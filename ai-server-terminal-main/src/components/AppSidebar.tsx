@@ -1,4 +1,4 @@
-import { LayoutDashboard, Server, Settings, LogOut, Terminal, Bot, Workflow } from "lucide-react";
+import { LayoutDashboard, Server, Settings, LogOut, Bot, Workflow, ChevronLeft } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useNavigate } from "react-router-dom";
 import {
@@ -10,7 +10,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarFooter,
-  SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { authLogout, fetchAuthSession } from "@/lib/api";
@@ -18,7 +17,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useI18n } from "@/lib/i18n";
 
 export function AppSidebar() {
-  const { state } = useSidebar();
+  const { state, toggleSidebar } = useSidebar();
   const collapsed = state === "collapsed";
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -39,10 +38,7 @@ export function AppSidebar() {
   ];
 
   const allowedItems = navItems.filter((item) => {
-    if (!item.feature) {
-      return true;
-    }
-
+    if (!item.feature) return true;
     return Boolean(data?.user?.features?.[item.feature]);
   });
 
@@ -53,30 +49,39 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-border">
-      <div className="flex h-14 items-center justify-between gap-2 border-b border-border px-4">
-        <div className="flex items-center gap-2 min-w-0">
-          <Terminal className="h-5 w-5 text-primary shrink-0" />
-          {!collapsed && (
-            <span className="font-semibold text-foreground tracking-tight truncate">
-              WebTerm<span className="text-primary">AI</span>
-            </span>
-          )}
+    <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar">
+      {/* Logo area */}
+      <div className="flex h-12 items-center gap-2 border-b border-sidebar-border px-3">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-primary/10">
+          <span className="text-xs font-bold text-primary">W</span>
         </div>
-        <SidebarTrigger className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground" />
+        {!collapsed && (
+          <span className="text-sm font-semibold text-foreground tracking-tight">
+            WebTermAI
+          </span>
+        )}
+        {!collapsed && (
+          <button
+            onClick={toggleSidebar}
+            className="ml-auto text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
 
-      <SidebarContent className="pt-2">
+      {/* Navigation */}
+      <SidebarContent className="px-2 py-3">
         <SidebarGroup>
           <SidebarGroupContent>
-            <SidebarMenu>
+            <SidebarMenu className="space-y-0.5">
               {allowedItems.map((item) => (
                 <SidebarMenuItem key={item.titleKey}>
                   <SidebarMenuButton asChild>
                     <NavLink
                       to={item.url}
                       end={item.url === "/dashboard"}
-                      className="flex items-center gap-3 px-3 py-2 rounded-md text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+                      className="flex items-center gap-2.5 px-2.5 py-1.5 rounded text-[13px] text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
                       activeClassName="bg-sidebar-accent text-primary font-medium"
                     >
                       <item.icon className="h-4 w-4 shrink-0" />
@@ -90,44 +95,45 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-border p-3 space-y-3">
+      {/* Footer */}
+      <SidebarFooter className="border-t border-sidebar-border px-3 py-2.5">
         {!collapsed && (
-          <div className="flex justify-center">
-            <div className="inline-flex rounded-md border border-border overflow-hidden text-[11px] font-semibold">
+          <div className="flex justify-center mb-2">
+            <div className="inline-flex rounded border border-border overflow-hidden text-[10px] font-medium">
               <button
                 onClick={() => setLang("en")}
-                className={`px-2.5 py-1 transition-colors ${lang === "en" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}
+                className={`px-2 py-0.5 transition-colors ${lang === "en" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}
               >
                 EN
               </button>
               <button
                 onClick={() => setLang("ru")}
-                className={`px-2.5 py-1 transition-colors ${lang === "ru" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}
+                className={`px-2 py-0.5 transition-colors ${lang === "ru" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}
               >
                 RU
               </button>
             </div>
           </div>
         )}
-        <div className="flex items-center gap-3">
-          <div className="h-7 w-7 rounded-full bg-primary flex items-center justify-center text-xs font-medium text-primary-foreground shrink-0">
+        <div className="flex items-center gap-2.5">
+          <div className="h-6 w-6 rounded bg-secondary flex items-center justify-center text-[10px] font-semibold text-foreground shrink-0">
             {(data?.user?.username || "U").slice(0, 1).toUpperCase()}
           </div>
           {!collapsed && (
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-foreground truncate">{data?.user?.username || "user"}</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs font-medium text-foreground truncate">{data?.user?.username || "user"}</p>
+              <p className="text-[10px] text-muted-foreground leading-tight">
                 {data?.user?.is_staff ? t("nav.admin") : t("nav.operator")}
               </p>
             </div>
           )}
           {!collapsed && (
             <button
-              className="text-muted-foreground hover:text-destructive transition-colors"
+              className="text-muted-foreground hover:text-destructive transition-colors p-0.5"
               aria-label={t("nav.signout")}
               onClick={handleLogout}
             >
-              <LogOut className="h-4 w-4" />
+              <LogOut className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
