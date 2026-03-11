@@ -36,7 +36,7 @@ export default function SettingsGroupsPage() {
     await createAccessGroup({ name: newName.trim(), members: newMembers });
     setNewName("");
     setNewMembers([]);
-    setMemberSearch("");
+    // setMemberSearch("");
     await reload();
   };
 
