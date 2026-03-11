@@ -35,11 +35,11 @@ export default function Dashboard() {
   const offline = servers.filter((server) => server.status === "offline").length;
   const unknown = servers.filter((server) => server.status === "unknown").length;
 
-  const summaryRows = [
-    { label: t("dash.total"), value: servers.length, icon: Server, tone: "info" as const },
-    { label: t("dash.online"), value: online, icon: Wifi, tone: "success" as const },
-    { label: t("dash.offline"), value: offline, icon: WifiOff, tone: offline > 0 ? ("danger" as const) : ("neutral" as const) },
-    { label: t("dash.unknown"), value: unknown, icon: AlertTriangle, tone: unknown > 0 ? ("warning" as const) : ("neutral" as const) },
+  const stats = [
+    { labelKey: "dash.total", value: servers.length, icon: Server, color: "text-info" },
+    { labelKey: "dash.online", value: online, icon: Wifi, color: "text-success" },
+    { labelKey: "dash.offline", value: offline, icon: WifiOff, color: offline > 0 ? "text-destructive" : "text-muted-foreground" },
+    { labelKey: "dash.unknown", value: unknown, icon: AlertTriangle, color: unknown > 0 ? "text-warning" : "text-muted-foreground" },
   ];
 
   return (
@@ -67,47 +67,26 @@ export default function Dashboard() {
           <h2 className="text-sm font-medium text-foreground">{t("dash.activity")}</h2>
         </div>
         <div className="divide-y divide-border">
-          {(data.recent_activity || []).map((item) => (
-            <div key={item.id} className="flex items-center gap-4 px-4 py-3">
-              <div className="flex-1">
-                <p className="text-sm text-foreground">{item.description || item.action}</p>
-                <p className="text-xs text-muted-foreground font-mono">{item.entity_name || "-"}</p>
-              </div>
+          {(data.recent_activity || []).length === 0 ? (
+            <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+              No recent activity
             </div>
-          ))}
-        </div>
-      </SectionCard>
-
-      <SectionCard
-        title={t("dash.activity")}
-        description="Recent events from the accessible workspace."
-        icon={<Activity className="h-4 w-4 text-primary" />}
-      >
-        {(data.recent_activity || []).length === 0 ? (
-          <EmptyState
-            icon={<Activity className="h-5 w-5" />}
-            title="No recent activity"
-            description="Activity items will appear here when operators interact with the workspace."
-          />
-        ) : (
-          <div className="overflow-hidden rounded-2xl border border-border/80 bg-background/30">
-            <div className="divide-y divide-border/60">
-              {(data.recent_activity || []).map((item) => (
-                <div key={item.id} className="flex items-start gap-4 px-5 py-3.5">
-                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-background/35">
-                    <Activity className="h-3.5 w-3.5 text-muted-foreground" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm text-foreground">{item.description || item.action}</p>
-                    <p className="mt-1 text-xs font-mono text-muted-foreground">{item.entity_name || "-"}</p>
-                  </div>
-                  <span className="shrink-0 text-xs text-muted-foreground">{toRelativeTime(item.created_at)}</span>
+          ) : (
+            (data.recent_activity || []).map((item) => (
+              <div key={item.id} className="flex items-start gap-4 px-5 py-3.5">
+                <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-background/35">
+                  <Activity className="h-3.5 w-3.5 text-muted-foreground" />
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </SectionCard>
-    </PageShell>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-foreground">{item.description || item.action}</p>
+                  <p className="mt-1 text-xs font-mono text-muted-foreground">{item.entity_name || "-"}</p>
+                </div>
+                <span className="shrink-0 text-xs text-muted-foreground">{toRelativeTime(item.created_at)}</span>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
