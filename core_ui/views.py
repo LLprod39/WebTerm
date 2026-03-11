@@ -18,7 +18,7 @@ from urllib import request as urllib_request
 from typing import AsyncGenerator
 from django.shortcuts import render, redirect
 from django.http import StreamingHttpResponse, JsonResponse, HttpResponseForbidden, FileResponse, Http404
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
 from django.contrib.auth.views import LoginView
 from django.contrib.auth.decorators import login_required
@@ -27,6 +27,7 @@ from django.conf import settings
 from django.db import transaction
 from django.db.models import OuterRef, Subquery, Count, Q
 from django.urls import reverse
+from django.middleware.csrf import get_token
 from asgiref.sync import async_to_sync, sync_to_async
 from dotenv import load_dotenv
 from loguru import logger
@@ -247,6 +248,12 @@ def api_auth_session(request):
     if not user or not user.is_authenticated:
         return JsonResponse({"authenticated": False, "user": None})
     return JsonResponse({"authenticated": True, "user": _auth_user_payload(user)})
+
+
+@ensure_csrf_cookie
+@require_http_methods(["GET"])
+def api_auth_csrf(request):
+    return JsonResponse({"csrfToken": get_token(request)})
 
 
 @require_http_methods(["GET"])

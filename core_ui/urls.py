@@ -36,6 +36,7 @@ urlpatterns = [
     path('api/admin/dashboard/', views.api_admin_dashboard, name='api_admin_dashboard'),
     path('api/admin/users/activity/', views.api_admin_users_activity, name='api_admin_users_activity'),
     path('api/admin/users/sessions/', views.api_admin_users_sessions, name='api_admin_users_sessions'),
+    path('api/auth/csrf/', views.api_auth_csrf, name='api_auth_csrf'),
     path('api/auth/session/', views.api_auth_session, name='api_auth_session'),
     path('api/auth/ws-token/', views.api_ws_token, name='api_ws_token'),
     path('api/auth/login/', views.api_auth_login, name='api_auth_login'),

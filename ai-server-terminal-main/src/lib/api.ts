@@ -3,10 +3,53 @@ const BACKEND_ORIGIN = (
   import.meta.env.VITE_BACKEND_ORIGIN ||
   (window.location.port === "8080" ? "http://127.0.0.1:9000" : "")
 ).replace(/\/$/, "");
+let csrfTokenCache: string | null = null;
+let csrfTokenRequest: Promise<string | null> | null = null;
 
 function getCookie(name: string): string | null {
   const match = document.cookie.match(new RegExp(`(^| )${name}=([^;]+)`));
   return match ? match[2] : null;
+}
+
+function isMutationRequest(method?: string): boolean {
+  const normalized = (method || "GET").toUpperCase();
+  return !["GET", "HEAD", "OPTIONS", "TRACE"].includes(normalized);
+}
+
+async function ensureCsrfToken(): Promise<string | null> {
+  const cookieToken = getCookie("csrftoken");
+  if (cookieToken) {
+    csrfTokenCache = cookieToken;
+    return cookieToken;
+  }
+
+  if (csrfTokenCache) {
+    return csrfTokenCache;
+  }
+
+  if (!csrfTokenRequest) {
+    csrfTokenRequest = fetch(`${API_BASE}/api/auth/csrf/`, {
+      credentials: "include",
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          return null;
+        }
+
+        const data = (await response.json().catch(() => null)) as { csrfToken?: unknown } | null;
+        const token =
+          typeof data?.csrfToken === "string" && data.csrfToken
+            ? data.csrfToken
+            : getCookie("csrftoken");
+        csrfTokenCache = token || null;
+        return csrfTokenCache;
+      })
+      .finally(() => {
+        csrfTokenRequest = null;
+      });
+  }
+
+  return csrfTokenRequest;
 }
 
 async function parseErrorMessage(res: Response): Promise<string> {
@@ -21,7 +64,7 @@ async function parseErrorMessage(res: Response): Promise<string> {
 }
 
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const csrfToken = getCookie("csrftoken");
+  const csrfToken = isMutationRequest(options.method) ? await ensureCsrfToken() : getCookie("csrftoken");
   const response = await fetch(`${API_BASE}${path}`, {
     credentials: "include",
     headers: {
