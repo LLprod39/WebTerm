@@ -1,3 +1,14 @@
+import {
+  isDemoMode,
+  enableDemoMode,
+  DEMO_SESSION,
+  DEMO_BOOTSTRAP,
+  DEMO_SETTINGS,
+  DEMO_MODELS,
+  DEMO_ACTIVITY_LOGS,
+  demoSuccess,
+} from "./demo";
+
 const API_BASE = import.meta.env.VITE_API_BASE || "";
 const BACKEND_ORIGIN = (
   import.meta.env.VITE_BACKEND_ORIGIN ||
