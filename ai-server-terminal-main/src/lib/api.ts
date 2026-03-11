@@ -38,6 +38,8 @@ async function ensureCsrfToken(): Promise<string | null> {
     return csrfTokenCache;
   }
 
+  if (isDemoMode()) return null;
+
   if (!csrfTokenRequest) {
     csrfTokenRequest = fetch(`${API_BASE}/api/auth/csrf/`, {
       credentials: "include",
@@ -46,6 +48,8 @@ async function ensureCsrfToken(): Promise<string | null> {
         if (!response.ok) {
           return null;
         }
+        const ct = response.headers.get("content-type") || "";
+        if (ct.includes("text/html")) return null;
 
         const data = (await response.json().catch(() => null)) as { csrfToken?: unknown } | null;
         const token =
@@ -55,6 +59,7 @@ async function ensureCsrfToken(): Promise<string | null> {
         csrfTokenCache = token || null;
         return csrfTokenCache;
       })
+      .catch(() => null)
       .finally(() => {
         csrfTokenRequest = null;
       });
