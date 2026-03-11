@@ -80,16 +80,30 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
     return demoFallback<T>(path, options);
   }
 
-  const csrfToken = isMutationRequest(options.method) ? await ensureCsrfToken() : getCookie("csrftoken");
-  const response = await fetch(`${API_BASE}${path}`, {
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(csrfToken ? { "X-CSRFToken": csrfToken } : {}),
-      ...((options.headers as Record<string, string>) || {}),
-    },
-    ...options,
-  });
+  let response: Response;
+  try {
+    const csrfToken = isMutationRequest(options.method) ? await ensureCsrfToken() : getCookie("csrftoken");
+    response = await fetch(`${API_BASE}${path}`, {
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...(csrfToken ? { "X-CSRFToken": csrfToken } : {}),
+        ...((options.headers as Record<string, string>) || {}),
+      },
+      ...options,
+    });
+  } catch {
+    // Network error — backend unreachable
+    enableDemoMode();
+    return demoFallback<T>(path, options);
+  }
+
+  // If server returned HTML instead of JSON (Vite SPA fallback), switch to demo
+  const ct = response.headers.get("content-type") || "";
+  if (ct.includes("text/html")) {
+    enableDemoMode();
+    return demoFallback<T>(path, options);
+  }
 
   if (!response.ok) {
     throw new Error(await parseErrorMessage(response));
