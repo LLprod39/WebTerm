@@ -75,6 +75,11 @@ async function parseErrorMessage(res: Response): Promise<string> {
 }
 
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+  // In demo mode, return mock data for known paths
+  if (isDemoMode()) {
+    return demoFallback<T>(path, options);
+  }
+
   const csrfToken = isMutationRequest(options.method) ? await ensureCsrfToken() : getCookie("csrftoken");
   const response = await fetch(`${API_BASE}${path}`, {
     credentials: "include",
@@ -91,6 +96,39 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   }
 
   return response.json();
+}
+
+/** Provides mock data for known API paths when in demo mode */
+function demoFallback<T>(path: string, _options: RequestInit = {}): T {
+  if (path.includes("/api/auth/session")) return DEMO_SESSION as T;
+  if (path.includes("/api/auth/login")) return { success: true, authenticated: true, next_url: "/servers", user: DEMO_SESSION.user } as T;
+  if (path.includes("/api/auth/logout")) return { success: true } as T;
+  if (path.includes("/api/auth/ws-token")) return { token: "demo-token" } as T;
+  if (path.includes("/frontend/bootstrap")) return DEMO_BOOTSTRAP as T;
+  if (path.includes("/api/settings/check") || path.includes("/api/settings") && !path.includes("activity")) return DEMO_SETTINGS as T;
+  if (path.includes("/api/models")) return DEMO_MODELS as T;
+  if (path.includes("/api/settings/activity") || path.includes("activity")) return DEMO_ACTIVITY_LOGS as T;
+  if (path.includes("/api/health")) return { status: "ok" } as T;
+  if (path.includes("/api/admin/dashboard")) return { success: true, stats: {} } as T;
+  if (path.includes("/api/access/users")) return { success: true, users: [] } as T;
+  if (path.includes("/api/access/groups")) return { success: true, groups: [] } as T;
+  if (path.includes("/api/access/permissions")) return { success: true, permissions: [] } as T;
+  if (path.includes("/api/studio/pipelines")) return { success: true, pipelines: [] } as T;
+  if (path.includes("/api/studio/runs")) return { success: true, runs: [] } as T;
+  if (path.includes("/api/studio/agents")) return { success: true, agents: [] } as T;
+  if (path.includes("/api/studio/mcp")) return { success: true, servers: [], templates: [] } as T;
+  if (path.includes("/api/studio/triggers")) return { success: true, triggers: [] } as T;
+  if (path.includes("/api/studio/templates")) return { success: true, templates: [] } as T;
+  if (path.includes("/api/studio/notifications")) return { success: true } as T;
+  if (path.includes("/servers/api/agents")) return { success: true, agents: [], templates: [], runs: [] } as T;
+  if (path.includes("/servers/api/monitoring")) return { success: true, servers: [] } as T;
+  if (path.includes("/servers/api/alerts")) return { success: true, alerts: [] } as T;
+  if (path.includes("/servers/api/global-context")) return { rules: "", forbidden_commands: [], required_checks: [], environment_vars: {} } as T;
+  if (path.includes("/servers/api/master-password")) return { has_master_password: false, success: true } as T;
+  if (path.includes("/knowledge")) return { success: true, items: [], categories: [] } as T;
+  if (path.includes("/shares")) return { success: true, shares: [] } as T;
+  // Generic fallback
+  return demoSuccess() as T;
 }
 
 export type ServerStatus = "online" | "offline" | "unknown";
