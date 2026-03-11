@@ -11,8 +11,8 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "ai-server-terminal-main/src"),
-    },
+    alias: [
+      { find: "@", replacement: path.resolve(process.cwd(), "ai-server-terminal-main/src") },
+    ],
   },
 }));
