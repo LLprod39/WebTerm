@@ -1,32 +1,60 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Save, X, Loader2, Bot, ArrowLeft } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
+import {
+  ArrowLeft,
+  BookOpen,
+  Bot,
+  Loader2,
+  Pencil,
+  Plus,
+  Save,
+  Trash2,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { studioAgents, studioMCP, studioServers, studioSkills, type AgentConfig } from "@/lib/api";
+import {
+  studioAgents,
+  studioMCP,
+  studioServers,
+  studioSkills,
+  type AgentConfig,
+} from "@/lib/api";
 
 const ALL_TOOLS = [
-  { id: "ssh_execute", label: "SSH Execute", desc: "Run commands on servers" },
-  { id: "read_console", label: "Read Console", desc: "Read terminal output" },
-  { id: "send_ctrl_c", label: "Send Ctrl+C", desc: "Interrupt running process" },
-  { id: "open_connection", label: "Open Connection", desc: "Open SSH connection" },
-  { id: "close_connection", label: "Close Connection", desc: "Close SSH connection" },
-  { id: "wait_for_output", label: "Wait for Output", desc: "Wait for regex pattern" },
-  { id: "report", label: "Report", desc: "Send intermediate report" },
-  { id: "ask_user", label: "Ask User", desc: "Pause and ask for input" },
-  { id: "analyze_output", label: "Analyze Output", desc: "LLM analysis of output" },
+  { id: "ssh_execute", label: "SSH Execute", description: "Run commands on servers" },
+  { id: "read_console", label: "Read Console", description: "Read terminal output" },
+  { id: "send_ctrl_c", label: "Send Ctrl+C", description: "Interrupt running processes" },
+  { id: "open_connection", label: "Open Connection", description: "Open SSH connections" },
+  { id: "close_connection", label: "Close Connection", description: "Close SSH connections" },
+  { id: "wait_for_output", label: "Wait for Output", description: "Wait for terminal patterns" },
+  { id: "report", label: "Report", description: "Send intermediate status updates" },
+  { id: "ask_user", label: "Ask User", description: "Pause for user input" },
+  { id: "analyze_output", label: "Analyze Output", description: "Run LLM analysis over output" },
 ];
 
-const LLM_MODELS = [
+const MODEL_OPTIONS = [
   "gemini-2.0-flash-exp",
   "gemini-2.5-pro",
   "claude-4.5-sonnet",
@@ -41,329 +69,307 @@ function AgentForm({
   isPending,
 }: {
   initial: Partial<AgentConfig>;
-  onSave: (data: Partial<AgentConfig>) => void;
+  onSave: (payload: Partial<AgentConfig>) => void;
   onCancel: () => void;
   isPending: boolean;
 }) {
+  const navigate = useNavigate();
   const [form, setForm] = useState<Partial<AgentConfig>>({
     name: "",
     description: "",
-    icon: "🤖",
+    icon: "B",
     system_prompt: "",
     instructions: "",
-    model: "gemini-2.0-flash-exp",
+    model: MODEL_OPTIONS[0],
     max_iterations: 10,
-    allowed_tools: ["ssh_execute", "report", "ask_user"],
+    allowed_tools: ["ssh_execute", "report"],
     skill_slugs: [],
     mcp_servers: [],
     server_scope: [],
     ...initial,
   });
-  const [editorSection, setEditorSection] = useState<"basics" | "behavior" | "access">("basics");
 
-  const { data: mcpList = [] } = useQuery({ queryKey: ["studio", "mcp"], queryFn: studioMCP.list });
-  const { data: servers = [] } = useQuery({ queryKey: ["studio", "servers"], queryFn: studioServers.list });
-  const { data: skills = [] } = useQuery({ queryKey: ["studio", "skills"], queryFn: studioSkills.list });
+  const { data: mcpList = [] } = useQuery({
+    queryKey: ["studio", "mcp"],
+    queryFn: studioMCP.list,
+  });
 
-  const set = (key: keyof AgentConfig, val: unknown) => setForm((f) => ({ ...f, [key]: val }));
+  const { data: servers = [] } = useQuery({
+    queryKey: ["studio", "servers"],
+    queryFn: studioServers.list,
+  });
+
+  const { data: skills = [] } = useQuery({
+    queryKey: ["studio", "skills"],
+    queryFn: studioSkills.list,
+  });
+
+  const setField = (key: keyof AgentConfig, value: unknown) => {
+    setForm((current) => ({ ...current, [key]: value }));
+  };
 
   const toggleTool = (toolId: string) => {
-    const tools = form.allowed_tools || [];
-    set("allowed_tools", tools.includes(toolId) ? tools.filter((t) => t !== toolId) : [...tools, toolId]);
+    const current = form.allowed_tools || [];
+    setField(
+      "allowed_tools",
+      current.includes(toolId)
+        ? current.filter((item) => item !== toolId)
+        : [...current, toolId],
+    );
   };
 
   const toggleMcp = (mcpId: number) => {
-    const ids = (form.mcp_servers || []).map((m) => (typeof m === "number" ? m : m.id));
-    const next = ids.includes(mcpId) ? ids.filter((id) => id !== mcpId) : [...ids, mcpId];
-    set("mcp_servers", next as unknown as AgentConfig["mcp_servers"]);
-  };
-
-  const toggleSkill = (slug: string) => {
-    const next = (form.skill_slugs || []).includes(slug)
-      ? (form.skill_slugs || []).filter((item) => item !== slug)
-      : [...(form.skill_slugs || []), slug];
-    set("skill_slugs", next);
+    const currentIds = (form.mcp_servers || []).map((item) =>
+      typeof item === "number" ? item : item.id,
+    );
+    const nextIds = currentIds.includes(mcpId)
+      ? currentIds.filter((item) => item !== mcpId)
+      : [...currentIds, mcpId];
+    setField("mcp_servers", nextIds as unknown as AgentConfig["mcp_servers"]);
   };
 
   const toggleServerScope = (serverId: number) => {
-    const ids = (form.server_scope || []).map((server) => (typeof server === "number" ? server : server.id));
-    const next = ids.includes(serverId) ? ids.filter((id) => id !== serverId) : [...ids, serverId];
-    set("server_scope", next as unknown as AgentConfig["server_scope"]);
+    const currentIds = (form.server_scope || []).map((item) =>
+      typeof item === "number" ? item : item.id,
+    );
+    const nextIds = currentIds.includes(serverId)
+      ? currentIds.filter((item) => item !== serverId)
+      : [...currentIds, serverId];
+    setField("server_scope", nextIds as unknown as AgentConfig["server_scope"]);
   };
 
-  const mcpIds = (form.mcp_servers || []).map((m) => (typeof m === "number" ? m : m.id));
-  const serverScopeIds = (form.server_scope || []).map((server) => (typeof server === "number" ? server : server.id));
+  const toggleSkill = (slug: string) => {
+    const current = form.skill_slugs || [];
+    setField(
+      "skill_slugs",
+      current.includes(slug)
+        ? current.filter((item) => item !== slug)
+        : [...current, slug],
+    );
+  };
+
+  const mcpIds = (form.mcp_servers || []).map((item) => (typeof item === "number" ? item : item.id));
+  const serverScopeIds = (form.server_scope || []).map((item) => (typeof item === "number" ? item : item.id));
 
   return (
-    <div className="space-y-5">
-      {/* Name + Icon */}
-      <div className="flex gap-2">
-        <div className="space-y-1.5">
-          <Label className="text-xs">Icon</Label>
-          <Input value={form.icon || "🤖"} onChange={(e) => set("icon", e.target.value)} className="w-14 text-center text-xl" />
-        </div>
-        <div className="flex-1 space-y-1.5">
-          <Label className="text-xs">Name *</Label>
-          <Input value={form.name || ""} onChange={(e) => set("name", e.target.value)} placeholder="My DevOps Agent" />
-        </div>
-      </div>
-
-      <div className="space-y-1.5">
-        <Label className="text-xs">Description</Label>
-        <Input value={form.description || ""} onChange={(e) => set("description", e.target.value)} placeholder="What this agent does..." />
-      </div>
-
-      {/* LLM Model + Iterations */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label className="text-xs">LLM Model</Label>
-          <Select value={form.model || "gemini-2.0-flash-exp"} onValueChange={(v) => set("model", v)}>
-            <SelectTrigger className="h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {LLM_MODELS.map((m) => (
-                <SelectItem key={m} value={m} className="text-xs">{m}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs">Max Iterations</Label>
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-[96px_minmax(0,1fr)]">
+        <div className="space-y-2">
+          <Label>Icon</Label>
           <Input
-            type="number"
-            value={form.max_iterations || 10}
-            onChange={(e) => set("max_iterations", parseInt(e.target.value) || 10)}
-            min={1}
-            max={50}
-            className="h-8 text-xs"
+            value={form.icon || "B"}
+            onChange={(event) => setField("icon", event.target.value)}
+            className="text-center text-lg"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Name</Label>
+          <Input
+            value={form.name || ""}
+            onChange={(event) => setField("name", event.target.value)}
+            placeholder="Ops triage agent"
           />
         </div>
       </div>
 
-      {/* System Prompt */}
-      <div className="space-y-1.5">
-        <Label className="text-xs">System Prompt</Label>
+      <div className="space-y-2">
+        <Label>Description</Label>
+        <Input
+          value={form.description || ""}
+          onChange={(event) => setField("description", event.target.value)}
+          placeholder="Reusable agent for infrastructure checks and repair suggestions"
+        />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label>Model</Label>
+          <Select value={form.model || MODEL_OPTIONS[0]} onValueChange={(value) => setField("model", value)}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {MODEL_OPTIONS.map((model) => (
+                <SelectItem key={model} value={model}>
+                  {model}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Max iterations</Label>
+          <Input
+            type="number"
+            min={1}
+            max={50}
+            value={form.max_iterations || 10}
+            onChange={(event) => setField("max_iterations", Number(event.target.value) || 10)}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label>System prompt</Label>
         <Textarea
           value={form.system_prompt || ""}
-          onChange={(e) => set("system_prompt", e.target.value)}
-          placeholder="You are a DevOps agent. Be concise and always verify before taking destructive actions..."
-          className="text-xs resize-none"
-          rows={3}
+          onChange={(event) => setField("system_prompt", event.target.value)}
+          rows={4}
+          placeholder="You are a careful operations agent. Verify before any risky action."
         />
       </div>
 
-      {/* Instructions */}
-      <div className="space-y-1.5">
-        <Label className="text-xs">Instructions / Rules</Label>
+      <div className="space-y-2">
+        <Label>Instructions</Label>
         <Textarea
           value={form.instructions || ""}
-          onChange={(e) => set("instructions", e.target.value)}
-          placeholder="Always run `df -h` first to check disk space. Never run rm -rf..."
-          className="text-xs resize-none"
-          rows={3}
+          onChange={(event) => setField("instructions", event.target.value)}
+          rows={4}
+          placeholder="Always gather context first. Avoid destructive commands unless explicitly approved."
         />
       </div>
 
-      {/* Tools */}
-      <div className="space-y-2">
-        <Label className="text-xs">Allowed Tools</Label>
-        <div className="grid grid-cols-2 gap-1.5">
+      <div className="space-y-3">
+        <Label>Allowed tools</Label>
+        <div className="grid gap-2 md:grid-cols-2">
           {ALL_TOOLS.map((tool) => (
-            <label key={tool.id} className="flex items-start gap-2 cursor-pointer p-2 rounded border border-border hover:bg-muted/30 transition-colors">
+            <label
+              key={tool.id}
+              className="flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 bg-background/30 px-3 py-3 transition-colors hover:bg-background/40"
+            >
               <Checkbox
                 checked={(form.allowed_tools || []).includes(tool.id)}
                 onCheckedChange={() => toggleTool(tool.id)}
                 className="mt-0.5"
               />
               <div>
-                <div className="text-xs font-medium">{tool.label}</div>
-                <div className="text-[10px] text-muted-foreground">{tool.desc}</div>
+                <div className="text-sm font-medium text-foreground">{tool.label}</div>
+                <div className="text-xs text-muted-foreground">{tool.description}</div>
               </div>
             </label>
           ))}
         </div>
       </div>
 
-      {/* MCP Servers */}
-      {mcpList.length > 0 && (
-        <div className="space-y-2">
-          <Label className="text-xs">MCP Servers</Label>
-          <p className="text-[10px] text-muted-foreground">
-            Attached MCP servers become callable tools for this agent during pipeline runs.
-          </p>
-          <div className="space-y-1">
+      {mcpList.length > 0 ? (
+        <div className="space-y-3">
+          <Label>MCP servers</Label>
+          <div className="grid gap-2">
             {mcpList.map((mcp) => (
-              <label key={mcp.id} className="flex items-center gap-2 cursor-pointer px-2 py-1.5 rounded border border-border hover:bg-muted/30 transition-colors">
-                <Checkbox
-                  checked={mcpIds.includes(mcp.id)}
-                  onCheckedChange={() => toggleMcp(mcp.id)}
-                />
-                <div className="flex-1 min-w-0">
-                  <span className="text-xs font-medium">{mcp.name}</span>
-                  <span className="text-[10px] text-muted-foreground ml-2">{mcp.transport}</span>
+              <label
+                key={mcp.id}
+                className="flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 bg-background/30 px-3 py-3 transition-colors hover:bg-background/40"
+              >
+                <Checkbox checked={mcpIds.includes(mcp.id)} onCheckedChange={() => toggleMcp(mcp.id)} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-medium text-foreground">{mcp.name}</span>
+                    <Badge variant="outline" className="text-[10px] font-mono">
+                      {mcp.transport}
+                    </Badge>
+                    {mcp.last_test_ok === true ? <Badge variant="secondary">OK</Badge> : null}
+                    {mcp.last_test_ok === false ? <Badge variant="destructive">ERR</Badge> : null}
+                  </div>
+                  <div className="text-xs text-muted-foreground">{mcp.description || "No description"}</div>
                 </div>
-                {mcp.last_test_ok === true && <Badge variant="default" className="text-[9px] px-1 py-0">OK</Badge>}
-                {mcp.last_test_ok === false && <Badge variant="destructive" className="text-[9px] px-1 py-0">ERR</Badge>}
               </label>
             ))}
           </div>
         </div>
-      )}
+      ) : null}
 
-      {/* Skills */}
-      {skills.length > 0 && (
-        <div className="space-y-2">
-          <Label className="text-xs">Skills / Policies</Label>
-          <p className="text-[10px] text-muted-foreground">
-            Skills pin service context, guardrails, and runtime policy that travel with this agent into runs.
-          </p>
-          <div className="grid grid-cols-1 gap-1.5">
+      {skills.length > 0 ? (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <Label>Skills</Label>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 rounded-md px-3 text-[11px]"
+              onClick={() => navigate("/studio/skills")}
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+              Browse catalog
+            </Button>
+          </div>
+          <div className="grid gap-2">
             {skills.map((skill) => (
-              <label key={skill.slug} className="flex items-start gap-2 cursor-pointer rounded border border-border px-2 py-2 hover:bg-muted/30 transition-colors">
+              <label
+                key={skill.slug}
+                className="flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 bg-background/30 px-3 py-3 transition-colors hover:bg-background/40"
+              >
                 <Checkbox
                   checked={(form.skill_slugs || []).includes(skill.slug)}
                   onCheckedChange={() => toggleSkill(skill.slug)}
                   className="mt-0.5"
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-xs font-medium">{skill.name}</span>
-                    {skill.service ? <Badge variant="outline" className="text-[9px]">{skill.service}</Badge> : null}
-                    {skill.runtime_enforced ? <Badge variant="secondary" className="text-[9px]">runtime</Badge> : null}
-                    {skill.safety_level ? <Badge variant="outline" className="text-[9px]">{skill.safety_level}</Badge> : null}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-medium text-foreground">{skill.name}</span>
+                    <span className="font-mono text-[10px] text-muted-foreground">{skill.slug}</span>
+                    {skill.service ? <span className="text-[10px] text-muted-foreground">{skill.service}</span> : null}
+                    {skill.safety_level ? <span className="text-[10px] text-muted-foreground">{skill.safety_level}</span> : null}
                   </div>
-                  {skill.description ? <p className="mt-1 text-[10px] text-muted-foreground">{skill.description}</p> : null}
-                  {skill.guardrail_summary?.length ? (
-                    <p className="mt-1 text-[10px] text-muted-foreground">
-                      {skill.guardrail_summary.slice(0, 2).join(" • ")}
-                    </p>
-                  ) : null}
+                  <div className="text-xs text-muted-foreground">{skill.description}</div>
                 </div>
               </label>
             ))}
           </div>
-          {form.skill_errors?.length ? (
-            <div className="rounded border border-amber-500/30 bg-amber-500/5 px-3 py-2">
-              <p className="text-[11px] font-medium text-amber-300">Skill warnings</p>
-              <div className="mt-1 space-y-1">
-                {form.skill_errors.map((error) => (
-                  <p key={error} className="text-[10px] text-amber-200">{error}</p>
-                ))}
-              </div>
-            </div>
-          ) : null}
         </div>
-      )}
+      ) : null}
 
-      {/* Server Scope */}
-      {servers.length > 0 && (
-        <div className="space-y-2">
-          <Label className="text-xs">Server Scope</Label>
-          <p className="text-[10px] text-muted-foreground">
-            Leave empty to allow all accessible servers. Select servers to hard-scope this agent.
+      {servers.length > 0 ? (
+        <div className="space-y-3">
+          <Label>Server scope</Label>
+          <p className="text-xs text-muted-foreground">
+            Leave empty to allow all accessible servers. Select specific servers to hard-scope this agent.
           </p>
-          <div className="grid grid-cols-1 gap-1.5">
+          <div className="grid gap-2 md:grid-cols-2">
             {servers.map((server) => (
-              <label key={server.id} className="flex items-center gap-2 cursor-pointer rounded border border-border px-2 py-1.5 hover:bg-muted/30 transition-colors">
+              <label
+                key={server.id}
+                className="flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 bg-background/30 px-3 py-3 transition-colors hover:bg-background/40"
+              >
                 <Checkbox
                   checked={serverScopeIds.includes(server.id)}
                   onCheckedChange={() => toggleServerScope(server.id)}
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-medium">{server.name}</div>
-                  <div className="text-[10px] text-muted-foreground">{server.host}</div>
+                  <div className="text-sm font-medium text-foreground">{server.name}</div>
+                  <div className="text-xs text-muted-foreground">{server.host}</div>
                 </div>
               </label>
             ))}
           </div>
-          )}
-
-          {editorSection === "access" && mcpList.length > 0 && (
-          <div className="rounded-xl border border-border/70 bg-background/24 p-4">
-            <div className="mb-4 flex items-start gap-3">
-              <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-lg border border-transparent bg-background/30 text-muted-foreground">
-                <Server className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="enterprise-kicker">{tr("MCP-серверы", "MCP Servers")}</p>
-                <p className="mt-2 text-sm text-muted-foreground">{tr("Подключайте только те сервисные поверхности, с которыми бот действительно должен работать.", "Attach only the service surfaces this bot should actually work with.")}</p>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              {mcpList.map((mcp) => (
-                <label key={mcp.id} className="flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 bg-background/30 px-3 py-3 transition-colors hover:bg-background/40">
-                  <Checkbox
-                    checked={mcpIds.includes(mcp.id)}
-                    onCheckedChange={() => toggleMcp(mcp.id)}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-medium">{mcp.name}</span>
-                      <span className="text-[10px] text-muted-foreground">{mcp.transport}</span>
-                      {mcp.last_test_ok === true && <span className="text-[10px] text-muted-foreground">OK</span>}
-                      {mcp.last_test_ok === false && <span className="text-[10px] text-red-300">ERR</span>}
-                    </div>
-                  </div>
-                </label>
-              ))}
-            </div>
-          </div>
-          )}
-
-          {editorSection === "access" && skillList.length > 0 && (
-          <div className="rounded-xl border border-border/70 bg-background/24 p-4">
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <div className="max-w-lg">
-                <p className="enterprise-kicker">{tr("Скиллы", "Skills")}</p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {tr("Подключайте скиллы только там, где нужен повторяемый процесс, pinned context или строгие guardrails.", "Attach skills only when the agent needs a repeatable process, pinned context, or strict guardrails.")}
-                </p>
-              </div>
-              <Button type="button" variant="outline" size="sm" className="h-9 gap-1.5 rounded-md px-3 text-[11px]" onClick={onOpenSkillCatalog}>
-                <BookOpen className="h-3 w-3" />
-                {tr("Открыть каталог", "Browse Catalog")}
-              </Button>
-            </div>
-
-            <div className="space-y-2">
-              {skillList.map((skill) => (
-                <label key={skill.slug} className="flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 bg-background/30 px-3 py-3 transition-colors hover:bg-background/40">
-                  <Checkbox
-                    checked={skillSlugs.includes(skill.slug)}
-                    onCheckedChange={() => toggleSkill(skill.slug)}
-                    className="mt-0.5"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-xs font-medium">{skill.name}</span>
-                      <span className="font-mono text-[10px] text-muted-foreground">{skill.slug}</span>
-                      {skill.runtime_enforced && <span className="text-[10px] text-muted-foreground">{tr("runtime enforced", "runtime enforced")}</span>}
-                      {skill.safety_level && <span className="text-[10px] text-muted-foreground">· {skill.safety_level}</span>}
-                    </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                      {skill.service && <span className="text-[10px] text-muted-foreground">{skill.service}</span>}
-                      {skill.category && <span className="text-[10px] text-muted-foreground">· {skill.category}</span>}
-                    </div>
-                    {skill.description && <p className="mt-1 text-[11px] leading-5 text-muted-foreground">{skill.description}</p>}
-                    {skill.guardrail_summary?.length > 0 && (
-                      <p className="mt-1 text-[10px] leading-5 text-muted-foreground">{skill.guardrail_summary[0]}</p>
-                    )}
-                  </div>
-                </label>
-              ))}
-            </div>
-          </div>
-          )}
         </div>
-      )}
+      ) : null}
 
-      <div className="flex justify-end gap-2 pt-2">
-        <Button variant="outline" size="sm" onClick={onCancel}>Cancel</Button>
-        <Button size="sm" onClick={() => onSave(form)} disabled={!form.name?.trim() || isPending} className="gap-1.5">
-          {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-          Save Agent
+      {form.skill_errors?.length ? (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3">
+          <div className="text-sm font-medium text-amber-200">Skill warnings</div>
+          <div className="mt-2 space-y-1">
+            {form.skill_errors.map((error) => (
+              <p key={error} className="text-xs text-amber-100">
+                {error}
+              </p>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button
+          onClick={() => onSave(form)}
+          disabled={!form.name?.trim() || isPending}
+          className="gap-2"
+        >
+          {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          Save agent
         </Button>
       </div>
     </div>
@@ -383,23 +389,28 @@ export default function AgentConfigPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: Partial<AgentConfig>) => studioAgents.create(data),
+    mutationFn: (payload: Partial<AgentConfig>) => studioAgents.create(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["studio", "agents"] });
       setEditAgent(null);
-      toast({ description: "Agent created" });
+      toast({ description: "Agent created." });
     },
-    onError: (err: Error) => toast({ variant: "destructive", description: err.message }),
+    onError: (error: Error) => {
+      toast({ variant: "destructive", description: error.message });
+    },
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<AgentConfig> }) => studioAgents.update(id, data),
+    mutationFn: ({ id, payload }: { id: number; payload: Partial<AgentConfig> }) =>
+      studioAgents.update(id, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["studio", "agents"] });
       setEditAgent(null);
-      toast({ description: "Agent updated" });
+      toast({ description: "Agent updated." });
     },
-    onError: (err: Error) => toast({ variant: "destructive", description: err.message }),
+    onError: (error: Error) => {
+      toast({ variant: "destructive", description: error.message });
+    },
   });
 
   const deleteMutation = useMutation({
@@ -407,157 +418,199 @@ export default function AgentConfigPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["studio", "agents"] });
       setDeleteTarget(null);
-      toast({ description: "Agent deleted" });
+      toast({ description: "Agent deleted." });
     },
-    onError: (err: Error) => toast({ variant: "destructive", description: err.message }),
+    onError: (error: Error) => {
+      toast({ variant: "destructive", description: error.message });
+    },
   });
 
-  const handleSave = (data: Partial<AgentConfig>) => {
-    if ((editAgent as AgentConfig)?.id) {
-      updateMutation.mutate({ id: (editAgent as AgentConfig).id, data });
-    } else {
-      createMutation.mutate(data);
+  const handleSave = (payload: Partial<AgentConfig>) => {
+    if ((editAgent as AgentConfig | null)?.id) {
+      updateMutation.mutate({
+        id: (editAgent as AgentConfig).id,
+        payload,
+      });
+      return;
     }
+
+    createMutation.mutate(payload);
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="border-b border-border px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigate("/studio")}>
+    <div className="space-y-6 p-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl" onClick={() => navigate("/studio")}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <div>
-              <h1 className="text-xl font-semibold flex items-center gap-2">
-                <Bot className="h-5 w-5 text-primary" />
-                Agent Configs
-              </h1>
-              <p className="text-sm text-muted-foreground mt-0.5">Reusable agent configurations for pipeline nodes</p>
-            </div>
+            <h1 className="flex items-center gap-2 text-2xl font-semibold text-foreground">
+              <Bot className="h-6 w-6 text-primary" />
+              Agent configs
+            </h1>
           </div>
-          <Button size="sm" onClick={() => setEditAgent({})} className="gap-1.5">
-            <Plus className="h-3.5 w-3.5" />
-            New Agent
+          <p className="text-sm text-muted-foreground">
+            Reusable agent profiles for pipeline nodes and automation tasks.
+          </p>
+        </div>
+
+        <Button className="gap-2" onClick={() => setEditAgent({})}>
+          <Plus className="h-4 w-4" />
+          New agent
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <div className="flex h-40 items-center justify-center text-muted-foreground">
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          Loading agent configs...
+        </div>
+      ) : agents.length === 0 ? (
+        <div className="flex h-56 flex-col items-center justify-center rounded-2xl border border-dashed border-border text-center">
+          <Bot className="mb-3 h-10 w-10 text-muted-foreground/50" />
+          <p className="text-sm font-medium text-foreground">No agent configs yet.</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Create reusable agent profiles for pipelines.
+          </p>
+          <Button className="mt-4 gap-2" size="sm" onClick={() => setEditAgent({})}>
+            <Plus className="h-4 w-4" />
+            New agent
           </Button>
         </div>
-      </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {agents.map((agent) => (
+            <Card key={agent.id} className="border-border/80">
+              <CardHeader className="space-y-3 pb-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-border/70 bg-background/35 text-lg">
+                      {agent.icon || "B"}
+                    </div>
+                    <div className="min-w-0">
+                      <CardTitle className="text-base">{agent.name}</CardTitle>
+                      <CardDescription className="mt-1 text-xs">
+                        {agent.description || "No description"}
+                      </CardDescription>
+                    </div>
+                  </div>
 
-      <div className="flex-1 overflow-auto p-6">
-        {isLoading ? (
-          <div className="flex items-center justify-center h-40 text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin mr-2" />
-            Loading...
-          </div>
-        ) : agents.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-52 border border-dashed border-border rounded-lg text-center">
-            <Bot className="h-10 w-10 text-muted-foreground/40 mb-3" />
-            <p className="font-medium text-sm">No agent configs yet</p>
-            <p className="text-xs text-muted-foreground mt-1 mb-4">Create a reusable agent configuration</p>
-            <Button size="sm" onClick={() => setEditAgent({})} className="gap-1.5">
-              <Plus className="h-3.5 w-3.5" />
-              New Agent Config
-            </Button>
-          </div>
-        ) : (
-          <div className="divide-y divide-border">
-            {agents.map((agent) => (
-              <Card key={agent.id} className="group hover:border-primary/50 transition-colors">
-                <CardHeader className="pb-2">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl">{agent.icon}</span>
-                      <CardTitle className="text-sm">{agent.name}</CardTitle>
-                    </div>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setEditAgent(agent)}>
-                        <Pencil className="h-3 w-3" />
-                      </Button>
-                      <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(agent)}>
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
+                  <div className="flex gap-1">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 rounded-xl"
+                      onClick={() => setEditAgent(agent)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 rounded-xl text-destructive hover:text-destructive"
+                      onClick={() => setDeleteTarget(agent)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
-                </CardHeader>
-                <CardContent className="pt-0 space-y-2">
-                  {agent.description && <p className="text-xs text-muted-foreground">{agent.description}</p>}
-                  <div className="flex flex-wrap gap-1">
-                    <Badge variant="outline" className="text-[10px]">{agent.model}</Badge>
-                    <Badge variant="secondary" className="text-[10px]">{agent.max_iterations} iter</Badge>
-                    {agent.mcp_servers?.length > 0 && (
-                      <Badge variant="secondary" className="text-[10px]">{agent.mcp_servers.length} MCP</Badge>
-                    )}
-                    {agent.skill_slugs?.length > 0 && (
-                      <Badge variant="secondary" className="text-[10px]">{agent.skill_slugs.length} skills</Badge>
-                    )}
-                    {agent.server_scope?.length > 0 && (
-                      <Badge variant="outline" className="text-[10px]">{agent.server_scope.length} scoped servers</Badge>
-                    )}
-                  </div>
-                  {agent.skill_errors?.length ? (
-                    <div className="rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1.5">
-                      {agent.skill_errors.slice(0, 2).map((error) => (
-                        <p key={error} className="text-[10px] text-amber-200">{error}</p>
-                      ))}
-                    </div>
+                </div>
+              </CardHeader>
+
+              <CardContent className="space-y-4 pt-0">
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="outline" className="text-[10px]">
+                    {agent.model}
+                  </Badge>
+                  <Badge variant="secondary" className="text-[10px]">
+                    {agent.max_iterations} iter
+                  </Badge>
+                  {agent.mcp_servers?.length ? (
+                    <Badge variant="secondary" className="text-[10px]">
+                      {agent.mcp_servers.length} MCP
+                    </Badge>
                   ) : null}
-                  {agent.skills?.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {agent.skills.slice(0, 3).map((skill) => (
-                        <span key={skill.slug} className="text-[9px] bg-muted/60 rounded px-1 py-0.5 text-muted-foreground">
-                          {skill.name}
-                        </span>
-                      ))}
-                      {agent.skills.length > 3 ? (
-                        <span className="text-[9px] text-muted-foreground">+{agent.skills.length - 3} more</span>
-                      ) : null}
-                    </div>
-                  )}
-                  {agent.allowed_tools?.length > 0 && (
-                    <div className="flex flex-wrap gap-0.5">
-                      {agent.allowed_tools.slice(0, 4).map((t) => (
-                        <span key={t} className="text-[9px] bg-muted/60 rounded px-1 py-0.5 text-muted-foreground">{t}</span>
-                      ))}
-                      {agent.allowed_tools.length > 4 && (
-                        <span className="text-[9px] text-muted-foreground">+{agent.allowed_tools.length - 4} more</span>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
+                  {agent.skill_slugs?.length ? (
+                    <Badge variant="secondary" className="text-[10px]">
+                      {agent.skill_slugs.length} skills
+                    </Badge>
+                  ) : null}
+                  {agent.server_scope?.length ? (
+                    <Badge variant="outline" className="text-[10px]">
+                      {agent.server_scope.length} scoped
+                    </Badge>
+                  ) : null}
+                </div>
 
-      {/* Edit/Create Dialog */}
-      <Dialog open={!!editAgent} onOpenChange={(o) => !o && setEditAgent(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-auto">
+                {agent.skills?.length ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {agent.skills.slice(0, 4).map((skill) => (
+                      <Badge key={skill.slug} variant="outline" className="text-[10px]">
+                        {skill.name}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : null}
+
+                {agent.allowed_tools?.length ? (
+                  <div className="text-xs text-muted-foreground">
+                    Tools: {agent.allowed_tools.slice(0, 4).join(", ")}
+                    {agent.allowed_tools.length > 4 ? ` +${agent.allowed_tools.length - 4} more` : ""}
+                  </div>
+                ) : null}
+
+                {agent.skill_errors?.length ? (
+                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2">
+                    {agent.skill_errors.slice(0, 2).map((error) => (
+                      <p key={error} className="text-xs text-amber-100">
+                        {error}
+                      </p>
+                    ))}
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <Dialog open={editAgent !== null} onOpenChange={(nextOpen) => !nextOpen && setEditAgent(null)}>
+        <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{(editAgent as AgentConfig)?.id ? "Edit Agent Config" : "New Agent Config"}</DialogTitle>
+            <DialogTitle>{(editAgent as AgentConfig | null)?.id ? "Edit agent" : "New agent"}</DialogTitle>
+            <DialogDescription>
+              Configure model, tools, scopes, MCP servers, and skills for this reusable agent profile.
+            </DialogDescription>
           </DialogHeader>
-          {editAgent && (
+          {editAgent ? (
             <AgentForm
               initial={editAgent}
               onSave={handleSave}
               onCancel={() => setEditAgent(null)}
               isPending={createMutation.isPending || updateMutation.isPending}
             />
-          )}
+          ) : null}
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirm */}
-      <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+      <Dialog open={deleteTarget !== null} onOpenChange={(nextOpen) => !nextOpen && setDeleteTarget(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete Agent Config</DialogTitle>
-            <DialogDescription>Delete "{deleteTarget?.name}"? This cannot be undone.</DialogDescription>
+            <DialogTitle>Delete agent</DialogTitle>
+            <DialogDescription>
+              {deleteTarget ? `Delete "${deleteTarget.name}"? This cannot be undone.` : ""}
+            </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)} disabled={deleteMutation.isPending}>
-              {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
               Delete
             </Button>
           </DialogFooter>

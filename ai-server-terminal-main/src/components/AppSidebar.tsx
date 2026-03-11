@@ -10,6 +10,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarFooter,
+  SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { authLogout, fetchAuthSession } from "@/lib/api";
@@ -30,18 +31,19 @@ export function AppSidebar() {
   });
 
   const navItems = [
-    { titleKey: "nav.dashboard", url: "/dashboard", icon: LayoutDashboard },
-    { titleKey: "nav.servers", url: "/servers", icon: Server },
-    { titleKey: "nav.agents", url: "/agents", icon: Bot },
-    { titleKey: "nav.studio", url: "/studio", icon: Workflow },
-    { titleKey: "nav.settings", url: "/settings", icon: Settings },
+    { titleKey: "nav.dashboard", url: "/dashboard", icon: LayoutDashboard, feature: "dashboard" },
+    { titleKey: "nav.servers", url: "/servers", icon: Server, feature: null },
+    { titleKey: "nav.agents", url: "/agents", icon: Bot, feature: "agents" },
+    { titleKey: "nav.studio", url: "/studio", icon: Workflow, feature: "studio" },
+    { titleKey: "nav.settings", url: "/settings", icon: Settings, feature: "settings" },
   ];
 
   const allowedItems = navItems.filter((item) => {
-    if (item.url === "/settings") {
-      return data?.user?.features?.settings;
+    if (!item.feature) {
+      return true;
     }
-    return true;
+
+    return Boolean(data?.user?.features?.[item.feature]);
   });
 
   const handleLogout = async () => {
@@ -52,13 +54,16 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon" className="border-r border-border">
-      <div className="flex h-14 items-center gap-2 px-4 border-b border-border">
-        <Terminal className="h-5 w-5 text-primary shrink-0" />
-        {!collapsed && (
-          <span className="font-semibold text-foreground tracking-tight">
-            WebTerm<span className="text-primary">AI</span>
-          </span>
-        )}
+      <div className="flex h-14 items-center justify-between gap-2 border-b border-border px-4">
+        <div className="flex items-center gap-2 min-w-0">
+          <Terminal className="h-5 w-5 text-primary shrink-0" />
+          {!collapsed && (
+            <span className="font-semibold text-foreground tracking-tight truncate">
+              WebTerm<span className="text-primary">AI</span>
+            </span>
+          )}
+        </div>
+        <SidebarTrigger className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground" />
       </div>
 
       <SidebarContent className="pt-2">

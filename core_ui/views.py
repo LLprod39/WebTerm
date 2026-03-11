@@ -223,6 +223,7 @@ def _auth_user_payload(user):
     if not user or not getattr(user, "is_authenticated", False):
         return None
     can_agents = bool(user_can_feature(user, "agents"))
+    can_dashboard = bool(user.is_staff and can_agents)
     return {
         "id": user.id,
         "username": user.username,
@@ -230,14 +231,11 @@ def _auth_user_payload(user):
         "is_staff": bool(user.is_staff),
         "features": {
             "servers": bool(user_can_feature(user, "servers")),
-            "dashboard": dashboard_allowed,
-            "agents": agents_allowed,
-            "studio": bool(user_can_feature(user, "studio")),
-            "settings": bool(user_can_feature(user, "settings")),
-            "orchestrator": bool(user_can_feature(user, "orchestrator")),
+            "dashboard": can_dashboard,
             "agents": can_agents,
             "studio": can_agents,
-            "dashboard": bool(user.is_staff and can_agents),
+            "settings": bool(user_can_feature(user, "settings")),
+            "orchestrator": bool(user_can_feature(user, "orchestrator")),
         },
     }
 

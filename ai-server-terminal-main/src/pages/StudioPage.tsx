@@ -1,31 +1,34 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Plus,
-  Play,
-  Pencil,
-  Copy,
-  Trash2,
-  Search,
-  Workflow,
-  CheckCircle2,
-  XCircle,
-  Loader2,
-  Clock,
-  Bot,
-  Server,
-  BookOpen,
-  Zap,
-  Bell,
   AlertCircle,
-  ArrowRight,
+  Bell,
+  BookOpen,
+  Bot,
+  CheckCircle2,
+  Clock,
+  Copy,
+  Loader2,
   MoreHorizontal,
+  Play,
+  Plus,
+  Search,
+  Server,
+  Trash2,
+  Workflow,
+  XCircle,
+  Zap,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -38,100 +41,68 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { studioPipelines, studioTemplates, studioNotifications, type PipelineListItem } from "@/lib/api";
+import {
+  studioNotifications,
+  studioPipelines,
+  studioTemplates,
+  type PipelineListItem,
+} from "@/lib/api";
+
+type TemplateItem = {
+  slug: string;
+  name: string;
+  description?: string;
+  icon?: string;
+  category?: string;
+};
+
+function formatRelativeTime(value: string): string {
+  const diffMs = Date.now() - new Date(value).getTime();
+  const minutes = Math.max(1, Math.floor(diffMs / 60_000));
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
 
 function RunStatusBadge({ status }: { status: string }) {
-  const map: Record<string, { label: string; icon: React.ReactNode; variant: "default" | "destructive" | "secondary" | "outline" }> = {
-    completed: { label: "Completed", icon: <CheckCircle2 className="h-3 w-3" />, variant: "default" },
-    failed: { label: "Failed", icon: <XCircle className="h-3 w-3" />, variant: "destructive" },
-    running: { label: "Running", icon: <Loader2 className="h-3 w-3 animate-spin" />, variant: "secondary" },
-    pending: { label: "Pending", icon: <Clock className="h-3 w-3" />, variant: "outline" },
-    stopped: { label: "Stopped", icon: <XCircle className="h-3 w-3" />, variant: "outline" },
-  };
-  const s = map[status] || { label: status, icon: null, variant: "outline" as const };
+  const normalized = status.toLowerCase();
+
+  if (normalized === "completed") {
+    return (
+      <Badge variant="default" className="gap-1 text-[10px]">
+        <CheckCircle2 className="h-3 w-3" />
+        Completed
+      </Badge>
+    );
+  }
+
+  if (normalized === "failed") {
+    return (
+      <Badge variant="destructive" className="gap-1 text-[10px]">
+        <XCircle className="h-3 w-3" />
+        Failed
+      </Badge>
+    );
+  }
+
+  if (normalized === "running") {
+    return (
+      <Badge variant="secondary" className="gap-1 text-[10px]">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        Running
+      </Badge>
+    );
+  }
+
   return (
-    <Badge variant={s.variant} className="flex items-center gap-1 text-xs">
-      {s.icon}
-      {s.label}
+    <Badge variant="outline" className="text-[10px]">
+      {status}
     </Badge>
-  );
-}
-
-function QuickActionCard({
-  icon,
-  title,
-  description,
-  actionLabel,
-  onClick,
-  badge,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  actionLabel: string;
-  onClick: () => void;
-  badge?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="workspace-subtle flex h-full flex-col items-start gap-4 rounded-[1.15rem] p-4 text-left transition-colors hover:border-primary/35 hover:bg-background/45"
-    >
-      <div className="flex w-full items-start justify-between gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border/70 bg-background/35">
-          {icon}
-        </div>
-        {badge ? <Badge variant="secondary" className="rounded-full px-2 py-0 text-[10px]">{badge}</Badge> : null}
-      </div>
-      <div className="space-y-1">
-        <div className="text-sm font-semibold text-foreground">{title}</div>
-        <div className="text-xs leading-5 text-muted-foreground">{description}</div>
-      </div>
-      <div className="mt-auto inline-flex items-center gap-2 text-xs font-medium text-primary">
-        {actionLabel}
-        <ArrowRight className="h-3.5 w-3.5" />
-      </div>
-    </button>
-  );
-}
-
-function BuilderLinkCard({
-  icon,
-  title,
-  meta,
-  onClick,
-  warning,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  meta: string;
-  onClick: () => void;
-  warning?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-colors ${
-        warning
-          ? "border-amber-500/30 bg-amber-500/8 hover:bg-amber-500/12"
-          : "border-border/80 bg-background/30 hover:bg-background/45"
-      }`}
-    >
-      <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/70 bg-background/35">
-        {icon}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium text-foreground">{title}</div>
-        <div className="text-xs text-muted-foreground">{meta}</div>
-      </div>
-      <ArrowRight className="h-4 w-4 text-muted-foreground" />
-    </button>
   );
 }
 
@@ -148,78 +119,81 @@ function PipelineCard({
   onClone: () => void;
   onDelete: () => void;
 }) {
-  const updatedAgo = (() => {
-    const diff = Date.now() - new Date(pipeline.updated_at).getTime();
-    const m = Math.floor(diff / 60000);
-    if (m < 1) return "just now";
-    if (m < 60) return `${m}m ago`;
-    const h = Math.floor(m / 60);
-    if (h < 24) return `${h}h ago`;
-    return `${Math.floor(h / 24)}d ago`;
-  })();
-
   return (
-    <Card className="group hover:border-primary/50 transition-colors">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="text-xl shrink-0">{pipeline.icon || "⚡"}</span>
+    <Card className="border-border/80 transition-colors hover:border-primary/40">
+      <CardHeader className="space-y-3 pb-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-border/70 bg-background/35 text-xl">
+              {pipeline.icon || "W"}
+            </div>
             <div className="min-w-0">
-              <CardTitle className="text-base leading-tight truncate">{pipeline.name}</CardTitle>
-              {pipeline.description && (
-                <CardDescription className="text-xs mt-0.5 line-clamp-2">{pipeline.description}</CardDescription>
-              )}
+              <CardTitle className="truncate text-base">{pipeline.name}</CardTitle>
+              <CardDescription className="mt-1 line-clamp-2 text-xs">
+                {pipeline.description || "No description"}
+              </CardDescription>
             </div>
           </div>
-          <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onEdit} title="Edit">
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onClone} title="Clone">
-              <Copy className="h-3.5 w-3.5" />
-            </Button>
-            <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={onDelete} title="Delete">
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </div>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={onOpen}>Open</DropdownMenuItem>
+              <DropdownMenuItem onClick={onRun}>Run</DropdownMenuItem>
+              <DropdownMenuItem onClick={onClone}>Clone</DropdownMenuItem>
+              <DropdownMenuItem className="text-destructive" onClick={onDelete}>
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="secondary" className="gap-1 text-[10px]">
+            <Workflow className="h-3 w-3" />
+            {pipeline.node_count} nodes
+          </Badge>
+          {pipeline.last_run ? (
+            <RunStatusBadge status={pipeline.last_run.status} />
+          ) : (
+            <Badge variant="outline" className="text-[10px]">
+              Never run
+            </Badge>
+          )}
         </div>
       </CardHeader>
 
-      <CardContent className="pt-0 space-y-3">
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <Workflow className="h-3 w-3" />
-            {pipeline.node_count} nodes
-          </span>
-          <span>·</span>
-          <span>{updatedAgo}</span>
-        </div>
-
-        {pipeline.tags && pipeline.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {pipeline.tags.map((tag) => (
-              <Badge key={tag} variant="secondary" className="text-[10px] px-1.5 py-0">
+      <CardContent className="space-y-4 pt-0">
+        {pipeline.tags.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {pipeline.tags.slice(0, 4).map((tag) => (
+              <Badge key={tag} variant="outline" className="text-[10px]">
                 {tag}
               </Badge>
             ))}
           </div>
-        )}
+        ) : null}
 
-        <div className="flex items-center justify-between">
-          {pipeline.last_run ? (
-            <RunStatusBadge status={pipeline.last_run.status} />
-          ) : (
-            <span className="text-xs text-muted-foreground">Never run</span>
-          )}
-          <Button size="sm" className="h-7 text-xs gap-1" onClick={onRun}>
-            <Play className="h-3 w-3" />
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>Updated {formatRelativeTime(pipeline.updated_at)}</span>
+          {pipeline.last_run?.triggered_by ? <span>{pipeline.last_run.triggered_by}</span> : null}
+        </div>
+
+        <div className="flex gap-2">
+          <Button size="sm" className="flex-1 gap-1.5" onClick={onOpen}>
+            Open
+          </Button>
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={onRun}>
+            <Play className="h-3.5 w-3.5" />
             Run
           </Button>
-          <Button size="icon" variant="ghost" className="ml-auto h-8 w-8 rounded-xl" onClick={onClone} title={tr("Клонировать", "Clone")}>
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={onClone}>
             <Copy className="h-3.5 w-3.5" />
-          </Button>
-          <Button size="icon" variant="ghost" className="h-8 w-8 rounded-xl text-destructive hover:text-destructive" onClick={onDelete} title={tr("Удалить", "Delete")}>
-            <Trash2 className="h-3.5 w-3.5" />
+            Clone
           </Button>
         </div>
       </CardContent>
@@ -236,60 +210,68 @@ function CreatePipelineDialog({
 }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [icon, setIcon] = useState("⚡");
+  const [icon, setIcon] = useState("W");
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   const createMutation = useMutation({
-    mutationFn: (data: { name: string; description: string; icon: string }) =>
-      studioPipelines.create({ ...data, nodes: [], edges: [] }),
+    mutationFn: (payload: { name: string; description: string; icon: string }) =>
+      studioPipelines.create({ ...payload, nodes: [], edges: [] }),
     onSuccess: (pipeline) => {
       queryClient.invalidateQueries({ queryKey: ["studio", "pipelines"] });
-      toast({ description: `Pipeline "${pipeline.name}" created` });
+      setName("");
+      setDescription("");
+      setIcon("W");
       onClose();
+      toast({ description: `Pipeline "${pipeline.name}" created.` });
       navigate(`/studio/pipeline/${pipeline.id}`);
     },
-    onError: (err: Error) => toast({ variant: "destructive", description: err.message }),
+    onError: (error: Error) => {
+      toast({ variant: "destructive", description: error.message });
+    },
   });
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>New Pipeline</DialogTitle>
-          <DialogDescription>Create a new DevOps automation pipeline</DialogDescription>
+          <DialogTitle>New pipeline</DialogTitle>
+          <DialogDescription>Create an empty workflow and open it in the editor.</DialogDescription>
         </DialogHeader>
+
         <div className="space-y-3 py-2">
           <div className="flex gap-2">
             <Input
               value={icon}
-              onChange={(e) => setIcon(e.target.value)}
-              className="w-16 text-center text-xl"
-              placeholder="⚡"
+              onChange={(event) => setIcon(event.target.value)}
+              placeholder="W"
+              className="w-16 text-center"
             />
             <Input
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(event) => setName(event.target.value)}
               placeholder="Pipeline name"
-              className="flex-1"
               autoFocus
             />
           </div>
           <Input
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Description (optional)"
+            onChange={(event) => setDescription(event.target.value)}
+            placeholder="Description"
           />
         </div>
+
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
           <Button
-            onClick={() => createMutation.mutate({ name, description, icon })}
+            onClick={() => createMutation.mutate({ name: name.trim(), description: description.trim(), icon: icon.trim() || "W" })}
             disabled={!name.trim() || createMutation.isPending}
           >
-            {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-            Create & Edit
+            {createMutation.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
+            Create
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -298,307 +280,251 @@ function CreatePipelineDialog({
 }
 
 export default function StudioPage() {
-  const [search, setSearch] = useState("");
-  const [showCreate, setShowCreate] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<PipelineListItem | null>(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [search, setSearch] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<PipelineListItem | null>(null);
 
   const { data: pipelines = [], isLoading } = useQuery({
     queryKey: ["studio", "pipelines", search],
     queryFn: () => studioPipelines.list(search || undefined),
   });
 
-  const { data: templates = [] } = useQuery({
+  const { data: templatesRaw = [] } = useQuery({
     queryKey: ["studio", "templates"],
     queryFn: studioTemplates.list,
   });
 
-  // Check if notifications are configured (to show a warning badge)
-  const { data: notifCfg } = useQuery({
+  const { data: notifications } = useQuery({
     queryKey: ["studio", "notifications"],
     queryFn: studioNotifications.get,
   });
 
-  const notifUnconfigured =
-    !notifCfg?.telegram_bot_token?.trim() && !notifCfg?.smtp_user?.trim();
+  const templates = useMemo(
+    () => (templatesRaw as TemplateItem[]).filter((item) => Boolean(item.slug && item.name)),
+    [templatesRaw],
+  );
+
+  const notifConfigured = Boolean(
+    notifications?.telegram_bot_token?.trim() ||
+      notifications?.smtp_user?.trim() ||
+      notifications?.notify_email?.trim(),
+  );
 
   const runMutation = useMutation({
-    mutationFn: (id: number) => studioPipelines.run(id),
+    mutationFn: (pipelineId: number) => studioPipelines.run(pipelineId),
     onSuccess: (run) => {
-      toast({ description: `Pipeline started (run #${run.id})` });
       queryClient.invalidateQueries({ queryKey: ["studio", "pipelines"] });
+      toast({ description: `Run #${run.id} started.` });
     },
-    onError: (err: Error) => toast({ variant: "destructive", description: err.message }),
+    onError: (error: Error) => {
+      toast({ variant: "destructive", description: error.message });
+    },
   });
 
   const cloneMutation = useMutation({
-    mutationFn: (id: number) => studioPipelines.clone(id),
+    mutationFn: (pipelineId: number) => studioPipelines.clone(pipelineId),
     onSuccess: (pipeline) => {
       queryClient.invalidateQueries({ queryKey: ["studio", "pipelines"] });
-      toast({ description: `Cloned as "${pipeline.name}"` });
+      toast({ description: `Cloned as "${pipeline.name}".` });
     },
-    onError: (err: Error) => toast({ variant: "destructive", description: err.message }),
+    onError: (error: Error) => {
+      toast({ variant: "destructive", description: error.message });
+    },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => studioPipelines.delete(id),
+    mutationFn: (pipelineId: number) => studioPipelines.delete(pipelineId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["studio", "pipelines"] });
       setDeleteTarget(null);
-      toast({ description: "Pipeline deleted" });
+      toast({ description: "Pipeline deleted." });
     },
-    onError: (err: Error) => toast({ variant: "destructive", description: err.message }),
+    onError: (error: Error) => {
+      toast({ variant: "destructive", description: error.message });
+    },
   });
 
   const useTemplateMutation = useMutation({
     mutationFn: (slug: string) => studioTemplates.use(slug),
     onSuccess: (pipeline) => {
       queryClient.invalidateQueries({ queryKey: ["studio", "pipelines"] });
-      toast({ description: `Created from template: "${pipeline.name}"` });
+      toast({ description: `Created from template "${pipeline.name}".` });
       navigate(`/studio/pipeline/${pipeline.id}`);
     },
-    onError: (err: Error) => toast({ variant: "destructive", description: err.message }),
+    onError: (error: Error) => {
+      toast({ variant: "destructive", description: error.message });
+    },
   });
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="border-b border-border px-6 py-4">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-semibold flex items-center gap-2">
-              <Workflow className="h-5 w-5 text-primary" />
-              Agent Studio
-            </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Build and run DevOps automation pipelines</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => navigate("/studio/runs")} className="gap-1.5">
-              <Clock className="h-3.5 w-3.5" />
-              Runs
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate("/studio/agents")} className="gap-1.5">
-              <Bot className="h-3.5 w-3.5" />
-              Agents
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate("/studio/skills")} className="gap-1.5">
-              <BookOpen className="h-3.5 w-3.5" />
-              Skills
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate("/studio/mcp")} className="gap-1.5">
-              <Server className="h-3.5 w-3.5" />
-              MCP Hub
-            </Button>
-            <Button
-              variant={notifUnconfigured ? "destructive" : "outline"}
-              size="sm"
-              onClick={() => navigate("/studio/notifications")}
-              className="gap-1.5 relative"
-              title={notifUnconfigured ? "Notifications not configured — click to set up" : "Notification settings"}
-            >
-              {notifUnconfigured ? (
-                <AlertCircle className="h-3.5 w-3.5" />
-              ) : (
-                <Bell className="h-3.5 w-3.5" />
-              )}
-              Notifications
-            </Button>
-            <Button size="sm" onClick={() => setShowCreate(true)} className="gap-1.5">
-              <Plus className="h-3.5 w-3.5" />
-              New Pipeline
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate("/studio/runs")} className="h-9 gap-1.5 rounded-xl px-3">
-              <Clock className="h-3.5 w-3.5" />
-              {tr("Запуски", "Runs")}
-            </Button>
-          </div>
+    <div className="space-y-6 p-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="space-y-1">
+          <h1 className="flex items-center gap-2 text-2xl font-semibold text-foreground">
+            <Workflow className="h-6 w-6 text-primary" />
+            Studio
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Pipelines, agent configs, MCP sources, and execution history.
+          </p>
         </div>
 
-        <div className="mt-3 relative max-w-sm">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search pipelines..."
-            className="pl-8 h-8 text-sm"
-          />
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" className="gap-1.5" onClick={() => navigate("/studio/runs")}>
+            <Clock className="h-4 w-4" />
+            Runs
+          </Button>
+          <Button variant="outline" className="gap-1.5" onClick={() => navigate("/studio/agents")}>
+            <Bot className="h-4 w-4" />
+            Agents
+          </Button>
+          <Button variant="outline" className="gap-1.5" onClick={() => navigate("/studio/skills")}>
+            <BookOpen className="h-4 w-4" />
+            Skills
+          </Button>
+          <Button variant="outline" className="gap-1.5" onClick={() => navigate("/studio/mcp")}>
+            <Server className="h-4 w-4" />
+            MCP
+          </Button>
+          <Button
+            variant={notifConfigured ? "outline" : "destructive"}
+            className="gap-1.5"
+            onClick={() => navigate("/studio/notifications")}
+          >
+            {notifConfigured ? <Bell className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+            Notifications
+          </Button>
+          <Button className="gap-1.5" onClick={() => setShowCreate(true)}>
+            <Plus className="h-4 w-4" />
+            New pipeline
+          </Button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-6 space-y-8">
-        {/* Templates section (only show when no search) */}
-        {!search && templates.length > 0 && pipelines.length === 0 && (
-          <section>
-            <h2 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
-              <Zap className="h-3.5 w-3.5" />
-              QUICK START TEMPLATES
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-              {(templates as Array<Record<string, string>>).map((t) => (
+      <div className="space-y-6">
+        <Card className="border-border/80">
+          <CardHeader className="gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <CardTitle>{search ? "Search results" : "Pipelines"}</CardTitle>
+              <CardDescription>
+                {search
+                  ? `Results for "${search}".`
+                  : "Open, run, duplicate, or remove pipelines from one place."}
+              </CardDescription>
+            </div>
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search pipelines"
+                className="pl-9"
+              />
+            </div>
+          </CardHeader>
+
+          <CardContent>
+            {isLoading ? (
+              <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Loading pipelines...
+              </div>
+            ) : pipelines.length === 0 ? (
+              <div className="flex h-48 flex-col items-center justify-center rounded-2xl border border-dashed border-border text-center">
+                <Workflow className="mb-3 h-10 w-10 text-muted-foreground/50" />
+                <p className="text-sm font-medium text-foreground">
+                  {search ? "Nothing matched this search." : "No pipelines yet."}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {search ? "Try a broader query." : "Create a new pipeline or start from a template."}
+                </p>
+                {!search ? (
+                  <Button className="mt-4 gap-1.5" size="sm" onClick={() => setShowCreate(true)}>
+                    <Plus className="h-4 w-4" />
+                    New pipeline
+                  </Button>
+                ) : null}
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+                {pipelines.map((pipeline) => (
+                  <PipelineCard
+                    key={pipeline.id}
+                    pipeline={pipeline}
+                    onOpen={() => navigate(`/studio/pipeline/${pipeline.id}`)}
+                    onRun={() => runMutation.mutate(pipeline.id)}
+                    onClone={() => cloneMutation.mutate(pipeline.id)}
+                    onDelete={() => setDeleteTarget(pipeline)}
+                  />
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {!search && templates.length > 0 ? (
+          <Card className="border-border/80">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Zap className="h-5 w-5 text-primary" />
+                Templates
+              </CardTitle>
+              <CardDescription>Use a starter pipeline and open it immediately.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {templates.slice(0, 6).map((template) => (
                 <button
-                  key={t.slug}
-                  onClick={() => useTemplateMutation.mutate(t.slug)}
-                  className="text-left p-4 rounded-lg border border-border hover:border-primary/50 hover:bg-muted/30 transition-colors"
+                  key={template.slug}
+                  type="button"
+                  onClick={() => useTemplateMutation.mutate(template.slug)}
+                  className="rounded-2xl border border-border/80 bg-background/30 p-4 text-left transition-colors hover:border-primary/40 hover:bg-background/45"
                 >
-                  <div className="text-2xl mb-2">{t.icon}</div>
-                  <div className="font-medium text-sm">{t.name}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{t.description}</div>
-                  <Badge variant="secondary" className="text-[10px] mt-2">{t.category}</Badge>
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border/70 bg-background/40 text-xl">
+                      {template.icon || "Z"}
+                    </div>
+                    {template.category ? (
+                      <Badge variant="secondary" className="text-[10px]">
+                        {template.category}
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-foreground">{template.name}</p>
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      {template.description || "Template without description"}
+                    </p>
+                  </div>
                 </button>
               ))}
-            </div>
-          </section>
-        )}
-
-        {/* Pipelines */}
-        <section>
-          {!search && pipelines.length > 0 && (
-            <h2 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
-              <Workflow className="h-3.5 w-3.5" />
-              MY PIPELINES
-            </h2>
-          )}
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <SectionCard
-          title={search ? tr("Search results", "Search results") : tr("Pipelines", "Pipelines")}
-          description={
-            search
-              ? tr(`Результаты по запросу "${search}".`, `Results for "${search}".`)
-              : tr("Главный рабочий список. Откройте пайплайн, запустите его или быстро клонируйте.", "The main working list. Open a pipeline, run it, or clone it quickly.")
-          }
-          icon={<Workflow className="h-4 w-4 text-primary" />}
-        >
-          {isLoading ? (
-            <div className="flex items-center justify-center h-40 text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin mr-2" />
-              Loading...
-            </div>
-          ) : pipelines.length === 0 && !search ? (
-            <div className="flex flex-col items-center justify-center h-52 text-center border border-dashed border-border rounded-lg">
-              <Workflow className="h-10 w-10 text-muted-foreground/40 mb-3" />
-              <p className="font-medium text-sm">No pipelines yet</p>
-              <p className="text-xs text-muted-foreground mt-1 mb-4">
-                Create your first pipeline or start from a template
-              </p>
-              <Button size="sm" onClick={() => setShowCreate(true)} className="gap-1.5">
-                <Plus className="h-3.5 w-3.5" />
-                New Pipeline
-              </Button>
-            </div>
-          ) : pipelines.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground text-sm">No pipelines match "{search}"</div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {pipelines.map((p) => (
-                <PipelineCard
-                  key={p.id}
-                  pipeline={p}
-                  onEdit={() => navigate(`/studio/pipeline/${p.id}`)}
-                  onRun={() => runMutation.mutate(p.id)}
-                  onClone={() => cloneMutation.mutate(p.id)}
-                  onDelete={() => setDeleteTarget(p)}
-                />
-              ))}
-            </div>
-          )}
-        </SectionCard>
-
-        <div className="space-y-4">
-          <SectionCard
-            title={tr("Start", "Start")}
-            description={tr("Ежедневные действия без перегрузки.", "Daily actions without extra screen noise.")}
-            icon={<Workflow className="h-4 w-4 text-primary" />}
-          >
-            <div className="space-y-2">
-              <BuilderLinkCard
-                icon={<Plus className="h-4 w-4 text-primary" />}
-                title={tr("Создать новый пайплайн", "Create a new pipeline")}
-                meta={tr("Пустой workflow для ручной сборки", "Blank workflow for manual assembly")}
-                onClick={() => setShowCreate(true)}
-              />
-              <BuilderLinkCard
-                icon={<Clock className="h-4 w-4 text-primary" />}
-                title={tr("Проверить запуски", "Check runs")}
-                meta={
-                  runningPipelines > 0 || failingPipelines > 0
-                    ? tr(`${runningPipelines} выполняются, ${failingPipelines} требуют внимания`, `${runningPipelines} running, ${failingPipelines} need attention`)
-                    : tr("Открыть историю запусков", "Open run history")
-                }
-                onClick={() => navigate("/studio/runs")}
-              />
-              {featuredTemplates[0] ? (
-                <BuilderLinkCard
-                  icon={<Zap className="h-4 w-4 text-primary" />}
-                  title={tr("Стартовать с шаблона", "Start from a template")}
-                  meta={featuredTemplates[0].name}
-                  onClick={() => useTemplateMutation.mutate(featuredTemplates[0].slug)}
-                />
-              ) : null}
-            </div>
-          </SectionCard>
-
-          <SectionCard
-            title={tr("Builder layer", "Builder layer")}
-            description={tr("Открывайте только когда готовите инструменты для пайплайнов.", "Open only when preparing tools for pipelines.")}
-            icon={<BookOpen className="h-4 w-4 text-primary" />}
-          >
-            <div className="space-y-2">
-              <BuilderLinkCard
-                icon={<Bot className="h-4 w-4 text-primary" />}
-                title={tr("Agent Configs", "Agent Configs")}
-                meta={tr(`${agentConfigs.length} конфигов`, `${agentConfigs.length} configs`)}
-                onClick={() => navigate("/studio/agents")}
-              />
-              <BuilderLinkCard
-                icon={<BookOpen className="h-4 w-4 text-primary" />}
-                title={tr("Skills", "Skills")}
-                meta={tr(`${skills.length} skill entries`, `${skills.length} skill entries`)}
-                onClick={() => navigate("/studio/skills")}
-              />
-              <BuilderLinkCard
-                icon={<Server className="h-4 w-4 text-primary" />}
-                title={tr("MCP Registry", "MCP Registry")}
-                meta={tr(`${mcpServers.length} capability sources`, `${mcpServers.length} capability sources`)}
-                onClick={() => navigate("/studio/mcp")}
-              />
-              <BuilderLinkCard
-                icon={notifUnconfigured ? <AlertCircle className="h-4 w-4 text-amber-300" /> : <Bell className="h-4 w-4 text-primary" />}
-                title={tr("Notifications", "Notifications")}
-                meta={
-                  notifUnconfigured
-                    ? tr("Уведомления ещё не настроены", "Notifications are not configured yet")
-                    : tr("Каналы уведомлений доступны", "Notification channels are configured")
-                }
-                onClick={() => navigate("/studio/notifications")}
-                warning={notifUnconfigured}
-              />
-            </div>
-          </SectionCard>
-        </div>
+            </CardContent>
+          </Card>
+        ) : null}
       </div>
 
-      {/* Create dialog */}
       <CreatePipelineDialog open={showCreate} onClose={() => setShowCreate(false)} />
 
-      <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+      <Dialog open={Boolean(deleteTarget)} onOpenChange={(nextOpen) => !nextOpen && setDeleteTarget(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete Pipeline</DialogTitle>
+            <DialogTitle>Delete pipeline</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete "{deleteTarget?.name}"? This cannot be undone.
+              {deleteTarget ? `Delete "${deleteTarget.name}"? This cannot be undone.` : ""}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
             <Button
               variant="destructive"
               onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
               disabled={deleteMutation.isPending}
             >
-              {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              {deleteMutation.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Trash2 className="mr-1 h-4 w-4" />}
               Delete
             </Button>
           </DialogFooter>

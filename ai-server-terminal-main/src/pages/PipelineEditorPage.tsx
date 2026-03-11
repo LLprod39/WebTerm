@@ -20,7 +20,9 @@ import "@xyflow/react/dist/style.css";
 import {
   Save,
   Play,
+  Plus,
   ArrowLeft,
+  BookOpen,
   ChevronRight,
   X,
   Loader2,
@@ -32,6 +34,7 @@ import {
   ChevronDown,
   ChevronUp,
   Sparkles,
+  Zap,
   Bot,
   Wand2,
   MoreHorizontal,
@@ -44,6 +47,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -122,6 +131,10 @@ const NODE_TYPE_LABELS: Record<string, { label: string; icon: string }> = {
   "output/email":          { label: "Send Email",       icon: "✉️" },
   "output/telegram":       { label: "Telegram",         icon: "📱" },
 };
+
+function localize(lang: string, ru: string, en: string) {
+  return lang === "ru" ? ru : en;
+}
 
 // ---------------------------------------------------------------------------
 // Run Monitor Panel
@@ -1165,7 +1178,18 @@ function NodeConfigPanel({
             </div>
             {skillList.length > 0 && (
               <div className="space-y-1.5">
-                <Label className="text-xs">{selectedAgent ? "Extra Skills" : "Skills / Policies"}</Label>
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-xs">{selectedAgent ? "Extra Skills" : "Skills / Policies"}</Label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1.5 text-[11px]"
+                    onClick={() => navigate("/studio/skills")}
+                  >
+                    <BookOpen className="h-3 w-3" />
+                    Browse Catalog
+                  </Button>
+                </div>
                 <p className="text-[10px] text-muted-foreground">
                   {selectedAgent
                     ? "These node-level skills are merged with the selected agent config at runtime."
@@ -1781,6 +1805,10 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { screenToFlowPosition, fitView } = useReactFlow();
+  const lang =
+    typeof document !== "undefined" && document.documentElement.lang.toLowerCase().startsWith("ru")
+      ? "ru"
+      : "en";
 
   const { data: pipeline, isLoading } = useQuery({
     queryKey: ["studio", "pipeline", pipelineId],
@@ -2109,7 +2137,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
             >
               {lastRun.status === "running" && <Loader2 className="h-2.5 w-2.5 animate-spin mr-1" />}
               Run #{lastRun.id}: {lastRun.status}
-            </Badge>
+            </button>
           )}
           <Button
             size="sm"

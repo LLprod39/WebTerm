@@ -1,8 +1,24 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
-import { AlertTriangle, ArrowLeft, BookOpen, Bot, CheckCircle2, Code2, FileCode2, FileText, FolderOpen, Loader2, Plus, Save, Search, Server, Shield, Sparkles, Trash2, WandSparkles } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  BookOpen,
+  Bot,
+  CheckCircle2,
+  FileCode2,
+  FolderPlus,
+  Loader2,
+  Save,
+  Search,
+  Server,
+  Shield,
+  Sparkles,
+  Trash2,
+  WandSparkles,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -42,8 +58,6 @@ type SkillWizardState = {
   with_assets: boolean;
   force: boolean;
 };
-
-type WorkspaceDraftKind = "reference" | "script" | "asset";
 
 function listToCsv(items?: string[]) {
   return (items || []).join(", ");
@@ -99,59 +113,26 @@ function parseRuntimePolicy(text: string) {
   return parsed as Record<string, unknown>;
 }
 
-function defaultWorkspaceFilename(kind: WorkspaceDraftKind) {
-  if (kind === "reference") return "example.md";
-  if (kind === "script") return "helper.sh";
-  return "notes.txt";
+function formatFileSize(size: number) {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function buildWorkspacePath(kind: WorkspaceDraftKind, filename: string) {
-  const trimmed = filename.trim().replace(/\\/g, "/").replace(/^\/+/, "");
-  if (!trimmed) return "";
-  if (kind === "reference") {
-    return `references/${trimmed.includes(".") ? trimmed : `${trimmed}.md`}`;
+function fileKindLabel(kind: StudioSkillWorkspaceFile["kind"], lang: "ru" | "en") {
+  const tr = (ru: string, en: string) => (lang === "ru" ? ru : en);
+  switch (kind) {
+    case "skill":
+      return "SKILL.md";
+    case "reference":
+      return tr("reference", "reference");
+    case "script":
+      return tr("script", "script");
+    case "asset":
+      return tr("asset", "asset");
+    default:
+      return tr("file", "file");
   }
-  if (kind === "script") {
-    return `scripts/${trimmed.includes(".") ? trimmed : `${trimmed}.sh`}`;
-  }
-  return `assets/${trimmed.includes(".") ? trimmed : `${trimmed}.txt`}`;
-}
-
-function buildWorkspaceTemplate(kind: WorkspaceDraftKind, filename: string, skillName: string) {
-  const stem = filename.replace(/\.[^.]+$/, "") || "new-file";
-  if (kind === "reference") {
-    return `# ${stem}\n\nContext for ${skillName}.\n\n## Examples\n\n- Example request\n- Example expected result\n`;
-  }
-  if (kind === "script") {
-    return `#!/usr/bin/env bash\nset -euo pipefail\n\n# ${skillName}: ${stem}\n# Add deterministic helper logic here.\n`;
-  }
-  return `# ${skillName}: ${stem}\n\nAdd supporting text, snippets, or templates here.\n`;
-}
-
-const WORKSPACE_UPLOAD_ACCEPT = [
-  ".md",
-  ".txt",
-  ".json",
-  ".yaml",
-  ".yml",
-  ".toml",
-  ".ini",
-  ".cfg",
-  ".conf",
-  ".csv",
-  ".sql",
-  ".sh",
-  ".bash",
-  ".zsh",
-  ".py",
-  ".js",
-  ".ts",
-].join(",");
-
-function workspaceFileIcon(kind: StudioSkillWorkspaceFile["kind"]) {
-  if (kind === "skill" || kind === "reference") return FileText;
-  if (kind === "script") return FileCode2;
-  return Code2;
 }
 
 function SkillMarkdown({ content }: { content: string }) {
@@ -225,12 +206,8 @@ function SkillCard({
         {skill.safety_level && <span className="text-[10px] text-muted-foreground">{skill.safety_level}</span>}
       </div>
       {skill.description && <p className="mt-3 text-[11px] leading-5 text-muted-foreground">{skill.description}</p>}
-      {skill.guardrail_summary?.length > 0 && (
-        <p className="mt-2 text-[10px] leading-5 text-muted-foreground">{skill.guardrail_summary[0]}</p>
-      )}
-      {skill.tags?.length > 0 && (
-        <div className="mt-3 text-[10px] text-muted-foreground">{skill.tags.slice(0, 3).join(" · ")}</div>
-      )}
+      {skill.guardrail_summary?.length > 0 && <p className="mt-2 text-[10px] leading-5 text-muted-foreground">{skill.guardrail_summary[0]}</p>}
+      {skill.tags?.length > 0 && <div className="mt-3 text-[10px] text-muted-foreground">{skill.tags.slice(0, 3).join(" · ")}</div>}
     </button>
   );
 }
@@ -271,30 +248,23 @@ export default function StudioSkillsPage() {
   const [launcherTemplateSlug, setLauncherTemplateSlug] = useState("__none__");
   const [createOpen, setCreateOpen] = useState(false);
   const [validateOpen, setValidateOpen] = useState(false);
+  const [createFileOpen, setCreateFileOpen] = useState(false);
   const [selectedTemplateSlug, setSelectedTemplateSlug] = useState("__none__");
+  const [selectedFilePath, setSelectedFilePath] = useState("");
+  const [createFilePath, setCreateFilePath] = useState("");
+  const [createFileContent, setCreateFileContent] = useState("");
+  const [editorValue, setEditorValue] = useState("");
   const [wizard, setWizard] = useState<SkillWizardState>(() => createWizardState(null));
   const [wizardSection, setWizardSection] = useState<"basics" | "policy" | "files">("basics");
   const [slugTouched, setSlugTouched] = useState(false);
   const [validationReport, setValidationReport] = useState<StudioSkillValidationResponse | null>(null);
   const [strictValidation, setStrictValidation] = useState(false);
-  const [workspaceOpen, setWorkspaceOpen] = useState(false);
-  const [workspaceCreateOpen, setWorkspaceCreateOpen] = useState(false);
-  const [workspacePath, setWorkspacePath] = useState("SKILL.md");
-  const [workspaceDraft, setWorkspaceDraft] = useState("");
-  const [workspaceDirty, setWorkspaceDirty] = useState(false);
-  const [workspaceStatus, setWorkspaceStatus] = useState<string | null>(null);
-  const [workspaceCreateKind, setWorkspaceCreateKind] = useState<WorkspaceDraftKind>("reference");
-  const [workspaceCreateName, setWorkspaceCreateName] = useState(defaultWorkspaceFilename("reference"));
-  const [workspaceUploadOpen, setWorkspaceUploadOpen] = useState(false);
-  const [workspaceUploadKind, setWorkspaceUploadKind] = useState<WorkspaceDraftKind>("reference");
-  const [workspaceUploadName, setWorkspaceUploadName] = useState("");
-  const [workspaceUploadFile, setWorkspaceUploadFile] = useState<File | null>(null);
-  const workspaceUploadInputRef = useRef<HTMLInputElement | null>(null);
 
   const { data: skills = [], isLoading } = useQuery({
     queryKey: ["studio", "skills"],
     queryFn: studioSkills.list,
   });
+
   const { data: templates = [] } = useQuery({
     queryKey: ["studio", "skill-templates"],
     queryFn: studioSkills.templates,
@@ -304,6 +274,7 @@ export default function StudioSkillsPage() {
     () => templates.find((item) => item.slug === selectedTemplateSlug) || null,
     [templates, selectedTemplateSlug],
   );
+
   const launcherTemplate = useMemo(
     () => templates.find((item) => item.slug === launcherTemplateSlug) || null,
     [templates, launcherTemplateSlug],
@@ -318,15 +289,25 @@ export default function StudioSkillsPage() {
     const matchesService = serviceFilter === "__all__" || skill.service === serviceFilter;
     return matchesSearch && matchesService;
   });
+
   const filteredSignature = filteredSkills.map((skill) => skill.slug).join("|");
   const runtimeEnforcedCount = skills.filter((skill) => skill.runtime_enforced).length;
   const serviceCount = new Set(skills.map((skill) => skill.service).filter(Boolean)).size;
 
+  const invalidateSkillQueries = async (slug?: string) => {
+    await queryClient.invalidateQueries({ queryKey: ["studio", "skills"] });
+    if (!slug) return;
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["studio", "skills", slug] }),
+      queryClient.invalidateQueries({ queryKey: ["studio", "skills", "workspace", slug] }),
+      queryClient.invalidateQueries({ queryKey: ["studio", "skills", "workspace", "file", slug] }),
+    ]);
+  };
+
   const scaffoldMutation = useMutation({
     mutationFn: (payload: StudioSkillScaffoldPayload) => studioSkills.scaffold(payload),
-    onSuccess: (response) => {
-      queryClient.invalidateQueries({ queryKey: ["studio", "skills"] });
-      queryClient.invalidateQueries({ queryKey: ["studio", "skills", response.skill.slug] });
+    onSuccess: async (response) => {
+      await invalidateSkillQueries(response.skill.slug);
       setSelectedSlug(response.skill.slug);
       setCreateOpen(false);
       toast({
@@ -368,7 +349,7 @@ export default function StudioSkillsPage() {
     if (!selectedSlug || !filteredSkills.some((skill) => skill.slug === selectedSlug)) {
       setSelectedSlug(filteredSkills[0].slug);
     }
-  }, [filteredSignature, selectedSlug]);
+  }, [filteredSignature, selectedSlug, filteredSkills]);
 
   const { data: selectedSkill, isFetching: isFetchingSkill } = useQuery({
     queryKey: ["studio", "skills", selectedSlug],
@@ -377,15 +358,86 @@ export default function StudioSkillsPage() {
   });
 
   const { data: workspace, isFetching: isFetchingWorkspace } = useQuery({
-    queryKey: ["studio", "skills", selectedSlug, "workspace"],
+    queryKey: ["studio", "skills", "workspace", selectedSlug],
     queryFn: () => studioSkills.workspace(selectedSlug),
-    enabled: workspaceOpen && !!selectedSlug,
+    enabled: !!selectedSlug,
   });
 
-  const { data: activeWorkspaceFile, isFetching: isFetchingWorkspaceFile } = useQuery({
-    queryKey: ["studio", "skills", selectedSlug, "workspace-file", workspacePath],
-    queryFn: () => studioSkills.readFile(selectedSlug, workspacePath),
-    enabled: workspaceOpen && !!selectedSlug && !!workspacePath,
+  const workspaceSignature = (workspace?.files || []).map((file) => file.path).join("|");
+
+  useEffect(() => {
+    if (!workspace?.files.length) {
+      if (selectedFilePath) setSelectedFilePath("");
+      return;
+    }
+    if (!selectedFilePath || !workspace.files.some((file) => file.path === selectedFilePath)) {
+      const preferred = workspace.files.find((file) => file.path === "SKILL.md")?.path || workspace.files[0].path;
+      setSelectedFilePath(preferred);
+    }
+  }, [workspace, workspaceSignature, selectedFilePath]);
+
+  const selectedWorkspaceFile = useMemo(
+    () => workspace?.files.find((file) => file.path === selectedFilePath) || null,
+    [workspace, selectedFilePath],
+  );
+
+  const { data: selectedFileDetail, isFetching: isFetchingFile } = useQuery({
+    queryKey: ["studio", "skills", "workspace", "file", selectedSlug, selectedFilePath],
+    queryFn: () => studioSkills.readFile(selectedSlug, selectedFilePath),
+    enabled: !!selectedSlug && !!selectedFilePath,
+  });
+
+  useEffect(() => {
+    if (selectedFileDetail) {
+      setEditorValue(selectedFileDetail.content);
+    }
+  }, [selectedFileDetail]);
+
+  const createFileMutation = useMutation({
+    mutationFn: (payload: { path: string; content: string }) => {
+      if (!selectedSlug) throw new Error("Skill is not selected");
+      return studioSkills.createFile(selectedSlug, payload);
+    },
+    onSuccess: async (response, variables) => {
+      await invalidateSkillQueries(selectedSlug);
+      setCreateFileOpen(false);
+      setCreateFilePath("");
+      setCreateFileContent("");
+      setSelectedFilePath(response.file?.path || variables.path);
+      toast({ description: tr("Файл создан", "File created") });
+    },
+    onError: (error: Error) => {
+      toast({ variant: "destructive", description: error.message });
+    },
+  });
+
+  const updateFileMutation = useMutation({
+    mutationFn: (payload: { path: string; content: string }) => {
+      if (!selectedSlug) throw new Error("Skill is not selected");
+      return studioSkills.updateFile(selectedSlug, payload);
+    },
+    onSuccess: async () => {
+      await invalidateSkillQueries(selectedSlug);
+      toast({ description: tr("Файл сохранён", "File saved") });
+    },
+    onError: (error: Error) => {
+      toast({ variant: "destructive", description: error.message });
+    },
+  });
+
+  const deleteFileMutation = useMutation({
+    mutationFn: (path: string) => {
+      if (!selectedSlug) throw new Error("Skill is not selected");
+      return studioSkills.deleteFile(selectedSlug, path);
+    },
+    onSuccess: async () => {
+      await invalidateSkillQueries(selectedSlug);
+      setSelectedFilePath("SKILL.md");
+      toast({ description: tr("Файл удалён", "File deleted") });
+    },
+    onError: (error: Error) => {
+      toast({ variant: "destructive", description: error.message });
+    },
   });
 
   const openCreateDialog = (template?: StudioSkillTemplate | null) => {
@@ -394,193 +446,6 @@ export default function StudioSkillsPage() {
     setWizardSection("basics");
     setSlugTouched(false);
     setCreateOpen(true);
-  };
-
-  useEffect(() => {
-    if (!workspaceOpen) return;
-    setWorkspaceStatus(null);
-  }, [workspaceOpen, workspacePath]);
-
-  useEffect(() => {
-    if (!workspaceOpen || !workspace?.files?.length) return;
-    const hasCurrent = workspace.files.some((file) => file.path === workspacePath);
-    if (hasCurrent) return;
-    const nextPath = workspace.files.some((file) => file.path === "SKILL.md") ? "SKILL.md" : workspace.files[0].path;
-    setWorkspacePath(nextPath);
-  }, [workspace, workspaceOpen, workspacePath]);
-
-  useEffect(() => {
-    if (!activeWorkspaceFile) return;
-    setWorkspaceDraft(activeWorkspaceFile.content);
-    setWorkspaceDirty(false);
-  }, [activeWorkspaceFile?.path, activeWorkspaceFile?.content]);
-
-  const workspaceFilesByKind = useMemo(() => {
-    const groups: Record<string, StudioSkillWorkspaceFile[]> = {
-      skill: [],
-      reference: [],
-      script: [],
-      asset: [],
-      file: [],
-    };
-    for (const file of workspace?.files || []) {
-      groups[file.kind] = [...(groups[file.kind] || []), file];
-    }
-    return groups;
-  }, [workspace?.files]);
-
-  const selectedWorkspaceMeta = useMemo(
-    () => workspace?.files.find((file) => file.path === workspacePath) || null,
-    [workspace?.files, workspacePath],
-  );
-
-  const workspaceExistingPaths = useMemo(() => new Set((workspace?.files || []).map((file) => file.path)), [workspace?.files]);
-
-  const refreshWorkspace = () => {
-    queryClient.invalidateQueries({ queryKey: ["studio", "skills", selectedSlug, "workspace"] });
-    queryClient.invalidateQueries({ queryKey: ["studio", "skills", selectedSlug] });
-    queryClient.invalidateQueries({ queryKey: ["studio", "skills"] });
-  };
-
-  const selectWorkspaceFile = (nextPath: string) => {
-    if (nextPath === workspacePath) return;
-    if (workspaceDirty && !window.confirm(tr("Есть несохранённые изменения. Переключить файл и потерять draft?", "You have unsaved changes. Switch files and discard the draft?"))) {
-      return;
-    }
-    setWorkspacePath(nextPath);
-    setWorkspaceStatus(null);
-  };
-
-  const resetWorkspaceUpload = (kind: WorkspaceDraftKind = "reference") => {
-    setWorkspaceUploadKind(kind);
-    setWorkspaceUploadName("");
-    setWorkspaceUploadFile(null);
-    if (workspaceUploadInputRef.current) {
-      workspaceUploadInputRef.current.value = "";
-    }
-  };
-
-  const saveWorkspaceFileMutation = useMutation({
-    mutationFn: (payload: { path: string; content: string }) => studioSkills.updateFile(selectedSlug, payload),
-    onSuccess: (response) => {
-      refreshWorkspace();
-      queryClient.invalidateQueries({ queryKey: ["studio", "skills", selectedSlug, "workspace-file", workspacePath] });
-      setWorkspaceDirty(false);
-      setWorkspaceStatus(
-        response.validation.errors.length
-          ? tr("Файл сохранён, но skill не проходит валидацию.", "File saved, but the skill currently fails validation.")
-          : response.validation.warnings.length
-            ? tr("Файл сохранён с предупреждениями валидации.", "File saved with validation warnings.")
-            : tr("Файл сохранён.", "File saved."),
-      );
-      toast({
-        description:
-          response.validation.errors.length
-            ? tr("Сохранено, но в skill есть ошибки валидации.", "Saved, but the skill has validation errors.")
-            : tr("Изменения сохранены", "Changes saved"),
-      });
-    },
-    onError: (error: Error) => {
-      toast({ variant: "destructive", description: error.message });
-    },
-  });
-
-  const createWorkspaceFileMutation = useMutation({
-    mutationFn: (payload: { path: string; content: string }) => studioSkills.createFile(selectedSlug, payload),
-    onSuccess: (response) => {
-      refreshWorkspace();
-      setWorkspaceCreateOpen(false);
-      setWorkspacePath(response.file?.path || workspacePath);
-      setWorkspaceStatus(tr("Файл создан.", "File created."));
-      if (response.file?.path) {
-        queryClient.invalidateQueries({ queryKey: ["studio", "skills", selectedSlug, "workspace-file", response.file.path] });
-      }
-      toast({ description: tr("Файл skill pack создан", "Skill pack file created") });
-    },
-    onError: (error: Error) => {
-      toast({ variant: "destructive", description: error.message });
-    },
-  });
-
-  const deleteWorkspaceFileMutation = useMutation({
-    mutationFn: (path: string) => studioSkills.deleteFile(selectedSlug, path),
-    onSuccess: () => {
-      const nextPath = workspace?.files.find((file) => file.path !== workspacePath)?.path || "SKILL.md";
-      refreshWorkspace();
-      queryClient.removeQueries({ queryKey: ["studio", "skills", selectedSlug, "workspace-file", workspacePath] });
-      setWorkspacePath(nextPath);
-      setWorkspaceStatus(tr("Файл удалён.", "File deleted."));
-      toast({ description: tr("Файл удалён", "File deleted") });
-    },
-    onError: (error: Error) => {
-      toast({ variant: "destructive", description: error.message });
-    },
-  });
-
-  const uploadWorkspaceFileMutation = useMutation({
-    mutationFn: async (payload: { kind: WorkspaceDraftKind; name: string; file: File }) => {
-      const path = buildWorkspacePath(payload.kind, payload.name || payload.file.name);
-      if (!path) {
-        throw new Error(tr("Укажите имя файла.", "Enter a file name."));
-      }
-      const content = await payload.file.text();
-      if (workspaceExistingPaths.has(path)) {
-        return {
-          path,
-          response: await studioSkills.updateFile(selectedSlug, { path, content }),
-          replaced: true,
-        };
-      }
-      return {
-        path,
-        response: await studioSkills.createFile(selectedSlug, { path, content }),
-        replaced: false,
-      };
-    },
-    onSuccess: ({ path, response, replaced }) => {
-      refreshWorkspace();
-      setWorkspaceUploadOpen(false);
-      resetWorkspaceUpload(workspaceUploadKind);
-      setWorkspaceOpen(true);
-      selectWorkspaceFile(path);
-      queryClient.invalidateQueries({ queryKey: ["studio", "skills", selectedSlug, "workspace-file", path] });
-      setWorkspaceStatus(
-        response.validation.errors.length
-          ? tr("Файл загружен, но skill не проходит валидацию.", "File uploaded, but the skill currently fails validation.")
-          : response.validation.warnings.length
-            ? tr("Файл загружен с предупреждениями валидации.", "File uploaded with validation warnings.")
-            : replaced
-              ? tr("Файл обновлён.", "File updated.")
-              : tr("Файл загружен.", "File uploaded."),
-      );
-      toast({
-        description: replaced
-          ? tr("Файл в skill pack обновлён", "Skill pack file updated")
-          : tr("Файл добавлен в skill pack", "File added to the skill pack"),
-      });
-    },
-    onError: (error: Error) => {
-      toast({ variant: "destructive", description: error.message });
-    },
-  });
-
-  const openWorkspace = (path?: string) => {
-    setWorkspaceOpen(true);
-    setWorkspaceStatus(null);
-    setWorkspacePath(path || "SKILL.md");
-  };
-
-  const openWorkspaceCreate = (kind: WorkspaceDraftKind = "reference") => {
-    setWorkspaceOpen(true);
-    setWorkspaceCreateKind(kind);
-    setWorkspaceCreateName(defaultWorkspaceFilename(kind));
-    setWorkspaceCreateOpen(true);
-  };
-
-  const openWorkspaceUpload = (kind: WorkspaceDraftKind = "reference") => {
-    setWorkspaceOpen(true);
-    resetWorkspaceUpload(kind);
-    setWorkspaceUploadOpen(true);
   };
 
   const submitWizard = () => {
@@ -616,6 +481,24 @@ export default function StudioSkillsPage() {
     scaffoldMutation.mutate(payload);
   };
 
+  const saveCurrentFile = () => {
+    if (!selectedFilePath) return;
+    updateFileMutation.mutate({ path: selectedFilePath, content: editorValue });
+  };
+
+  const removeCurrentFile = () => {
+    if (!selectedFilePath || selectedFilePath === "SKILL.md") return;
+    const confirmed = window.confirm(
+      tr(`Удалить файл ${selectedFilePath}? Это действие нельзя отменить.`, `Delete ${selectedFilePath}? This cannot be undone.`),
+    );
+    if (!confirmed) return;
+    deleteFileMutation.mutate(selectedFilePath);
+  };
+
+  const isEditorDirty = Boolean(selectedFileDetail && editorValue !== selectedFileDetail.content);
+  const workspaceErrors = workspace?.validation.errors || [];
+  const workspaceWarnings = workspace?.validation.warnings || [];
+
   return (
     <div className="flex h-full flex-col">
       <div className="px-6 py-6">
@@ -628,13 +511,16 @@ export default function StudioSkillsPage() {
                 </Button>
                 <div>
                   <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{tr("Studio library", "Studio library")}</div>
-                  <h1 className="text-2xl font-semibold tracking-tight text-foreground">{tr("Каталог скиллов", "Skill Catalog")}</h1>
+                  <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-foreground">
+                    <BookOpen className="h-5 w-5 text-primary" />
+                    {tr("Каталог скиллов", "Skill Catalog")}
+                  </h1>
                 </div>
               </div>
               <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
                 {tr(
-                  "Скилл здесь это рабочий плейбук. Сначала выберите нужный сервис слева, затем проверьте guardrails, runtime policy и сам Markdown справа.",
-                  "A skill here is an operating playbook. Pick the relevant service on the left, then review guardrails, runtime policy, and the Markdown content on the right.",
+                  "Скилл здесь это рабочий плейбук. Выберите сервис, проверьте guardrails и runtime policy, а затем правьте сам workspace прямо из Studio.",
+                  "A skill here is an operating playbook. Pick the service, review guardrails and runtime policy, then edit the workspace directly from Studio.",
                 )}
               </p>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
@@ -674,7 +560,7 @@ export default function StudioSkillsPage() {
               <div className="rounded-xl border border-border/70 bg-background/24 p-4">
                 <div className="mb-3">
                   <Label className="text-xs">{tr("Каталог", "Catalog")}</Label>
-                  <p className="mt-1 text-[11px] text-muted-foreground">{tr("Ищите по сервису, тегам или названию. Список слева нужен только для выбора, всё содержание открывается справа.", "Search by service, tags, or name. The left side is only for picking a skill; the full content opens on the right.")}</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">{tr("Ищите по сервису, тегам или названию. Полный playbook и файловый workspace откроются справа.", "Search by service, tags, or name. The full playbook and workspace open on the right.")}</p>
                 </div>
 
                 <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_160px] xl:grid-cols-1">
@@ -718,83 +604,62 @@ export default function StudioSkillsPage() {
                   ) : (
                     <div className="space-y-2">
                       {filteredSkills.map((skill) => (
-                        <SkillCard
-                          key={skill.slug}
-                          skill={skill}
-                          isSelected={skill.slug === selectedSlug}
-                          onSelect={() => setSelectedSlug(skill.slug)}
-                          lang={lang}
-                        />
+                        <SkillCard key={skill.slug} skill={skill} isSelected={skill.slug === selectedSlug} onSelect={() => setSelectedSlug(skill.slug)} lang={lang} />
                       ))}
                     </div>
                   )}
                 </div>
               </div>
 
-              {templates.length > 0 && (
-                <div className="rounded-xl border border-border/70 bg-background/24 p-4">
-                  <div className="mb-3 flex items-center justify-between gap-2">
-                    <div>
-                      <Label className="text-xs">{tr("Создать новый скилл", "Create a new skill")}</Label>
-                      <p className="mt-1 text-[11px] text-muted-foreground">{tr("Лучше выбрать шаблон сервиса и только потом открывать мастер. Так меньше лишних полей сразу.", "Pick a service template first, then open the wizard. It keeps the first step lighter.")}</p>
-                    </div>
-                    <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-md px-3 text-[11px]" onClick={() => openCreateDialog()}>
-                      <Sparkles className="h-3 w-3" />
-                      {tr("Пустой мастер", "Blank Wizard")}
-                    </Button>
+              <div className="rounded-xl border border-border/70 bg-background/24 p-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div>
+                    <Label className="text-xs">{tr("Создать новый скилл", "Create a new skill")}</Label>
+                    <p className="mt-1 text-[11px] text-muted-foreground">{tr("Лучше выбрать шаблон сервиса и потом открывать мастер. Так сразу подтянутся дефолтные policy и guardrails.", "Pick a service template first, then open the wizard. That preloads sensible policy and guardrails.")}</p>
                   </div>
-
-                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-                    <Select value={launcherTemplateSlug} onValueChange={setLauncherTemplateSlug}>
-                      <SelectTrigger className="h-10 rounded-md text-xs">
-                        <SelectValue placeholder={tr("Выберите шаблон сервиса", "Choose a service template")} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">{tr("Начать с нуля", "Start from scratch")}</SelectItem>
-                        {templates.map((template) => (
-                          <SelectItem key={template.slug} value={template.slug}>
-                            {template.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      size="sm"
-                      className="h-10 gap-1.5 rounded-md px-4"
-                      onClick={() => openCreateDialog(launcherTemplate)}
-                    >
-                      <WandSparkles className="h-3.5 w-3.5" />
-                      {tr("Открыть мастер", "Open wizard")}
-                    </Button>
-                  </div>
-
-                  {launcherTemplate && (
-                    <div className="mt-3 rounded-xl border border-border/70 bg-background/30 px-3 py-3">
-                      <div className="flex flex-wrap items-center gap-2 text-[11px]">
-                        <span className="font-medium text-foreground">{launcherTemplate.name}</span>
-                        {launcherTemplate.defaults.service && <span className="text-muted-foreground">{launcherTemplate.defaults.service}</span>}
-                        {launcherTemplate.defaults.safety_level && <span className="text-muted-foreground">· {launcherTemplate.defaults.safety_level}</span>}
-                      </div>
-                      <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
-                        {launcherTemplate.summary || launcherTemplate.description}
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="mt-3 text-[11px] text-muted-foreground">
-                    {tr(
-                      `${templates.length} шаблонов доступны через мастер`,
-                      `${templates.length} templates are available through the wizard`,
-                    )}
-                  </div>
+                  <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-md px-3 text-[11px]" onClick={() => openCreateDialog()}>
+                    <Sparkles className="h-3 w-3" />
+                    {tr("Пустой мастер", "Blank Wizard")}
+                  </Button>
                 </div>
-              )}
+
+                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                  <Select value={launcherTemplateSlug} onValueChange={setLauncherTemplateSlug}>
+                    <SelectTrigger className="h-10 rounded-md text-xs">
+                      <SelectValue placeholder={tr("Выберите шаблон сервиса", "Choose a service template")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">{tr("Начать с нуля", "Start from scratch")}</SelectItem>
+                      {templates.map((template) => (
+                        <SelectItem key={template.slug} value={template.slug}>
+                          {template.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button size="sm" className="h-10 gap-1.5 rounded-md px-4" onClick={() => openCreateDialog(launcherTemplate)}>
+                    <WandSparkles className="h-3.5 w-3.5" />
+                    {tr("Открыть мастер", "Open wizard")}
+                  </Button>
+                </div>
+
+                {launcherTemplate && (
+                  <div className="mt-3 rounded-xl border border-border/70 bg-background/30 px-3 py-3">
+                    <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                      <span className="font-medium text-foreground">{launcherTemplate.name}</span>
+                      {launcherTemplate.defaults.service && <span className="text-muted-foreground">{launcherTemplate.defaults.service}</span>}
+                      {launcherTemplate.defaults.safety_level && <span className="text-muted-foreground">· {launcherTemplate.defaults.safety_level}</span>}
+                    </div>
+                    <p className="mt-2 text-[11px] leading-5 text-muted-foreground">{launcherTemplate.summary || launcherTemplate.description}</p>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="min-w-0">
               {!selectedSlug ? (
                 <div className="flex h-72 items-center justify-center rounded-xl border border-border/70 bg-background/24 text-center text-sm text-muted-foreground">
-                  {tr("Выберите скилл слева, чтобы изучить его плейбук и ограничения.", "Select a skill on the left to inspect its playbook and guardrails.")}
+                  {tr("Выберите скилл слева, чтобы изучить его плейбук, guardrails и workspace.", "Select a skill on the left to inspect its playbook, guardrails, and workspace.")}
                 </div>
               ) : isFetchingSkill && !selectedSkill ? (
                 <div className="flex h-72 items-center justify-center rounded-xl border border-border/70 bg-background/24 text-sm text-muted-foreground">
@@ -813,26 +678,16 @@ export default function StudioSkillsPage() {
                       {selectedSkill.category && <span>· {selectedSkill.category}</span>}
                       {selectedSkill.runtime_enforced && <span>· {tr("runtime enforced", "runtime enforced")}</span>}
                       {selectedSkill.safety_level && <span>· {selectedSkill.safety_level}</span>}
-                      <span>· {selectedSkill.path}</span>
                     </div>
-                    {selectedSkill.description && <p className="text-sm text-muted-foreground">{selectedSkill.description}</p>}
-                    {selectedSkill.ui_hint && <p className="text-xs text-muted-foreground">{selectedSkill.ui_hint}</p>}
-                    <div className="flex flex-wrap gap-2">
-                      <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-md px-3 text-[11px]" onClick={() => openWorkspace("SKILL.md")}>
-                        <FolderOpen className="h-3.5 w-3.5" />
-                        {tr("Открыть workspace", "Open workspace")}
-                      </Button>
-                      <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-md px-3 text-[11px]" onClick={() => openWorkspaceCreate()}>
-                        <Plus className="h-3.5 w-3.5" />
-                        {tr("Новый файл", "New file")}
-                      </Button>
-                      <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-md px-3 text-[11px]" onClick={() => openWorkspaceUpload()}>
-                        <ArrowLeft className="h-3.5 w-3.5 rotate-90" />
-                        {tr("Загрузить файл", "Upload file")}
-                      </Button>
+                    {selectedSkill.description && <p className="mt-3 text-sm leading-6 text-muted-foreground">{selectedSkill.description}</p>}
+                    {selectedSkill.ui_hint && <div className="mt-3 rounded-lg border border-border/60 bg-background/28 px-3 py-2 text-[11px] text-muted-foreground">{selectedSkill.ui_hint}</div>}
+                    <div className="mt-3 rounded-xl border border-border/70 bg-background/30 px-3 py-3">
+                      <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{tr("Workspace path", "Workspace path")}</div>
+                      <div className="mt-1 break-all font-mono text-[11px] text-foreground">{selectedSkill.path}</div>
                     </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
+                  </div>
+
+                  <div className="grid gap-4 lg:grid-cols-2">
                     {selectedSkill.guardrail_summary?.length > 0 && (
                       <div className="rounded-xl border border-border/70 bg-background/24 p-4">
                         <p className="text-xs font-medium">{tr("Guardrails", "Guardrails")}</p>
@@ -872,6 +727,174 @@ export default function StudioSkillsPage() {
                     </div>
                     <SkillMarkdown content={selectedSkill.content} />
                   </div>
+
+                  <div className="rounded-xl border border-border/70 bg-background/24 p-5">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <h3 className="flex items-center gap-2 text-base font-medium text-foreground">
+                          <FileCode2 className="h-4 w-4 text-primary" />
+                          {tr("Workspace редактор", "Workspace Editor")}
+                        </h3>
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          {tr(
+                            "Здесь можно править сам SKILL.md и text-файлы в references/, scripts/ и assets/. Backend это уже поддерживает, теперь и фронт тоже.",
+                            "You can edit SKILL.md and text files under references/, scripts/, and assets/. The backend already supported it; now the frontend does too.",
+                          )}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-md px-3 text-[11px]" onClick={() => setCreateFileOpen(true)}>
+                          <FolderPlus className="h-3.5 w-3.5" />
+                          {tr("Новый файл", "New File")}
+                        </Button>
+                        <Button size="sm" className="h-8 gap-1.5 rounded-md px-3 text-[11px]" onClick={saveCurrentFile} disabled={!selectedFilePath || !isEditorDirty || updateFileMutation.isPending}>
+                          {updateFileMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                          {tr("Сохранить", "Save")}
+                        </Button>
+                        <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-md px-3 text-[11px]" onClick={removeCurrentFile} disabled={!selectedFilePath || selectedFilePath === "SKILL.md" || deleteFileMutation.isPending}>
+                          {deleteFileMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                          {tr("Удалить", "Delete")}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                      <span>{tr(`${workspace?.files.length || 0} файлов`, `${workspace?.files.length || 0} files`)}</span>
+                      <span>{tr("Только UTF-8 text файлы", "UTF-8 text files only")}</span>
+                      <span>{tr("Лимит файла: 500 KB", "File limit: 500 KB")}</span>
+                    </div>
+
+                    <div className="mt-4 grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
+                      <div className="rounded-xl border border-border/70 bg-background/30 p-3">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <div>
+                            <p className="text-xs font-medium text-foreground">{tr("Файлы пакета", "Package Files")}</p>
+                            <p className="text-[10px] text-muted-foreground">{tr("SKILL.md, references/, scripts/, assets/", "SKILL.md, references/, scripts/, assets/")}</p>
+                          </div>
+                          {isFetchingWorkspace ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
+                        </div>
+                        {!workspace?.files.length ? (
+                          <div className="rounded-xl border border-dashed border-border/70 px-3 py-6 text-center text-[11px] text-muted-foreground">
+                            {tr("Файлы ещё не найдены.", "No files found yet.")}
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {workspace.files.map((file) => (
+                              <button
+                                key={file.path}
+                                type="button"
+                                onClick={() => setSelectedFilePath(file.path)}
+                                className={`w-full rounded-xl border px-3 py-3 text-left transition-colors ${
+                                  selectedFilePath === file.path ? "border-primary/40 bg-primary/5" : "border-border/70 bg-background/24 hover:bg-background/40"
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="truncate text-[11px] font-medium text-foreground">{file.name}</span>
+                                  <span className="text-[10px] text-muted-foreground">{formatFileSize(file.size)}</span>
+                                </div>
+                                <div className="mt-1 truncate font-mono text-[10px] text-muted-foreground">{file.path}</div>
+                                <div className="mt-2 flex flex-wrap gap-1">
+                                  <Badge variant="outline" className="text-[9px]">{fileKindLabel(file.kind, lang)}</Badge>
+                                  <Badge variant="secondary" className="text-[9px]">{file.language}</Badge>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="rounded-xl border border-border/70 bg-background/30">
+                        {!selectedWorkspaceFile ? (
+                          <div className="flex min-h-[360px] items-center justify-center px-6 text-center text-sm text-muted-foreground">
+                            {tr("Выберите файл слева, чтобы открыть редактор.", "Select a file on the left to open the editor.")}
+                          </div>
+                        ) : isFetchingFile && !selectedFileDetail ? (
+                          <div className="flex min-h-[360px] items-center justify-center text-sm text-muted-foreground">
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            {tr("Загрузка файла...", "Loading file...")}
+                          </div>
+                        ) : (
+                          <>
+                            <div className="border-b border-border/70 px-4 py-4">
+                              <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                  <div className="text-sm font-medium text-foreground">{selectedWorkspaceFile.name}</div>
+                                  <div className="mt-1 break-all font-mono text-[10px] text-muted-foreground">{selectedWorkspaceFile.path}</div>
+                                </div>
+                                <div className="flex flex-wrap gap-1">
+                                  <Badge variant="outline" className="text-[9px]">{fileKindLabel(selectedWorkspaceFile.kind, lang)}</Badge>
+                                  <Badge variant="secondary" className="text-[9px]">{selectedWorkspaceFile.language}</Badge>
+                                  <Badge variant="outline" className="text-[9px]">{formatFileSize(selectedWorkspaceFile.size)}</Badge>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="p-4">
+                              <Textarea rows={20} value={editorValue} onChange={(event) => setEditorValue(event.target.value)} className="min-h-[360px] font-mono text-[12px] leading-5" />
+                              <div className="mt-3 flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
+                                <div className="text-[11px] text-muted-foreground">
+                                  {selectedWorkspaceFile.path === "SKILL.md"
+                                    ? tr("Изменения в SKILL.md обновят playbook, который читает агент во время выполнения.", "Changes to SKILL.md update the playbook the agent reads at runtime.")
+                                    : tr("Редактируются только text-файлы. Для бинарных assets backend пока не подходит.", "Only text files are editable. Binary assets are not supported here yet.")}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  {isEditorDirty ? <span className="text-[11px] text-amber-300">{tr("Есть несохранённые изменения", "Unsaved changes")}</span> : <span className="text-[11px] text-muted-foreground">{tr("Сохранено", "Saved")}</span>}
+                                  <Button size="sm" className="h-8 gap-1.5 rounded-md px-3 text-[11px]" onClick={saveCurrentFile} disabled={!isEditorDirty || updateFileMutation.isPending}>
+                                    {updateFileMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                                    {tr("Сохранить файл", "Save file")}
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                      <div className="rounded-xl border border-border/70 bg-background/30 p-4">
+                        <div className="flex items-center gap-2">
+                          {workspace?.validation.is_valid ? <CheckCircle2 className="h-4 w-4 text-green-300" /> : <AlertTriangle className="h-4 w-4 text-amber-300" />}
+                          <p className="text-sm font-medium text-foreground">{tr("Состояние workspace", "Workspace status")}</p>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                          <span>{workspaceErrors.length} {tr("ошибок", "errors")}</span>
+                          <span>{workspaceWarnings.length} {tr("предупреждений", "warnings")}</span>
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-border/70 bg-background/30 p-4 text-[11px] leading-5 text-muted-foreground">
+                        {tr(
+                          "Если нужен новый runtime-материал, сначала создайте файл вида references/guide.md или scripts/helper.py, потом уже прикрепляйте этот skill к агенту или pipeline node.",
+                          "If you need new runtime material, create a file like references/guide.md or scripts/helper.py first, then attach the skill to an agent or pipeline node.",
+                        )}
+                      </div>
+                    </div>
+
+                    {(workspaceErrors.length > 0 || workspaceWarnings.length > 0) && (
+                      <div className="mt-4 space-y-3">
+                        {workspaceErrors.length > 0 && (
+                          <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4">
+                            <p className="text-xs font-medium text-red-200">{tr("Ошибки пакета", "Package errors")}</p>
+                            <div className="mt-2 space-y-1">
+                              {workspaceErrors.map((item) => (
+                                <p key={item} className="text-[11px] text-red-100">• {item}</p>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {workspaceWarnings.length > 0 && (
+                          <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+                            <p className="text-xs font-medium text-amber-100">{tr("Предупреждения пакета", "Package warnings")}</p>
+                            <div className="mt-2 space-y-1">
+                              {workspaceWarnings.map((item) => (
+                                <p key={item} className="text-[11px] text-amber-50">• {item}</p>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div className="flex h-72 items-center justify-center rounded-xl border border-border/70 bg-background/24 text-sm text-muted-foreground">
@@ -880,375 +903,8 @@ export default function StudioSkillsPage() {
               )}
             </div>
           </div>
+        </div>
       </div>
-      </div>
-
-      <Dialog
-        open={workspaceOpen}
-        onOpenChange={(open) => {
-          if (!open && workspaceDirty && !window.confirm(tr("Есть несохранённые изменения. Закрыть editor и потерять draft?", "You have unsaved changes. Close the editor and discard the draft?"))) {
-            return;
-          }
-          setWorkspaceOpen(open);
-        }}
-      >
-        <DialogContent className="max-h-[92vh] max-w-6xl overflow-hidden rounded-md border-border bg-background p-0">
-          <div className="flex h-[82vh] min-h-[620px] flex-col">
-            <DialogHeader className="border-b border-border px-6 py-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <DialogTitle>{tr("Skill Workspace", "Skill Workspace")}</DialogTitle>
-                  <DialogDescription>
-                    {tr(
-                      "Редактируйте SKILL.md, примеры в references/, детерминированные helper scripts и текстовые assets прямо из веба.",
-                      "Edit SKILL.md, examples in references/, deterministic helper scripts, and text assets directly from the web.",
-                    )}
-                  </DialogDescription>
-                </div>
-                {workspace?.validation ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    {workspace.validation.errors.length > 0 ? (
-                      <Badge variant="destructive" className="text-[10px]">{workspace.validation.errors.length} {tr("ошибок", "errors")}</Badge>
-                    ) : null}
-                    {workspace.validation.warnings.length > 0 ? (
-                      <Badge variant="outline" className="text-[10px]">{workspace.validation.warnings.length} {tr("предупреждений", "warnings")}</Badge>
-                    ) : null}
-                    {workspace.validation.errors.length === 0 && workspace.validation.warnings.length === 0 ? (
-                      <Badge variant="secondary" className="text-[10px]">{tr("валидно", "valid")}</Badge>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            </DialogHeader>
-
-            <div className="grid min-h-0 flex-1 lg:grid-cols-[290px_minmax(0,1fr)]">
-              <div className="min-h-0 overflow-auto border-b border-border p-4 lg:border-b-0 lg:border-r">
-                <div className="mb-4 flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-md px-3 text-[11px]" onClick={() => openWorkspaceCreate()}>
-                    <Plus className="h-3 w-3" />
-                    {tr("Новый", "New")}
-                  </Button>
-                  <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-md px-3 text-[11px]" onClick={() => openWorkspaceUpload()}>
-                    <ArrowLeft className="h-3 w-3 rotate-90" />
-                    {tr("Загрузить", "Upload")}
-                  </Button>
-                </div>
-
-                {isFetchingWorkspace && !workspace ? (
-                  <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {tr("Загрузка workspace...", "Loading workspace...")}
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {([
-                      ["skill", tr("Основной skill", "Main skill")],
-                      ["reference", tr("References", "References")],
-                      ["script", tr("Scripts", "Scripts")],
-                      ["asset", tr("Assets", "Assets")],
-                    ] as Array<[StudioSkillWorkspaceFile["kind"], string]>).map(([kind, label]) => {
-                      const files = workspaceFilesByKind[kind] || [];
-                      if (!files.length) return null;
-                      return (
-                        <div key={kind} className="space-y-1.5">
-                          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-                          {files.map((file) => {
-                            const Icon = workspaceFileIcon(file.kind);
-                            return (
-                              <button
-                                key={file.path}
-                                type="button"
-                                onClick={() => selectWorkspaceFile(file.path)}
-                                className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition-colors ${
-                                  file.path === workspacePath ? "bg-primary/10 text-foreground" : "hover:bg-muted/30 text-muted-foreground"
-                                }`}
-                              >
-                                <Icon className="h-3.5 w-3.5 shrink-0" />
-                                <div className="min-w-0 flex-1">
-                                  <div className="truncate font-medium text-foreground">{file.name}</div>
-                                  <div className="truncate text-[10px] text-muted-foreground">{file.path}</div>
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      );
-                    })}
-                    {workspace?.files?.length === 0 ? (
-                      <div className="rounded-md border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
-                        {tr("Workspace пока пустой.", "The workspace is empty.")}
-                      </div>
-                    ) : null}
-                  </div>
-                )}
-              </div>
-
-              <div className="min-h-0 flex flex-col">
-                <div className="border-b border-border px-4 py-3">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-foreground">{selectedWorkspaceMeta?.path || "SKILL.md"}</p>
-                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                        {selectedWorkspaceMeta ? (
-                          <>
-                            <span>{selectedWorkspaceMeta.kind}</span>
-                            <span>·</span>
-                            <span>{selectedWorkspaceMeta.language}</span>
-                            <span>·</span>
-                            <span>{selectedWorkspaceMeta.size}b</span>
-                          </>
-                        ) : null}
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 gap-1.5 rounded-md px-3 text-[11px]"
-                        onClick={() => saveWorkspaceFileMutation.mutate({ path: workspacePath, content: workspaceDraft })}
-                        disabled={!selectedWorkspaceMeta || !workspaceDirty || saveWorkspaceFileMutation.isPending}
-                      >
-                        {saveWorkspaceFileMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                        {tr("Сохранить", "Save")}
-                      </Button>
-                      {selectedWorkspaceMeta && selectedWorkspaceMeta.path !== "SKILL.md" ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 gap-1.5 rounded-md px-3 text-[11px] text-destructive hover:text-destructive"
-                          onClick={() => {
-                            if (!window.confirm(tr("Удалить этот файл из skill pack?", "Delete this file from the skill pack?"))) return;
-                            deleteWorkspaceFileMutation.mutate(selectedWorkspaceMeta.path);
-                          }}
-                          disabled={deleteWorkspaceFileMutation.isPending}
-                        >
-                          {deleteWorkspaceFileMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                          {tr("Удалить", "Delete")}
-                        </Button>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="min-h-0 flex-1">
-                  {isFetchingWorkspaceFile && !activeWorkspaceFile ? (
-                    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      {tr("Загрузка файла...", "Loading file...")}
-                    </div>
-                  ) : selectedWorkspaceMeta ? (
-                    <div className="flex h-full flex-col">
-                      <div className="border-b border-border px-4 py-2 text-[11px] text-muted-foreground">
-                        {selectedWorkspaceMeta.path === "SKILL.md"
-                          ? tr("Главный playbook skill pack. Здесь держи основную инструкцию, workflow и guardrails.", "Main skill pack playbook. Keep the core instruction set, workflow, and guardrails here.")
-                          : selectedWorkspaceMeta.kind === "reference"
-                            ? tr("Reference-файлы подходят для длинной документации, runbooks и примеров.", "Reference files are good for longer docs, runbooks, and examples.")
-                            : selectedWorkspaceMeta.kind === "script"
-                              ? tr("Scripts — для детерминированных helper-ов, которые агент может вызывать как часть skill pack workflow.", "Scripts are for deterministic helpers that can support the skill pack workflow.")
-                              : tr("Текстовый asset внутри skill pack.", "Text asset inside the skill pack.")}
-                      </div>
-                      <div className="min-h-0 flex-1 p-4">
-                        <Textarea
-                          value={workspaceDraft}
-                          onChange={(event) => {
-                            setWorkspaceDraft(event.target.value);
-                            setWorkspaceDirty(true);
-                            setWorkspaceStatus(null);
-                          }}
-                          className="h-full min-h-[420px] resize-none rounded-md border-border bg-background font-mono text-[12px] leading-6"
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                      {tr("Выберите файл слева.", "Select a file from the left.")}
-                    </div>
-                  )}
-                </div>
-
-                <div className="border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
-                  {workspaceStatus || (workspaceDirty ? tr("Есть несохранённые изменения.", "You have unsaved changes.") : tr("Изменений нет.", "No unsaved changes."))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={workspaceCreateOpen} onOpenChange={setWorkspaceCreateOpen}>
-        <DialogContent className="max-w-lg rounded-md border-border bg-background/95">
-          <DialogHeader>
-            <DialogTitle>{tr("Новый файл skill pack", "New skill pack file")}</DialogTitle>
-            <DialogDescription>
-              {tr("Создайте reference, script или text asset прямо в веб-интерфейсе.", "Create a reference, script, or text asset directly from the web UI.")}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs">{tr("Тип файла", "File type")}</Label>
-              <Select
-                value={workspaceCreateKind}
-                onValueChange={(value: WorkspaceDraftKind) => {
-                  setWorkspaceCreateKind(value);
-                  setWorkspaceCreateName(defaultWorkspaceFilename(value));
-                }}
-              >
-                <SelectTrigger className="text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="reference">{tr("Reference document", "Reference document")}</SelectItem>
-                  <SelectItem value="script">{tr("Helper script", "Helper script")}</SelectItem>
-                  <SelectItem value="asset">{tr("Text asset", "Text asset")}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">{tr("Имя файла", "File name")}</Label>
-              <Input
-                value={workspaceCreateName}
-                onChange={(event) => setWorkspaceCreateName(event.target.value)}
-                placeholder={defaultWorkspaceFilename(workspaceCreateKind)}
-              />
-              <p className="text-[11px] text-muted-foreground">
-                {buildWorkspacePath(workspaceCreateKind, workspaceCreateName || defaultWorkspaceFilename(workspaceCreateKind))}
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-4 flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setWorkspaceCreateOpen(false)}>
-              {tr("Отмена", "Cancel")}
-            </Button>
-            <Button
-              onClick={() => {
-                const path = buildWorkspacePath(workspaceCreateKind, workspaceCreateName);
-                if (!path) {
-                  toast({ variant: "destructive", description: tr("Укажите имя файла.", "Enter a file name.") });
-                  return;
-                }
-                createWorkspaceFileMutation.mutate({
-                  path,
-                  content: buildWorkspaceTemplate(workspaceCreateKind, workspaceCreateName, selectedSkill?.name || selectedSlug || "Skill"),
-                });
-              }}
-              disabled={createWorkspaceFileMutation.isPending}
-              className="gap-1.5"
-            >
-              {createWorkspaceFileMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-              {tr("Создать файл", "Create file")}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={workspaceUploadOpen}
-        onOpenChange={(open) => {
-          setWorkspaceUploadOpen(open);
-          if (!open) resetWorkspaceUpload(workspaceUploadKind);
-        }}
-      >
-        <DialogContent className="max-w-lg rounded-md border-border bg-background/95">
-          <DialogHeader>
-            <DialogTitle>{tr("Загрузить файл в skill pack", "Upload file into the skill pack")}</DialogTitle>
-            <DialogDescription>
-              {tr(
-                "Загрузите локальный markdown, JSON, shell/python script или текстовый asset. Файл попадёт прямо в references/, scripts/ или assets/.",
-                "Upload local markdown, JSON, shell/python scripts, or text assets. The file will go straight into references/, scripts/, or assets/.",
-              )}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs">{tr("Тип файла", "File type")}</Label>
-              <Select value={workspaceUploadKind} onValueChange={(value: WorkspaceDraftKind) => setWorkspaceUploadKind(value)}>
-                <SelectTrigger className="text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="reference">{tr("Reference document", "Reference document")}</SelectItem>
-                  <SelectItem value="script">{tr("Helper script", "Helper script")}</SelectItem>
-                  <SelectItem value="asset">{tr("Text asset", "Text asset")}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">{tr("Локальный файл", "Local file")}</Label>
-              <input
-                ref={workspaceUploadInputRef}
-                type="file"
-                accept={WORKSPACE_UPLOAD_ACCEPT}
-                className="hidden"
-                onChange={(event) => {
-                  const nextFile = event.target.files?.[0] || null;
-                  setWorkspaceUploadFile(nextFile);
-                  setWorkspaceUploadName(nextFile?.name || "");
-                }}
-              />
-              <Button type="button" variant="outline" className="w-full justify-between text-xs" onClick={() => workspaceUploadInputRef.current?.click()}>
-                <span className="truncate">
-                  {workspaceUploadFile?.name || tr("Выбрать файл", "Choose file")}
-                </span>
-                <span className="text-[10px] text-muted-foreground">
-                  {workspaceUploadFile ? `${Math.max(1, Math.round(workspaceUploadFile.size / 1024))} KB` : tr("UTF-8 text only", "UTF-8 text only")}
-                </span>
-              </Button>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">{tr("Имя внутри skill pack", "Name inside the skill pack")}</Label>
-              <Input
-                value={workspaceUploadName}
-                onChange={(event) => setWorkspaceUploadName(event.target.value)}
-                placeholder={workspaceUploadFile?.name || defaultWorkspaceFilename(workspaceUploadKind)}
-              />
-              <p className="text-[11px] text-muted-foreground">
-                {buildWorkspacePath(workspaceUploadKind, workspaceUploadName || workspaceUploadFile?.name || defaultWorkspaceFilename(workspaceUploadKind))}
-              </p>
-            </div>
-
-            {workspaceUploadFile && workspaceExistingPaths.has(buildWorkspacePath(workspaceUploadKind, workspaceUploadName || workspaceUploadFile.name)) ? (
-              <div className="rounded-md bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground">
-                {tr("Файл с таким путём уже существует и будет заменён.", "A file at this path already exists and will be replaced.")}
-              </div>
-            ) : null}
-          </div>
-
-          <div className="mt-4 flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setWorkspaceUploadOpen(false)}>
-              {tr("Отмена", "Cancel")}
-            </Button>
-            <Button
-              onClick={() => {
-                if (!workspaceUploadFile) {
-                  toast({ variant: "destructive", description: tr("Сначала выберите локальный файл.", "Choose a local file first.") });
-                  return;
-                }
-                const nextPath = buildWorkspacePath(workspaceUploadKind, workspaceUploadName || workspaceUploadFile.name);
-                if (!nextPath) {
-                  toast({ variant: "destructive", description: tr("Укажите имя файла.", "Enter a file name.") });
-                  return;
-                }
-                uploadWorkspaceFileMutation.mutate({
-                  kind: workspaceUploadKind,
-                  name: workspaceUploadName || workspaceUploadFile.name,
-                  file: workspaceUploadFile,
-                });
-              }}
-              disabled={uploadWorkspaceFileMutation.isPending}
-              className="gap-1.5"
-            >
-              {uploadWorkspaceFileMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowLeft className="h-3.5 w-3.5 rotate-90" />}
-              {tr("Загрузить", "Upload")}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="max-h-[90vh] max-w-5xl overflow-auto rounded-md border-border bg-background/95">
@@ -1260,12 +916,7 @@ export default function StudioSkillsPage() {
             <span className="font-medium text-foreground">{wizard.name.trim() || tr("Новый скилл", "New skill")}</span>
             <span>{selectedTemplate ? selectedTemplate.name : tr("без шаблона", "no template")}</span>
             <span>{tr(`safety: ${wizard.safety_level}`, `safety: ${wizard.safety_level}`)}</span>
-            <span>
-              {tr(
-                `${[wizard.with_references, wizard.with_scripts, wizard.with_assets].filter(Boolean).length} папок`,
-                `${[wizard.with_references, wizard.with_scripts, wizard.with_assets].filter(Boolean).length} folders`,
-              )}
-            </span>
+            <span>{tr(`${[wizard.with_references, wizard.with_scripts, wizard.with_assets].filter(Boolean).length} папок`, `${[wizard.with_references, wizard.with_scripts, wizard.with_assets].filter(Boolean).length} folders`)}</span>
           </div>
 
           <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -1273,21 +924,9 @@ export default function StudioSkillsPage() {
               <div className="workspace-subtle rounded-2xl px-4 py-3">
                 <div className="flex flex-wrap items-center gap-2">
                   {([
-                    {
-                      id: "basics",
-                      label: tr("1. Основа", "1. Basics"),
-                      description: tr("Шаблон, имя, сервис", "Template, name, service"),
-                    },
-                    {
-                      id: "policy",
-                      label: tr("2. Guardrails", "2. Guardrails"),
-                      description: tr("Правила, теги, runtime policy", "Rules, tags, runtime policy"),
-                    },
-                    {
-                      id: "files",
-                      label: tr("3. Файлы", "3. Files"),
-                      description: tr("references, scripts, assets", "references, scripts, assets"),
-                    },
+                    { id: "basics", label: tr("1. Основа", "1. Basics"), description: tr("Шаблон, имя, сервис", "Template, name, service") },
+                    { id: "policy", label: tr("2. Guardrails", "2. Guardrails"), description: tr("Правила, теги, runtime policy", "Rules, tags, runtime policy") },
+                    { id: "files", label: tr("3. Файлы", "3. Files"), description: tr("references, scripts, assets", "references, scripts, assets") },
                   ] as const).map((section) => {
                     const active = wizardSection === section.id;
                     return (
@@ -1296,9 +935,7 @@ export default function StudioSkillsPage() {
                         type="button"
                         onClick={() => setWizardSection(section.id)}
                         className={`rounded-xl border px-3 py-2 text-left transition-colors ${
-                          active
-                            ? "border-border bg-background text-foreground"
-                            : "border-transparent bg-transparent text-muted-foreground hover:border-border/70 hover:bg-background/35 hover:text-foreground"
+                          active ? "border-border bg-background text-foreground" : "border-transparent bg-transparent text-muted-foreground hover:border-border/70 hover:bg-background/35 hover:text-foreground"
                         }`}
                       >
                         <div className="text-xs font-medium">{section.label}</div>
@@ -1341,9 +978,7 @@ export default function StudioSkillsPage() {
                         {selectedTemplate.defaults.service && <span className="text-muted-foreground">{selectedTemplate.defaults.service}</span>}
                         {selectedTemplate.defaults.safety_level && <span className="text-muted-foreground">· {selectedTemplate.defaults.safety_level}</span>}
                       </div>
-                      <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
-                        {selectedTemplate.summary || selectedTemplate.description}
-                      </p>
+                      <p className="mt-2 text-[11px] leading-5 text-muted-foreground">{selectedTemplate.summary || selectedTemplate.description}</p>
                     </div>
                   )}
 
@@ -1354,36 +989,20 @@ export default function StudioSkillsPage() {
                         value={wizard.name}
                         onChange={(e) => {
                           const value = e.target.value;
-                          setWizard((prev) => ({
-                            ...prev,
-                            name: value,
-                            slug: slugTouched ? prev.slug : slugifySkillName(value),
-                          }));
+                          setWizard((prev) => ({ ...prev, name: value, slug: slugTouched ? prev.slug : slugifySkillName(value) }));
                         }}
                         placeholder={tr("Рабочий процесс операций Keycloak", "Keycloak Operations Workflow")}
                       />
                     </div>
                     <div className="space-y-1.5">
                       <Label className="text-xs">{tr("Slug", "Slug")}</Label>
-                      <Input
-                        value={wizard.slug}
-                        onChange={(e) => {
-                          setSlugTouched(true);
-                          setWizard((prev) => ({ ...prev, slug: e.target.value }));
-                        }}
-                        placeholder={tr("keycloak-operations-workflow", "keycloak-operations-workflow")}
-                      />
+                      <Input value={wizard.slug} onChange={(e) => { setSlugTouched(true); setWizard((prev) => ({ ...prev, slug: e.target.value })); }} placeholder={tr("keycloak-operations-workflow", "keycloak-operations-workflow")} />
                     </div>
                   </div>
 
                   <div className="space-y-1.5">
                     <Label className="text-xs">{tr("Описание", "Description")}</Label>
-                    <Textarea
-                      rows={3}
-                      value={wizard.description}
-                      onChange={(e) => setWizard((prev) => ({ ...prev, description: e.target.value }))}
-                      placeholder={tr("Когда этот скилл нужно подключать и использовать.", "When this skill should be attached and used.")}
-                    />
+                    <Textarea rows={3} value={wizard.description} onChange={(e) => setWizard((prev) => ({ ...prev, description: e.target.value }))} placeholder={tr("Когда этот скилл нужно подключать и использовать.", "When this skill should be attached and used.")} />
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -1400,9 +1019,7 @@ export default function StudioSkillsPage() {
                   <div className="space-y-1.5">
                     <Label className="text-xs">{tr("Уровень безопасности", "Safety level")}</Label>
                     <Select value={wizard.safety_level} onValueChange={(value) => setWizard((prev) => ({ ...prev, safety_level: value }))}>
-                      <SelectTrigger className="text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
+                      <SelectTrigger className="text-xs"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {SAFETY_LEVELS.map((level) => (
                           <SelectItem key={level} value={level}>{level}</SelectItem>
@@ -1419,48 +1036,32 @@ export default function StudioSkillsPage() {
                     <Label className="text-xs">{tr("UI-подсказка", "UI hint")}</Label>
                     <Input value={wizard.ui_hint} onChange={(e) => setWizard((prev) => ({ ...prev, ui_hint: e.target.value }))} placeholder={tr("Короткая инструкция для админа в Studio", "Short admin-facing instruction in Studio")} />
                   </div>
-
                   <div className="space-y-1.5">
                     <Label className="text-xs">{tr("Теги", "Tags")}</Label>
                     <Input value={wizard.tags_text} onChange={(e) => setWizard((prev) => ({ ...prev, tags_text: e.target.value }))} placeholder={tr("keycloak, iam, mcp, безопасность", "keycloak, iam, mcp, safety")} />
                   </div>
-
                   <div className="space-y-1.5">
                     <Label className="text-xs">{tr("Сводка guardrail-правил", "Guardrail summary")}</Label>
-                    <Textarea
-                      rows={3}
-                      value={wizard.guardrail_summary_text}
-                      onChange={(e) => setWizard((prev) => ({ ...prev, guardrail_summary_text: e.target.value }))}
-                      placeholder={tr("Требует preflight, фиксирует profile=test, блокирует переключение профиля", "Requires preflight, Pins profile=test, Blocks profile switching")}
-                    />
+                    <Textarea rows={3} value={wizard.guardrail_summary_text} onChange={(e) => setWizard((prev) => ({ ...prev, guardrail_summary_text: e.target.value }))} placeholder={tr("Требует preflight, фиксирует profile=test, блокирует переключение профиля", "Requires preflight, Pins profile=test, Blocks profile switching")} />
                   </div>
-
                   <div className="space-y-1.5">
                     <Label className="text-xs">{tr("Рекомендуемые инструменты агента", "Recommended agent tools")}</Label>
                     <Input value={wizard.recommended_tools_text} onChange={(e) => setWizard((prev) => ({ ...prev, recommended_tools_text: e.target.value }))} placeholder={tr("report, ask_user, analyze_output", "report, ask_user, analyze_output")} />
                   </div>
-
                   <div className="rounded-xl border border-border/70 bg-background/30 p-4">
                     <div className="flex items-center gap-2">
                       <Shield className="h-4 w-4 text-muted-foreground" />
                       <p className="text-sm font-medium">{tr("Runtime policy", "Runtime policy")}</p>
                     </div>
-                    <p className="mt-1 text-[11px] text-muted-foreground">
-                      {tr("Оставляйте шаблонную policy по умолчанию, если не уверены в точных названиях MCP-инструментов и закреплённых аргументах.", "Keep the template default unless you know the exact original MCP tool names and pinned arguments.")}
-                    </p>
-                    <Textarea
-                      rows={14}
-                      value={wizard.runtime_policy_text}
-                      onChange={(e) => setWizard((prev) => ({ ...prev, runtime_policy_text: e.target.value }))}
-                      className="mt-3 font-mono text-[11px]"
-                    />
+                    <p className="mt-1 text-[11px] text-muted-foreground">{tr("Оставляйте template-default policy, если не уверены в точных названиях MCP tool и pinned args.", "Keep the template default unless you know the exact MCP tool names and pinned arguments.")}</p>
+                    <Textarea rows={14} value={wizard.runtime_policy_text} onChange={(e) => setWizard((prev) => ({ ...prev, runtime_policy_text: e.target.value }))} className="mt-3 font-mono text-[11px]" />
                   </div>
                 </div>
               )}
 
               {wizardSection === "files" && (
                 <div className="space-y-4 rounded-xl border border-border/70 bg-background/24 p-4">
-                  <div className="rounded-xl border border-border/70 bg-background/30 p-4 space-y-3">
+                  <div className="space-y-3 rounded-xl border border-border/70 bg-background/30 p-4">
                     <p className="text-sm font-medium">{tr("Необязательные папки скилла", "Optional skill folders")}</p>
                     <div className="flex items-center justify-between gap-3">
                       <div>
@@ -1519,7 +1120,7 @@ export default function StudioSkillsPage() {
               <div className="rounded-xl border border-border/70 bg-background/24 p-4">
                 <p className="text-xs font-medium text-foreground">{tr("Простой порядок", "Simple order")}</p>
                 <div className="mt-2 space-y-2 text-[11px] leading-5 text-muted-foreground">
-                  <p>{tr("1. Выберите шаблон или начните с нуля.", "1. Pick a template or start from scratch.")}</p>
+                  <p>{tr("1. Выберите template или начните с нуля.", "1. Pick a template or start from scratch.")}</p>
                   <p>{tr("2. Коротко опишите назначение и сервис.", "2. Describe the purpose and service.")}</p>
                   <p>{tr("3. Добавьте только нужные guardrails и policy.", "3. Add only the guardrails and policy you actually need.")}</p>
                   <p>{tr("4. Подключайте папки только если они реально нужны рантайму.", "4. Add folders only if the runtime truly needs them.")}</p>
@@ -1533,6 +1134,35 @@ export default function StudioSkillsPage() {
             <Button onClick={submitWizard} disabled={!wizard.name.trim() || !wizard.description.trim() || scaffoldMutation.isPending} className="gap-1.5">
               {scaffoldMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <WandSparkles className="h-3.5 w-3.5" />}
               {tr("Создать скилл", "Create Skill")}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={createFileOpen} onOpenChange={setCreateFileOpen}>
+        <DialogContent className="max-h-[85vh] max-w-3xl overflow-auto rounded-md border-border bg-background/95">
+          <DialogHeader>
+            <DialogTitle>{tr("Новый workspace-файл", "New workspace file")}</DialogTitle>
+            <DialogDescription>{tr("Создайте text-файл внутри references/, scripts/ или assets/. Для нового playbook-материала обычно начинайте с references/guide.md.", "Create a text file inside references/, scripts/, or assets/. For new playbook material, start with references/guide.md.")}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs">{tr("Путь", "Path")}</Label>
+              <Input value={createFilePath} onChange={(event) => setCreateFilePath(event.target.value)} placeholder="references/guide.md" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">{tr("Содержимое", "Content")}</Label>
+              <Textarea rows={16} value={createFileContent} onChange={(event) => setCreateFileContent(event.target.value)} className="font-mono text-[12px] leading-5" />
+            </div>
+            <div className="rounded-xl border border-border/70 bg-background/24 px-4 py-4 text-[11px] leading-5 text-muted-foreground">
+              {tr("Разрешены только относительные пути и только text-расширения. Абсолютные пути, скрытые файлы и выход за пределы skill directory backend отклоняет.", "Only relative paths and text extensions are allowed. Absolute paths, hidden files, and escaping the skill directory are rejected by the backend.")}
+            </div>
+          </div>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setCreateFileOpen(false)}>{tr("Отмена", "Cancel")}</Button>
+            <Button onClick={() => createFileMutation.mutate({ path: createFilePath.trim(), content: createFileContent })} disabled={!createFilePath.trim() || createFileMutation.isPending} className="gap-1.5">
+              {createFileMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FolderPlus className="h-3.5 w-3.5" />}
+              {tr("Создать файл", "Create file")}
             </Button>
           </div>
         </DialogContent>

@@ -18,9 +18,13 @@ import {
   Eye,
   Key,
   Globe,
+  CheckCircle2,
+  Server,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { StatusBadge } from "@/components/ui/page-shell";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -580,9 +584,9 @@ export default function SettingsPage() {
               />
               <div className="workspace-subtle rounded-2xl p-4">
                 <div className="mb-3">
-                  <p className="text-sm font-medium text-foreground">{tr("Уровень рассуждения OpenAI", "OpenAI reasoning effort")}</p>
+                  <p className="text-sm font-medium text-foreground">OpenAI reasoning effort</p>
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    {tr("Настройка reasoning для Responses API: none, low, medium или high.", "Reasoning setting for the Responses API: none, low, medium, or high.")}
+                    Reasoning setting for the Responses API: none, low, medium, or high.
                   </p>
                 </div>
                 <div className="flex items-start justify-between gap-4">
@@ -849,6 +853,6 @@ export default function SettingsPage() {
           </SectionCard>
         </TabsContent>
       </Tabs>
-    </PageShell>
+    </div>
   );
 }

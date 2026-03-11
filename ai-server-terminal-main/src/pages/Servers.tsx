@@ -104,6 +104,7 @@ interface KnowledgeItem {
 }
 
 type AdvancedTab = "access" | "knowledge" | "context" | "security" | "execute";
+type MainTab = "servers" | "groups" | "bulk";
 
 function initialForm(): ServerForm {
   return {
@@ -173,8 +174,10 @@ export default function Servers() {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const [advancedTab, setAdvancedTab] = useState<AdvancedTab>("access");
+  const [mainTab, setMainTab] = useState<MainTab>("servers");
   const [search, setSearch] = useState("");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [selectedServerId, setSelectedServerId] = useState<number | null>(null);
   const [groupName, setGroupName] = useState("");
   const [groupDescription, setGroupDescription] = useState("");
   const [groupColor, setGroupColor] = useState("#3b82f6");
@@ -751,9 +754,10 @@ export default function Servers() {
                       </Button>
                     </div>
                   </div>
-                )}
+                ))}
               </div>
-            </FilterBar>
+          </section>
+        </TabsContent>
 
         <TabsContent value="bulk" className="space-y-3">
           <section className="bg-card border border-border rounded-lg p-4 space-y-3">
