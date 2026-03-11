@@ -96,9 +96,6 @@ export interface AuthUser {
     studio: boolean;
     settings: boolean;
     orchestrator: boolean;
-    agents: boolean;
-    studio: boolean;
-    dashboard: boolean;
   };
 }
 
