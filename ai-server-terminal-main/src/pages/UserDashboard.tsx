@@ -191,23 +191,23 @@ export default function UserDashboard() {
   const problemCount = summary.critical + summary.warning + summary.unreachable;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mx-auto max-w-6xl space-y-4 p-5">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">{t("udash.title")}</h1>
-          <p className="text-sm text-muted-foreground">
-            {summary.total_servers} servers, {agents.length} agents, {activeRuns.length} active runs
+          <h1 className="text-lg font-semibold text-foreground">{t("udash.title")}</h1>
+          <p className="text-xs text-muted-foreground">
+            {summary.total_servers} servers · {agents.length} agents · {activeRuns.length} active
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Link to="/agents">
-            <Button size="sm" variant="outline" className="gap-2">
-              <Plus className="h-4 w-4" />
+            <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs">
+              <Plus className="h-3.5 w-3.5" />
               Agents
             </Button>
           </Link>
-          <Button size="sm" variant="ghost" className="gap-2" onClick={() => void refresh()}>
-            <RefreshCw className="h-4 w-4" />
+          <Button size="sm" variant="ghost" className="gap-1.5 h-7 text-xs" onClick={() => void refresh()}>
+            <RefreshCw className="h-3.5 w-3.5" />
             Refresh
           </Button>
         </div>
