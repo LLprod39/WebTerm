@@ -4,6 +4,7 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 
 export default defineConfig(({ mode }) => ({
+  root: "ai-server-terminal-main",
   server: {
     host: "0.0.0.0",
     port: 8080,
@@ -11,8 +12,8 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
-    alias: [
-      { find: "@", replacement: path.resolve(process.cwd(), "ai-server-terminal-main/src") },
-    ],
+    alias: {
+      "@": path.resolve("ai-server-terminal-main/src"),
+    },
   },
 }));
