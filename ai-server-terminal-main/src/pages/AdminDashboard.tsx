@@ -103,12 +103,12 @@ export default function AdminDashboard() {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-5">
+    <div className="p-5 max-w-7xl mx-auto space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">{t("adash.title")}</h1>
-          <p className="text-xs text-muted-foreground">v{d.app_version}</p>
+          <h1 className="text-lg font-semibold text-foreground">{t("adash.title")}</h1>
+          <p className="text-[11px] text-muted-foreground">v{d.app_version}</p>
         </div>
         <Button size="sm" variant="ghost" className="gap-1.5 text-xs h-7" onClick={refresh}>
           <RefreshCw className="h-3 w-3" /> {t("udash.refresh")}

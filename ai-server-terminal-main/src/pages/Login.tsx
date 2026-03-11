@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Terminal, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -59,76 +59,82 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <div className="w-full max-w-sm relative">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center h-12 w-12 rounded-xl bg-primary/10 border border-primary/20 mb-4">
-            <Terminal className="h-6 w-6 text-primary" />
+      <div className="w-full max-w-[340px]">
+        {/* Logo */}
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-6">
+            <div className="h-8 w-8 rounded bg-primary/10 flex items-center justify-center">
+              <span className="text-sm font-bold text-primary">W</span>
+            </div>
+            <span className="text-base font-semibold text-foreground">WebTermAI</span>
           </div>
-          <h1 className="text-2xl font-semibold text-foreground">
+          <h1 className="text-lg font-semibold text-foreground">
             {t("login.title")}
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">{t("login.subtitle")}</p>
+          <p className="text-xs text-muted-foreground mt-1">{t("login.subtitle")}</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 bg-card border border-border rounded-lg p-6">
-          <div className="space-y-2">
-            <Label htmlFor="username" className="text-sm text-foreground">{t("login.username")}</Label>
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="username" className="text-xs text-muted-foreground">{t("login.username")}</Label>
             <Input
               id="username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="admin"
-              className="bg-secondary border-border focus:border-primary"
+              className="h-9 bg-card border-border text-sm"
               autoComplete="username"
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="password" className="text-sm text-foreground">{t("login.password")}</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="password" className="text-xs text-muted-foreground">{t("login.password")}</Label>
             <Input
               id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="bg-secondary border-border focus:border-primary"
+              className="h-9 bg-card border-border text-sm"
               autoComplete="current-password"
             />
           </div>
 
-          <label className="flex cursor-pointer items-center gap-2 rounded-md border border-border/60 px-3 py-2 text-xs text-muted-foreground">
+          <label className="flex cursor-pointer items-center gap-2 py-1 text-xs text-muted-foreground">
             <Checkbox
               checked={localOnly}
               onCheckedChange={(checked) => setLocalOnly(checked === true)}
             />
-            <span>{lang === "ru" ? "Локальный вход (без LDAP)" : "Local login (skip LDAP)"}</span>
+            <span>{lang === "ru" ? "Локальный вход" : "Local login"}</span>
           </label>
 
           {error && (
-            <p className="text-sm text-destructive">{error}</p>
+            <p className="text-xs text-destructive">{error}</p>
           )}
 
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+          <Button type="submit" className="w-full h-9 text-sm" disabled={loading}>
+            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
             {t("login.submit")}
           </Button>
         </form>
 
-        <div className="flex items-center justify-between mt-4 px-1">
-          <p className="text-xs text-muted-foreground">
+        {/* Footer */}
+        <div className="flex items-center justify-between mt-6">
+          <p className="text-[10px] text-muted-foreground">
             {t("login.footer")}
           </p>
-          <div className="inline-flex rounded-md border border-border overflow-hidden text-[11px] font-semibold">
+          <div className="inline-flex rounded border border-border overflow-hidden text-[10px] font-medium">
             <button
               type="button"
               onClick={() => setLang("en")}
-              className={`px-2 py-0.5 transition-colors ${lang === "en" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}
+              className={`px-2 py-0.5 transition-colors ${lang === "en" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}
             >
               EN
             </button>
             <button
               type="button"
               onClick={() => setLang("ru")}
-              className={`px-2 py-0.5 transition-colors ${lang === "ru" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}
+              className={`px-2 py-0.5 transition-colors ${lang === "ru" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}
             >
               RU
             </button>

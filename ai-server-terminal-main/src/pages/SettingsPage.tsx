@@ -459,10 +459,10 @@ export default function SettingsPage() {
   const monitoredServers = isAdmin ? monConfig?.stats?.monitored_servers || 0 : 0;
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="p-5 max-w-5xl mx-auto space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold text-foreground">{t("settings.title")}</h1>
-        <p className="text-sm text-muted-foreground mt-1">{t("set.subtitle")}</p>
+        <h1 className="text-lg font-semibold text-foreground">{t("settings.title")}</h1>
+        <p className="text-xs text-muted-foreground mt-0.5">{t("set.subtitle")}</p>
       </div>
 
       <Tabs defaultValue="ai" className="space-y-4">
