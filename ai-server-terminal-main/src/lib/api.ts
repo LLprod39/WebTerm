@@ -124,11 +124,64 @@ function demoFallback<T>(path: string, _options: RequestInit = {}): T {
   if (path.includes("/api/auth/logout")) return { success: true } as T;
   if (path.includes("/api/auth/ws-token")) return { token: "demo-token" } as T;
   if (path.includes("/frontend/bootstrap")) return DEMO_BOOTSTRAP as T;
-  if (path.includes("/api/settings/check") || path.includes("/api/settings") && !path.includes("activity")) return DEMO_SETTINGS as T;
+
+  // Settings page
+  if (path.includes("/api/settings/activity")) return DEMO_ACTIVITY_LOGS as T;
+  if (path.includes("/api/settings")) return DEMO_SETTINGS as T;
+  if (path.includes("/api/models/refresh")) return { success: true, provider: "gemini", models: ["gemini-2.0-flash"], count: 1 } as T;
   if (path.includes("/api/models")) return DEMO_MODELS as T;
-  if (path.includes("/api/settings/activity") || path.includes("activity")) return DEMO_ACTIVITY_LOGS as T;
+
+  // Admin dashboard — must match AdminDashboardData shape
+  if (path.includes("/api/admin/dashboard")) return {
+    success: true,
+    data: {
+      online_users: { count: 1, total_registered: 1, users: [{ username: "demo", action: "login", time: new Date().toISOString() }] },
+      ai: { requests_today: 0 },
+      terminals: { active: 0, connections: [] },
+      agents: { running: 0, today: 0, succeeded_24h: 0, failed_24h: 0, success_rate: 0 },
+      api_usage: {},
+      api_calls_today: 0,
+      providers: { gemini: { enabled: true, model: "gemini-2.0-flash" } },
+      servers: { total: 3, active: 2 },
+      tasks: { total: 0, in_progress: 0 },
+      hourly_activity: [],
+      top_users: [{ username: "demo", total: 5, ai_requests: 2, terminal_sessions: 3 }],
+      recent_activity: [{ user: "demo", category: "auth", action: "login", time: new Date().toISOString() }],
+      fleet_health: { avg_cpu: 25, avg_memory: 40, avg_disk: 35, healthy: 2, warning: 0, critical: 0, unreachable: 1 },
+      active_alerts_count: 0,
+      alerts: [],
+      app_version: "demo",
+    },
+  } as T;
+  if (path.includes("/api/admin/users/sessions")) return { success: true, online_count: 1, total_registered: 1, active_today: 1, sessions: [] } as T;
+  if (path.includes("/api/admin/users/activity")) return { success: true, total: 0, events: [] } as T;
+
+  // Monitoring dashboard — must match MonitoringDashboard shape
+  if (path.includes("/servers/api/monitoring/config")) return {
+    success: true,
+    thresholds: { cpu_warn: 80, cpu_crit: 95, mem_warn: 85, mem_crit: 95, disk_warn: 80, disk_crit: 90 },
+    stats: { total_checks: 0, active_alerts: 0, last_check_at: null, monitored_servers: 0 },
+  } as T;
+  if (path.includes("/servers/api/monitoring/dashboard")) return {
+    success: true,
+    servers: [],
+    alerts: [],
+    summary: { total_servers: 3, healthy: 2, warning: 0, critical: 0, unreachable: 1, unknown: 0, active_alerts: 0, avg_cpu: 25, avg_memory: 40, avg_disk: 35 },
+    recent_activity: [],
+  } as T;
+
+  // Agents
+  if (path.includes("/servers/api/agents/dashboard")) return { success: true, active: [], recent: [] } as T;
+  if (path.includes("/servers/api/agents/templates")) return { success: true, templates: [] } as T;
+  if (path.includes("/servers/api/agents/runs")) return { success: true, runs: [] } as T;
+  if (path.includes("/servers/api/agents")) return { success: true, agents: [] } as T;
+  if (path.includes("/servers/api/alerts")) return { success: true, alerts: [] } as T;
+  if (path.includes("/servers/api/global-context")) return { rules: "", forbidden_commands: [], required_checks: [], environment_vars: {} } as T;
+  if (path.includes("/servers/api/master-password")) return { has_master_password: false, success: true } as T;
+  if (path.includes("/knowledge")) return { success: true, items: [], categories: [] } as T;
+  if (path.includes("/shares")) return { success: true, shares: [] } as T;
+
   if (path.includes("/api/health")) return { status: "ok" } as T;
-  if (path.includes("/api/admin/dashboard")) return { success: true, stats: {} } as T;
   if (path.includes("/api/access/users")) return { success: true, users: [] } as T;
   if (path.includes("/api/access/groups")) return { success: true, groups: [] } as T;
   if (path.includes("/api/access/permissions")) return { success: true, permissions: [] } as T;
@@ -139,13 +192,8 @@ function demoFallback<T>(path: string, _options: RequestInit = {}): T {
   if (path.includes("/api/studio/triggers")) return { success: true, triggers: [] } as T;
   if (path.includes("/api/studio/templates")) return { success: true, templates: [] } as T;
   if (path.includes("/api/studio/notifications")) return { success: true } as T;
-  if (path.includes("/servers/api/agents")) return { success: true, agents: [], templates: [], runs: [] } as T;
-  if (path.includes("/servers/api/monitoring")) return { success: true, servers: [] } as T;
-  if (path.includes("/servers/api/alerts")) return { success: true, alerts: [] } as T;
-  if (path.includes("/servers/api/global-context")) return { rules: "", forbidden_commands: [], required_checks: [], environment_vars: {} } as T;
-  if (path.includes("/servers/api/master-password")) return { has_master_password: false, success: true } as T;
-  if (path.includes("/knowledge")) return { success: true, items: [], categories: [] } as T;
-  if (path.includes("/shares")) return { success: true, shares: [] } as T;
+  if (path.includes("/api/studio/servers")) return { success: true, servers: [] } as T;
+
   // Generic fallback
   return demoSuccess() as T;
 }
