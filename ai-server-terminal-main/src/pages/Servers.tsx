@@ -596,26 +596,37 @@ export default function Servers() {
   if (error || !data) return <div className="p-6 text-sm text-destructive">{t("srv.error")}</div>;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
+    <div className="p-5 max-w-6xl mx-auto space-y-4">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">{t("srv.title")}</h1>
-          <p className="text-sm text-muted-foreground">
-            {servers.length} {t("srv.servers_count")} — {Object.keys(grouped).length} {t("srv.groups").toLowerCase()}
-          </p>
+          <h1 className="text-lg font-semibold text-foreground">{t("srv.title")}</h1>
+          <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+            <span>{servers.length} total</span>
+            <span className="text-border">·</span>
+            <span className="text-emerald-400">{onlineCount} online</span>
+            {sharedCount > 0 && (
+              <>
+                <span className="text-border">·</span>
+                <span>{sharedCount} shared</span>
+              </>
+            )}
+            <span className="text-border">·</span>
+            <span>{groupCount} groups</span>
+          </div>
         </div>
         <div className="flex gap-2">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
               placeholder={t("srv.search")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 w-56 bg-secondary border-border"
+              className="pl-8 h-8 w-48 bg-card border-border text-xs"
             />
           </div>
-          <Button size="sm" className="gap-1.5" onClick={openCreate}>
-            <Plus className="h-4 w-4" /> {t("srv.add")}
+          <Button size="sm" className="gap-1.5 h-8 text-xs" onClick={openCreate}>
+            <Plus className="h-3.5 w-3.5" /> {t("srv.add")}
           </Button>
         </div>
       </div>
