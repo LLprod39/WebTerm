@@ -34,6 +34,8 @@ env/
 .cursor/
 .claude/
 .playwright-mcp/
+node_modules/
+ai-server-terminal-main/node_modules/
 
 # Temporary / cache (do not commit)
 .tmp/

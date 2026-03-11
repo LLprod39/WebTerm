@@ -1,0 +1,15 @@
+{
+  "name": "webtrerm-workspace",
+  "private": true,
+  "workspaces": [
+    "ai-server-terminal-main"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=vite_react_shadcn_ts -- --host 0.0.0.0 --port 8080",
+    "start": "npm run dev --workspace=vite_react_shadcn_ts -- --host 0.0.0.0 --port 8080",
+    "build": "npm run build --workspace=vite_react_shadcn_ts",
+    "preview": "npm run preview --workspace=vite_react_shadcn_ts -- --host 0.0.0.0 --port 8080",
+    "lint": "npm run lint --workspace=vite_react_shadcn_ts",
+    "test": "npm run test --workspace=vite_react_shadcn_ts"
+  }
+}
