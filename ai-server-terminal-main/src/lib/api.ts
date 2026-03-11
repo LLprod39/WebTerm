@@ -362,8 +362,15 @@ export function getRdpPath(serverId: number | string): string {
   return backendPath(`/servers/${serverId}/terminal/`);
 }
 
-export async function fetchAuthSession() {
-  return apiFetch<AuthSessionResponse>("/api/auth/session/");
+export async function fetchAuthSession(): Promise<AuthSessionResponse> {
+  if (isDemoMode()) return DEMO_SESSION;
+  try {
+    return await apiFetch<AuthSessionResponse>("/api/auth/session/");
+  } catch {
+    // Backend unreachable — activate demo mode
+    enableDemoMode();
+    return DEMO_SESSION;
+  }
 }
 
 export async function authLogin(username: string, password: string, authMode: "auto" | "local" = "auto") {
