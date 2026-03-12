@@ -439,7 +439,10 @@ export default function AgentConfigPage() {
   };
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="flex flex-col h-full">
+      <StudioNav />
+      <div className="flex-1 overflow-auto">
+      <div className="space-y-6 p-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="space-y-1">
           <div className="flex items-center gap-2">

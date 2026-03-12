@@ -317,7 +317,10 @@ export default function MCPHubPage() {
   };
 
   return (
-    <PageShell width="full">
+    <div className="flex flex-col h-full">
+      <StudioNav />
+      <div className="flex-1 overflow-auto">
+      <PageShell width="full">
       <SectionCard
         title="MCP Hub"
         description="Manage Model Context Protocol servers used by Studio."

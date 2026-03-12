@@ -502,6 +502,7 @@ export default function StudioSkillsPage() {
 
   return (
     <div className="flex h-full flex-col">
+      <StudioNav />
       <div className="px-6 py-6">
         <section className="rounded-xl border border-border/70 bg-background/24 px-5 py-5">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
