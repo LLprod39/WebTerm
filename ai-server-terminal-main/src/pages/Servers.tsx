@@ -959,40 +959,240 @@ export default function Servers() {
           </section>
         </TabsContent>
 
-        <TabsContent value="bulk" className="space-y-3">
-          <section className="bg-card border border-border rounded-lg p-4 space-y-3">
-            <h2 className="text-sm font-medium">Bulk Update Filtered Servers ({filtered.length})</h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-              <select
-                value={bulkGroupId}
-                onChange={(e) => setBulkGroupId(e.target.value)}
-                className="bg-secondary border border-border rounded-md px-3 py-2 text-sm"
-              >
-                <option value="__keep__">Keep group</option>
-                <option value="__none__">Remove group</option>
-                {groups
-                  .filter((g) => g.id !== null)
-                  .map((g) => (
-                    <option key={g.id!} value={g.id!}>
-                      {g.name}
-                    </option>
+        <TabsContent value="playbook" className="space-y-3">
+          {/* PLAYBOOK LIST */}
+          {playbookView === "list" && (
+            <section className="bg-card border border-border rounded-lg p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold text-foreground">Playbooks</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">Ansible-style command sequences to run across servers</p>
+                </div>
+                <Button size="sm" className="gap-1.5 h-8 text-xs" onClick={openNewPlaybook}>
+                  <Plus className="h-3.5 w-3.5" /> New Playbook
+                </Button>
+              </div>
+
+              {playbooks.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <BookOpen className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">No playbooks yet</p>
+                  <p className="text-xs mt-1">Create your first playbook to automate tasks across servers</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {playbooks.map((pb) => (
+                    <div key={pb.id} className="flex items-center gap-4 px-4 py-3 rounded-lg border border-border bg-secondary/10 hover:bg-secondary/30 transition-colors">
+                      <BookOpen className="h-4 w-4 text-primary shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{pb.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {pb.tasks.length} task{pb.tasks.length !== 1 ? "s" : ""} · {new Date(pb.createdAt).toLocaleDateString()}
+                          {pb.description && ` · ${pb.description}`}
+                        </p>
+                      </div>
+                      <div className="flex gap-1.5 shrink-0">
+                        <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs gap-1" onClick={() => openEditPlaybook(pb)}>
+                          <Settings className="h-3 w-3" /> Edit
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={() => onDuplicatePlaybook(pb)}>
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => onDeletePlaybook(pb.id)}>
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
                   ))}
-              </select>
-              <Input placeholder="Tags (comma separated)" value={bulkTags} onChange={(e) => setBulkTags(e.target.value)} />
-              <select
-                value={bulkActive}
-                onChange={(e) => setBulkActive(e.target.value)}
-                className="bg-secondary border border-border rounded-md px-3 py-2 text-sm"
-              >
-                <option value="__keep__">Keep active state</option>
-                <option value="active">Set active</option>
-                <option value="inactive">Set inactive</option>
-              </select>
-              <Button onClick={onBulkUpdateFiltered} disabled={bulkSaving || !filtered.length}>
-                {bulkSaving ? "Applying..." : "Apply Bulk Update"}
-              </Button>
-            </div>
-          </section>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* PLAYBOOK EDITOR */}
+          {playbookView === "edit" && (
+            <section className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => setPlaybookView("list")}>
+                  <ChevronRight className="h-4 w-4 rotate-180" />
+                </Button>
+                <h2 className="text-sm font-semibold text-foreground">
+                  {activePlaybook ? "Edit Playbook" : "New Playbook"}
+                </h2>
+              </div>
+
+              {/* Meta */}
+              <div className="bg-card border border-border rounded-lg p-4 space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Playbook Name *</Label>
+                    <Input placeholder="e.g. Deploy Application" value={playbookName} onChange={(e) => setPlaybookName(e.target.value)} className="bg-secondary/50 h-9" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Description</Label>
+                    <Input placeholder="What this playbook does..." value={playbookDesc} onChange={(e) => setPlaybookDesc(e.target.value)} className="bg-secondary/50 h-9" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Tasks */}
+              <div className="bg-card border border-border rounded-lg p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Tasks ({playbookTasks.length})</h3>
+                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={addPlaybookTask}>
+                    <Plus className="h-3 w-3" /> Add Task
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  {playbookTasks.map((task, idx) => (
+                    <div key={task.id} className="flex items-start gap-2 p-3 rounded-lg border border-border bg-secondary/10">
+                      <div className="flex flex-col gap-1 pt-1.5 shrink-0">
+                        <button onClick={() => moveTask(idx, -1)} disabled={idx === 0} className="text-muted-foreground hover:text-foreground disabled:opacity-20 transition-colors">
+                          <ChevronDown className="h-3 w-3 rotate-180" />
+                        </button>
+                        <GripVertical className="h-3 w-3 text-muted-foreground/40 mx-auto" />
+                        <button onClick={() => moveTask(idx, 1)} disabled={idx === playbookTasks.length - 1} className="text-muted-foreground hover:text-foreground disabled:opacity-20 transition-colors">
+                          <ChevronDown className="h-3 w-3" />
+                        </button>
+                      </div>
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-mono text-muted-foreground bg-secondary rounded px-1.5 py-0.5 shrink-0">#{idx + 1}</span>
+                          <Input
+                            placeholder="Description (optional)"
+                            value={task.description}
+                            onChange={(e) => updatePlaybookTask(task.id, { description: e.target.value })}
+                            className="bg-secondary/50 h-7 text-xs flex-1"
+                          />
+                        </div>
+                        <Input
+                          placeholder="Command, e.g. systemctl restart nginx"
+                          value={task.command}
+                          onChange={(e) => updatePlaybookTask(task.id, { command: e.target.value })}
+                          className="bg-background h-9 font-mono text-sm border-border"
+                        />
+                        <label className="text-[11px] flex items-center gap-1.5 text-muted-foreground cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={task.continueOnError}
+                            onChange={(e) => updatePlaybookTask(task.id, { continueOnError: e.target.checked })}
+                            className="rounded"
+                          />
+                          Continue on error
+                        </label>
+                      </div>
+                      <button onClick={() => removePlaybookTask(task.id)} className="text-muted-foreground hover:text-destructive transition-colors pt-1.5 shrink-0">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Target Servers */}
+              <div className="bg-card border border-border rounded-lg p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Target Servers ({playbookTargets.size} selected)
+                  </h3>
+                  <div className="flex gap-1.5">
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={selectAllTargets}>Select Online</Button>
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={clearTargets}>Clear</Button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {servers.map((srv) => (
+                    <button
+                      key={srv.id}
+                      onClick={() => toggleTarget(srv.id)}
+                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border text-left transition-all text-xs ${
+                        playbookTargets.has(srv.id)
+                          ? "border-primary bg-primary/5 text-foreground"
+                          : "border-border bg-secondary/10 text-muted-foreground hover:text-foreground hover:border-border"
+                      }`}
+                    >
+                      <StatusIndicator status={srv.status} showLabel={false} />
+                      <span className="font-medium truncate">{srv.name}</span>
+                      <span className="text-[10px] font-mono ml-auto opacity-60">{srv.host}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-2 justify-end">
+                <Button size="sm" variant="outline" className="h-9 gap-1.5" onClick={onSavePlaybook} disabled={!playbookName.trim() || playbookTasks.length === 0}>
+                  <Save className="h-3.5 w-3.5" /> Save Playbook
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-9 gap-1.5 px-6"
+                  onClick={onRunPlaybook}
+                  disabled={playbookRunning || playbookTargets.size === 0 || playbookTasks.filter((t) => t.command.trim()).length === 0}
+                >
+                  <Play className="h-3.5 w-3.5" /> Run on {playbookTargets.size} Server{playbookTargets.size !== 1 ? "s" : ""}
+                </Button>
+              </div>
+            </section>
+          )}
+
+          {/* PLAYBOOK RUN RESULTS */}
+          {playbookView === "run" && (
+            <section className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => setPlaybookView("edit")}>
+                  <ChevronRight className="h-4 w-4 rotate-180" />
+                </Button>
+                <h2 className="text-sm font-semibold text-foreground">
+                  Run Results {playbookRunning && <Loader2 className="inline h-3.5 w-3.5 ml-1.5 animate-spin text-primary" />}
+                </h2>
+                <span className="text-xs text-muted-foreground ml-auto">
+                  {playbookResults.length} server{playbookResults.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+
+              {playbookResults.map((sr) => {
+                const allDone = sr.taskResults.every((tr) => tr.status !== "pending" && tr.status !== "running");
+                const allOk = sr.taskResults.every((tr) => tr.status === "success");
+                const hasError = sr.taskResults.some((tr) => tr.status === "error");
+                return (
+                  <div key={sr.serverId} className="bg-card border border-border rounded-lg overflow-hidden">
+                    <div className={`flex items-center gap-3 px-4 py-3 border-b border-border ${allDone ? (allOk ? "bg-primary/5" : hasError ? "bg-destructive/5" : "bg-secondary/20") : ""}`}>
+                      <Server className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-medium text-foreground">{sr.serverName}</span>
+                      <div className="ml-auto flex items-center gap-1.5">
+                        {allDone && allOk && <CheckCircle2 className="h-4 w-4 text-primary" />}
+                        {allDone && hasError && <XCircle className="h-4 w-4 text-destructive" />}
+                        {!allDone && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                      </div>
+                    </div>
+                    <div className="divide-y divide-border">
+                      {sr.taskResults.map((tr, ti) => (
+                        <div key={tr.taskId} className="px-4 py-3">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[10px] font-mono text-muted-foreground bg-secondary rounded px-1.5 py-0.5">#{ti + 1}</span>
+                            <code className="text-xs font-mono text-foreground">{tr.command}</code>
+                            <span className="ml-auto">
+                              {tr.status === "success" && <CheckCircle2 className="h-3.5 w-3.5 text-primary" />}
+                              {tr.status === "error" && <XCircle className="h-3.5 w-3.5 text-destructive" />}
+                              {tr.status === "running" && <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />}
+                              {tr.status === "pending" && <span className="h-3.5 w-3.5 rounded-full bg-muted-foreground/20 inline-block" />}
+                              {tr.status === "skipped" && <span className="text-[10px] text-muted-foreground">skipped</span>}
+                            </span>
+                          </div>
+                          {tr.output && (
+                            <pre className="mt-2 p-2.5 rounded bg-background border border-border text-[11px] font-mono text-muted-foreground overflow-x-auto max-h-32 whitespace-pre-wrap">{tr.output}</pre>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </section>
+          )}
         </TabsContent>
       </Tabs>
 
