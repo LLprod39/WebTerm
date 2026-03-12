@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { StudioNav } from "@/components/StudioNav";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
