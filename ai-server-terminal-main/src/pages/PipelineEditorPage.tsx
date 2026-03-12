@@ -2309,10 +2309,55 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         onApplyGraphPatch={handleApplyPipelineAssistantGraphPatch}
       />
 
+      {/* Flow summary bar */}
+      {nodes.length > 0 && (
+        <div className="flex items-center gap-1 px-4 py-1.5 border-b border-border bg-muted/30 overflow-x-auto">
+          <span className="text-[10px] text-muted-foreground shrink-0 mr-1">Flow:</span>
+          {(() => {
+            // Build a simple chain from triggers -> connected nodes
+            const pNodes = nodes as unknown as PipelineNode[];
+            const pEdges = edges as unknown as PipelineEdge[];
+            const visited = new Set<string>();
+            const chain: PipelineNode[] = [];
+            const triggers = pNodes.filter((n) => n.type?.startsWith("trigger/"));
+            const queue = triggers.length ? [...triggers] : pNodes.slice(0, 1);
+            while (queue.length && chain.length < 12) {
+              const current = queue.shift()!;
+              if (visited.has(current.id)) continue;
+              visited.add(current.id);
+              chain.push(current);
+              const downstream = pEdges
+                .filter((e) => e.source === current.id)
+                .map((e) => pNodes.find((n) => n.id === e.target))
+                .filter(Boolean) as PipelineNode[];
+              queue.push(...downstream);
+            }
+            // Add orphans
+            pNodes.forEach((n) => { if (!visited.has(n.id) && chain.length < 15) chain.push(n); });
+            return chain.map((n, i) => (
+              <span key={n.id} className="flex items-center gap-1 shrink-0">
+                {i > 0 && <ChevronRight className="h-2.5 w-2.5 text-muted-foreground/40" />}
+                <button
+                  onClick={() => { setSelectedNode(n); setActiveRunId(null); }}
+                  className={cn(
+                    "text-[10px] px-1.5 py-0.5 rounded-md border transition-colors",
+                    selectedNode?.id === n.id
+                      ? "border-primary/40 bg-primary/10 text-primary"
+                      : "border-transparent hover:bg-muted/50 text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {NODE_TYPE_LABELS[n.type || ""]?.icon || "🔧"} {getNodeDisplayLabel(n)}
+                </button>
+              </span>
+            ));
+          })()}
+        </div>
+      )}
+
       {/* Main area */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left: Node palette */}
-        <div className="w-52 shrink-0">
+        <div className="w-56 shrink-0">
           <NodePalette onAddNode={handleAddNode} />
         </div>
 
@@ -2326,12 +2371,16 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
             onConnect={onConnect}
             onNodeClick={onNodeClick}
             onPaneClick={onPaneClick}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
             nodeTypes={nodeTypes}
             fitView
             proOptions={{ hideAttribution: true }}
             defaultEdgeOptions={{
               style: { strokeWidth: 2 },
               animated: true,
+              labelStyle: { fontSize: 10, fill: "hsl(var(--muted-foreground))" },
+              labelBgStyle: { fill: "hsl(var(--background))", fillOpacity: 0.8 },
             }}
           >
             <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
@@ -2342,20 +2391,23 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                 maskColor="hsl(var(--background) / 0.82)"
                 nodeColor={(node) => {
                   const type = node.type || "";
-                  if (type.startsWith("trigger/")) return "#6b7280";
-                  if (type.startsWith("agent/")) return "#4b5563";
-                  if (type.startsWith("logic/")) return "#9ca3af";
-                  if (type.startsWith("output/")) return "#374151";
-                  return "#6b7280";
+                  if (type.startsWith("trigger/")) return "hsl(var(--muted-foreground))";
+                  if (type.startsWith("agent/")) return "hsl(var(--primary))";
+                  if (type.startsWith("logic/")) return "hsl(var(--accent-foreground))";
+                  if (type.startsWith("output/")) return "hsl(var(--secondary-foreground))";
+                  return "hsl(var(--muted-foreground))";
                 }}
               />
             )}
             {/* Empty state hint inside React Flow */}
             {nodes.length === 0 && (
-              <Panel position="top-center" style={{ pointerEvents: "none", marginTop: "30%" }}>
-                <div className="text-center select-none">
-                  <Zap className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
-                  <p className="text-sm text-muted-foreground/60">Click a node type on the left to add it</p>
+              <Panel position="top-center" style={{ pointerEvents: "none", marginTop: "25%" }}>
+                <div className="text-center select-none space-y-3">
+                  <Zap className="h-12 w-12 text-primary/20 mx-auto" />
+                  <p className="text-sm text-muted-foreground/70 font-medium">Build your automation pipeline</p>
+                  <p className="text-xs text-muted-foreground/50 max-w-xs mx-auto">
+                    Click or drag nodes from the palette on the left. Connect them to define the execution flow.
+                  </p>
                 </div>
               </Panel>
             )}
