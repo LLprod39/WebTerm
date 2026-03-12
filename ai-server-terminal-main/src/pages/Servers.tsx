@@ -678,6 +678,39 @@ export default function Servers() {
     savePlaybooks(updated);
   };
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const onImportFile = async (file: File) => {
+    try {
+      const text = await file.text();
+      const pb = parseAnsiblePlaybook(text, file.name);
+      const updated = [...playbooks, pb];
+      setPlaybooks(updated);
+      savePlaybooks(updated);
+      setActivePlaybook(pb);
+      setPlaybookName(pb.name);
+      setPlaybookDesc(pb.description);
+      setPlaybookTasks([...pb.tasks]);
+      setPlaybookTargets(new Set());
+      setPlaybookResults([]);
+      setPlaybookView("edit");
+    } catch (err) {
+      alert(`Failed to parse playbook: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  const onFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) onImportFile(file);
+    e.target.value = "";
+  };
+
+  const onDropPlaybook = (e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file) onImportFile(file);
+  };
+
   const onRunPlaybook = async () => {
     const validTasks = playbookTasks.filter((t) => t.command.trim());
     const targetIds = Array.from(playbookTargets);
