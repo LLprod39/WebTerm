@@ -330,7 +330,6 @@ export default function MCPHubPage() {
               <Plus className="h-4 w-4" />
               Add server
             </Button>
-          </>
         }
       >
         <Tabs defaultValue="mine" className="space-y-5">
