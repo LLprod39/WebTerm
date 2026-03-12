@@ -31,7 +31,7 @@ export function StudioNav() {
     <nav className="flex items-center gap-1 border-b border-border bg-card/50 px-5 py-1.5 overflow-x-auto">
       <span className="text-xs font-semibold text-primary mr-3 shrink-0">Studio</span>
       {NAV_ITEMS.map((item) => {
-        const active = isActive(item);
+        const active = isActive(item.path, "exact" in item ? item.exact : undefined);
         const Icon = item.icon;
         return (
           <button
