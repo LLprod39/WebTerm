@@ -22,9 +22,9 @@ export function StudioNav() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const isActive = (item: (typeof NAV_ITEMS)[number]) => {
-    if (item.exact) return location.pathname === item.path;
-    return location.pathname.startsWith(item.path);
+  const isActive = (path: string, exact?: boolean) => {
+    if (exact) return location.pathname === path;
+    return location.pathname.startsWith(path);
   };
 
   return (
