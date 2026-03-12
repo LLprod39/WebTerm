@@ -89,6 +89,8 @@ const LLM_PROVIDERS = [
   { value: "claude", label: "Claude (Anthropic)" },
 ];
 
+const AUTO_REASONING_VALUE = "__auto__";
+
 function PurposeModelSelector({
   label, description, icon: Icon, provider, model, availableModels,
   onProviderChange, onModelChange, onRefresh, refreshing,
@@ -245,7 +247,7 @@ export default function SettingsPage() {
   const [orchProvider, setOrchProvider] = useState("grok");
   const [orchModel, setOrchModel] = useState("");
   const [refreshingPurpose, setRefreshingPurpose] = useState<string | null>(null);
-  const [reasoningEffort, setReasoningEffort] = useState<string>("low");
+  const [reasoningEffort, setReasoningEffort] = useState<string>(AUTO_REASONING_VALUE);
   const [refreshing, setRefreshing] = useState(false);
 
   // Logging config state
@@ -273,7 +275,7 @@ export default function SettingsPage() {
     setAgentModel(config.agent_llm_model || "");
     setOrchProvider(config.orchestrator_llm_provider || activeProvider);
     setOrchModel(config.orchestrator_llm_model || "");
-    setReasoningEffort(config.openai_reasoning_effort || "low");
+    setReasoningEffort(config.openai_reasoning_effort || AUTO_REASONING_VALUE);
   }, [settingsData]);
 
   const getModelsForProvider = (p: string): string[] => {
@@ -301,7 +303,8 @@ export default function SettingsPage() {
         chat_llm_provider: chatProvider, chat_llm_model: chatModel,
         agent_llm_provider: agentProvider, agent_llm_model: agentModel,
         orchestrator_llm_provider: orchProvider, orchestrator_llm_model: orchModel,
-        internal_llm_provider: chatProvider, openai_reasoning_effort: reasoningEffort,
+        internal_llm_provider: chatProvider,
+        openai_reasoning_effort: reasoningEffort === AUTO_REASONING_VALUE ? "" : reasoningEffort,
       });
       await queryClient.invalidateQueries({ queryKey: ["settings", "config"] });
     } finally { setSaving(false); }
@@ -503,7 +506,7 @@ export default function SettingsPage() {
                   <Select value={reasoningEffort} onValueChange={setReasoningEffort}>
                     <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Auto</SelectItem>
+                      <SelectItem value={AUTO_REASONING_VALUE}>Auto</SelectItem>
                       <SelectItem value="none">None ⚡⚡</SelectItem>
                       <SelectItem value="low">Low ⚡</SelectItem>
                       <SelectItem value="medium">Medium ⚖️</SelectItem>

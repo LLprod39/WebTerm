@@ -74,6 +74,7 @@ import {
   type PipelineTrigger,
   type StudioPipelineGraphPatch,
 } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import {
   TriggerNode,
   AgentNode,
