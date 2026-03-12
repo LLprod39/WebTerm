@@ -57,6 +57,9 @@ import {
   Loader2,
   Save,
   FolderOpen,
+  Upload,
+  Download,
+  FileJson,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
