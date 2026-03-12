@@ -239,10 +239,16 @@ export default function Servers() {
   const [groupDescription, setGroupDescription] = useState("");
   const [groupColor, setGroupColor] = useState("#3b82f6");
   const [groupSaving, setGroupSaving] = useState(false);
-  const [bulkGroupId, setBulkGroupId] = useState("__keep__");
-  const [bulkTags, setBulkTags] = useState("");
-  const [bulkActive, setBulkActive] = useState("__keep__");
-  const [bulkSaving, setBulkSaving] = useState(false);
+  // Playbook state
+  const [playbooks, setPlaybooks] = useState<Playbook[]>(loadPlaybooks);
+  const [activePlaybook, setActivePlaybook] = useState<Playbook | null>(null);
+  const [playbookName, setPlaybookName] = useState("");
+  const [playbookDesc, setPlaybookDesc] = useState("");
+  const [playbookTasks, setPlaybookTasks] = useState<PlaybookTask[]>([]);
+  const [playbookTargets, setPlaybookTargets] = useState<Set<number>>(new Set());
+  const [playbookRunning, setPlaybookRunning] = useState(false);
+  const [playbookResults, setPlaybookResults] = useState<PlaybookRunResult[]>([]);
+  const [playbookView, setPlaybookView] = useState<"list" | "edit" | "run">("list");
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingServer, setEditingServer] = useState<FrontendServer | null>(null);
