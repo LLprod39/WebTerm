@@ -398,5 +398,7 @@ export default function NotificationsSettingsPage() {
         </div>
       </SectionCard>
     </PageShell>
+    </div>
+    </div>
   );
 }
