@@ -1088,9 +1088,6 @@ export default function Servers() {
                               </Button>
                               {server.can_edit && (
                                 <>
-                                  <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => onTest(server)}>
-                                    <Plug className="h-3.5 w-3.5" />
-                                  </Button>
                                   <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => openEdit(server)}>
                                     <Settings className="h-3.5 w-3.5" />
                                   </Button>
