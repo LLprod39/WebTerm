@@ -1156,24 +1156,47 @@ export default function Servers() {
         </TabsContent>
 
         <TabsContent value="playbook" className="space-y-3">
+          {/* Hidden file input */}
+          <input ref={fileInputRef} type="file" accept=".yml,.yaml,.json" className="hidden" onChange={onFileInputChange} />
+
           {/* PLAYBOOK LIST */}
           {playbookView === "list" && (
             <section className="bg-card border border-border rounded-lg p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-sm font-semibold text-foreground">Playbooks</h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">Ansible-style command sequences to run across servers</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Import Ansible playbooks (YAML/JSON) or create from scratch</p>
                 </div>
-                <Button size="sm" className="gap-1.5 h-8 text-xs" onClick={openNewPlaybook}>
-                  <Plus className="h-3.5 w-3.5" /> New Playbook
-                </Button>
+                <div className="flex gap-1.5">
+                  <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={() => fileInputRef.current?.click()}>
+                    <Upload className="h-3.5 w-3.5" /> Import
+                  </Button>
+                  <Button size="sm" className="gap-1.5 h-8 text-xs" onClick={openNewPlaybook}>
+                    <Plus className="h-3.5 w-3.5" /> New Playbook
+                  </Button>
+                </div>
+              </div>
+
+              {/* Drag & drop zone */}
+              <div
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={onDropPlaybook}
+                className="border-2 border-dashed border-border rounded-lg p-6 text-center transition-colors hover:border-primary/40 hover:bg-primary/5 cursor-pointer"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <FileJson className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40" />
+                <p className="text-xs text-muted-foreground">
+                  Drop Ansible playbook here (.yml, .yaml, .json) or <span className="text-primary underline">browse</span>
+                </p>
+                <p className="text-[10px] text-muted-foreground/60 mt-1">
+                  Supports: shell, command, apt, yum, systemd, service, copy, file, git, pip and more
+                </p>
               </div>
 
               {playbooks.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <BookOpen className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                <div className="text-center py-6 text-muted-foreground">
                   <p className="text-sm">No playbooks yet</p>
-                  <p className="text-xs mt-1">Create your first playbook to automate tasks across servers</p>
+                  <p className="text-xs mt-1">Import an Ansible playbook or create a new one</p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -1190,6 +1213,9 @@ export default function Servers() {
                       <div className="flex gap-1.5 shrink-0">
                         <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs gap-1" onClick={() => openEditPlaybook(pb)}>
                           <Settings className="h-3 w-3" /> Edit
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" title="Export as JSON" onClick={() => exportPlaybookAsJson(pb)}>
+                          <Download className="h-3 w-3" />
                         </Button>
                         <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={() => onDuplicatePlaybook(pb)}>
                           <Copy className="h-3 w-3" />
