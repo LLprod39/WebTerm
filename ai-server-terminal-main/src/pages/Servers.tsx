@@ -419,37 +419,163 @@ export default function Servers() {
     await reload();
   };
 
-  const onBulkUpdateFiltered = async () => {
-    if (!filtered.length) return;
-    const payload: {
-      server_ids: number[];
-      group_id?: number | null;
-      tags?: string;
-      is_active?: boolean;
-    } = { server_ids: filtered.map((s) => s.id) };
+  // Playbook helpers
+  const addPlaybookTask = () => {
+    setPlaybookTasks((prev) => [...prev, { id: newTaskId(), command: "", description: "", continueOnError: false }]);
+  };
 
-    if (bulkGroupId !== "__keep__") {
-      payload.group_id = bulkGroupId === "__none__" ? null : Number(bulkGroupId);
-    }
-    if (bulkTags.trim()) {
-      payload.tags = bulkTags.trim();
-    }
-    if (bulkActive !== "__keep__") {
-      payload.is_active = bulkActive === "active";
+  const updatePlaybookTask = (id: string, patch: Partial<PlaybookTask>) => {
+    setPlaybookTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+  };
+
+  const removePlaybookTask = (id: string) => {
+    setPlaybookTasks((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const moveTask = (idx: number, dir: -1 | 1) => {
+    setPlaybookTasks((prev) => {
+      const next = [...prev];
+      const target = idx + dir;
+      if (target < 0 || target >= next.length) return prev;
+      [next[idx], next[target]] = [next[target], next[idx]];
+      return next;
+    });
+  };
+
+  const toggleTarget = (id: number) => {
+    setPlaybookTargets((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllTargets = () => {
+    setPlaybookTargets(new Set(servers.filter((s) => s.status === "online").map((s) => s.id)));
+  };
+
+  const clearTargets = () => setPlaybookTargets(new Set());
+
+  const openNewPlaybook = () => {
+    setActivePlaybook(null);
+    setPlaybookName("");
+    setPlaybookDesc("");
+    setPlaybookTasks([{ id: newTaskId(), command: "", description: "", continueOnError: false }]);
+    setPlaybookTargets(new Set());
+    setPlaybookResults([]);
+    setPlaybookView("edit");
+  };
+
+  const openEditPlaybook = (pb: Playbook) => {
+    setActivePlaybook(pb);
+    setPlaybookName(pb.name);
+    setPlaybookDesc(pb.description);
+    setPlaybookTasks([...pb.tasks]);
+    setPlaybookTargets(new Set());
+    setPlaybookResults([]);
+    setPlaybookView("edit");
+  };
+
+  const onSavePlaybook = () => {
+    if (!playbookName.trim() || playbookTasks.length === 0) return;
+    const pb: Playbook = {
+      id: activePlaybook?.id || newPlaybookId(),
+      name: playbookName.trim(),
+      description: playbookDesc.trim(),
+      tasks: playbookTasks.filter((t) => t.command.trim()),
+      createdAt: activePlaybook?.createdAt || new Date().toISOString(),
+    };
+    const updated = activePlaybook
+      ? playbooks.map((p) => (p.id === activePlaybook.id ? pb : p))
+      : [...playbooks, pb];
+    setPlaybooks(updated);
+    savePlaybooks(updated);
+    setActivePlaybook(pb);
+  };
+
+  const onDeletePlaybook = (id: string) => {
+    if (!confirm("Delete this playbook?")) return;
+    const updated = playbooks.filter((p) => p.id !== id);
+    setPlaybooks(updated);
+    savePlaybooks(updated);
+    if (activePlaybook?.id === id) setPlaybookView("list");
+  };
+
+  const onDuplicatePlaybook = (pb: Playbook) => {
+    const dup: Playbook = {
+      ...pb,
+      id: newPlaybookId(),
+      name: `${pb.name} (copy)`,
+      createdAt: new Date().toISOString(),
+      tasks: pb.tasks.map((t) => ({ ...t, id: newTaskId() })),
+    };
+    const updated = [...playbooks, dup];
+    setPlaybooks(updated);
+    savePlaybooks(updated);
+  };
+
+  const onRunPlaybook = async () => {
+    const validTasks = playbookTasks.filter((t) => t.command.trim());
+    const targetIds = Array.from(playbookTargets);
+    if (!validTasks.length || !targetIds.length) return;
+
+    setPlaybookRunning(true);
+    setPlaybookView("run");
+
+    const results: PlaybookRunResult[] = targetIds.map((sid) => {
+      const srv = servers.find((s) => s.id === sid);
+      return {
+        serverId: sid,
+        serverName: srv?.name || `Server #${sid}`,
+        taskResults: validTasks.map((t) => ({
+          taskId: t.id,
+          command: t.command,
+          status: "pending" as const,
+          output: "",
+        })),
+      };
+    });
+    setPlaybookResults([...results]);
+
+    for (let si = 0; si < results.length; si++) {
+      const sr = results[si];
+      let shouldSkip = false;
+      for (let ti = 0; ti < validTasks.length; ti++) {
+        const task = validTasks[ti];
+        if (shouldSkip) {
+          sr.taskResults[ti].status = "skipped";
+          sr.taskResults[ti].output = "Skipped due to previous error";
+          setPlaybookResults([...results]);
+          continue;
+        }
+
+        sr.taskResults[ti].status = "running";
+        setPlaybookResults([...results]);
+
+        try {
+          const resp = await executeServerCommand(sr.serverId, task.command, "");
+          if (resp.success) {
+            sr.taskResults[ti].status = "success";
+            sr.taskResults[ti].output = formatCommandOutput(resp.output);
+            sr.taskResults[ti].exitCode = 0;
+          } else {
+            sr.taskResults[ti].status = "error";
+            sr.taskResults[ti].output = resp.error || "Command failed";
+            sr.taskResults[ti].exitCode = 1;
+            if (!task.continueOnError) shouldSkip = true;
+          }
+        } catch (err) {
+          sr.taskResults[ti].status = "error";
+          sr.taskResults[ti].output = String(err);
+          sr.taskResults[ti].exitCode = 1;
+          if (!task.continueOnError) shouldSkip = true;
+        }
+        setPlaybookResults([...results]);
+      }
     }
 
-    if (Object.keys(payload).length === 1) {
-      alert("Set at least one field for bulk update");
-      return;
-    }
-
-    setBulkSaving(true);
-    try {
-      await bulkUpdateServers(payload);
-      await reload();
-    } finally {
-      setBulkSaving(false);
-    }
+    setPlaybookRunning(false);
   };
 
   const openAdvanced = async (server: FrontendServer) => {
