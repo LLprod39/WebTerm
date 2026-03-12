@@ -39,6 +39,8 @@ import {
   Bot,
   Wand2,
   MoreHorizontal,
+  Info,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -88,6 +90,7 @@ import {
   NODE_PALETTE,
   type NodeType,
 } from "@/components/pipeline/nodes";
+import { getNodeTypeGuidance } from "@/components/pipeline/nodes/nodeMeta";
 
 // ---------------------------------------------------------------------------
 // React Flow node type map
@@ -868,6 +871,27 @@ function NodeConfigPanel({
       </div>
 
       <div className="flex-1 overflow-auto p-4 space-y-4">
+        {/* Guidance */}
+        {(() => {
+          const guidance = getNodeTypeGuidance(type, "en");
+          return (
+            <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 space-y-1.5">
+              <div className="flex items-center gap-1.5 text-[11px] font-medium text-primary">
+                <Info className="h-3 w-3" />
+                {guidance.category} — {typeInfo.label}
+              </div>
+              <p className="text-[10px] text-muted-foreground leading-relaxed">{guidance.summary}</p>
+              <ul className="space-y-0.5">
+                {guidance.checklist.map((item, i) => (
+                  <li key={i} className="text-[10px] text-muted-foreground flex items-start gap-1">
+                    <span className="text-primary/60 mt-px">•</span> {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })()}
+
         {/* Common: label */}
         <div className="space-y-1.5">
           <Label className="text-xs">Label (optional)</Label>
@@ -1764,35 +1788,97 @@ function NodeConfigPanel({
 }
 
 // ---------------------------------------------------------------------------
-// Node Palette (left panel)
+// Node Palette (left panel) — with search, drag, category icons
 // ---------------------------------------------------------------------------
+const CATEGORY_ICONS: Record<string, string> = {
+  Triggers: "🚀",
+  Agents: "🤖",
+  Logic: "⚙️",
+  Output: "📤",
+};
+
 function NodePalette({ onAddNode }: { onAddNode: (type: NodeType) => void }) {
+  const [search, setSearch] = useState("");
+  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set(NODE_PALETTE.map((c) => c.category)));
+
+  const toggleCat = (cat: string) => {
+    setExpandedCats((prev) => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);
+      else next.add(cat);
+      return next;
+    });
+  };
+
+  const filtered = NODE_PALETTE.map((cat) => ({
+    ...cat,
+    nodes: cat.nodes.filter(
+      (n) =>
+        !search.trim() ||
+        n.label.toLowerCase().includes(search.toLowerCase()) ||
+        n.description.toLowerCase().includes(search.toLowerCase()),
+    ),
+  })).filter((cat) => cat.nodes.length > 0);
+
   return (
     <div className="flex flex-col h-full border-r border-border bg-card">
-      <div className="px-3 py-3 border-b border-border">
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Nodes</h3>
+      <div className="px-3 py-3 border-b border-border space-y-2">
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+          <Plus className="h-3 w-3" /> Add Node
+        </h3>
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search nodes..."
+          className="h-7 text-xs"
+        />
       </div>
-      <div className="flex-1 overflow-auto p-2 space-y-3">
-        {NODE_PALETTE.map((cat) => (
+      <div className="flex-1 overflow-auto p-2 space-y-1">
+        {filtered.map((cat) => (
           <div key={cat.category}>
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase px-1 mb-1">{cat.category}</p>
-            {cat.nodes.map((node) => (
+            <button
+              onClick={() => toggleCat(cat.category)}
+              className="w-full text-left flex items-center gap-1.5 px-1 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase hover:text-foreground transition-colors"
+            >
+              <span>{CATEGORY_ICONS[cat.category] || "📦"}</span>
+              <span className="flex-1">{cat.category}</span>
+              <span className="text-[9px] font-normal bg-muted/50 rounded px-1">{cat.nodes.length}</span>
+              {expandedCats.has(cat.category) ? (
+                <ChevronUp className="h-2.5 w-2.5" />
+              ) : (
+                <ChevronDown className="h-2.5 w-2.5" />
+              )}
+            </button>
+            {expandedCats.has(cat.category) && cat.nodes.map((node) => (
               <button
                 key={node.type}
                 onClick={() => onAddNode(node.type)}
-                className="w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors group"
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData("application/pipeline-node-type", node.type);
+                  e.dataTransfer.effectAllowed = "copy";
+                }}
+                className="w-full text-left flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-primary/5 border border-transparent hover:border-border/50 transition-all group cursor-grab active:cursor-grabbing"
                 title={node.description}
               >
-                <span className="text-sm">{node.icon}</span>
-                <div className="min-w-0">
+                <span className="text-base h-8 w-8 flex items-center justify-center rounded-lg bg-muted/40 group-hover:bg-primary/10 transition-colors shrink-0">
+                  {node.icon}
+                </span>
+                <div className="min-w-0 flex-1">
                   <div className="text-xs font-medium text-foreground truncate">{node.label}</div>
-                  <div className="text-[10px] text-muted-foreground truncate">{node.description}</div>
+                  <div className="text-[10px] text-muted-foreground truncate leading-tight mt-0.5">{node.description}</div>
                 </div>
-                <Plus className="h-3 w-3 ml-auto text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0" />
+                <Plus className="h-3.5 w-3.5 ml-auto text-primary opacity-0 group-hover:opacity-100 shrink-0 transition-opacity" />
               </button>
             ))}
           </div>
         ))}
+        {filtered.length === 0 && search.trim() && (
+          <p className="text-[11px] text-muted-foreground text-center py-4">No nodes match "{search}"</p>
+        )}
+      </div>
+      <div className="px-3 py-2 border-t border-border">
+        <p className="text-[9px] text-muted-foreground text-center">Click or drag nodes to canvas</p>
       </div>
     </div>
   );
@@ -1976,6 +2062,26 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       setSelectedNode(newNode as PipelineNode);
     },
     [nodes, selectedNode, setNodes, screenToFlowPosition],
+  );
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      const type = e.dataTransfer.getData("application/pipeline-node-type");
+      if (!type || !isNodeType(type)) return;
+      const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+      const id = `node_${nodeIdCounter.current++}`;
+      const newNode = { id, type, position, data: buildDefaultNodeData(type as NodeType) };
+      setNodes((nds) => [...nds, newNode as never]);
+      setActiveRunId(null);
+      setSelectedNode(newNode as PipelineNode);
+    },
+    [screenToFlowPosition, setNodes],
   );
 
   const handleUpdateNodeData = useCallback(
@@ -2203,10 +2309,55 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         onApplyGraphPatch={handleApplyPipelineAssistantGraphPatch}
       />
 
+      {/* Flow summary bar */}
+      {nodes.length > 0 && (
+        <div className="flex items-center gap-1 px-4 py-1.5 border-b border-border bg-muted/30 overflow-x-auto">
+          <span className="text-[10px] text-muted-foreground shrink-0 mr-1">Flow:</span>
+          {(() => {
+            // Build a simple chain from triggers -> connected nodes
+            const pNodes = nodes as unknown as PipelineNode[];
+            const pEdges = edges as unknown as PipelineEdge[];
+            const visited = new Set<string>();
+            const chain: PipelineNode[] = [];
+            const triggers = pNodes.filter((n) => n.type?.startsWith("trigger/"));
+            const queue = triggers.length ? [...triggers] : pNodes.slice(0, 1);
+            while (queue.length && chain.length < 12) {
+              const current = queue.shift()!;
+              if (visited.has(current.id)) continue;
+              visited.add(current.id);
+              chain.push(current);
+              const downstream = pEdges
+                .filter((e) => e.source === current.id)
+                .map((e) => pNodes.find((n) => n.id === e.target))
+                .filter(Boolean) as PipelineNode[];
+              queue.push(...downstream);
+            }
+            // Add orphans
+            pNodes.forEach((n) => { if (!visited.has(n.id) && chain.length < 15) chain.push(n); });
+            return chain.map((n, i) => (
+              <span key={n.id} className="flex items-center gap-1 shrink-0">
+                {i > 0 && <ChevronRight className="h-2.5 w-2.5 text-muted-foreground/40" />}
+                <button
+                  onClick={() => { setSelectedNode(n); setActiveRunId(null); }}
+                  className={cn(
+                    "text-[10px] px-1.5 py-0.5 rounded-md border transition-colors",
+                    selectedNode?.id === n.id
+                      ? "border-primary/40 bg-primary/10 text-primary"
+                      : "border-transparent hover:bg-muted/50 text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {NODE_TYPE_LABELS[n.type || ""]?.icon || "🔧"} {getNodeDisplayLabel(n)}
+                </button>
+              </span>
+            ));
+          })()}
+        </div>
+      )}
+
       {/* Main area */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left: Node palette */}
-        <div className="w-52 shrink-0">
+        <div className="w-56 shrink-0">
           <NodePalette onAddNode={handleAddNode} />
         </div>
 
@@ -2220,12 +2371,16 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
             onConnect={onConnect}
             onNodeClick={onNodeClick}
             onPaneClick={onPaneClick}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
             nodeTypes={nodeTypes}
             fitView
             proOptions={{ hideAttribution: true }}
             defaultEdgeOptions={{
               style: { strokeWidth: 2 },
               animated: true,
+              labelStyle: { fontSize: 10, fill: "hsl(var(--muted-foreground))" },
+              labelBgStyle: { fill: "hsl(var(--background))", fillOpacity: 0.8 },
             }}
           >
             <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
@@ -2236,20 +2391,23 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                 maskColor="hsl(var(--background) / 0.82)"
                 nodeColor={(node) => {
                   const type = node.type || "";
-                  if (type.startsWith("trigger/")) return "#6b7280";
-                  if (type.startsWith("agent/")) return "#4b5563";
-                  if (type.startsWith("logic/")) return "#9ca3af";
-                  if (type.startsWith("output/")) return "#374151";
-                  return "#6b7280";
+                  if (type.startsWith("trigger/")) return "hsl(var(--muted-foreground))";
+                  if (type.startsWith("agent/")) return "hsl(var(--primary))";
+                  if (type.startsWith("logic/")) return "hsl(var(--accent-foreground))";
+                  if (type.startsWith("output/")) return "hsl(var(--secondary-foreground))";
+                  return "hsl(var(--muted-foreground))";
                 }}
               />
             )}
             {/* Empty state hint inside React Flow */}
             {nodes.length === 0 && (
-              <Panel position="top-center" style={{ pointerEvents: "none", marginTop: "30%" }}>
-                <div className="text-center select-none">
-                  <Zap className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
-                  <p className="text-sm text-muted-foreground/60">Click a node type on the left to add it</p>
+              <Panel position="top-center" style={{ pointerEvents: "none", marginTop: "25%" }}>
+                <div className="text-center select-none space-y-3">
+                  <Zap className="h-12 w-12 text-primary/20 mx-auto" />
+                  <p className="text-sm text-muted-foreground/70 font-medium">Build your automation pipeline</p>
+                  <p className="text-xs text-muted-foreground/50 max-w-xs mx-auto">
+                    Click or drag nodes from the palette on the left. Connect them to define the execution flow.
+                  </p>
                 </div>
               </Panel>
             )}
