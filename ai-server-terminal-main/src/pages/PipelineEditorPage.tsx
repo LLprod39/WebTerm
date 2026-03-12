@@ -88,6 +88,7 @@ import {
   NODE_PALETTE,
   type NodeType,
 } from "@/components/pipeline/nodes";
+import { getNodeTypeGuidance } from "@/components/pipeline/nodes/nodeMeta";
 
 // ---------------------------------------------------------------------------
 // React Flow node type map
