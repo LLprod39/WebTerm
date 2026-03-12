@@ -559,6 +559,7 @@ export default function PipelineRunsPage() {
           <RunDetail runId={selectedRunId} onClose={() => setSelectedRunId(null)} />
         </div>
       )}
+      </div>
     </div>
   );
 }

@@ -565,5 +565,7 @@ export default function MCPHubPage() {
         </DialogContent>
       </Dialog>
     </PageShell>
+      </div>
+    </div>
   );
 }
