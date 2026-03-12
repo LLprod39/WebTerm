@@ -567,6 +567,8 @@ function PipelineAssistantDialog({
   const { toast } = useToast();
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -575,10 +577,17 @@ function PipelineAssistantDialog({
       {
         id: `pipeline-assistant-intro-${pipelineId ?? "new"}`,
         role: "assistant",
-        content: "I can review this pipeline, suggest targeted node patches, or generate the next part of the graph without changing the current UI layout.",
+        content: `Привет! Я помогу с пайплайном${pipelineName ? ` **${pipelineName}**` : ""}.\n\nМогу проанализировать текущий граф, предложить улучшения, добавить ноды или настроить существующие.`,
       },
     ]);
+    setTimeout(() => inputRef.current?.focus(), 100);
   }, [open, pipelineId]);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
 
   const assistantMutation = useMutation({
     mutationFn: (message: string) =>
@@ -617,126 +626,209 @@ function PipelineAssistantDialog({
     if (!trimmed || assistantMutation.isPending) return;
     setMessages((prev) => [
       ...prev,
-      {
-        id: `pipeline-user-${Date.now()}`,
-        role: "user",
-        content: trimmed,
-      },
+      { id: `pipeline-user-${Date.now()}`, role: "user", content: trimmed },
     ]);
     setDraft("");
     await assistantMutation.mutateAsync(trimmed);
   };
 
   const quickPrompts = [
-    "Explain what this pipeline currently does.",
-    "What looks weak or incomplete before production?",
-    "Suggest the next nodes to add.",
-    "Generate a starter graph patch for the next stage.",
+    { icon: "🔍", text: "Объясни что делает пайплайн", full: "Explain what this pipeline currently does." },
+    { icon: "⚠️", text: "Найди проблемы", full: "What looks weak or incomplete before production?" },
+    { icon: "➕", text: "Предложи ноды", full: "Suggest the next nodes to add." },
+    { icon: "✨", text: "Сгенерируй граф", full: "Generate a starter graph patch for the next stage." },
   ];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Bot className="h-4 w-4" />
-            Pipeline Assistant
-          </DialogTitle>
-          <DialogDescription>
-            Ask for targeted node changes or a graph patch. The current strict UI stays the same; only the editor logic is restored.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogBody className="space-y-4">
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <Badge variant="outline">Nodes: {nodes.length}</Badge>
-            <Badge variant="outline">Edges: {edges.length}</Badge>
-            {selectedNode ? <Badge variant="outline">Focus: {getNodeDisplayLabel(selectedNode)}</Badge> : null}
+      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center">
+              <Bot className="h-4 w-4 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold">Pipeline Assistant</h3>
+              <p className="text-[10px] text-muted-foreground">
+                {nodes.length} nodes • {edges.length} connections
+                {selectedNode ? ` • Focus: ${getNodeDisplayLabel(selectedNode)}` : ""}
+              </p>
+            </div>
           </div>
+          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onOpenChange(false)}>
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        </div>
 
-          <div className="flex flex-wrap gap-2">
-            {quickPrompts.map((prompt) => (
-              <Button key={prompt} type="button" size="sm" variant="outline" className="h-auto py-1.5 text-[11px]" onClick={() => void submitPrompt(prompt)}>
-                {prompt}
-              </Button>
-            ))}
+        {/* Quick prompts */}
+        {messages.length <= 1 && (
+          <div className="px-5 py-3 border-b border-border bg-muted/20">
+            <p className="text-[10px] text-muted-foreground mb-2 uppercase font-medium tracking-wide">Быстрые действия</p>
+            <div className="grid grid-cols-2 gap-2">
+              {quickPrompts.map((qp) => (
+                <button
+                  key={qp.text}
+                  onClick={() => void submitPrompt(qp.full)}
+                  disabled={assistantMutation.isPending}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-border bg-card hover:bg-primary/5 hover:border-primary/30 transition-all text-left group"
+                >
+                  <span className="text-base">{qp.icon}</span>
+                  <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">{qp.text}</span>
+                </button>
+              ))}
+            </div>
           </div>
+        )}
 
-          <div className="rounded-md border border-border">
-            <ScrollArea className="max-h-[50vh]">
-              <div className="space-y-3 p-4">
-                {messages.map((message) => {
-                  const hasPatch = Boolean(message.nodePatch && Object.keys(message.nodePatch).length && message.targetNodeId);
-                  const graphPatchSummary = describeGraphPatch(message.graphPatch);
-                  return (
-                    <div key={message.id} className="rounded-md border border-border bg-card px-4 py-3">
-                      <div className="mb-2 flex items-center gap-2">
-                        <Badge variant={message.role === "assistant" ? "outline" : "default"} className="text-[10px]">
-                          {message.role === "assistant" ? "AI" : "You"}
-                        </Badge>
-                        {message.targetNodeId ? (
-                          <Badge variant="outline" className="text-[10px]">
-                            Target: {message.targetNodeId}
-                          </Badge>
-                        ) : null}
-                      </div>
-                      <div className="whitespace-pre-wrap text-sm leading-6">{message.content}</div>
-                      {message.warnings?.length ? (
-                        <div className="mt-3 space-y-1">
-                          {message.warnings.map((warning) => (
-                            <p key={warning} className="text-xs text-amber-300">
-                              {warning}
-                            </p>
-                          ))}
-                        </div>
-                      ) : null}
-                      {hasPatch ? (
-                        <div className="mt-3 space-y-3">
-                          <pre className="max-h-48 overflow-auto rounded-md border border-border bg-muted/30 px-3 py-2 text-[11px] leading-5 text-muted-foreground">
-                            {JSON.stringify(message.nodePatch, null, 2)}
-                          </pre>
-                          <Button type="button" size="sm" className="gap-2" onClick={() => onApplyPatch(message.targetNodeId || "", message.nodePatch || {})}>
-                            <Wand2 className="h-4 w-4" />
-                            Apply node patch
-                          </Button>
-                        </div>
-                      ) : null}
-                      {graphPatchSummary ? (
-                        <div className="mt-3 space-y-3">
-                          <div className="rounded-md border border-border bg-muted/20 px-3 py-3 text-xs text-muted-foreground">
-                            <p>{graphPatchSummary.nodeCount} node(s), {graphPatchSummary.edgeCount} edge(s)</p>
-                            {graphPatchSummary.nodeLabels.length ? <p className="mt-1">Nodes: {graphPatchSummary.nodeLabels.join(", ")}</p> : null}
-                            {graphPatchSummary.edgeLabels.length ? <p className="mt-1">Edges: {graphPatchSummary.edgeLabels.join(", ")}</p> : null}
-                          </div>
-                          <Button type="button" size="sm" variant="outline" className="gap-2" onClick={() => onApplyGraphPatch(message.graphPatch || { anchor_node_id: null, nodes: [], edges: [] })}>
-                            <Sparkles className="h-4 w-4" />
-                            Apply graph changes
-                          </Button>
-                        </div>
-                      ) : null}
+        {/* Chat messages */}
+        <div ref={scrollRef} className="flex-1 overflow-auto px-5 py-4 space-y-4 min-h-[200px] max-h-[50vh]">
+          {messages.map((message) => {
+            const isAI = message.role === "assistant";
+            const hasPatch = Boolean(message.nodePatch && Object.keys(message.nodePatch).length && message.targetNodeId);
+            const graphPatchSummary = describeGraphPatch(message.graphPatch);
+
+            return (
+              <div key={message.id} className={cn("flex gap-3", !isAI && "flex-row-reverse")}>
+                {/* Avatar */}
+                <div className={cn(
+                  "h-7 w-7 rounded-lg flex items-center justify-center shrink-0 text-xs",
+                  isAI ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                )}>
+                  {isAI ? "🤖" : "👤"}
+                </div>
+
+                {/* Bubble */}
+                <div className={cn(
+                  "max-w-[85%] space-y-2",
+                  !isAI && "text-right"
+                )}>
+                  <div className={cn(
+                    "rounded-xl px-3.5 py-2.5 text-sm leading-relaxed",
+                    isAI
+                      ? "bg-card border border-border text-foreground"
+                      : "bg-primary text-primary-foreground"
+                  )}>
+                    <div className="whitespace-pre-wrap">{message.content}</div>
+                  </div>
+
+                  {/* Warnings */}
+                  {message.warnings?.length ? (
+                    <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 space-y-1">
+                      {message.warnings.map((w) => (
+                        <p key={w} className="text-[11px] text-amber-600 dark:text-amber-400 flex items-start gap-1.5">
+                          <span className="shrink-0">⚠️</span> {w}
+                        </p>
+                      ))}
                     </div>
-                  );
-                })}
-              </div>
-            </ScrollArea>
-          </div>
+                  ) : null}
 
-          <Textarea
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            rows={4}
-            placeholder="Ask about weak spots, missing nodes, MCP usage, or request a graph patch."
-            className="text-sm resize-none"
-          />
-        </DialogBody>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Close
-          </Button>
-          <Button type="button" className="gap-2" disabled={!draft.trim() || assistantMutation.isPending} onClick={() => void submitPrompt(draft)}>
-            {assistantMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            Send
-          </Button>
-        </DialogFooter>
+                  {/* Node patch action */}
+                  {hasPatch && (
+                    <div className="rounded-xl border border-border bg-card overflow-hidden">
+                      <div className="px-3 py-2 border-b border-border bg-muted/30 flex items-center gap-2">
+                        <Wand2 className="h-3 w-3 text-primary" />
+                        <span className="text-[11px] font-medium">Изменение ноды: {message.targetNodeId}</span>
+                      </div>
+                      <pre className="px-3 py-2 text-[10px] leading-4 text-muted-foreground max-h-32 overflow-auto font-mono">
+                        {JSON.stringify(message.nodePatch, null, 2)}
+                      </pre>
+                      <div className="px-3 py-2 border-t border-border">
+                        <Button
+                          size="sm"
+                          className="h-7 gap-1.5 text-xs w-full"
+                          onClick={() => onApplyPatch(message.targetNodeId || "", message.nodePatch || {})}
+                        >
+                          <Wand2 className="h-3 w-3" />
+                          Применить
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Graph patch action */}
+                  {graphPatchSummary && (
+                    <div className="rounded-xl border border-border bg-card overflow-hidden">
+                      <div className="px-3 py-2 border-b border-border bg-muted/30 flex items-center gap-2">
+                        <Sparkles className="h-3 w-3 text-primary" />
+                        <span className="text-[11px] font-medium">Изменение графа</span>
+                      </div>
+                      <div className="px-3 py-2 space-y-1 text-[11px] text-muted-foreground">
+                        <div className="flex items-center gap-3">
+                          <span className="bg-primary/10 text-primary rounded px-1.5 py-0.5 font-medium">
+                            +{graphPatchSummary.nodeCount} nodes
+                          </span>
+                          <span className="bg-muted rounded px-1.5 py-0.5">
+                            +{graphPatchSummary.edgeCount} edges
+                          </span>
+                        </div>
+                        {graphPatchSummary.nodeLabels.length > 0 && (
+                          <p className="text-[10px]">{graphPatchSummary.nodeLabels.join(" → ")}</p>
+                        )}
+                      </div>
+                      <div className="px-3 py-2 border-t border-border">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 gap-1.5 text-xs w-full"
+                          onClick={() => onApplyGraphPatch(message.graphPatch || { anchor_node_id: null, nodes: [], edges: [] })}
+                        >
+                          <Sparkles className="h-3 w-3" />
+                          Добавить на канвас
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Typing indicator */}
+          {assistantMutation.isPending && (
+            <div className="flex gap-3">
+              <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 text-xs">🤖</div>
+              <div className="bg-card border border-border rounded-xl px-4 py-3 flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 animate-pulse" />
+                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 animate-pulse [animation-delay:150ms]" />
+                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 animate-pulse [animation-delay:300ms]" />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Input area */}
+        <div className="border-t border-border px-4 py-3 bg-card/50">
+          <div className="flex items-end gap-2">
+            <Textarea
+              ref={inputRef}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  void submitPrompt(draft);
+                }
+              }}
+              rows={1}
+              placeholder="Спросите об улучшениях, проблемах, или попросите добавить ноды..."
+              className="text-sm resize-none min-h-[38px] max-h-[120px] flex-1"
+            />
+            <Button
+              size="icon"
+              className="h-[38px] w-[38px] shrink-0"
+              disabled={!draft.trim() || assistantMutation.isPending}
+              onClick={() => void submitPrompt(draft)}
+            >
+              {assistantMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+          <p className="text-[9px] text-muted-foreground mt-1.5 text-center">Enter — отправить, Shift+Enter — новая строка</p>
+        </div>
       </DialogContent>
     </Dialog>
   );
