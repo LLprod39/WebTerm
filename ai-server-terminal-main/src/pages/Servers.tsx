@@ -921,216 +921,333 @@ export default function Servers() {
       </Dialog>
 
       <Dialog open={advancedOpen} onOpenChange={setAdvancedOpen}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>{t("srv.advanced")}: {advancedServer?.name || "Server"}</DialogTitle>
-            <DialogDescription>{t("srv.sharing")}</DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-5xl h-[85vh] flex flex-col p-0">
+          {/* Header */}
+          <div className="flex items-center gap-3 px-6 py-4 border-b border-border shrink-0">
+            <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Server className="h-4 w-4 text-primary" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <DialogTitle className="text-sm font-semibold">{advancedServer?.name || "Server"}</DialogTitle>
+              <DialogDescription className="text-xs font-mono mt-0">
+                {advancedServer?.host}:{advancedServer?.port} · {advancedServer?.group_name}
+              </DialogDescription>
+            </div>
+          </div>
 
-          <DialogBody className={advancedLoading ? "py-8" : "max-h-[65vh] overflow-y-auto p-0"}>
           {advancedLoading ? (
-              <div className="text-sm text-muted-foreground text-center">{t("loading")}</div>
+            <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">{t("loading")}</div>
           ) : (
-              <Tabs value={advancedTab} onValueChange={(v) => setAdvancedTab(v as AdvancedTab)}>
-                <div className="sticky top-0 z-10 bg-card border-b border-border px-6 pt-4 pb-0">
-                  <TabsList className="w-full justify-start">
-                    <TabsTrigger value="access">{t("srv.access")}</TabsTrigger>
-                    <TabsTrigger value="knowledge">{t("srv.knowledge")}</TabsTrigger>
-                    <TabsTrigger value="context">{t("srv.context")}</TabsTrigger>
-                    <TabsTrigger value="security">{t("srv.security")}</TabsTrigger>
-                    <TabsTrigger value="execute">{t("srv.execute")}</TabsTrigger>
-                  </TabsList>
-                </div>
+            <div className="flex flex-1 min-h-0">
+              {/* Sidebar tabs */}
+              <div className="w-44 shrink-0 border-r border-border bg-secondary/20 py-2">
+                {([
+                  { key: "access", icon: <Sparkles className="h-3.5 w-3.5" />, label: t("srv.access") },
+                  { key: "knowledge", icon: <Sparkles className="h-3.5 w-3.5" />, label: t("srv.knowledge") },
+                  { key: "context", icon: <Layers className="h-3.5 w-3.5" />, label: t("srv.context") },
+                  { key: "security", icon: <Settings className="h-3.5 w-3.5" />, label: t("srv.security") },
+                  { key: "execute", icon: <Terminal className="h-3.5 w-3.5" />, label: t("srv.execute") },
+                ] as const).map((tab) => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setAdvancedTab(tab.key)}
+                    className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-medium transition-colors text-left ${
+                      advancedTab === tab.key
+                        ? "bg-primary/10 text-primary border-r-2 border-primary"
+                        : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                    }`}
+                  >
+                    {tab.icon}
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
 
-                <div className="px-6 py-5">
-
-                <TabsContent value="access" className="mt-0 space-y-4">
-                  <div className="rounded-lg border border-border bg-secondary/20 p-4 space-y-3">
-                    <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">{t("srv.server_sharing")}</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                      <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">{t("srv.username")}</Label>
-                        <Input placeholder="username / email / id" value={shareUser} onChange={(e) => setShareUser(e.target.value)} className="bg-secondary/50 h-9" />
+              {/* Content area */}
+              <div className="flex-1 overflow-y-auto p-6">
+                {/* ACCESS TAB */}
+                {advancedTab === "access" && (
+                  <div className="space-y-5">
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground mb-1">{t("srv.server_sharing")}</h3>
+                      <p className="text-xs text-muted-foreground mb-4">Share server access with other users</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-muted-foreground">{t("srv.username")}</Label>
+                          <Input placeholder="username / email / id" value={shareUser} onChange={(e) => setShareUser(e.target.value)} className="bg-secondary/50 h-9" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-muted-foreground">Expires</Label>
+                          <Input type="datetime-local" value={shareExpiresAt} onChange={(e) => setShareExpiresAt(e.target.value)} className="bg-secondary/50 h-9" />
+                        </div>
                       </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">Expires</Label>
-                        <Input type="datetime-local" value={shareExpiresAt} onChange={(e) => setShareExpiresAt(e.target.value)} className="bg-secondary/50 h-9" />
-                      </div>
-                      <div className="flex items-end">
-                        <label className="text-xs flex items-center gap-2 h-9 text-muted-foreground">
+                      <div className="flex items-center justify-between mt-3">
+                        <label className="text-xs flex items-center gap-2 text-muted-foreground">
                           <input type="checkbox" checked={shareContext} onChange={(e) => setShareContext(e.target.checked)} className="rounded" />
                           {t("srv.share_context")}
                         </label>
-                      </div>
-                      <div className="flex items-end">
-                        <Button size="sm" className="w-full h-9" onClick={onShareCreate}>{t("srv.share")}</Button>
+                        <Button size="sm" className="h-8 px-4" onClick={onShareCreate}>{t("srv.share")}</Button>
                       </div>
                     </div>
-                  </div>
-                  {shares.length > 0 && (
-                    <div className="space-y-2">
-                      {shares.map((s) => (
-                        <div key={s.id} className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-border bg-secondary/10">
-                          <div className="h-7 w-7 rounded-full bg-primary/15 flex items-center justify-center text-xs font-medium text-primary shrink-0">
-                            {(s.username || "U").slice(0, 1).toUpperCase()}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-foreground truncate">{s.username}</p>
-                            <p className="text-xs text-muted-foreground">{s.email || "—"} · {s.is_active ? "active" : "expired"}</p>
-                          </div>
-                          <Button size="sm" variant="outline" className="h-7 text-xs text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => onShareRevoke(s.id)}>
-                            {t("srv.revoke")}
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </TabsContent>
 
-                <TabsContent value="knowledge" className="mt-0 space-y-4">
-                  <div className="rounded-lg border border-border bg-secondary/20 p-4 space-y-3">
-                    <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">{t("srv.ai_memory")}</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                      <Input placeholder="Title" value={knowledgeTitle} onChange={(e) => setKnowledgeTitle(e.target.value)} className="bg-secondary/50 h-9" />
-                      <Input placeholder="Content" value={knowledgeContent} onChange={(e) => setKnowledgeContent(e.target.value)} className="bg-secondary/50 h-9" />
-                      <select
-                        value={knowledgeCategory}
-                        onChange={(e) => setKnowledgeCategory(e.target.value)}
-                        className="flex h-9 w-full rounded-md border border-input bg-secondary/50 px-3 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                      >
-                        <option value="system">System</option>
-                        <option value="services">Services</option>
-                        <option value="network">Network</option>
-                        <option value="security">Security</option>
-                        <option value="performance">Performance</option>
-                        <option value="storage">Storage</option>
-                        <option value="packages">Packages</option>
-                        <option value="config">Config</option>
-                        <option value="issues">Issues</option>
-                        <option value="solutions">Solutions</option>
-                        <option value="other">Other</option>
-                      </select>
-                      <Button size="sm" className="h-9" onClick={onKnowledgeCreate}>{t("srv.add_entry")}</Button>
-                    </div>
-                  </div>
-                  {knowledge.length > 0 && (
-                    <div className="space-y-2">
-                      {knowledge.map((k) => (
-                        <div key={k.id} className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-border bg-secondary/10">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="text-sm font-medium text-foreground">{k.title}</p>
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${k.is_active ? "bg-green-500/15 text-green-400" : "bg-secondary text-muted-foreground"}`}>
-                                {k.category_label}
-                              </span>
+                    {shares.length > 0 && (
+                      <div className="border-t border-border pt-4">
+                        <h4 className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wider">Active shares</h4>
+                        <div className="space-y-2">
+                          {shares.map((s) => (
+                            <div key={s.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-border bg-secondary/10">
+                              <div className="h-7 w-7 rounded-full bg-primary/15 flex items-center justify-center text-xs font-medium text-primary shrink-0">
+                                {(s.username || "U").slice(0, 1).toUpperCase()}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-foreground truncate">{s.username}</p>
+                                <p className="text-xs text-muted-foreground">{s.email || "—"} · {s.is_active ? "active" : "expired"}</p>
+                              </div>
+                              <Button size="sm" variant="outline" className="h-7 text-xs text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => onShareRevoke(s.id)}>
+                                {t("srv.revoke")}
+                              </Button>
                             </div>
-                            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{k.content}</p>
-                          </div>
-                          <div className="flex gap-1 shrink-0">
-                            <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => onKnowledgeToggle(k)}>
-                              {k.is_active ? t("srv.disable") : t("srv.enable")}
-                            </Button>
-                            <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => { setKnowledgeEditingId(k.id); void onKnowledgeEdit(k); }}>
-                              {t("srv.edit")}
-                            </Button>
-                            <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => onKnowledgeDelete(k.id)}>
-                              {t("srv.delete")}
-                            </Button>
-                          </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="context" className="mt-0 space-y-5">
-                  <div className="rounded-lg border border-border bg-secondary/20 p-4 space-y-3">
-                    <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">{t("srv.global_context")}</h3>
-                    <div className="space-y-2">
-                      <Textarea className="min-h-16 bg-secondary/50 text-sm" value={globalRules} onChange={(e) => setGlobalRules(e.target.value)} placeholder="Global rules" />
-                      <Textarea className="min-h-16 bg-secondary/50 text-sm" value={globalForbidden} onChange={(e) => setGlobalForbidden(e.target.value)} placeholder="Forbidden commands (one per line)" />
-                      <Textarea className="min-h-16 bg-secondary/50 text-sm" value={globalRequired} onChange={(e) => setGlobalRequired(e.target.value)} placeholder="Required checks (one per line)" />
-                      <Textarea className="min-h-16 bg-secondary/50 text-sm font-mono" value={globalEnvJson} onChange={(e) => setGlobalEnvJson(e.target.value)} placeholder='{"KEY": "value"}' />
-                    </div>
-                    <Button size="sm" onClick={onSaveGlobalContext}>{t("srv.save_global")}</Button>
-                  </div>
-
-                  {advancedServer?.group_id && (
-                    <div className="rounded-lg border border-border bg-secondary/20 p-4 space-y-3">
-                      <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">{t("srv.group_context")}</h3>
-                      <div className="space-y-2">
-                        <Textarea className="min-h-16 bg-secondary/50 text-sm" value={groupRules} onChange={(e) => setGroupRules(e.target.value)} placeholder="Group rules" />
-                        <Textarea className="min-h-16 bg-secondary/50 text-sm" value={groupForbidden} onChange={(e) => setGroupForbidden(e.target.value)} placeholder="Forbidden commands (one per line)" />
-                        <Textarea className="min-h-16 bg-secondary/50 text-sm font-mono" value={groupEnvJson} onChange={(e) => setGroupEnvJson(e.target.value)} placeholder='{"KEY": "value"}' />
                       </div>
-                      <Button size="sm" onClick={onSaveGroupContext}>{t("srv.save_group")}</Button>
-
-                      <div className="border-t border-border pt-3 mt-3 grid grid-cols-1 md:grid-cols-4 gap-2">
-                        <Input placeholder="username/email" value={groupMemberUser} onChange={(e) => setGroupMemberUser(e.target.value)} className="bg-secondary/50 h-9" />
-                        <select
-                          value={groupMemberRole}
-                          onChange={(e) => setGroupMemberRole(e.target.value as ServerGroupRole)}
-                          className="flex h-9 w-full rounded-md border border-input bg-secondary/50 px-3 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                        >
-                          <option value="owner">Owner</option>
-                          <option value="admin">Admin</option>
-                          <option value="member">Member</option>
-                          <option value="viewer">Viewer</option>
-                        </select>
-                        <Button size="sm" className="h-9" onClick={onAddGroupMember}>{t("srv.add_member")}</Button>
-                        <Button size="sm" variant="outline" className="h-9" onClick={() => subscribeServerGroup(advancedServer.group_id!, "follow")}>{t("srv.follow_group")}</Button>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                        <Input placeholder="user id" value={groupRemoveUserId} onChange={(e) => setGroupRemoveUserId(e.target.value)} className="bg-secondary/50 h-9" />
-                        <Button size="sm" variant="outline" className="h-9 text-destructive border-destructive/30 hover:bg-destructive/10" onClick={onRemoveGroupMember}>{t("srv.remove_member")}</Button>
-                        <Button size="sm" variant="outline" className="h-9" onClick={() => subscribeServerGroup(advancedServer.group_id!, "favorite")}>{t("srv.fav_group")}</Button>
-                      </div>
-                    </div>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="security" className="mt-0 space-y-4">
-                  <div className="rounded-lg border border-border bg-secondary/20 p-4 space-y-3">
-                    <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">{t("srv.master_pw")}</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-                      <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">Master Password</Label>
-                        <Input type="password" value={masterPassword} onChange={(e) => setMasterPasswordText(e.target.value)} className="bg-secondary/50 h-9" />
-                      </div>
-                      <Button size="sm" className="h-9" onClick={onSetMasterPassword}>{t("srv.set_mp")}</Button>
-                      <Button size="sm" variant="outline" className="h-9" onClick={onClearMasterPassword}>{t("srv.clear_mp")}</Button>
-                      <div className="text-xs text-muted-foreground flex items-center h-9">
-                        <span className={`inline-block w-2 h-2 rounded-full mr-2 ${hasMasterPassword ? "bg-green-400" : "bg-muted-foreground"}`} />
-                        {hasMasterPassword ? "Set" : "Not set"}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-border bg-secondary/20 p-4 space-y-3">
-                    <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">{t("srv.reveal_pw")}</h3>
-                    <div className="flex gap-2 items-end">
-                      <Button size="sm" className="h-9" onClick={onRevealPassword}>{t("srv.reveal_pw")}</Button>
-                      <Input value={revealedPassword} readOnly className="bg-secondary/50 h-9 font-mono" placeholder="•••" />
-                    </div>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="execute" className="mt-0 space-y-4">
-                  <div className="rounded-lg border border-border bg-secondary/20 p-4 space-y-3">
-                    <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">{t("srv.exec_cmd")}</h3>
-                    <div className="flex gap-2">
-                      <Input value={execCommand} onChange={(e) => setExecCommand(e.target.value)} className="bg-secondary/50 h-9 font-mono" />
-                      <Button size="sm" className="h-9 px-6" onClick={onExecuteCommand}>{t("srv.run")}</Button>
-                    </div>
-                    {execResult && (
-                      <Textarea className="min-h-32 bg-background font-mono text-xs border-border" value={execResult} readOnly />
                     )}
                   </div>
-                </TabsContent>
+                )}
 
-                </div>
-              </Tabs>
+                {/* KNOWLEDGE TAB */}
+                {advancedTab === "knowledge" && (
+                  <div className="space-y-5">
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground mb-1">{t("srv.ai_memory")}</h3>
+                      <p className="text-xs text-muted-foreground mb-4">Knowledge entries for AI assistant context</p>
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Title</Label>
+                            <Input placeholder="Entry title" value={knowledgeTitle} onChange={(e) => setKnowledgeTitle(e.target.value)} className="bg-secondary/50 h-9" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Category</Label>
+                            <select
+                              value={knowledgeCategory}
+                              onChange={(e) => setKnowledgeCategory(e.target.value)}
+                              className="flex h-9 w-full rounded-md border border-input bg-secondary/50 px-3 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                            >
+                              <option value="system">System</option>
+                              <option value="services">Services</option>
+                              <option value="network">Network</option>
+                              <option value="security">Security</option>
+                              <option value="performance">Performance</option>
+                              <option value="storage">Storage</option>
+                              <option value="packages">Packages</option>
+                              <option value="config">Config</option>
+                              <option value="issues">Issues</option>
+                              <option value="solutions">Solutions</option>
+                              <option value="other">Other</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-muted-foreground">Content</Label>
+                          <Textarea placeholder="Knowledge content..." value={knowledgeContent} onChange={(e) => setKnowledgeContent(e.target.value)} className="bg-secondary/50 min-h-20 text-sm" />
+                        </div>
+                        <div className="flex justify-end">
+                          <Button size="sm" className="h-8 px-4" onClick={onKnowledgeCreate}>{t("srv.add_entry")}</Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {knowledge.length > 0 && (
+                      <div className="border-t border-border pt-4">
+                        <h4 className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wider">Entries ({knowledge.length})</h4>
+                        <div className="space-y-2">
+                          {knowledge.map((k) => (
+                            <div key={k.id} className="flex items-start gap-3 px-3 py-3 rounded-lg border border-border bg-secondary/10">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <p className="text-sm font-medium text-foreground">{k.title}</p>
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded ${k.is_active ? "bg-primary/15 text-primary" : "bg-secondary text-muted-foreground"}`}>
+                                    {k.category_label}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-muted-foreground leading-relaxed">{k.content}</p>
+                              </div>
+                              <div className="flex gap-1 shrink-0">
+                                <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => onKnowledgeToggle(k)}>
+                                  {k.is_active ? t("srv.disable") : t("srv.enable")}
+                                </Button>
+                                <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => { setKnowledgeEditingId(k.id); void onKnowledgeEdit(k); }}>
+                                  {t("srv.edit")}
+                                </Button>
+                                <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => onKnowledgeDelete(k.id)}>
+                                  {t("srv.delete")}
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* CONTEXT TAB */}
+                {advancedTab === "context" && (
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground mb-1">{t("srv.global_context")}</h3>
+                      <p className="text-xs text-muted-foreground mb-4">Rules and constraints applied to all servers</p>
+                      <div className="space-y-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-muted-foreground">Rules</Label>
+                          <Textarea className="min-h-20 bg-secondary/50 text-sm" value={globalRules} onChange={(e) => setGlobalRules(e.target.value)} placeholder="Global rules for AI assistant" />
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Forbidden commands</Label>
+                            <Textarea className="min-h-20 bg-secondary/50 text-sm font-mono" value={globalForbidden} onChange={(e) => setGlobalForbidden(e.target.value)} placeholder="rm -rf /&#10;dd if=..." />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Required checks</Label>
+                            <Textarea className="min-h-20 bg-secondary/50 text-sm font-mono" value={globalRequired} onChange={(e) => setGlobalRequired(e.target.value)} placeholder="uptime&#10;df -h" />
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-muted-foreground">Environment variables (JSON)</Label>
+                          <Textarea className="min-h-16 bg-secondary/50 text-sm font-mono" value={globalEnvJson} onChange={(e) => setGlobalEnvJson(e.target.value)} placeholder='{"KEY": "value"}' />
+                        </div>
+                        <div className="flex justify-end">
+                          <Button size="sm" className="h-8 px-4" onClick={onSaveGlobalContext}>{t("srv.save_global")}</Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {advancedServer?.group_id && (
+                      <div className="border-t border-border pt-5">
+                        <h3 className="text-sm font-semibold text-foreground mb-1">{t("srv.group_context")}</h3>
+                        <p className="text-xs text-muted-foreground mb-4">Rules specific to group "{advancedServer.group_name}"</p>
+                        <div className="space-y-3">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Group rules</Label>
+                            <Textarea className="min-h-20 bg-secondary/50 text-sm" value={groupRules} onChange={(e) => setGroupRules(e.target.value)} placeholder="Group-specific rules" />
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-muted-foreground">Forbidden commands</Label>
+                              <Textarea className="min-h-20 bg-secondary/50 text-sm font-mono" value={groupForbidden} onChange={(e) => setGroupForbidden(e.target.value)} placeholder="One per line" />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-muted-foreground">Environment (JSON)</Label>
+                              <Textarea className="min-h-20 bg-secondary/50 text-sm font-mono" value={groupEnvJson} onChange={(e) => setGroupEnvJson(e.target.value)} placeholder='{"KEY": "value"}' />
+                            </div>
+                          </div>
+                          <div className="flex justify-end">
+                            <Button size="sm" className="h-8 px-4" onClick={onSaveGroupContext}>{t("srv.save_group")}</Button>
+                          </div>
+                        </div>
+
+                        {/* Group members */}
+                        <div className="border-t border-border pt-4 mt-4">
+                          <h4 className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wider">Group members</h4>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-muted-foreground">Username / email</Label>
+                              <Input placeholder="user@example.com" value={groupMemberUser} onChange={(e) => setGroupMemberUser(e.target.value)} className="bg-secondary/50 h-9" />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-muted-foreground">Role</Label>
+                              <select
+                                value={groupMemberRole}
+                                onChange={(e) => setGroupMemberRole(e.target.value as ServerGroupRole)}
+                                className="flex h-9 w-full rounded-md border border-input bg-secondary/50 px-3 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                              >
+                                <option value="owner">Owner</option>
+                                <option value="admin">Admin</option>
+                                <option value="member">Member</option>
+                                <option value="viewer">Viewer</option>
+                              </select>
+                            </div>
+                            <div className="flex items-end">
+                              <Button size="sm" className="h-9 w-full" onClick={onAddGroupMember}>{t("srv.add_member")}</Button>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-muted-foreground">Remove by user ID</Label>
+                              <Input placeholder="user id" value={groupRemoveUserId} onChange={(e) => setGroupRemoveUserId(e.target.value)} className="bg-secondary/50 h-9" />
+                            </div>
+                            <div className="flex items-end">
+                              <Button size="sm" variant="outline" className="h-9 w-full text-destructive border-destructive/30 hover:bg-destructive/10" onClick={onRemoveGroupMember}>{t("srv.remove_member")}</Button>
+                            </div>
+                            <div className="flex items-end gap-2">
+                              <Button size="sm" variant="outline" className="h-9 flex-1" onClick={() => subscribeServerGroup(advancedServer.group_id!, "follow")}>{t("srv.follow_group")}</Button>
+                              <Button size="sm" variant="outline" className="h-9 flex-1" onClick={() => subscribeServerGroup(advancedServer.group_id!, "favorite")}>{t("srv.fav_group")}</Button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* SECURITY TAB */}
+                {advancedTab === "security" && (
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground mb-1">{t("srv.master_pw")}</h3>
+                      <p className="text-xs text-muted-foreground mb-4">Session-level master password for encrypted credentials</p>
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+                          <span className={`inline-block w-2 h-2 rounded-full ${hasMasterPassword ? "bg-primary" : "bg-muted-foreground"}`} />
+                          {hasMasterPassword ? "Master password is set for this session" : "No master password set"}
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Master Password</Label>
+                            <Input type="password" value={masterPassword} onChange={(e) => setMasterPasswordText(e.target.value)} className="bg-secondary/50 h-9" placeholder="Enter password" />
+                          </div>
+                          <Button size="sm" className="h-9" onClick={onSetMasterPassword}>{t("srv.set_mp")}</Button>
+                          <Button size="sm" variant="outline" className="h-9" onClick={onClearMasterPassword}>{t("srv.clear_mp")}</Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-border pt-5">
+                      <h3 className="text-sm font-semibold text-foreground mb-1">{t("srv.reveal_pw")}</h3>
+                      <p className="text-xs text-muted-foreground mb-4">Decrypt and reveal stored server password</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                        <div className="sm:col-span-2 space-y-1.5">
+                          <Label className="text-xs text-muted-foreground">Decrypted password</Label>
+                          <Input value={revealedPassword} readOnly className="bg-secondary/50 h-9 font-mono" placeholder="•••••••••" />
+                        </div>
+                        <Button size="sm" className="h-9" onClick={onRevealPassword}>{t("srv.reveal_pw")}</Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* EXECUTE TAB */}
+                {advancedTab === "execute" && (
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground mb-1">{t("srv.exec_cmd")}</h3>
+                      <p className="text-xs text-muted-foreground mb-4">Run a quick command on this server</p>
+                      <div className="flex gap-2">
+                        <Input value={execCommand} onChange={(e) => setExecCommand(e.target.value)} className="bg-secondary/50 h-9 font-mono flex-1" placeholder="hostname" />
+                        <Button size="sm" className="h-9 px-6" onClick={onExecuteCommand}>{t("srv.run")}</Button>
+                      </div>
+                    </div>
+                    {execResult && (
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground">Output</Label>
+                        <Textarea className="min-h-40 bg-background font-mono text-xs border-border" value={execResult} readOnly />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
           )}
-          </DialogBody>
         </DialogContent>
       </Dialog>
     </div>
