@@ -828,8 +828,8 @@ export default function Servers() {
           <TabsTrigger value="groups" className="gap-2">
             <Layers className="h-4 w-4" /> {t("srv.groups")}
           </TabsTrigger>
-          <TabsTrigger value="bulk" className="gap-2">
-            <WandSparkles className="h-4 w-4" /> {t("srv.bulk")}
+          <TabsTrigger value="playbook" className="gap-2">
+            <BookOpen className="h-4 w-4" /> Playbook
           </TabsTrigger>
         </TabsList>
 
