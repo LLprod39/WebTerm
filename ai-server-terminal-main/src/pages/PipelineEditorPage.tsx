@@ -1764,35 +1764,97 @@ function NodeConfigPanel({
 }
 
 // ---------------------------------------------------------------------------
-// Node Palette (left panel)
+// Node Palette (left panel) — with search, drag, category icons
 // ---------------------------------------------------------------------------
+const CATEGORY_ICONS: Record<string, string> = {
+  Triggers: "🚀",
+  Agents: "🤖",
+  Logic: "⚙️",
+  Output: "📤",
+};
+
 function NodePalette({ onAddNode }: { onAddNode: (type: NodeType) => void }) {
+  const [search, setSearch] = useState("");
+  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set(NODE_PALETTE.map((c) => c.category)));
+
+  const toggleCat = (cat: string) => {
+    setExpandedCats((prev) => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);
+      else next.add(cat);
+      return next;
+    });
+  };
+
+  const filtered = NODE_PALETTE.map((cat) => ({
+    ...cat,
+    nodes: cat.nodes.filter(
+      (n) =>
+        !search.trim() ||
+        n.label.toLowerCase().includes(search.toLowerCase()) ||
+        n.description.toLowerCase().includes(search.toLowerCase()),
+    ),
+  })).filter((cat) => cat.nodes.length > 0);
+
   return (
     <div className="flex flex-col h-full border-r border-border bg-card">
-      <div className="px-3 py-3 border-b border-border">
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Nodes</h3>
+      <div className="px-3 py-3 border-b border-border space-y-2">
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+          <Plus className="h-3 w-3" /> Add Node
+        </h3>
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search nodes..."
+          className="h-7 text-xs"
+        />
       </div>
-      <div className="flex-1 overflow-auto p-2 space-y-3">
-        {NODE_PALETTE.map((cat) => (
+      <div className="flex-1 overflow-auto p-2 space-y-1">
+        {filtered.map((cat) => (
           <div key={cat.category}>
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase px-1 mb-1">{cat.category}</p>
-            {cat.nodes.map((node) => (
+            <button
+              onClick={() => toggleCat(cat.category)}
+              className="w-full text-left flex items-center gap-1.5 px-1 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase hover:text-foreground transition-colors"
+            >
+              <span>{CATEGORY_ICONS[cat.category] || "📦"}</span>
+              <span className="flex-1">{cat.category}</span>
+              <span className="text-[9px] font-normal bg-muted/50 rounded px-1">{cat.nodes.length}</span>
+              {expandedCats.has(cat.category) ? (
+                <ChevronUp className="h-2.5 w-2.5" />
+              ) : (
+                <ChevronDown className="h-2.5 w-2.5" />
+              )}
+            </button>
+            {expandedCats.has(cat.category) && cat.nodes.map((node) => (
               <button
                 key={node.type}
                 onClick={() => onAddNode(node.type)}
-                className="w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors group"
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData("application/pipeline-node-type", node.type);
+                  e.dataTransfer.effectAllowed = "copy";
+                }}
+                className="w-full text-left flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-primary/5 border border-transparent hover:border-border/50 transition-all group cursor-grab active:cursor-grabbing"
                 title={node.description}
               >
-                <span className="text-sm">{node.icon}</span>
-                <div className="min-w-0">
+                <span className="text-base h-8 w-8 flex items-center justify-center rounded-lg bg-muted/40 group-hover:bg-primary/10 transition-colors shrink-0">
+                  {node.icon}
+                </span>
+                <div className="min-w-0 flex-1">
                   <div className="text-xs font-medium text-foreground truncate">{node.label}</div>
-                  <div className="text-[10px] text-muted-foreground truncate">{node.description}</div>
+                  <div className="text-[10px] text-muted-foreground truncate leading-tight mt-0.5">{node.description}</div>
                 </div>
-                <Plus className="h-3 w-3 ml-auto text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0" />
+                <Plus className="h-3.5 w-3.5 ml-auto text-primary opacity-0 group-hover:opacity-100 shrink-0 transition-opacity" />
               </button>
             ))}
           </div>
         ))}
+        {filtered.length === 0 && search.trim() && (
+          <p className="text-[11px] text-muted-foreground text-center py-4">No nodes match "{search}"</p>
+        )}
+      </div>
+      <div className="px-3 py-2 border-t border-border">
+        <p className="text-[9px] text-muted-foreground text-center">Click or drag nodes to canvas</p>
       </div>
     </div>
   );
