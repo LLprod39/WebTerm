@@ -113,7 +113,55 @@ interface KnowledgeItem {
 }
 
 type AdvancedTab = "access" | "knowledge" | "context" | "security" | "execute";
-type MainTab = "servers" | "groups" | "bulk";
+type MainTab = "servers" | "groups" | "playbook";
+
+interface PlaybookTask {
+  id: string;
+  command: string;
+  description: string;
+  continueOnError: boolean;
+}
+
+interface Playbook {
+  id: string;
+  name: string;
+  description: string;
+  tasks: PlaybookTask[];
+  createdAt: string;
+}
+
+interface PlaybookRunResult {
+  serverId: number;
+  serverName: string;
+  taskResults: {
+    taskId: string;
+    command: string;
+    status: "pending" | "running" | "success" | "error" | "skipped";
+    output: string;
+    exitCode?: number;
+  }[];
+}
+
+function loadPlaybooks(): Playbook[] {
+  try {
+    const raw = localStorage.getItem("weu_playbooks");
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePlaybooks(playbooks: Playbook[]) {
+  localStorage.setItem("weu_playbooks", JSON.stringify(playbooks));
+}
+
+function newTaskId() {
+  return `t_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function newPlaybookId() {
+  return `pb_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+}
 
 function initialForm(): ServerForm {
   return {
