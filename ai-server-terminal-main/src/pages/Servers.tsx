@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import yaml from "js-yaml";
 import { Link } from "react-router-dom";
 import {
   addServerGroupMember,
@@ -57,6 +58,9 @@ import {
   Loader2,
   Save,
   FolderOpen,
+  Upload,
+  Download,
+  FileJson,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -161,6 +165,165 @@ function newTaskId() {
 
 function newPlaybookId() {
   return `pb_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
+/** Parse Ansible playbook (YAML or JSON) into our Playbook format */
+function parseAnsiblePlaybook(content: string, filename: string): Playbook {
+  // Try YAML first, then JSON
+  let parsed: unknown;
+  try {
+    parsed = yaml.load(content);
+  } catch {
+    parsed = JSON.parse(content);
+  }
+
+  const tasks: PlaybookTask[] = [];
+  let playbookName = filename.replace(/\.(ya?ml|json)$/i, "");
+  let playbookDesc = "";
+
+  // Ansible playbooks are arrays of plays
+  const plays = Array.isArray(parsed) ? parsed : [parsed];
+
+  for (const play of plays) {
+    if (!play || typeof play !== "object") continue;
+    const p = play as Record<string, unknown>;
+
+    if (p.name && typeof p.name === "string" && !playbookDesc) {
+      playbookName = p.name;
+    }
+    if (p.hosts && typeof p.hosts === "string") {
+      playbookDesc = `hosts: ${p.hosts}`;
+    }
+
+    // Extract tasks from "tasks", "pre_tasks", "post_tasks", "handlers"
+    for (const section of ["pre_tasks", "tasks", "post_tasks", "handlers"]) {
+      const sectionTasks = (p as Record<string, unknown>)[section];
+      if (!Array.isArray(sectionTasks)) continue;
+
+      for (const task of sectionTasks) {
+        if (!task || typeof task !== "object") continue;
+        const t = task as Record<string, unknown>;
+        const taskName = (t.name as string) || "";
+        let command = "";
+        let continueOnError = Boolean(t.ignore_errors);
+
+        // Extract command from common Ansible modules
+        if (typeof t.shell === "string") {
+          command = t.shell;
+        } else if (typeof t.command === "string") {
+          command = t.command;
+        } else if (typeof t.raw === "string") {
+          command = t.raw;
+        } else if (typeof t.script === "string") {
+          command = t.script;
+        } else if (t.shell && typeof t.shell === "object") {
+          command = (t.shell as Record<string, unknown>).cmd as string || "";
+        } else if (t.command && typeof t.command === "object") {
+          command = (t.command as Record<string, unknown>).cmd as string || "";
+        } else if (typeof t.apt === "object" || typeof t.apt === "string") {
+          const apt = typeof t.apt === "string" ? { name: t.apt } : t.apt as Record<string, unknown>;
+          const pkg = apt.name || apt.pkg || "";
+          const state = apt.state || "present";
+          command = `apt-get ${state === "absent" ? "remove" : "install"} -y ${pkg}`;
+        } else if (typeof t.yum === "object" || typeof t.yum === "string") {
+          const yum = typeof t.yum === "string" ? { name: t.yum } : t.yum as Record<string, unknown>;
+          const pkg = yum.name || "";
+          const state = yum.state || "present";
+          command = `yum ${state === "absent" ? "remove" : "install"} -y ${pkg}`;
+        } else if (typeof t.systemd === "object" || typeof t.service === "object") {
+          const svc = (t.systemd || t.service) as Record<string, unknown>;
+          const name = svc.name || "";
+          const state = svc.state || "started";
+          const stateMap: Record<string, string> = { started: "start", stopped: "stop", restarted: "restart", reloaded: "reload" };
+          command = `systemctl ${stateMap[state as string] || state} ${name}`;
+          if (svc.enabled === true) command += ` && systemctl enable ${name}`;
+        } else if (typeof t.copy === "object") {
+          const cp = t.copy as Record<string, unknown>;
+          if (cp.content && cp.dest) {
+            const escaped = String(cp.content).replace(/'/g, "'\\''");
+            command = `echo '${escaped}' > ${cp.dest}`;
+          } else if (cp.src && cp.dest) {
+            command = `cp ${cp.src} ${cp.dest}`;
+          }
+        } else if (typeof t.file === "object") {
+          const f = t.file as Record<string, unknown>;
+          if (f.state === "directory") command = `mkdir -p ${f.path || f.dest || ""}`;
+          else if (f.state === "absent") command = `rm -rf ${f.path || f.dest || ""}`;
+          else if (f.mode) command = `chmod ${f.mode} ${f.path || f.dest || ""}`;
+        } else if (typeof t.lineinfile === "object") {
+          const l = t.lineinfile as Record<string, unknown>;
+          command = `# lineinfile: ${l.path || l.dest || ""} line="${l.line || ""}"`;
+        } else if (typeof t.template === "object") {
+          const tmpl = t.template as Record<string, unknown>;
+          command = `# template: ${tmpl.src} -> ${tmpl.dest}`;
+        } else if (typeof t.git === "object") {
+          const g = t.git as Record<string, unknown>;
+          command = `git clone ${g.repo || ""} ${g.dest || ""}${g.version ? ` -b ${g.version}` : ""}`;
+        } else if (typeof t.pip === "object") {
+          const pip = t.pip as Record<string, unknown>;
+          command = `pip install ${pip.name || ""}${pip.requirements ? ` -r ${pip.requirements}` : ""}`;
+        } else if (typeof t.docker_container === "object") {
+          const dc = t.docker_container as Record<string, unknown>;
+          command = `# docker: ${dc.name} image=${dc.image || ""} state=${dc.state || "started"}`;
+        } else {
+          // Unknown module — show as comment with module name
+          const moduleKeys = Object.keys(t).filter((k) => !["name", "when", "register", "become", "become_user", "tags", "notify", "ignore_errors", "changed_when", "failed_when", "loop", "with_items", "vars", "environment", "no_log", "delegate_to", "run_once", "block", "rescue", "always"].includes(k));
+          if (moduleKeys.length > 0) {
+            const mod = moduleKeys[0];
+            const val = t[mod];
+            command = `# ansible.${mod}: ${typeof val === "string" ? val : JSON.stringify(val)}`;
+          }
+        }
+
+        if (command || taskName) {
+          tasks.push({
+            id: newTaskId(),
+            command: command || `# ${taskName}`,
+            description: taskName,
+            continueOnError,
+          });
+        }
+      }
+    }
+  }
+
+  if (tasks.length === 0) {
+    throw new Error("No tasks found in playbook. Ensure it contains tasks with shell/command/apt/systemd modules.");
+  }
+
+  return {
+    id: newPlaybookId(),
+    name: playbookName,
+    description: playbookDesc,
+    tasks,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+/** Export playbook to JSON */
+function exportPlaybookAsJson(pb: Playbook) {
+  const ansible = [{
+    name: pb.name,
+    hosts: "all",
+    become: true,
+    tasks: pb.tasks.map((t) => {
+      const task: Record<string, unknown> = { name: t.description || t.command };
+      if (t.command.startsWith("#")) {
+        task.debug = { msg: t.command };
+      } else {
+        task.shell = t.command;
+      }
+      if (t.continueOnError) task.ignore_errors = true;
+      return task;
+    }),
+  }];
+  const blob = new Blob([JSON.stringify(ansible, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${pb.name.replace(/\s+/g, "_").toLowerCase()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function initialForm(): ServerForm {
@@ -513,6 +676,39 @@ export default function Servers() {
     const updated = [...playbooks, dup];
     setPlaybooks(updated);
     savePlaybooks(updated);
+  };
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const onImportFile = async (file: File) => {
+    try {
+      const text = await file.text();
+      const pb = parseAnsiblePlaybook(text, file.name);
+      const updated = [...playbooks, pb];
+      setPlaybooks(updated);
+      savePlaybooks(updated);
+      setActivePlaybook(pb);
+      setPlaybookName(pb.name);
+      setPlaybookDesc(pb.description);
+      setPlaybookTasks([...pb.tasks]);
+      setPlaybookTargets(new Set());
+      setPlaybookResults([]);
+      setPlaybookView("edit");
+    } catch (err) {
+      alert(`Failed to parse playbook: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  const onFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) onImportFile(file);
+    e.target.value = "";
+  };
+
+  const onDropPlaybook = (e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file) onImportFile(file);
   };
 
   const onRunPlaybook = async () => {
@@ -960,24 +1156,47 @@ export default function Servers() {
         </TabsContent>
 
         <TabsContent value="playbook" className="space-y-3">
+          {/* Hidden file input */}
+          <input ref={fileInputRef} type="file" accept=".yml,.yaml,.json" className="hidden" onChange={onFileInputChange} />
+
           {/* PLAYBOOK LIST */}
           {playbookView === "list" && (
             <section className="bg-card border border-border rounded-lg p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-sm font-semibold text-foreground">Playbooks</h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">Ansible-style command sequences to run across servers</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Import Ansible playbooks (YAML/JSON) or create from scratch</p>
                 </div>
-                <Button size="sm" className="gap-1.5 h-8 text-xs" onClick={openNewPlaybook}>
-                  <Plus className="h-3.5 w-3.5" /> New Playbook
-                </Button>
+                <div className="flex gap-1.5">
+                  <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={() => fileInputRef.current?.click()}>
+                    <Upload className="h-3.5 w-3.5" /> Import
+                  </Button>
+                  <Button size="sm" className="gap-1.5 h-8 text-xs" onClick={openNewPlaybook}>
+                    <Plus className="h-3.5 w-3.5" /> New Playbook
+                  </Button>
+                </div>
+              </div>
+
+              {/* Drag & drop zone */}
+              <div
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={onDropPlaybook}
+                className="border-2 border-dashed border-border rounded-lg p-6 text-center transition-colors hover:border-primary/40 hover:bg-primary/5 cursor-pointer"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <FileJson className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40" />
+                <p className="text-xs text-muted-foreground">
+                  Drop Ansible playbook here (.yml, .yaml, .json) or <span className="text-primary underline">browse</span>
+                </p>
+                <p className="text-[10px] text-muted-foreground/60 mt-1">
+                  Supports: shell, command, apt, yum, systemd, service, copy, file, git, pip and more
+                </p>
               </div>
 
               {playbooks.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <BookOpen className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                <div className="text-center py-6 text-muted-foreground">
                   <p className="text-sm">No playbooks yet</p>
-                  <p className="text-xs mt-1">Create your first playbook to automate tasks across servers</p>
+                  <p className="text-xs mt-1">Import an Ansible playbook or create a new one</p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -994,6 +1213,9 @@ export default function Servers() {
                       <div className="flex gap-1.5 shrink-0">
                         <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs gap-1" onClick={() => openEditPlaybook(pb)}>
                           <Settings className="h-3 w-3" /> Edit
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" title="Export as JSON" onClick={() => exportPlaybookAsJson(pb)}>
+                          <Download className="h-3 w-3" />
                         </Button>
                         <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={() => onDuplicatePlaybook(pb)}>
                           <Copy className="h-3 w-3" />
