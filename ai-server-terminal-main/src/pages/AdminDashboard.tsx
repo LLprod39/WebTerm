@@ -62,6 +62,21 @@ export default function AdminDashboard() {
     refetchInterval: 30_000,
   });
 
+  // Filter activity by date
+  const filteredActivity = useMemo(() => {
+    if (!dashData?.data) return [];
+    let items = dashData.data.recent_activity || [];
+    if (dateFrom) {
+      const from = dateFrom.getTime();
+      items = items.filter((a) => a.time && new Date(a.time).getTime() >= from);
+    }
+    if (dateTo) {
+      const to = dateTo.getTime() + 86400000;
+      items = items.filter((a) => a.time && new Date(a.time).getTime() <= to);
+    }
+    return items;
+  }, [dashData, dateFrom, dateTo]);
+
   if (isLoading || !dashData?.data) {
     return <div className="p-6 text-sm text-muted-foreground">{t("dash.loading")}</div>;
   }
@@ -69,20 +84,6 @@ export default function AdminDashboard() {
   const d: AdminDashboardData = dashData.data;
   const sessions = sessionsData?.sessions || [];
   const totalCost = Object.values(d.api_usage).reduce((s, u) => s + (u.cost_usd || 0), 0);
-
-  // Filter activity by date
-  const filteredActivity = useMemo(() => {
-    let items = d.recent_activity || [];
-    if (dateFrom) {
-      const from = dateFrom.getTime();
-      items = items.filter((a) => a.time && new Date(a.time).getTime() >= from);
-    }
-    if (dateTo) {
-      const to = dateTo.getTime() + 86400000; // end of day
-      items = items.filter((a) => a.time && new Date(a.time).getTime() <= to);
-    }
-    return items;
-  }, [d.recent_activity, dateFrom, dateTo]);
 
   const hourlyData = (d.hourly_activity || []).map((h) => ({
     hour: new Date(h.hour).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
