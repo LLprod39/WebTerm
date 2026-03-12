@@ -621,8 +621,7 @@ export default function AgentConfigPage() {
         </DialogContent>
       </Dialog>
     </div>
-      </div>
-      </div>
+    </div>
     </div>
   );
 }
