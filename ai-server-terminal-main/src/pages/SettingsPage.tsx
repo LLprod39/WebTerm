@@ -9,24 +9,33 @@ import {
   FolderOpen,
   RefreshCw,
   Save,
-  Gauge,
-  AlertTriangle,
   Search,
   ChevronRight,
   Cpu,
-  HardDrive,
-  MemoryStick,
-  Eye,
   Key,
   Globe,
-  CheckCircle2,
-  Server,
+  ScrollText,
+  Eye,
+  Terminal,
+  MessageSquare,
+  Workflow,
+  Database,
+  ToggleLeft,
+  ToggleRight,
+  FileText,
   Clock,
+  CalendarIcon,
 } from "lucide-react";
+import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { StatusBadge } from "@/components/ui/page-shell";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   fetchModels,
@@ -34,11 +43,10 @@ import {
   fetchSettingsActivity,
   refreshModels,
   saveSettings,
-  fetchMonitoringConfig,
-  saveMonitoringConfig,
   fetchAuthSession,
 } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 
 function relativeTime(value: string): string {
   const d = new Date(value);
@@ -48,81 +56,28 @@ function relativeTime(value: string): string {
   return `${Math.floor(diff / 1440)}d ago`;
 }
 
-function statusBadge(status: string) {
-  if (status === "success") return "bg-green-500/10 text-green-300";
-  if (status === "error") return "bg-red-500/10 text-red-300";
-  return "bg-background/35 text-muted-foreground";
-}
-
-function SectionCard({ title, icon: Icon, children, description }: {
+function SectionCard({ title, icon: Icon, children, description, actions }: {
   title: string;
   icon: React.ElementType;
   children: React.ReactNode;
   description?: string;
+  actions?: React.ReactNode;
 }) {
   return (
     <div className="bg-card border border-border rounded-lg overflow-hidden">
-      <div className="flex items-center gap-2 px-5 py-3.5 border-b border-border bg-secondary/20">
-        <Icon className="h-4 w-4 text-primary" />
-        <div>
-          <h2 className="text-sm font-medium text-foreground">{title}</h2>
-          {description && <p className="text-[10px] text-muted-foreground mt-0.5">{description}</p>}
+      <div className="flex items-center justify-between px-5 py-3.5 border-b border-border bg-secondary/20">
+        <div className="flex items-center gap-2.5">
+          <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center">
+            <Icon className="h-3.5 w-3.5 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-sm font-medium text-foreground">{title}</h2>
+            {description && <p className="text-[10px] text-muted-foreground mt-0.5">{description}</p>}
+          </div>
         </div>
+        {actions}
       </div>
       <div className="p-5">{children}</div>
-    </div>
-  );
-}
-
-function ThresholdSlider({ label, icon: Icon, warnValue, critValue, onWarnChange, onCritChange, unit = "%" }: {
-  label: string;
-  icon: React.ElementType;
-  warnValue: number;
-  critValue: number;
-  onWarnChange: (v: number) => void;
-  onCritChange: (v: number) => void;
-  unit?: string;
-}) {
-  return (
-    <div className="space-y-3 bg-secondary/20 rounded-lg p-4">
-      <div className="flex items-center gap-2">
-        <Icon className="h-4 w-4 text-muted-foreground" />
-        <span className="text-sm font-medium text-foreground">{label}</span>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <label className="text-xs text-yellow-400 flex items-center gap-1">
-              <AlertTriangle className="h-3 w-3" /> Warning
-            </label>
-            <span className="text-xs font-mono text-foreground">{warnValue}{unit}</span>
-          </div>
-          <input
-            type="range"
-            min={10}
-            max={99}
-            value={warnValue}
-            onChange={(e) => onWarnChange(Number(e.target.value))}
-            className="w-full h-1.5 bg-secondary rounded-full appearance-none cursor-pointer accent-yellow-500"
-          />
-        </div>
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <label className="text-xs text-red-400 flex items-center gap-1">
-              <AlertTriangle className="h-3 w-3" /> Critical
-            </label>
-            <span className="text-xs font-mono text-foreground">{critValue}{unit}</span>
-          </div>
-          <input
-            type="range"
-            min={10}
-            max={99}
-            value={critValue}
-            onChange={(e) => onCritChange(Number(e.target.value))}
-            className="w-full h-1.5 bg-secondary rounded-full appearance-none cursor-pointer accent-red-500"
-          />
-        </div>
-      </div>
     </div>
   );
 }
@@ -135,115 +90,111 @@ const LLM_PROVIDERS = [
 ];
 
 function PurposeModelSelector({
-  label,
-  description,
-  provider,
-  model,
-  availableModels,
-  onProviderChange,
-  onModelChange,
-  onRefresh,
-  refreshing,
+  label, description, icon: Icon, provider, model, availableModels,
+  onProviderChange, onModelChange, onRefresh, refreshing,
 }: {
-  label: string;
-  description: string;
-  provider: string;
-  model: string;
-  availableModels: string[];
-  onProviderChange: (p: string) => void;
-  onModelChange: (m: string) => void;
-  onRefresh: () => void;
-  refreshing: boolean;
+  label: string; description: string; icon: React.ElementType;
+  provider: string; model: string; availableModels: string[];
+  onProviderChange: (p: string) => void; onModelChange: (m: string) => void;
+  onRefresh: () => void; refreshing: boolean;
 }) {
   return (
-    <div className="space-y-3 bg-secondary/20 rounded-lg p-4">
-      <div>
-        <p className="text-sm font-medium text-foreground">{label}</p>
-        <p className="text-[11px] text-muted-foreground mt-0.5">{description}</p>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Провайдер</label>
-          <select
-            value={provider}
-            onChange={(e) => onProviderChange(e.target.value)}
-            className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
-          >
-            {LLM_PROVIDERS.map((p) => (
-              <option key={p.value} value={p.value}>{p.label}</option>
-            ))}
-          </select>
+    <div className="rounded-lg border border-border p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <Icon className="h-4 w-4 text-primary" />
+        <div>
+          <p className="text-xs font-medium text-foreground">{label}</p>
+          <p className="text-[10px] text-muted-foreground">{description}</p>
         </div>
-        <div className="space-y-1.5">
-          <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Модель</label>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <label className="text-[10px] font-medium text-muted-foreground uppercase">Провайдер</label>
+          <Select value={provider} onValueChange={onProviderChange}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {LLM_PROVIDERS.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <label className="text-[10px] font-medium text-muted-foreground uppercase">Модель</label>
           {availableModels.length > 0 ? (
-            <select
-              value={model}
-              onChange={(e) => onModelChange(e.target.value)}
-              className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
-            >
-              {availableModels.map((m) => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
+            <Select value={model} onValueChange={onModelChange}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {availableModels.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+              </SelectContent>
+            </Select>
           ) : (
-            <div className="flex gap-2">
-              <Input
-                value={model}
-                onChange={(e) => onModelChange(e.target.value)}
-                placeholder="Введите модель или нажмите Refresh"
-                className="bg-secondary h-[38px] text-sm"
-              />
-              <Button size="sm" variant="outline" className="shrink-0 h-[38px] px-2.5" onClick={onRefresh} disabled={refreshing}>
-                <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+            <div className="flex gap-1.5">
+              <Input value={model} onChange={(e) => onModelChange(e.target.value)} placeholder="Model name" className="h-8 text-xs" />
+              <Button size="icon" variant="outline" className="h-8 w-8 shrink-0" onClick={onRefresh} disabled={refreshing}>
+                <RefreshCw className={cn("h-3 w-3", refreshing && "animate-spin")} />
               </Button>
             </div>
           )}
         </div>
       </div>
       {availableModels.length > 0 && (
-        <div className="flex justify-end">
-          <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2 gap-1 text-muted-foreground" onClick={onRefresh} disabled={refreshing}>
-            <RefreshCw className={`h-2.5 w-2.5 ${refreshing ? "animate-spin" : ""}`} /> Обновить список
-          </Button>
-        </div>
+        <Button size="sm" variant="ghost" className="h-5 text-[9px] px-1.5 gap-1 text-muted-foreground" onClick={onRefresh} disabled={refreshing}>
+          <RefreshCw className={cn("h-2.5 w-2.5", refreshing && "animate-spin")} /> Обновить список
+        </Button>
       )}
     </div>
   );
 }
 
-function AccessCard({
-  icon: Icon,
-  title,
-  description,
-  to,
-}: {
-  icon: React.ElementType;
-  title: string;
-  description: string;
-  to: string;
-}) {
-  return (
-    <Link to={to} className="workspace-subtle group flex items-center gap-3 rounded-2xl p-4 hover:border-border/80 hover:bg-background/40">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-transparent bg-background/24 text-muted-foreground">
-        <Icon className="h-4 w-4" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium text-foreground">{title}</div>
-        <div className="mt-1 text-xs leading-5 text-muted-foreground">{description}</div>
-      </div>
-      <ChevronRight className="h-4 w-4 text-muted-foreground/70" />
-    </Link>
-  );
+// Activity category icons
+const CATEGORY_ICONS: Record<string, React.ElementType> = {
+  terminal: Terminal,
+  ai: Bot,
+  agent: Bot,
+  pipeline: Workflow,
+  auth: Shield,
+  server: Database,
+  settings: Key,
+};
+
+const DATE_PRESETS = [
+  { label: "Сегодня", days: 0 },
+  { label: "Вчера", days: 1 },
+  { label: "7 дней", days: 7 },
+  { label: "14 дней", days: 14 },
+  { label: "30 дней", days: 30 },
+];
+
+// Logging config (stored in localStorage as the backend API may not support it yet)
+const DEFAULT_LOGGING_CONFIG = {
+  log_terminal_commands: true,
+  log_ai_assistant: true,
+  log_agent_runs: true,
+  log_pipeline_runs: true,
+  log_auth_events: true,
+  log_server_changes: true,
+  log_settings_changes: true,
+  log_file_operations: false,
+  log_mcp_calls: true,
+  retention_days: 90,
+  export_format: "json",
+};
+
+function getLoggingConfig() {
+  try {
+    const stored = localStorage.getItem("weu_logging_config");
+    if (stored) return { ...DEFAULT_LOGGING_CONFIG, ...JSON.parse(stored) };
+  } catch {}
+  return { ...DEFAULT_LOGGING_CONFIG };
+}
+
+function saveLoggingConfig(config: Record<string, unknown>) {
+  localStorage.setItem("weu_logging_config", JSON.stringify(config));
 }
 
 export default function SettingsPage() {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [monSaving, setMonSaving] = useState(false);
-  const [activitySearch, setActivitySearch] = useState("");
 
   const { data: authData } = useQuery({
     queryKey: ["auth", "session"],
@@ -251,7 +202,6 @@ export default function SettingsPage() {
     staleTime: 60_000,
     retry: false,
   });
-
   const isAdmin = authData?.user?.is_staff ?? false;
 
   const { data: settingsData, isLoading: settingsLoading, error: settingsError } = useQuery({
@@ -266,23 +216,28 @@ export default function SettingsPage() {
     staleTime: 30_000,
   });
 
+  // Activity with date range
+  const [activitySearch, setActivitySearch] = useState("");
+  const [activityDays, setActivityDays] = useState(7);
+  const [dateFrom, setDateFrom] = useState<Date | undefined>(subDays(new Date(), 7));
+  const [dateTo, setDateTo] = useState<Date | undefined>(new Date());
+
+  const computedDays = useMemo(() => {
+    if (dateFrom && dateTo) {
+      return Math.max(1, Math.ceil((dateTo.getTime() - dateFrom.getTime()) / 86400000));
+    }
+    return activityDays;
+  }, [dateFrom, dateTo, activityDays]);
+
   const { data: activityData } = useQuery({
-    queryKey: ["settings", "activity"],
-    queryFn: () => fetchSettingsActivity(50, 14),
+    queryKey: ["settings", "activity", computedDays],
+    queryFn: () => fetchSettingsActivity(200, computedDays),
     staleTime: 20_000,
   });
 
-  const { data: monConfig } = useQuery({
-    queryKey: ["settings", "monitoring"],
-    queryFn: fetchMonitoringConfig,
-    enabled: isAdmin,
-    staleTime: 30_000,
-  });
-
+  // AI model state
   const [provider, setProvider] = useState<string>("grok");
   const [model, setModel] = useState<string>("");
-
-  // Purpose-based model state
   const [chatProvider, setChatProvider] = useState("grok");
   const [chatModel, setChatModel] = useState("");
   const [agentProvider, setAgentProvider] = useState("grok");
@@ -290,16 +245,12 @@ export default function SettingsPage() {
   const [orchProvider, setOrchProvider] = useState("grok");
   const [orchModel, setOrchModel] = useState("");
   const [refreshingPurpose, setRefreshingPurpose] = useState<string | null>(null);
-
-  // OpenAI reasoning effort
   const [reasoningEffort, setReasoningEffort] = useState<string>("low");
+  const [refreshing, setRefreshing] = useState(false);
 
-  const [cpuWarn, setCpuWarn] = useState(80);
-  const [cpuCrit, setCpuCrit] = useState(95);
-  const [memWarn, setMemWarn] = useState(85);
-  const [memCrit, setMemCrit] = useState(95);
-  const [diskWarn, setDiskWarn] = useState(80);
-  const [diskCrit, setDiskCrit] = useState(90);
+  // Logging config state
+  const [loggingConfig, setLoggingConfig] = useState(getLoggingConfig);
+  const [loggingSaved, setLoggingSaved] = useState(false);
 
   useEffect(() => {
     const config = settingsData?.config;
@@ -316,7 +267,6 @@ export default function SettingsPage() {
     else if (activeProvider === "claude") setModel(config.chat_model_claude || "");
     else setModel(config.chat_model_grok || "");
 
-    // Purpose-based
     setChatProvider(config.chat_llm_provider || activeProvider);
     setChatModel(config.chat_llm_model || "");
     setAgentProvider(config.agent_llm_provider || activeProvider);
@@ -325,16 +275,6 @@ export default function SettingsPage() {
     setOrchModel(config.orchestrator_llm_model || "");
     setReasoningEffort(config.openai_reasoning_effort || "low");
   }, [settingsData]);
-
-  useEffect(() => {
-    if (!monConfig?.thresholds) return;
-    setCpuWarn(monConfig.thresholds.cpu_warn);
-    setCpuCrit(monConfig.thresholds.cpu_crit);
-    setMemWarn(monConfig.thresholds.mem_warn);
-    setMemCrit(monConfig.thresholds.mem_crit);
-    setDiskWarn(monConfig.thresholds.disk_warn);
-    setDiskCrit(monConfig.thresholds.disk_crit);
-  }, [monConfig]);
 
   const getModelsForProvider = (p: string): string[] => {
     if (!modelsData) return [];
@@ -351,43 +291,21 @@ export default function SettingsPage() {
     try {
       await refreshModels(p as "gemini" | "grok" | "openai" | "claude");
       await queryClient.invalidateQueries({ queryKey: ["settings", "models"] });
-    } finally {
-      setRefreshingPurpose(null);
-    }
+    } finally { setRefreshingPurpose(null); }
   };
 
   const onSavePurpose = async () => {
     setSaving(true);
     try {
       await saveSettings({
-        chat_llm_provider: chatProvider,
-        chat_llm_model: chatModel,
-        agent_llm_provider: agentProvider,
-        agent_llm_model: agentModel,
-        orchestrator_llm_provider: orchProvider,
-        orchestrator_llm_model: orchModel,
-        // Keep internal_llm_provider in sync with chat provider for backward compat
-        internal_llm_provider: chatProvider,
-        openai_reasoning_effort: reasoningEffort,
+        chat_llm_provider: chatProvider, chat_llm_model: chatModel,
+        agent_llm_provider: agentProvider, agent_llm_model: agentModel,
+        orchestrator_llm_provider: orchProvider, orchestrator_llm_model: orchModel,
+        internal_llm_provider: chatProvider, openai_reasoning_effort: reasoningEffort,
       });
       await queryClient.invalidateQueries({ queryKey: ["settings", "config"] });
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   };
-
-  const filteredActivity = useMemo(() => {
-    const events = activityData?.events || [];
-    if (!activitySearch) return events;
-    const q = activitySearch.toLowerCase();
-    return events.filter(
-      (e) =>
-        e.username.toLowerCase().includes(q) ||
-        e.action.toLowerCase().includes(q) ||
-        (e.description || "").toLowerCase().includes(q) ||
-        e.category.toLowerCase().includes(q),
-    );
-  }, [activityData, activitySearch]);
 
   const onSave = async () => {
     setSaving(true);
@@ -395,28 +313,20 @@ export default function SettingsPage() {
       const llmProviders = ["gemini", "grok", "openai", "claude"];
       const isLlmProvider = llmProviders.includes(provider);
       const payload: Record<string, unknown> = { default_provider: provider };
-
-      // Update the selected model for this provider
       if (provider === "gemini") payload.chat_model_gemini = model;
       if (provider === "grok") payload.chat_model_grok = model;
       if (provider === "openai") payload.chat_model_openai = model;
       if (provider === "claude") payload.chat_model_claude = model;
-
-      // Sync internal_llm_provider so terminal AI & agents use the chosen provider
       if (isLlmProvider) {
         payload.internal_llm_provider = provider;
-        // Enable the selected provider and disable others
         payload.gemini_enabled = provider === "gemini";
         payload.grok_enabled = provider === "grok";
         payload.openai_enabled = provider === "openai";
         payload.claude_enabled = provider === "claude";
       }
-
       await saveSettings(payload);
       await queryClient.invalidateQueries({ queryKey: ["settings", "config"] });
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   };
 
   const onRefreshModels = async () => {
@@ -424,27 +334,45 @@ export default function SettingsPage() {
     try {
       await refreshModels(provider as "gemini" | "grok" | "openai" | "claude");
       await queryClient.invalidateQueries({ queryKey: ["settings", "models"] });
-    } finally {
-      setRefreshing(false);
-    }
+    } finally { setRefreshing(false); }
   };
 
-  const onSaveMonitoring = async () => {
-    setMonSaving(true);
-    try {
-      await saveMonitoringConfig({
-        cpu_warn: cpuWarn,
-        cpu_crit: cpuCrit,
-        mem_warn: memWarn,
-        mem_crit: memCrit,
-        disk_warn: diskWarn,
-        disk_crit: diskCrit,
-      });
-      await queryClient.invalidateQueries({ queryKey: ["settings", "monitoring"] });
-    } finally {
-      setMonSaving(false);
-    }
+  const updateLogging = (key: string, val: unknown) => {
+    const next = { ...loggingConfig, [key]: val };
+    setLoggingConfig(next);
+    setLoggingSaved(false);
   };
+
+  const handleSaveLogging = () => {
+    saveLoggingConfig(loggingConfig);
+    setLoggingSaved(true);
+    setTimeout(() => setLoggingSaved(false), 2000);
+  };
+
+  const filteredActivity = useMemo(() => {
+    const events = activityData?.events || [];
+    let filtered = events;
+    if (activitySearch) {
+      const q = activitySearch.toLowerCase();
+      filtered = events.filter(
+        (e) =>
+          e.username?.toLowerCase().includes(q) ||
+          e.action?.toLowerCase().includes(q) ||
+          (e.description || "").toLowerCase().includes(q) ||
+          e.category?.toLowerCase().includes(q),
+      );
+    }
+    // Filter by date range
+    if (dateFrom) {
+      const from = startOfDay(dateFrom).getTime();
+      filtered = filtered.filter((e) => new Date(e.timestamp || e.created_at || "").getTime() >= from);
+    }
+    if (dateTo) {
+      const to = endOfDay(dateTo).getTime();
+      filtered = filtered.filter((e) => new Date(e.timestamp || e.created_at || "").getTime() <= to);
+    }
+    return filtered;
+  }, [activityData, activitySearch, dateFrom, dateTo]);
 
   if (settingsLoading) {
     return <div className="p-6 text-sm text-muted-foreground">{t("loading")}</div>;
@@ -456,175 +384,144 @@ export default function SettingsPage() {
   const config = settingsData.config;
   const apiKeys = settingsData.api_keys as Record<string, boolean> | undefined;
 
-  const monitoredServers = isAdmin ? monConfig?.stats?.monitored_servers || 0 : 0;
+  const LOGGING_ITEMS = [
+    { key: "log_terminal_commands", label: "Команды терминала", desc: "Записывать все SSH-команды пользователей", icon: Terminal },
+    { key: "log_ai_assistant", label: "AI ассистент", desc: "Записывать запросы и ответы AI помощника", icon: MessageSquare },
+    { key: "log_agent_runs", label: "Запуски агентов", desc: "Логировать все действия и итерации агентов", icon: Bot },
+    { key: "log_pipeline_runs", label: "Pipeline запуски", desc: "Логировать выполнение pipeline и результаты", icon: Workflow },
+    { key: "log_auth_events", label: "Авторизация", desc: "Входы, выходы, неудачные попытки", icon: Shield },
+    { key: "log_server_changes", label: "Изменения серверов", desc: "Создание, обновление, удаление серверов", icon: Database },
+    { key: "log_settings_changes", label: "Изменения настроек", desc: "Любые изменения в конфигурации платформы", icon: Key },
+    { key: "log_mcp_calls", label: "MCP вызовы", desc: "Все вызовы к MCP серверам и инструментам", icon: Cpu },
+    { key: "log_file_operations", label: "Файловые операции", desc: "Загрузки, скачивания и изменения файлов", icon: FileText },
+  ];
 
   return (
     <div className="p-5 max-w-5xl mx-auto space-y-4">
       <div>
         <h1 className="text-lg font-semibold text-foreground">{t("settings.title")}</h1>
-        <p className="text-xs text-muted-foreground mt-0.5">{t("set.subtitle")}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">Управление платформой, моделями, доступом и аудитом</p>
       </div>
 
       <Tabs defaultValue="ai" className="space-y-4">
-        <TabsList className="w-full justify-start bg-secondary/30 p-1">
-          <TabsTrigger value="ai" className="gap-2 data-[state=active]:bg-card">
-            <Bot className="h-4 w-4" /> {t("set.tab_ai")}
+        <TabsList className="w-full justify-start bg-secondary/30 p-1 flex-wrap">
+          <TabsTrigger value="ai" className="gap-1.5 data-[state=active]:bg-card">
+            <Bot className="h-3.5 w-3.5" /> AI модели
           </TabsTrigger>
-          <TabsTrigger value="access" className="gap-2 rounded-xl data-[state=active]:bg-card">
-            <Shield className="h-4 w-4" /> {t("set.tab_access")}
+          <TabsTrigger value="access" className="gap-1.5 data-[state=active]:bg-card">
+            <Shield className="h-3.5 w-3.5" /> Доступ
           </TabsTrigger>
           {isAdmin && (
-            <TabsTrigger value="monitoring" className="gap-2 rounded-xl data-[state=active]:bg-card">
-              <Gauge className="h-4 w-4" /> {t("set.tab_monitoring")}
+            <TabsTrigger value="logging" className="gap-1.5 data-[state=active]:bg-card">
+              <ScrollText className="h-3.5 w-3.5" /> Логирование
             </TabsTrigger>
           )}
-          <TabsTrigger value="activity" className="gap-2 rounded-xl data-[state=active]:bg-card">
-            <Activity className="h-4 w-4" /> {t("set.tab_activity")}
+          <TabsTrigger value="activity" className="gap-1.5 data-[state=active]:bg-card">
+            <Activity className="h-3.5 w-3.5" /> Журнал
           </TabsTrigger>
         </TabsList>
 
         {/* ==================== AI TAB ==================== */}
         <TabsContent value="ai" className="space-y-4">
-          <SectionCard title={t("set.ai_models")} icon={Bot} description={t("set.ai_models_desc")}>
-            <div className="space-y-5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("set.provider")}</label>
-                  <select
-                    value={provider}
-                    onChange={(e) => setProvider(e.target.value)}
-                    className="w-full bg-secondary border border-border rounded-lg px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
-                  >
-                    <option value="grok">Grok</option>
-                    <option value="gemini">Gemini</option>
-                    <option value="openai">OpenAI</option>
-                    <option value="claude">Claude</option>
-                  </select>
+          {/* Default model */}
+          <SectionCard title="Основная модель" icon={Bot} description="Модель по умолчанию для всех задач">
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-medium text-muted-foreground uppercase">Провайдер</label>
+                  <Select value={provider} onValueChange={setProvider}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {LLM_PROVIDERS.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("set.model")}</label>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-medium text-muted-foreground uppercase">Модель</label>
                   {availableModels.length > 0 ? (
-                    <select
-                      value={model}
-                      onChange={(e) => setModel(e.target.value)}
-                      className="w-full bg-secondary border border-border rounded-lg px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
-                    >
-                      {availableModels.map((m) => (
-                        <option key={m} value={m}>{m}</option>
-                      ))}
-                    </select>
+                    <Select value={model} onValueChange={setModel}>
+                      <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {availableModels.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   ) : (
-                    <div className="space-y-1.5">
-                      <Input
-                        value={model}
-                        onChange={(e) => setModel(e.target.value)}
-                        placeholder={
-                          provider === "claude" ? "claude-sonnet-4-6" :
-                          provider === "gemini" ? "models/gemini-2.5-flash" :
-                          provider === "openai" ? "gpt-4o" : "grok-3"
-                        }
-                      />
-                      <p className="text-[10px] text-muted-foreground">
-                        Нажмите «Refresh Models» чтобы загрузить список из API
-                      </p>
+                    <div className="flex gap-2">
+                      <Input value={model} onChange={(e) => setModel(e.target.value)} placeholder="Model name" className="h-9" />
+                      <Button size="sm" variant="outline" className="h-9 px-3" onClick={onRefreshModels} disabled={refreshing}>
+                        <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
+                      </Button>
                     </div>
                   )}
                 </div>
               </div>
-
-              <div className="flex items-center gap-3 pt-1">
-                <Button size="sm" className="gap-1.5 px-4" onClick={onSave} disabled={saving}>
-                  <Save className="h-3.5 w-3.5" /> {saving ? t("set.saving") : t("set.save")}
+              <div className="flex gap-2">
+                <Button size="sm" className="gap-1.5" onClick={onSave} disabled={saving}>
+                  <Save className="h-3.5 w-3.5" /> {saving ? "Сохранение..." : "Сохранить"}
                 </Button>
-                <Button size="sm" variant="outline" className="gap-1.5" onClick={onRefreshModels} disabled={refreshing}>
-                  <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} /> {t("set.refresh_models")}
-                </Button>
+                {availableModels.length > 0 && (
+                  <Button size="sm" variant="outline" className="gap-1.5" onClick={onRefreshModels} disabled={refreshing}>
+                    <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} /> Обновить модели
+                  </Button>
+                )}
               </div>
             </div>
           </SectionCard>
 
-          {/* Purpose-based model settings */}
-          <SectionCard
-            title="Модели по назначению"
-            icon={Cpu}
-            description="Отдельные модели для чата, агентов и оркестратора"
-          >
-            <div className="space-y-4">
+          {/* Purpose-based models */}
+          <SectionCard title="Модели по назначению" icon={Cpu} description="Отдельные модели для разных задач платформы">
+            <div className="space-y-3">
               <PurposeModelSelector
-                label="Чат / Терминальный AI"
-                description="Используется при общении в терминале сервера и AI-помощнике"
-                provider={chatProvider}
-                model={chatModel}
-                availableModels={getModelsForProvider(chatProvider)}
+                label="Чат / Терминальный AI" description="AI помощник в терминале" icon={MessageSquare}
+                provider={chatProvider} model={chatModel} availableModels={getModelsForProvider(chatProvider)}
                 onProviderChange={(p) => { setChatProvider(p); setChatModel(""); }}
-                onModelChange={setChatModel}
-                onRefresh={() => onRefreshPurpose(chatProvider)}
+                onModelChange={setChatModel} onRefresh={() => onRefreshPurpose(chatProvider)}
                 refreshing={refreshingPurpose === chatProvider}
               />
               <PurposeModelSelector
-                label="Агенты (ReAct / Full)"
-                description="Используется при выполнении задач агентом — итерации, инструменты"
-                provider={agentProvider}
-                model={agentModel}
-                availableModels={getModelsForProvider(agentProvider)}
+                label="Агенты (ReAct)" description="Выполнение задач с инструментами" icon={Bot}
+                provider={agentProvider} model={agentModel} availableModels={getModelsForProvider(agentProvider)}
                 onProviderChange={(p) => { setAgentProvider(p); setAgentModel(""); }}
-                onModelChange={setAgentModel}
-                onRefresh={() => onRefreshPurpose(agentProvider)}
+                onModelChange={setAgentModel} onRefresh={() => onRefreshPurpose(agentProvider)}
                 refreshing={refreshingPurpose === agentProvider}
               />
               <PurposeModelSelector
-                label="Оркестратор (Pipeline)"
-                description="Используется для планирования и синтеза в многоагентном пайплайне"
-                provider={orchProvider}
-                model={orchModel}
-                availableModels={getModelsForProvider(orchProvider)}
+                label="Оркестратор (Pipeline)" description="Планирование в мультиагентных пайплайнах" icon={Workflow}
+                provider={orchProvider} model={orchModel} availableModels={getModelsForProvider(orchProvider)}
                 onProviderChange={(p) => { setOrchProvider(p); setOrchModel(""); }}
-                onModelChange={setOrchModel}
-                onRefresh={() => onRefreshPurpose(orchProvider)}
+                onModelChange={setOrchModel} onRefresh={() => onRefreshPurpose(orchProvider)}
                 refreshing={refreshingPurpose === orchProvider}
               />
-              <div className="workspace-subtle rounded-2xl p-4">
-                <div className="mb-3">
-                  <p className="text-sm font-medium text-foreground">OpenAI reasoning effort</p>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    Reasoning setting for the Responses API: none, low, medium, or high.
-                  </p>
-                </div>
-                <div className="flex items-start justify-between gap-4">
+
+              {/* Reasoning effort */}
+              <div className="rounded-lg border border-border p-4 space-y-2">
+                <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-medium text-foreground">OpenAI Reasoning Effort</p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">
-                      Управляет reasoning в Responses API (gpt-5.x).
-                      <span className="text-green-400"> none</span> — без мышления, мгновенно;
-                      <span className="text-yellow-400"> low</span> — быстро;
-                      <span className="text-blue-400"> medium</span> — баланс;
-                      <span className="text-purple-400"> high</span> — максимум.
-                    </p>
+                    <p className="text-xs font-medium">OpenAI Reasoning Effort</p>
+                    <p className="text-[10px] text-muted-foreground">Глубина reasoning в Responses API</p>
                   </div>
-                  <select
-                    value={reasoningEffort}
-                    onChange={(e) => setReasoningEffort(e.target.value)}
-                    className="shrink-0 bg-secondary border border-border rounded-lg px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
-                  >
-                    <option value="">— авто (модель решает)</option>
-                    <option value="none">none — без мышления ⚡⚡</option>
-                    <option value="low">low — минимум ⚡</option>
-                    <option value="medium">medium — баланс ⚖️</option>
-                    <option value="high">high — глубоко 🔬</option>
-                  </select>
+                  <Select value={reasoningEffort} onValueChange={setReasoningEffort}>
+                    <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Auto</SelectItem>
+                      <SelectItem value="none">None ⚡⚡</SelectItem>
+                      <SelectItem value="low">Low ⚡</SelectItem>
+                      <SelectItem value="medium">Medium ⚖️</SelectItem>
+                      <SelectItem value="high">High 🔬</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
-              <div className="pt-1">
-                <Button size="sm" className="gap-1.5 px-4" onClick={onSavePurpose} disabled={saving}>
-                  <Save className="h-3.5 w-3.5" /> {saving ? t("set.saving") : "Сохранить настройки моделей"}
-                </Button>
-              </div>
+              <Button size="sm" className="gap-1.5" onClick={onSavePurpose} disabled={saving}>
+                <Save className="h-3.5 w-3.5" /> {saving ? "Сохранение..." : "Сохранить модели"}
+              </Button>
             </div>
           </SectionCard>
 
+          {/* API Keys status */}
           {apiKeys && isAdmin && (
-            <SectionCard title={t("set.api_keys")} icon={Key} description={t("set.api_keys_desc")}>
+            <SectionCard title="API ключи" icon={Key} description="Статус подключения провайдеров">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
                   { name: "Gemini", key: "gemini_set", enabled: config.gemini_enabled },
@@ -632,13 +529,13 @@ export default function SettingsPage() {
                   { name: "OpenAI", key: "openai_set", enabled: config.openai_enabled },
                   { name: "Claude", key: "claude_set", enabled: config.claude_enabled },
                 ].map((p) => (
-                  <div key={p.name} className="workspace-subtle flex items-center gap-3 rounded-2xl px-3 py-3">
-                    <div className={`h-2 w-2 rounded-full ${apiKeys[p.key] ? "bg-green-400" : "bg-red-400"}`} />
+                  <div key={p.name} className="flex items-center gap-3 rounded-lg border border-border px-3 py-3">
+                    <div className={cn("h-2.5 w-2.5 rounded-full", apiKeys[p.key] ? "bg-green-500" : "bg-red-500")} />
                     <div>
-                      <p className="text-xs font-medium text-foreground">{p.name}</p>
+                      <p className="text-xs font-medium">{p.name}</p>
                       <p className="text-[10px] text-muted-foreground">
-                        {apiKeys[p.key] ? t("set.key_set") : t("set.key_missing")}
-                        {p.enabled ? ` · ${t("set.enabled")}` : ""}
+                        {apiKeys[p.key] ? "Подключен" : "Не задан"}
+                        {p.enabled ? " · Активен" : ""}
                       </p>
                     </div>
                   </div>
@@ -647,20 +544,21 @@ export default function SettingsPage() {
             </SectionCard>
           )}
 
+          {/* Domain auth */}
           {isAdmin && config.domain_auth_enabled !== undefined && (
-            <SectionCard title={t("set.domain_auth")} icon={Globe} description={t("set.domain_auth_desc")}>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <div className="workspace-subtle rounded-2xl px-3 py-3">
-                  <p className="text-[10px] text-muted-foreground uppercase">{t("set.status")}</p>
-                  <p className="text-sm font-medium text-foreground">{config.domain_auth_enabled ? t("set.enabled") : t("set.disabled")}</p>
+            <SectionCard title="Доменная авторизация" icon={Globe} description="SSO через HTTP-заголовок">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-lg border border-border px-3 py-2.5">
+                  <p className="text-[10px] text-muted-foreground uppercase">Статус</p>
+                  <p className="text-sm font-medium">{config.domain_auth_enabled ? "Включен" : "Выключен"}</p>
                 </div>
-                <div className="bg-secondary/30 rounded-lg px-3 py-2.5">
+                <div className="rounded-lg border border-border px-3 py-2.5">
                   <p className="text-[10px] text-muted-foreground uppercase">Header</p>
-                  <p className="text-sm font-mono text-foreground">{config.domain_auth_header || "REMOTE_USER"}</p>
+                  <p className="text-sm font-mono">{config.domain_auth_header || "REMOTE_USER"}</p>
                 </div>
-                <div className="workspace-subtle rounded-2xl px-3 py-3">
-                  <p className="text-[10px] text-muted-foreground uppercase">{t("set.auto_create")}</p>
-                  <p className="text-sm font-medium text-foreground">{config.domain_auth_auto_create ? "Yes" : "No"}</p>
+                <div className="rounded-lg border border-border px-3 py-2.5">
+                  <p className="text-[10px] text-muted-foreground uppercase">Авто-создание</p>
+                  <p className="text-sm font-medium">{config.domain_auth_auto_create ? "Да" : "Нет"}</p>
                 </div>
               </div>
             </SectionCard>
@@ -671,20 +569,20 @@ export default function SettingsPage() {
         <TabsContent value="access">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {[
-              { title: t("settings.users"), desc: t("set.users_desc"), icon: Users, url: "/settings/users", count: "" },
-              { title: t("settings.groups"), desc: t("set.groups_desc"), icon: FolderOpen, url: "/settings/groups", count: "" },
-              { title: t("settings.permissions"), desc: t("set.perms_desc"), icon: Shield, url: "/settings/permissions", count: "" },
+              { title: "Пользователи", desc: "Управление аккаунтами и ролями", icon: Users, url: "/settings/users" },
+              { title: "Группы", desc: "Группы серверов и доступ", icon: FolderOpen, url: "/settings/groups" },
+              { title: "Разрешения", desc: "Политики доступа к модулям", icon: Shield, url: "/settings/permissions" },
             ].map((page) => (
               <Link
                 key={page.url}
                 to={page.url}
-                className="flex items-center gap-4 bg-card border border-border rounded-lg p-5 hover:border-primary/50 hover:bg-card/80 transition-all group"
+                className="flex items-center gap-4 bg-card border border-border rounded-lg p-5 hover:border-primary/30 hover:bg-primary/5 transition-all group"
               >
                 <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                   <page.icon className="h-5 w-5 text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">{page.title}</p>
+                  <p className="text-sm font-medium group-hover:text-primary transition-colors">{page.title}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">{page.desc}</p>
                 </div>
                 <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
@@ -693,162 +591,235 @@ export default function SettingsPage() {
           </div>
         </TabsContent>
 
-        {/* ==================== MONITORING TAB ==================== */}
+        {/* ==================== LOGGING TAB ==================== */}
         {isAdmin && (
-          <TabsContent value="monitoring" className="space-y-4">
-            {/* Stats overview */}
-            {monConfig && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="bg-card border border-border rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{t("set.mon_servers")}</span>
-                    <Server className="h-3.5 w-3.5 text-blue-400" />
-                  </div>
-                  <p className="text-xl font-semibold text-foreground">{monConfig.stats.monitored_servers}</p>
-                </div>
-                <div className="bg-card border border-border rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{t("set.mon_checks")}</span>
-                    <CheckCircle2 className="h-3.5 w-3.5 text-green-400" />
-                  </div>
-                  <p className="text-xl font-semibold text-foreground">{monConfig.stats.total_checks}</p>
-                </div>
-                <div className="bg-card border border-border rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{t("set.mon_alerts")}</span>
-                    <AlertTriangle className="h-3.5 w-3.5 text-red-400" />
-                  </div>
-                  <p className="text-xl font-semibold text-foreground">{monConfig.stats.active_alerts}</p>
-                </div>
-                <div className="bg-card border border-border rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{t("set.mon_last")}</span>
-                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                  </div>
-                  <p className="text-sm font-medium text-foreground mt-1">
-                    {monConfig.stats.last_check_at ? relativeTime(monConfig.stats.last_check_at) : "—"}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Thresholds */}
-            <SectionCard title={t("set.mon_thresholds")} icon={Gauge} description={t("set.mon_thresholds_desc")}>
-              <div className="space-y-4">
-                <ThresholdSlider
-                  label="CPU Load"
-                  icon={Cpu}
-                  warnValue={cpuWarn}
-                  critValue={cpuCrit}
-                  onWarnChange={setCpuWarn}
-                  onCritChange={setCpuCrit}
-                />
-                <ThresholdSlider
-                  label="Memory (RAM)"
-                  icon={MemoryStick}
-                  warnValue={memWarn}
-                  critValue={memCrit}
-                  onWarnChange={setMemWarn}
-                  onCritChange={setMemCrit}
-                />
-                <ThresholdSlider
-                  label="Disk Usage"
-                  icon={HardDrive}
-                  warnValue={diskWarn}
-                  critValue={diskCrit}
-                  onWarnChange={setDiskWarn}
-                  onCritChange={setDiskCrit}
-                />
-
-                <div className="flex items-center gap-3 pt-2">
-                  <Button size="sm" className="gap-1.5 rounded-xl px-4" onClick={onSaveMonitoring} disabled={monSaving}>
-                    <Save className="h-3.5 w-3.5" /> {monSaving ? t("set.saving") : t("set.save_thresholds")}
-                  </Button>
-                </div>
+          <TabsContent value="logging" className="space-y-4">
+            <SectionCard
+              title="Настройки логирования"
+              icon={ScrollText}
+              description="Выберите какие действия пользователей записывать в журнал"
+              actions={
+                <Button size="sm" className="gap-1.5 h-7" onClick={handleSaveLogging}>
+                  <Save className="h-3 w-3" />
+                  {loggingSaved ? "✓ Сохранено" : "Сохранить"}
+                </Button>
+              }
+            >
+              <div className="space-y-1">
+                {LOGGING_ITEMS.map((item) => {
+                  const Icon = item.icon;
+                  const enabled = loggingConfig[item.key];
+                  return (
+                    <label
+                      key={item.key}
+                      className="flex items-center gap-3 rounded-lg px-3 py-3 hover:bg-muted/30 transition-colors cursor-pointer"
+                    >
+                      <div className={cn(
+                        "h-8 w-8 rounded-lg flex items-center justify-center shrink-0 transition-colors",
+                        enabled ? "bg-primary/10" : "bg-muted/50"
+                      )}>
+                        <Icon className={cn("h-4 w-4", enabled ? "text-primary" : "text-muted-foreground")} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium">{item.label}</p>
+                        <p className="text-[10px] text-muted-foreground">{item.desc}</p>
+                      </div>
+                      <Switch
+                        checked={enabled}
+                        onCheckedChange={(v) => updateLogging(item.key, v)}
+                      />
+                    </label>
+                  );
+                })}
               </div>
             </SectionCard>
 
-            {/* How monitoring works */}
-            <SectionCard title={t("set.mon_how")} icon={Eye} description={t("set.mon_how_desc")}>
-              <div className="space-y-3 text-sm text-muted-foreground">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="rounded-xl border border-border/60 bg-background/24 p-4 space-y-2">
-                    <p className="text-xs font-semibold text-foreground uppercase tracking-wider">{t("set.mon_quick")}</p>
-                    <p className="text-xs">{t("set.mon_quick_desc")}</p>
-                    <div className="space-y-1 font-mono text-[11px] text-foreground/70">
-                      <p>cat /proc/loadavg</p>
-                      <p>free -m | grep Mem</p>
-                      <p>df -h / | tail -1</p>
-                      <p>cat /proc/uptime</p>
-                      <p>ps aux --no-headers | wc -l</p>
-                    </div>
-                  </div>
-                  <div className="rounded-xl border border-border/60 bg-background/24 p-4 space-y-2">
-                    <p className="text-xs font-semibold text-foreground uppercase tracking-wider">{t("set.mon_deep")}</p>
-                    <p className="text-xs">{t("set.mon_deep_desc")}</p>
-                    <div className="space-y-1 font-mono text-[11px] text-foreground/70">
-                      <p>systemctl list-units --state=failed</p>
-                      <p>journalctl -p 3 --since '10 min ago'</p>
-                      <p>dmesg --level=err,crit</p>
-                    </div>
-                  </div>
+            <SectionCard title="Хранение и экспорт" icon={Database} description="Настройки ротации и формата логов">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-xs">Хранить логи (дней)</Label>
+                  <Select
+                    value={String(loggingConfig.retention_days)}
+                    onValueChange={(v) => updateLogging("retention_days", Number(v))}
+                  >
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="30">30 дней</SelectItem>
+                      <SelectItem value="60">60 дней</SelectItem>
+                      <SelectItem value="90">90 дней</SelectItem>
+                      <SelectItem value="180">180 дней</SelectItem>
+                      <SelectItem value="365">1 год</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Формат экспорта</Label>
+                  <Select
+                    value={loggingConfig.export_format}
+                    onValueChange={(v) => updateLogging("export_format", v)}
+                  >
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="json">JSON</SelectItem>
+                      <SelectItem value="csv">CSV</SelectItem>
+                      <SelectItem value="syslog">Syslog</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="mt-4 rounded-lg border border-border bg-muted/20 px-4 py-3">
                 <p className="text-[11px] text-muted-foreground">
-                  {t("set.mon_run_hint")}
+                  Логи хранятся на сервере в таблице <code className="text-foreground">core_ui_useractivitylog</code>.
+                  При превышении срока хранения старые записи автоматически удаляются.
+                  Экспорт доступен через API: <code className="text-foreground">GET /api/settings/activity/?format=json&days=30</code>
                 </p>
               </div>
             </SectionCard>
+
+            {/* Summary of active logging */}
+            <div className="rounded-lg border border-border bg-card px-5 py-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Eye className="h-4 w-4 text-primary" />
+                <span className="text-xs font-medium">Активные категории</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {LOGGING_ITEMS.filter((i) => loggingConfig[i.key]).map((i) => (
+                  <Badge key={i.key} variant="secondary" className="text-[10px] gap-1">
+                    <i.icon className="h-2.5 w-2.5" /> {i.label}
+                  </Badge>
+                ))}
+                {LOGGING_ITEMS.every((i) => !loggingConfig[i.key]) && (
+                  <p className="text-[11px] text-muted-foreground">Все категории отключены</p>
+                )}
+              </div>
+            </div>
           </TabsContent>
         )}
 
         {/* ==================== ACTIVITY TAB ==================== */}
-        <TabsContent value="activity">
-          <SectionCard title={t("set.activity_log")} icon={Activity} description={t("set.activity_desc")}>
+        <TabsContent value="activity" className="space-y-4">
+          <SectionCard title="Журнал действий" icon={Activity} description="Полная история действий пользователей на платформе">
             <div className="space-y-4">
-              <div className="relative max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder={t("set.activity_search")}
-                  value={activitySearch}
-                  onChange={(e) => setActivitySearch(e.target.value)}
-                  className="pl-9"
-                />
+              {/* Filters */}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="relative flex-1 min-w-[200px] max-w-sm">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    value={activitySearch}
+                    onChange={(e) => setActivitySearch(e.target.value)}
+                    placeholder="Поиск по пользователю, действию..."
+                    className="pl-9 h-8 text-xs"
+                  />
+                </div>
+
+                {/* Date presets */}
+                <div className="flex items-center gap-1">
+                  {DATE_PRESETS.map((preset) => (
+                    <Button
+                      key={preset.days}
+                      size="sm"
+                      variant={activityDays === preset.days ? "default" : "outline"}
+                      className="h-7 text-[10px] px-2"
+                      onClick={() => {
+                        setActivityDays(preset.days);
+                        setDateFrom(subDays(new Date(), preset.days || 0));
+                        setDateTo(new Date());
+                      }}
+                    >
+                      {preset.label}
+                    </Button>
+                  ))}
+                </div>
+
+                {/* Date range pickers */}
+                <div className="flex items-center gap-1.5">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1 px-2">
+                        <CalendarIcon className="h-3 w-3" />
+                        {dateFrom ? format(dateFrom, "dd.MM.yy") : "От"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={dateFrom}
+                        onSelect={setDateFrom}
+                        disabled={(date) => date > new Date()}
+                        className="p-3 pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <span className="text-[10px] text-muted-foreground">—</span>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1 px-2">
+                        <CalendarIcon className="h-3 w-3" />
+                        {dateTo ? format(dateTo, "dd.MM.yy") : "До"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={dateTo}
+                        onSelect={setDateTo}
+                        disabled={(date) => date > new Date()}
+                        className="p-3 pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <Badge variant="outline" className="text-[10px] shrink-0">
+                  {filteredActivity.length} записей
+                </Badge>
               </div>
 
-              {activityData?.summary && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <StatusBadge label={`${activityData.summary.total_events} ${t("set.events")}`} tone="info" />
-                  <StatusBadge label={`${activityData.summary.total_users} ${t("set.unique_users")}`} tone="neutral" />
+              {/* Activity table */}
+              <div className="rounded-lg border border-border overflow-hidden">
+                <div className="max-h-[500px] overflow-auto">
+                  <table className="w-full text-xs">
+                    <thead className="sticky top-0 bg-card z-10">
+                      <tr className="text-[10px] text-muted-foreground uppercase border-b border-border">
+                        <th className="px-3 py-2 text-left font-medium w-10">Тип</th>
+                        <th className="px-3 py-2 text-left font-medium">Пользователь</th>
+                        <th className="px-3 py-2 text-left font-medium">Действие</th>
+                        <th className="px-3 py-2 text-left font-medium">Описание</th>
+                        <th className="px-3 py-2 text-right font-medium w-20">Время</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/50">
+                      {filteredActivity.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                            Нет записей за выбранный период
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredActivity.map((event, i) => {
+                          const CatIcon = CATEGORY_ICONS[event.category] || Activity;
+                          return (
+                            <tr key={i} className="hover:bg-muted/20 transition-colors">
+                              <td className="px-3 py-2">
+                                <div className="h-6 w-6 rounded bg-muted/40 flex items-center justify-center">
+                                  <CatIcon className="h-3 w-3 text-muted-foreground" />
+                                </div>
+                              </td>
+                              <td className="px-3 py-2 font-medium text-foreground whitespace-nowrap">{event.username}</td>
+                              <td className="px-3 py-2">
+                                <Badge variant="outline" className="text-[9px] font-normal">{event.action}</Badge>
+                              </td>
+                              <td className="px-3 py-2 text-muted-foreground max-w-xs truncate">{event.description || "—"}</td>
+                              <td className="px-3 py-2 text-right text-muted-foreground whitespace-nowrap">
+                                {relativeTime(event.timestamp || event.created_at || "")}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
                 </div>
-              )}
-
-              <div className="max-h-[500px] overflow-y-auto divide-y divide-border rounded-2xl border border-border overflow-hidden">
-                {filteredActivity.length === 0 && (
-                  <p className="text-sm text-muted-foreground p-6 text-center">{t("set.no_activity")}</p>
-                )}
-                {filteredActivity.map((log) => (
-                  <div key={log.id} className="flex items-center gap-3 px-4 py-3 hover:bg-secondary/15 transition-colors">
-                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-background/30 text-[10px] font-medium text-muted-foreground">
-                      {log.username.slice(0, 1).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-foreground">{log.username}</span>
-                        <span className={`rounded-full px-2 py-1 text-[9px] font-medium ${statusBadge(log.status)}`}>
-                          {log.status}
-                        </span>
-                        <span className="rounded-full bg-background/35 px-2 py-1 text-[10px] text-muted-foreground">
-                          {log.category}
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                        {log.description || log.action}
-                        {log.entity_name ? ` · ${log.entity_name}` : ""}
-                      </p>
-                    </div>
-                    <span className="text-[10px] text-muted-foreground shrink-0">{relativeTime(log.created_at)}</span>
-                  </div>
-                ))}
               </div>
             </div>
           </SectionCard>
