@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { StudioNav } from "@/components/StudioNav";
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -454,7 +455,9 @@ export default function PipelineRunsPage() {
   }, [filtered, selectedRunId]);
 
   return (
-    <div className="flex h-full">
+    <div className="flex flex-col h-full">
+      <StudioNav />
+      <div className="flex flex-1 min-h-0">
       {/* Left: runs list */}
       <div className={`flex flex-col border-r border-border ${selectedRunId ? "w-80 shrink-0" : "flex-1"}`}>
         {/* Header */}
@@ -556,6 +559,7 @@ export default function PipelineRunsPage() {
           <RunDetail runId={selectedRunId} onClose={() => setSelectedRunId(null)} />
         </div>
       )}
+      </div>
     </div>
   );
 }

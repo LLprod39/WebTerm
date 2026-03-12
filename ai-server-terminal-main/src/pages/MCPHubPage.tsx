@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { StudioNav } from "@/components/StudioNav";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -316,22 +317,19 @@ export default function MCPHubPage() {
   };
 
   return (
-    <PageShell width="full">
+    <div className="flex flex-col h-full">
+      <StudioNav />
+      <div className="flex-1 overflow-auto">
+      <PageShell width="full">
       <SectionCard
         title="MCP Hub"
         description="Manage Model Context Protocol servers used by Studio."
         icon={<Server className="h-5 w-5" />}
         actions={
-          <>
-            <Button variant="outline" className="gap-1.5" onClick={() => navigate("/studio")}>
-              <ArrowLeft className="h-4 w-4" />
-              Back
-            </Button>
             <Button className="gap-1.5" onClick={() => setEditMcp({})}>
               <Plus className="h-4 w-4" />
               Add server
             </Button>
-          </>
         }
       >
         <Tabs defaultValue="mine" className="space-y-5">
@@ -561,5 +559,7 @@ export default function MCPHubPage() {
         </DialogContent>
       </Dialog>
     </PageShell>
+      </div>
+    </div>
   );
 }

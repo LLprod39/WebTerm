@@ -1,4 +1,5 @@
 import { useEffect, useState, type ElementType } from "react";
+import { StudioNav } from "@/components/StudioNav";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
@@ -198,6 +199,9 @@ export default function NotificationsSettingsPage() {
   }
 
   return (
+    <div className="flex flex-col h-full">
+      <StudioNav />
+      <div className="flex-1 overflow-auto">
     <PageShell width="6xl">
       <SectionCard
         title="Notification settings"
@@ -394,5 +398,7 @@ export default function NotificationsSettingsPage() {
         </div>
       </SectionCard>
     </PageShell>
+    </div>
+    </div>
   );
 }
