@@ -2064,6 +2064,26 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     [nodes, selectedNode, setNodes, screenToFlowPosition],
   );
 
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      const type = e.dataTransfer.getData("application/pipeline-node-type");
+      if (!type || !isNodeType(type)) return;
+      const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+      const id = `node_${nodeIdCounter.current++}`;
+      const newNode = { id, type, position, data: buildDefaultNodeData(type as NodeType) };
+      setNodes((nds) => [...nds, newNode as never]);
+      setActiveRunId(null);
+      setSelectedNode(newNode as PipelineNode);
+    },
+    [screenToFlowPosition, setNodes],
+  );
+
   const handleUpdateNodeData = useCallback(
     (nodeId: string, data: Record<string, unknown>) => {
       setNodes((nds) =>
