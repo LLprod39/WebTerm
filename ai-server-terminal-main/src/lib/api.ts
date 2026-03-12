@@ -185,14 +185,16 @@ function demoFallback<T>(path: string, _options: RequestInit = {}): T {
   if (path.includes("/api/access/users")) return { success: true, users: [] } as T;
   if (path.includes("/api/access/groups")) return { success: true, groups: [] } as T;
   if (path.includes("/api/access/permissions")) return { success: true, permissions: [] } as T;
-  if (path.includes("/api/studio/pipelines")) return { success: true, pipelines: [] } as T;
-  if (path.includes("/api/studio/runs")) return { success: true, runs: [] } as T;
-  if (path.includes("/api/studio/agents")) return { success: true, agents: [] } as T;
-  if (path.includes("/api/studio/mcp")) return { success: true, servers: [], templates: [] } as T;
-  if (path.includes("/api/studio/triggers")) return { success: true, triggers: [] } as T;
-  if (path.includes("/api/studio/templates")) return { success: true, templates: [] } as T;
+  if (path.includes("/api/studio/templates")) return [] as T;
+  if (path.includes("/api/studio/pipelines")) return [] as T;
+  if (path.includes("/api/studio/runs")) return [] as T;
+  if (path.includes("/api/studio/agents")) return [] as T;
+  if (path.includes("/api/studio/mcp/templates")) return [] as T;
+  if (path.includes("/api/studio/mcp")) return [] as T;
+  if (path.includes("/api/studio/triggers")) return [] as T;
   if (path.includes("/api/studio/notifications")) return { success: true } as T;
-  if (path.includes("/api/studio/servers")) return { success: true, servers: [] } as T;
+  if (path.includes("/api/studio/servers")) return [] as T;
+  if (path.includes("/api/studio/skills")) return [] as T;
 
   // Generic fallback
   return demoSuccess() as T;
