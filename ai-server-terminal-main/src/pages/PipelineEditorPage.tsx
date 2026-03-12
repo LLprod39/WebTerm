@@ -868,6 +868,27 @@ function NodeConfigPanel({
       </div>
 
       <div className="flex-1 overflow-auto p-4 space-y-4">
+        {/* Guidance */}
+        {(() => {
+          const guidance = getNodeTypeGuidance(type, "en");
+          return (
+            <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 space-y-1.5">
+              <div className="flex items-center gap-1.5 text-[11px] font-medium text-primary">
+                <Info className="h-3 w-3" />
+                {guidance.category} — {typeInfo.label}
+              </div>
+              <p className="text-[10px] text-muted-foreground leading-relaxed">{guidance.summary}</p>
+              <ul className="space-y-0.5">
+                {guidance.checklist.map((item, i) => (
+                  <li key={i} className="text-[10px] text-muted-foreground flex items-start gap-1">
+                    <span className="text-primary/60 mt-px">•</span> {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })()}
+
         {/* Common: label */}
         <div className="space-y-1.5">
           <Label className="text-xs">Label (optional)</Label>
