@@ -199,6 +199,9 @@ export default function NotificationsSettingsPage() {
   }
 
   return (
+    <div className="flex flex-col h-full">
+      <StudioNav />
+      <div className="flex-1 overflow-auto">
     <PageShell width="6xl">
       <SectionCard
         title="Notification settings"
