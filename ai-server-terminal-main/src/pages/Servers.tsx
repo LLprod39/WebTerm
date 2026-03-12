@@ -48,7 +48,16 @@ import {
   Plug,
   Sparkles,
   Layers,
-  WandSparkles,
+  Play,
+  BookOpen,
+  GripVertical,
+  Copy,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  Save,
+  FolderOpen,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
