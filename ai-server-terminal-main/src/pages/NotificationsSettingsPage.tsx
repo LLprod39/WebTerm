@@ -1,4 +1,5 @@
 import { useEffect, useState, type ElementType } from "react";
+import { StudioNav } from "@/components/StudioNav";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
