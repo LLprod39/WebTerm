@@ -16,6 +16,7 @@ from collections.abc import Callable, Coroutine
 from typing import Any
 
 import asyncssh
+from asgiref.sync import sync_to_async as _s2a
 from loguru import logger
 
 from servers.monitor import _build_connect_kwargs
@@ -103,7 +104,7 @@ class AgentSessionManager:
         forbidden = self._collect_forbidden(server)
         session = _ServerSession(server.id, server.name, forbidden)
 
-        kwargs = _build_connect_kwargs(server)
+        kwargs = await _build_connect_kwargs(server)
         session.conn = await asyncssh.connect(**kwargs)
         session.proc = await session.conn.create_process(
             term_type="xterm-256color",

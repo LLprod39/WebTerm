@@ -8,12 +8,41 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
+from asgiref.sync import sync_to_async as _s2a
+from django.conf import settings as django_settings
 from loguru import logger
 
 from core_ui.managed_secrets import get_mcp_secret_env
 from .models import MCPServerPool
 
 SUPPORTED_PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
+RETRY_BACKOFF_SECONDS = (1.0, 2.0, 4.0)
+
+
+def _setting_int(name: str, default: int) -> int:
+    return max(int(getattr(django_settings, name, default) or default), 0)
+
+
+def _mcp_http_retry_count() -> int:
+    return max(_setting_int("MCP_HTTP_RETRY_ATTEMPTS", 2) - 1, 0)
+
+
+def _mcp_http_timeout(total_seconds: float) -> httpx.Timeout:
+    total = max(float(total_seconds), 1.0)
+    connect = max(float(getattr(django_settings, "MCP_HTTP_CONNECT_TIMEOUT_SECONDS", 10) or 10), 1.0)
+    return httpx.Timeout(total, connect=connect)
+
+
+def _retry_delay(attempt_index: int) -> float:
+    return RETRY_BACKOFF_SECONDS[min(attempt_index, len(RETRY_BACKOFF_SECONDS) - 1)]
+
+
+def _should_retry_http_status(status_code: int) -> bool:
+    return status_code == 429 or 500 <= status_code < 600
+
+
+def _is_retryable_http_error(exc: httpx.HTTPError) -> bool:
+    return isinstance(exc, httpx.TransportError)
 
 
 def _normalize_sse_url(url: str) -> str:
@@ -94,7 +123,8 @@ class _StdioMCPClient:
         if not self.server.command:
             raise MCPClientError("MCP command is not configured")
 
-        env = {**__import__("os").environ, **(self.server.env or {}), **get_mcp_secret_env(self.server.id)}
+        secret_env = await _s2a(get_mcp_secret_env, thread_sensitive=True)(self.server.id)
+        env = {**__import__("os").environ, **(self.server.env or {}), **secret_env}
         self.proc = await asyncio.create_subprocess_exec(
             self.server.command,
             *(self.server.args or []),
@@ -111,7 +141,10 @@ class _StdioMCPClient:
         if self.proc.returncode is None:
             self.proc.terminate()
             try:
-                await asyncio.wait_for(self.proc.wait(), timeout=2)
+                await asyncio.wait_for(
+                    self.proc.wait(),
+                    timeout=max(float(getattr(django_settings, "MCP_PROCESS_TERMINATE_TIMEOUT_SECONDS", 2) or 2), 1.0),
+                )
             except asyncio.TimeoutError:
                 self.proc.kill()
                 await self.proc.wait()
@@ -127,7 +160,10 @@ class _StdioMCPClient:
             },
             request_id=request_id,
         )
-        result = await self.request(payload, timeout=20)
+        result = await self.request(
+            payload,
+            timeout=max(float(getattr(django_settings, "MCP_STDIO_INITIALIZE_TIMEOUT_SECONDS", 20) or 20), 1.0),
+        )
         await self.notify("notifications/initialized")
         return MCPServerInfo(
             protocol_version=str(result.get("protocolVersion") or SUPPORTED_PROTOCOL_VERSIONS[-1]),
@@ -135,16 +171,24 @@ class _StdioMCPClient:
             capabilities=result.get("capabilities") or {},
         )
 
-    async def request(self, payload: dict[str, Any], *, timeout: float = 30) -> dict[str, Any]:
+    async def request(self, payload: dict[str, Any], *, timeout: float | None = None) -> dict[str, Any]:
         if not self.proc or not self.proc.stdin or not self.proc.stdout:
             raise MCPClientError("MCP process is not running")
+        effective_timeout = max(
+            float(
+                timeout
+                if timeout is not None
+                else getattr(django_settings, "MCP_STDIO_REQUEST_TIMEOUT_SECONDS", 30) or 30
+            ),
+            1.0,
+        )
 
         self.proc.stdin.write((json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8"))
         await self.proc.stdin.drain()
 
         request_id = str(payload.get("id") or "")
         while True:
-            line = await asyncio.wait_for(self.proc.stdout.readline(), timeout=timeout)
+            line = await asyncio.wait_for(self.proc.stdout.readline(), timeout=effective_timeout)
             if not line:
                 stderr = ""
                 if self.proc.stderr:
@@ -179,7 +223,7 @@ class _HttpMCPClient:
     def __init__(self, server: MCPServerPool):
         self.server = server
         self._sse_url = _normalize_sse_url(server.url or "")
-        self.client = httpx.AsyncClient(timeout=30)
+        self.client = httpx.AsyncClient(timeout=None)
         self.protocol_version = SUPPORTED_PROTOCOL_VERSIONS[0]
 
     async def __aenter__(self):
@@ -199,7 +243,12 @@ class _HttpMCPClient:
             },
             request_id=request_id,
         )
-        result = await self._request(payload, include_protocol_header=False)
+        result = await self._request(
+            payload,
+            include_protocol_header=False,
+            timeout=float(getattr(django_settings, "MCP_HTTP_REQUEST_TIMEOUT_SECONDS", 30) or 30),
+            retries=_mcp_http_retry_count(),
+        )
         self.protocol_version = str(result.get("protocolVersion") or self.protocol_version)
         await self.notify("notifications/initialized")
         return MCPServerInfo(
@@ -208,7 +257,14 @@ class _HttpMCPClient:
             capabilities=result.get("capabilities") or {},
         )
 
-    async def _request(self, payload: dict[str, Any], *, include_protocol_header: bool = True) -> dict[str, Any]:
+    async def _request(
+        self,
+        payload: dict[str, Any],
+        *,
+        include_protocol_header: bool = True,
+        timeout: float | None = None,
+        retries: int = 0,
+    ) -> dict[str, Any]:
         if not self._sse_url:
             raise MCPClientError("SSE URL is required")
         headers = {
@@ -219,46 +275,74 @@ class _HttpMCPClient:
             headers["MCP-Protocol-Version"] = self.protocol_version
 
         request_id = str(payload.get("id") or "")
-        try:
-            async with self.client.stream("POST", self._sse_url, json=payload, headers=headers) as response:
-                response.raise_for_status()
-                content_type = (response.headers.get("content-type") or "").lower()
-                if "application/json" in content_type:
-                    data = json.loads((await response.aread()).decode("utf-8", errors="replace"))
-                    return _extract_json_rpc_result(data, request_id)
-                if "text/event-stream" in content_type:
-                    async for event in _iter_sse_events(response.aiter_lines()):
-                        data_str = event.get("data") or ""
-                        if not data_str:
-                            continue
-                        try:
-                            data = json.loads(data_str)
-                        except json.JSONDecodeError:
-                            continue
-                        if data.get("id") != request_id:
-                            continue
+        effective_timeout = float(
+            timeout if timeout is not None else getattr(django_settings, "MCP_HTTP_REQUEST_TIMEOUT_SECONDS", 30) or 30
+        )
+        for attempt in range(max(int(retries), 0) + 1):
+            try:
+                async with self.client.stream(
+                    "POST",
+                    self._sse_url,
+                    json=payload,
+                    headers=headers,
+                    timeout=_mcp_http_timeout(effective_timeout),
+                ) as response:
+                    response.raise_for_status()
+                    content_type = (response.headers.get("content-type") or "").lower()
+                    if "application/json" in content_type:
+                        data = json.loads((await response.aread()).decode("utf-8", errors="replace"))
                         return _extract_json_rpc_result(data, request_id)
-                    raise MCPClientError("MCP HTTP stream ended before a response was received")
-                raise MCPClientError(f"Unsupported MCP HTTP response type: {content_type or 'unknown'}")
-        except httpx.HTTPStatusError as exc:
-            status = exc.response.status_code
-            if status in (404, 405, 406):
-                raise MCPClientError(
-                    "Direct MCP blocks support stdio servers and HTTP endpoints that accept JSON-RPC POST. "
-                    "Legacy SSE-only endpoints are not supported here yet."
-                ) from exc
-            raise MCPClientError(f"MCP HTTP error {status}: {exc.response.text[:300]}") from exc
-        except httpx.HTTPError as exc:
-            raise MCPClientError(str(exc)) from exc
+                    if "text/event-stream" in content_type:
+                        async for event in _iter_sse_events(response.aiter_lines()):
+                            data_str = event.get("data") or ""
+                            if not data_str:
+                                continue
+                            try:
+                                data = json.loads(data_str)
+                            except json.JSONDecodeError:
+                                continue
+                            if data.get("id") != request_id:
+                                continue
+                            return _extract_json_rpc_result(data, request_id)
+                        raise MCPClientError("MCP HTTP stream ended before a response was received")
+                    raise MCPClientError(f"Unsupported MCP HTTP response type: {content_type or 'unknown'}")
+            except httpx.HTTPStatusError as exc:
+                status = exc.response.status_code
+                if status in (404, 405, 406):
+                    raise MCPClientError(
+                        "Direct MCP blocks support stdio servers and HTTP endpoints that accept JSON-RPC POST. "
+                        "Legacy SSE-only endpoints are not supported here yet."
+                    ) from exc
+                if attempt < retries and _should_retry_http_status(status):
+                    await asyncio.sleep(_retry_delay(attempt))
+                    continue
+                raise MCPClientError(f"MCP HTTP error {status}: {exc.response.text[:300]}") from exc
+            except httpx.HTTPError as exc:
+                if attempt < retries and _is_retryable_http_error(exc):
+                    await asyncio.sleep(_retry_delay(attempt))
+                    continue
+                raise MCPClientError(str(exc)) from exc
 
-    async def request(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def request(
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+        *,
+        timeout: float | None = None,
+        retries: int = 0,
+    ) -> dict[str, Any]:
         payload = _json_rpc_payload(method, params or {}, request_id=secrets.token_hex(8))
-        return await self._request(payload)
+        return await self._request(payload, timeout=timeout, retries=retries)
 
     async def notify(self, method: str, params: dict[str, Any] | None = None):
         headers = {"Content-Type": "application/json", "MCP-Protocol-Version": self.protocol_version}
         try:
-            await self.client.post(self._sse_url, json=_json_rpc_payload(method, params), headers=headers)
+            await self.client.post(
+                self._sse_url,
+                json=_json_rpc_payload(method, params),
+                headers=headers,
+                timeout=_mcp_http_timeout(float(getattr(django_settings, "MCP_HTTP_REQUEST_TIMEOUT_SECONDS", 30) or 30)),
+            )
         except Exception:
             # Notifications are best-effort for direct tool calls.
             return
@@ -296,7 +380,12 @@ async def _list_tools(client) -> list[dict[str, Any]]:
             payload = _json_rpc_payload("tools/list", params, request_id=secrets.token_hex(8))
             result = await client.request(payload)
         else:
-            result = await client.request("tools/list", params)
+            result = await client.request(
+                "tools/list",
+                params,
+                timeout=float(getattr(django_settings, "MCP_HTTP_REQUEST_TIMEOUT_SECONDS", 30) or 30),
+                retries=_mcp_http_retry_count(),
+            )
 
         chunk = result.get("tools") or []
         if isinstance(chunk, list):
@@ -333,9 +422,17 @@ async def call_mcp_tool(server: MCPServerPool, tool_name: str, arguments: dict[s
                 {"name": tool_name, "arguments": arguments},
                 request_id=secrets.token_hex(8),
             )
-            result = await client.request(payload, timeout=120)
+            result = await client.request(
+                payload,
+                timeout=max(float(getattr(django_settings, "MCP_STDIO_TOOL_CALL_TIMEOUT_SECONDS", 120) or 120), 1.0),
+            )
         else:
-            result = await client.request("tools/call", {"name": tool_name, "arguments": arguments})
+            result = await client.request(
+                "tools/call",
+                {"name": tool_name, "arguments": arguments},
+                timeout=float(getattr(django_settings, "MCP_HTTP_TOOL_CALL_TIMEOUT_SECONDS", 120) or 120),
+                retries=0,
+            )
     logger.info(
         "mcp call done: server={} tool={} is_error={} content_items={}",
         server.name,

@@ -39,6 +39,17 @@ function formatDateTime(value?: string | null): string {
   return new Date(value).toLocaleString();
 }
 
+function formatCompactDateTime(value?: string | null): string {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
 function statusLabel(status: string): string {
   switch (status) {
     case "plan_review":
@@ -69,28 +80,6 @@ function statusClasses(status: string): string {
   }
 }
 
-function MetricPill({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="inline-flex min-w-[120px] items-center gap-2 rounded-2xl border border-border/70 bg-card/60 px-3 py-2">
-      <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-border/70 bg-background/70 text-muted-foreground">
-        {icon}
-      </div>
-      <div className="min-w-0">
-        <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{label}</div>
-        <div className="truncate text-sm font-medium text-foreground">{value}</div>
-      </div>
-    </div>
-  );
-}
-
 export default function AgentRunPage() {
   const { runId } = useParams<{ runId: string }>();
   const { t } = useI18n();
@@ -107,23 +96,27 @@ export default function AgentRunPage() {
 
   const rid = parseInt(runId || "0", 10);
 
-  const { data: runData, isLoading } = useQuery({
+  const { data: runData, isLoading, isError, error } = useQuery({
     queryKey: ["agent-run", rid],
     queryFn: () => fetchAgentRunDetail(rid),
     enabled: rid > 0,
+    retry: false,
     refetchInterval: 3000,
   });
 
   const { data: logData } = useQuery({
     queryKey: ["agent-run-log", rid],
     queryFn: () => fetchAgentRunLog(rid),
-    enabled: rid > 0,
+    enabled: rid > 0 && Boolean(runData?.run),
+    retry: false,
     refetchInterval: 2000,
   });
 
   const run = runData?.run;
   const serverPlanTasks = logData?.plan_tasks || run?.plan_tasks || [];
-  // localPlanTasks overrides server data after user edits (clears on next poll)
+  const serverPlanTasksSnapshot = JSON.stringify(serverPlanTasks);
+  const localPlanTasksSnapshot = localPlanTasks ? JSON.stringify(localPlanTasks) : "";
+  // localPlanTasks overrides server data only until fresh server state diverges.
   const planTasks = localPlanTasks ?? serverPlanTasks;
   const isMulti = run?.agent_mode === "multi";
   const isPlanReview = run?.status === "plan_review";
@@ -136,7 +129,19 @@ export default function AgentRunPage() {
     } else if (run && isMulti) {
       setActiveTab("pipeline");
     }
-  }, [run?.id, run?.status]);
+  }, [hasReport, isActive, isMulti, isPlanReview, run]);
+
+  useEffect(() => {
+    setLocalPlanTasks(null);
+  }, [rid]);
+
+  useEffect(() => {
+    if (localPlanTasks === null) return;
+    if (!serverPlanTasksSnapshot) return;
+    if (serverPlanTasksSnapshot !== localPlanTasksSnapshot) {
+      setLocalPlanTasks(null);
+    }
+  }, [localPlanTasks, localPlanTasksSnapshot, serverPlanTasksSnapshot]);
 
   const onApprovePlan = async () => {
     if (!run) return;
@@ -163,8 +168,9 @@ export default function AgentRunPage() {
     if (!run) return;
     setStopping(true);
     try {
-      await stopAgent(run.agent_id);
+      await stopAgent(run.agent_id, run.id);
       await queryClient.invalidateQueries({ queryKey: ["agent-run", rid] });
+      await queryClient.invalidateQueries({ queryKey: ["agent-run-log", rid] });
     } finally {
       setStopping(false);
     }
@@ -182,7 +188,17 @@ export default function AgentRunPage() {
     }
   };
 
-  if (isLoading || !run) {
+  if (rid <= 0) {
+    return (
+      <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center bg-background px-4">
+        <div className="rounded-2xl border border-border/70 bg-card/70 px-5 py-4 text-sm text-muted-foreground shadow-[0_18px_48px_rgba(0,0,0,0.18)]">
+          Некорректный идентификатор запуска.
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading) {
     return (
       <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center bg-background px-4">
         <div className="flex min-w-[260px] items-center gap-3 rounded-2xl border border-border/70 bg-card/70 px-4 py-3 text-sm text-muted-foreground shadow-[0_18px_48px_rgba(0,0,0,0.18)]">
@@ -193,153 +209,164 @@ export default function AgentRunPage() {
     );
   }
 
+  if (isError || !run) {
+    const message = error instanceof Error ? error.message : "Запуск агента не найден или больше недоступен.";
+    return (
+      <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center bg-background px-4">
+        <div className="max-w-md rounded-2xl border border-border/70 bg-card/70 px-5 py-4 text-sm text-muted-foreground shadow-[0_18px_48px_rgba(0,0,0,0.18)]">
+          <div className="mb-2 flex items-center gap-2 text-foreground">
+            <AlertTriangle className="h-4 w-4 text-amber-400" />
+            <span className="font-medium">Запуск не найден</span>
+          </div>
+          <p>{message}</p>
+          <div className="mt-4">
+            <Link to="/agents">
+              <Button size="sm" variant="outline" className="gap-1.5">
+                <ArrowLeft className="h-3.5 w-3.5" />
+                К списку агентов
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const elapsed = run.duration_ms || (Date.now() - new Date(run.started_at).getTime());
   const doneTasks = planTasks.filter((task) => task.status === "done").length;
   const failedTasks = planTasks.filter((task) => task.status === "failed").length;
   const runningTasks = planTasks.filter((task) => task.status === "running").length;
+  const progressPercent = planTasks.length > 0 ? (doneTasks / planTasks.length) * 100 : 0;
   const connectedServerNames =
     run.connected_servers.length > 0 ? run.connected_servers.map((server) => server.server_name) : run.server_name ? [run.server_name] : [];
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)] flex-col bg-background">
       <div className="border-b border-border/70 bg-background/95 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-4 sm:px-6">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-            <div className="min-w-0 space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <Link to="/agents">
-                  <Button size="sm" variant="ghost" className="h-8 rounded-xl px-2.5 text-muted-foreground">
-                    <ArrowLeft className="h-3.5 w-3.5" />
-                  </Button>
-                </Link>
-                <span className="rounded-full border border-border/70 bg-card/70 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                  Agent Run
-                </span>
-                <StatusBadge status={run.status} />
-                {isMulti ? (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-violet-500/25 bg-violet-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-violet-300">
-                    <Layers className="h-3 w-3" />
-                    Pipeline
-                  </span>
-                ) : null}
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-border/70 bg-card/70">
-                    <Bot className="h-5 w-5 text-primary" />
-                  </div>
-                  <div className="min-w-0">
-                    <h1 className="truncate text-2xl font-semibold tracking-[-0.03em] text-foreground">{run.agent_name}</h1>
-                    <p className="text-sm text-muted-foreground">
-                      {isMulti
-                        ? "Structured execution view for planning, task progress, and final synthesis."
-                        : "Minimal run transcript with status, console output, and final report."}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <MetricPill icon={<Clock className="h-3.5 w-3.5" />} label="Duration" value={formatDuration(elapsed)} />
-                  <MetricPill
-                    icon={isMulti ? <Cpu className="h-3.5 w-3.5" /> : <Activity className="h-3.5 w-3.5" />}
-                    label={isMulti ? "Tasks" : "Iterations"}
-                    value={isMulti ? String(planTasks.length) : String(run.total_iterations)}
-                  />
-                  <MetricPill
-                    icon={<Terminal className="h-3.5 w-3.5" />}
-                    label="Servers"
-                    value={connectedServerNames.length > 0 ? String(connectedServerNames.length) : "0"}
-                  />
-                  <MetricPill icon={<Clock className="h-3.5 w-3.5" />} label="Started" value={formatDateTime(run.started_at)} />
-                </div>
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-3 sm:px-6">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0 flex items-center gap-2">
+              <Link to="/agents">
+                <Button size="sm" variant="ghost" className="h-8 rounded-lg px-2 text-muted-foreground">
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
+              <div className="min-w-0 flex items-center gap-2">
+                <Bot className="h-4 w-4 shrink-0 text-primary" />
+                <h1 className="truncate text-lg font-semibold tracking-[-0.03em] text-foreground">{run.agent_name}</h1>
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 xl:max-w-[360px] xl:items-end">
-              {connectedServerNames.length > 0 ? (
-                <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
-                  {run.connected_servers.map((server) => (
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <StatusBadge status={run.status} />
+              {isMulti ? (
+                <span className="inline-flex h-7 items-center gap-1 rounded-full border border-violet-500/25 bg-violet-500/10 px-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-violet-300">
+                  <Layers className="h-3 w-3" />
+                  Pipeline
+                </span>
+              ) : null}
+              <div className="rounded-xl border border-border/70 bg-card/70 p-0.5">
+                {isMulti ? (
+                  <button
+                    onClick={() => setActiveTab("pipeline")}
+                    className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                      activeTab === "pipeline" ? "bg-background text-foreground" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      <Layers className="h-3.5 w-3.5" />
+                      Pipeline
+                      {(isActive || isPlanReview) ? <span className="h-1.5 w-1.5 rounded-full bg-violet-400" /> : null}
+                    </span>
+                  </button>
+                ) : null}
+                <button
+                  onClick={() => setActiveTab("report")}
+                  className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                    activeTab === "report" ? "bg-background text-foreground" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <FileText className="h-3.5 w-3.5" />
+                    {t("agent.report")}
+                    {hasReport && !isActive ? <CheckCircle2 className="h-3 w-3 text-emerald-300" /> : null}
+                  </span>
+                </button>
+              </div>
+              {isActive ? (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="h-8 rounded-lg px-3 text-xs"
+                  onClick={onStop}
+                  disabled={stopping}
+                >
+                  {stopping ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Square className="h-3.5 w-3.5" />}
+                  {t("agent.stop")}
+                </Button>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+            <span>{formatDuration(elapsed)}</span>
+            <span className="text-muted-foreground/40">·</span>
+            <span>{isMulti ? `${planTasks.length} tasks` : `${run.total_iterations} iterations`}</span>
+            <span className="text-muted-foreground/40">·</span>
+            <span>{connectedServerNames.length} servers</span>
+            <span className="text-muted-foreground/40">·</span>
+            <span>{formatCompactDateTime(run.started_at)}</span>
+
+            {connectedServerNames.length > 0 ? (
+              <>
+                <span className="text-muted-foreground/40">·</span>
+                <div className="flex flex-wrap items-center gap-1">
+                  {run.connected_servers.length > 0 ? run.connected_servers.map((server) => (
                     <Link key={server.server_id} to={`/servers/${server.server_id}/terminal`}>
-                      <span className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-card/70 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary/10 hover:text-primary">
+                      <span className="inline-flex h-6 items-center gap-1 rounded-full border border-border/70 bg-card/70 px-2 text-[11px] text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary/10 hover:text-primary">
                         <Terminal className="h-3 w-3" />
                         {server.server_name}
                       </span>
                     </Link>
-                  ))}
-                </div>
-              ) : null}
-
-              <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-                <div className="rounded-2xl border border-border/70 bg-card/70 p-1">
-                  {isMulti ? (
-                    <button
-                      onClick={() => setActiveTab("pipeline")}
-                      className={`rounded-xl px-3 py-2 text-xs font-medium transition-colors ${
-                        activeTab === "pipeline" ? "bg-background text-foreground" : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      <span className="inline-flex items-center gap-1.5">
-                        <Layers className="h-3.5 w-3.5" />
-                        Pipeline
-                        {(isActive || isPlanReview) ? <span className="h-1.5 w-1.5 rounded-full bg-violet-400" /> : null}
-                      </span>
-                    </button>
-                  ) : null}
-                  <button
-                    onClick={() => setActiveTab("report")}
-                    className={`rounded-xl px-3 py-2 text-xs font-medium transition-colors ${
-                      activeTab === "report" ? "bg-background text-foreground" : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    <span className="inline-flex items-center gap-1.5">
-                      <FileText className="h-3.5 w-3.5" />
-                      {t("agent.report")}
-                      {hasReport && !isActive ? <CheckCircle2 className="h-3 w-3 text-emerald-300" /> : null}
+                  )) : (
+                    <span className="inline-flex h-6 items-center gap-1 rounded-full border border-border/70 bg-card/70 px-2 text-[11px] text-muted-foreground">
+                      <Terminal className="h-3 w-3" />
+                      {run.server_name}
                     </span>
-                  </button>
+                  )}
                 </div>
-                {isActive ? (
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    className="h-10 rounded-xl px-4 text-xs"
-                    onClick={onStop}
-                    disabled={stopping}
-                  >
-                    {stopping ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Square className="h-3.5 w-3.5" />}
-                    {t("agent.stop")}
-                  </Button>
-                ) : null}
-              </div>
-            </div>
-          </div>
+              </>
+            ) : null}
 
-          {isMulti ? (
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span className="rounded-full border border-border/70 bg-card/60 px-3 py-1.5">
-                {doneTasks}/{planTasks.length} tasks done
-              </span>
-              {runningTasks > 0 ? (
-                <span className="rounded-full border border-sky-500/25 bg-sky-500/10 px-3 py-1.5 text-sky-300">
-                  {runningTasks} running
+            {isMulti ? (
+              <div className="ml-auto flex items-center gap-2">
+                <div className="h-1.5 w-20 overflow-hidden rounded-full bg-card sm:w-28">
+                  <div
+                    className="h-full rounded-full bg-violet-400 transition-[width]"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+                <span className="font-medium text-foreground/80">
+                  {doneTasks}/{planTasks.length}
                 </span>
-              ) : null}
-              {failedTasks > 0 ? (
-                <span className="rounded-full border border-red-500/25 bg-red-500/10 px-3 py-1.5 text-red-300">
-                  {failedTasks} failed
-                </span>
-              ) : null}
-              <label className="ml-auto inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/60 px-3 py-1.5 text-xs text-muted-foreground">
-                <input
-                  type="checkbox"
-                  checked={autoScroll}
-                  onChange={(e) => setAutoScroll(e.target.checked)}
-                  className="h-3.5 w-3.5 rounded"
-                />
-                Auto-scroll
-              </label>
-            </div>
-          ) : null}
+                {runningTasks > 0 ? <span className="text-sky-300">{runningTasks} running</span> : null}
+                {failedTasks > 0 ? <span className="text-red-300">{failedTasks} failed</span> : null}
+                <button
+                  type="button"
+                  onClick={() => setAutoScroll((current) => !current)}
+                  className={`inline-flex h-6 w-6 items-center justify-center rounded-full border transition-colors ${
+                    autoScroll
+                      ? "border-violet-500/30 bg-violet-500/10 text-violet-300"
+                      : "border-border/70 bg-card/60 text-muted-foreground hover:text-foreground"
+                  }`}
+                  title={autoScroll ? "Автопрокрутка включена" : "Автопрокрутка выключена"}
+                  aria-label={autoScroll ? "Выключить автопрокрутку" : "Включить автопрокрутку"}
+                >
+                  <RotateCcw className="h-3 w-3" />
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
 

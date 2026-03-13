@@ -161,6 +161,11 @@ class Server(models.Model):
     network_config = models.JSONField(
         default=dict, blank=True, help_text="Контекст корпоративной сети: прокси, VPN, firewall, env variables"
     )
+    trusted_host_keys = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Доверенные SSH host keys для strict host verification (TOFU).",
+    )
 
     # Helper fields для UI (заполняются автоматически из network_config)
     has_proxy = models.BooleanField(default=False, help_text="Сервер работает через прокси")
@@ -699,6 +704,14 @@ class AgentRun(models.Model):
         default=list,
         blank=True,
         help_text="[{server_id, server_name, connected_at}]",
+    )
+    runtime_control = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            "Runtime control mailbox for cross-process run control: "
+            "{stop_requested, pause_requested, reply_nonce, reply_ack_nonce, reply_text}"
+        ),
     )
     pending_question = models.TextField(blank=True, help_text="Question agent is waiting user to answer")
     final_report = models.TextField(blank=True, help_text="Final structured report from full agent")

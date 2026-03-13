@@ -94,16 +94,6 @@ export default defineConfig(({ mode }) => ({
           if (id.includes("lucide-react")) {
             return "icons-vendor";
           }
-          if (
-            id.includes("@tanstack/react-query") ||
-            id.includes("@tanstack/query-core") ||
-            id.includes("react-router-dom") ||
-            id.includes("@remix-run/router") ||
-            id.includes("react-dom") ||
-            /node_modules[\\/](react|scheduler)[\\/]/.test(id)
-          ) {
-            return "react-vendor";
-          }
           return "vendor";
         },
       },

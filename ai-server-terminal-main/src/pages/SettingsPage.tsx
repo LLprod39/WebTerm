@@ -1,5 +1,4 @@
-// @ts-nocheck
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Bot,
@@ -166,7 +165,6 @@ const DATE_PRESETS = [
   { label: "30 дней", days: 30 },
 ];
 
-// Logging config (stored in localStorage as the backend API may not support it yet)
 const DEFAULT_LOGGING_CONFIG = {
   log_terminal_commands: true,
   log_ai_assistant: true,
@@ -177,21 +175,11 @@ const DEFAULT_LOGGING_CONFIG = {
   log_settings_changes: true,
   log_file_operations: false,
   log_mcp_calls: true,
+  log_http_requests: true,
   retention_days: 90,
   export_format: "json",
 };
-
-function getLoggingConfig() {
-  try {
-    const stored = localStorage.getItem("weu_logging_config");
-    if (stored) return { ...DEFAULT_LOGGING_CONFIG, ...JSON.parse(stored) };
-  } catch {}
-  return { ...DEFAULT_LOGGING_CONFIG };
-}
-
-function saveLoggingConfig(config: Record<string, unknown>) {
-  localStorage.setItem("weu_logging_config", JSON.stringify(config));
-}
+const LOGGING_KEYS = Object.keys(DEFAULT_LOGGING_CONFIG);
 
 export default function SettingsPage() {
   const { t } = useI18n();
@@ -234,6 +222,7 @@ export default function SettingsPage() {
   const { data: activityData } = useQuery({
     queryKey: ["settings", "activity", computedDays],
     queryFn: () => fetchSettingsActivity(200, computedDays),
+    enabled: isAdmin,
     staleTime: 20_000,
   });
 
@@ -251,7 +240,7 @@ export default function SettingsPage() {
   const [refreshing, setRefreshing] = useState(false);
 
   // Logging config state
-  const [loggingConfig, setLoggingConfig] = useState(getLoggingConfig);
+  const [loggingConfig, setLoggingConfig] = useState({ ...DEFAULT_LOGGING_CONFIG });
   const [loggingSaved, setLoggingSaved] = useState(false);
 
   useEffect(() => {
@@ -276,17 +265,21 @@ export default function SettingsPage() {
     setOrchProvider(config.orchestrator_llm_provider || activeProvider);
     setOrchModel(config.orchestrator_llm_model || "");
     setReasoningEffort(config.openai_reasoning_effort || AUTO_REASONING_VALUE);
+    setLoggingConfig({
+      ...DEFAULT_LOGGING_CONFIG,
+      ...Object.fromEntries(LOGGING_KEYS.map((key) => [key, config[key] ?? DEFAULT_LOGGING_CONFIG[key]])),
+    });
   }, [settingsData]);
 
-  const getModelsForProvider = (p: string): string[] => {
+  const getModelsForProvider = useCallback((p: string): string[] => {
     if (!modelsData) return [];
     if (p === "gemini") return modelsData.gemini || [];
     if (p === "openai") return modelsData.openai || [];
     if (p === "claude") return modelsData.claude || [];
     return modelsData.grok || [];
-  };
+  }, [modelsData]);
 
-  const availableModels = useMemo(() => getModelsForProvider(provider), [modelsData, provider]);
+  const availableModels = useMemo(() => getModelsForProvider(provider), [getModelsForProvider, provider]);
 
   const onRefreshPurpose = async (p: string) => {
     setRefreshingPurpose(p);
@@ -346,10 +339,16 @@ export default function SettingsPage() {
     setLoggingSaved(false);
   };
 
-  const handleSaveLogging = () => {
-    saveLoggingConfig(loggingConfig);
-    setLoggingSaved(true);
-    setTimeout(() => setLoggingSaved(false), 2000);
+  const handleSaveLogging = async () => {
+    setSaving(true);
+    try {
+      await saveSettings(Object.fromEntries(LOGGING_KEYS.map((key) => [key, loggingConfig[key]])));
+      await queryClient.invalidateQueries({ queryKey: ["settings", "config"] });
+      setLoggingSaved(true);
+      setTimeout(() => setLoggingSaved(false), 2000);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const filteredActivity = useMemo(() => {
@@ -397,6 +396,7 @@ export default function SettingsPage() {
     { key: "log_settings_changes", label: "Изменения настроек", desc: "Любые изменения в конфигурации платформы", icon: Key },
     { key: "log_mcp_calls", label: "MCP вызовы", desc: "Все вызовы к MCP серверам и инструментам", icon: Cpu },
     { key: "log_file_operations", label: "Файловые операции", desc: "Загрузки, скачивания и изменения файлов", icon: FileText },
+    { key: "log_http_requests", label: "HTTP/API запросы", desc: "Логировать каждый web/API запрос пользователя", icon: Globe },
   ];
 
   return (
@@ -419,9 +419,11 @@ export default function SettingsPage() {
               <ScrollText className="h-3.5 w-3.5" /> Логирование
             </TabsTrigger>
           )}
-          <TabsTrigger value="activity" className="gap-1.5 data-[state=active]:bg-card">
-            <Activity className="h-3.5 w-3.5" /> Журнал
-          </TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="activity" className="gap-1.5 data-[state=active]:bg-card">
+              <Activity className="h-3.5 w-3.5" /> Журнал
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* ==================== AI TAB ==================== */}
@@ -602,9 +604,9 @@ export default function SettingsPage() {
               icon={ScrollText}
               description="Выберите какие действия пользователей записывать в журнал"
               actions={
-                <Button size="sm" className="gap-1.5 h-7" onClick={handleSaveLogging}>
+                <Button size="sm" className="gap-1.5 h-7" onClick={handleSaveLogging} disabled={saving}>
                   <Save className="h-3 w-3" />
-                  {loggingSaved ? "✓ Сохранено" : "Сохранить"}
+                  {saving ? "Сохранение..." : loggingSaved ? "✓ Сохранено" : "Сохранить"}
                 </Button>
               }
             >
@@ -700,133 +702,135 @@ export default function SettingsPage() {
         )}
 
         {/* ==================== ACTIVITY TAB ==================== */}
-        <TabsContent value="activity" className="space-y-4">
-          <SectionCard title="Журнал действий" icon={Activity} description="Полная история действий пользователей на платформе">
-            <div className="space-y-4">
-              {/* Filters */}
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="relative flex-1 min-w-[200px] max-w-sm">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                  <Input
-                    value={activitySearch}
-                    onChange={(e) => setActivitySearch(e.target.value)}
-                    placeholder="Поиск по пользователю, действию..."
-                    className="pl-9 h-8 text-xs"
-                  />
-                </div>
+        {isAdmin && (
+          <TabsContent value="activity" className="space-y-4">
+            <SectionCard title="Журнал действий" icon={Activity} description="Полная история действий пользователей на платформе">
+              <div className="space-y-4">
+                {/* Filters */}
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="relative flex-1 min-w-[200px] max-w-sm">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input
+                      value={activitySearch}
+                      onChange={(e) => setActivitySearch(e.target.value)}
+                      placeholder="Поиск по пользователю, действию..."
+                      className="pl-9 h-8 text-xs"
+                    />
+                  </div>
 
-                {/* Date presets */}
-                <div className="flex items-center gap-1">
-                  {DATE_PRESETS.map((preset) => (
-                    <Button
-                      key={preset.days}
-                      size="sm"
-                      variant={activityDays === preset.days ? "default" : "outline"}
-                      className="h-7 text-[10px] px-2"
-                      onClick={() => {
-                        setActivityDays(preset.days);
-                        setDateFrom(subDays(new Date(), preset.days || 0));
-                        setDateTo(new Date());
-                      }}
-                    >
-                      {preset.label}
-                    </Button>
-                  ))}
-                </div>
-
-                {/* Date range pickers */}
-                <div className="flex items-center gap-1.5">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1 px-2">
-                        <CalendarIcon className="h-3 w-3" />
-                        {dateFrom ? format(dateFrom, "dd.MM.yy") : "От"}
+                  {/* Date presets */}
+                  <div className="flex items-center gap-1">
+                    {DATE_PRESETS.map((preset) => (
+                      <Button
+                        key={preset.days}
+                        size="sm"
+                        variant={activityDays === preset.days ? "default" : "outline"}
+                        className="h-7 text-[10px] px-2"
+                        onClick={() => {
+                          setActivityDays(preset.days);
+                          setDateFrom(subDays(new Date(), preset.days || 0));
+                          setDateTo(new Date());
+                        }}
+                      >
+                        {preset.label}
                       </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={dateFrom}
-                        onSelect={setDateFrom}
-                        disabled={(date) => date > new Date()}
-                        className="p-3 pointer-events-auto"
-                      />
-                    </PopoverContent>
-                  </Popover>
-                  <span className="text-[10px] text-muted-foreground">—</span>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1 px-2">
-                        <CalendarIcon className="h-3 w-3" />
-                        {dateTo ? format(dateTo, "dd.MM.yy") : "До"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={dateTo}
-                        onSelect={setDateTo}
-                        disabled={(date) => date > new Date()}
-                        className="p-3 pointer-events-auto"
-                      />
-                    </PopoverContent>
-                  </Popover>
+                    ))}
+                  </div>
+
+                  {/* Date range pickers */}
+                  <div className="flex items-center gap-1.5">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1 px-2">
+                          <CalendarIcon className="h-3 w-3" />
+                          {dateFrom ? format(dateFrom, "dd.MM.yy") : "От"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={dateFrom}
+                          onSelect={setDateFrom}
+                          disabled={(date) => date > new Date()}
+                          className="p-3 pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <span className="text-[10px] text-muted-foreground">—</span>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1 px-2">
+                          <CalendarIcon className="h-3 w-3" />
+                          {dateTo ? format(dateTo, "dd.MM.yy") : "До"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={dateTo}
+                          onSelect={setDateTo}
+                          disabled={(date) => date > new Date()}
+                          className="p-3 pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  <Badge variant="outline" className="text-[10px] shrink-0">
+                    {filteredActivity.length} записей
+                  </Badge>
                 </div>
 
-                <Badge variant="outline" className="text-[10px] shrink-0">
-                  {filteredActivity.length} записей
-                </Badge>
-              </div>
-
-              {/* Activity table */}
-              <div className="rounded-lg border border-border overflow-hidden">
-                <div className="max-h-[500px] overflow-auto">
-                  <table className="w-full text-xs">
-                    <thead className="sticky top-0 bg-card z-10">
-                      <tr className="text-[10px] text-muted-foreground uppercase border-b border-border">
-                        <th className="px-3 py-2 text-left font-medium w-10">Тип</th>
-                        <th className="px-3 py-2 text-left font-medium">Пользователь</th>
-                        <th className="px-3 py-2 text-left font-medium">Действие</th>
-                        <th className="px-3 py-2 text-left font-medium">Описание</th>
-                        <th className="px-3 py-2 text-right font-medium w-20">Время</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border/50">
-                      {filteredActivity.length === 0 ? (
-                        <tr>
-                          <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                            Нет записей за выбранный период
-                          </td>
+                {/* Activity table */}
+                <div className="rounded-lg border border-border overflow-hidden">
+                  <div className="max-h-[500px] overflow-auto">
+                    <table className="w-full text-xs">
+                      <thead className="sticky top-0 bg-card z-10">
+                        <tr className="text-[10px] text-muted-foreground uppercase border-b border-border">
+                          <th className="px-3 py-2 text-left font-medium w-10">Тип</th>
+                          <th className="px-3 py-2 text-left font-medium">Пользователь</th>
+                          <th className="px-3 py-2 text-left font-medium">Действие</th>
+                          <th className="px-3 py-2 text-left font-medium">Описание</th>
+                          <th className="px-3 py-2 text-right font-medium w-20">Время</th>
                         </tr>
-                      ) : (
-                        filteredActivity.map((event, i) => {
-                          const CatIcon = CATEGORY_ICONS[event.category] || Activity;
-                          return (
-                            <tr key={i} className="hover:bg-muted/20 transition-colors">
-                              <td className="px-3 py-2">
-                                <div className="h-6 w-6 rounded bg-muted/40 flex items-center justify-center">
-                                  <CatIcon className="h-3 w-3 text-muted-foreground" />
-                                </div>
-                              </td>
-                              <td className="px-3 py-2 font-medium text-foreground whitespace-nowrap">{event.username}</td>
-                              <td className="px-3 py-2">
-                                <Badge variant="outline" className="text-[9px] font-normal">{event.action}</Badge>
-                              </td>
-                              <td className="px-3 py-2 text-muted-foreground max-w-xs truncate">{event.description || "—"}</td>
-                              <td className="px-3 py-2 text-right text-muted-foreground whitespace-nowrap">
-                                {relativeTime(event.timestamp || event.created_at || "")}
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-border/50">
+                        {filteredActivity.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                              Нет записей за выбранный период
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredActivity.map((event, i) => {
+                            const CatIcon = CATEGORY_ICONS[event.category] || Activity;
+                            return (
+                              <tr key={i} className="hover:bg-muted/20 transition-colors">
+                                <td className="px-3 py-2">
+                                  <div className="h-6 w-6 rounded bg-muted/40 flex items-center justify-center">
+                                    <CatIcon className="h-3 w-3 text-muted-foreground" />
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2 font-medium text-foreground whitespace-nowrap">{event.username}</td>
+                                <td className="px-3 py-2">
+                                  <Badge variant="outline" className="text-[9px] font-normal">{event.action}</Badge>
+                                </td>
+                                <td className="px-3 py-2 text-muted-foreground max-w-xs truncate">{event.description || "—"}</td>
+                                <td className="px-3 py-2 text-right text-muted-foreground whitespace-nowrap">
+                                  {relativeTime(event.timestamp || event.created_at || "")}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
-            </div>
-          </SectionCard>
-        </TabsContent>
+            </SectionCard>
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

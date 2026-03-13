@@ -1,10 +1,7 @@
-// @ts-nocheck
 import { StudioNav } from "@/components/StudioNav";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft,
   Loader2,
   Pencil,
   Plus,
@@ -38,19 +35,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { studioMCP, type MCPServer } from "@/lib/api";
-
-interface MCPTemplate {
-  slug: string;
-  name: string;
-  description: string;
-  transport: "stdio" | "sse";
-  command?: string;
-  args?: string[];
-  env?: Record<string, string>;
-  url?: string;
-  icon?: string;
-}
+import { studioMCP, type MCPServer, type MCPTemplate } from "@/lib/api";
 
 function previewConnection(server: Pick<MCPServer, "transport" | "command" | "args" | "url">) {
   if (server.transport === "stdio") {
@@ -216,7 +201,6 @@ function MCPForm({
 }
 
 export default function MCPHubPage() {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [editMcp, setEditMcp] = useState<Partial<MCPServer> | null>(null);
@@ -228,12 +212,10 @@ export default function MCPHubPage() {
     queryFn: studioMCP.list,
   });
 
-  const { data: templatesRaw = [] } = useQuery({
+  const { data: templates = [] } = useQuery({
     queryKey: ["studio", "mcp", "templates"],
     queryFn: studioMCP.templates,
   });
-
-  const templates = templatesRaw as MCPTemplate[];
 
   const createMutation = useMutation({
     mutationFn: (payload: Partial<MCPServer>) => studioMCP.create(payload),

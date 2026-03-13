@@ -205,7 +205,7 @@ function parseAnsiblePlaybook(content: string, filename: string): Playbook {
         const t = task as Record<string, unknown>;
         const taskName = (t.name as string) || "";
         let command = "";
-        let continueOnError = Boolean(t.ignore_errors);
+        const continueOnError = Boolean(t.ignore_errors);
 
         // Extract command from common Ansible modules
         if (typeof t.shell === "string") {
@@ -458,8 +458,8 @@ export default function Servers() {
     staleTime: 20_000,
   });
 
-  const servers = data?.servers || [];
-  const groups = data?.groups || [];
+  const servers = useMemo(() => data?.servers ?? [], [data?.servers]);
+  const groups = useMemo(() => data?.groups ?? [], [data?.groups]);
   const onlineCount = servers.filter((server) => server.status === "online").length;
   const sharedCount = servers.filter((server) => server.is_shared).length;
   const groupCount = groups.filter((group) => group.id !== null).length;

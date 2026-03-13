@@ -23,4 +23,22 @@ export default tseslint.config(
       "@typescript-eslint/no-unused-vars": "off",
     },
   },
+  {
+    files: ["src/components/ui/**/*.{ts,tsx}", "src/lib/i18n.tsx"],
+    rules: {
+      "react-refresh/only-export-components": "off",
+    },
+  },
+  {
+    files: ["e2e/**/*.{ts,tsx}"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
+  {
+    files: ["src/pages/AgentsPage.tsx", "src/pages/MCPHubPage.tsx", "src/pages/PipelineEditorPage.tsx"],
+    rules: {
+      "@typescript-eslint/ban-ts-comment": "off",
+    },
+  },
 );

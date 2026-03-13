@@ -16,7 +16,7 @@ def _make_workspace_temp_dir(settings, name: str) -> Path:
 
 @pytest.mark.django_db
 def test_skill_templates_endpoint_returns_built_in_templates():
-    user = User.objects.create_user(username="skill-api-user", password="x")
+    user = User.objects.create_user(username="skill-api-user", password="x", is_staff=True)
     client = Client()
     client.force_login(user)
 
@@ -33,7 +33,7 @@ def test_skill_scaffold_and_validate_endpoints(settings):
     temp_root = _make_workspace_temp_dir(settings, "skill_api")
     try:
         settings.STUDIO_SKILLS_DIRS = [temp_root / "skills"]
-        user = User.objects.create_user(username="skill-api-admin", password="x")
+        user = User.objects.create_user(username="skill-api-admin", password="x", is_staff=True)
         client = Client()
         client.force_login(user)
 

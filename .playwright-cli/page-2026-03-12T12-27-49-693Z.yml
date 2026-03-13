@@ -1,0 +1,213 @@
+- generic [ref=e2]:
+  - region "Notifications (F8)":
+    - list
+  - region "Notifications alt+T"
+  - generic [ref=e4]:
+    - generic [ref=e8]:
+      - generic [ref=e9]:
+        - generic [ref=e11]: W
+        - generic [ref=e12]: WebTermAI
+        - button [ref=e13] [cursor=pointer]:
+          - img [ref=e14]
+      - list [ref=e19]:
+        - listitem [ref=e20]:
+          - link "Панель" [ref=e21] [cursor=pointer]:
+            - /url: /dashboard
+            - img [ref=e22]
+            - generic [ref=e27]: Панель
+        - listitem [ref=e28]:
+          - link "Серверы" [ref=e29] [cursor=pointer]:
+            - /url: /servers
+            - img [ref=e30]
+            - generic [ref=e33]: Серверы
+        - listitem [ref=e34]:
+          - link "Агенты" [ref=e35] [cursor=pointer]:
+            - /url: /agents
+            - img [ref=e36]
+            - generic [ref=e39]: Агенты
+        - listitem [ref=e40]:
+          - link "Студия" [ref=e41] [cursor=pointer]:
+            - /url: /studio
+            - img [ref=e42]
+            - generic [ref=e46]: Студия
+        - listitem [ref=e47]:
+          - link "Настройки" [ref=e48] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e49]
+            - generic [ref=e52]: Настройки
+      - generic [ref=e53]:
+        - generic [ref=e55]:
+          - button "EN" [ref=e56] [cursor=pointer]
+          - button "RU" [ref=e57] [cursor=pointer]
+        - generic [ref=e58]:
+          - generic [ref=e59]: L
+          - generic [ref=e60]:
+            - paragraph [ref=e61]: lunix
+            - paragraph [ref=e62]: Администратор
+          - button "Выйти" [ref=e63] [cursor=pointer]:
+            - img [ref=e64]
+    - main [ref=e68]:
+      - generic [ref=e70]:
+        - generic [ref=e71]:
+          - button [ref=e72] [cursor=pointer]:
+            - img
+          - img [ref=e73]
+          - textbox "Pipeline name..." [ref=e75]
+          - generic [ref=e76]:
+            - button "Assistant" [ref=e77] [cursor=pointer]:
+              - img
+              - text: Assistant
+            - button "Save" [ref=e78] [cursor=pointer]:
+              - img
+              - text: Save
+            - button "Run" [ref=e79] [cursor=pointer]:
+              - img
+              - text: Run
+            - button "Ещё" [ref=e80] [cursor=pointer]:
+              - img
+              - text: Ещё
+        - generic [ref=e81]:
+          - generic [ref=e83]:
+            - generic [ref=e84]:
+              - heading "Add Node" [level=3] [ref=e85]:
+                - img [ref=e86]
+                - text: Add Node
+              - textbox "Search nodes..." [ref=e87]
+            - generic [ref=e88]:
+              - generic [ref=e89]:
+                - button "🚀 Triggers 3" [ref=e90] [cursor=pointer]:
+                  - generic [ref=e91]: 🚀
+                  - generic [ref=e92]: Triggers
+                  - generic [ref=e93]: "3"
+                  - img [ref=e94]
+                - button "▶️ Manual Trigger Start pipeline manually" [ref=e96]:
+                  - generic [ref=e97]: ▶️
+                  - generic [ref=e98]:
+                    - generic [ref=e99]: Manual Trigger
+                    - generic [ref=e100]: Start pipeline manually
+                  - img [ref=e101]
+                - button "🔗 Webhook Start via HTTP POST" [ref=e102]:
+                  - generic [ref=e103]: 🔗
+                  - generic [ref=e104]:
+                    - generic [ref=e105]: Webhook
+                    - generic [ref=e106]: Start via HTTP POST
+                  - img [ref=e107]
+                - button "⏰ Schedule Start on cron schedule" [ref=e108]:
+                  - generic [ref=e109]: ⏰
+                  - generic [ref=e110]:
+                    - generic [ref=e111]: Schedule
+                    - generic [ref=e112]: Start on cron schedule
+                  - img [ref=e113]
+              - generic [ref=e114]:
+                - button "🤖 Agents 5" [ref=e115] [cursor=pointer]:
+                  - generic [ref=e116]: 🤖
+                  - generic [ref=e117]: Agents
+                  - generic [ref=e118]: "5"
+                  - img [ref=e119]
+                - button "🤖 ReAct Agent Executes actions on server via SSH+LLM" [ref=e121]:
+                  - generic [ref=e122]: 🤖
+                  - generic [ref=e123]:
+                    - generic [ref=e124]: ReAct Agent
+                    - generic [ref=e125]: Executes actions on server via SSH+LLM
+                  - img [ref=e126]
+                - button "🦾 Multi-Agent Orchestrated multi-server agent" [ref=e127]:
+                  - generic [ref=e128]: 🦾
+                  - generic [ref=e129]:
+                    - generic [ref=e130]: Multi-Agent
+                    - generic [ref=e131]: Orchestrated multi-server agent
+                  - img [ref=e132]
+                - button "💻 SSH Command Direct SSH command (no LLM)" [ref=e133]:
+                  - generic [ref=e134]: 💻
+                  - generic [ref=e135]:
+                    - generic [ref=e136]: SSH Command
+                    - generic [ref=e137]: Direct SSH command (no LLM)
+                  - img [ref=e138]
+                - button "🧠 LLM Query Direct AI reasoning/analysis step" [ref=e139]:
+                  - generic [ref=e140]: 🧠
+                  - generic [ref=e141]:
+                    - generic [ref=e142]: LLM Query
+                    - generic [ref=e143]: Direct AI reasoning/analysis step
+                  - img [ref=e144]
+                - button "🧩 MCP Call Force a specific MCP tool call" [ref=e145]:
+                  - generic [ref=e146]: 🧩
+                  - generic [ref=e147]:
+                    - generic [ref=e148]: MCP Call
+                    - generic [ref=e149]: Force a specific MCP tool call
+                  - img [ref=e150]
+              - generic [ref=e151]:
+                - button "⚙️ Logic 4" [ref=e152] [cursor=pointer]:
+                  - generic [ref=e153]: ⚙️
+                  - generic [ref=e154]: Logic
+                  - generic [ref=e155]: "4"
+                  - img [ref=e156]
+                - button "🔀 Condition Branch if/else" [ref=e158]:
+                  - generic [ref=e159]: 🔀
+                  - generic [ref=e160]:
+                    - generic [ref=e161]: Condition
+                    - generic [ref=e162]: Branch if/else
+                  - img [ref=e163]
+                - button "⚡ Parallel Run nodes in parallel" [ref=e164]:
+                  - generic [ref=e165]: ⚡
+                  - generic [ref=e166]:
+                    - generic [ref=e167]: Parallel
+                    - generic [ref=e168]: Run nodes in parallel
+                  - img [ref=e169]
+                - button "⏱️ Wait Pause execution for N minutes" [ref=e170]:
+                  - generic [ref=e171]: ⏱️
+                  - generic [ref=e172]:
+                    - generic [ref=e173]: Wait
+                    - generic [ref=e174]: Pause execution for N minutes
+                  - img [ref=e175]
+                - button "👤 Human Approval Pause and wait for human approve/reject via email & Telegram" [ref=e176]:
+                  - generic [ref=e177]: 👤
+                  - generic [ref=e178]:
+                    - generic [ref=e179]: Human Approval
+                    - generic [ref=e180]: Pause and wait for human approve/reject via email & Telegram
+                  - img [ref=e181]
+              - generic [ref=e182]:
+                - button "📤 Output 4" [ref=e183] [cursor=pointer]:
+                  - generic [ref=e184]: 📤
+                  - generic [ref=e185]: Output
+                  - generic [ref=e186]: "4"
+                  - img [ref=e187]
+                - button "📋 Report Generate markdown report" [ref=e189]:
+                  - generic [ref=e190]: 📋
+                  - generic [ref=e191]:
+                    - generic [ref=e192]: Report
+                    - generic [ref=e193]: Generate markdown report
+                  - img [ref=e194]
+                - button "📤 Send Webhook POST results to URL" [ref=e195]:
+                  - generic [ref=e196]: 📤
+                  - generic [ref=e197]:
+                    - generic [ref=e198]: Send Webhook
+                    - generic [ref=e199]: POST results to URL
+                  - img [ref=e200]
+                - button "✉️ Send Email Email report via SMTP" [ref=e201]:
+                  - generic [ref=e202]: ✉️
+                  - generic [ref=e203]:
+                    - generic [ref=e204]: Send Email
+                    - generic [ref=e205]: Email report via SMTP
+                  - img [ref=e206]
+                - button "📱 Telegram Send message via Telegram Bot API" [ref=e207]:
+                  - generic [ref=e208]: 📱
+                  - generic [ref=e209]:
+                    - generic [ref=e210]: Telegram
+                    - generic [ref=e211]: Send message via Telegram Bot API
+                  - img [ref=e212]
+            - paragraph [ref=e214]: Click or drag nodes to canvas
+          - application [ref=e216]:
+            - img
+            - generic "Control Panel" [ref=e219]:
+              - button "Zoom In" [ref=e220] [cursor=pointer]:
+                - img [ref=e221]
+              - button "Zoom Out" [ref=e223] [cursor=pointer]:
+                - img [ref=e224]
+              - button "Fit View" [ref=e226] [cursor=pointer]:
+                - img [ref=e227]
+              - button "Toggle Interactivity" [ref=e229] [cursor=pointer]:
+                - img [ref=e230]
+            - generic:
+              - generic:
+                - img
+                - paragraph: Build your automation pipeline
+                - paragraph: Click or drag nodes from the palette on the left. Connect them to define the execution flow.

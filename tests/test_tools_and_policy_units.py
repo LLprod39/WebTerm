@@ -1,6 +1,7 @@
 import re
 from types import MappingProxyType, SimpleNamespace
 
+import httpx
 import pytest
 
 from app.tools.base import BaseTool, ToolMetadata, ToolParameter
@@ -14,6 +15,7 @@ from app.tools.ssh_tools import SSHConnectionManager, SSHExecuteTool
 from servers.mcp_tool_runtime import MCPBoundTool
 from studio.mcp_client import (
     MCPClientError,
+    _HttpMCPClient,
     _extract_json_rpc_result,
     _iter_sse_events,
     _json_rpc_payload,
@@ -296,3 +298,114 @@ async def test_mcp_client_sse_event_parser():
         {"event": "message", "data": '{"id":"1","result":{"ok":true}}'},
         {"event": "ping", "data": "{}"},
     ]
+
+
+class _FakeHTTPStreamResponse:
+    def __init__(
+        self,
+        *,
+        status_code: int,
+        headers: dict[str, str] | None = None,
+        body: str = "",
+        lines: list[str] | None = None,
+    ):
+        self.headers = headers or {"content-type": "application/json"}
+        self._body = body.encode("utf-8")
+        self._lines = list(lines or [])
+        request = httpx.Request("POST", "http://localhost/sse")
+        self._response = httpx.Response(
+            status_code,
+            request=request,
+            headers=self.headers,
+            content=self._body,
+        )
+        self.text = self._response.text
+
+    def raise_for_status(self) -> None:
+        self._response.raise_for_status()
+
+    async def aread(self) -> bytes:
+        return self._body
+
+    async def aiter_lines(self):
+        for line in self._lines:
+            yield line
+
+
+class _FakeHTTPStreamContext:
+    def __init__(self, response: _FakeHTTPStreamResponse):
+        self._response = response
+
+    async def __aenter__(self) -> _FakeHTTPStreamResponse:
+        return self._response
+
+    async def __aexit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+
+class _FakeAsyncHTTPClient:
+    def __init__(self, responses: list[_FakeHTTPStreamResponse]):
+        self.responses = list(responses)
+        self.calls = 0
+
+    def stream(self, *args, **kwargs):
+        self.calls += 1
+        return _FakeHTTPStreamContext(self.responses.pop(0))
+
+    async def post(self, *args, **kwargs):
+        return None
+
+    async def aclose(self):
+        return None
+
+
+@pytest.mark.asyncio
+async def test_mcp_http_client_retries_retryable_status(monkeypatch):
+    async def _noop_sleep(_seconds: float) -> None:
+        return None
+
+    monkeypatch.setattr("studio.mcp_client.asyncio.sleep", _noop_sleep)
+
+    client = _HttpMCPClient(SimpleNamespace(name="demo", url="http://localhost/sse", transport="sse"))
+    client.client = _FakeAsyncHTTPClient(
+        [
+            _FakeHTTPStreamResponse(status_code=503, body="unavailable"),
+            _FakeHTTPStreamResponse(
+                status_code=200,
+                body='{"jsonrpc":"2.0","id":"req-1","result":{"tools":[]}}',
+            ),
+        ]
+    )
+
+    result = await client._request(
+        _json_rpc_payload("tools/list", {}, request_id="req-1"),
+        retries=1,
+        timeout=5,
+    )
+
+    assert result == {"tools": []}
+    assert client.client.calls == 2
+
+
+@pytest.mark.asyncio
+async def test_mcp_http_client_does_not_retry_legacy_endpoint(monkeypatch):
+    async def _noop_sleep(_seconds: float) -> None:
+        return None
+
+    monkeypatch.setattr("studio.mcp_client.asyncio.sleep", _noop_sleep)
+
+    client = _HttpMCPClient(SimpleNamespace(name="legacy", url="http://localhost/sse", transport="sse"))
+    client.client = _FakeAsyncHTTPClient(
+        [
+            _FakeHTTPStreamResponse(status_code=404, body="not found"),
+        ]
+    )
+
+    with pytest.raises(MCPClientError, match="Legacy SSE-only endpoints are not supported here yet"):
+        await client._request(
+            _json_rpc_payload("initialize", {}, request_id="req-1"),
+            retries=2,
+            timeout=5,
+        )
+
+    assert client.client.calls == 1

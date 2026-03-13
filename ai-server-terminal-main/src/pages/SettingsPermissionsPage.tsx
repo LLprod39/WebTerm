@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   deleteAccessPermission,
@@ -29,9 +29,9 @@ export default function SettingsPermissionsPage() {
   });
   const { data: usersData } = useQuery({ queryKey: ["access", "users"], queryFn: fetchAccessUsers });
 
-  const permissions = permsData?.permissions || [];
-  const features = permsData?.features || [];
-  const users = usersData?.users || [];
+  const permissions = useMemo(() => permsData?.permissions ?? [], [permsData?.permissions]);
+  const features = useMemo(() => permsData?.features ?? [], [permsData?.features]);
+  const users = useMemo(() => usersData?.users ?? [], [usersData?.users]);
 
   useEffect(() => {
     if (!newUserId && users.length) setNewUserId(users[0].id);

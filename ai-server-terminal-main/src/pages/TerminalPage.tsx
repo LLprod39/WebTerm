@@ -222,7 +222,7 @@ function ServerPicker({ servers, open, onClose, onSelect, usedServerIds }: Serve
 export default function TerminalPage() {
   const { id } = useParams<{ id: string }>();
   const requestedId = useMemo(() => Number(id || 0), [id]);
-  const terminalRef = useRef<TerminalHandle | null>(null);
+  const terminalRefs = useRef<Record<string, TerminalHandle | null>>({});
   const activeTabIdRef = useRef("");
 
   const { data, isLoading, error } = useQuery({
@@ -231,7 +231,7 @@ export default function TerminalPage() {
     staleTime: 20_000,
   });
 
-  const servers = data?.servers || [];
+  const servers = useMemo(() => data?.servers ?? [], [data?.servers]);
   const defaultServer = findServer(servers, requestedId) || servers[0];
 
   const [tabs, setTabs] = useState<Tab[]>([]);
@@ -290,6 +290,24 @@ export default function TerminalPage() {
     setActiveTabId(tabs[0].id);
   }, [tabs, activeTabId]);
 
+  useEffect(() => {
+    const availableServerIds = new Set(servers.map((server) => server.id));
+    if (!tabs.length) return;
+
+    const removedTabIds = tabs.filter((tab) => !availableServerIds.has(tab.serverId)).map((tab) => tab.id);
+    if (!removedTabIds.length) return;
+
+    setTabs((prev) => prev.filter((tab) => availableServerIds.has(tab.serverId)));
+    setTabAiState((prev) => {
+      const next = { ...prev };
+      for (const tabId of removedTabIds) {
+        delete next[tabId];
+        delete terminalRefs.current[tabId];
+      }
+      return next;
+    });
+  }, [servers, tabs]);
+
   const activeTab = tabs.find((tab) => tab.id === activeTabId) || tabs[0];
   const activeServer = activeTab ? findServer(servers, activeTab.serverId) : null;
   const activeAiState = activeTabId ? tabAiState[activeTabId] || createEmptyAiState() : createEmptyAiState();
@@ -319,6 +337,7 @@ export default function TerminalPage() {
       setActiveTabId((current) => (current === tabId ? next[0]?.id || "" : current));
       return next;
     });
+    delete terminalRefs.current[tabId];
 
     setTabAiState((prev) => {
       const next = { ...prev };
@@ -327,8 +346,7 @@ export default function TerminalPage() {
     });
   }, []);
 
-  const updateTabStatus = useCallback((status: TerminalConnectionStatus) => {
-    const tabId = activeTabIdRef.current;
+  const updateTabStatus = useCallback((tabId: string, status: TerminalConnectionStatus) => {
     if (!tabId) return;
     setTabs((prev) => prev.map((tab) => (tab.id === tabId ? { ...tab, status: mapStatus(status) } : tab)));
   }, []);
@@ -345,6 +363,16 @@ export default function TerminalPage() {
   const handleClearChat = useCallback(() => {
     updateActiveTabAiState(() => createEmptyAiState());
   }, [updateActiveTabAiState]);
+
+  const revealAiPanel = useCallback(() => {
+    setShowAi(true);
+  }, []);
+
+  const revealAiPanelForTab = useCallback((tabId: string) => {
+    if (activeTabIdRef.current === tabId) {
+      revealAiPanel();
+    }
+  }, [revealAiPanel]);
 
   const startDrag = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
     isDragging.current = true;
@@ -372,12 +400,12 @@ export default function TerminalPage() {
     };
   }, []);
 
-  const handleWsEvent = useCallback((payload: Record<string, unknown>) => {
+  const handleTabWsEvent = useCallback((tabId: string, payload: Record<string, unknown>) => {
     const type = String(payload.type || "");
 
     if (type === "ai_status") {
       const status = String(payload.status || "");
-      updateActiveTabAiState((state) => ({
+      updateTabAiState(tabId, (state) => ({
         ...state,
         isGenerating: status === "thinking" || status === "running",
       }));
@@ -389,7 +417,8 @@ export default function TerminalPage() {
       const mode = String(payload.mode || "answer") as AiMessage["mode"];
       const rawCommands = (payload.commands as AiCommand[] | undefined) || [];
 
-      updateActiveTabAiState((state) => ({
+      revealAiPanelForTab(tabId);
+      updateTabAiState(tabId, (state) => ({
         ...state,
         messages: [
           ...state.messages,
@@ -414,7 +443,7 @@ export default function TerminalPage() {
       const status = String(payload.status || "done") as AiCommand["status"];
       const exitCode = payload.exit_code !== undefined ? Number(payload.exit_code) : undefined;
 
-      updateActiveTabAiState((state) => ({
+      updateTabAiState(tabId, (state) => ({
         ...state,
         messages: state.messages.map((message) => {
           if (message.type !== "commands" || !message.commands?.some((command) => command.id === cmdId)) return message;
@@ -434,7 +463,8 @@ export default function TerminalPage() {
       const reportStatus = String(payload.status || "ok") as AiMessage["reportStatus"];
       if (!report) return;
 
-      updateActiveTabAiState((state) => ({
+      revealAiPanelForTab(tabId);
+      updateTabAiState(tabId, (state) => ({
         ...state,
         messages: [
           ...state.messages,
@@ -450,7 +480,8 @@ export default function TerminalPage() {
       const cmd = payload.cmd ? String(payload.cmd) : undefined;
       const exitCode = payload.exit_code !== undefined ? Number(payload.exit_code) : undefined;
 
-      updateActiveTabAiState((state) => ({
+      revealAiPanelForTab(tabId);
+      updateTabAiState(tabId, (state) => ({
         ...state,
         messages: [
           ...state.messages,
@@ -466,7 +497,6 @@ export default function TerminalPage() {
           },
         ],
       }));
-      setShowAi(true);
       return;
     }
 
@@ -475,7 +505,8 @@ export default function TerminalPage() {
       const elapsed = Number(payload.elapsed || 0);
       const outputTail = String(payload.output_tail || "");
 
-      updateActiveTabAiState((state) => {
+      revealAiPanelForTab(tabId);
+      updateTabAiState(tabId, (state) => {
         let found = false;
         const updated = state.messages.map((message) => {
           if (message.type === "progress" && message.progressCmd === cmd) {
@@ -507,7 +538,8 @@ export default function TerminalPage() {
     }
 
     if (type === "ai_recovery") {
-      updateActiveTabAiState((state) => ({
+      revealAiPanelForTab(tabId);
+      updateTabAiState(tabId, (state) => ({
         ...state,
         messages: [
           ...state.messages,
@@ -526,7 +558,8 @@ export default function TerminalPage() {
     }
 
     if (type === "ai_error") {
-      updateActiveTabAiState((state) => ({
+      revealAiPanelForTab(tabId);
+      updateTabAiState(tabId, (state) => ({
         ...state,
         isGenerating: false,
         messages: [
@@ -538,12 +571,20 @@ export default function TerminalPage() {
     }
 
     if (type === "status" && String(payload.status) === "connected") {
-      updateActiveTabAiState((state) => ({
+      updateTabAiState(tabId, (state) => ({
         ...state,
         isGenerating: false,
       }));
     }
-  }, [updateActiveTabAiState]);
+  }, [revealAiPanelForTab, updateTabAiState]);
+
+  useEffect(() => {
+    if (!activeTabId) return;
+    const timer = window.setTimeout(() => {
+      terminalRefs.current[activeTabId]?.fit();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [activeTabId]);
 
   const handleSendAi = useCallback((text: string) => {
     if (!text.trim()) return;
@@ -553,7 +594,7 @@ export default function TerminalPage() {
       isGenerating: true,
       messages: [...state.messages, { id: nextId(), role: "user", type: "text", content: text }],
     }));
-    terminalRef.current?.sendAiRequest(text, executionMode);
+    terminalRefs.current[activeTabIdRef.current]?.sendAiRequest(text, executionMode);
   }, [executionMode, updateActiveTabAiState]);
 
   const handleStopAi = useCallback(() => {
@@ -561,19 +602,19 @@ export default function TerminalPage() {
       ...state,
       isGenerating: false,
     }));
-    terminalRef.current?.stopAi();
+    terminalRefs.current[activeTabIdRef.current]?.stopAi();
   }, [updateActiveTabAiState]);
 
   const handleConfirm = useCallback((id: number) => {
-    terminalRef.current?.sendAiConfirm(id);
+    terminalRefs.current[activeTabIdRef.current]?.sendAiConfirm(id);
   }, []);
 
   const handleCancel = useCallback((id: number) => {
-    terminalRef.current?.sendAiCancel(id);
+    terminalRefs.current[activeTabIdRef.current]?.sendAiCancel(id);
   }, []);
 
   const handleReply = useCallback((qId: string, text: string) => {
-    terminalRef.current?.sendAiReply(qId, text);
+    terminalRefs.current[activeTabIdRef.current]?.sendAiReply(qId, text);
   }, []);
 
   if (isLoading) return <div className="p-6 text-sm text-muted-foreground">Загрузка...</div>;
@@ -609,23 +650,48 @@ export default function TerminalPage() {
           aria-label="Add tab" title="Подключить сервер">
           <Plus className="h-4 w-4" />
         </button>
+        <div className="ml-auto shrink-0 pl-2">
+          <Button
+            type="button"
+            size="sm"
+            variant={showAi ? "default" : "ghost"}
+            className="h-8 gap-1.5 text-xs"
+            onClick={() => setShowAi((current) => !current)}
+            title={showAi ? "Скрыть AI ассистента" : "Показать AI ассистента"}
+          >
+            <Bot className="h-3.5 w-3.5" />
+            AI
+          </Button>
+        </div>
       </div>
 
       <div className="flex min-h-0 flex-1">
         <div className="min-h-0 flex-1 bg-terminal-bg p-1">
-          <XTerminal
-            key={activeServer.id}
-            ref={terminalRef}
-            serverId={activeServer.id}
-            onStatusChange={updateTabStatus}
-            onError={(message) =>
-              updateActiveTabAiState((state) => ({
-                ...state,
-                messages: [...state.messages, { id: nextId(), role: "system", type: "text", content: message }],
-              }))
-            }
-            onEvent={handleWsEvent}
-          />
+          <div className="relative h-full w-full">
+            {tabs.map((tab) => (
+              <div
+                key={tab.id}
+                className={`absolute inset-0 ${tab.id === activeTabId ? "z-10" : "pointer-events-none opacity-0"}`}
+                aria-hidden={tab.id === activeTabId ? undefined : true}
+              >
+                <XTerminal
+                  ref={(handle) => {
+                    terminalRefs.current[tab.id] = handle;
+                  }}
+                  serverId={tab.serverId}
+                  active={tab.id === activeTabId}
+                  onStatusChange={(status) => updateTabStatus(tab.id, status)}
+                  onError={(message) =>
+                    updateTabAiState(tab.id, (state) => ({
+                      ...state,
+                      messages: [...state.messages, { id: nextId(), role: "system", type: "text", content: message }],
+                    }))
+                  }
+                  onEvent={(payload) => handleTabWsEvent(tab.id, payload)}
+                />
+              </div>
+            ))}
+          </div>
         </div>
 
         {showAi ? (

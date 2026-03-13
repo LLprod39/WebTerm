@@ -79,6 +79,20 @@ class ModelConfig(BaseModel):
     domain_auth_lowercase_usernames: Optional[bool] = None
     domain_auth_default_profile: Optional[str] = None
 
+    # Audit logging configuration
+    log_terminal_commands: bool = True
+    log_ai_assistant: bool = True
+    log_agent_runs: bool = True
+    log_pipeline_runs: bool = True
+    log_auth_events: bool = True
+    log_server_changes: bool = True
+    log_settings_changes: bool = True
+    log_file_operations: bool = False
+    log_mcp_calls: bool = True
+    log_http_requests: bool = True
+    retention_days: int = 90
+    export_format: str = "json"
+
 
 
 class ModelManager:

@@ -22,13 +22,13 @@ test.describe("Smoke scenarios", () => {
     await page.goto("/servers");
     await expect(page.getByRole("heading", { name: "Infrastructure" })).toBeVisible();
 
-    await page.locator('a[href="/dashboard"]').first().click();
+    await page.getByRole("link", { name: "Dashboard" }).first().click();
     await expect(page.getByRole("heading", { name: "Server Dashboard" })).toBeVisible();
 
-    await page.locator('a[href="/studio"]').first().click();
-    await expect(page.getByRole("heading", { name: "Automation Studio" })).toBeVisible();
+    await page.getByRole("link", { name: "Studio" }).first().click();
+    await expect(page.getByRole("heading", { name: "Pipeline Workspace" })).toBeVisible();
 
-    await page.locator('a[href="/settings"]').first().click();
+    await page.getByRole("link", { name: "Settings" }).first().click();
     await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
   });
 
@@ -36,7 +36,7 @@ test.describe("Smoke scenarios", () => {
     const { harness } = await installPlatformMocks(page, { authenticated: true });
 
     await page.goto("/studio");
-    await expect(page.getByRole("heading", { name: "Automation Studio" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Pipeline Workspace" })).toBeVisible();
 
     await page.getByRole("button", { name: /^Run$/ }).first().click();
     expect(harness.getCalls("/api/studio/pipelines/101/run/", "POST").length).toBeGreaterThan(0);

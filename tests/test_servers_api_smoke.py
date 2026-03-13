@@ -1,21 +1,34 @@
 import json
+from concurrent.futures import Future
 from types import SimpleNamespace
 
 import pytest
+from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
-from django.test import Client
+from django.test import Client, override_settings
 from django.utils import timezone
 
+from app.runtime_limits import get_terminal_session_limit_error
+from core_ui.models import UserAppPermission
+from servers.agent_engine import AgentEngine
 from servers.models import (
     AgentRun,
     Server,
+    ServerAgent,
     ServerAlert,
+    ServerConnection,
     ServerHealthCheck,
 )
 
 
 def _json(payload: dict) -> str:
     return json.dumps(payload, ensure_ascii=False)
+
+
+def _csrf_token(client: Client) -> str:
+    response = client.get("/api/auth/csrf/")
+    assert response.status_code == 200
+    return client.cookies["csrftoken"].value
 
 
 def _create_server(user: User, **kwargs) -> Server:
@@ -27,6 +40,31 @@ def _create_server(user: User, **kwargs) -> Server:
         auth_method=kwargs.pop("auth_method", "password"),
         **kwargs,
     )
+
+
+def _make_public_key_record() -> dict[str, str]:
+    import asyncssh
+
+    private_key = asyncssh.generate_private_key("ssh-ed25519")
+    public_key = private_key.export_public_key("openssh")
+    if isinstance(public_key, bytes):
+        public_key = public_key.decode("utf-8")
+    parsed_key = asyncssh.import_public_key(public_key)
+    return {
+        "public_key": public_key.strip(),
+        "algorithm": parsed_key.get_algorithm(),
+        "fingerprint_sha256": parsed_key.get_fingerprint("sha256"),
+        "trusted_at": "2026-03-12T00:00:00+00:00",
+    }
+
+
+def _grant_feature(user: User, *features: str) -> None:
+    for feature in features:
+        UserAppPermission.objects.update_or_create(
+            user=user,
+            feature=feature,
+            defaults={"allowed": True},
+        )
 
 
 @pytest.mark.django_db
@@ -381,8 +419,223 @@ def test_monitoring_alerts_and_ai_analyze_endpoints(monkeypatch):
 
 
 @pytest.mark.django_db
+def test_servers_mutation_endpoints_require_csrf_when_enforced():
+    user = User.objects.create_user(username="servers-csrf-user", password="x")
+    _grant_feature(user, "servers")
+    client = Client(enforce_csrf_checks=True)
+    client.force_login(user)
+
+    rejected = client.post(
+        "/servers/api/groups/create/",
+        data=_json({"name": "prod", "description": "production"}),
+        content_type="application/json",
+    )
+    assert rejected.status_code == 403
+
+    token = _csrf_token(client)
+    accepted = client.post(
+        "/servers/api/groups/create/",
+        data=_json({"name": "prod", "description": "production"}),
+        content_type="application/json",
+        HTTP_X_CSRFTOKEN=token,
+    )
+    assert accepted.status_code == 200
+    assert accepted.json()["success"] is True
+
+
+@pytest.mark.django_db
+def test_full_agent_run_launches_in_background(monkeypatch):
+    user = User.objects.create_user(username="full-agent-user", password="x")
+    _grant_feature(user, "agents")
+    client = Client()
+    client.force_login(user)
+
+    server = _create_server(user)
+    agent = ServerAgent.objects.create(
+        user=user,
+        name="Full Agent",
+        mode=ServerAgent.MODE_FULL,
+        agent_type=ServerAgent.TYPE_CUSTOM,
+        goal="Inspect the server",
+        ai_prompt="Check the host",
+    )
+    agent.servers.set([server])
+
+    captured: dict[str, object] = {}
+
+    def fake_launch(run_id: int, agent_id: int, server_ids: list[int], user_id: int, *, plan_only: bool = False):
+        captured.update({
+            "run_id": run_id,
+            "agent_id": agent_id,
+            "server_ids": server_ids,
+            "user_id": user_id,
+            "plan_only": plan_only,
+        })
+
+    monkeypatch.setattr("servers.views.launch_agent_run_background", fake_launch)
+
+    response = client.post(
+        f"/servers/api/agents/{agent.id}/run/",
+        data=_json({}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["run_id"] == payload["runs"][0]["run_id"]
+    assert payload["status"] == AgentRun.STATUS_PENDING
+
+    run = AgentRun.objects.get(pk=payload["run_id"])
+    assert run.status == AgentRun.STATUS_PENDING
+    assert captured == {
+        "run_id": run.id,
+        "agent_id": agent.id,
+        "server_ids": [server.id],
+        "user_id": user.id,
+        "plan_only": False,
+    }
+
+    duplicate = client.post(
+        f"/servers/api/agents/{agent.id}/run/",
+        data=_json({}),
+        content_type="application/json",
+    )
+    assert duplicate.status_code == 409
+    assert duplicate.json()["success"] is False
+
+
+@pytest.mark.django_db
+@override_settings(AGENT_ACTIVE_RUNS_PER_USER_LIMIT=1, AGENT_ACTIVE_RUNS_GLOBAL_LIMIT=0)
+def test_full_agent_run_enforces_user_active_run_limit(monkeypatch):
+    user = User.objects.create_user(username="agent-limit-user", password="x")
+    _grant_feature(user, "agents")
+    client = Client()
+    client.force_login(user)
+
+    server = _create_server(user)
+    first_agent = ServerAgent.objects.create(
+        user=user,
+        name="First Agent",
+        mode=ServerAgent.MODE_FULL,
+        goal="Inspect server",
+    )
+    second_agent = ServerAgent.objects.create(
+        user=user,
+        name="Second Agent",
+        mode=ServerAgent.MODE_FULL,
+        goal="Inspect another server",
+    )
+    first_agent.servers.set([server])
+    second_agent.servers.set([server])
+
+    AgentRun.objects.create(
+        agent=first_agent,
+        server=server,
+        user=user,
+        status=AgentRun.STATUS_RUNNING,
+    )
+
+    monkeypatch.setattr(
+        "servers.views.launch_agent_run_background",
+        lambda **_kwargs: pytest.fail("launch_agent_run_background should not run when the active-run limit is hit"),
+    )
+
+    response = client.post(
+        f"/servers/api/agents/{second_agent.id}/run/",
+        data=_json({}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 429
+    payload = response.json()
+    assert payload["success"] is False
+    assert payload["code"] == "agent_user_limit_reached"
+    assert payload["limit"] == 1
+    assert payload["active"] == 1
+
+
+@pytest.mark.django_db
+@override_settings(SSH_TERMINAL_SESSIONS_PER_USER_LIMIT=1, SSH_TERMINAL_SESSIONS_GLOBAL_LIMIT=0)
+def test_terminal_session_limit_helper_enforces_user_limit():
+    user = User.objects.create_user(username="terminal-limit-user", password="x")
+    server = _create_server(user, name="term-limit-srv")
+    ServerConnection.objects.create(
+        server=server,
+        user=user,
+        connection_id="term-existing-1",
+        status="connected",
+    )
+
+    error = get_terminal_session_limit_error(user)
+
+    assert error is not None
+    assert error["code"] == "terminal_user_limit_reached"
+    assert error["scope"] == "user"
+    assert error["limit"] == 1
+
+
+@pytest.mark.django_db
+def test_multi_agent_approve_plan_launches_in_background(monkeypatch):
+    user = User.objects.create_user(username="multi-approve-user", password="x")
+    _grant_feature(user, "agents")
+    client = Client()
+    client.force_login(user)
+
+    server = _create_server(user)
+    agent = ServerAgent.objects.create(
+        user=user,
+        name="Multi Agent",
+        mode=ServerAgent.MODE_MULTI,
+        agent_type=ServerAgent.TYPE_MULTI_HEALTH,
+        goal="Check all systems",
+        ai_prompt="Prepare a plan",
+        allow_multi_server=True,
+    )
+    agent.servers.set([server])
+
+    run = AgentRun.objects.create(
+        agent=agent,
+        server=server,
+        user=user,
+        status=AgentRun.STATUS_PLAN_REVIEW,
+        plan_tasks=[{"id": 1, "name": "Check logs", "description": "Inspect logs", "status": "pending"}],
+    )
+
+    captured: dict[str, object] = {}
+
+    def fake_launch(run_id: int, agent_id: int, server_ids: list[int], user_id: int):
+        captured.update({
+            "run_id": run_id,
+            "agent_id": agent_id,
+            "server_ids": server_ids,
+            "user_id": user_id,
+        })
+
+    monkeypatch.setattr("servers.views.launch_plan_execution_background", fake_launch)
+
+    response = client.post(f"/servers/api/agents/runs/{run.id}/approve-plan/")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["run_id"] == run.id
+    assert payload["status"] == AgentRun.STATUS_PENDING
+
+    run.refresh_from_db()
+    assert run.status == AgentRun.STATUS_PENDING
+    assert captured == {
+        "run_id": run.id,
+        "agent_id": agent.id,
+        "server_ids": [server.id],
+        "user_id": user.id,
+    }
+
+
+@pytest.mark.django_db
 def test_agent_endpoints_crud_run_and_control_flow(monkeypatch):
     user = User.objects.create_user(username="agent-user", password="x")
+    _grant_feature(user, "agents")
     client = Client()
     client.force_login(user)
     server = _create_server(user, name="agent-srv", server_type="ssh")
@@ -470,6 +723,12 @@ def test_agent_endpoints_crud_run_and_control_flow(monkeypatch):
     )
     assert reply.status_code == 200
     assert reply.json()["success"] is True
+    waiting_run.refresh_from_db()
+    assert waiting_run.runtime_control["reply_nonce"] == 1
+    assert waiting_run.runtime_control["reply_ack_nonce"] == 0
+    assert waiting_run.runtime_control["reply_text"] == "Proceed"
+    assert waiting_run.status == AgentRun.STATUS_RUNNING
+    assert waiting_run.pending_question == ""
 
     running_run = _build_run(AgentRun.STATUS_RUNNING)
     stop = client.post(f"/servers/api/agents/{agent_id}/stop/")
@@ -477,6 +736,8 @@ def test_agent_endpoints_crud_run_and_control_flow(monkeypatch):
     assert stop.json()["success"] is True
     running_run.refresh_from_db()
     assert running_run.status == AgentRun.STATUS_STOPPED
+    assert running_run.runtime_control["stop_requested"] is True
+    assert running_run.runtime_control["pause_requested"] is False
 
     editable_run = _build_run(AgentRun.STATUS_PLAN_REVIEW)
     editable_run.plan_tasks = [
@@ -515,3 +776,322 @@ def test_agent_endpoints_crud_run_and_control_flow(monkeypatch):
     delete_agent = client.post(f"/servers/api/agents/{agent_id}/delete/")
     assert delete_agent.status_code == 200
     assert delete_agent.json()["success"] is True
+
+
+@pytest.mark.django_db
+def test_agent_engine_syncs_reply_from_runtime_control():
+    user = User.objects.create_user(username="runtime-sync-user", password="x")
+    server = _create_server(user, name="sync-srv", server_type="ssh")
+    agent = ServerAgent.objects.create(
+        user=user,
+        name="Sync Agent",
+        mode=ServerAgent.MODE_FULL,
+        agent_type=ServerAgent.TYPE_CUSTOM,
+        goal="Wait for user input",
+        ai_prompt="Wait",
+    )
+    agent.servers.set([server])
+    run = AgentRun.objects.create(
+        agent=agent,
+        server=server,
+        user=user,
+        status=AgentRun.STATUS_WAITING,
+        pending_question="Continue?",
+        runtime_control={
+            "stop_requested": False,
+            "pause_requested": False,
+            "reply_nonce": 1,
+            "reply_ack_nonce": 0,
+            "reply_text": "Proceed",
+        },
+    )
+
+    engine = AgentEngine(agent, [server], user)
+    engine.run_record = run
+    engine.session = SimpleNamespace(user_reply_future=Future())
+
+    async_to_sync(engine._sync_runtime_control)()
+
+    assert engine.session.user_reply_future.done() is True
+    assert engine.session.user_reply_future.result() == "Proceed"
+
+    run.refresh_from_db()
+    assert run.runtime_control["reply_ack_nonce"] == 1
+    assert run.runtime_control["reply_text"] == ""
+
+
+@pytest.mark.django_db
+def test_agent_control_paths_do_not_require_live_engine(monkeypatch):
+    user = User.objects.create_user(username="agent-no-engine-user", password="x")
+    client = Client()
+    client.force_login(user)
+
+    server = _create_server(user, name="agent-no-engine-srv", server_type="ssh")
+    agent = ServerAgent.objects.create(
+        user=user,
+        name="No Engine Agent",
+        mode=ServerAgent.MODE_FULL,
+        agent_type=ServerAgent.TYPE_CUSTOM,
+        goal="Wait for input",
+        ai_prompt="Wait",
+    )
+    agent.servers.set([server])
+
+    waiting_run = AgentRun.objects.create(
+        agent=agent,
+        server=server,
+        user=user,
+        status=AgentRun.STATUS_WAITING,
+        pending_question="Continue?",
+    )
+    running_run = AgentRun.objects.create(
+        agent=agent,
+        server=server,
+        user=user,
+        status=AgentRun.STATUS_RUNNING,
+    )
+
+    monkeypatch.setattr("servers.views.get_engine_for_run", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("servers.views.get_engine_for_agent", lambda *_args, **_kwargs: None)
+
+    reply = client.post(
+        f"/servers/api/agents/runs/{waiting_run.id}/reply/",
+        data=_json({"answer": "Proceed without local engine"}),
+        content_type="application/json",
+    )
+    assert reply.status_code == 200
+    waiting_run.refresh_from_db()
+    assert waiting_run.status == AgentRun.STATUS_RUNNING
+    assert waiting_run.runtime_control["reply_nonce"] == 1
+    assert waiting_run.runtime_control["reply_ack_nonce"] == 0
+    assert waiting_run.runtime_control["reply_text"] == "Proceed without local engine"
+
+    stop = client.post(f"/servers/api/agents/{agent.id}/stop/")
+    assert stop.status_code == 200
+    assert stop.json()["stop_signal_sent"] is False
+    running_run.refresh_from_db()
+    assert running_run.status == AgentRun.STATUS_STOPPED
+    assert running_run.runtime_control["stop_requested"] is True
+    assert running_run.runtime_control["pause_requested"] is False
+
+
+@pytest.mark.django_db
+def test_agent_stop_can_target_specific_run():
+    user = User.objects.create_user(username="agent-stop-target-user", password="x")
+    _grant_feature(user, "agents")
+    client = Client()
+    client.force_login(user)
+
+    server = _create_server(user, name="agent-stop-target-srv", server_type="ssh")
+    agent = ServerAgent.objects.create(
+        user=user,
+        name="Targeted Stop Agent",
+        mode=ServerAgent.MODE_FULL,
+        goal="Stop only selected run",
+    )
+    agent.servers.set([server])
+
+    target_run = AgentRun.objects.create(
+        agent=agent,
+        server=server,
+        user=user,
+        status=AgentRun.STATUS_RUNNING,
+    )
+    other_run = AgentRun.objects.create(
+        agent=agent,
+        server=server,
+        user=user,
+        status=AgentRun.STATUS_WAITING,
+        pending_question="Continue?",
+    )
+
+    response = client.post(
+        f"/servers/api/agents/{agent.id}/stop/",
+        data=_json({"run_id": target_run.id}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    target_run.refresh_from_db()
+    other_run.refresh_from_db()
+    assert target_run.status == AgentRun.STATUS_STOPPED
+    assert target_run.runtime_control["stop_requested"] is True
+    assert other_run.status == AgentRun.STATUS_WAITING
+    assert other_run.runtime_control.get("stop_requested", False) is False
+
+
+@pytest.mark.django_db
+def test_server_update_clears_trusted_host_keys_when_address_changes():
+    user = User.objects.create_user(username="ssh-update-owner", password="x")
+    client = Client()
+    client.force_login(user)
+
+    server = _create_server(
+        user,
+        host="10.0.0.11",
+        port=22,
+        auth_method="key",
+        key_path="/tmp/id_ed25519",
+        trusted_host_keys=[_make_public_key_record()],
+    )
+
+    response = client.post(
+        f"/servers/api/{server.id}/update/",
+        data=_json({"host": "10.0.0.99"}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    server.refresh_from_db()
+    assert server.trusted_host_keys == []
+
+
+@pytest.mark.django_db
+def test_server_test_connection_passes_server_to_ssh_manager(monkeypatch):
+    user = User.objects.create_user(username="ssh-test-owner", password="x")
+    client = Client()
+    client.force_login(user)
+
+    server = _create_server(user, name="ssh-check", host="10.0.0.25", port=2222, auth_method="password")
+    calls: dict[str, object] = {}
+
+    async def fake_connect(**kwargs):
+        calls.update(kwargs)
+        return "conn-1"
+
+    async def fake_disconnect(conn_id: str):
+        calls["disconnect_conn_id"] = conn_id
+
+    monkeypatch.setattr("servers.views.ssh_manager.connect", fake_connect)
+    monkeypatch.setattr("servers.views.ssh_manager.disconnect", fake_disconnect)
+
+    response = client.post(
+        f"/servers/api/{server.id}/test/",
+        data=_json({}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["success"] is True
+    assert calls["server"] == server
+    assert calls["network_config"] == {}
+    assert calls["disconnect_conn_id"] == "conn-1"
+
+
+@pytest.mark.django_db
+def test_shared_user_cannot_refresh_trusted_host_key():
+    owner = User.objects.create_user(username="ssh-owner-share", password="x")
+    teammate = User.objects.create_user(username="ssh-shared-user", password="x")
+    server = _create_server(owner, name="shared-ssh", auth_method="password")
+    from servers.models import ServerShare
+
+    ServerShare.objects.create(server=server, user=teammate, shared_by=owner, share_context=True)
+
+    client = Client()
+    client.force_login(teammate)
+    response = client.post(
+        f"/servers/api/{server.id}/test/",
+        data=_json({"refresh_host_key": True}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 403
+    assert "Only owner can refresh" in response.json()["error"]
+
+
+@pytest.mark.django_db
+def test_shared_user_server_detail_hides_saved_secret_and_context_flags():
+    owner = User.objects.create_user(username="shared-detail-owner", password="x")
+    teammate = User.objects.create_user(username="shared-detail-user", password="x")
+    server = _create_server(
+        owner,
+        name="shared-detail-srv",
+        auth_method="password",
+        notes="owner notes",
+        corporate_context="secret corp context",
+        network_config={"proxy": {"http_proxy": "http://proxy.local:8080"}},
+    )
+    server.encrypted_password = "ciphertext"
+    server.salt = b"12345678"
+    server.save(update_fields=["encrypted_password", "salt"])
+
+    from servers.models import ServerShare
+
+    ServerShare.objects.create(server=server, user=teammate, shared_by=owner, share_context=False)
+
+    client = Client()
+    client.force_login(teammate)
+    response = client.get(f"/servers/api/{server.id}/get/")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["notes"] == ""
+    assert payload["corporate_context"] == ""
+    assert payload["network_config"] == {}
+    assert payload["share_context_enabled"] is False
+    assert payload["has_saved_password"] is False
+    assert payload["can_view_password"] is False
+
+
+@pytest.mark.django_db
+def test_reveal_password_requires_master_password_or_session():
+    owner = User.objects.create_user(username="reveal-owner", password="x")
+    server = _create_server(owner, name="reveal-srv", auth_method="password")
+    server.encrypted_password = "ciphertext"
+    server.salt = b"12345678"
+    server.save(update_fields=["encrypted_password", "salt"])
+
+    client = Client()
+    client.force_login(owner)
+    response = client.post(
+        f"/servers/api/{server.id}/reveal-password/",
+        data=_json({}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 400
+    assert "Master password is required" in response.json()["error"]
+
+
+@pytest.mark.django_db
+def test_group_member_cannot_read_group_environment_vars():
+    owner = User.objects.create_user(username="group-owner", password="x")
+    teammate = User.objects.create_user(username="group-member", password="x")
+    client = Client()
+    client.force_login(owner)
+
+    create_group = client.post(
+        "/servers/api/groups/create/",
+        data=_json({"name": "secure-group"}),
+        content_type="application/json",
+    )
+    assert create_group.status_code == 200
+    group_id = create_group.json()["group_id"]
+
+    add_member = client.post(
+        f"/servers/api/groups/{group_id}/add-member/",
+        data=_json({"user": teammate.username, "role": "member"}),
+        content_type="application/json",
+    )
+    assert add_member.status_code == 200
+
+    save_group_ctx = client.post(
+        f"/servers/api/groups/{group_id}/context/save/",
+        data=_json(
+            {
+                "rules": "Use maintenance window",
+                "forbidden_commands": ["reboot"],
+                "environment_vars": {"VPN_PROFILE": "prod-admin"},
+            }
+        ),
+        content_type="application/json",
+    )
+    assert save_group_ctx.status_code == 200
+
+    member_client = Client()
+    member_client.force_login(teammate)
+    group_ctx = member_client.get(f"/servers/api/groups/{group_id}/context/")
+
+    assert group_ctx.status_code == 200
+    assert group_ctx.json()["rules"] == "Use maintenance window"
+    assert group_ctx.json()["environment_vars"] == {}

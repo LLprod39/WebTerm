@@ -1,5 +1,6 @@
 import {
   isDemoMode,
+  canUseDemoMode,
   enableDemoMode,
   DEMO_SESSION,
   DEMO_BOOTSTRAP,
@@ -79,6 +80,13 @@ async function parseErrorMessage(res: Response): Promise<string> {
   return `HTTP ${res.status}`;
 }
 
+function fallbackToDemoOrThrow<T>(path: string, options: RequestInit, errorMessage: string): T {
+  if (enableDemoMode()) {
+    return demoFallback<T>(path, options);
+  }
+  throw new Error(errorMessage);
+}
+
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   // In demo mode, return mock data for known paths
   if (isDemoMode()) {
@@ -99,15 +107,13 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
     });
   } catch {
     // Network error — backend unreachable
-    enableDemoMode();
-    return demoFallback<T>(path, options);
+    return fallbackToDemoOrThrow<T>(path, options, "Backend unavailable");
   }
 
   // If server returned HTML instead of JSON (Vite SPA fallback), switch to demo
   const ct = response.headers.get("content-type") || "";
   if (ct.includes("text/html")) {
-    enableDemoMode();
-    return demoFallback<T>(path, options);
+    return fallbackToDemoOrThrow<T>(path, options, "Backend returned HTML instead of JSON");
   }
 
   if (!response.ok) {
@@ -331,26 +337,49 @@ export interface AccessPermission {
   allowed: boolean;
 }
 
+export interface SettingsConfig {
+  default_provider: string;
+  internal_llm_provider: string;
+  gemini_enabled: boolean;
+  grok_enabled: boolean;
+  openai_enabled: boolean;
+  chat_llm_provider: string;
+  chat_llm_model: string;
+  agent_llm_provider: string;
+  agent_llm_model: string;
+  orchestrator_llm_provider: string;
+  orchestrator_llm_model: string;
+  claude_enabled: boolean;
+  chat_model_gemini: string;
+  chat_model_grok: string;
+  chat_model_openai: string;
+  chat_model_claude: string;
+  log_terminal_commands: boolean;
+  log_ai_assistant: boolean;
+  log_agent_runs: boolean;
+  log_pipeline_runs: boolean;
+  log_auth_events: boolean;
+  log_server_changes: boolean;
+  log_settings_changes: boolean;
+  log_file_operations: boolean;
+  log_mcp_calls: boolean;
+  log_http_requests: boolean;
+  retention_days: number;
+  export_format: string;
+  openai_reasoning_effort?: string;
+  domain_auth_enabled?: boolean;
+  domain_auth_header?: string;
+  domain_auth_auto_create?: boolean;
+  domain_auth_lowercase_usernames?: boolean;
+  domain_auth_default_profile?: string;
+  [key: string]: string | number | boolean | null | undefined;
+}
+
 export interface SettingsConfigResponse {
   success: boolean;
-  config: {
-    default_provider: string;
-    internal_llm_provider: string;
-    gemini_enabled: boolean;
-    grok_enabled: boolean;
-    openai_enabled: boolean;
-    chat_llm_provider: string;
-    chat_llm_model: string;
-    agent_llm_provider: string;
-    agent_llm_model: string;
-    orchestrator_llm_provider: string;
-    orchestrator_llm_model: string;
-    claude_enabled: boolean;
-    chat_model_gemini: string;
-    chat_model_grok: string;
-    chat_model_openai: string;
-    chat_model_claude: string;
-  };
+  config: SettingsConfig;
+  api_keys?: Record<string, boolean>;
+  providers?: Record<string, unknown>;
 }
 
 export interface ModelsResponse {
@@ -367,21 +396,34 @@ export interface ModelsResponse {
   };
 }
 
+export interface ActivityLogEvent {
+  id: number;
+  created_at: string;
+  timestamp?: string;
+  user_id?: number | null;
+  username: string;
+  category: string;
+  action: string;
+  status: string;
+  description: string;
+  entity_type?: string;
+  entity_id?: number | string | null;
+  entity_name: string;
+  ip_address?: string;
+  user_agent?: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface ActivityLogsResponse {
   success: boolean;
-  events: Array<{
-    id: number;
-    created_at: string;
-    username: string;
-    category: string;
-    action: string;
-    status: string;
-    description: string;
-    entity_name: string;
-  }>;
+  events: ActivityLogEvent[];
   summary: {
     total_events: number;
     total_users: number;
+    login_count?: number;
+    assistant_requests?: number;
+    server_connections?: number;
+    server_changes?: number;
   };
 }
 
@@ -395,20 +437,26 @@ function normalizeWsOrigin(rawValue: string): string {
   return `${proto}${raw}`;
 }
 
-export function getWsUrl(serverId: number | string, wsToken?: string): string {
+function buildWsBase(): string {
   const explicitWs = normalizeWsOrigin(import.meta.env.VITE_DJANGO_WS_URL || "");
-  let base: string;
   if (explicitWs) {
-    base = `${explicitWs}/ws/servers/${serverId}/terminal/`;
-  } else {
-    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const host = import.meta.env.VITE_WS_HOST || window.location.host;
-    base = `${proto}//${host}/ws/servers/${serverId}/terminal/`;
+    return explicitWs;
   }
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const host = import.meta.env.VITE_WS_HOST || window.location.host;
+  return `${proto}//${host}`;
+}
+
+export function getWsUrl(serverId: number | string, wsToken?: string): string {
+  const base = `${buildWsBase()}/ws/servers/${serverId}/terminal/`;
   if (wsToken) {
     return `${base}?ws_token=${encodeURIComponent(wsToken)}`;
   }
   return base;
+}
+
+export function getStudioPipelineRunWsUrl(runId: number | string): string {
+  return `${buildWsBase()}/ws/studio/pipeline-runs/${runId}/live/`;
 }
 
 /** Fetch a short-lived WS auth token from Django (solves Vite proxy cookie issue). */
@@ -436,9 +484,10 @@ export async function fetchAuthSession(): Promise<AuthSessionResponse> {
   try {
     return await apiFetch<AuthSessionResponse>("/api/auth/session/");
   } catch {
-    // Backend unreachable — activate demo mode
-    enableDemoMode();
-    return DEMO_SESSION;
+    if (canUseDemoMode() && enableDemoMode()) {
+      return DEMO_SESSION;
+    }
+    return { authenticated: false, user: null };
   }
 }
 
@@ -1034,7 +1083,7 @@ export async function aiAnalyzeServer(serverId: number) {
 export interface AgentItem {
   id: number;
   name: string;
-  mode: "mini" | "full";
+  mode: "mini" | "full" | "multi";
   mode_display: string;
   agent_type: string;
   agent_type_display: string;
@@ -1057,7 +1106,7 @@ export interface AgentItem {
 export interface AgentTemplate {
   type: string;
   name: string;
-  mode: "mini" | "full";
+  mode: "mini" | "full" | "multi";
   commands: string[];
   ai_prompt: string;
   command_count: number;
@@ -1183,8 +1232,11 @@ export async function runAgent(agentId: number, serverId?: number) {
   });
 }
 
-export async function stopAgent(agentId: number) {
-  return apiFetch<{ success: boolean }>(`/servers/api/agents/${agentId}/stop/`, { method: "POST" });
+export async function stopAgent(agentId: number, runId?: number) {
+  return apiFetch<{ success: boolean }>(`/servers/api/agents/${agentId}/stop/`, {
+    method: "POST",
+    body: JSON.stringify(runId ? { run_id: runId } : {}),
+  });
 }
 
 export async function fetchAgentRuns(agentId: number, limit = 20) {
@@ -1264,7 +1316,7 @@ export interface DashboardRunItem {
   id: number;
   agent_id: number;
   agent_name: string;
-  agent_mode: "mini" | "full";
+  agent_mode: "mini" | "full" | "multi";
   agent_type: string;
   server_name: string;
   server_id: number;
@@ -1505,6 +1557,18 @@ export interface MCPServerTool {
   inputSchema?: Record<string, unknown>;
 }
 
+export interface MCPTemplate {
+  slug: string;
+  name: string;
+  description: string;
+  transport: "stdio" | "sse";
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  url?: string;
+  icon?: string;
+}
+
 export interface MCPServerInspection {
   server: {
     name: string;
@@ -1642,7 +1706,7 @@ export const studioMCP = {
   update: (id: number, data: Partial<MCPServer>) => apiFetch<MCPServer>(`/api/studio/mcp/${id}/`, { method: "PUT", body: JSON.stringify(data) }),
   delete: (id: number) => apiFetch<{ ok: boolean }>(`/api/studio/mcp/${id}/`, { method: "DELETE" }),
   test: (id: number) => apiFetch<{ ok: boolean; error: string | null }>(`/api/studio/mcp/${id}/test/`, { method: "POST" }),
-  templates: () => apiFetch<Array<Record<string, unknown>>>("/api/studio/mcp/templates/"),
+  templates: () => apiFetch<MCPTemplate[]>("/api/studio/mcp/templates/"),
   tools: (id: number) => apiFetch<MCPServerInspection>(`/api/studio/mcp/${id}/tools/`),
 };
 

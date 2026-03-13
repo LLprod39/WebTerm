@@ -1,0 +1,116 @@
+- generic [ref=e2]:
+  - region "Notifications (F8)":
+    - list
+  - region "Notifications alt+T"
+  - generic [ref=e4]:
+    - generic [ref=e8]:
+      - generic [ref=e9]:
+        - generic [ref=e11]: W
+        - generic [ref=e12]: WebTermAI
+        - button [ref=e13] [cursor=pointer]:
+          - img [ref=e14]
+      - list [ref=e19]:
+        - listitem [ref=e20]:
+          - link "Серверы" [ref=e21] [cursor=pointer]:
+            - /url: /servers
+            - img [ref=e22]
+            - generic [ref=e25]: Серверы
+        - listitem [ref=e26]:
+          - link "Агенты" [ref=e27] [cursor=pointer]:
+            - /url: /agents
+            - img [ref=e28]
+            - generic [ref=e31]: Агенты
+        - listitem [ref=e32]:
+          - link "Студия" [ref=e33] [cursor=pointer]:
+            - /url: /studio
+            - img [ref=e34]
+            - generic [ref=e38]: Студия
+      - generic [ref=e39]:
+        - generic [ref=e41]:
+          - button "EN" [ref=e42] [cursor=pointer]
+          - button "RU" [ref=e43] [cursor=pointer]
+        - generic [ref=e44]:
+          - generic [ref=e45]: S
+          - generic [ref=e46]:
+            - paragraph [ref=e47]: smoke-user-01
+            - paragraph [ref=e48]: Оператор
+          - button "Выйти" [ref=e49] [cursor=pointer]:
+            - img [ref=e50]
+    - generic [ref=e53]:
+      - banner [ref=e54]:
+        - button "Toggle Sidebar" [ref=e55] [cursor=pointer]:
+          - img
+          - generic [ref=e56]: Toggle Sidebar
+        - link "Back" [ref=e57] [cursor=pointer]:
+          - /url: /agents
+          - img [ref=e58]
+          - text: Back
+        - generic [ref=e60]: Agent Run
+      - main [ref=e61]:
+        - generic [ref=e62]:
+          - generic [ref=e70]:
+            - generic [ref=e71]:
+              - generic [ref=e72]:
+                - link [ref=e73] [cursor=pointer]:
+                  - /url: /agents
+                  - button [ref=e74]:
+                    - img
+                - generic [ref=e75]:
+                  - img [ref=e76]
+                  - heading "Smoke Agent 01" [level=1] [ref=e79]
+              - generic [ref=e80]:
+                - generic [ref=e81]: running
+                - button "Отчёт" [ref=e83] [cursor=pointer]:
+                  - generic [ref=e84]:
+                    - img [ref=e85]
+                    - text: Отчёт
+                - button "Остановить" [ref=e88] [cursor=pointer]:
+                  - img
+                  - text: Остановить
+            - generic [ref=e89]:
+              - generic [ref=e90]: 14s
+              - generic [ref=e91]: ·
+              - generic [ref=e92]: 0 iterations
+              - generic [ref=e93]: ·
+              - generic [ref=e94]: 1 servers
+              - generic [ref=e95]: ·
+              - generic [ref=e96]: 13.03.2026, 04:34
+              - generic [ref=e97]: ·
+              - generic [ref=e99]:
+                - img [ref=e100]
+                - text: Smoke SSH 01
+          - generic [ref=e104]:
+            - generic [ref=e105]:
+              - generic [ref=e107]:
+                - generic [ref=e108]:
+                  - generic [ref=e109]:
+                    - img [ref=e110]
+                    - text: Final report
+                  - generic [ref=e113]:
+                    - img [ref=e115]
+                    - generic [ref=e118]:
+                      - heading "Smoke Agent 01" [level=2] [ref=e119]
+                      - paragraph [ref=e120]: Concise execution summary, outputs, and final synthesis for this agent run.
+                - generic [ref=e121]: running
+              - generic [ref=e122]:
+                - generic [ref=e123]:
+                  - generic [ref=e124]:
+                    - img [ref=e125]
+                    - generic [ref=e128]: Длительность
+                  - paragraph [ref=e129]: 0ms
+                - generic [ref=e130]:
+                  - generic [ref=e131]:
+                    - img [ref=e132]
+                    - generic [ref=e134]: итераций
+                  - paragraph [ref=e135]: "0"
+                - generic [ref=e136]:
+                  - generic [ref=e137]:
+                    - img [ref=e138]
+                    - generic [ref=e140]: Servers
+                  - paragraph [ref=e141]: Smoke SSH 01
+                - generic [ref=e142]:
+                  - generic [ref=e143]:
+                    - img [ref=e144]
+                    - generic [ref=e147]: Ошибка
+                  - paragraph [ref=e148]: —
+            - paragraph [ref=e151]: running

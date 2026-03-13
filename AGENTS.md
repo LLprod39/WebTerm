@@ -106,6 +106,7 @@ ruff format .
 
 - `/admin/`
 - `'' -> core_ui.urls`
+- `'api/desktop/v1/' -> core_ui.desktop_api.urls`
 - `'servers/' -> servers.urls`
 - `'api/studio/' -> studio.urls`
 - `web_ui/asgi.py` поднимает HTTP + WebSocket через `ProtocolTypeRouter`.
@@ -256,6 +257,7 @@ ruff format .
 - `/studio/pipeline/new`
 - `/studio/runs`
 - `/studio/agents`
+- `/studio/skills`
 - `/studio/mcp`
 - `/studio/notifications`
 - `/settings`
@@ -377,6 +379,7 @@ Server agents:
 ### `studio.urls` под префиксом `/api/studio/`
 
 - `/api/studio/pipelines/`
+- `/api/studio/pipelines/assistant/`
 - `/api/studio/pipelines/<pipeline_id>/`
 - `/api/studio/pipelines/<pipeline_id>/run/`
 - `/api/studio/pipelines/<pipeline_id>/clone/`
@@ -387,6 +390,13 @@ Server agents:
 - `/api/studio/runs/<run_id>/approve/<node_id>/`
 - `/api/studio/agents/`
 - `/api/studio/agents/<agent_id>/`
+- `/api/studio/skills/`
+- `/api/studio/skills/templates/`
+- `/api/studio/skills/scaffold/`
+- `/api/studio/skills/validate/`
+- `/api/studio/skills/<slug>/workspace/`
+- `/api/studio/skills/<slug>/workspace/file/`
+- `/api/studio/skills/<slug>/`
 - `/api/studio/mcp/`
 - `/api/studio/mcp/templates/`
 - `/api/studio/mcp/<mcp_id>/`

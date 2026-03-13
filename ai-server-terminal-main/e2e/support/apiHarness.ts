@@ -4,7 +4,7 @@ export interface ApiRequest {
   method: string;
   path: string;
   query: Record<string, string>;
-  body: any;
+  body: unknown;
   url: URL;
 }
 
@@ -21,7 +21,7 @@ export interface ApiHarness {
 
 export type ApiHandler = (req: ApiRequest, route: Route) => Promise<ApiResponse | void> | ApiResponse | void;
 
-function parseBody(raw: string | null): any {
+function parseBody(raw: string | null): unknown {
   if (!raw) return null;
   try {
     return JSON.parse(raw);

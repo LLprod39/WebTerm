@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { StudioNav } from "@/components/StudioNav";
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -23,7 +22,7 @@ import {
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { studioRuns, studioPipelines, type PipelineRun, type PipelineNode } from "@/lib/api";
+import { getStudioPipelineRunWsUrl, studioRuns, studioPipelines, type PipelineRun, type PipelineNode } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 // ---------------------------------------------------------------------------
@@ -172,38 +171,71 @@ function RunDetail({ runId, onClose }: { runId: number; onClose: () => void }) {
     },
     refetchIntervalInBackground: true,
   });
+  const liveEnabled = !run || run.status === "running" || run.status === "pending";
 
   // WebSocket connection for live agent events
   useEffect(() => {
-    const proto = window.location.protocol === "https:" ? "wss" : "ws";
-    const url = `${proto}://${window.location.host}/ws/studio/pipeline-runs/${runId}/live/`;
-    const ws = new WebSocket(url);
-    wsRef.current = ws;
+    if (!liveEnabled) return;
 
-    ws.onmessage = (e) => {
-      try {
-        const msg = JSON.parse(e.data);
-        if (msg.type === "node_event" && msg.event_type && msg.node_id) {
-          const ev: AgentEvent = { event_type: msg.event_type, data: msg.data || {}, ts: Date.now() };
-          setNodeAgentEvents((prev) => ({
-            ...prev,
-            [msg.node_id]: [...(prev[msg.node_id] || []), ev],
-          }));
-          // Auto-expand the node that has activity
-          setExpandedNode((cur) => cur ?? msg.node_id);
+    let cancelled = false;
+    let reconnectTimer: number | null = null;
+    let attempts = 0;
+
+    const connect = () => {
+      if (cancelled) return;
+      const ws = new WebSocket(getStudioPipelineRunWsUrl(runId));
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        attempts = 0;
+      };
+
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.type === "node_event" && msg.event_type && msg.node_id) {
+            const ev: AgentEvent = { event_type: msg.event_type, data: msg.data || {}, ts: Date.now() };
+            setNodeAgentEvents((prev) => ({
+              ...prev,
+              [msg.node_id]: [...(prev[msg.node_id] || []), ev],
+            }));
+            setExpandedNode((cur) => cur ?? msg.node_id);
+          }
+        } catch {
+          // ignore
         }
-      } catch {
-        // ignore
-      }
+      };
+
+      ws.onerror = () => {};
+      ws.onclose = () => {
+        if (wsRef.current === ws) {
+          wsRef.current = null;
+        }
+        if (cancelled) return;
+        attempts += 1;
+        const delay = Math.min(5000, attempts <= 1 ? 1000 : attempts <= 2 ? 2000 : 4000);
+        reconnectTimer = window.setTimeout(() => {
+          reconnectTimer = null;
+          connect();
+        }, delay);
+      };
     };
 
-    ws.onerror = () => {};
-    ws.onclose = () => {};
+    connect();
 
     return () => {
-      ws.close();
+      cancelled = true;
+      if (reconnectTimer !== null) {
+        window.clearTimeout(reconnectTimer);
+      }
+      wsRef.current?.close();
       wsRef.current = null;
     };
+  }, [liveEnabled, runId]);
+
+  useEffect(() => {
+    setNodeAgentEvents({});
+    setExpandedNode(null);
   }, [runId]);
 
   const stopMutation = useMutation({
@@ -221,8 +253,7 @@ function RunDetail({ runId, onClose }: { runId: number; onClose: () => void }) {
     );
   }
 
-  const nodeStates: Record<string, Record<string, unknown>> =
-    (run.node_states as Record<string, Record<string, unknown>>) || {};
+  const nodeStates: PipelineRun["node_states"] = run.node_states || {};
   const nodes: PipelineNode[] = (run.nodes_snapshot || []).filter(
     (n) => !n.type?.startsWith("trigger/")
   );
@@ -295,15 +326,15 @@ function RunDetail({ runId, onClose }: { runId: number; onClose: () => void }) {
             <div className="text-sm font-medium mb-2 text-muted-foreground">Узлы ({nodes.length})</div>
             <div className="space-y-2">
               {nodes.map((node) => {
-                const st = nodeStates[node.id] || {};
-                const status = (st.status as string) || "pending";
-                const output = (st.output as string) || "";
-                const error = (st.error as string) || "";
+                const st: PipelineRun["node_states"][string] = nodeStates[node.id] || { status: "pending" };
+                const status = st.status;
+                const output = st.output || "";
+                const error = st.error || "";
                 const isExp = expandedNode === node.id;
                 const agentEvents = nodeAgentEvents[node.id] || [];
                 const hasContent = !!(output || error || agentEvents.length);
-                const startedAt = st.started_at as string | undefined;
-                const finishedAt = st.finished_at as string | undefined;
+                const startedAt = st.started_at;
+                const finishedAt = st.finished_at;
                 const isAgentNode = node.type?.startsWith("agent/");
 
                 let duration = "";

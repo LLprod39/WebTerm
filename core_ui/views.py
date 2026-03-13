@@ -3,11 +3,13 @@ WEU AI Agent - Views
 Full-featured web interface for AI Agent system
 """
 import asyncio
+import csv
 import json
 import os
 import shutil
 import time
 import uuid
+from io import StringIO
 from collections import defaultdict
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
@@ -17,8 +19,8 @@ from urllib import parse as urllib_parse
 from urllib import request as urllib_request
 from typing import AsyncGenerator
 from django.shortcuts import render, redirect
-from django.http import StreamingHttpResponse, JsonResponse, HttpResponseForbidden, FileResponse, Http404
-from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
+from django.http import StreamingHttpResponse, JsonResponse, HttpResponse, HttpResponseForbidden, FileResponse, Http404
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
 from django.contrib.auth.views import LoginView
 from django.contrib.auth.decorators import login_required
@@ -65,6 +67,8 @@ except Exception:
 from core_ui.context_processors import user_can_feature, is_server_only_user
 from core_ui.decorators import require_feature, async_login_required, async_require_feature
 from core_ui.activity import log_user_activity
+from core_ui.logging_setup import log_sink_summary
+from core_ui.audit import maybe_apply_log_retention
 from core_ui.models import ChatSession, ChatMessage, UserActivityLog
 from core_ui.middleware import get_template_name
 
@@ -123,7 +127,6 @@ def get_rag_engine():
 # Health Check (no auth)
 # ============================================
 
-@csrf_exempt
 @require_GET
 def api_health(request):
     """
@@ -132,6 +135,7 @@ def api_health(request):
     """
     try:
         services = {'django': 'ok'}
+        observability = log_sink_summary()
         # RAG: use cached engine if already created (no heavy init), else treat as ok if import works
         try:
             if _rag_engine is not None:
@@ -141,17 +145,20 @@ def api_health(request):
                 services['rag'] = 'ok'
         except Exception:
             services['rag'] = 'unavailable'
+        services['channels'] = 'ok'
         status = 'degraded' if services.get('rag') == 'unavailable' else 'ok'
         return JsonResponse({
             'status': status,
             'timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z',
             'services': services,
+            'observability': observability,
         })
     except Exception:
         return JsonResponse({
             'status': 'error',
             'timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z',
             'services': {'django': 'error', 'rag': 'unavailable'},
+            'observability': {'request_id_header': 'X-Request-ID'},
         }, status=500)
 
 
@@ -271,7 +278,6 @@ def api_ws_token(request):
     return JsonResponse({"token": token})
 
 
-@csrf_exempt
 @require_http_methods(["POST"])
 def api_auth_login(request):
     try:
@@ -288,6 +294,16 @@ def api_auth_login(request):
         return JsonResponse({"success": False, "error": "Invalid JSON"}, status=400)
 
     if not username or not password:
+        log_user_activity(
+            request=request,
+            username_snapshot=username,
+            category="auth",
+            action="login_failed",
+            status=UserActivityLog.STATUS_ERROR,
+            description="Login failed: username and password are required",
+            entity_type="auth",
+            metadata={"auth_mode": auth_mode or "auto"},
+        )
         return JsonResponse({"success": False, "error": "Username and password are required"}, status=400)
 
     if auth_mode not in {"auto", "local"}:
@@ -307,14 +323,44 @@ def api_auth_login(request):
         auth_backend = getattr(user, "backend", None) if user is not None else None
 
     if user is None:
+        log_user_activity(
+            request=request,
+            username_snapshot=username,
+            category="auth",
+            action="login_failed",
+            status=UserActivityLog.STATUS_ERROR,
+            description="Login failed: invalid username or password",
+            entity_type="auth",
+            metadata={"auth_mode": auth_mode},
+        )
         return JsonResponse({"success": False, "error": "Invalid username or password"}, status=401)
     if not user.is_active:
+        log_user_activity(
+            user=user,
+            request=request,
+            category="auth",
+            action="login_failed",
+            status=UserActivityLog.STATUS_ERROR,
+            description="Login failed: user is inactive",
+            entity_type="auth",
+            metadata={"auth_mode": auth_mode},
+        )
         return JsonResponse({"success": False, "error": "User is inactive"}, status=403)
 
     if auth_backend:
         auth_login(request, user, backend=auth_backend)
     else:
         auth_login(request, user)
+    log_user_activity(
+        user=user,
+        request=request,
+        category="auth",
+        action="login",
+        status=UserActivityLog.STATUS_SUCCESS,
+        description="User logged in",
+        entity_type="auth",
+        metadata={"auth_mode": auth_mode, "backend": auth_backend or ""},
+    )
     next_url = reverse("servers:server_list")
     if user.is_staff and user_can_feature(user, "agents"):
         next_url = reverse("dashboard")
@@ -329,10 +375,19 @@ def api_auth_login(request):
     )
 
 
-@csrf_exempt
 @require_http_methods(["POST"])
 def api_auth_logout(request):
     if getattr(request, "user", None) and request.user.is_authenticated:
+        user = request.user
+        log_user_activity(
+            user=user,
+            request=request,
+            category="auth",
+            action="logout",
+            status=UserActivityLog.STATUS_SUCCESS,
+            description="User logged out",
+            entity_type="auth",
+        )
         auth_logout(request)
     return JsonResponse({"success": True, "authenticated": False, "user": None})
 
@@ -807,7 +862,7 @@ def _collect_admin_dashboard_data(include_version: bool = False) -> dict:
         })
 
     ai_requests_today = UserActivityLog.objects.filter(
-        action__in=['chat_request', 'terminal_ai_request', 'chat_message'],
+        action__in=['chat_request', 'terminal_ai_request', 'chat_message', 'llm_request'],
         created_at__date=today,
     ).count()
 
@@ -888,7 +943,7 @@ def _collect_admin_dashboard_data(include_version: bool = False) -> dict:
         .values('user__username')
         .annotate(
             total=Count('id'),
-            ai_requests=Count('id', filter=Q(action__in=['chat_request', 'terminal_ai_request', 'chat_message'])),
+            ai_requests=Count('id', filter=Q(action__in=['chat_request', 'terminal_ai_request', 'chat_message', 'llm_request'])),
             terminal_sessions=Count('id', filter=Q(category='terminal')),
         )
         .order_by('-total')[:10]
@@ -1595,7 +1650,6 @@ async def _try_server_command_by_name(user_id: int, message: str):
         return None
 
 
-@csrf_exempt
 @login_required
 @require_feature('orchestrator')
 @require_http_methods(["GET"])
@@ -1638,7 +1692,6 @@ def api_chats_list(request):
         return JsonResponse({"error": str(e)}, status=500)
 
 
-@csrf_exempt
 @login_required
 @require_feature('orchestrator')
 @require_http_methods(["POST"])
@@ -1656,7 +1709,6 @@ def api_chats_create(request):
         return JsonResponse({"error": str(e)}, status=500)
 
 
-@csrf_exempt
 @login_required
 @require_feature('orchestrator')
 @require_http_methods(["GET"])
@@ -1682,7 +1734,6 @@ def api_chat_detail(request, chat_id):
         return JsonResponse({"error": str(e)}, status=500)
 
 
-@csrf_exempt
 @async_login_required
 @async_require_feature('orchestrator')
 async def chat_api(request):
@@ -1888,7 +1939,6 @@ async def chat_api(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@csrf_exempt
 @login_required
 @require_feature('knowledge_base')
 @require_http_methods(["POST"])
@@ -1926,7 +1976,6 @@ def rag_add_api(request):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
-@csrf_exempt
 @login_required
 @require_feature('knowledge_base')
 @require_http_methods(["POST"])
@@ -1982,7 +2031,6 @@ def rag_query_api(request):
         }, status=500)
 
 
-@csrf_exempt
 @login_required
 @require_feature('knowledge_base')
 @require_http_methods(["POST"])
@@ -2010,7 +2058,6 @@ def rag_reset_api(request):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
-@csrf_exempt
 @login_required
 @require_feature('knowledge_base')
 @require_http_methods(["POST"])
@@ -2124,7 +2171,6 @@ def api_models_list(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@csrf_exempt
 @login_required
 @require_http_methods(["POST"])
 def api_models_refresh(request):
@@ -2172,7 +2218,6 @@ def api_models_refresh(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@csrf_exempt
 @login_required
 @require_feature('orchestrator')
 @require_http_methods(["POST"])
@@ -2205,7 +2250,6 @@ def api_clear_history(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@csrf_exempt
 @login_required
 @require_http_methods(["GET", "POST"])
 def api_settings(request):
@@ -2290,6 +2334,18 @@ def api_settings(request):
                     'agent_llm_model': getattr(c, 'agent_llm_model', '') or '',
                     'orchestrator_llm_provider': getattr(c, 'orchestrator_llm_provider', '') or '',
                     'orchestrator_llm_model': getattr(c, 'orchestrator_llm_model', '') or '',
+                    'log_terminal_commands': getattr(c, 'log_terminal_commands', True),
+                    'log_ai_assistant': getattr(c, 'log_ai_assistant', True),
+                    'log_agent_runs': getattr(c, 'log_agent_runs', True),
+                    'log_pipeline_runs': getattr(c, 'log_pipeline_runs', True),
+                    'log_auth_events': getattr(c, 'log_auth_events', True),
+                    'log_server_changes': getattr(c, 'log_server_changes', True),
+                    'log_settings_changes': getattr(c, 'log_settings_changes', True),
+                    'log_file_operations': getattr(c, 'log_file_operations', False),
+                    'log_mcp_calls': getattr(c, 'log_mcp_calls', True),
+                    'log_http_requests': getattr(c, 'log_http_requests', True),
+                    'retention_days': getattr(c, 'retention_days', 90) or 90,
+                    'export_format': getattr(c, 'export_format', 'json') or 'json',
                 },
                 'api_keys': {
                     'gemini_set': bool(os.getenv('GEMINI_API_KEY')),
@@ -2308,6 +2364,20 @@ def api_settings(request):
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
+            audit_logging_keys = {
+                'log_terminal_commands',
+                'log_ai_assistant',
+                'log_agent_runs',
+                'log_pipeline_runs',
+                'log_auth_events',
+                'log_server_changes',
+                'log_settings_changes',
+                'log_file_operations',
+                'log_mcp_calls',
+                'log_http_requests',
+                'retention_days',
+                'export_format',
+            }
             allowed = {
                 'default_provider', 'chat_model_gemini', 'chat_model_grok',
                 'chat_model_openai',
@@ -2336,7 +2406,26 @@ def api_settings(request):
                 'orchestrator_llm_provider', 'orchestrator_llm_model',
                 # OpenAI reasoning effort (Responses API)
                 'openai_reasoning_effort',
+                # Audit logging
+                'log_terminal_commands',
+                'log_ai_assistant',
+                'log_agent_runs',
+                'log_pipeline_runs',
+                'log_auth_events',
+                'log_server_changes',
+                'log_settings_changes',
+                'log_file_operations',
+                'log_mcp_calls',
+                'log_http_requests',
+                'retention_days',
+                'export_format',
             }
+            requested_audit_keys = sorted(key for key in data.keys() if key in audit_logging_keys)
+            if requested_audit_keys and not request.user.is_staff:
+                return JsonResponse(
+                    {'success': False, 'error': 'Only admins can update audit logging settings'},
+                    status=403,
+                )
             if 'domain_auth_header' in data and data['domain_auth_header'] is not None:
                 data['domain_auth_header'] = str(data['domain_auth_header']).strip() or 'REMOTE_USER'
             if 'domain_auth_default_profile' in data and data['domain_auth_default_profile'] is not None:
@@ -2344,6 +2433,16 @@ def api_settings(request):
                 if profile not in {'server_only', 'admin_full', 'reset_defaults', 'custom'}:
                     return JsonResponse({'success': False, 'error': 'Invalid domain_auth_default_profile'}, status=400)
                 data['domain_auth_default_profile'] = profile
+            if 'retention_days' in data and data['retention_days'] is not None:
+                try:
+                    data['retention_days'] = max(1, min(int(data['retention_days']), 3650))
+                except (TypeError, ValueError):
+                    return JsonResponse({'success': False, 'error': 'Invalid retention_days'}, status=400)
+            if 'export_format' in data and data['export_format'] is not None:
+                export_format = str(data['export_format']).strip().lower()
+                if export_format not in {'json', 'csv', 'syslog'}:
+                    return JsonResponse({'success': False, 'error': 'Invalid export_format'}, status=400)
+                data['export_format'] = export_format
             # Если выбран провайдер через purpose-based ключи, включить его (чтобы не было fallback на grok)
             for provider_key in ('chat_llm_provider', 'agent_llm_provider', 'orchestrator_llm_provider', 'internal_llm_provider'):
                 p = data.get(provider_key)
@@ -2422,6 +2521,9 @@ def api_settings_check(request):
 def api_settings_activity_logs(request):
     """Activity log stream + aggregated stats for settings page."""
     try:
+        if not request.user.is_staff:
+            return JsonResponse({'success': False, 'error': 'Forbidden'}, status=403)
+        maybe_apply_log_retention()
         try:
             limit = int(request.GET.get('limit', 50))
         except (TypeError, ValueError):
@@ -2444,6 +2546,7 @@ def api_settings_activity_logs(request):
         action = (request.GET.get('action') or '').strip().lower()
         status = (request.GET.get('status') or '').strip().lower()
         search = (request.GET.get('search') or '').strip()
+        export_format = (request.GET.get('format') or '').strip().lower() or None
 
         base_qs = UserActivityLog.objects.select_related('user')
         since = datetime.now(timezone.utc) - timedelta(days=days)
@@ -2470,7 +2573,8 @@ def api_settings_activity_logs(request):
             )
 
         total = filtered.count()
-        rows = list(filtered.order_by('-created_at')[offset: offset + limit])
+        ordered_qs = filtered.order_by('-created_at')
+        rows = list(ordered_qs[offset: offset + limit])
         events = []
         for row in rows:
             username = ''
@@ -2497,11 +2601,65 @@ def api_settings_activity_logs(request):
                 }
             )
 
+        if export_format in {'csv', 'syslog'}:
+            export_rows = list(ordered_qs[:5000])
+            if export_format == 'csv':
+                buffer = StringIO()
+                writer = csv.writer(buffer)
+                writer.writerow([
+                    'created_at',
+                    'user_id',
+                    'username',
+                    'category',
+                    'action',
+                    'status',
+                    'description',
+                    'entity_type',
+                    'entity_id',
+                    'entity_name',
+                    'ip_address',
+                    'user_agent',
+                    'metadata',
+                ])
+                for row in export_rows:
+                    username = row.user.username if row.user_id and row.user else (row.username_snapshot or 'unknown')
+                    writer.writerow([
+                        row.created_at.isoformat(),
+                        row.user_id or '',
+                        username,
+                        row.category,
+                        row.action,
+                        row.status,
+                        row.description,
+                        row.entity_type,
+                        row.entity_id,
+                        row.entity_name,
+                        row.ip_address or '',
+                        row.user_agent or '',
+                        json.dumps(row.metadata or {}, ensure_ascii=False),
+                    ])
+                response = HttpResponse(buffer.getvalue(), content_type='text/csv; charset=utf-8')
+                response['Content-Disposition'] = f'attachment; filename="activity-logs-{days}d.csv"'
+                return response
+
+            lines = []
+            for row in export_rows:
+                username = row.user.username if row.user_id and row.user else (row.username_snapshot or 'unknown')
+                lines.append(
+                    f"{row.created_at.isoformat()} weu-audit username={username} category={row.category} "
+                    f"action={row.action} status={row.status} entity={row.entity_type}:{row.entity_id} "
+                    f"description={json.dumps(row.description or '', ensure_ascii=False)} "
+                    f"metadata={json.dumps(row.metadata or {}, ensure_ascii=False)}"
+                )
+            response = HttpResponse("\n".join(lines), content_type='text/plain; charset=utf-8')
+            response['Content-Disposition'] = f'attachment; filename="activity-logs-{days}d.syslog"'
+            return response
+
         summary = {
             'total_events': total,
             'total_users': filtered.exclude(user_id__isnull=True).values('user_id').distinct().count(),
             'login_count': filtered.filter(action='login').count(),
-            'assistant_requests': filtered.filter(action__in=['chat_request', 'terminal_ai_request']).count(),
+            'assistant_requests': filtered.filter(action__in=['chat_request', 'terminal_ai_request', 'llm_request']).count(),
             'server_connections': filtered.filter(action__in=['terminal_connect', 'rdp_connect']).count(),
             'server_changes': filtered.filter(action__in=['server_create', 'server_update', 'server_delete', 'servers_bulk_update']).count(),
         }
@@ -2511,7 +2669,7 @@ def api_settings_activity_logs(request):
             .annotate(
                 events_total=Count('id'),
                 logins=Count('id', filter=Q(action='login')),
-                ai_requests=Count('id', filter=Q(action__in=['chat_request', 'terminal_ai_request'])),
+                ai_requests=Count('id', filter=Q(action__in=['chat_request', 'terminal_ai_request', 'llm_request'])),
                 server_connections=Count('id', filter=Q(action__in=['terminal_connect', 'rdp_connect'])),
                 server_changes=Count('id', filter=Q(action__in=['server_create', 'server_update', 'server_delete', 'servers_bulk_update'])),
             )
@@ -2624,7 +2782,6 @@ def api_agents_list(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@csrf_exempt
 @async_login_required
 @async_require_feature('agents')
 @require_http_methods(["POST"])
@@ -2649,7 +2806,6 @@ async def api_agent_execute(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@csrf_exempt
 @login_required
 @require_feature('knowledge_base')
 @require_http_methods(["POST"])
@@ -2905,7 +3061,6 @@ def api_ide_read_file(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@csrf_exempt
 @login_required
 @require_feature('orchestrator')
 @require_http_methods(["PUT", "POST"])
@@ -3006,7 +3161,6 @@ def ide_view(request):
 # Access Management API (Users, Groups, Permissions)
 # ============================================
 
-@csrf_exempt
 @login_required
 @require_feature('settings')
 @require_http_methods(["GET", "POST"])
@@ -3109,7 +3263,6 @@ def api_access_users(request):
             return JsonResponse({'error': str(e)}, status=500)
 
 
-@csrf_exempt
 @login_required
 @require_feature('settings')
 @require_http_methods(["GET", "PUT", "DELETE"])
@@ -3219,7 +3372,6 @@ def api_access_user_detail(request, user_id):
         return JsonResponse({'success': True, 'message': 'User deleted'})
 
 
-@csrf_exempt
 @login_required
 @require_feature('settings')
 @require_http_methods(["POST"])
@@ -3256,7 +3408,6 @@ def api_access_user_password(request, user_id):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@csrf_exempt
 @login_required
 @require_feature('settings')
 @require_http_methods(["POST"])
@@ -3311,7 +3462,6 @@ def api_access_user_profile(request, user_id):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@csrf_exempt
 @login_required
 @require_feature('settings')
 @require_http_methods(["GET", "POST"])
@@ -3366,7 +3516,6 @@ def api_access_groups(request):
             return JsonResponse({'error': str(e)}, status=500)
 
 
-@csrf_exempt
 @login_required
 @require_feature('settings')
 @require_http_methods(["GET", "PUT", "DELETE"])
@@ -3429,7 +3578,6 @@ def api_access_group_detail(request, group_id):
         return JsonResponse({'success': True, 'message': 'Group deleted'})
 
 
-@csrf_exempt
 @login_required
 @require_feature('settings')
 @require_http_methods(["POST", "DELETE"])
@@ -3472,7 +3620,6 @@ def api_access_group_members(request, group_id):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@csrf_exempt
 @login_required
 @require_feature('settings')
 @require_http_methods(["GET", "POST"])
@@ -3550,7 +3697,6 @@ def api_access_permissions(request):
             return JsonResponse({'error': str(e)}, status=500)
 
 
-@csrf_exempt
 @login_required
 @require_feature('settings')
 @require_http_methods(["PUT", "DELETE"])

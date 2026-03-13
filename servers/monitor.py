@@ -16,6 +16,7 @@ from typing import Any
 
 import asyncssh
 from asgiref.sync import sync_to_async as _s2a
+from django.conf import settings
 
 
 def sync_to_async(func, thread_sensitive=False):
@@ -26,6 +27,7 @@ from loguru import logger
 
 from servers.models import Server, ServerAlert, ServerHealthCheck
 from servers.secret_utils import get_server_auth_secret
+from servers.ssh_host_keys import build_server_connect_kwargs, ensure_server_known_hosts
 
 QUICK_COMMANDS = (
     "cat /proc/loadavg;"
@@ -50,53 +52,20 @@ DISK_WARN = 80.0
 DISK_CRIT = 90.0
 
 
-def _parse_host_port(server: Server) -> tuple[str, int]:
-    raw = (server.host or "").strip()
-    if raw.startswith("["):
-        bracket_end = raw.find("]")
-        host = raw[1:bracket_end] if bracket_end != -1 else raw
-        port_str = raw[bracket_end + 2 :] if bracket_end != -1 and len(raw) > bracket_end + 1 else ""
-    elif raw.count(":") == 1:
-        host, port_str = raw.rsplit(":", 1)
-    else:
-        host, port_str = raw, ""
-    port = int(port_str) if port_str.isdigit() else int(server.port or 22)
-    return host, port
-
-
 def _decrypt_server_secret(server: Server) -> str:
     return get_server_auth_secret(server)
 
 
-def _build_connect_kwargs(server: Server) -> dict[str, Any]:
-    host, port = _parse_host_port(server)
-    kwargs: dict[str, Any] = {
-        "host": host,
-        "port": port,
-        "username": server.username,
-        "known_hosts": None,
-        "connect_timeout": 10,
-        "login_timeout": 15,
-    }
-
-    network_config = server.network_config or {}
-    bastion = (network_config.get("network") or {}).get("bastion_host") if isinstance(network_config, dict) else None
-    if bastion:
-        kwargs["tunnel"] = str(bastion).strip()
-
-    secret = _decrypt_server_secret(server)
-
-    if server.auth_method == "password":
-        kwargs["password"] = secret
-    elif server.auth_method == "key":
-        kwargs["client_keys"] = [server.key_path]
-    elif server.auth_method == "key_password":
-        kwargs["client_keys"] = [server.key_path]
-        kwargs["passphrase"] = secret
-    else:
-        kwargs["password"] = secret
-
-    return kwargs
+async def _build_connect_kwargs(server: Server) -> dict[str, Any]:
+    known_hosts = await ensure_server_known_hosts(server)
+    secret = await sync_to_async(_decrypt_server_secret, thread_sensitive=True)(server)
+    return build_server_connect_kwargs(
+        server,
+        secret=secret,
+        known_hosts=known_hosts,
+        connect_timeout=max(1, int(getattr(settings, "SSH_CONNECT_TIMEOUT_SECONDS", 10) or 10)),
+        login_timeout=max(1, int(getattr(settings, "SSH_LOGIN_TIMEOUT_SECONDS", 20) or 20)),
+    )
 
 
 def _parse_loadavg(line: str) -> tuple[float, float, float]:
@@ -311,7 +280,7 @@ async def check_server(server: Server, deep: bool = False) -> ServerHealthCheck 
 
     t0 = time.monotonic()
     try:
-        kwargs = _build_connect_kwargs(server)
+        kwargs = await _build_connect_kwargs(server)
     except Exception as exc:
         logger.debug("Monitor: cannot build connect kwargs for {}: {}", server.name, exc)
         return await _save_unreachable(server, str(exc))

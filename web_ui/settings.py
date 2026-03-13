@@ -16,6 +16,8 @@ import shutil
 from pathlib import Path
 from urllib.parse import urlparse
 
+from django.core.exceptions import ImproperlyConfigured
+
 # Загрузка .env до чтения os.getenv (для POSTGRES_*, CELERY_* и т.д.)
 try:
     from dotenv import load_dotenv
@@ -41,12 +43,37 @@ def _env_list(name: str, default: list[str] | None = None) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
+def _env_int(name: str, default: int = 0) -> int:
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return default
+    return int(raw.strip())
+
+
 def _append_unique(values: list[str], *items: str) -> list[str]:
     for item in items:
         value = (item or "").strip()
         if value and value not in values:
             values.append(value)
     return values
+
+
+def _origin_from_url(value: str) -> str:
+    raw = (value or "").strip().rstrip("/")
+    if not raw or "://" not in raw:
+        return ""
+    parsed = urlparse(raw)
+    if not parsed.scheme or not parsed.netloc:
+        return ""
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def _hostname_from_value(value: str) -> str:
+    raw = (value or "").strip()
+    if not raw:
+        return ""
+    parsed = urlparse(raw if "://" in raw else f"http://{raw}")
+    return (parsed.hostname or "").strip()
 
 
 _RENDER_EXTERNAL_URL = (os.getenv("RENDER_EXTERNAL_URL", "") or "").rstrip("/")
@@ -56,15 +83,49 @@ _RENDER_EXTERNAL_HOSTNAME = (os.getenv("RENDER_EXTERNAL_HOSTNAME", "") or "").st
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = (
-    os.getenv("DJANGO_SECRET_KEY")
-    or os.getenv("SECRET_KEY")
-    or "django-insecure-@b9idj_4skbcph+21q6^bc0qbs*$qs&@7r2sqfn*1#)z5_i%my"
-)
-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = _env_bool("DJANGO_DEBUG", _env_bool("DEBUG", True))
+
+# SECURITY WARNING: keep the secret key used in production secret!
+_DEV_SECRET_KEY_FALLBACK = "django-insecure-@b9idj_4skbcph+21q6^bc0qbs*$qs&@7r2sqfn*1#)z5_i%my"
+SECRET_KEY = (os.getenv("DJANGO_SECRET_KEY") or os.getenv("SECRET_KEY") or "").strip()
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = _DEV_SECRET_KEY_FALLBACK
+    else:
+        raise ImproperlyConfigured(
+            "DJANGO_SECRET_KEY or SECRET_KEY must be set when DJANGO_DEBUG=false."
+        )
+if not DEBUG and (
+    SECRET_KEY.startswith("django-insecure-")
+    or len(SECRET_KEY) < 50
+    or len(set(SECRET_KEY)) < 5
+):
+    raise ImproperlyConfigured(
+        "Set a long random DJANGO_SECRET_KEY for production."
+    )
+
+SITE_URL = (
+    os.getenv("SITE_URL")
+    or _RENDER_EXTERNAL_URL
+    or ("http://localhost:9000" if DEBUG else "")
+).strip().rstrip("/")
+
+FRONTEND_APP_URL = (
+    os.getenv(
+        "FRONTEND_APP_URL",
+        "http://127.0.0.1:8080" if DEBUG and not _RENDER_EXTERNAL_URL else "",
+    )
+    or ""
+).strip().rstrip("/")
+
+_SITE_ORIGIN = _origin_from_url(SITE_URL)
+_FRONTEND_ORIGIN = _origin_from_url(FRONTEND_APP_URL)
+_RENDER_ORIGIN = _origin_from_url(_RENDER_EXTERNAL_URL)
+_PRODUCTION_HTTPS = (not DEBUG) and any(
+    origin.startswith("https://")
+    for origin in (_SITE_ORIGIN, _FRONTEND_ORIGIN, _RENDER_ORIGIN)
+)
 
 # Р”РѕРјРµРЅ Рё IP СЃРµСЂРІРµСЂР° вЂ” РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ, С‡С‚РѕР±С‹ СЂР°Р±РѕС‚Р°Р»Рѕ РїРѕ weuai.site Рё РїРѕ IP
 _DEFAULT_ALLOWED = [
@@ -77,14 +138,20 @@ _DEFAULT_ALLOWED = [
     ".ngrok-free.app",  # любой поддомен ngrok (смена URL при рестарте)
 ]
 
-ALLOWED_HOSTS = [
-    h.strip()
-    for h in os.getenv("ALLOWED_HOSTS", "").split(",")
-    if h.strip()
-] or _DEFAULT_ALLOWED
-
-if _RENDER_EXTERNAL_HOSTNAME:
-    _append_unique(ALLOWED_HOSTS, _RENDER_EXTERNAL_HOSTNAME)
+ALLOWED_HOSTS = _env_list("ALLOWED_HOSTS")
+_append_unique(
+    ALLOWED_HOSTS,
+    _RENDER_EXTERNAL_HOSTNAME,
+    _hostname_from_value(SITE_URL),
+    _hostname_from_value(FRONTEND_APP_URL),
+    _hostname_from_value(_RENDER_EXTERNAL_URL),
+)
+if DEBUG:
+    _append_unique(ALLOWED_HOSTS, *_DEFAULT_ALLOWED)
+if not DEBUG and not ALLOWED_HOSTS:
+    raise ImproperlyConfigured(
+        "ALLOWED_HOSTS must be set explicitly or derivable from SITE_URL/FRONTEND_APP_URL in production."
+    )
 
 # Dev: разрешаем Origin от Vite dev-сервера (:8080) для WebSocket через прокси
 _default_frontend_origins = [
@@ -96,20 +163,14 @@ _default_frontend_origins = [
 
 # Истоки для CSRF. Ngrok-домены добавляются автоматически в core_ui.middleware.CsrfTrustNgrokMiddleware.
 # Через .env можно добавить свои: CSRF_TRUSTED_ORIGINS=https://example.com,http://example.com
-FRONTEND_APP_URL = (
-    os.getenv(
-        "FRONTEND_APP_URL",
-        "http://127.0.0.1:8080" if not _RENDER_EXTERNAL_URL else "",
-    )
-    or ""
-).rstrip("/")
-
-CSRF_TRUSTED_ORIGINS = _env_list("CSRF_TRUSTED_ORIGINS", _default_frontend_origins)
-_append_unique(CSRF_TRUSTED_ORIGINS, FRONTEND_APP_URL)
+CSRF_TRUSTED_ORIGINS = _env_list("CSRF_TRUSTED_ORIGINS")
+_append_unique(CSRF_TRUSTED_ORIGINS, _FRONTEND_ORIGIN, _SITE_ORIGIN, _RENDER_ORIGIN)
+if DEBUG:
+    _append_unique(CSRF_TRUSTED_ORIGINS, *_default_frontend_origins)
 
 CORS_ALLOWED_ORIGINS = _env_list(
     "CORS_ALLOWED_ORIGINS",
-    ([FRONTEND_APP_URL] if FRONTEND_APP_URL else []),
+    ([_FRONTEND_ORIGIN] if _FRONTEND_ORIGIN else []),
 )
 CORS_ALLOW_CREDENTIALS = bool(CORS_ALLOWED_ORIGINS)
 if DEBUG:
@@ -143,6 +204,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'core_ui.domain_auth.DomainAutoLoginMiddleware',
+    'core_ui.middleware.RequestAuditMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'core_ui.middleware.AdminRussianMiddleware',
@@ -181,6 +243,12 @@ CHANNEL_REDIS_URL = os.getenv("CHANNEL_REDIS_URL", "").strip()
 if not CHANNEL_REDIS_URL and not DEBUG:
     # In production it's reasonable to reuse the same Redis as Celery (if configured)
     CHANNEL_REDIS_URL = os.getenv("CELERY_BROKER_URL", "").strip()
+
+if not DEBUG and not CHANNEL_REDIS_URL:
+    raise ImproperlyConfigured(
+        "CHANNEL_REDIS_URL (or CELERY_BROKER_URL) must be set when DJANGO_DEBUG=false. "
+        "InMemoryChannelLayer is not supported for production or multi-worker runtime control."
+    )
 
 if CHANNEL_REDIS_URL:
     CHANNEL_LAYERS = {
@@ -266,8 +334,34 @@ AUTHENTICATION_BACKENDS = ['django.contrib.auth.backends.ModelBackend']
 
 # External SPA frontend (React/Vite)
 SERVE_STATIC_FILES = _env_bool("SERVE_STATIC_FILES", not DEBUG)
-USE_X_FORWARDED_HOST = True
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = _env_bool("USE_X_FORWARDED_HOST", True)
+SECURE_PROXY_SSL_HEADER = (
+    ("HTTP_X_FORWARDED_PROTO", "https")
+    if _env_bool("TRUST_X_FORWARDED_PROTO", True)
+    else None
+)
+SECURE_SSL_REDIRECT = _env_bool("SECURE_SSL_REDIRECT", _PRODUCTION_HTTPS)
+SECURE_HSTS_SECONDS = _env_int(
+    "SECURE_HSTS_SECONDS",
+    31536000 if SECURE_SSL_REDIRECT else 0,
+)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_bool(
+    "SECURE_HSTS_INCLUDE_SUBDOMAINS",
+    SECURE_HSTS_SECONDS > 0,
+)
+SECURE_HSTS_PRELOAD = _env_bool(
+    "SECURE_HSTS_PRELOAD",
+    SECURE_HSTS_SECONDS > 0 and SECURE_HSTS_INCLUDE_SUBDOMAINS,
+)
+SECURE_CONTENT_TYPE_NOSNIFF = _env_bool("SECURE_CONTENT_TYPE_NOSNIFF", True)
+SECURE_REFERRER_POLICY = (
+    os.getenv("SECURE_REFERRER_POLICY", "strict-origin-when-cross-origin")
+    or "strict-origin-when-cross-origin"
+).strip()
+SECURE_CROSS_ORIGIN_OPENER_POLICY = (
+    os.getenv("SECURE_CROSS_ORIGIN_OPENER_POLICY", "same-origin")
+    or "same-origin"
+).strip()
 
 _cross_site_auth = _env_bool("CROSS_SITE_AUTH", CORS_ALLOW_CREDENTIALS and not DEBUG)
 if _cross_site_auth:
@@ -392,7 +486,7 @@ EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'WEU Platform <noreply@weuai.site>')
 
 # Site URL for email links and approval callbacks
-SITE_URL = os.getenv('SITE_URL', _RENDER_EXTERNAL_URL or 'http://localhost:8000')
+SITE_URL = SITE_URL or (_RENDER_EXTERNAL_URL or "http://localhost:9000")
 
 # =============================================================================
 # Pipeline Notifications — global defaults (used when nodes don't override)
@@ -435,6 +529,39 @@ CLI_RUNTIME_TIMEOUT_SECONDS = int(os.getenv("CLI_RUNTIME_TIMEOUT_SECONDS", "600"
 # РўР°Р№РјР°СѓС‚ В«РїРµСЂРІРѕРіРѕ РІС‹РІРѕРґР°В»: РµСЃР»Рё Claude РЅРµ РІС‹РІРµР» РЅРё РѕРґРЅРѕР№ СЃС‚СЂРѕРєРё Р·Р° СЌС‚Рѕ РІСЂРµРјСЏ вЂ” РїСЂРµСЂРІР°С‚СЊ.
 # РћР±С‹С‡РЅРѕ РѕР·РЅР°С‡Р°РµС‚, С‡С‚Рѕ Claude Р¶РґС‘С‚ MCP-СЃРµСЂРІРµСЂ, РєРѕС‚РѕСЂС‹Р№ РЅРµ Р·Р°РїСѓСЃС‚РёР»СЃСЏ РёР»Рё Р·Р°РІРёСЃ РїСЂРё СЃС‚Р°СЂС‚Рµ Django.
 CLI_FIRST_OUTPUT_TIMEOUT_SECONDS = int(os.getenv("CLI_FIRST_OUTPUT_TIMEOUT_SECONDS", "120"))
+
+# Runtime concurrency guards. Set any limit to 0 to disable it explicitly.
+AGENT_ACTIVE_RUNS_PER_USER_LIMIT = _env_int("AGENT_ACTIVE_RUNS_PER_USER_LIMIT", 5)
+AGENT_ACTIVE_RUNS_GLOBAL_LIMIT = _env_int("AGENT_ACTIVE_RUNS_GLOBAL_LIMIT", 25)
+PIPELINE_ACTIVE_RUNS_PER_USER_LIMIT = _env_int("PIPELINE_ACTIVE_RUNS_PER_USER_LIMIT", 8)
+PIPELINE_ACTIVE_RUNS_GLOBAL_LIMIT = _env_int("PIPELINE_ACTIVE_RUNS_GLOBAL_LIMIT", 40)
+SSH_TERMINAL_SESSIONS_PER_USER_LIMIT = _env_int("SSH_TERMINAL_SESSIONS_PER_USER_LIMIT", 12)
+SSH_TERMINAL_SESSIONS_GLOBAL_LIMIT = _env_int("SSH_TERMINAL_SESSIONS_GLOBAL_LIMIT", 120)
+
+# Shared SSH transport defaults across terminal, tools, monitor and pipeline SSH execution.
+SSH_CONNECT_TIMEOUT_SECONDS = _env_int("SSH_CONNECT_TIMEOUT_SECONDS", 10)
+SSH_LOGIN_TIMEOUT_SECONDS = _env_int("SSH_LOGIN_TIMEOUT_SECONDS", 20)
+SSH_KEEPALIVE_INTERVAL_SECONDS = _env_int("SSH_KEEPALIVE_INTERVAL_SECONDS", 20)
+SSH_KEEPALIVE_COUNT_MAX = _env_int("SSH_KEEPALIVE_COUNT_MAX", 3)
+
+# MCP transport timeouts and safe retries.
+MCP_STDIO_INITIALIZE_TIMEOUT_SECONDS = _env_int("MCP_STDIO_INITIALIZE_TIMEOUT_SECONDS", 20)
+MCP_STDIO_REQUEST_TIMEOUT_SECONDS = _env_int("MCP_STDIO_REQUEST_TIMEOUT_SECONDS", 30)
+MCP_STDIO_TOOL_CALL_TIMEOUT_SECONDS = _env_int("MCP_STDIO_TOOL_CALL_TIMEOUT_SECONDS", 120)
+MCP_PROCESS_TERMINATE_TIMEOUT_SECONDS = _env_int("MCP_PROCESS_TERMINATE_TIMEOUT_SECONDS", 2)
+MCP_HTTP_CONNECT_TIMEOUT_SECONDS = _env_int("MCP_HTTP_CONNECT_TIMEOUT_SECONDS", 10)
+MCP_HTTP_REQUEST_TIMEOUT_SECONDS = _env_int("MCP_HTTP_REQUEST_TIMEOUT_SECONDS", 30)
+MCP_HTTP_TOOL_CALL_TIMEOUT_SECONDS = _env_int("MCP_HTTP_TOOL_CALL_TIMEOUT_SECONDS", 120)
+MCP_HTTP_RETRY_ATTEMPTS = _env_int("MCP_HTTP_RETRY_ATTEMPTS", 2)
+
+# Shared LLM stream/runtime protection defaults so slow providers fail predictably instead of hanging forever.
+LLM_MAX_RETRY_ATTEMPTS = _env_int("LLM_MAX_RETRY_ATTEMPTS", 3)
+LLM_PROVIDER_TIMEOUT_SECONDS = _env_int("LLM_PROVIDER_TIMEOUT_SECONDS", 90)
+LLM_GEMINI_STREAM_TIMEOUT_SECONDS = _env_int("LLM_GEMINI_STREAM_TIMEOUT_SECONDS", 90)
+LLM_GROK_STREAM_TIMEOUT_SECONDS = _env_int("LLM_GROK_STREAM_TIMEOUT_SECONDS", 60)
+LLM_CLAUDE_STREAM_TIMEOUT_SECONDS = _env_int("LLM_CLAUDE_STREAM_TIMEOUT_SECONDS", 120)
+LLM_OPENAI_STREAM_TIMEOUT_SECONDS = _env_int("LLM_OPENAI_STREAM_TIMEOUT_SECONDS", 90)
+LLM_OPENAI_RESPONSES_TIMEOUT_SECONDS = _env_int("LLM_OPENAI_RESPONSES_TIMEOUT_SECONDS", 300)
 
 # РџРµСЂРµРґ Р·Р°РїСѓСЃРєРѕРј С‚Р°СЃРєР°/РІРѕСЂРєС„Р»РѕСѓ СЃРЅР°С‡Р°Р»Р° РїСЂРѕРІРµСЂРёС‚СЊ Р·Р°РґР°С‡Сѓ С‡РµСЂРµР· Cursor (--mode=ask). Р•СЃР»Рё True вЂ” С„Р°Р·Р° В«Р°РЅР°Р»РёР·В» РїРµСЂРµРґ РІС‹РїРѕР»РЅРµРЅРёРµРј.
 ANALYZE_TASK_BEFORE_RUN = os.getenv("ANALYZE_TASK_BEFORE_RUN", "1").strip().lower() in ("1", "true", "yes", "on")

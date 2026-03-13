@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -17,7 +16,7 @@ import {
 import { useI18n } from "@/lib/i18n";
 import {
   Bot, Plus, Play, Trash2, RefreshCw, Clock, Zap, Eye,
-  FileText, Server, ChevronDown, ChevronUp, X, Square,
+  FileText, Server, X, Square,
   Brain, Target, Settings2, Layers, Terminal, CheckCircle2,
   AlertTriangle, Activity,
   Shield,
@@ -55,19 +54,6 @@ const AGENT_ICONS: Record<string, LucideIcon> = {
   multi_health: Activity,
   custom: Settings2,
 };
-const MODE_LABELS: Record<"all" | "mini" | "full" | "multi", string> = {
-  all: "All",
-  mini: "Mini",
-  full: "Full",
-  multi: "Pipeline",
-};
-
-function modeBadgeClass(mode: string) {
-  if (mode === "full") return "bg-primary/12 text-primary";
-  if (mode === "multi") return "bg-secondary text-foreground";
-  return "bg-background/65 text-muted-foreground";
-}
-
 function relativeTime(iso: string | null): string {
   if (!iso) return "—";
   const diff = Date.now() - new Date(iso).getTime();
@@ -80,11 +66,12 @@ function relativeTime(iso: string | null): string {
 }
 
 export default function AgentsPage() {
-  const { t } = useI18n();
+  useI18n();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [modeFilter, setModeFilter] = useState<"all" | "mini" | "full" | "multi">("all");
   const [createOpen, setCreateOpen] = useState(false);
+  const [createdAgentId, setCreatedAgentId] = useState<number | null>(null);
   const [runningId, setRunningId] = useState<number | null>(null);
   const [result, setResult] = useState<AgentRunResult | null>(null);
   const [reportModalOpen, setReportModalOpen] = useState(false);
@@ -197,8 +184,17 @@ export default function AgentsPage() {
               const AgentIcon = AGENT_ICONS[ag.agent_type] || Settings2;
               const isRunning = runningId === ag.id || !!ag.active_run_id;
               return (
-                <div key={ag.id} className="flex items-center gap-3 px-4 py-3 hover:bg-secondary/20 transition-colors">
-                  <span className="text-lg shrink-0">{AGENT_ICONS[ag.agent_type] || "🔧"}</span>
+                <div
+                  key={ag.id}
+                  className={`flex items-center gap-3 px-4 py-3 transition-colors ${
+                    createdAgentId === ag.id
+                      ? "bg-primary/8 ring-1 ring-inset ring-primary/25"
+                      : "hover:bg-secondary/20"
+                  }`}
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-card/70">
+                    <AgentIcon className="h-4 w-4 text-primary" />
+                  </span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-sm font-medium text-foreground">{ag.name}</span>
@@ -256,14 +252,31 @@ export default function AgentsPage() {
       )}
 
       <CreateAgentDialog open={createOpen} onClose={() => setCreateOpen(false)}
-        onCreated={() => { setCreateOpen(false); queryClient.invalidateQueries({ queryKey: ["agents"] }); }} />
+        onCreated={async ({ id, mode }) => {
+          setModeFilter("all");
+          setCreatedAgentId(id);
+          setCreateOpen(false);
+          await queryClient.invalidateQueries({ queryKey: ["agents", "list"] });
+          if (mode === "full" || mode === "multi") {
+            navigate("/agents");
+          }
+          window.setTimeout(() => setCreatedAgentId((current) => (current === id ? null : current)), 8000);
+        }} />
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
 
-function CreateAgentDialog({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: () => void }) {
+function CreateAgentDialog({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated: (created: { id: number; mode: "mini" | "full" | "multi" }) => Promise<void> | void;
+}) {
   const [step, setStep] = useState<"template" | "config">("template");
   const [mode, setMode] = useState<"mini" | "full" | "multi">("mini");
   const [selectedType, setSelectedType] = useState("");
@@ -281,7 +294,7 @@ function CreateAgentDialog({ open, onClose, onCreated }: { open: boolean; onClos
   const { data: tplData } = useQuery({ queryKey: ["agents", "templates"], queryFn: fetchAgentTemplates, enabled: open });
   const { data: bootstrapData } = useQuery({ queryKey: ["frontend", "bootstrap"], queryFn: fetchFrontendBootstrap, staleTime: 30_000 });
 
-  const templates = (tplData?.templates || []).filter((t) => t.mode === mode || (mode === "multi" && t.mode === "full"));
+  const templates = (tplData?.templates || []).filter((template) => template.mode === mode || (mode === "multi" && template.mode === "full"));
   const servers = bootstrapData?.servers || [];
 
   const onSelectTemplate = (tpl: AgentTemplate) => {
@@ -301,7 +314,7 @@ function CreateAgentDialog({ open, onClose, onCreated }: { open: boolean; onClos
     setSaving(true);
     try {
       const cmdList = commands.split("\n").map((c) => c.trim()).filter(Boolean);
-      await createAgent({
+      const created = await createAgent({
         name: name || "Custom Agent",
         mode,
         agent_type: selectedType || "custom",
@@ -314,7 +327,7 @@ function CreateAgentDialog({ open, onClose, onCreated }: { open: boolean; onClos
         max_iterations: maxIter,
         allow_multi_server: multiServer,
       });
-      onCreated();
+      await onCreated({ id: created.id, mode });
       resetForm();
     } finally { setSaving(false); }
   };
@@ -329,7 +342,7 @@ function CreateAgentDialog({ open, onClose, onCreated }: { open: boolean; onClos
   const selectAll = () => { if (selectedServers.length === servers.length) setSelectedServers([]); else setSelectedServers(servers.map((s) => s.id)); };
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{step === "template" ? "Create Agent" : `Configure ${mode === "multi" ? "Pipeline" : mode === "full" ? "Full" : "Mini"} Agent`}</DialogTitle>
@@ -422,7 +435,7 @@ function CreateAgentDialog({ open, onClose, onCreated }: { open: boolean; onClos
                 </>
               )}
 
-              {mode === "mini" && mode !== "multi" && (
+              {mode === "mini" && (
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-muted-foreground">Commands (one per line)</label>
                   <Textarea value={commands} onChange={(e) => setCommands(e.target.value)} rows={5} className="bg-secondary/50 font-mono text-[11px]"

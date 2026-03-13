@@ -4,10 +4,11 @@ from pathlib import Path
 
 import pytest
 from django.contrib.auth.models import User
-from django.test import Client
+from django.test import Client, override_settings
 
+from core_ui.models import UserAppPermission
 from servers.models import Server
-from studio.models import MCPServerPool, PipelineTemplate
+from studio.models import MCPServerPool, Pipeline, PipelineRun, PipelineTemplate
 
 
 def _json(payload: dict) -> str:
@@ -23,9 +24,19 @@ def _llm_node(node_id: str) -> dict:
     }
 
 
+def _grant_feature(user: User, *features: str) -> None:
+    for feature in features:
+        UserAppPermission.objects.update_or_create(
+            user=user,
+            feature=feature,
+            defaults={"allowed": True},
+        )
+
+
 @pytest.mark.django_db
 def test_studio_pipeline_trigger_template_and_servers_endpoints(monkeypatch):
     user = User.objects.create_user(username="studio-user", password="x")
+    _grant_feature(user, "agents")
     server = Server.objects.create(user=user, name="studio-srv", host="10.0.0.55", username="root")
     client = Client()
     client.force_login(user)
@@ -142,8 +153,48 @@ def test_studio_pipeline_trigger_template_and_servers_endpoints(monkeypatch):
 
 
 @pytest.mark.django_db
+@override_settings(PIPELINE_ACTIVE_RUNS_PER_USER_LIMIT=1, PIPELINE_ACTIVE_RUNS_GLOBAL_LIMIT=0)
+def test_pipeline_run_enforces_user_active_run_limit(monkeypatch):
+    user = User.objects.create_user(username="studio-limit-user", password="x")
+    _grant_feature(user, "studio", "agents")
+    client = Client()
+    client.force_login(user)
+
+    pipeline = Pipeline.objects.create(
+        name="Limited Flow",
+        owner=user,
+        nodes=[{"id": "n1", "type": "agent/llm_query", "position": {"x": 0, "y": 0}, "data": {"prompt": "hi"}}],
+        edges=[],
+    )
+    PipelineRun.objects.create(
+        pipeline=pipeline,
+        triggered_by=user,
+        status=PipelineRun.STATUS_RUNNING,
+        context={},
+    )
+
+    monkeypatch.setattr(
+        "studio.views._launch_pipeline_run_async",
+        lambda _run: pytest.fail("_launch_pipeline_run_async should not be called when the active-run limit is hit"),
+    )
+
+    response = client.post(
+        f"/api/studio/pipelines/{pipeline.id}/run/",
+        data=_json({"context": {}}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 429
+    payload = response.json()
+    assert payload["success"] is False
+    assert payload["code"] == "pipeline_user_limit_reached"
+    assert payload["limit"] == 1
+    assert payload["active"] == 1
+
+
+@pytest.mark.django_db
 def test_studio_agents_skills_and_mcp_crud_endpoints(monkeypatch):
-    user = User.objects.create_user(username="studio-admin", password="x")
+    user = User.objects.create_user(username="studio-admin", password="x", is_staff=True)
     server = Server.objects.create(user=user, name="scope-srv", host="10.0.0.77", username="root")
     client = Client()
     client.force_login(user)
@@ -250,7 +301,7 @@ def test_studio_agents_skills_and_mcp_crud_endpoints(monkeypatch):
 
 @pytest.mark.django_db
 def test_studio_notification_endpoints_with_mocked_transports(monkeypatch, settings):
-    user = User.objects.create_user(username="notif-user", password="x")
+    user = User.objects.create_user(username="notif-user", password="x", is_staff=True)
     client = Client()
     client.force_login(user)
 
@@ -332,3 +383,48 @@ def test_studio_notification_endpoints_with_mocked_transports(monkeypatch, setti
     email = client.post("/api/studio/notifications/test-email/")
     assert email.status_code == 200
     assert email.json()["ok"] is True
+
+
+@pytest.mark.django_db
+def test_non_admin_cannot_manage_global_notifications_or_skill_workspace():
+    user = User.objects.create_user(username="studio-non-admin", password="x")
+    _grant_feature(user, "studio")
+    client = Client()
+    client.force_login(user)
+
+    mcp_list = client.get("/api/studio/mcp/")
+    assert mcp_list.status_code == 403
+
+    mcp_create = client.post(
+        "/api/studio/mcp/",
+        data=_json({"name": "Blocked MCP", "transport": "stdio", "command": "echo"}),
+        content_type="application/json",
+    )
+    assert mcp_create.status_code == 403
+
+    notif_get = client.get("/api/studio/notifications/")
+    assert notif_get.status_code == 403
+
+    notif_post = client.post(
+        "/api/studio/notifications/",
+        data=_json({"notify_email": "ops@example.com"}),
+        content_type="application/json",
+    )
+    assert notif_post.status_code == 403
+
+    scaffold = client.post(
+        "/api/studio/skills/scaffold/",
+        data=_json({"name": "Blocked Skill", "description": "should fail"}),
+        content_type="application/json",
+    )
+    assert scaffold.status_code == 403
+
+    workspace = client.get("/api/studio/skills/keycloak-safety/workspace/")
+    assert workspace.status_code == 403
+
+    validate = client.post(
+        "/api/studio/skills/validate/",
+        data=_json({"slugs": ["keycloak-safety"]}),
+        content_type="application/json",
+    )
+    assert validate.status_code == 403

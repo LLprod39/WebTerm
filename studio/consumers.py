@@ -13,6 +13,9 @@ from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.contrib.auth.models import AnonymousUser
 from django.core.serializers.json import DjangoJSONEncoder
+from django.utils import timezone
+
+from .pipeline_runtime import get_executor_for_run
 
 
 class PipelineRunConsumer(AsyncWebsocketConsumer):
@@ -24,11 +27,12 @@ class PipelineRunConsumer(AsyncWebsocketConsumer):
         if not user or isinstance(user, AnonymousUser) or not user.is_authenticated:
             await self.close(code=4001)
             return
-        if not await self._user_can_studio(user.id):
+
+        run_id = self.scope["url_route"]["kwargs"]["run_id"]
+        if not await self._user_can_access_run(user.id, run_id):
             await self.close(code=4003)
             return
 
-        run_id = self.scope["url_route"]["kwargs"]["run_id"]
         self.run_id = run_id
         self.group_name = f"pipeline_run_{run_id}"
 
@@ -49,15 +53,12 @@ class PipelineRunConsumer(AsyncWebsocketConsumer):
 
         action = msg.get("action")
         if action == "stop":
-            from asgiref.sync import sync_to_async
-
-            from studio.models import PipelineRun
-
-            run = await sync_to_async(PipelineRun.objects.get)(pk=self.run_id)
-            # Signal executor to stop (stored in channels group metadata)
-            await self.channel_layer.group_send(
-                self.group_name,
-                {"type": "pipeline.control", "action": "stop"},
+            executor = get_executor_for_run(self.run_id)
+            if executor is not None:
+                executor.request_stop()
+            await self._mark_run_stopped(self.run_id)
+            await self._send_event(
+                {"type": "control_ack", "action": "stop", "ok": True, "live_executor": executor is not None}
             )
 
     # ------------------------------------------------------------------
@@ -78,9 +79,27 @@ class PipelineRunConsumer(AsyncWebsocketConsumer):
         pass
 
     @database_sync_to_async
-    def _user_can_studio(self, user_id: int) -> bool:
+    def _user_can_access_run(self, user_id: int, run_id: int) -> bool:
         from django.contrib.auth.models import User
         from core_ui.context_processors import user_can_feature
+        from studio.models import PipelineRun
 
         user = User.objects.filter(id=user_id).first()
-        return bool(user and user_can_feature(user, "agents"))
+        if not user or not user_can_feature(user, "studio"):
+            return False
+        return PipelineRun.objects.filter(pk=run_id, pipeline__owner_id=user_id).exists()
+
+    @database_sync_to_async
+    def _mark_run_stopped(self, run_id: int) -> None:
+        from studio.models import PipelineRun
+        from studio.pipeline_runtime import update_runtime_control
+
+        run = PipelineRun.objects.filter(pk=run_id).first()
+        if run is None:
+            return
+
+        update_runtime_control(run, stop_requested=True)
+        if run.status in {PipelineRun.STATUS_PENDING, PipelineRun.STATUS_RUNNING}:
+            run.status = PipelineRun.STATUS_STOPPED
+            run.finished_at = timezone.now()
+            run.save(update_fields=["status", "finished_at"])

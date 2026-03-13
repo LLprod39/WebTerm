@@ -4,10 +4,21 @@ import pytest
 from django.contrib.auth.models import User
 from django.test import Client
 
+from core_ui.models import UserAppPermission
+
+
+def _grant_feature(user: User, *features: str) -> None:
+    for feature in features:
+        UserAppPermission.objects.update_or_create(
+            user=user,
+            feature=feature,
+            defaults={"allowed": True},
+        )
 
 @pytest.mark.django_db
 def test_pipeline_assistant_returns_reply_and_patch(monkeypatch):
     user = User.objects.create_user(username="pipeline-assistant", password="x")
+    _grant_feature(user, "agents")
     client = Client()
     client.force_login(user)
 

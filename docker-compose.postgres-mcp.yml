@@ -29,6 +29,19 @@ services:
       - "-c"
       - "shared_buffers=128MB"
 
+  redis:
+    image: redis:7-alpine
+    container_name: mini-prod-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   mcp-demo:
     image: python:3.12-slim
     container_name: mini-prod-mcp-demo

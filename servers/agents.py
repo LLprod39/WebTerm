@@ -21,6 +21,7 @@ from loguru import logger
 
 from app.tools.safety import is_dangerous_command
 from core_ui.activity import log_user_activity
+from core_ui.audit import audit_context
 from servers.models import AgentRun, Server, ServerAgent
 from servers.monitor import _build_connect_kwargs
 
@@ -284,7 +285,7 @@ async def run_agent(agent: ServerAgent, server: Server, user) -> AgentRun:
     outputs: list[dict[str, Any]] = []
 
     try:
-        kwargs = _build_connect_kwargs(server)
+        kwargs = await _build_connect_kwargs(server)
     except Exception as exc:
         run.status = AgentRun.STATUS_FAILED
         run.ai_analysis = f"Cannot connect to server: {exc}"
@@ -344,7 +345,16 @@ async def run_agent(agent: ServerAgent, server: Server, user) -> AgentRun:
         await sync_to_async(run.save)()
         return run
 
-    ai_analysis = await _get_ai_analysis(agent, server, outputs)
+    with audit_context(
+        user_id=getattr(user, "id", None),
+        username_snapshot=str(getattr(user, "username", "") or ""),
+        channel="agent",
+        path=f"/servers/api/agents/{agent.id}/run/",
+        entity_type="agent_run",
+        entity_id=str(run.id),
+        entity_name=agent.name,
+    ):
+        ai_analysis = await _get_ai_analysis(agent, server, outputs)
 
     run.status = AgentRun.STATUS_COMPLETED
     run.commands_output = outputs

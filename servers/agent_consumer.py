@@ -14,6 +14,8 @@ from __future__ import annotations
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
+from servers.agent_runtime import get_engine_for_run, update_runtime_control
+
 
 class AgentLiveConsumer(AsyncJsonWebsocketConsumer):
     """
@@ -95,13 +97,31 @@ class AgentLiveConsumer(AsyncJsonWebsocketConsumer):
     async def agent_question(self, event):
         await self.send_json(event)
 
+    async def agent_plan(self, event):
+        await self.send_json(event)
+
+    async def agent_pipeline_phase(self, event):
+        await self.send_json(event)
+
+    async def agent_task_start(self, event):
+        await self.send_json(event)
+
+    async def agent_task_done(self, event):
+        await self.send_json(event)
+
+    async def agent_task_failed(self, event):
+        await self.send_json(event)
+
+    async def agent_task_iteration(self, event):
+        await self.send_json(event)
+
     # ------------------------------------------------------------------
     # User commands
     # ------------------------------------------------------------------
 
     async def _handle_stop(self):
-        from servers.models import AgentRun
-        await self._update_run_status(AgentRun.STATUS_STOPPED)
+        await self._issue_runtime_control(stop_requested=True, pause_requested=False)
+        await self._mark_run_stopped()
         await self.channel_layer.group_send(self.group_name, {
             "type": "agent_status",
             "status": "stopped",
@@ -110,6 +130,7 @@ class AgentLiveConsumer(AsyncJsonWebsocketConsumer):
 
     async def _handle_pause(self):
         from servers.models import AgentRun
+        await self._issue_runtime_control(pause_requested=True)
         await self._update_run_status(AgentRun.STATUS_PAUSED)
         await self.channel_layer.group_send(self.group_name, {
             "type": "agent_status",
@@ -118,6 +139,7 @@ class AgentLiveConsumer(AsyncJsonWebsocketConsumer):
 
     async def _handle_resume(self):
         from servers.models import AgentRun
+        await self._issue_runtime_control(pause_requested=False)
         await self._update_run_status(AgentRun.STATUS_RUNNING)
         await self.channel_layer.group_send(self.group_name, {
             "type": "agent_status",
@@ -128,6 +150,7 @@ class AgentLiveConsumer(AsyncJsonWebsocketConsumer):
         if not answer:
             return
         from servers.models import AgentRun
+        await self._issue_runtime_control(reply_text=answer, pause_requested=False)
 
         @database_sync_to_async
         def save_reply():
@@ -183,3 +206,35 @@ class AgentLiveConsumer(AsyncJsonWebsocketConsumer):
     def _update_run_status(self, status: str):
         from servers.models import AgentRun
         AgentRun.objects.filter(id=self.run_id, agent__user_id=self._user_id).update(status=status)
+
+    @database_sync_to_async
+    def _mark_run_stopped(self):
+        from django.utils import timezone
+        from servers.models import AgentRun
+
+        AgentRun.objects.filter(id=self.run_id, agent__user_id=self._user_id).update(
+            status=AgentRun.STATUS_STOPPED,
+            completed_at=timezone.now(),
+        )
+
+    @database_sync_to_async
+    def _issue_runtime_control(
+        self,
+        *,
+        stop_requested: bool | None = None,
+        pause_requested: bool | None = None,
+        reply_text: str | None = None,
+    ):
+        from servers.models import AgentRun
+
+        run = AgentRun.objects.filter(id=self.run_id, agent__user_id=self._user_id).first()
+        if not run:
+            return
+        live_engine = get_engine_for_run(self.run_id)
+        update_runtime_control(
+            run,
+            live_engine=live_engine,
+            stop_requested=stop_requested,
+            pause_requested=pause_requested,
+            reply_text=reply_text,
+        )

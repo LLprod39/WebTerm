@@ -1,0 +1,147 @@
+- generic [ref=e2]:
+  - region "Notifications (F8)":
+    - list
+  - region "Notifications alt+T"
+  - generic [ref=e5]:
+    - generic [ref=e9]:
+      - generic [ref=e10]:
+        - generic [ref=e12]: W
+        - generic [ref=e13]: WebTermAI
+        - button [ref=e14] [cursor=pointer]:
+          - img [ref=e15]
+      - list [ref=e20]:
+        - listitem [ref=e21]:
+          - link "Серверы" [ref=e22] [cursor=pointer]:
+            - /url: /servers
+            - img [ref=e23]
+            - generic [ref=e26]: Серверы
+        - listitem [ref=e27]:
+          - link "Агенты" [ref=e28] [cursor=pointer]:
+            - /url: /agents
+            - img [ref=e29]
+            - generic [ref=e32]: Агенты
+        - listitem [ref=e33]:
+          - link "Студия" [ref=e34] [cursor=pointer]:
+            - /url: /studio
+            - img [ref=e35]
+            - generic [ref=e39]: Студия
+      - generic [ref=e40]:
+        - generic [ref=e42]:
+          - button "EN" [ref=e43] [cursor=pointer]
+          - button "RU" [ref=e44] [cursor=pointer]
+        - generic [ref=e45]:
+          - generic [ref=e46]: S
+          - generic [ref=e47]:
+            - paragraph [ref=e48]: smoke-user-01
+            - paragraph [ref=e49]: Оператор
+          - button "Выйти" [ref=e50] [cursor=pointer]:
+            - img [ref=e51]
+    - generic [ref=e54]:
+      - banner [ref=e55]:
+        - button "Toggle Sidebar" [ref=e56] [cursor=pointer]:
+          - img
+          - generic [ref=e57]: Toggle Sidebar
+        - link "Back" [ref=e58] [cursor=pointer]:
+          - /url: /agents
+          - img [ref=e59]
+          - text: Back
+        - generic [ref=e61]: Agent Run
+      - main [ref=e62]:
+        - generic [ref=e63]:
+          - generic [ref=e65]:
+            - generic [ref=e66]:
+              - generic [ref=e67]:
+                - link [ref=e68] [cursor=pointer]:
+                  - /url: /agents
+                  - button [ref=e69]:
+                    - img
+                - generic [ref=e70]:
+                  - img [ref=e71]
+                  - heading "Smoke Multi Agent" [level=1] [ref=e74]
+              - generic [ref=e75]:
+                - generic [ref=e76]: running
+                - generic [ref=e77]:
+                  - img [ref=e78]
+                  - text: Pipeline
+                - generic [ref=e82]:
+                  - button "Pipeline" [ref=e83] [cursor=pointer]:
+                    - generic [ref=e84]:
+                      - img [ref=e85]
+                      - text: Pipeline
+                  - button "Отчёт" [ref=e90] [cursor=pointer]:
+                    - generic [ref=e91]:
+                      - img [ref=e92]
+                      - text: Отчёт
+                - button "Остановить" [ref=e95] [cursor=pointer]:
+                  - img
+                  - text: Остановить
+            - generic [ref=e96]:
+              - generic [ref=e97]: 53s
+              - generic [ref=e98]: ·
+              - generic [ref=e99]: 1 tasks
+              - generic [ref=e100]: ·
+              - generic [ref=e101]: 1 servers
+              - generic [ref=e102]: ·
+              - generic [ref=e103]: 13.03.2026, 04:42
+              - generic [ref=e104]: ·
+              - generic [ref=e106]:
+                - img [ref=e107]
+                - text: Smoke SSH 01
+              - generic [ref=e109]:
+                - generic [ref=e111]: 0/1
+                - generic [ref=e112]: 1 running
+                - button "Выключить автопрокрутку" [ref=e113] [cursor=pointer]:
+                  - img [ref=e114]
+          - generic [ref=e120]:
+            - generic [ref=e122]:
+              - generic [ref=e123]:
+                - generic [ref=e124]: Goal
+                - generic [ref=e125]:
+                  - img [ref=e127]
+                  - generic [ref=e131]:
+                    - paragraph [ref=e132]: Smoke Multi Agent
+                    - paragraph [ref=e133]: Smoke Multi Agent
+              - generic [ref=e134]:
+                - generic [ref=e135]: Plan state
+                - generic [ref=e136]:
+                  - img [ref=e138]
+                  - generic [ref=e148]:
+                    - paragraph [ref=e149]: Создано 1 задач
+                    - paragraph [ref=e150]: Сейчас отображается живая последовательность исполнения и решений оркестратора.
+              - generic [ref=e151]:
+                - generic [ref=e152]: Run signal
+                - generic [ref=e153]:
+                  - img [ref=e155]
+                  - generic [ref=e157]:
+                    - paragraph [ref=e158]: В работе
+                    - paragraph [ref=e159]: Лента ниже показывает текущее состояние задач и наблюдения оркестратора.
+            - generic [ref=e161]:
+              - generic [ref=e162]:
+                - generic [ref=e163]:
+                  - img [ref=e165]
+                  - generic [ref=e169]:
+                    - generic [ref=e170]: Goal
+                    - generic [ref=e171]: Smoke Multi Agent
+                - paragraph [ref=e172]: Smoke Multi Agent
+              - generic [ref=e175]:
+                - generic [ref=e176]:
+                  - img [ref=e178]
+                  - generic [ref=e188]:
+                    - generic [ref=e189]: Orchestrator
+                    - generic [ref=e190]: Планирование
+                - paragraph [ref=e192]: Создан план из 1 задач
+              - generic [ref=e196]:
+                - generic [ref=e197] [cursor=pointer]:
+                  - img [ref=e199]
+                  - generic [ref=e204]:
+                    - generic [ref=e205]: Задача 1
+                    - generic [ref=e206]: Check SSH
+                  - generic [ref=e207]: Выполняется
+                  - img [ref=e208]
+                - generic [ref=e210]:
+                  - paragraph [ref=e211]: Validate SSH access
+                  - generic [ref=e212]:
+                    - generic [ref=e213]:
+                      - img [ref=e214]
+                      - text: Thinking
+                    - paragraph [ref=e224]: Inspecting host

@@ -38,7 +38,7 @@ from core_ui.desktop_api.serializers import (
 from core_ui.managed_secrets import set_mcp_secret_env
 from servers.models import GlobalServerRules, Server, ServerGroup, ServerKnowledge
 from servers.secret_utils import clear_server_auth_secret, store_server_auth_secret
-from servers.views import _accessible_servers_queryset, _active_server_share, _get_group_role
+from servers.views import _accessible_servers_queryset, _active_server_share, _get_group_role, _shared_server_context_allowed
 from studio.mcp_client import MCPClientError, inspect_mcp_server
 from studio.models import MCPServerPool
 from studio.views import _normalize_sse_url, _test_mcp_connection
@@ -60,6 +60,13 @@ def _error(message: str, *, code: str = "bad_request", status: int = 400, detail
 
 def _ok(data: dict, *, status: int = 200) -> JsonResponse:
     return JsonResponse(data, status=status)
+
+
+def _require_admin(request, *, message: str = "Admin access required") -> JsonResponse | None:
+    user = getattr(request, "desktop_user", None)
+    if user and getattr(user, "is_staff", False):
+        return None
+    return _error(message, code="forbidden", status=403)
 
 
 def _bearer_token(request) -> str:
@@ -264,7 +271,7 @@ def bootstrap(request):
                 "servers_owned": sum(1 for server in servers if server.user_id == user.id),
                 "servers_shared": shared_count,
                 "groups": len(groups),
-                "mcp": MCPServerPool.objects.filter(owner=user).count(),
+                "mcp": MCPServerPool.objects.filter(owner=user).count() if user_can_feature(user, "studio") else 0,
             },
             "groups": [serialize_group(group) for group in groups],
             "terminal": {
@@ -413,7 +420,7 @@ def group_context(request, group_id: int):
     if not role:
         return _error("Forbidden", code="forbidden", status=403)
     if request.method == "GET":
-        return _ok({"item": serialize_group_context(group)})
+        return _ok({"item": serialize_group_context(group, include_environment_vars=role in ("owner", "admin"))})
 
     if role not in ("owner", "admin"):
         return _error("Forbidden", code="forbidden", status=403)
@@ -444,7 +451,17 @@ def server_detail(request, server_id: int):
         return _error("Server not found", code="server_not_found", status=404)
 
     if request.method == "GET":
-        return _ok({"item": serialize_server_detail(server, current_user=user, share=_active_server_share(server, user))})
+        share = _active_server_share(server, user)
+        return _ok(
+            {
+                "item": serialize_server_detail(
+                    server,
+                    current_user=user,
+                    share=share,
+                    can_access_context=_shared_server_context_allowed(server, user, share=share),
+                )
+            }
+        )
 
     if server.user_id != user.id:
         return _error("Only owner can modify server", code="forbidden", status=403)
@@ -527,6 +544,9 @@ def server_knowledge_detail(request, server_id: int, knowledge_id: int):
 @csrf_exempt
 @desktop_auth_required("studio")
 def mcp_collection(request):
+    admin_error = _require_admin(request)
+    if admin_error:
+        return admin_error
     user = request.desktop_user
     if request.method == "GET":
         items = list(MCPServerPool.objects.filter(owner=user).order_by("name"))
@@ -559,6 +579,9 @@ def mcp_collection(request):
 @csrf_exempt
 @desktop_auth_required("studio")
 def mcp_detail(request, mcp_id: int):
+    admin_error = _require_admin(request)
+    if admin_error:
+        return admin_error
     user = request.desktop_user
     item = MCPServerPool.objects.filter(id=mcp_id, owner=user).first()
     if not item:
@@ -591,6 +614,9 @@ def mcp_detail(request, mcp_id: int):
 @csrf_exempt
 @desktop_auth_required("studio")
 def mcp_test(request, mcp_id: int):
+    admin_error = _require_admin(request)
+    if admin_error:
+        return admin_error
     user = request.desktop_user
     item = MCPServerPool.objects.filter(id=mcp_id, owner=user).first()
     if not item:
@@ -606,6 +632,9 @@ def mcp_test(request, mcp_id: int):
 @require_http_methods(["GET"])
 @desktop_auth_required("studio")
 def mcp_tools(request, mcp_id: int):
+    admin_error = _require_admin(request)
+    if admin_error:
+        return admin_error
     user = request.desktop_user
     item = MCPServerPool.objects.filter(id=mcp_id, owner=user).first()
     if not item:

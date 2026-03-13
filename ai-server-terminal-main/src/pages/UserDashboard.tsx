@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   aiAnalyzeServer,
@@ -106,13 +105,13 @@ export default function UserDashboard() {
 
   const { data: agentsData } = useQuery({
     queryKey: ["agents", "list"],
-    queryFn: fetchAgents,
+    queryFn: () => fetchAgents(),
     staleTime: 15_000,
   });
 
   const { data: runsData } = useQuery({
     queryKey: ["agents", "dashboard-runs"],
-    queryFn: fetchAgentDashboardRuns,
+    queryFn: () => fetchAgentDashboardRuns(),
     refetchInterval: 5_000,
   });
 

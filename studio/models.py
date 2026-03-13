@@ -167,11 +167,11 @@ class AgentConfig(models.Model):
             "model": self.model,
             "max_iterations": self.max_iterations,
             "allowed_tools": self.allowed_tools,
-            "mcp_servers": list(self.mcp_servers.values("id", "name", "transport")),
+            "mcp_servers": list(self.mcp_servers.filter(owner=self.owner).values("id", "name", "transport")),
             "skill_slugs": list(self.skill_slugs or []),
             "skills": [skill.to_summary_dict() for skill in skills],
             "skill_errors": [*skill_errors, *policy_errors],
-            "server_scope": list(self.server_scope.values("id", "name")),
+            "server_scope": list(self.server_scope.filter(user=self.owner).values("id", "name")),
         }
 
 
@@ -416,6 +416,11 @@ class PipelineRun(models.Model):
     # Context passed to the run (from trigger payload or manual input)
     context = models.JSONField(default=dict, blank=True)
     trigger_data = models.JSONField(default=dict, blank=True)
+    runtime_control = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Runtime control mailbox for cross-process pipeline control: {stop_requested}",
+    )
 
     # Final summary output
     summary = models.TextField(blank=True)

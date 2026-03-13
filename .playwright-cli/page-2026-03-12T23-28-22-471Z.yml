@@ -1,0 +1,33 @@
+- generic [ref=e2]:
+  - region "Notifications (F8)":
+    - list
+  - region "Notifications alt+T"
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - generic [ref=e8]: W
+        - generic [ref=e9]: WebTermAI
+      - heading "WebTermAI" [level=1] [ref=e10]
+      - paragraph [ref=e11]: Войдите в консоль управления серверами
+    - generic [ref=e12]:
+      - generic [ref=e13]:
+        - text: Имя пользователя
+        - textbox "Имя пользователя" [ref=e14]:
+          - /placeholder: admin
+          - text: smoke-user-01
+      - generic [ref=e15]:
+        - text: Пароль
+        - textbox "Пароль" [ref=e16]: SmokePass123!
+      - generic [ref=e17] [cursor=pointer]:
+        - checkbox "Локальный вход" [checked] [ref=e18]:
+          - generic:
+            - img
+        - checkbox [checked]
+        - generic [ref=e19]: Локальный вход
+      - paragraph [ref=e26]: Invalid username or password
+      - button "Войти" [ref=e20] [cursor=pointer]
+    - generic [ref=e21]:
+      - paragraph [ref=e22]: Авторизация через Django backend
+      - generic [ref=e23]:
+        - button "EN" [ref=e24] [cursor=pointer]
+        - button "RU" [ref=e25] [cursor=pointer]

@@ -67,7 +67,8 @@ def serialize_server_summary(server, *, connected_server_ids: set[int] | None = 
     }
 
 
-def serialize_server_detail(server, *, current_user, share=None) -> dict:
+def serialize_server_detail(server, *, current_user, share=None, can_access_context: bool = True) -> dict:
+    is_owner = bool(server.user_id == current_user.id)
     return {
         "id": int(server.id),
         "name": server.name,
@@ -78,14 +79,14 @@ def serialize_server_detail(server, *, current_user, share=None) -> dict:
         "auth_method": server.auth_method,
         "key_path": server.key_path,
         "tags": server.tags,
-        "notes": server.notes,
-        "corporate_context": server.corporate_context,
-        "network_config": server.network_config or {},
+        "notes": server.notes if can_access_context else "",
+        "corporate_context": server.corporate_context if can_access_context else "",
+        "network_config": (server.network_config or {}) if can_access_context else {},
         "group_id": server.group_id,
         "group_name": server.group.name if server.group else "",
         "is_active": bool(server.is_active),
-        "has_saved_secret": bool(has_saved_server_secret(server)),
-        "can_edit": bool(server.user_id == current_user.id),
+        "has_saved_secret": bool(is_owner and has_saved_server_secret(server)),
+        "can_edit": is_owner,
         "is_shared_server": bool(share),
         "share_context_enabled": bool(share.share_context) if share else True,
         "shared_by_username": share.shared_by.username if share and share.shared_by else "",
@@ -116,13 +117,13 @@ def serialize_global_context(rules) -> dict:
     }
 
 
-def serialize_group_context(group) -> dict:
+def serialize_group_context(group, *, include_environment_vars: bool = True) -> dict:
     return {
         "id": int(group.id),
         "name": group.name,
         "rules": group.rules,
         "forbidden_commands": list(group.forbidden_commands or []),
-        "environment_vars": dict(group.environment_vars or {}),
+        "environment_vars": dict(group.environment_vars or {}) if include_environment_vars else {},
     }
 
 

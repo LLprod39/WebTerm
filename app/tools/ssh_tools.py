@@ -6,8 +6,14 @@ import asyncssh
 import secrets
 from loguru import logger
 from typing import Optional, Dict, Any
+from asgiref.sync import sync_to_async
+from django.conf import settings
+
 from app.tools.base import BaseTool, ToolMetadata, ToolParameter
 from app.tools.safety import is_dangerous_command
+from core_ui.activity import log_user_activity
+from core_ui.audit import get_audit_context
+from servers.ssh_host_keys import ensure_server_known_hosts, parse_host_port_value, tofu_known_hosts_for_host
 
 
 class SSHConnectionManager:
@@ -24,6 +30,8 @@ class SSHConnectionManager:
         key_path: Optional[str] = None,
         port: int = 22,
         network_config: Optional[Dict] = None,
+        server: Optional[Any] = None,
+        refresh_host_key: bool = False,
     ) -> str:
         """
         Establish SSH connection с учётом network_config
@@ -39,23 +47,34 @@ class SSHConnectionManager:
         Returns:
             connection ID
         """
-        conn_id = f"{username}@{host}:{port}:{secrets.token_hex(4)}"
+        normalized_host, normalized_port = parse_host_port_value(host, port)
+        conn_id = f"{username}@{normalized_host}:{normalized_port}:{secrets.token_hex(4)}"
         
         try:
             logger.info(f"Connecting to {conn_id}...")
+            effective_network_config = network_config or getattr(server, "network_config", None) or {}
+
+            if server is not None:
+                known_hosts = await ensure_server_known_hosts(server, refresh=refresh_host_key)
+            else:
+                known_hosts, _trusted_record = await tofu_known_hosts_for_host(
+                    normalized_host,
+                    normalized_port,
+                    network_config=effective_network_config,
+                )
             
             # Prepare connection options
             options = {
-                "known_hosts": None,  # Skip host key verification (use with caution!)
-                "connect_timeout": 10,
-                "login_timeout": 10,
-                "keepalive_interval": 20,
-                "keepalive_count_max": 3,
+                "known_hosts": known_hosts,
+                "connect_timeout": max(1, int(getattr(settings, "SSH_CONNECT_TIMEOUT_SECONDS", 10) or 10)),
+                "login_timeout": max(1, int(getattr(settings, "SSH_LOGIN_TIMEOUT_SECONDS", 20) or 20)),
+                "keepalive_interval": max(1, int(getattr(settings, "SSH_KEEPALIVE_INTERVAL_SECONDS", 20) or 20)),
+                "keepalive_count_max": max(1, int(getattr(settings, "SSH_KEEPALIVE_COUNT_MAX", 3) or 3)),
             }
             
             # Network config handling
-            if network_config:
-                nc = network_config
+            if effective_network_config:
+                nc = effective_network_config
                 
                 # Bastion/Jump host
                 bastion = nc.get('network', {}).get('bastion_host')
@@ -99,8 +118,8 @@ class SSHConnectionManager:
                     options['password'] = password
             
             conn = await asyncssh.connect(
-                host=host,
-                port=port,
+                host=normalized_host,
+                port=normalized_port,
                 username=username,
                 **options,
             )
@@ -228,9 +247,43 @@ class SSHExecuteTool(BaseTool):
     
     async def execute(self, conn_id: str, command: str, allow_destructive: bool = False) -> Dict[str, Any]:
         """Execute command over SSH"""
+        audit_ctx = get_audit_context()
         if is_dangerous_command(command) and not allow_destructive:
+            await sync_to_async(log_user_activity, thread_sensitive=True)(
+                user_id=audit_ctx.get("user_id"),
+                username_snapshot=str(audit_ctx.get("username_snapshot") or ""),
+                category="terminal",
+                action="terminal_command",
+                status="error",
+                description=command[:4000],
+                entity_type="ssh_connection",
+                entity_id=conn_id,
+                entity_name=conn_id,
+                metadata={
+                    "tool": "ssh_execute",
+                    "blocked": True,
+                    "reason": "dangerous_command_requires_allow_destructive",
+                },
+            )
             return {"success": False, "stderr": "Команда выглядит опасной. Нужен явный допуск allow_destructive=true.", "stdout": "", "exit_code": -1}
         result = await ssh_manager.execute(conn_id, command)
+        output_text = (result.get("stdout") or "") + (("\n" + (result.get("stderr") or "")) if result.get("stderr") else "")
+        await sync_to_async(log_user_activity, thread_sensitive=True)(
+            user_id=audit_ctx.get("user_id"),
+            username_snapshot=str(audit_ctx.get("username_snapshot") or ""),
+            category="terminal",
+            action="terminal_command",
+            status="success" if result.get("exit_code") == 0 else "error",
+            description=command[:4000],
+            entity_type="ssh_connection",
+            entity_id=conn_id,
+            entity_name=conn_id,
+            metadata={
+                "tool": "ssh_execute",
+                "exit_code": result.get("exit_code"),
+                "output_excerpt": output_text[:4000],
+            },
+        )
         return result
 
 

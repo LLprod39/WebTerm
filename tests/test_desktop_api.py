@@ -5,7 +5,7 @@ from django.test import Client, TestCase
 
 from core_ui.managed_secrets import get_mcp_secret_env, get_server_auth_secret
 from core_ui.models import ManagedSecret, UserAppPermission
-from servers.models import Server
+from servers.models import Server, ServerShare
 from studio.models import MCPServerPool
 
 
@@ -80,6 +80,8 @@ class DesktopApiTests(TestCase):
         self.assertTrue(ManagedSecret.objects.filter(namespace="server_auth_secret", object_id=server.id).exists())
 
     def test_mcp_secret_env_is_masked_in_desktop_api(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=["is_staff"])
         access_token, _ = self._login()
         response = self.client.post(
             "/api/desktop/v1/mcp/",
@@ -128,3 +130,42 @@ class DesktopApiTests(TestCase):
         self.assertEqual(terminal["server_id"], server.id)
         self.assertIn("ws_token", terminal)
         self.assertIn(f"/ws/servers/{server.id}/terminal/", terminal["path"])
+
+    def test_shared_server_detail_hides_saved_secret_for_desktop_user(self):
+        owner = User.objects.create_user(
+            username="desktop-owner",
+            email="owner@example.com",
+            password="OwnerPass123!",
+        )
+        server = Server.objects.create(
+            user=owner,
+            name="Shared Desktop Server",
+            host="10.0.0.50",
+            port=22,
+            username="root",
+            server_type="ssh",
+            auth_method="password",
+            notes="owner notes",
+            corporate_context="owner context",
+            network_config={"jump_host": "bastion"},
+            encrypted_password="ciphertext",
+            salt=b"12345678",
+        )
+        ServerShare.objects.create(server=server, user=self.user, shared_by=owner, share_context=False)
+
+        access_token, _ = self._login()
+        response = self.client.get(f"/api/desktop/v1/servers/{server.id}/", **self._auth_headers(access_token))
+
+        self.assertEqual(response.status_code, 200, response.content)
+        item = response.json()["item"]
+        self.assertEqual(item["notes"], "")
+        self.assertEqual(item["corporate_context"], "")
+        self.assertEqual(item["network_config"], {})
+        self.assertFalse(item["share_context_enabled"])
+        self.assertFalse(item["has_saved_secret"])
+
+    def test_non_admin_desktop_user_cannot_manage_mcp(self):
+        access_token, _ = self._login()
+        response = self.client.get("/api/desktop/v1/mcp/", **self._auth_headers(access_token))
+        self.assertEqual(response.status_code, 403, response.content)
+        self.assertEqual(response.json()["error"]["code"], "forbidden")

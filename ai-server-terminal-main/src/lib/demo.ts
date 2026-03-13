@@ -12,14 +12,24 @@ import type {
 } from "./api";
 
 let _demoMode = false;
+const _demoModeAllowed =
+  import.meta.env.DEV || String(import.meta.env.VITE_ENABLE_DEMO_MODE || "").toLowerCase() === "true";
 
 export function isDemoMode(): boolean {
   return _demoMode;
 }
 
-export function enableDemoMode(): void {
+export function canUseDemoMode(): boolean {
+  return _demoModeAllowed;
+}
+
+export function enableDemoMode(): boolean {
+  if (!_demoModeAllowed) {
+    return false;
+  }
   _demoMode = true;
   console.info("[WebTermAI] Demo mode enabled — backend unavailable, using mock data");
+  return true;
 }
 
 export const DEMO_SESSION: AuthSessionResponse = {
@@ -146,6 +156,18 @@ export const DEMO_SETTINGS: SettingsConfigResponse = {
     chat_model_grok: "",
     chat_model_openai: "",
     chat_model_claude: "",
+    log_terminal_commands: true,
+    log_ai_assistant: true,
+    log_agent_runs: true,
+    log_pipeline_runs: true,
+    log_auth_events: true,
+    log_server_changes: true,
+    log_settings_changes: true,
+    log_file_operations: false,
+    log_mcp_calls: true,
+    log_http_requests: true,
+    retention_days: 90,
+    export_format: "json",
   },
 };
 

@@ -8,7 +8,6 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_http_methods
-from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Q
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -31,12 +30,16 @@ from .models import (
     ServerAgent,
     AgentRun,
 )
+from app.runtime_limits import get_agent_run_limit_error
 from app.tools.ssh_tools import ssh_manager
 from core_ui.activity import log_user_activity
 from core_ui.models import UserActivityLog
 from core_ui.decorators import require_feature
 from passwords.encryption import PasswordEncryption
+from .agent_background import launch_agent_run_background, launch_plan_execution_background
+from .agent_runtime import get_engine_for_agent, get_engine_for_run, update_runtime_control
 from .secret_utils import clear_server_auth_secret, get_server_auth_secret, has_saved_server_secret, store_server_auth_secret
+from .ssh_host_keys import clear_server_trusted_host_keys, get_server_trusted_host_keys
 
 PASSWORD_ENCRYPTION_COMPAT = PasswordEncryption
 
@@ -274,6 +277,15 @@ def _active_server_share(server: Server, user: User) -> ServerShare | None:
     )
 
 
+def _shared_server_context_allowed(server: Server, user: User, share: ServerShare | None = None) -> bool:
+    if not server:
+        return False
+    if server.user_id == user.id:
+        return True
+    active_share = share if share is not None else _active_server_share(server, user)
+    return bool(active_share and active_share.share_context)
+
+
 def _effective_master_password(request, data: dict | None = None) -> str:
     """Resolve master password from payload, session, or env."""
     data = data or {}
@@ -322,7 +334,6 @@ def _parse_expires_at(raw_value):
     return dt
 
 
-@csrf_exempt
 @login_required
 @require_feature('servers')
 @require_http_methods(["POST"])
@@ -359,7 +370,6 @@ def group_create(request):
     return JsonResponse({"success": True, "group_id": group.id})
 
 
-@csrf_exempt
 @login_required
 @require_feature('servers')
 @require_http_methods(["POST"])
@@ -393,7 +403,6 @@ def group_update(request, group_id):
     return JsonResponse({"success": True})
 
 
-@csrf_exempt
 @login_required
 @require_feature('servers')
 @require_http_methods(["POST"])
@@ -417,7 +426,6 @@ def group_delete(request, group_id):
     return JsonResponse({"success": True})
 
 
-@csrf_exempt
 @login_required
 @require_feature('servers')
 @require_http_methods(["POST"])
@@ -441,7 +449,6 @@ def group_add_member(request, group_id):
     return JsonResponse({"success": True})
 
 
-@csrf_exempt
 @login_required
 @require_feature('servers')
 @require_http_methods(["POST"])
@@ -459,7 +466,6 @@ def group_remove_member(request, group_id):
     return JsonResponse({"success": True})
 
 
-@csrf_exempt
 @login_required
 @require_feature('servers')
 @require_http_methods(["POST"])
@@ -473,7 +479,6 @@ def group_subscribe(request, group_id):
     return JsonResponse({"success": True})
 
 
-@csrf_exempt
 @login_required
 @require_feature('servers')
 @require_http_methods(["POST"])
@@ -518,7 +523,6 @@ def bulk_update_servers(request):
     return JsonResponse({"success": True})
 
 
-@csrf_exempt
 @login_required
 @require_feature('servers')
 @require_http_methods(["POST"])
@@ -618,7 +622,6 @@ def server_create(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@csrf_exempt
 @login_required
 @require_feature('servers')
 @require_http_methods(["POST"])
@@ -627,12 +630,15 @@ def server_update(request, server_id):
     try:
         server = get_object_or_404(Server, id=server_id, user=request.user)
         data = json.loads(request.body)
+        host_changed = False
         
         # Update basic fields
         if 'name' in data:
             server.name = data['name']
         if 'host' in data:
-            server.host = data['host']
+            next_host = str(data['host'] or '')
+            host_changed = host_changed or next_host != server.host
+            server.host = next_host
         if 'port' in data:
             try:
                 port = int(data['port'])
@@ -640,6 +646,7 @@ def server_update(request, server_id):
                 return JsonResponse({'error': 'Invalid port'}, status=400)
             if port < 1 or port > 65535:
                 return JsonResponse({'error': 'Port must be in range 1..65535'}, status=400)
+            host_changed = host_changed or port != int(server.port or 22)
             server.port = port
         if 'username' in data:
             server.username = data['username']
@@ -698,6 +705,9 @@ def server_update(request, server_id):
             master_password = _effective_master_password(request, data)
             if password:
                 store_server_auth_secret(server, secret_value=password, master_password=master_password)
+
+        if host_changed:
+            clear_server_trusted_host_keys(server)
         
         changed_fields = sorted(list(data.keys()))
         server.save()
@@ -740,7 +750,6 @@ def server_update(request, server_id):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@csrf_exempt
 @login_required
 @require_feature('servers')
 @require_http_methods(["POST"])
@@ -749,6 +758,9 @@ def server_test_connection(request, server_id):
     try:
         server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
         data = json.loads(request.body)
+        refresh_host_key = bool(data.get("refresh_host_key"))
+        if refresh_host_key and server.user_id != request.user.id:
+            return JsonResponse({'success': False, 'error': 'Only owner can refresh trusted SSH host key'}, status=403)
         try:
             password = _resolve_server_secret(server, request, data)
         except ValueError as e:
@@ -764,7 +776,10 @@ def server_test_connection(request, server_id):
                     username=server.username,
                     password=password,
                     key_path=server.key_path if server.auth_method in ['key', 'key_password'] else None,
-                    port=server.port
+                    port=server.port,
+                    network_config=server.network_config or {},
+                    server=server,
+                    refresh_host_key=refresh_host_key,
                 )
                 # Disconnect immediately after test
                 await ssh_manager.disconnect(conn_id)
@@ -819,7 +834,6 @@ def server_test_connection(request, server_id):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
-@csrf_exempt
 @login_required
 @require_feature('servers')
 @require_http_methods(["POST"])
@@ -850,7 +864,9 @@ def server_execute_command(request, server_id):
                     username=server.username,
                     password=password,
                     key_path=server.key_path if server.auth_method in ['key', 'key_password'] else None,
-                    port=server.port
+                    port=server.port,
+                    network_config=server.network_config or {},
+                    server=server,
                 )
                 
                 # Execute
@@ -922,7 +938,6 @@ def server_execute_command(request, server_id):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
-@csrf_exempt
 @login_required
 @require_feature('servers')
 @require_http_methods(["POST"])
@@ -988,7 +1003,6 @@ def server_share_list(request, server_id):
     return JsonResponse({"success": True, "shares": payload})
 
 
-@csrf_exempt
 @login_required
 @require_feature('servers')
 @require_http_methods(["POST"])
@@ -1081,7 +1095,6 @@ def server_share_create(request, server_id):
         return JsonResponse({"error": str(e)}, status=500)
 
 
-@csrf_exempt
 @login_required
 @require_feature('servers')
 @require_http_methods(["POST"])
@@ -1112,7 +1125,6 @@ def server_share_revoke(request, server_id, share_id):
     return JsonResponse({"success": True})
 
 
-@csrf_exempt
 @login_required
 @require_feature('servers')
 @require_http_methods(["POST"])
@@ -1159,7 +1171,6 @@ def global_context_get(request):
     })
 
 
-@csrf_exempt
 @login_required
 @require_feature('servers')
 @require_http_methods(["POST"])
@@ -1197,16 +1208,16 @@ def group_context_get(request, group_id):
     role = _get_group_role(group, request.user)
     if not role:
         return JsonResponse({'error': 'Permission denied'}, status=403)
+    include_environment_vars = role in ["owner", "admin"]
     return JsonResponse({
         'id': group.id,
         'name': group.name,
         'rules': group.rules,
         'forbidden_commands': group.forbidden_commands,
-        'environment_vars': group.environment_vars,
+        'environment_vars': group.environment_vars if include_environment_vars else {},
     })
 
 
-@csrf_exempt
 @login_required
 @require_feature('servers')
 @require_http_methods(["POST"])
@@ -1241,6 +1252,8 @@ def server_get(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
     share = _active_server_share(server, request.user)
     is_owner = server.user_id == request.user.id
+    can_access_context = _shared_server_context_allowed(server, request.user, share)
+    trusted_host_keys = get_server_trusted_host_keys(server) if is_owner else []
     return JsonResponse({
         'id': server.id,
         'name': server.name,
@@ -1251,35 +1264,56 @@ def server_get(request, server_id):
         'auth_method': server.auth_method,
         'key_path': server.key_path,
         'tags': server.tags,
-        'notes': server.notes,
-        'corporate_context': server.corporate_context,
+        'notes': server.notes if can_access_context else '',
+        'corporate_context': server.corporate_context if can_access_context else '',
         'group_id': server.group_id,
         'is_active': server.is_active,
-        'network_config': server.network_config,
-        'has_saved_password': has_saved_server_secret(server),
-        'can_view_password': server.auth_method in ["password", "key_password"] and has_saved_server_secret(server),
+        'network_config': server.network_config if can_access_context else {},
+        'has_saved_password': bool(is_owner and has_saved_server_secret(server)),
+        'can_view_password': bool(
+            is_owner
+            and server.auth_method in ["password", "key_password"]
+            and has_saved_server_secret(server)
+        ),
         'can_edit': bool(is_owner),
         'is_shared_server': bool(share),
         'share_context_enabled': bool(share.share_context) if share else True,
         'shared_by_username': share.shared_by.username if share and share.shared_by else '',
+        'has_trusted_host_keys': bool(trusted_host_keys),
+        'trusted_host_key_fingerprints': [
+            item.get('fingerprint_sha256', '')
+            for item in trusted_host_keys
+            if item.get('fingerprint_sha256')
+        ],
     })
 
 
-@csrf_exempt
 @login_required
 @require_feature('servers')
 @require_http_methods(["POST"])
 def server_reveal_password(request, server_id):
-    """Reveal decrypted server password for owner or active shared recipient."""
+    """Reveal decrypted server password for the server owner only."""
     try:
         server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+        if server.user_id != request.user.id:
+            return JsonResponse({'success': False, 'error': 'Only the server owner can reveal the saved password'}, status=403)
         if server.auth_method not in ["password", "key_password"]:
             return JsonResponse({'success': False, 'error': 'Password is not used for this auth method'}, status=400)
         if not has_saved_server_secret(server):
             return JsonResponse({'success': False, 'error': 'Saved password is not available'}, status=400)
 
         data = json.loads(request.body or "{}")
-        master_password = _effective_master_password(request, data)
+        master_password = str(data.get("master_password") or "").strip()
+        if not master_password:
+            master_password = str(request.session.get("_mp") or "").strip()
+        if not master_password:
+            return JsonResponse(
+                {
+                    'success': False,
+                    'error': 'Master password is required to reveal the saved password',
+                },
+                status=400,
+            )
         try:
             password = get_server_auth_secret(
                 server,
@@ -1288,7 +1322,6 @@ def server_reveal_password(request, server_id):
         except ValueError:
             return JsonResponse({'success': False, 'error': 'Failed to decrypt password. Check MASTER_PASSWORD'}, status=400)
 
-        share = _active_server_share(server, request.user)
         log_user_activity(
             user=request.user,
             request=request,
@@ -1300,9 +1333,9 @@ def server_reveal_password(request, server_id):
             entity_id=server.id,
             entity_name=server.name,
             metadata={
-                'is_owner': server.user_id == request.user.id,
-                'is_shared_server': bool(share),
-                'shared_by': share.shared_by.username if share and share.shared_by else '',
+                'is_owner': True,
+                'is_shared_server': False,
+                'shared_by': '',
             },
         )
         return JsonResponse({'success': True, 'password': password})
@@ -1343,7 +1376,6 @@ def server_knowledge_list(request, server_id):
     )
 
 
-@csrf_exempt
 @login_required
 @require_feature('servers')
 @require_http_methods(["POST"])
@@ -1380,7 +1412,6 @@ def server_knowledge_create(request, server_id):
         return JsonResponse({"success": False, "error": str(e)}, status=500)
 
 
-@csrf_exempt
 @login_required
 @require_feature('servers')
 @require_http_methods(["POST"])
@@ -1425,7 +1456,6 @@ def server_knowledge_update(request, server_id, knowledge_id):
         return JsonResponse({"success": False, "error": str(e)}, status=500)
 
 
-@csrf_exempt
 @login_required
 @require_feature('servers')
 @require_http_methods(["POST"])
@@ -1616,7 +1646,6 @@ def server_health_history(request, server_id):
     })
 
 
-@csrf_exempt
 @login_required
 @require_feature('servers')
 @require_http_methods(["POST"])
@@ -1717,7 +1746,6 @@ def server_alerts_list(request):
     })
 
 
-@csrf_exempt
 @login_required
 @require_feature('servers')
 @require_http_methods(["POST"])
@@ -1748,7 +1776,6 @@ def server_alert_resolve(request, alert_id):
     return JsonResponse({"success": True})
 
 
-@csrf_exempt
 @login_required
 @require_http_methods(["GET", "POST"])
 def monitoring_config(request):
@@ -1812,7 +1839,6 @@ def monitoring_config(request):
         return JsonResponse({"success": False, "error": str(e)}, status=400)
 
 
-@csrf_exempt
 @login_required
 @require_feature('servers')
 @require_http_methods(["POST"])
@@ -1934,7 +1960,14 @@ def agent_list(request):
     for a in agents:
         last_run = AgentRun.objects.filter(agent=a).first()
         active_run = AgentRun.objects.filter(
-            agent=a, status__in=[AgentRun.STATUS_RUNNING, AgentRun.STATUS_PAUSED, AgentRun.STATUS_WAITING],
+            agent=a,
+            status__in=[
+                AgentRun.STATUS_PENDING,
+                AgentRun.STATUS_RUNNING,
+                AgentRun.STATUS_PAUSED,
+                AgentRun.STATUS_WAITING,
+                AgentRun.STATUS_PLAN_REVIEW,
+            ],
         ).first()
         data.append({
             "id": a.id,
@@ -1970,7 +2003,6 @@ def agent_templates(request):
     return JsonResponse({"success": True, "templates": get_all_templates()})
 
 
-@csrf_exempt
 @login_required
 @require_feature('agents')
 @require_http_methods(["POST"])
@@ -2053,7 +2085,6 @@ def agent_create(request):
     return JsonResponse({"success": True, "id": agent.id})
 
 
-@csrf_exempt
 @login_required
 @require_feature('agents')
 @require_http_methods(["POST"])
@@ -2096,7 +2127,6 @@ def agent_update(request, agent_id):
     return JsonResponse({"success": True})
 
 
-@csrf_exempt
 @login_required
 @require_feature('agents')
 @require_http_methods(["POST"])
@@ -2109,7 +2139,6 @@ def agent_delete(request, agent_id):
     return JsonResponse({"success": True})
 
 
-@csrf_exempt
 @login_required
 @require_feature('agents')
 @require_http_methods(["POST"])
@@ -2156,8 +2185,7 @@ def agent_run(request, agent_id):
 
 
 def _start_full_agent(request, agent: ServerAgent, data: dict):
-    """Start a full ReAct or multi-agent pipeline asynchronously."""
-    from asgiref.sync import async_to_sync
+    """Start a full ReAct or multi-agent pipeline in a background worker."""
 
     server_ids = list(agent.servers.values_list("id", flat=True))
     if not server_ids:
@@ -2169,20 +2197,36 @@ def _start_full_agent(request, agent: ServerAgent, data: dict):
 
     already_running = AgentRun.objects.filter(
         agent=agent,
-        status__in=[AgentRun.STATUS_RUNNING, AgentRun.STATUS_PAUSED, AgentRun.STATUS_WAITING, AgentRun.STATUS_PLAN_REVIEW],
+        status__in=[
+            AgentRun.STATUS_PENDING,
+            AgentRun.STATUS_RUNNING,
+            AgentRun.STATUS_PAUSED,
+            AgentRun.STATUS_WAITING,
+            AgentRun.STATUS_PLAN_REVIEW,
+        ],
     ).exists()
     if already_running:
         return JsonResponse({"success": False, "error": "Agent is already running"}, status=409)
 
-    if agent.is_multi:
-        from servers.multi_agent_engine import MultiAgentEngine
-        engine = MultiAgentEngine(agent, servers, request.user)
-        # Multi-agent always plans first and waits for human approval
-        run_result = async_to_sync(engine.run)(plan_only=True)
-    else:
-        from servers.agent_engine import AgentEngine
-        engine = AgentEngine(agent, servers, request.user)
-        run_result = async_to_sync(engine.run)()
+    limit_error = get_agent_run_limit_error(request.user)
+    if limit_error:
+        return JsonResponse(limit_error, status=429)
+
+    primary_server = servers[0] if servers else None
+    run_result = AgentRun.objects.create(
+        agent=agent,
+        server=primary_server,
+        user=request.user,
+        status=AgentRun.STATUS_PENDING,
+    )
+
+    launch_agent_run_background(
+        run_id=run_result.id,
+        agent_id=agent.id,
+        server_ids=[server.id for server in servers],
+        user_id=request.user.id,
+        plan_only=bool(agent.is_multi),
+    )
 
     return JsonResponse({
         "success": True,
@@ -2268,26 +2312,48 @@ def agent_run_detail(request, run_id):
     return JsonResponse({"success": True, "run": data})
 
 
-@csrf_exempt
 @login_required
 @require_feature('agents')
 @require_http_methods(["POST"])
 def agent_stop(request, agent_id):
     """Stop a running full agent."""
-    run = AgentRun.objects.filter(
+    try:
+        data = json.loads(request.body) if request.body else {}
+    except Exception:
+        data = {}
+
+    active_statuses = [
+        AgentRun.STATUS_PENDING,
+        AgentRun.STATUS_RUNNING,
+        AgentRun.STATUS_PAUSED,
+        AgentRun.STATUS_WAITING,
+        AgentRun.STATUS_PLAN_REVIEW,
+    ]
+    run_id = data.get("run_id")
+    run_query = AgentRun.objects.filter(
         agent_id=agent_id,
         agent__user=request.user,
-        status__in=[AgentRun.STATUS_RUNNING, AgentRun.STATUS_PAUSED, AgentRun.STATUS_WAITING],
-    ).first()
+        status__in=active_statuses,
+    )
+    if run_id is not None:
+        run_query = run_query.filter(id=run_id)
+    run = run_query.first()
     if not run:
         return JsonResponse({"success": False, "error": "No active run found"}, status=404)
+
+    live_engine = get_engine_for_run(run.id) or get_engine_for_agent(agent_id)
+    update_runtime_control(run, live_engine=live_engine, stop_requested=True, pause_requested=False)
+
     run.status = AgentRun.STATUS_STOPPED
     run.completed_at = timezone.now()
     run.save(update_fields=["status", "completed_at"])
-    return JsonResponse({"success": True, "run_id": run.id})
+    return JsonResponse({
+        "success": True,
+        "run_id": run.id,
+        "stop_signal_sent": bool(live_engine),
+    })
 
 
-@csrf_exempt
 @login_required
 @require_feature('agents')
 @require_http_methods(["POST"])
@@ -2307,6 +2373,9 @@ def agent_run_reply(request, run_id):
     answer = data.get("answer", "")
     if not answer:
         return JsonResponse({"success": False, "error": "Answer required"}, status=400)
+
+    live_engine = get_engine_for_run(run.id)
+    update_runtime_control(run, live_engine=live_engine, reply_text=answer, pause_requested=False)
 
     run.pending_question = ""
     run.status = AgentRun.STATUS_RUNNING
@@ -2337,7 +2406,6 @@ def agent_run_log(request, run_id):
     })
 
 
-@csrf_exempt
 @login_required
 @require_feature('agents')
 @require_http_methods(["POST"])
@@ -2348,8 +2416,6 @@ def agent_run_approve_plan(request, run_id):
     runs execute_existing_plan() which re-opens SSH connections and runs
     Phase 2 + 3 from the saved plan_tasks.
     """
-    from asgiref.sync import async_to_sync
-
     run = AgentRun.objects.filter(
         id=run_id,
         agent__user=request.user,
@@ -2365,27 +2431,34 @@ def agent_run_approve_plan(request, run_id):
     if not servers:
         return JsonResponse({"success": False, "error": "No accessible servers"}, status=400)
 
-    from servers.multi_agent_engine import MultiAgentEngine
-    engine = MultiAgentEngine(agent, servers, request.user)
-    result = async_to_sync(engine.execute_existing_plan)(run)
+    run.status = AgentRun.STATUS_PENDING
+    run.pending_question = ""
+    run.completed_at = None
+    run.save(update_fields=["status", "pending_question", "completed_at"])
+
+    launch_plan_execution_background(
+        run_id=run.id,
+        agent_id=agent.id,
+        server_ids=[server.id for server in servers],
+        user_id=request.user.id,
+    )
 
     return JsonResponse({
         "success": True,
-        "run_id": result.id,
-        "status": result.status,
+        "run_id": run.id,
+        "status": run.status,
         "runs": [{
-            "run_id": result.id,
-            "server_name": result.server.name if result.server_id else "?",
-            "status": result.status,
-            "ai_analysis": result.ai_analysis,
-            "duration_ms": result.duration_ms,
-            "total_iterations": result.total_iterations,
-            "final_report": result.final_report,
+            "run_id": run.id,
+            "server_name": run.server.name if run.server_id else "?",
+            "status": run.status,
+            "ai_analysis": run.ai_analysis,
+            "duration_ms": run.duration_ms,
+            "total_iterations": run.total_iterations,
+            "final_report": run.final_report,
         }],
     })
 
 
-@csrf_exempt
 @login_required
 @require_feature('agents')
 @require_http_methods(["POST"])
@@ -2433,7 +2506,6 @@ def agent_run_task_update(request, run_id, task_id):
     return JsonResponse({"success": True, "plan_tasks": tasks})
 
 
-@csrf_exempt
 @login_required
 @require_feature('agents')
 @require_http_methods(["POST"])
@@ -2526,7 +2598,13 @@ def agent_run_task_ai_refine(request, run_id, task_id):
 @require_http_methods(["GET"])
 def agent_dashboard_runs(request):
     """Active + recent runs for the dashboard widget."""
-    active_statuses = [AgentRun.STATUS_RUNNING, AgentRun.STATUS_PAUSED, AgentRun.STATUS_WAITING, AgentRun.STATUS_PENDING]
+    active_statuses = [
+        AgentRun.STATUS_PENDING,
+        AgentRun.STATUS_RUNNING,
+        AgentRun.STATUS_PAUSED,
+        AgentRun.STATUS_WAITING,
+        AgentRun.STATUS_PLAN_REVIEW,
+    ]
     active_runs = list(
         AgentRun.objects.filter(agent__user=request.user, status__in=active_statuses)
         .select_related("agent", "server")

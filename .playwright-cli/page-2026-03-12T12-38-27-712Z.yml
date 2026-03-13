@@ -1,0 +1,612 @@
+- generic [ref=e2]:
+  - region "Notifications (F8)":
+    - list
+  - region "Notifications alt+T"
+  - generic [ref=e4]:
+    - generic [ref=e8]:
+      - generic [ref=e9]:
+        - generic [ref=e11]: W
+        - generic [ref=e12]: WebTermAI
+        - button [ref=e13] [cursor=pointer]:
+          - img [ref=e14]
+      - list [ref=e19]:
+        - listitem [ref=e20]:
+          - link "Панель" [ref=e21] [cursor=pointer]:
+            - /url: /dashboard
+            - img [ref=e22]
+            - generic [ref=e27]: Панель
+        - listitem [ref=e28]:
+          - link "Серверы" [ref=e29] [cursor=pointer]:
+            - /url: /servers
+            - img [ref=e30]
+            - generic [ref=e33]: Серверы
+        - listitem [ref=e34]:
+          - link "Агенты" [ref=e35] [cursor=pointer]:
+            - /url: /agents
+            - img [ref=e36]
+            - generic [ref=e39]: Агенты
+        - listitem [ref=e40]:
+          - link "Студия" [ref=e41] [cursor=pointer]:
+            - /url: /studio
+            - img [ref=e42]
+            - generic [ref=e46]: Студия
+        - listitem [ref=e47]:
+          - link "Настройки" [ref=e48] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e49]
+            - generic [ref=e52]: Настройки
+      - generic [ref=e53]:
+        - generic [ref=e55]:
+          - button "EN" [ref=e56] [cursor=pointer]
+          - button "RU" [ref=e57] [cursor=pointer]
+        - generic [ref=e58]:
+          - generic [ref=e59]: L
+          - generic [ref=e60]:
+            - paragraph [ref=e61]: lunix
+            - paragraph [ref=e62]: Администратор
+          - button "Выйти" [ref=e63] [cursor=pointer]:
+            - img [ref=e64]
+    - main [ref=e68]:
+      - generic [ref=e69]:
+        - navigation [ref=e70]:
+          - generic [ref=e71]: Studio
+          - button "Pipelines" [ref=e72] [cursor=pointer]:
+            - img [ref=e73]
+            - text: Pipelines
+          - button "Skills" [ref=e77] [cursor=pointer]:
+            - img [ref=e78]
+            - text: Skills
+          - button "MCP" [ref=e80] [cursor=pointer]:
+            - img [ref=e81]
+            - text: MCP
+          - button "Agents" [ref=e84] [cursor=pointer]:
+            - img [ref=e85]
+            - text: Agents
+          - button "Runs" [ref=e88] [cursor=pointer]:
+            - img [ref=e89]
+            - text: Runs
+          - button "Alerts" [ref=e92] [cursor=pointer]:
+            - img [ref=e93]
+            - text: Alerts
+        - generic [ref=e98]:
+          - generic [ref=e100]:
+            - generic [ref=e101]:
+              - generic [ref=e102]: Studio Control
+              - generic [ref=e103]:
+                - heading "Pipeline Workspace" [level=1] [ref=e104]
+                - paragraph [ref=e105]: Build, run, and monitor automations from one place with a layout that stays stable on large screens.
+            - generic [ref=e106]:
+              - generic [ref=e107]:
+                - img [ref=e108]
+                - textbox "Search pipelines..." [ref=e111]
+              - button "New Pipeline" [ref=e112] [cursor=pointer]:
+                - img
+                - text: New Pipeline
+          - generic [ref=e113]:
+            - generic [ref=e114]:
+              - generic [ref=e115]:
+                - img [ref=e116]
+                - text: Pipelines
+              - generic [ref=e120]: "17"
+            - generic [ref=e121]:
+              - generic [ref=e122]:
+                - img [ref=e123]
+                - text: Skills
+              - generic [ref=e125]: "0"
+            - generic [ref=e126]:
+              - generic [ref=e127]:
+                - img [ref=e128]
+                - text: MCP Servers
+              - generic [ref=e131]: "2"
+            - generic [ref=e132]:
+              - generic [ref=e133]:
+                - img [ref=e134]
+                - text: Agents
+              - generic [ref=e137]: "1"
+            - generic [ref=e138]:
+              - generic [ref=e139]:
+                - img [ref=e140]
+                - text: Completed
+              - generic [ref=e143]: "18"
+              - generic [ref=e144]: runs
+            - generic [ref=e145]:
+              - generic [ref=e146]:
+                - img [ref=e147]
+                - text: Failed
+              - generic [ref=e151]: "6"
+              - generic [ref=e152]: runs
+          - generic [ref=e153]:
+            - generic [ref=e154]:
+              - generic [ref=e155]:
+                - generic [ref=e156]:
+                  - generic [ref=e157]:
+                    - paragraph [ref=e158]: Pipelines
+                    - heading "All automations" [level=2] [ref=e159]
+                  - paragraph [ref=e160]: 17 workflows available
+                - generic [ref=e161]:
+                  - article [ref=e162] [cursor=pointer]:
+                    - generic [ref=e163]:
+                      - generic [ref=e164]: 🐳
+                      - generic [ref=e165]:
+                        - generic [ref=e166]:
+                          - generic [ref=e167]:
+                            - generic [ref=e168]:
+                              - heading "Docker Deploy" [level=3] [ref=e169]
+                              - generic [ref=e170]: 5 nodes
+                            - paragraph [ref=e171]: Pulls latest image, recreates container, verifies it's running.
+                          - button [ref=e173]:
+                            - img
+                        - generic [ref=e174]:
+                          - generic [ref=e175]:
+                            - generic [ref=e176]: Updated 20h ago
+                            - generic [ref=e177]: docker
+                            - generic [ref=e178]: deploy
+                          - generic [ref=e179]:
+                            - button "Open" [ref=e180]
+                            - button "Run" [ref=e181]:
+                              - img
+                              - text: Run
+                  - article [ref=e182] [cursor=pointer]:
+                    - generic [ref=e183]:
+                      - generic [ref=e184]: 🐳
+                      - generic [ref=e185]:
+                        - generic [ref=e186]:
+                          - generic [ref=e187]:
+                            - generic [ref=e188]:
+                              - heading "Docker Deploy" [level=3] [ref=e189]
+                              - generic [ref=e190]: 5 nodes
+                            - paragraph [ref=e191]: Pulls latest image, recreates container, verifies it's running.
+                          - button [ref=e193]:
+                            - img
+                        - generic [ref=e194]:
+                          - generic [ref=e195]:
+                            - generic [ref=e196]: Updated 4d ago
+                            - generic [ref=e197]: docker
+                            - generic [ref=e198]: deploy
+                          - generic [ref=e199]:
+                            - button "Open" [ref=e200]
+                            - button "Run" [ref=e201]:
+                              - img
+                              - text: Run
+                  - article [ref=e202] [cursor=pointer]:
+                    - generic [ref=e203]:
+                      - generic [ref=e204]: 🚨
+                      - generic [ref=e205]:
+                        - generic [ref=e206]:
+                          - generic [ref=e207]:
+                            - generic [ref=e208]:
+                              - heading "Incident Response" [level=3] [ref=e209]
+                              - generic [ref=e210]: 4 nodes
+                            - paragraph [ref=e211]: Triggered by webhook alert — investigates the issue, collects diagnostics, generates a report.
+                          - button [ref=e213]:
+                            - img
+                        - generic [ref=e214]:
+                          - generic [ref=e215]:
+                            - generic [ref=e216]: Updated 4d ago
+                            - generic [ref=e217]: incident
+                            - generic [ref=e218]: alert
+                          - generic [ref=e219]:
+                            - button "Open" [ref=e220]
+                            - button "Run" [ref=e221]:
+                              - img
+                              - text: Run
+                  - article [ref=e222] [cursor=pointer]:
+                    - generic [ref=e223]:
+                      - generic [ref=e224]: 🐳
+                      - generic [ref=e225]:
+                        - generic [ref=e226]:
+                          - generic [ref=e227]:
+                            - generic [ref=e228]:
+                              - heading "Docker Deploy" [level=3] [ref=e229]
+                              - generic [ref=e230]: 5 nodes
+                            - paragraph [ref=e231]: Pulls latest image, recreates container, verifies it's running.
+                          - button [ref=e233]:
+                            - img
+                        - generic [ref=e234]:
+                          - generic [ref=e235]:
+                            - generic [ref=e236]: Updated 4d ago
+                            - generic [ref=e237]: docker
+                            - generic [ref=e238]: deploy
+                          - generic [ref=e239]:
+                            - button "Open" [ref=e240]
+                            - button "Run" [ref=e241]:
+                              - img
+                              - text: Run
+                  - article [ref=e242] [cursor=pointer]:
+                    - generic [ref=e243]:
+                      - generic [ref=e244]: 🐳
+                      - generic [ref=e245]:
+                        - generic [ref=e246]:
+                          - generic [ref=e247]:
+                            - generic [ref=e248]:
+                              - heading "Docker Deploy" [level=3] [ref=e249]
+                              - generic [ref=e250]: 5 nodes
+                            - paragraph [ref=e251]: Pulls latest image, recreates container, verifies it's running.
+                          - button [ref=e253]:
+                            - img
+                        - generic [ref=e254]:
+                          - generic [ref=e255]:
+                            - generic [ref=e256]: Updated 4d ago
+                            - generic [ref=e257]: docker
+                            - generic [ref=e258]: deploy
+                          - generic [ref=e259]:
+                            - button "Open" [ref=e260]
+                            - button "Run" [ref=e261]:
+                              - img
+                              - text: Run
+                  - article [ref=e262] [cursor=pointer]:
+                    - generic [ref=e263]:
+                      - generic [ref=e264]: 🤖
+                      - generic [ref=e265]:
+                        - generic [ref=e266]:
+                          - generic [ref=e267]:
+                            - generic [ref=e268]:
+                              - heading "AI Server Analyst" [level=3] [ref=e269]
+                              - generic [ref=e270]: 6 nodes
+                              - generic [ref=e271]: pending
+                            - paragraph [ref=e272]: ИИ-агент анализирует состояние сервера и выдаёт рекомендации по оптимизации
+                          - button [ref=e274]:
+                            - img
+                        - generic [ref=e275]:
+                          - generic [ref=e276]:
+                            - generic [ref=e277]: Updated 7d ago
+                            - generic [ref=e278]: ai
+                            - generic [ref=e279]: react-agent
+                          - generic [ref=e280]:
+                            - button "Open" [ref=e281]
+                            - button "Run" [ref=e282]:
+                              - img
+                              - text: Run
+                  - article [ref=e283] [cursor=pointer]:
+                    - generic [ref=e284]:
+                      - generic [ref=e285]: KEY
+                      - generic [ref=e286]:
+                        - generic [ref=e287]:
+                          - generic [ref=e288]:
+                            - generic [ref=e289]:
+                              - heading "Keycloak Ops PROD" [level=3] [ref=e290]
+                              - generic [ref=e291]: 6 nodes
+                              - generic [ref=e292]:
+                                - img [ref=e293]
+                                - text: Completed
+                            - paragraph [ref=e296]: Direct Keycloak operator pipeline for the PROD environment. Accepts free-form user requests, uses the fixed 'prod' MCP profile, and sends no email or Telegram messages.
+                          - button [ref=e298]:
+                            - img
+                        - generic [ref=e299]:
+                          - generic [ref=e300]:
+                            - generic [ref=e301]: Updated 7d ago
+                            - generic [ref=e302]: mcp
+                            - generic [ref=e303]: keycloak
+                          - generic [ref=e304]:
+                            - button "Open" [ref=e305]
+                            - button "Run" [ref=e306]:
+                              - img
+                              - text: Run
+                  - article [ref=e307] [cursor=pointer]:
+                    - generic [ref=e308]:
+                      - generic [ref=e309]: KEY
+                      - generic [ref=e310]:
+                        - generic [ref=e311]:
+                          - generic [ref=e312]:
+                            - generic [ref=e313]:
+                              - heading "Keycloak Ops TEST" [level=3] [ref=e314]
+                              - generic [ref=e315]: 6 nodes
+                            - paragraph [ref=e316]: Direct Keycloak operator pipeline for the TEST environment. Accepts free-form user requests, uses the fixed 'test' MCP profile, and sends no email or Telegram messages.
+                          - button [ref=e318]:
+                            - img
+                        - generic [ref=e319]:
+                          - generic [ref=e320]:
+                            - generic [ref=e321]: Updated 8d ago
+                            - generic [ref=e322]: mcp
+                            - generic [ref=e323]: keycloak
+                          - generic [ref=e324]:
+                            - button "Open" [ref=e325]
+                            - button "Run" [ref=e326]:
+                              - img
+                              - text: Run
+                  - article [ref=e327] [cursor=pointer]:
+                    - generic [ref=e328]:
+                      - generic [ref=e329]: KEY
+                      - generic [ref=e330]:
+                        - generic [ref=e331]:
+                          - generic [ref=e332]:
+                            - generic [ref=e333]:
+                              - heading "Keycloak Provisioning with Approval" [level=3] [ref=e334]
+                              - generic [ref=e335]: 8 nodes
+                            - paragraph [ref=e336]: Human-approved Keycloak provisioning flow for Studio. It accepts manual or webhook context, runs a read-only preflight against Keycloak, asks for approval, then lets an MCP-enabled agent create the user, assign realm roles, assign client roles, add groups, and verify the final state.
+                          - button [ref=e338]:
+                            - img
+                        - generic [ref=e339]:
+                          - generic [ref=e340]:
+                            - generic [ref=e341]: Updated 8d ago
+                            - generic [ref=e342]: mcp
+                            - generic [ref=e343]: keycloak
+                          - generic [ref=e344]:
+                            - button "Open" [ref=e345]
+                            - button "Run" [ref=e346]:
+                              - img
+                              - text: Run
+                  - article [ref=e347] [cursor=pointer]:
+                    - generic [ref=e348]:
+                      - generic [ref=e349]: MCP
+                      - generic [ref=e350]:
+                        - generic [ref=e351]:
+                          - generic [ref=e352]:
+                            - generic [ref=e353]:
+                              - heading "MCP Workspace Forge" [level=3] [ref=e354]
+                              - generic [ref=e355]: 14 nodes
+                              - generic [ref=e356]:
+                                - img [ref=e357]
+                                - text: Completed
+                            - paragraph [ref=e360]: Large MCP-first showcase pipeline for Studio. It scans the workspace, collects TODO hotspots, builds a deterministic action plan, writes two artifacts to disk, verifies them, and compiles a final report.
+                          - button [ref=e362]:
+                            - img
+                        - generic [ref=e363]:
+                          - generic [ref=e364]:
+                            - generic [ref=e365]: Updated 8d ago
+                            - generic [ref=e366]: mcp
+                            - generic [ref=e367]: showcase
+                          - generic [ref=e368]:
+                            - button "Open" [ref=e369]
+                            - button "Run" [ref=e370]:
+                              - img
+                              - text: Run
+                  - article [ref=e371] [cursor=pointer]:
+                    - generic [ref=e372]:
+                      - generic [ref=e373]: 🔄
+                      - generic [ref=e374]:
+                        - generic [ref=e375]:
+                          - generic [ref=e376]:
+                            - generic [ref=e377]:
+                              - heading "Server Update with Human Approval" [level=3] [ref=e378]
+                              - generic [ref=e379]: 17 nodes
+                              - generic [ref=e380]: stopped
+                            - paragraph [ref=e381]: Discovers available updates on a server, classifies them as safe or risky, sends an approval request via Email & Telegram, waits for your decision, schedules the update with a 20-minute warning, executes it, then runs automated service verification and delivers a final report.
+                          - button [ref=e383]:
+                            - img
+                        - generic [ref=e384]:
+                          - generic [ref=e385]:
+                            - generic [ref=e386]: Updated 9d ago
+                            - generic [ref=e387]: update
+                            - generic [ref=e388]: approval
+                          - generic [ref=e389]:
+                            - button "Open" [ref=e390]
+                            - button "Run" [ref=e391]:
+                              - img
+                              - text: Run
+                  - article [ref=e392] [cursor=pointer]:
+                    - generic [ref=e393]:
+                      - generic [ref=e394]: 🔄
+                      - generic [ref=e395]:
+                        - generic [ref=e396]:
+                          - generic [ref=e397]:
+                            - generic [ref=e398]:
+                              - heading "Server Update with Human Approval" [level=3] [ref=e399]
+                              - generic [ref=e400]: 17 nodes
+                            - paragraph [ref=e401]: Discovers available updates on a server, classifies them as safe or risky, sends an approval request via Email & Telegram, waits for your decision, schedules the update with a 20-minute warning, executes it, then runs automated service verification and delivers a final report.
+                          - button [ref=e403]:
+                            - img
+                        - generic [ref=e404]:
+                          - generic [ref=e405]:
+                            - generic [ref=e406]: Updated 9d ago
+                            - generic [ref=e407]: update
+                            - generic [ref=e408]: approval
+                          - generic [ref=e409]:
+                            - button "Open" [ref=e410]
+                            - button "Run" [ref=e411]:
+                              - img
+                              - text: Run
+                  - article [ref=e412] [cursor=pointer]:
+                    - generic [ref=e413]:
+                      - generic [ref=e414]: 🔐
+                      - generic [ref=e415]:
+                        - generic [ref=e416]:
+                          - generic [ref=e417]:
+                            - generic [ref=e418]:
+                              - heading "Security Audit + AI Threat Analysis" [level=3] [ref=e419]
+                              - generic [ref=e420]: 9 nodes
+                              - generic [ref=e421]:
+                                - img [ref=e422]
+                                - text: Completed
+                            - paragraph [ref=e425]: "Ежедневная проверка безопасности: открытые порты, неудачные входы, sudo-активность. ИИ-эксперт анализирует угрозы и рекомендует действия."
+                          - button [ref=e427]:
+                            - img
+                        - generic [ref=e428]:
+                          - generic [ref=e429]:
+                            - generic [ref=e430]: Updated 9d ago
+                            - generic [ref=e431]: security
+                            - generic [ref=e432]: ai
+                          - generic [ref=e433]:
+                            - button "Open" [ref=e434]
+                            - button "Run" [ref=e435]:
+                              - img
+                              - text: Run
+                  - article [ref=e436] [cursor=pointer]:
+                    - generic [ref=e437]:
+                      - generic [ref=e438]: 🏥
+                      - generic [ref=e439]:
+                        - generic [ref=e440]:
+                          - generic [ref=e441]:
+                            - generic [ref=e442]:
+                              - heading "Server Health Check" [level=3] [ref=e443]
+                              - generic [ref=e444]: 5 nodes
+                              - generic [ref=e445]: pending
+                            - paragraph [ref=e446]: "Demo: checks disk space and CPU load in parallel, then generates report or sends alert"
+                          - button [ref=e448]:
+                            - img
+                        - generic [ref=e449]:
+                          - generic [ref=e450]:
+                            - generic [ref=e451]: Updated 9d ago
+                            - generic [ref=e452]: health
+                            - generic [ref=e453]: monitoring
+                          - generic [ref=e454]:
+                            - button "Open" [ref=e455]
+                            - button "Run" [ref=e456]:
+                              - img
+                              - text: Run
+                  - article [ref=e457] [cursor=pointer]:
+                    - generic [ref=e458]:
+                      - generic [ref=e459]: 🤖
+                      - generic [ref=e460]:
+                        - generic [ref=e461]:
+                          - generic [ref=e462]:
+                            - generic [ref=e463]:
+                              - heading "🤖 Full DevOps Autopilot" [level=3] [ref=e464]
+                              - generic [ref=e465]: 18 nodes
+                              - generic [ref=e466]: pending
+                            - paragraph [ref=e467]: "Мега-пайплайн: 5 параллельных SSH + 4 LLM-запроса + ReAct-агент устраняет проблемы + плановое обслуживание + email-отчёт + Slack. ИИ управляет всем циклом DevOps-автоматизации."
+                          - button [ref=e469]:
+                            - img
+                        - generic [ref=e470]:
+                          - generic [ref=e471]:
+                            - generic [ref=e472]: Updated 9d ago
+                            - generic [ref=e473]: autopilot
+                            - generic [ref=e474]: ai
+                          - generic [ref=e475]:
+                            - button "Open" [ref=e476]
+                            - button "Run" [ref=e477]:
+                              - img
+                              - text: Run
+                  - article [ref=e478] [cursor=pointer]:
+                    - generic [ref=e479]:
+                      - generic [ref=e480]: 💾
+                      - generic [ref=e481]:
+                        - generic [ref=e482]:
+                          - generic [ref=e483]:
+                            - generic [ref=e484]:
+                              - heading "Backup + Verify + AI Status Report" [level=3] [ref=e485]
+                              - generic [ref=e486]: 9 nodes
+                            - paragraph [ref=e487]: Ежедневный бэкап данных, проверка целостности, очистка устаревших. ИИ оценивает здоровье резервной копии и даёт рекомендации.
+                          - button [ref=e489]:
+                            - img
+                        - generic [ref=e490]:
+                          - generic [ref=e491]:
+                            - generic [ref=e492]: Updated 9d ago
+                            - generic [ref=e493]: backup
+                            - generic [ref=e494]: verify
+                          - generic [ref=e495]:
+                            - button "Open" [ref=e496]
+                            - button "Run" [ref=e497]:
+                              - img
+                              - text: Run
+                  - article [ref=e498] [cursor=pointer]:
+                    - generic [ref=e499]:
+                      - generic [ref=e500]: 🔄
+                      - generic [ref=e501]:
+                        - generic [ref=e502]:
+                          - generic [ref=e503]:
+                            - generic [ref=e504]:
+                              - heading "Smart Update Pipeline (AI-Driven)" [level=3] [ref=e505]
+                              - generic [ref=e506]: 11 nodes
+                            - paragraph [ref=e507]: ИИ-агент анализирует обновления, решает что безопасно обновить, выполняет обновления и проверяет результат. Полный цикл DevOps-автоматизации.
+                          - button [ref=e509]:
+                            - img
+                        - generic [ref=e510]:
+                          - generic [ref=e511]:
+                            - generic [ref=e512]: Updated 9d ago
+                            - generic [ref=e513]: updates
+                            - generic [ref=e514]: ai
+                          - generic [ref=e515]:
+                            - button "Open" [ref=e516]
+                            - button "Run" [ref=e517]:
+                              - img
+                              - text: Run
+              - generic [ref=e518]:
+                - generic [ref=e519]:
+                  - img [ref=e520]
+                  - heading "Quick Start Templates" [level=3] [ref=e522]
+                - generic [ref=e523]:
+                  - button "🐳 Docker Deploy Pulls latest image, recreates container, verifies it's running. Deployment" [ref=e524] [cursor=pointer]:
+                    - generic [ref=e525]: 🐳
+                    - generic [ref=e526]:
+                      - paragraph [ref=e527]: Docker Deploy
+                      - paragraph [ref=e528]: Pulls latest image, recreates container, verifies it's running.
+                    - generic [ref=e529]: Deployment
+                  - button "🚨 Incident Response Triggered by webhook alert — investigates the issue, collects diagnostics, generates a report. Incident" [ref=e530] [cursor=pointer]:
+                    - generic [ref=e531]: 🚨
+                    - generic [ref=e532]:
+                      - paragraph [ref=e533]: Incident Response
+                      - paragraph [ref=e534]: Triggered by webhook alert — investigates the issue, collects diagnostics, generates a report.
+                    - generic [ref=e535]: Incident
+                  - button "🧹 Log Cleanup Finds and removes old logs and temp files, frees up disk space. Maintenance" [ref=e536] [cursor=pointer]:
+                    - generic [ref=e537]: 🧹
+                    - generic [ref=e538]:
+                      - paragraph [ref=e539]: Log Cleanup
+                      - paragraph [ref=e540]: Finds and removes old logs and temp files, frees up disk space.
+                    - generic [ref=e541]: Maintenance
+                  - button "🔄 Server Update with Human Approval Discovers available updates on a server, classifies them as safe or risky, sends an approval request via Email & Telegram, waits for your decision, schedules the update with a 20-minute warning, executes it, then runs automated service verification and delivers a final report. Maintenance" [ref=e542] [cursor=pointer]:
+                    - generic [ref=e543]: 🔄
+                    - generic [ref=e544]:
+                      - paragraph [ref=e545]: Server Update with Human Approval
+                      - paragraph [ref=e546]: Discovers available updates on a server, classifies them as safe or risky, sends an approval request via Email & Telegram, waits for your decision, schedules the update with a 20-minute warning, executes it, then runs automated service verification and delivers a final report.
+                    - generic [ref=e547]: Maintenance
+                  - button "🏥 Healthcheck Sweep Checks CPU, RAM, disk and load on multiple servers, generates a health report. Monitoring" [ref=e548] [cursor=pointer]:
+                    - generic [ref=e549]: 🏥
+                    - generic [ref=e550]:
+                      - paragraph [ref=e551]: Healthcheck Sweep
+                      - paragraph [ref=e552]: Checks CPU, RAM, disk and load on multiple servers, generates a health report.
+                    - generic [ref=e553]: Monitoring
+                  - button "🔄 Service Restart Restarts a service, waits for it to come up, verifies it is healthy. Operations" [ref=e554] [cursor=pointer]:
+                    - generic [ref=e555]: 🔄
+                    - generic [ref=e556]:
+                      - paragraph [ref=e557]: Service Restart
+                      - paragraph [ref=e558]: Restarts a service, waits for it to come up, verifies it is healthy.
+                    - generic [ref=e559]: Operations
+            - complementary [ref=e560]:
+              - generic [ref=e561]:
+                - heading "Quick Access" [level=3] [ref=e562]
+                - button "Skill Catalog Manage playbooks & guardrails" [ref=e563] [cursor=pointer]:
+                  - img [ref=e564]
+                  - generic [ref=e566]:
+                    - paragraph [ref=e567]: Skill Catalog
+                    - paragraph [ref=e568]: Manage playbooks & guardrails
+                - button "MCP Registry Model Context Protocol servers" [ref=e569] [cursor=pointer]:
+                  - img [ref=e570]
+                  - generic [ref=e573]:
+                    - paragraph [ref=e574]: MCP Registry
+                    - paragraph [ref=e575]: Model Context Protocol servers
+                - button "Agent Configs Configure AI agents" [ref=e576] [cursor=pointer]:
+                  - img [ref=e577]
+                  - generic [ref=e580]:
+                    - paragraph [ref=e581]: Agent Configs
+                    - paragraph [ref=e582]: Configure AI agents
+                - button "Execution History All pipeline runs" [ref=e583] [cursor=pointer]:
+                  - img [ref=e584]
+                  - generic [ref=e587]:
+                    - paragraph [ref=e588]: Execution History
+                    - paragraph [ref=e589]: All pipeline runs
+              - generic [ref=e590]:
+                - generic [ref=e591]:
+                  - heading "Recent Runs" [level=3] [ref=e592]
+                  - button "View all" [ref=e593] [cursor=pointer]
+                - generic [ref=e594]:
+                  - generic [ref=e595] [cursor=pointer]:
+                    - generic [ref=e596]:
+                      - img [ref=e597]
+                      - text: Completed
+                    - generic [ref=e600]: AI Server Analyst
+                    - generic [ref=e601]: 7d ago
+                  - generic [ref=e602] [cursor=pointer]:
+                    - generic [ref=e603]:
+                      - img [ref=e604]
+                      - text: Completed
+                    - generic [ref=e607]: Keycloak Ops PROD
+                    - generic [ref=e608]: 7d ago
+                  - generic [ref=e609] [cursor=pointer]:
+                    - generic [ref=e610]:
+                      - img [ref=e611]
+                      - text: Completed
+                    - generic [ref=e614]: MCP Workspace Forge
+                    - generic [ref=e615]: 8d ago
+                  - generic [ref=e616] [cursor=pointer]:
+                    - generic [ref=e617]:
+                      - img [ref=e618]
+                      - text: Completed
+                    - generic [ref=e621]: MCP Workspace Forge
+                    - generic [ref=e622]: 8d ago
+                  - generic [ref=e623] [cursor=pointer]:
+                    - generic [ref=e624]:
+                      - img [ref=e625]
+                      - text: Failed
+                    - generic [ref=e629]: MCP Workspace Forge
+                    - generic [ref=e630]: 8d ago

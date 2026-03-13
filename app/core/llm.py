@@ -3,7 +3,8 @@ import asyncio
 import time
 from google import genai
 from loguru import logger
-from typing import AsyncGenerator, Optional
+from typing import Any, AsyncGenerator, Optional
+from django.conf import settings as django_settings
 from app.core.model_config import model_manager
 
 # Таймаут для стрима Gemini (сек), экспоненциальная задержка при retry
@@ -11,8 +12,56 @@ GEMINI_STREAM_TIMEOUT = 90  # в диапазоне 60–120 сек
 RETRY_BACKOFF = [1, 2, 4]
 
 
-def _log_llm_usage(provider: str, model_name: str, input_text: str, output_text: str,
-                    duration_ms: int, status: str = 'success'):
+def _setting_int(name: str, default: int, *, minimum: int = 1) -> int:
+    try:
+        raw = getattr(django_settings, name, None)
+    except Exception:
+        raw = None
+    if raw in (None, ""):
+        raw = os.getenv(name)
+    try:
+        value = int(raw if raw not in (None, "") else default)
+    except (TypeError, ValueError):
+        value = default
+    return max(value, minimum)
+
+
+def _retry_attempts() -> int:
+    return _setting_int("LLM_MAX_RETRY_ATTEMPTS", 3, minimum=1)
+
+
+def _provider_timeout_seconds(provider: str, *, endpoint_name: str | None = None) -> int:
+    if provider == "gemini":
+        return _setting_int("LLM_GEMINI_STREAM_TIMEOUT_SECONDS", GEMINI_STREAM_TIMEOUT, minimum=1)
+    if provider == "grok":
+        return _setting_int("LLM_GROK_STREAM_TIMEOUT_SECONDS", 60, minimum=1)
+    if provider == "claude":
+        return _setting_int("LLM_CLAUDE_STREAM_TIMEOUT_SECONDS", 120, minimum=1)
+    if provider == "openai" and endpoint_name == "responses":
+        return _setting_int("LLM_OPENAI_RESPONSES_TIMEOUT_SECONDS", 300, minimum=1)
+    if provider == "openai":
+        return _setting_int("LLM_OPENAI_STREAM_TIMEOUT_SECONDS", 90, minimum=1)
+    return _setting_int("LLM_PROVIDER_TIMEOUT_SECONDS", 90, minimum=1)
+
+
+def _is_timeout_error(e: Exception) -> bool:
+    if isinstance(e, (TimeoutError, asyncio.TimeoutError)):
+        return True
+    s = str(e).lower()
+    return "timeout" in s or "timed out" in s
+
+
+def _log_llm_usage(
+    provider: str,
+    model_name: str,
+    input_text: str,
+    output_text: str,
+    duration_ms: int,
+    status: str = "success",
+    *,
+    purpose: str = "",
+    metadata: dict[str, Any] | None = None,
+):
     """Log LLM API usage for monitoring. Never raises — errors are silently logged.
 
     Safe to call from both sync and async contexts.
@@ -20,14 +69,33 @@ def _log_llm_usage(provider: str, model_name: str, input_text: str, output_text:
     from asgiref.sync import sync_to_async
 
     def _do_log():
+        from core_ui.activity import log_llm_activity
+        from core_ui.audit import get_audit_context, maybe_apply_log_retention, should_log_llm
         from core_ui.models import LLMUsageLog
+
+        if not should_log_llm():
+            return
+
+        maybe_apply_log_retention()
+        audit_ctx = get_audit_context()
         LLMUsageLog.objects.create(
             provider=provider,
             model_name=model_name,
+            user_id=audit_ctx.get("user_id"),
             input_tokens=len(input_text) // 4,
             output_tokens=len(output_text) // 4,
             duration_ms=duration_ms,
             status=status,
+        )
+        log_llm_activity(
+            provider=provider,
+            model_name=model_name,
+            prompt=input_text,
+            response=output_text,
+            duration_ms=duration_ms,
+            status=status,
+            purpose=purpose,
+            metadata=metadata,
         )
 
     try:
@@ -46,7 +114,7 @@ def _log_llm_usage(provider: str, model_name: str, input_text: str, output_text:
 
 def _is_retryable_error(e: Exception) -> bool:
     """Проверка на 429 (rate limit), 5xx или таймаут — повторять с backoff."""
-    if isinstance(e, (TimeoutError, asyncio.TimeoutError)):
+    if _is_timeout_error(e):
         return True
     # aiohttp таймауты
     try:
@@ -239,7 +307,8 @@ class LLMProvider:
 
             target_model = specific_model or model_manager.get_chat_model("gemini")
             logger.info(f"Using Gemini model: {target_model}")
-            max_attempts = 3
+            max_attempts = _retry_attempts()
+            timeout_seconds = _provider_timeout_seconds("gemini")
             _t0 = time.monotonic()
 
             for attempt in range(max_attempts):
@@ -256,18 +325,31 @@ class LLMProvider:
                                 out.append(chunk.text)
                         return out
 
-                    chunks = await asyncio.wait_for(consume(), timeout=GEMINI_STREAM_TIMEOUT)
+                    chunks = await asyncio.wait_for(consume(), timeout=timeout_seconds)
                     _output = ""
                     for c in chunks:
                         _output += c
                         yield c
-                    _log_llm_usage("gemini", target_model, prompt, _output,
-                                   int((time.monotonic() - _t0) * 1000))
+                    _log_llm_usage(
+                        "gemini",
+                        target_model,
+                        prompt,
+                        _output,
+                        int((time.monotonic() - _t0) * 1000),
+                        purpose=purpose,
+                    )
                     return
                 except asyncio.TimeoutError:
                     logger.error("Gemini stream timeout")
-                    _log_llm_usage("gemini", target_model, prompt, "",
-                                   int((time.monotonic() - _t0) * 1000), "timeout")
+                    _log_llm_usage(
+                        "gemini",
+                        target_model,
+                        prompt,
+                        "",
+                        int((time.monotonic() - _t0) * 1000),
+                        "timeout",
+                        purpose=purpose,
+                    )
                     yield "Error: Timeout (Gemini stream)."
                     return
                 except Exception as e:
@@ -277,8 +359,15 @@ class LLMProvider:
                         await asyncio.sleep(delay)
                     else:
                         logger.error(f"Gemini Error: {e}")
-                        _log_llm_usage("gemini", target_model, prompt, "",
-                                       int((time.monotonic() - _t0) * 1000), "error")
+                        _log_llm_usage(
+                            "gemini",
+                            target_model,
+                            prompt,
+                            "",
+                            int((time.monotonic() - _t0) * 1000),
+                            "error",
+                            purpose=purpose,
+                        )
                         yield f"Error calling Gemini: {str(e)}"
                         return
 
@@ -309,9 +398,8 @@ class LLMProvider:
                 "stream": True,
                 "temperature": 0.7
             }
-            # ClientTimeout(total=60) — уже используется для Grok
-            timeout = aiohttp.ClientTimeout(total=60.0)
-            max_attempts = 3
+            timeout = aiohttp.ClientTimeout(total=float(_provider_timeout_seconds("grok")))
+            max_attempts = _retry_attempts()
             _t0 = time.monotonic()
 
             for attempt in range(max_attempts):
@@ -334,8 +422,14 @@ class LLMProvider:
                                                 yield content
                                         except json.JSONDecodeError:
                                             continue
-                                _log_llm_usage("grok", grok_model, prompt, _output,
-                                               int((time.monotonic() - _t0) * 1000))
+                                _log_llm_usage(
+                                    "grok",
+                                    grok_model,
+                                    prompt,
+                                    _output,
+                                    int((time.monotonic() - _t0) * 1000),
+                                    purpose=purpose,
+                                )
                                 return
                             error_text = await response.text()
                             is_retryable = response.status == 429 or (500 <= response.status < 600)
@@ -344,8 +438,15 @@ class LLMProvider:
                                 delay = RETRY_BACKOFF[min(attempt, len(RETRY_BACKOFF) - 1)]
                                 await asyncio.sleep(delay)
                             else:
-                                _log_llm_usage("grok", grok_model, prompt, "",
-                                               int((time.monotonic() - _t0) * 1000), "error")
+                                _log_llm_usage(
+                                    "grok",
+                                    grok_model,
+                                    prompt,
+                                    "",
+                                    int((time.monotonic() - _t0) * 1000),
+                                    "error",
+                                    purpose=purpose,
+                                )
                                 yield f"Error from Grok API: {response.status} - {error_text}"
                                 return
                 except Exception as e:
@@ -356,9 +457,19 @@ class LLMProvider:
                         await asyncio.sleep(delay)
                     else:
                         logger.error(f"Grok Error: {e}")
-                        _log_llm_usage("grok", grok_model, prompt, "",
-                                       int((time.monotonic() - _t0) * 1000), "error")
-                        yield f"Error calling Grok: {str(e)}"
+                        _log_llm_usage(
+                            "grok",
+                            grok_model,
+                            prompt,
+                            "",
+                            int((time.monotonic() - _t0) * 1000),
+                            "timeout" if _is_timeout_error(e) else "error",
+                            purpose=purpose,
+                        )
+                        if _is_timeout_error(e):
+                            yield "Error: Timeout (Grok stream)."
+                        else:
+                            yield f"Error calling Grok: {str(e)}"
                         return
         
         elif model == "claude":
@@ -373,23 +484,31 @@ class LLMProvider:
 
             target_model = specific_model or model_manager.get_chat_model("claude")
             logger.info(f"Using Claude model: {target_model}")
-            max_attempts = 3
+            max_attempts = _retry_attempts()
+            timeout_seconds = _provider_timeout_seconds("claude")
             _t0 = time.monotonic()
 
             for attempt in range(max_attempts):
                 try:
                     import anthropic as _anthropic_pkg
                     _output = ""
-                    async with client.messages.stream(
-                        model=target_model,
-                        max_tokens=8192,
-                        messages=[{"role": "user", "content": prompt}],
-                    ) as stream:
-                        async for text in stream.text_stream:
-                            _output += text
-                            yield text
-                    _log_llm_usage("claude", target_model, prompt, _output,
-                                   int((time.monotonic() - _t0) * 1000))
+                    async with asyncio.timeout(timeout_seconds):
+                        async with client.messages.stream(
+                            model=target_model,
+                            max_tokens=8192,
+                            messages=[{"role": "user", "content": prompt}],
+                        ) as stream:
+                            async for text in stream.text_stream:
+                                _output += text
+                                yield text
+                    _log_llm_usage(
+                        "claude",
+                        target_model,
+                        prompt,
+                        _output,
+                        int((time.monotonic() - _t0) * 1000),
+                        purpose=purpose,
+                    )
                     return
                 except Exception as e:
                     if _is_retryable_error(e) and attempt < max_attempts - 1:
@@ -398,9 +517,19 @@ class LLMProvider:
                         await asyncio.sleep(delay)
                     else:
                         logger.error(f"Claude Error: {e}")
-                        _log_llm_usage("claude", target_model, prompt, "",
-                                       int((time.monotonic() - _t0) * 1000), "error")
-                        yield f"Error calling Claude: {str(e)}"
+                        _log_llm_usage(
+                            "claude",
+                            target_model,
+                            prompt,
+                            "",
+                            int((time.monotonic() - _t0) * 1000),
+                            "timeout" if _is_timeout_error(e) else "error",
+                            purpose=purpose,
+                        )
+                        if _is_timeout_error(e):
+                            yield "Error: Timeout (Claude stream)."
+                        else:
+                            yield f"Error calling Claude: {str(e)}"
                         return
         
         elif model == "openai":
@@ -481,10 +610,10 @@ class LLMProvider:
                 "Authorization": f"Bearer {self.openai_api_key}",
             }
             # Responses API (reasoning-модели gpt-5.x) могут думать несколько минут
-            _timeout_sec = 300.0 if endpoint_name == "responses" else 90.0
+            _timeout_sec = float(_provider_timeout_seconds("openai", endpoint_name=endpoint_name))
             timeout = aiohttp.ClientTimeout(total=_timeout_sec)
             logger.debug(f"OpenAI: timeout={_timeout_sec}s")
-            max_attempts = 3
+            max_attempts = _retry_attempts()
             _t0 = time.monotonic()
 
             for attempt in range(max_attempts):
@@ -533,8 +662,14 @@ class LLMProvider:
                                         _output += content
                                         yield content
 
-                                _log_llm_usage("openai", target_model, prompt, _output,
-                                               int((time.monotonic() - _t0) * 1000))
+                                _log_llm_usage(
+                                    "openai",
+                                    target_model,
+                                    prompt,
+                                    _output,
+                                    int((time.monotonic() - _t0) * 1000),
+                                    purpose=purpose,
+                                )
                                 return
 
                             error_text = await response.text()
@@ -545,8 +680,15 @@ class LLMProvider:
                                 delay = RETRY_BACKOFF[min(attempt, len(RETRY_BACKOFF) - 1)]
                                 await asyncio.sleep(delay)
                             else:
-                                _log_llm_usage("openai", target_model, prompt, "",
-                                               int((time.monotonic() - _t0) * 1000), "error")
+                                _log_llm_usage(
+                                    "openai",
+                                    target_model,
+                                    prompt,
+                                    "",
+                                    int((time.monotonic() - _t0) * 1000),
+                                    "error",
+                                    purpose=purpose,
+                                )
                                 yield f"Error from OpenAI API: {response.status} - {error_text}"
                                 return
                 except Exception as e:
@@ -557,9 +699,19 @@ class LLMProvider:
                         delay = RETRY_BACKOFF[min(attempt, len(RETRY_BACKOFF) - 1)]
                         await asyncio.sleep(delay)
                     else:
-                        _log_llm_usage("openai", target_model, prompt, "",
-                                       int((time.monotonic() - _t0) * 1000), "error")
-                        yield f"Error calling OpenAI: {str(e)}"
+                        _log_llm_usage(
+                            "openai",
+                            target_model,
+                            prompt,
+                            "",
+                            int((time.monotonic() - _t0) * 1000),
+                            "timeout" if _is_timeout_error(e) else "error",
+                            purpose=purpose,
+                        )
+                        if _is_timeout_error(e):
+                            yield "Error: Timeout (OpenAI stream)."
+                        else:
+                            yield f"Error calling OpenAI: {str(e)}"
                         return
 
         else:

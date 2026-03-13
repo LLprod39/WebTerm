@@ -35,8 +35,8 @@ export default function SettingsUsersPage() {
   const { data: usersData, isLoading, error } = useQuery({ queryKey: ["access", "users"], queryFn: fetchAccessUsers });
   const { data: groupsData } = useQuery({ queryKey: ["access", "groups"], queryFn: fetchAccessGroups });
 
-  const users = usersData?.users || [];
-  const groups = groupsData?.groups || [];
+  const users = useMemo(() => usersData?.users ?? [], [usersData?.users]);
+  const groups = useMemo(() => groupsData?.groups ?? [], [groupsData?.groups]);
 
   const selectedGroupsLabel = useMemo(() => {
     const selected = groups.filter((g) => form.groups.includes(g.id));

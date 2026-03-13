@@ -23,6 +23,7 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency in local m
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
+from app.runtime_limits import get_pipeline_run_limit_error
 from studio.models import PipelineRun, PipelineTrigger
 
 
@@ -93,6 +94,13 @@ class Command(BaseCommand):
 
     def _fire_trigger(self, trigger: PipelineTrigger):
         from studio.views import _launch_pipeline_run_async
+
+        limit_error = get_pipeline_run_limit_error(trigger.pipeline.owner)
+        if limit_error:
+            self.stderr.write(
+                f"Skipped trigger #{trigger.pk} ({trigger.pipeline.name}): {limit_error['error']}"
+            )
+            return
 
         run = PipelineRun.objects.create(
             pipeline=trigger.pipeline,

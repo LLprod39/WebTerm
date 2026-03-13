@@ -1,6 +1,15 @@
 import { expect, test } from "@playwright/test";
 import { installApiHarness, json } from "./support/apiHarness";
 
+const fullFeatures = {
+  servers: true,
+  dashboard: true,
+  agents: true,
+  studio: true,
+  settings: true,
+  orchestrator: true,
+};
+
 type ServerItem = {
   id: number;
   name: string;
@@ -124,7 +133,7 @@ function makeServersHandler() {
           username: "admin",
           email: "admin@example.com",
           is_staff: true,
-          features: { servers: true, settings: true, orchestrator: true },
+          features: fullFeatures,
         },
       });
     }
@@ -324,7 +333,7 @@ function makeServersHandler() {
   };
 }
 
-test("manages server catalog, groups and bulk updates", async ({ page }) => {
+test("manages server catalog and groups", async ({ page }) => {
   const handler = makeServersHandler();
   const harness = await installApiHarness(page, handler);
 
@@ -332,10 +341,9 @@ test("manages server catalog, groups and bulk updates", async ({ page }) => {
 
   await page.getByRole("button", { name: /Add Server/i }).click();
   const createDialog = page.getByRole("dialog").filter({ hasText: "Create Server" });
-  const createInputs = createDialog.locator("input");
-  await createInputs.nth(0).fill("Cache-01");
-  await createInputs.nth(1).fill("10.0.0.33");
-  await createInputs.nth(3).fill("cache");
+  await createDialog.getByPlaceholder("e.g. prod-web-01").fill("Cache-01");
+  await createDialog.getByPlaceholder("192.168.1.10").fill("10.0.0.33");
+  await createDialog.getByPlaceholder("ubuntu").fill("cache");
   await page.getByRole("button", { name: /^Create$/ }).click();
   await expect(page.getByText("Cache-01")).toBeVisible();
 
@@ -345,22 +353,14 @@ test("manages server catalog, groups and bulk updates", async ({ page }) => {
   await page.getByRole("button", { name: "Create Group" }).click();
   await expect(page.getByText("Edge Group")).toBeVisible();
 
-  const edgeRow = page.locator("div.rounded-2xl.border").filter({ hasText: "Edge Group" }).first();
-  await edgeRow.getByRole("button", { name: "Rename" }).click();
-  const renameDialog = page.getByRole("dialog").filter({ hasText: "Rename group" });
-  await renameDialog.locator("input").first().fill("Edge Team");
-  await page.getByRole("button", { name: "Save name" }).click();
+  page.once("dialog", async (dialog) => {
+    await dialog.accept("Edge Team");
+  });
+  await page.getByRole("button", { name: "Rename" }).last().click();
   await expect(page.getByText("Edge Team")).toBeVisible();
 
-  await page.getByRole("tab", { name: "Bulk Actions" }).click();
-  await page.locator("select").first().selectOption({ label: "Edge Team" });
-  await page.getByRole("button", { name: "Apply Bulk Update" }).click();
-
-  const bulkCall = harness.getCalls("/servers/api/bulk-update/", "POST").at(-1);
-  expect(bulkCall?.body?.group_id).toBeDefined();
-
-  await page.getByRole("tab", { name: "Server List" }).click();
-  await expect(page.getByText("Edge Team").first()).toBeVisible();
+  await page.getByRole("button", { name: "Follow" }).last().click();
+  expect(harness.getCalls("/servers/api/groups/12/subscribe/", "POST").length).toBeGreaterThan(0);
 });
 
 test("uses advanced server actions for sharing, knowledge, context, security and command run", async ({ page }) => {
@@ -369,32 +369,33 @@ test("uses advanced server actions for sharing, knowledge, context, security and
   await page.goto("/servers");
 
   await page.locator("button:has(svg.lucide-sparkles)").first().click();
-  const advancedDialog = page.getByRole("dialog").filter({ hasText: "Advanced:" });
+  const advancedDialog = page.getByRole("dialog");
   await expect(advancedDialog).toBeVisible();
-  await expect(page.getByText(/Advanced: Web-01/)).toBeVisible();
+  await expect(advancedDialog.getByText("Web-01")).toBeVisible();
+  await expect(advancedDialog.getByText("10.0.0.11:22")).toBeVisible();
   await expect(advancedDialog.getByRole("button", { name: "Share" })).toBeVisible();
 
   await advancedDialog.locator("input").first().fill("alice");
   await advancedDialog.getByRole("button", { name: "Share" }).click();
   await expect(advancedDialog.getByText(/^alice$/)).toBeVisible();
 
-  await page.getByRole("tab", { name: "Knowledge" }).click();
+  await advancedDialog.getByRole("button", { name: "Knowledge" }).click();
   await page.getByPlaceholder("Title").fill("Rotation note");
   await page.getByPlaceholder("Content").fill("Rotate secrets every 30 days");
   await page.getByRole("button", { name: "Add" }).click();
   await expect(page.getByText("Rotation note")).toBeVisible();
 
-  await page.getByRole("tab", { name: "Context" }).click();
+  await advancedDialog.getByRole("button", { name: "Context" }).click();
   await page.getByRole("button", { name: "Save Global Context" }).click();
 
-  await page.getByRole("tab", { name: "Security" }).click();
+  await advancedDialog.getByRole("button", { name: "Security" }).click();
   await page.locator('input[type="password"]').first().fill("master-pass");
   await page.getByRole("button", { name: "Set Session MP" }).click();
   await page.getByRole("button", { name: "Reveal Server Password" }).click();
   await expect(page.locator('input[value="revealed-password"]')).toBeVisible();
 
-  await page.getByRole("tab", { name: "Execute" }).click();
-  await page.locator("input.font-mono").first().fill("uname -a");
+  await advancedDialog.getByRole("button", { name: "Execute" }).click();
+  await page.getByPlaceholder("hostname").fill("uname -a");
   await page.getByRole("button", { name: "Run" }).click();
   await expect(page.locator("textarea").filter({ hasText: "Executed: uname -a" })).toBeVisible();
 });

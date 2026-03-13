@@ -59,8 +59,8 @@ FEATURE_CHOICES = [
 ]
 
 # Features allowed by default for non-staff users.
-# By product policy, regular accounts start in server-only mode.
-DEFAULT_ALLOWED_FEATURES = {"servers"}
+# Settings remain opt-in, but core daily workflows are available by default.
+DEFAULT_ALLOWED_FEATURES = {"servers", "dashboard", "agents", "studio", "knowledge_base"}
 
 
 class UserAppPermission(models.Model):

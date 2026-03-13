@@ -7,10 +7,12 @@ from typing import Any, Dict, Optional, Tuple
 from loguru import logger
 from django.db.models import Q
 from django.utils import timezone
+from core_ui.activity import log_user_activity
 from app.tools.base import BaseTool, ToolMetadata, ToolParameter
 from app.tools.ssh_tools import ssh_manager
 from app.tools.safety import is_dangerous_command
 from asgiref.sync import sync_to_async
+from servers.secret_utils import get_server_auth_secret
 
 
 def _get_user_id(kwargs: Dict[str, Any]) -> Optional[int]:
@@ -171,17 +173,17 @@ class ServerExecuteTool(BaseTool):
             )
         password = None
         if server.auth_method in ("password", "key_password"):
-            if server.encrypted_password:
-                mp = _get_master_password(kwargs)
-                if mp:
-                    from passwords.encryption import PasswordEncryption
-                    password = PasswordEncryption.decrypt_password(
-                        server.encrypted_password, mp, bytes(server.salt or b"")
-                    )
-                else:
-                    return "Сервер требует мастер-пароль для расшифровки. Выполни команду через Servers → Execute в интерфейсе или передай master_password в контексте."
-            else:
-                password = getattr(server, "_plain_password", None)
+            mp = _get_master_password(kwargs)
+            try:
+                password = await sync_to_async(
+                    get_server_auth_secret,
+                    thread_sensitive=True,
+                )(server, master_password=mp or "", fallback_plain=getattr(server, "_plain_password", None) or "")
+            except ValueError:
+                return (
+                    "Сервер требует мастер-пароль для расшифровки. "
+                    "Выполни команду через Servers → Execute в интерфейсе или передай master_password в контексте."
+                )
         key_path = server.key_path if server.auth_method in ("key", "key_password") else None
         try:
             # Подключение с network_config
@@ -192,6 +194,7 @@ class ServerExecuteTool(BaseTool):
                 key_path=key_path or None,
                 port=server.port,
                 network_config=server.network_config or {},
+                server=server,
             )
             result = await ssh_manager.execute(conn_id, command)
             await ssh_manager.disconnect(conn_id)
@@ -211,6 +214,22 @@ class ServerExecuteTool(BaseTool):
                 )
             except Exception as hist_err:
                 logger.debug(f"Failed to save command history: {hist_err}")
+
+            await sync_to_async(log_user_activity, thread_sensitive=True)(
+                user_id=user_id,
+                category="terminal",
+                action="server_tool_execute",
+                status="success" if code == 0 else "error",
+                description=command[:4000],
+                entity_type="server",
+                entity_id=str(server.id),
+                entity_name=server.name,
+                metadata={
+                    "tool": "server_execute",
+                    "exit_code": code,
+                    "output_excerpt": out[:4000],
+                },
+            )
 
             # Analyze output and save AI knowledge
             try:
@@ -235,6 +254,20 @@ class ServerExecuteTool(BaseTool):
             return f"Exit code: {code}{network_info}\n{out}"
         except Exception as e:
             logger.exception("server_execute failed")
+            await sync_to_async(log_user_activity, thread_sensitive=True)(
+                user_id=user_id,
+                category="terminal",
+                action="server_tool_execute",
+                status="error",
+                description=command[:4000],
+                entity_type="server",
+                entity_id=str(getattr(server, "id", "")),
+                entity_name=getattr(server, "name", ""),
+                metadata={
+                    "tool": "server_execute",
+                    "error": str(e)[:4000],
+                },
+            )
             return f"Ошибка выполнения на {server.name}: {e}"
 
     @staticmethod

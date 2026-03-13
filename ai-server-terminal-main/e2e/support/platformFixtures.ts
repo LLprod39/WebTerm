@@ -8,6 +8,9 @@ type SessionUser = {
   is_staff: boolean;
   features: {
     servers: boolean;
+    dashboard: boolean;
+    agents: boolean;
+    studio: boolean;
     settings: boolean;
     orchestrator: boolean;
   };
@@ -54,7 +57,14 @@ function makeSessionUser(isStaff: boolean, username = "admin"): SessionUser {
     username,
     email: `${username}@example.com`,
     is_staff: isStaff,
-    features: { servers: true, settings: true, orchestrator: true },
+    features: {
+      servers: true,
+      dashboard: true,
+      agents: true,
+      studio: true,
+      settings: true,
+      orchestrator: true,
+    },
   };
 }
 
@@ -284,6 +294,14 @@ export async function installPlatformMocks(page: Page, options: PlatformMockOpti
 
       if (req.path === "/api/studio/pipelines/" && req.method === "GET") {
         return json(pipelines);
+      }
+
+      if (req.path === "/api/studio/runs/" && req.method === "GET") {
+        return json([]);
+      }
+
+      if (req.path === "/api/studio/skills/" && req.method === "GET") {
+        return json([]);
       }
 
       if (req.path.match(/^\/api\/studio\/pipelines\/\d+\/run\/$/) && req.method === "POST") {

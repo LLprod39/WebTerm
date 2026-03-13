@@ -34,6 +34,10 @@ KNOWN_NODE_TYPES = {
 }
 
 
+def _owner_can_use_mcp(owner) -> bool:
+    return bool(owner and getattr(owner, "is_staff", False))
+
+
 def _looks_like_five_field_cron(value: str) -> bool:
     return len([part for part in value.split() if part]) == 5
 
@@ -138,8 +142,13 @@ def _validate_node_references(node: dict[str, Any], owner, errors: list[str]) ->
             errors=errors,
             node_id=node_id,
         )
-        if agent_config_id is not None and not AgentConfig.objects.filter(owner=owner, id=agent_config_id).exists():
-            errors.append(f"Node '{node_id}' references an inaccessible agent config: {agent_config_id}.")
+        agent_config = None
+        if agent_config_id is not None:
+            agent_config = AgentConfig.objects.filter(owner=owner, id=agent_config_id).prefetch_related("mcp_servers").first()
+            if agent_config is None:
+                errors.append(f"Node '{node_id}' references an inaccessible agent config: {agent_config_id}.")
+            elif not _owner_can_use_mcp(owner) and agent_config.mcp_servers.exists():
+                errors.append(f"Node '{node_id}' references an agent config with MCP servers, but MCP is admin-only.")
 
         mcp_server_ids = _collect_int_ids(
             data.get("mcp_server_ids"),
@@ -148,6 +157,8 @@ def _validate_node_references(node: dict[str, Any], owner, errors: list[str]) ->
             node_id=node_id,
         )
         if mcp_server_ids:
+            if not _owner_can_use_mcp(owner):
+                errors.append(f"Node '{node_id}' attaches MCP servers, but MCP is admin-only.")
             accessible = set(MCPServerPool.objects.filter(owner=owner, id__in=mcp_server_ids).values_list("id", flat=True))
             missing = [mid for mid in mcp_server_ids if mid not in accessible]
             if missing:
@@ -165,8 +176,11 @@ def _validate_node_references(node: dict[str, Any], owner, errors: list[str]) ->
             errors=errors,
             node_id=node_id,
         )
-        if mcp_server_id is not None and not MCPServerPool.objects.filter(owner=owner, id=mcp_server_id).exists():
-            errors.append(f"Node '{node_id}' references an inaccessible MCP server: {mcp_server_id}.")
+        if mcp_server_id is not None:
+            if not _owner_can_use_mcp(owner):
+                errors.append(f"Node '{node_id}' uses an MCP call, but MCP is admin-only.")
+            if not MCPServerPool.objects.filter(owner=owner, id=mcp_server_id).exists():
+                errors.append(f"Node '{node_id}' references an inaccessible MCP server: {mcp_server_id}.")
 
 
 def _validate_graph_structure(nodes: list[dict[str, Any]], edges: list[dict[str, Any]]) -> list[str]:

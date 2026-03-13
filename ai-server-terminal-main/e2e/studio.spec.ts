@@ -1,6 +1,15 @@
 import { expect, test } from "@playwright/test";
 import { installApiHarness, json } from "./support/apiHarness";
 
+const fullFeatures = {
+  servers: true,
+  dashboard: true,
+  agents: true,
+  studio: true,
+  settings: true,
+  orchestrator: true,
+};
+
 function makeStudioHandler() {
   let nextPipelineId = 102;
   let nextSkillSlug = 1;
@@ -111,7 +120,7 @@ function makeStudioHandler() {
           username: "admin",
           email: "admin@example.com",
           is_staff: true,
-          features: { servers: true, settings: true, orchestrator: true },
+          features: fullFeatures,
         },
       });
     }
@@ -123,6 +132,10 @@ function makeStudioHandler() {
         return [pipeline.name, pipeline.description, ...(pipeline.tags || [])].join(" ").toLowerCase().includes(q);
       });
       return json(filtered);
+    }
+
+    if (req.path === "/api/studio/runs/" && req.method === "GET") {
+      return json([]);
     }
 
     if (req.path.match(/^\/api\/studio\/pipelines\/\d+\/run\/$/) && req.method === "POST") {
@@ -303,47 +316,49 @@ test("works with pipeline actions from Studio", async ({ page }) => {
   const harness = await installApiHarness(page, handler);
 
   await page.goto("/studio");
-  await expect(page.getByRole("heading", { name: "Automation Studio" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Pipeline Workspace" })).toBeVisible();
 
   await page.getByRole("button", { name: /^Run$/ }).first().click();
   expect(harness.getCalls("/api/studio/pipelines/101/run/", "POST").length).toBeGreaterThan(0);
 
-  await page.locator('[title="Clone"]').first().click();
+  const pipelineCard = page.locator("article").filter({ hasText: "Nightly Patch" }).first();
+  await pipelineCard.locator("button").first().click();
+  await page.getByRole("menuitem", { name: /Clone/ }).click();
   await expect(page.getByRole("heading", { name: "Nightly Patch Copy" })).toBeVisible();
 
-  const cloneCard = page.locator(".group.overflow-hidden.rounded-md").filter({ hasText: "Nightly Patch Copy" }).first();
-  await cloneCard.locator('[title="Delete"]').click();
+  const cloneCard = page.locator("article").filter({ hasText: "Nightly Patch Copy" }).first();
+  await cloneCard.locator("button").first().click();
+  await page.getByRole("menuitem", { name: /Delete/ }).click();
   await page.getByRole("button", { name: /^Delete$/ }).click();
   await expect(page.getByText("Nightly Patch Copy")).toHaveCount(0);
 });
 
 test("manages MCP registry and notification test actions", async ({ page }) => {
-  await installApiHarness(page, makeStudioHandler());
+  const harness = await installApiHarness(page, makeStudioHandler());
 
   await page.goto("/studio/mcp");
-  await expect(page.getByRole("heading", { name: "MCP Registry" })).toBeVisible();
+  await expect(page.getByText("MCP Hub")).toBeVisible();
 
-  await page.getByRole("button", { name: "Add MCP Server" }).first().click();
+  await page.getByRole("button", { name: "Add server" }).first().click();
   await page.getByPlaceholder("GitHub MCP").fill("PagerDuty MCP");
-  await page.getByPlaceholder("What this MCP provides...").fill("Incident escalation tools");
+  await page.getByPlaceholder("What this MCP provides").fill("Incident escalation tools");
   await page.getByPlaceholder("npx").fill("npx");
   await page.getByRole("button", { name: /^Save$/ }).click();
   await expect(page.getByText("PagerDuty MCP")).toBeVisible();
-
-  const pagerCard = page.locator(".group.overflow-hidden.rounded-md").filter({ hasText: "PagerDuty MCP" }).first();
-  await pagerCard.getByTitle("Test connection").click();
+  expect(harness.getCalls("/api/studio/mcp/", "POST").length).toBeGreaterThan(0);
 
   await page.goto("/studio/notifications");
-  await expect(page.getByRole("heading", { name: "Notification Settings" })).toBeVisible();
+  await expect(page.getByText("Notification settings")).toBeVisible();
 
   await page.locator('input[type="password"]').first().fill("tg-token");
-  await page.locator('input[placeholder*="userinfobot"]').fill("123456789");
-  await page.getByRole("button", { name: "Send Test Message" }).click();
+  await page.locator('input[placeholder="123456789"]').fill("123456789");
+  await page.getByRole("button", { name: "Send test Telegram message" }).click();
   await expect(page.getByText("Telegram test sent")).toBeVisible();
 
-  await page.locator('input[placeholder*="email@gmail.com"]').fill("smtp-user");
-  await page.getByRole("button", { name: "Send Test Email" }).click();
+  await page.getByPlaceholder("smtp.gmail.com").fill("smtp.gmail.com");
+  await page.getByPlaceholder("email@example.com", { exact: true }).fill("smtp-user");
+  await page.getByRole("button", { name: "Send test email" }).click();
   await expect(page.getByText("Email test sent")).toBeVisible();
 
-  await page.getByRole("button", { name: "Save settings" }).click();
+  await page.getByRole("button", { name: /^Save$/ }).click();
 });

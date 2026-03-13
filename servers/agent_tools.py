@@ -150,6 +150,8 @@ async def tool_ask_user(session: AgentSessionManager, *, question: str, **_kw) -
     try:
         answer = await asyncio.wait_for(session.user_reply_future, timeout=300)
         return ToolResult(True, f"User replied: {answer}")
+    except asyncio.CancelledError:
+        return ToolResult(False, "User input was interrupted.")
     except asyncio.TimeoutError:
         return ToolResult(False, "User did not reply within 5 minutes.")
 

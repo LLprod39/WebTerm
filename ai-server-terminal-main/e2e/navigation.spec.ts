@@ -1,6 +1,15 @@
 import { expect, test } from "@playwright/test";
 import { installApiHarness, json } from "./support/apiHarness";
 
+const fullFeatures = {
+  servers: true,
+  dashboard: true,
+  agents: true,
+  studio: true,
+  settings: true,
+  orchestrator: true,
+};
+
 test("sidebar navigation opens key sections", async ({ page }) => {
   await installApiHarness(page, (req) => {
     if (req.path === "/api/auth/session/" && req.method === "GET") {
@@ -11,7 +20,7 @@ test("sidebar navigation opens key sections", async ({ page }) => {
           username: "operator",
           email: "operator@example.com",
           is_staff: false,
-          features: { servers: true, settings: true, orchestrator: true },
+          features: fullFeatures,
         },
       });
     }
@@ -98,6 +107,10 @@ test("sidebar navigation opens key sections", async ({ page }) => {
           last_run: null,
         },
       ]);
+    }
+
+    if (req.path === "/api/studio/runs/" && req.method === "GET") {
+      return json([]);
     }
 
     if (req.path === "/api/studio/templates/" && req.method === "GET") {
@@ -197,23 +210,23 @@ test("sidebar navigation opens key sections", async ({ page }) => {
   await page.goto("/servers");
   await expect(page.getByRole("heading", { name: "Infrastructure" })).toBeVisible();
 
-  await page.locator('a[href="/dashboard"]').first().click();
+  await page.getByRole("link", { name: "Dashboard" }).first().click();
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByRole("heading", { name: "Server Dashboard" })).toBeVisible();
 
-  await page.locator('a[href="/agents"]').first().click();
+  await page.getByRole("link", { name: "Agents" }).first().click();
   await expect(page).toHaveURL(/\/agents$/);
-  await expect(page.getByRole("heading", { name: "Server Agents" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Agents" })).toBeVisible();
 
-  await page.locator('a[href="/studio"]').first().click();
+  await page.getByRole("link", { name: "Studio" }).first().click();
   await expect(page).toHaveURL(/\/studio$/);
-  await expect(page.getByRole("heading", { name: "Automation Studio" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Pipeline Workspace" })).toBeVisible();
 
-  await page.locator('a[href="/settings"]').first().click();
+  await page.getByRole("link", { name: "Settings" }).first().click();
   await expect(page).toHaveURL(/\/settings$/);
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
 
-  await page.locator('a[href="/servers"]').first().click();
+  await page.getByRole("link", { name: "Servers" }).first().click();
   await expect(page).toHaveURL(/\/servers$/);
   await expect(page.getByRole("heading", { name: "Infrastructure" })).toBeVisible();
 });

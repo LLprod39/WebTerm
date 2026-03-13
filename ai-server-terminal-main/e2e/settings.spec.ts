@@ -1,6 +1,15 @@
 import { expect, test } from "@playwright/test";
 import { installApiHarness, json } from "./support/apiHarness";
 
+const fullFeatures = {
+  servers: true,
+  dashboard: true,
+  agents: true,
+  studio: true,
+  settings: true,
+  orchestrator: true,
+};
+
 function makeSettingsHandler() {
   let nextUserId = 3;
   let nextGroupId = 3;
@@ -119,7 +128,7 @@ function makeSettingsHandler() {
           username: "admin",
           email: "admin@example.com",
           is_staff: true,
-          features: { servers: true, settings: true, orchestrator: true },
+          features: fullFeatures,
         },
       });
     }
@@ -303,38 +312,50 @@ function makeSettingsHandler() {
   };
 }
 
-test("updates general settings and monitoring thresholds", async ({ page }) => {
-  await installApiHarness(page, makeSettingsHandler());
+test("updates AI settings from the settings workspace", async ({ page }) => {
+  const harness = await installApiHarness(page, makeSettingsHandler());
 
   await page.goto("/settings");
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Save" }).first().click();
-  await page.getByRole("button", { name: "Refresh Models" }).click();
+  await page.getByRole("button", { name: "Сохранить" }).first().click();
+  await expect
+    .poll(() => harness.getCalls("/api/settings/", "POST").length)
+    .toBeGreaterThan(0);
 
-  await page.getByRole("tab", { name: "Monitoring" }).click();
-  await page.getByRole("button", { name: "Save Thresholds" }).click();
+  await page.getByRole("button", { name: "Обновить список" }).first().click();
+  await expect
+    .poll(() => harness.getCalls("/api/models/refresh/", "POST").length)
+    .toBeGreaterThan(0);
 });
 
 test("manages users from access catalog", async ({ page }) => {
-  await installApiHarness(page, makeSettingsHandler());
+  const harness = await installApiHarness(page, makeSettingsHandler());
 
   await page.goto("/settings/users");
-  await expect(page.getByRole("heading", { name: "Users" })).toBeVisible();
+  await expect(page.getByText("Users")).toBeVisible();
 
-  await page.getByPlaceholder("operator-team").fill("qa-user");
-  await page.getByPlaceholder("team@example.com").fill("qa@example.com");
-  await page.getByPlaceholder("Temporary password").fill("Temp1234");
-  await page.getByRole("button", { name: "Create user" }).click();
+  await page.getByPlaceholder("Username").fill("qa-user");
+  await page.getByPlaceholder("Email").fill("qa@example.com");
+  await page.getByPlaceholder("Password").fill("Temp1234");
+  await page.getByRole("button", { name: "Create User" }).click();
   await expect(page.getByText("qa-user")).toBeVisible();
 
-  const userCard = page.locator("div.rounded-2xl.border").filter({ hasText: "qa-user" }).first();
-  await userCard.getByRole("button", { name: "Reset password" }).click();
-  await page.getByPlaceholder("Enter a temporary password").fill("NewPass123!");
-  await page.getByRole("button", { name: "Update password" }).click();
+  await page.evaluate(() => {
+    window.prompt = () => "NewPass123!";
+    window.confirm = () => true;
+    window.alert = () => undefined;
+  });
 
-  await userCard.getByRole("button", { name: "Delete" }).click();
-  await page.getByRole("button", { name: "Delete user" }).click();
+  await page.getByRole("button", { name: "Password" }).last().click();
+  await expect
+    .poll(() => harness.getCalls("/api/access/users/3/password/", "POST").length)
+    .toBeGreaterThan(0);
+
+  await page.getByRole("button", { name: "Delete" }).last().click();
+  await expect
+    .poll(() => harness.getCalls("/api/access/users/3/", "DELETE").length)
+    .toBeGreaterThan(0);
   await expect(page.getByText("qa-user")).toHaveCount(0);
 });
 
@@ -344,24 +365,27 @@ test("manages groups and explicit permissions", async ({ page }) => {
   await page.goto("/settings/groups");
   await expect(page.getByRole("heading", { name: "Groups" })).toBeVisible();
 
-  await page.getByPlaceholder("Operations team").fill("SRE Team");
-  await page.getByRole("button", { name: "Create group" }).click();
+  await page.getByPlaceholder("Group name").fill("SRE Team");
+  await page.getByRole("button", { name: "Create Group" }).click();
   await expect(page.getByText("SRE Team")).toBeVisible();
 
-  const groupCard = page.locator("div.rounded-2xl.border").filter({ hasText: "SRE Team" }).first();
-  await groupCard.getByRole("button", { name: "Rename" }).click();
-  await page.locator('input[value="SRE Team"]').first().fill("SRE Core");
-  await page.getByRole("button", { name: "Save" }).first().click();
+  page.once("dialog", async (dialog) => {
+    await dialog.accept("SRE Core");
+  });
+  await page.getByRole("button", { name: "Rename" }).last().click();
   await expect(page.getByText("SRE Core")).toBeVisible();
 
   await page.goto("/settings/permissions");
   await expect(page.getByRole("heading", { name: "Permissions" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Save permission" }).click();
-  expect(harness.getCalls("/api/access/permissions/", "POST").length).toBeGreaterThan(0);
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect
+    .poll(() => harness.getCalls("/api/access/permissions/", "POST").length)
+    .toBeGreaterThan(0);
 
-  const permRow = page.locator("div.rounded-2xl.border").filter({ hasText: "operator" }).first();
-  await permRow.getByRole("button", { name: "Toggle" }).click();
-  await permRow.getByRole("button", { name: "Delete" }).click();
-  await page.getByRole("button", { name: "Delete permission" }).click();
+  await page.getByRole("button", { name: "Toggle" }).first().click();
+  page.once("dialog", async (dialog) => {
+    await dialog.accept();
+  });
+  await page.getByRole("button", { name: "Delete" }).first().click();
 });

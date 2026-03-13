@@ -3,12 +3,22 @@ import json
 import pytest
 from django.contrib.auth.models import Group, User
 from django.test import Client
+from django.utils import timezone
 
+from core_ui.activity import log_user_activity
+from core_ui.audit import audit_context
 from core_ui.models import UserAppPermission
+from core_ui.models import UserActivityLog
 
 
 def _json(payload: dict) -> str:
     return json.dumps(payload, ensure_ascii=False)
+
+
+def _csrf_token(client: Client) -> str:
+    response = client.get("/api/auth/csrf/")
+    assert response.status_code == 200
+    return client.cookies["csrftoken"].value
 
 
 @pytest.mark.django_db
@@ -18,6 +28,8 @@ def test_health_and_anonymous_auth_endpoints():
     health = client.get("/api/health/")
     assert health.status_code == 200
     assert "status" in health.json()
+    assert health["X-Request-ID"]
+    assert health.json()["observability"]["request_id_header"] == "X-Request-ID"
 
     session = client.get("/api/auth/session/")
     assert session.status_code == 200
@@ -61,6 +73,37 @@ def test_auth_login_logout_session_and_ws_token_flow():
 
 
 @pytest.mark.django_db
+def test_auth_login_and_logout_require_csrf_when_enforced():
+    User.objects.create_user(username="csrf-user", password="secret123")
+    client = Client(enforce_csrf_checks=True)
+
+    rejected_login = client.post(
+        "/api/auth/login/",
+        data=_json({"username": "csrf-user", "password": "secret123"}),
+        content_type="application/json",
+    )
+    assert rejected_login.status_code == 403
+
+    token = _csrf_token(client)
+    accepted_login = client.post(
+        "/api/auth/login/",
+        data=_json({"username": "csrf-user", "password": "secret123"}),
+        content_type="application/json",
+        HTTP_X_CSRFTOKEN=token,
+    )
+    assert accepted_login.status_code == 200
+    assert accepted_login.json()["authenticated"] is True
+
+    rejected_logout = client.post("/api/auth/logout/")
+    assert rejected_logout.status_code == 403
+
+    logout_token = _csrf_token(client)
+    accepted_logout = client.post("/api/auth/logout/", HTTP_X_CSRFTOKEN=logout_token)
+    assert accepted_logout.status_code == 200
+    assert accepted_logout.json()["authenticated"] is False
+
+
+@pytest.mark.django_db
 def test_admin_and_settings_endpoints_for_staff_user(monkeypatch):
     staff = User.objects.create_user(username="staff-core", password="x", is_staff=True)
     client = Client()
@@ -97,6 +140,85 @@ def test_admin_and_settings_endpoints_for_staff_user(monkeypatch):
     )
     assert refresh.status_code == 400
     assert "provider must be one of" in refresh.json()["error"]
+
+
+@pytest.mark.django_db
+def test_non_staff_cannot_access_activity_logs_or_update_audit_settings():
+    user = User.objects.create_user(username="settings-audit-user", password="x")
+    UserAppPermission.objects.update_or_create(
+        user=user,
+        feature="settings",
+        defaults={"allowed": True},
+    )
+    client = Client(enforce_csrf_checks=True)
+    client.force_login(user)
+
+    logs = client.get("/api/settings/activity/")
+    assert logs.status_code == 403
+
+    export = client.get("/api/settings/activity/?format=csv")
+    assert export.status_code == 403
+
+    token = _csrf_token(client)
+    update = client.post(
+        "/api/settings/",
+        data=_json({"log_http_requests": True, "retention_days": 30, "export_format": "csv"}),
+        content_type="application/json",
+        HTTP_X_CSRFTOKEN=token,
+    )
+    assert update.status_code == 403
+    assert "Only admins can update audit logging settings" in update.json()["error"]
+
+
+@pytest.mark.django_db
+def test_log_user_activity_normalizes_datetime_metadata_and_uses_audit_context():
+    user = User.objects.create_user(username="audit-user", password="x")
+    finished_at = timezone.now()
+
+    with audit_context(
+        user_id=user.id,
+        username_snapshot=user.username,
+        channel="pipeline",
+        path="/api/studio/pipelines/1/run/",
+        request_id="req-pipeline-1",
+    ):
+        log_user_activity(
+            category="pipeline",
+            action="pipeline_status_update",
+            description="Pipeline finished",
+            metadata={
+                "finished_at": finished_at,
+                "tags": {"prod", "ops"},
+                "nested": {"when": finished_at.date()},
+            },
+        )
+
+    entry = UserActivityLog.objects.latest("id")
+    assert entry.user_id == user.id
+    assert entry.username_snapshot == "audit-user"
+    assert entry.metadata["request_id"] == "req-pipeline-1"
+    assert entry.metadata["channel"] == "pipeline"
+    assert entry.metadata["path"] == "/api/studio/pipelines/1/run/"
+    assert entry.metadata["finished_at"] == finished_at.isoformat()
+    assert set(entry.metadata["tags"]) == {"prod", "ops"}
+    assert entry.metadata["nested"]["when"] == finished_at.date().isoformat()
+
+
+@pytest.mark.django_db
+def test_request_audit_middleware_sets_request_id_header_and_logs_it():
+    user = User.objects.create_user(username="request-audit-user", password="x")
+    client = Client()
+    client.force_login(user)
+
+    response = client.get("/api/auth/session/", HTTP_X_REQUEST_ID="req-http-123")
+    assert response.status_code == 200
+    assert response["X-Request-ID"] == "req-http-123"
+
+    entry = UserActivityLog.objects.latest("id")
+    assert entry.action == "http_request"
+    assert entry.metadata["request_id"] == "req-http-123"
+    assert entry.metadata["path"] == "/api/auth/session/"
+    assert entry.metadata["method"] == "GET"
 
 
 @pytest.mark.django_db

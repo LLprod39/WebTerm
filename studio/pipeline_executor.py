@@ -30,6 +30,7 @@ import re
 import secrets
 from collections import defaultdict, deque
 from datetime import timedelta
+from threading import Event
 from typing import Any
 
 import httpx
@@ -38,10 +39,13 @@ from channels.layers import get_channel_layer
 from django.utils import timezone
 
 from app.core.model_utils import resolve_provider_and_model
+from core_ui.activity import log_user_activity_async
+from core_ui.audit import audit_context
 from servers.mcp_tool_runtime import MCPBoundTool
 
 from .mcp_client import call_mcp_tool
 from .models import PipelineRun
+from .pipeline_runtime import is_runtime_stop_requested, register_executor, unregister_executor
 from .pipeline_validation import validate_pipeline_definition
 from .skill_policy import apply_skill_policies, compile_skill_policies
 from .skill_registry import normalise_skill_slugs, resolve_skills
@@ -101,6 +105,77 @@ def _coerce_mcp_arguments(config: dict[str, Any]) -> tuple[dict[str, Any] | None
     return None, "MCP arguments must be a JSON object"
 
 
+def _pipeline_actor_context(run: PipelineRun) -> dict[str, Any]:
+    actor = getattr(run, "triggered_by", None) or getattr(getattr(run, "pipeline", None), "owner", None)
+    username = ""
+    user_id = None
+    if actor is not None:
+        user_id = getattr(actor, "id", None)
+        username = str(getattr(actor, "username", "") or "").strip()
+    return {
+        "user_id": user_id,
+        "username_snapshot": username,
+        "channel": "pipeline",
+        "path": f"/api/studio/pipelines/{run.pipeline_id}/run/",
+        "entity_type": "pipeline_run",
+        "entity_id": str(run.pk),
+        "entity_name": str(getattr(getattr(run, "pipeline", None), "name", "") or f"pipeline-run-{run.pk}"),
+    }
+
+
+def _save_server_command_history(*, server_id: int, user_id: int | None, command: str, output: str, exit_code: int | None) -> None:
+    from servers.models import ServerCommandHistory
+
+    ServerCommandHistory.objects.create(
+        server_id=server_id,
+        user_id=user_id,
+        command=command,
+        output=(output or "")[:10000],
+        exit_code=exit_code,
+    )
+
+
+async def _log_pipeline_ssh_command(
+    *,
+    run: PipelineRun,
+    server,
+    node_id: str,
+    command: str,
+    exit_code: int | None,
+    output: str = "",
+    error: str = "",
+) -> None:
+    actor_ctx = _pipeline_actor_context(run)
+    status = "success" if exit_code == 0 and not error else "error"
+    combined_output = error or output
+    await log_user_activity_async(
+        user_id=actor_ctx.get("user_id"),
+        username_snapshot=str(actor_ctx.get("username_snapshot") or ""),
+        category="terminal",
+        action="server_execute_command",
+        status=status,
+        description=command[:4000],
+        entity_type="server",
+        entity_id=str(server.id),
+        entity_name=server.name,
+        metadata={
+            "source": "pipeline_ssh_cmd",
+            "pipeline_id": run.pipeline_id,
+            "pipeline_run_id": run.pk,
+            "node_id": node_id,
+            "exit_code": exit_code,
+            "output_excerpt": combined_output[:4000],
+        },
+    )
+    await _s2a_fn(_save_server_command_history, thread_sensitive=True)(
+        server_id=server.id,
+        user_id=actor_ctx.get("user_id"),
+        command=command,
+        output=combined_output,
+        exit_code=exit_code,
+    )
+
+
 def _mcp_result_to_text(result: dict[str, Any]) -> str:
     parts: list[str] = []
 
@@ -143,7 +218,8 @@ async def _load_owned_agent_config(owner, agent_config_id: int):
 async def _load_agent_scope_ids(agent_conf) -> set[int]:
     if not agent_conf:
         return set()
-    return set(await _s2a_fn(lambda: list(agent_conf.server_scope.values_list("id", flat=True)))())
+    owner = getattr(agent_conf, "owner", None)
+    return set(await _s2a_fn(lambda: list(agent_conf.server_scope.filter(user=owner).values_list("id", flat=True)))())
 
 
 # ---------------------------------------------------------------------------
@@ -224,7 +300,7 @@ async def _execute_agent_react(node: dict, context: dict, run: PipelineRun) -> d
         max_iterations = agent_conf.max_iterations
         model = agent_conf.model
         tools_config = dict.fromkeys(agent_conf.allowed_tools or [], True)
-        mcp_servers = await _s2a_fn(lambda: list(agent_conf.mcp_servers.all()))()
+        mcp_servers = await _s2a_fn(lambda: list(agent_conf.mcp_servers.filter(owner=owner)))()
         skill_slugs = _merge_unique_strings(list(agent_conf.skill_slugs or []), node_skill_slugs)
         allowed_server_ids = await _load_agent_scope_ids(agent_conf)
         if allowed_server_ids:
@@ -341,7 +417,7 @@ async def _execute_agent_multi(node: dict, context: dict, run: PipelineRun) -> d
         max_iterations = agent_conf.max_iterations
         model = agent_conf.model
         tools_config = dict.fromkeys(agent_conf.allowed_tools or [], True)
-        mcp_servers = await _s2a_fn(lambda: list(agent_conf.mcp_servers.all()))()
+        mcp_servers = await _s2a_fn(lambda: list(agent_conf.mcp_servers.filter(owner=owner)))()
         skill_slugs = _merge_unique_strings(list(agent_conf.skill_slugs or []), node_skill_slugs)
         allowed_server_ids = await _load_agent_scope_ids(agent_conf)
         if allowed_server_ids:
@@ -455,21 +531,38 @@ async def _execute_agent_ssh_cmd(node: dict, context: dict, run: PipelineRun) ->
     try:
         from servers.monitor import _build_connect_kwargs
 
-        connect_kwargs = _build_connect_kwargs(server)
+        connect_kwargs = await _build_connect_kwargs(server)
         connect_kwargs["connect_timeout"] = 30
 
         async with asyncssh.connect(**connect_kwargs) as conn:
             result = await conn.run(command, timeout=120)
             output = result.stdout + (("\n" + result.stderr) if result.stderr else "")
+            await _log_pipeline_ssh_command(
+                run=run,
+                server=server,
+                node_id=str(node.get("id") or ""),
+                command=command,
+                exit_code=result.exit_status,
+                output=output,
+            )
             return {
                 "status": "completed",
                 "output": output,
                 "exit_code": result.exit_status,
             }
     except Exception as exc:
+        error_text = f"{exc} (server: {server.name} [{server.username}@{server.host}])"
+        await _log_pipeline_ssh_command(
+            run=run,
+            server=server,
+            node_id=str(node.get("id") or ""),
+            command=command,
+            exit_code=-1,
+            error=error_text,
+        )
         return {
             "status": "failed",
-            "error": f"{exc} (server: {server.name} [{server.username}@{server.host}])",
+            "error": error_text,
         }
 
 
@@ -623,6 +716,27 @@ async def _execute_agent_mcp_call(
             bool(result.get("isError")),
             len(output),
         )
+        actor_ctx = _pipeline_actor_context(run)
+        await log_user_activity_async(
+            user_id=actor_ctx.get("user_id"),
+            username_snapshot=str(actor_ctx.get("username_snapshot") or ""),
+            category="mcp",
+            action="mcp_call",
+            status="error" if result.get("isError") else "success",
+            description=f"{mcp_server.name}.{tool_name}",
+            entity_type="pipeline_run",
+            entity_id=str(run.pk),
+            entity_name=actor_ctx.get("entity_name") or "",
+            metadata={
+                "node_id": str(node.get("id") or ""),
+                "mcp_server_id": mcp_server.id,
+                "mcp_server_name": mcp_server.name,
+                "tool_name": tool_name,
+                "arguments": prepared_args,
+                "is_error": bool(result.get("isError")),
+                "output_excerpt": output[:4000],
+            },
+        )
         if result.get("isError"):
             return {
                 "status": "failed",
@@ -639,6 +753,22 @@ async def _execute_agent_mcp_call(
         }
     except Exception as exc:
         logger.exception("mcp_call node %s failed", node.get("id"))
+        actor_ctx = _pipeline_actor_context(run)
+        await log_user_activity_async(
+            user_id=actor_ctx.get("user_id"),
+            username_snapshot=str(actor_ctx.get("username_snapshot") or ""),
+            category="mcp",
+            action="mcp_call",
+            status="error",
+            description=f"{mcp_server.name}.{tool_name}" if "mcp_server" in locals() else tool_name,
+            entity_type="pipeline_run",
+            entity_id=str(run.pk),
+            entity_name=actor_ctx.get("entity_name") or "",
+            metadata={
+                "node_id": str(node.get("id") or ""),
+                "error": str(exc),
+            },
+        )
         return {"status": "failed", "error": str(exc)}
 
 
@@ -954,7 +1084,7 @@ async def _execute_output_telegram(node: dict, context: dict, node_outputs: dict
         return {"status": "failed", "error": f"Telegram send error: {exc}"}
 
 
-async def _execute_logic_wait(node: dict, context: dict, run: PipelineRun) -> dict:
+async def _execute_logic_wait(node: dict, context: dict, run: PipelineRun, stop_event: Event | None = None) -> dict:
     """Pause pipeline execution for a configurable number of minutes."""
     config = node.get("data", {})
     try:
@@ -964,12 +1094,28 @@ async def _execute_logic_wait(node: dict, context: dict, run: PipelineRun) -> di
 
     minutes = max(0.1, min(minutes, 1440))  # clamp: 6 seconds to 24 hours
     logger.info("logic/wait node %s: sleeping %.1f minutes", node.get("id"), minutes)
-    await asyncio.sleep(minutes * 60)
+    remaining_seconds = minutes * 60
+    while remaining_seconds > 0:
+        if stop_event and stop_event.is_set():
+            return {"status": "stopped", "output": "Wait cancelled by stop request", "stopped": True}
+        fresh_status = await _s2a(
+            lambda: PipelineRun.objects.filter(pk=run.pk).values_list("status", flat=True).first(),
+            thread_sensitive=False,
+        )()
+        if fresh_status == PipelineRun.STATUS_STOPPED:
+            return {"status": "stopped", "output": "Wait cancelled by stop request", "stopped": True}
+        sleep_seconds = min(1.0, remaining_seconds)
+        await asyncio.sleep(sleep_seconds)
+        remaining_seconds -= sleep_seconds
     return {"status": "completed", "output": f"⏱️ Waited {minutes:.1f} minute(s)"}
 
 
 async def _execute_logic_human_approval(
-    node: dict, context: dict, node_outputs: dict[str, dict], run: PipelineRun
+    node: dict,
+    context: dict,
+    node_outputs: dict[str, dict],
+    run: PipelineRun,
+    stop_event: Event | None = None,
 ) -> dict:
     """
     Pause the pipeline and wait for a human approve/reject decision.
@@ -1116,15 +1262,17 @@ async def _execute_logic_human_approval(
 
     # ── Poll for decision ───────────────────────────────────────────────────
     deadline = timezone.now() + timedelta(minutes=timeout_minutes)
-    poll_interval = 10  # seconds
+    poll_interval = 2  # seconds
 
     while True:
+        if stop_event and stop_event.is_set():
+            return {"status": "stopped", "output": "Approval wait cancelled by stop request", "stopped": True}
         await asyncio.sleep(poll_interval)
 
         # Check if pipeline was stopped externally
         fresh_run = await _s2a(lambda: PipelineRun.objects.get(pk=run.pk), thread_sensitive=False)()
         if fresh_run.status == PipelineRun.STATUS_STOPPED:
-            return {"status": "failed", "error": "Pipeline stopped while awaiting approval"}
+            return {"status": "stopped", "output": "Approval wait cancelled by stop request", "stopped": True}
 
         node_state = fresh_run.node_states.get(node_id, {})
         decision = node_state.get("approval_decision")
@@ -1198,6 +1346,26 @@ async def _update_node_state(run: PipelineRun, node_id: str, state: dict):
 
     await _s2a_fn(lambda: PipelineRun.objects.filter(pk=run.pk).update(node_states=run.node_states))()
 
+    actor_ctx = _pipeline_actor_context(run)
+    await log_user_activity_async(
+        user_id=actor_ctx.get("user_id"),
+        username_snapshot=str(actor_ctx.get("username_snapshot") or ""),
+        category="pipeline",
+        action="pipeline_node_state",
+        status="error" if state.get("status") == "failed" else "success",
+        description=f"Node {node_id} -> {state.get('status', 'unknown')}",
+        entity_type="pipeline_run",
+        entity_id=str(run.pk),
+        entity_name=actor_ctx.get("entity_name") or "",
+        metadata={
+            "node_id": node_id,
+            "node_status": state.get("status", "unknown"),
+            "started_at": state.get("started_at"),
+            "finished_at": state.get("finished_at"),
+            "error": str(state.get("error") or "")[:4000],
+        },
+    )
+
     layer = get_channel_layer()
     if layer:
         with contextlib.suppress(Exception):
@@ -1218,6 +1386,23 @@ async def _update_run_status(run: PipelineRun, status: str, **extra):
         f" extra={list(extra.keys())}" if extra else "",
     )
     await _s2a_fn(run.save)()
+
+    actor_ctx = _pipeline_actor_context(run)
+    await log_user_activity_async(
+        user_id=actor_ctx.get("user_id"),
+        username_snapshot=str(actor_ctx.get("username_snapshot") or ""),
+        category="pipeline",
+        action="pipeline_run_status",
+        status="error" if status == PipelineRun.STATUS_FAILED else "success",
+        description=f"Pipeline run #{run.pk} -> {status}",
+        entity_type="pipeline_run",
+        entity_id=str(run.pk),
+        entity_name=actor_ctx.get("entity_name") or "",
+        metadata={
+            "status": status,
+            "extra": extra,
+        },
+    )
 
     layer = get_channel_layer()
     if layer:
@@ -1245,148 +1430,172 @@ class PipelineExecutor:
     def __init__(self, run: PipelineRun):
         self.run = run
         self._stop_requested = False
+        self._stop_event = Event()
         self._executed_mcp_tools: set[str] = set()
 
     def request_stop(self):
         self._stop_requested = True
+        self._stop_event.set()
+
+    async def _sync_stop_state_from_db(self) -> bool:
+        run_snapshot = await _s2a_fn(
+            lambda: PipelineRun.objects.filter(pk=self.run.pk).values("status", "runtime_control").first()
+        )()
+        if run_snapshot is None:
+            self.request_stop()
+            return self._stop_requested
+
+        if run_snapshot.get("status") == PipelineRun.STATUS_STOPPED or is_runtime_stop_requested(
+            run_snapshot.get("runtime_control")
+        ):
+            self.request_stop()
+        return self._stop_requested
 
     async def execute(self, context: dict | None = None) -> PipelineRun:
         run = self.run
         owner = await _s2a_fn(lambda: run.pipeline.owner)()
-        if context is None:
-            context = {}
-        if not isinstance(context, dict):
-            await _update_run_status(
-                run,
-                PipelineRun.STATUS_FAILED,
-                error="Pipeline run context must be a JSON object.",
-                finished_at=timezone.now(),
-            )
-            return run
-        context = dict(context)
-
-        validation_errors = await _s2a_fn(
-            lambda: validate_pipeline_definition(
-                nodes=run.pipeline.nodes or [],
-                edges=run.pipeline.edges or [],
-                owner=owner,
-            )
-        )()
-        if validation_errors:
-            await _update_run_status(
-                run,
-                PipelineRun.STATUS_FAILED,
-                error=f"Pipeline validation failed: {'; '.join(validation_errors)}",
-                finished_at=timezone.now(),
-            )
-            return run
-        if not any(not str(node.get("type") or "").startswith("trigger/") for node in (run.pipeline.nodes or [])):
-            await _update_run_status(
-                run,
-                PipelineRun.STATUS_FAILED,
-                error="Pipeline has no executable nodes.",
-                finished_at=timezone.now(),
-            )
-            return run
-
-        run.nodes_snapshot = run.pipeline.nodes
-        run.edges_snapshot = run.pipeline.edges
-        run.context = context
-        run.started_at = timezone.now()
-        await _s2a_fn(run.save)()
-
-        logger.info(
-            "pipeline run %s start: pipeline=%s context_keys=%s nodes=%s edges=%s",
-            run.pk,
-            run.pipeline.name,
-            sorted(context.keys()),
-            len(run.nodes_snapshot or []),
-            len(run.edges_snapshot or []),
-        )
-        await _update_run_status(run, PipelineRun.STATUS_RUNNING)
-
-        nodes = run.nodes_snapshot
-        edges = run.edges_snapshot
-
-        layers = _topo_sort(nodes, edges)
-        node_outputs: dict[str, dict] = {}
-
+        register_executor(run.pk, self)
         try:
-            for layer_index, layer in enumerate(layers, start=1):
-                if self._stop_requested:
-                    break
-
-                # Filter trigger nodes — they just inject context and pass through
-                exec_nodes = [n for n in layer if not n.get("type", "").startswith("trigger/")]
-                logger.info(
-                    "pipeline run %s layer %s start: nodes=%s exec_nodes=%s",
-                    run.pk,
-                    layer_index,
-                    [n.get("id") for n in layer],
-                    [n.get("id") for n in exec_nodes],
-                )
-
-                if not exec_nodes:
-                    continue
-
-                # Mark all nodes in this layer as running
-                for node in exec_nodes:
-                    await _update_node_state(
+            with audit_context(**_pipeline_actor_context(run)):
+                if context is None:
+                    context = {}
+                if not isinstance(context, dict):
+                    await _update_run_status(
                         run,
-                        node["id"],
-                        {"status": "running", "started_at": timezone.now().isoformat()},
+                        PipelineRun.STATUS_FAILED,
+                        error="Pipeline run context must be a JSON object.",
+                        finished_at=timezone.now(),
                     )
+                    return run
+                if await self._sync_stop_state_from_db():
+                    await _update_run_status(run, PipelineRun.STATUS_STOPPED, finished_at=timezone.now())
+                    return run
+                context = dict(context)
 
-                # Execute all nodes in this layer concurrently
-                tasks = [self._execute_node(node, context, node_outputs) for node in exec_nodes]
-                results = await asyncio.gather(*tasks, return_exceptions=True)
-
-                for node, result in zip(exec_nodes, results, strict=False):
-                    nid = node["id"]
-                    if isinstance(result, Exception):
-                        logger.exception("pipeline run %s node %s raised exception", run.pk, nid, exc_info=result)
-                        state: dict[str, Any] = {
-                            "status": "failed",
-                            "error": str(result),
-                            "finished_at": timezone.now().isoformat(),
-                        }
-                    else:
-                        state = {**result, "finished_at": timezone.now().isoformat()}
-                        if "started_at" not in state:
-                            state["started_at"] = timezone.now().isoformat()
-
-                    node_outputs[nid] = state
-                    await _update_node_state(run, nid, state)
-                    logger.info(
-                        "pipeline run %s node %s finished: type=%s status=%s error=%s output_chars=%s",
-                        run.pk,
-                        nid,
-                        node.get("type", ""),
-                        state.get("status"),
-                        (state.get("error") or "")[:300],
-                        len(state.get("output") or ""),
+                validation_errors = await _s2a_fn(
+                    lambda: validate_pipeline_definition(
+                        nodes=run.pipeline.nodes or [],
+                        edges=run.pipeline.edges or [],
+                        owner=owner,
                     )
+                )()
+                if validation_errors:
+                    await _update_run_status(
+                        run,
+                        PipelineRun.STATUS_FAILED,
+                        error=f"Pipeline validation failed: {'; '.join(validation_errors)}",
+                        finished_at=timezone.now(),
+                    )
+                    return run
+                if not any(not str(node.get("type") or "").startswith("trigger/") for node in (run.pipeline.nodes or [])):
+                    await _update_run_status(
+                        run,
+                        PipelineRun.STATUS_FAILED,
+                        error="Pipeline has no executable nodes.",
+                        finished_at=timezone.now(),
+                    )
+                    return run
 
-                    # If a critical node failed and no condition node follows, abort
-                    node_type = node.get("type", "")
-                    if state["status"] == "failed" and node_type.startswith("agent/"):
-                        on_fail = node.get("data", {}).get("on_failure", "continue")
-                        if on_fail == "abort":
-                            raise RuntimeError(f"Node {nid} failed: {state.get('error')}")
+                run.nodes_snapshot = run.pipeline.nodes
+                run.edges_snapshot = run.pipeline.edges
+                run.context = context
+                run.started_at = timezone.now()
+                await _s2a_fn(run.save)()
 
-        except Exception as exc:
-            run.error = str(exc)
-            logger.exception("pipeline run %s failed", run.pk)
-            await _update_run_status(run, PipelineRun.STATUS_FAILED, error=str(exc), finished_at=timezone.now())
-            return run
+                logger.info(
+                    "pipeline run %s start: pipeline=%s context_keys=%s nodes=%s edges=%s",
+                    run.pk,
+                    run.pipeline.name,
+                    sorted(context.keys()),
+                    len(run.nodes_snapshot or []),
+                    len(run.edges_snapshot or []),
+                )
+                await _update_run_status(run, PipelineRun.STATUS_RUNNING)
 
-        if self._stop_requested:
-            await _update_run_status(run, PipelineRun.STATUS_STOPPED, finished_at=timezone.now())
-        else:
-            await _update_run_status(run, PipelineRun.STATUS_COMPLETED, finished_at=timezone.now())
+                nodes = run.nodes_snapshot
+                edges = run.edges_snapshot
 
-        logger.info("pipeline run %s finished: status=%s", run.pk, run.status)
-        return run
+                layers = _topo_sort(nodes, edges)
+                node_outputs: dict[str, dict] = {}
+
+                try:
+                    for layer_index, layer in enumerate(layers, start=1):
+                        if await self._sync_stop_state_from_db():
+                            break
+
+                        # Filter trigger nodes — they just inject context and pass through
+                        exec_nodes = [n for n in layer if not n.get("type", "").startswith("trigger/")]
+                        logger.info(
+                            "pipeline run %s layer %s start: nodes=%s exec_nodes=%s",
+                            run.pk,
+                            layer_index,
+                            [n.get("id") for n in layer],
+                            [n.get("id") for n in exec_nodes],
+                        )
+
+                        if not exec_nodes:
+                            continue
+
+                        # Mark all nodes in this layer as running
+                        for node in exec_nodes:
+                            await _update_node_state(
+                                run,
+                                node["id"],
+                                {"status": "running", "started_at": timezone.now().isoformat()},
+                            )
+
+                        # Execute all nodes in this layer concurrently
+                        tasks = [self._execute_node(node, context, node_outputs) for node in exec_nodes]
+                        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+                        for node, result in zip(exec_nodes, results, strict=False):
+                            nid = node["id"]
+                            if isinstance(result, Exception):
+                                logger.exception("pipeline run %s node %s raised exception", run.pk, nid, exc_info=result)
+                                state: dict[str, Any] = {
+                                    "status": "failed",
+                                    "error": str(result),
+                                    "finished_at": timezone.now().isoformat(),
+                                }
+                            else:
+                                state = {**result, "finished_at": timezone.now().isoformat()}
+                                if "started_at" not in state:
+                                    state["started_at"] = timezone.now().isoformat()
+
+                            node_outputs[nid] = state
+                            await _update_node_state(run, nid, state)
+                            logger.info(
+                                "pipeline run %s node %s finished: type=%s status=%s error=%s output_chars=%s",
+                                run.pk,
+                                nid,
+                                node.get("type", ""),
+                                state.get("status"),
+                                (state.get("error") or "")[:300],
+                                len(state.get("output") or ""),
+                            )
+
+                            # If a critical node failed and no condition node follows, abort
+                            node_type = node.get("type", "")
+                            if state["status"] == "failed" and node_type.startswith("agent/"):
+                                on_fail = node.get("data", {}).get("on_failure", "continue")
+                                if on_fail == "abort":
+                                    raise RuntimeError(f"Node {nid} failed: {state.get('error')}")
+
+                except Exception as exc:
+                    run.error = str(exc)
+                    logger.exception("pipeline run %s failed", run.pk)
+                    await _update_run_status(run, PipelineRun.STATUS_FAILED, error=str(exc), finished_at=timezone.now())
+                    return run
+
+                if self._stop_requested:
+                    await _update_run_status(run, PipelineRun.STATUS_STOPPED, finished_at=timezone.now())
+                else:
+                    await _update_run_status(run, PipelineRun.STATUS_COMPLETED, finished_at=timezone.now())
+
+                logger.info("pipeline run %s finished: status=%s", run.pk, run.status)
+                return run
+        finally:
+            unregister_executor(run.pk, self)
 
     async def _execute_node(self, node: dict, context: dict, node_outputs: dict[str, dict]) -> dict:
         node_type = node.get("type", "")
@@ -1426,10 +1635,10 @@ class PipelineExecutor:
             return {"status": "completed", "output": "parallel gateway"}
 
         if node_type == "logic/wait":
-            return await _execute_logic_wait(node, enriched, self.run)
+            return await _execute_logic_wait(node, enriched, self.run, self._stop_event)
 
         if node_type == "logic/human_approval":
-            return await _execute_logic_human_approval(node, enriched, node_outputs, self.run)
+            return await _execute_logic_human_approval(node, enriched, node_outputs, self.run, self._stop_event)
 
         if node_type == "output/report":
             return await _execute_output_report(node, enriched, node_outputs, self.run)

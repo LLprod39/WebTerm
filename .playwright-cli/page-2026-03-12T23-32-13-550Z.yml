@@ -1,0 +1,136 @@
+- generic [ref=e2]:
+  - region "Notifications (F8)":
+    - list
+  - region "Notifications alt+T"
+  - generic [ref=e28]:
+    - generic [ref=e32]:
+      - generic [ref=e33]:
+        - generic [ref=e35]: W
+        - generic [ref=e36]: WebTermAI
+        - button [ref=e37] [cursor=pointer]:
+          - img [ref=e38]
+      - list [ref=e43]:
+        - listitem [ref=e44]:
+          - link "Серверы" [ref=e45] [cursor=pointer]:
+            - /url: /servers
+            - img [ref=e46]
+            - generic [ref=e49]: Серверы
+        - listitem [ref=e50]:
+          - link "Агенты" [ref=e51] [cursor=pointer]:
+            - /url: /agents
+            - img [ref=e52]
+            - generic [ref=e55]: Агенты
+        - listitem [ref=e56]:
+          - link "Студия" [ref=e57] [cursor=pointer]:
+            - /url: /studio
+            - img [ref=e58]
+            - generic [ref=e62]: Студия
+      - generic [ref=e63]:
+        - generic [ref=e65]:
+          - button "EN" [ref=e66] [cursor=pointer]
+          - button "RU" [ref=e67] [cursor=pointer]
+        - generic [ref=e68]:
+          - generic [ref=e69]: S
+          - generic [ref=e70]:
+            - paragraph [ref=e71]: smoke-user-01
+            - paragraph [ref=e72]: Оператор
+          - button "Выйти" [ref=e73] [cursor=pointer]:
+            - img [ref=e74]
+    - generic [ref=e77]:
+      - banner [ref=e152]:
+        - button "Toggle Sidebar" [ref=e153] [cursor=pointer]:
+          - img
+          - generic [ref=e154]: Toggle Sidebar
+        - link "Back" [ref=e155] [cursor=pointer]:
+          - /url: /servers
+          - img [ref=e156]
+          - text: Back
+        - generic [ref=e158]: Terminal
+      - main [ref=e159]:
+        - generic [ref=e160]:
+          - generic [ref=e161]:
+            - button "Smoke SSH 01 Close Smoke SSH 01" [ref=e226] [cursor=pointer]:
+              - generic [ref=e165]: Smoke SSH 01
+              - button "Close Smoke SSH 01" [ref=e227]:
+                - img [ref=e228]
+            - button "Smoke SSH Extra 01 Close Smoke SSH Extra 01" [ref=e231] [cursor=pointer]:
+              - generic [ref=e234]: Smoke SSH Extra 01
+              - button "Close Smoke SSH Extra 01" [ref=e235]:
+                - img [ref=e236]
+            - button "Add tab" [ref=e166] [cursor=pointer]:
+              - img [ref=e167]
+            - button "AI" [active] [ref=e169] [cursor=pointer]:
+              - img
+              - text: AI
+          - generic [ref=e170]:
+            - generic [ref=e172]:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - textbox
+                      - generic:
+                        - generic:
+                          - generic: WebTermAI
+                        - generic:
+                          - generic: "Connecting to server #43..."
+                        - generic:
+                          - generic: WebSocket connected. Starting SSH session...
+                        - generic:
+                          - generic: smoke@f443e801a710
+                          - generic: ":"
+                          - generic: ~
+                          - generic: $
+              - generic [ref=e243]:
+                - textbox "Terminal input" [ref=e244]
+                - generic:
+                  - generic:
+                    - generic: WebTermAI
+                  - generic:
+                    - generic: "Connecting to server #44..."
+                  - generic:
+                    - generic: WebSocket connected. Starting SSH session...
+                  - generic:
+                    - generic: "Last login: Thu Mar 12 23:31:09 2026 from 172.17.0.1"
+                  - generic:
+                    - generic: smoke@f443e801a710
+                    - generic: ":"
+                    - generic: ~
+                    - generic: $
+            - generic [ref=e245]:
+              - generic "Перетащите для изменения ширины" [ref=e246]
+              - generic [ref=e248]:
+                - generic [ref=e249]:
+                  - generic [ref=e250]:
+                    - img [ref=e252]
+                    - generic [ref=e255]:
+                      - heading "AI Assistant" [level=3] [ref=e256]
+                      - paragraph [ref=e257]: готов
+                  - button "Close" [ref=e259] [cursor=pointer]:
+                    - img
+                - generic [ref=e260]:
+                  - generic [ref=e261]: Режим
+                  - generic [ref=e262]:
+                    - button "Авто" [ref=e263] [cursor=pointer]:
+                      - img [ref=e264]
+                      - text: Авто
+                    - button "Быстрый" [ref=e267] [cursor=pointer]:
+                      - img [ref=e268]
+                      - text: Быстрый
+                    - button "Пошагово" [ref=e270] [cursor=pointer]:
+                      - img [ref=e271]
+                      - text: Пошагово
+                - generic [ref=e275]:
+                  - img [ref=e277]
+                  - generic [ref=e279]:
+                    - paragraph [ref=e280]: Чем могу помочь?
+                    - paragraph [ref=e281]: Задайте вопрос о терминале или сервере
+                  - generic [ref=e282]:
+                    - button "Объясни вывод" [ref=e283] [cursor=pointer]
+                    - button "Предложи команду" [ref=e284] [cursor=pointer]
+                    - button "Проверь синтаксис" [ref=e285] [cursor=pointer]
+                    - button "Что означает ошибка" [ref=e286] [cursor=pointer]
+                - generic [ref=e288]:
+                  - textbox "Сообщение... (Enter — отправить)" [ref=e289]
+                  - button "Send" [disabled]:
+                    - img

@@ -1,0 +1,37 @@
+services:
+  postgres:
+    container_name: mini-prod-postgres-smoke
+
+  redis:
+    container_name: mini-prod-redis-smoke
+
+  backend:
+    container_name: mini-prod-backend-smoke
+
+  frontend:
+    container_name: mini-prod-frontend-smoke
+
+  nginx:
+    container_name: mini-prod-nginx-smoke
+
+  ssh-target:
+    build:
+      context: .
+      dockerfile: docker/ssh-smoke-target.Dockerfile
+    container_name: mini-prod-ssh-target-smoke
+    environment:
+      SMOKE_SSH_USERNAME: ${SMOKE_SSH_USERNAME:-smoke}
+      SMOKE_SSH_PASSWORD: ${SMOKE_SSH_PASSWORD:-smoke-password}
+    expose:
+      - "2222"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 2222 >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

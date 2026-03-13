@@ -13,6 +13,7 @@ import json
 import re
 import time
 from collections.abc import Callable, Coroutine
+from contextlib import suppress
 
 from asgiref.sync import sync_to_async as _s2a
 from django.utils import timezone
@@ -20,6 +21,15 @@ from loguru import logger
 
 from app.core.llm import LLMProvider
 from app.core.model_utils import resolve_provider_and_model
+from core_ui.audit import audit_context
+from servers.agent_runtime import (
+    build_runtime_control_state,
+    is_runtime_stop_requested,
+    register_engine,
+    reset_runtime_control_state,
+    unregister_engine,
+    update_runtime_control,
+)
 from servers.agent_sessions import AgentSessionManager
 from servers.agent_tools import AGENT_TOOLS, get_enabled_tools, get_tools_description
 from servers.mcp_tool_runtime import build_mcp_tools_description, execute_bound_mcp_tool, load_mcp_tool_bindings
@@ -68,6 +78,7 @@ def _parse_action(response: str) -> tuple[str | None, dict]:
 
 SESSION_TIMEOUT_DEFAULT = 600
 MAX_ITERATIONS_CAP = 100
+CONTROL_POLL_INTERVAL = 0.5
 
 
 class AgentEngine:
@@ -106,6 +117,9 @@ class AgentEngine:
         self._stop_requested = False
         self._pause_event = asyncio.Event()
         self._pause_event.set()
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._stop_cleanup_scheduled = False
+        self._control_task: asyncio.Task | None = None
 
         self.session: AgentSessionManager | None = None
         self.run_record: AgentRun | None = None
@@ -137,33 +151,105 @@ class AgentEngine:
     # ------------------------------------------------------------------
 
     def request_stop(self):
+        if self._stop_requested and self._stop_cleanup_scheduled:
+            return
         self._stop_requested = True
+        self._pause_event.set()
         if self.session and self.session.user_reply_future and not self.session.user_reply_future.done():
             self.session.user_reply_future.cancel()
+        self._schedule_session_shutdown()
 
     def request_pause(self):
-        self._pause_event.clear()
+        if self._pause_event.is_set():
+            self._pause_event.clear()
 
     def request_resume(self):
-        self._pause_event.set()
+        if not self._pause_event.is_set():
+            self._pause_event.set()
 
-    def provide_user_reply(self, answer: str):
+    def provide_user_reply(self, answer: str) -> bool:
         if self.session and self.session.user_reply_future and not self.session.user_reply_future.done():
             self.session.user_reply_future.set_result(answer)
+            return True
+        return False
+
+    def _schedule_session_shutdown(self):
+        if self._stop_cleanup_scheduled:
+            return
+        loop = self._loop
+        if loop is None or loop.is_closed():
+            return
+
+        self._stop_cleanup_scheduled = True
+
+        async def shutdown_sessions():
+            if not self.session:
+                return
+            server_ids = list(self.session.connections)
+            for server_id in server_ids:
+                try:
+                    await self.session.send_signal(server_id, "ctrl_c")
+                except Exception:
+                    pass
+            try:
+                await self.session.close_all()
+            except Exception:
+                pass
+
+        try:
+            loop.call_soon_threadsafe(lambda: asyncio.create_task(shutdown_sessions()))
+        except RuntimeError:
+            self._stop_cleanup_scheduled = False
 
     # ------------------------------------------------------------------
     # Main run
     # ------------------------------------------------------------------
 
-    async def run(self) -> AgentRun:
+    async def run(self, run_record: AgentRun | None = None) -> AgentRun:
+        self._loop = asyncio.get_running_loop()
         primary_server = self.servers[0] if self.servers else None
-        run = await sync_to_async(AgentRun.objects.create)(
-            agent=self.agent if self.agent.pk else None,
-            server=primary_server,
-            user=self.user,
-            status=AgentRun.STATUS_RUNNING,
-        )
+        if run_record is None:
+            run = await sync_to_async(AgentRun.objects.create)(
+                agent=self.agent if self.agent.pk else None,
+                server=primary_server,
+                user=self.user,
+                status=AgentRun.STATUS_RUNNING,
+                runtime_control=reset_runtime_control_state(),
+            )
+        else:
+            current_status = await sync_to_async(
+                lambda: AgentRun.objects.filter(pk=run_record.pk).values("status", "runtime_control").first()
+            )()
+            run = run_record
+            if not current_status:
+                self.run_record = run
+                return run
+            if current_status["status"] == AgentRun.STATUS_STOPPED or is_runtime_stop_requested(current_status["runtime_control"]):
+                self.run_record = run
+                return run
+            await sync_to_async(self._update_run)(
+                run,
+                agent=self.agent if self.agent.pk else None,
+                server=primary_server,
+                user=self.user,
+                status=AgentRun.STATUS_RUNNING,
+                ai_analysis="",
+                commands_output=[],
+                duration_ms=0,
+                completed_at=None,
+                iterations_log=[],
+                tool_calls=[],
+                total_iterations=0,
+                connected_servers=[],
+                runtime_control=reset_runtime_control_state(),
+                pending_question="",
+                final_report="",
+                started_at=timezone.now(),
+            )
         self.run_record = run
+        register_engine(run.id, getattr(self.agent, "id", None), self)
+        self._control_task = asyncio.create_task(self._watch_runtime_control())
+        await self._sync_runtime_control()
         t0 = time.monotonic()
 
         self.session = AgentSessionManager(
@@ -384,10 +470,70 @@ class AgentEngine:
             await sync_to_async(run.save)()
             await self._emit("agent_status", {"status": "failed", "error": str(exc)})
         finally:
+            unregister_engine(run.id, self)
+            if self._control_task:
+                self._control_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await self._control_task
+                self._control_task = None
+            self._loop = None
             if self.session:
                 await self.session.close_all()
 
         return run
+
+    def _audit_scope(self):
+        return audit_context(
+            user_id=getattr(self.user, "id", None),
+            username_snapshot=str(getattr(self.user, "username", "") or ""),
+            channel="agent",
+            path=f"/servers/api/agents/{self.agent.id}/run/",
+            entity_type="agent_run",
+            entity_id=str(getattr(self.run_record, "id", "") or ""),
+            entity_name=self.agent.name,
+        )
+
+    # ------------------------------------------------------------------
+    # Runtime control
+    # ------------------------------------------------------------------
+
+    async def _watch_runtime_control(self):
+        while True:
+            await self._sync_runtime_control()
+            await asyncio.sleep(CONTROL_POLL_INTERVAL)
+
+    async def _sync_runtime_control(self):
+        if not self.run_record:
+            return
+
+        payload = await sync_to_async(
+            lambda: AgentRun.objects.filter(pk=self.run_record.pk).values("runtime_control").first(),
+            thread_sensitive=True,
+        )()
+        if not payload:
+            return
+
+        control = build_runtime_control_state(payload.get("runtime_control"))
+        if control["stop_requested"]:
+            self.request_stop()
+        if control["pause_requested"]:
+            self.request_pause()
+        else:
+            self.request_resume()
+
+        reply_nonce = int(control["reply_nonce"])
+        reply_ack_nonce = int(control["reply_ack_nonce"])
+        if reply_nonce > reply_ack_nonce and control["reply_text"]:
+            if self.provide_user_reply(control["reply_text"]):
+                await sync_to_async(self._ack_runtime_reply, thread_sensitive=True)(reply_nonce)
+
+    def _ack_runtime_reply(self, reply_nonce: int):
+        if not self.run_record:
+            return
+        run = AgentRun.objects.filter(pk=self.run_record.pk).first()
+        if not run:
+            return
+        update_runtime_control(run, reply_ack_nonce=reply_nonce)
 
     # ------------------------------------------------------------------
     # LLM interaction
@@ -398,13 +544,14 @@ class AgentEngine:
         provider = LLMProvider()
         chunks = []
         try:
-            async for chunk in provider.stream_chat(
-                prompt,
-                model=self.model_preference,
-                specific_model=self.specific_model,
-                purpose="agent",
-            ):
-                chunks.append(chunk)
+            with self._audit_scope():
+                async for chunk in provider.stream_chat(
+                    prompt,
+                    model=self.model_preference,
+                    specific_model=self.specific_model,
+                    purpose="agent",
+                ):
+                    chunks.append(chunk)
         except Exception as exc:
             logger.error("LLM call failed: {}", exc)
             return ""

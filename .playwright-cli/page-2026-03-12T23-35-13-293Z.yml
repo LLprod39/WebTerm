@@ -1,0 +1,52 @@
+- generic [ref=e2]:
+  - region "Notifications (F8)":
+    - list
+  - region "Notifications alt+T"
+  - generic [ref=e4]:
+    - generic [ref=e8]:
+      - generic [ref=e9]:
+        - generic [ref=e11]: W
+        - generic [ref=e12]: WebTermAI
+        - button [ref=e13] [cursor=pointer]:
+          - img [ref=e14]
+      - list [ref=e19]:
+        - listitem [ref=e20]:
+          - link "Серверы" [ref=e21] [cursor=pointer]:
+            - /url: /servers
+            - img [ref=e22]
+            - generic [ref=e25]: Серверы
+        - listitem [ref=e26]:
+          - link "Агенты" [ref=e27] [cursor=pointer]:
+            - /url: /agents
+            - img [ref=e28]
+            - generic [ref=e31]: Агенты
+        - listitem [ref=e32]:
+          - link "Студия" [ref=e33] [cursor=pointer]:
+            - /url: /studio
+            - img [ref=e34]
+            - generic [ref=e38]: Студия
+      - generic [ref=e39]:
+        - generic [ref=e41]:
+          - button "EN" [ref=e42] [cursor=pointer]
+          - button "RU" [ref=e43] [cursor=pointer]
+        - generic [ref=e44]:
+          - generic [ref=e45]: S
+          - generic [ref=e46]:
+            - paragraph [ref=e47]: smoke-user-01
+            - paragraph [ref=e48]: Оператор
+          - button "Выйти" [ref=e49] [cursor=pointer]:
+            - img [ref=e50]
+    - generic [ref=e53]:
+      - banner [ref=e54]:
+        - button "Toggle Sidebar" [ref=e55] [cursor=pointer]:
+          - img
+          - generic [ref=e56]: Toggle Sidebar
+        - link "Back" [ref=e57] [cursor=pointer]:
+          - /url: /agents
+          - img [ref=e58]
+          - text: Back
+        - generic [ref=e60]: Agent Run
+      - main [ref=e61]:
+        - generic [ref=e63]:
+          - img [ref=e64]
+          - generic [ref=e69]: Загрузка...

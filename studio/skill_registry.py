@@ -57,7 +57,6 @@ class SkillDefinition:
             "guardrail_summary": list(self.guardrail_summary),
             "recommended_tools": list(self.recommended_tools),
             "runtime_enforced": bool(self.runtime_policy),
-            "path": self.path,
         }
 
     def to_detail_dict(self) -> dict[str, Any]:

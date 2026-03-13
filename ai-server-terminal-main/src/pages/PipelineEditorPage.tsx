@@ -1,5 +1,4 @@
-// @ts-nocheck
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -68,6 +67,7 @@ import {
   fetchModels,
   refreshModels,
   type MCPServerInspection,
+  type ModelsResponse,
   type PipelineNode,
   type PipelineEdge,
   type PipelineRun,
@@ -187,7 +187,7 @@ function RunMonitorPanel({
     stopped:   "text-yellow-400",
   };
 
-  const nodeStates: Record<string, Record<string, unknown>> = (run?.node_states as Record<string, Record<string, unknown>>) || {};
+  const nodeStates = run?.node_states || {};
 
   return (
     <div className="flex flex-col h-full">
@@ -248,10 +248,11 @@ function RunMonitorPanel({
 
         {/* Node states */}
         {run?.nodes_snapshot && (run.nodes_snapshot as PipelineNode[]).filter((n) => !n.type?.startsWith("trigger/")).map((node) => {
-          const state = nodeStates[node.id] || {};
-          const status = (state.status as string) || "pending";
-          const output = (state.output as string) || "";
-          const error = (state.error as string) || "";
+          const state = nodeStates[node.id];
+          const stateExtra: Record<string, unknown> = (state as (typeof state & Record<string, unknown>) | undefined) || {};
+          const status = state?.status || "pending";
+          const output = state?.output || "";
+          const error = state?.error || "";
           const isExpanded = expandedNode === node.id;
           const hasContent = output || error;
 
@@ -275,10 +276,10 @@ function RunMonitorPanel({
               {status === "awaiting_approval" && (
                 <div className="border-t border-border px-3 py-2 space-y-2">
                   <p className="text-yellow-400 text-[11px] font-medium">⏳ Waiting for your decision...</p>
-                  {(state.approve_url as string) && (
+                  {typeof stateExtra.approve_url === "string" && (
                     <div className="flex gap-2">
                       <a
-                        href={state.approve_url as string}
+                        href={stateExtra.approve_url}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex-1 text-center text-xs py-1.5 rounded bg-green-800/40 border border-green-600/40 text-green-300 hover:bg-green-700/50 transition-colors"
@@ -286,7 +287,7 @@ function RunMonitorPanel({
                         ✅ Approve
                       </a>
                       <a
-                        href={state.reject_url as string}
+                        href={typeof stateExtra.reject_url === "string" ? stateExtra.reject_url : "#"}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex-1 text-center text-xs py-1.5 rounded bg-red-900/30 border border-red-600/40 text-red-300 hover:bg-red-800/40 transition-colors"
@@ -402,7 +403,20 @@ function getNodeDisplayLabel(node: PipelineNode | { id: string; type: string; la
   return NODE_TYPE_LABELS[node.type]?.label || node.id;
 }
 
-function buildDefaultNodeData(type: NodeType) {
+type ModelProvider = Exclude<keyof ModelsResponse, "current">;
+
+const MODEL_PROVIDERS: ModelProvider[] = ["gemini", "grok", "openai", "claude"];
+
+function isModelProvider(value: string): value is ModelProvider {
+  return MODEL_PROVIDERS.includes(value as ModelProvider);
+}
+
+function getModelsForProvider(models: ModelsResponse | undefined, provider: string): string[] {
+  if (!models || !isModelProvider(provider)) return [];
+  return models[provider];
+}
+
+function buildDefaultNodeData(type: NodeType): Record<string, unknown> {
   switch (type) {
     case "trigger/manual":
       return { is_active: true };
@@ -582,7 +596,7 @@ function PipelineAssistantDialog({
       },
     ]);
     setTimeout(() => inputRef.current?.focus(), 100);
-  }, [open, pipelineId]);
+  }, [open, pipelineId, pipelineName]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -850,6 +864,7 @@ function NodeConfigPanel({
   onClose: () => void;
   onDelete: (id: string) => void;
 }) {
+  const navigate = useNavigate();
   const { data: agents = [] } = useQuery({ queryKey: ["studio", "agents"], queryFn: studioAgents.list });
   const { data: servers = [] } = useQuery({ queryKey: ["studio", "servers"], queryFn: studioServers.list });
   const { data: mcpList = [] } = useQuery({ queryKey: ["studio", "mcp"], queryFn: studioMCP.list });
@@ -863,17 +878,21 @@ function NodeConfigPanel({
     () => (typeof node.data?.arguments_text === "string" ? String(node.data.arguments_text) : toJsonEditorText(node.data?.arguments || {})),
   );
 
-  const set = (key: string, val: unknown) => {
-    const next = { ...d, [key]: val };
-    setD(next);
-    onUpdate(node.id, next);
-  };
+  const set = useCallback((key: string, val: unknown) => {
+    setD((prev) => {
+      const next = { ...prev, [key]: val };
+      onUpdate(node.id, next);
+      return next;
+    });
+  }, [node.id, onUpdate]);
 
-  const setMany = (patch: Record<string, unknown>) => {
-    const next = { ...d, ...patch };
-    setD(next);
-    onUpdate(node.id, next);
-  };
+  const setMany = useCallback((patch: Record<string, unknown>) => {
+    setD((prev) => {
+      const next = { ...prev, ...patch };
+      onUpdate(node.id, next);
+      return next;
+    });
+  }, [node.id, onUpdate]);
 
   const type = node.type as NodeType;
   const provider =
@@ -882,8 +901,12 @@ function NodeConfigPanel({
       : type === "agent/react" || type === "agent/multi"
         ? ((d.provider as string) || "auto")
         : "";
+  const currentModel = (d.model as string) || "";
   const modelProvider = provider && provider !== "auto" ? provider : "";
-  const modelList = (modelProvider && modelsData && (modelsData as Record<string, string[] | undefined>)[modelProvider]) ?? [];
+  const modelList = useMemo(
+    () => getModelsForProvider(modelsData, modelProvider),
+    [modelProvider, modelsData],
+  );
   const selectedAgent = agents.find((agent) => String(agent.id) === String(d.agent_config_id || ""));
   const selectedMcpId = d.mcp_server_id ? Number(d.mcp_server_id) : null;
   const selectedMcp = mcpList.find((mcp) => mcp.id === selectedMcpId) || null;
@@ -918,30 +941,32 @@ function NodeConfigPanel({
 
   useEffect(() => {
     if (!(type === "agent/llm_query" || type === "agent/react" || type === "agent/multi") || !modelProvider || !modelList.length) return;
-    const current = (d.model as string) || "";
-    if (current && !modelList.includes(current)) set("model", modelList[0]);
-  }, [type, modelsData, modelProvider, modelList.length]);
+    if (currentModel && !modelList.includes(currentModel)) set("model", modelList[0]);
+  }, [currentModel, modelList, modelProvider, set, type]);
 
   useEffect(() => {
     if (!(type === "agent/llm_query" || type === "agent/react" || type === "agent/multi") || !modelProvider || loadingModelsFor !== null) return;
-    const list = (modelsData && (modelsData as Record<string, string[] | undefined>)[modelProvider]) ?? [];
+    const list = getModelsForProvider(modelsData, modelProvider);
     if (list.length > 0) return;
+    if (!isModelProvider(modelProvider)) return;
     const prov = modelProvider;
     setLoadingModelsFor(prov);
-    refreshModels(prov as "gemini" | "grok" | "openai" | "claude")
+    refreshModels(prov)
       .then((res) => {
-        queryClient.setQueryData(["api", "models"], (old: Record<string, unknown> | undefined) => ({
+        queryClient.setQueryData(["api", "models"], (old: ModelsResponse | undefined) => ({
           ...(old ?? {}),
           [prov]: res.models,
         }));
         if (res.models.length && providerRef.current === prov) {
-          const next = { ...d, provider: prov, model: res.models[0] };
-          setD(next);
-          onUpdate(node.id, next);
+          setD((prev) => {
+            const next = { ...prev, provider: prov, model: res.models[0] };
+            onUpdate(node.id, next);
+            return next;
+          });
         }
       })
       .finally(() => setLoadingModelsFor(null));
-  }, [type, modelProvider, modelsData]);
+  }, [loadingModelsFor, modelProvider, modelsData, node.id, onUpdate, queryClient, type]);
 
   const typeInfo = NODE_TYPE_LABELS[type] || { label: type, icon: "🔧" };
   const triggerWebhookUrl = trigger?.webhook_url ? new URL(trigger.webhook_url, window.location.origin).toString() : "";
@@ -2240,7 +2265,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         if (!spec.ref || !isNodeType(spec.type)) return;
         const newId = `node_${nodeIdCounter.current++}`;
         refToId.set(spec.ref, newId);
-        const data = {
+        const data: Record<string, unknown> = {
           ...buildDefaultNodeData(spec.type),
           ...(spec.data || {}),
         };

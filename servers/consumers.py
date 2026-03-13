@@ -5,26 +5,32 @@ WebSocket consumers for interactive SSH terminal sessions.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import re
 import shlex
 import uuid
 from dataclasses import dataclass
+from errno import ECONNRESET
 from typing import Any, Optional
 
 import asyncssh
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
+from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 from loguru import logger
 
+from app.runtime_limits import get_terminal_session_limit_error
 from app.tools.safety import is_dangerous_command
 from core_ui.activity import log_user_activity_async
+from core_ui.audit import audit_context
 from core_ui.context_processors import user_can_feature
-from servers.models import Server, ServerShare
+from servers.models import Server, ServerConnection, ServerShare
 from servers.secret_utils import get_server_auth_secret, has_saved_server_secret
+from servers.ssh_host_keys import build_server_connect_kwargs, ensure_server_known_hosts
 
 
 @dataclass(frozen=True)
@@ -164,6 +170,34 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         except (BadSignature, SignatureExpired, ValueError, TypeError):
             return None
 
+    async def _reject_with_error(self, *, code: int, message: str, error_code: str) -> None:
+        try:
+            await self.accept()
+            await self._safe_send_json(
+                {
+                    "type": "error",
+                    "message": message,
+                    "fatal": True,
+                    "error_code": error_code,
+                }
+            )
+        except Exception:
+            pass
+        await self.close(code=code)
+
+    @staticmethod
+    def _format_ssh_connect_error(exc: Exception) -> str:
+        if isinstance(exc, ConnectionResetError) or getattr(exc, "errno", None) == ECONNRESET:
+            return (
+                "SSH сервер принял TCP-соединение и сразу закрыл его "
+                "(Connection reset by peer). Проверьте sshd, порт, firewall, bastion/VPN и allowlist по IP."
+            )
+        if isinstance(exc, TimeoutError):
+            return "Таймаут подключения к SSH серверу. Проверьте маршрут, firewall, bastion/VPN и доступность порта."
+        if isinstance(exc, asyncssh.misc.HostKeyNotVerifiable):
+            return f"SSH host key не доверен: {exc}"
+        return str(exc) or exc.__class__.__name__
+
     async def connect(self):
         self._connect_lock = asyncio.Lock()
 
@@ -184,7 +218,11 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         logger.debug("WS connect: user={} authenticated={}", user, getattr(user, "is_authenticated", "N/A"))
         if not user or not getattr(user, "is_authenticated", False):
             logger.warning("WS connect REJECT 4401: not authenticated (user={})", user)
-            await self.close(code=4401)
+            await self._reject_with_error(
+                code=4401,
+                message="Сессия истекла или пользователь не авторизован.",
+                error_code="auth_required",
+            )
             return
 
         self._user_id = int(user.id)
@@ -210,31 +248,52 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         self._ai_stop_requested = False
         self._marker_suppress = {"stdout": False, "stderr": False}
         self._marker_line_buf = {"stdout": "", "stderr": ""}
+        self._manual_input_buffer = ""
+        self._input_capture_suppress = 0
+        self._ai_audit_context: dict[str, Any] = {}
+        self._server_connection_id: str | None = None
 
         can_servers = await self._user_can_servers(user.id)
         logger.debug("WS connect: user={} can_servers={}", user, can_servers)
         if not can_servers:
             logger.warning("WS connect REJECT 4403: no servers permission (user={})", user)
-            await self.close(code=4403)
+            await self._reject_with_error(
+                code=4403,
+                message="Нет доступа к разделу серверов.",
+                error_code="servers_forbidden",
+            )
             return
 
         server_id = self.scope.get("url_route", {}).get("kwargs", {}).get("server_id")
         if not server_id:
             logger.warning("WS connect REJECT 4400: no server_id in URL")
-            await self.close(code=4400)
+            await self._reject_with_error(
+                code=4400,
+                message="Некорректный идентификатор сервера.",
+                error_code="server_id_missing",
+            )
             return
 
         try:
             self.server = await self._get_server(user.id, int(server_id))
         except Server.DoesNotExist:
             logger.warning("WS connect REJECT 4404: server {} not found for user={}", server_id, user)
-            await self.close(code=4404)
+            await self._reject_with_error(
+                code=4404,
+                message="Сервер не найден или доступ к нему уже отозван.",
+                error_code="server_not_found",
+            )
             return
         except Exception as exc:
             logger.exception("WS connect REJECT: unexpected error fetching server {} for user={}: {}", server_id, user, exc)
-            await self.close(code=4500)
+            await self._reject_with_error(
+                code=4500,
+                message="Не удалось подготовить подключение к серверу.",
+                error_code="server_connect_prepare_failed",
+            )
             return
 
+        has_encrypted_secret = await database_sync_to_async(has_saved_server_secret, thread_sensitive=True)(self.server)
         await self.accept()
         await self._safe_send_json(
             {
@@ -242,7 +301,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                 "server_id": self.server.id,
                 "server_name": self.server.name,
                 "auth_method": self.server.auth_method,
-                "has_encrypted_secret": has_saved_server_secret(self.server),
+                "has_encrypted_secret": has_encrypted_secret,
             }
         )
 
@@ -364,66 +423,23 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                 return
 
             try:
-                # Strip port from host if stored as "host:port" (e.g. "192.168.1.1:22")
-                _raw_host = (self.server.host or "").strip()
-                if _raw_host.startswith("["):
-                    # IPv6: [::1]:22
-                    _bracket_end = _raw_host.find("]")
-                    _ssh_host = _raw_host[1:_bracket_end] if _bracket_end != -1 else _raw_host
-                    _port_str = _raw_host[_bracket_end + 2:] if _bracket_end != -1 and len(_raw_host) > _bracket_end + 1 else ""
-                elif _raw_host.count(":") == 1:
-                    # IPv4 with port: "1.2.3.4:22"
-                    _ssh_host, _port_str = _raw_host.rsplit(":", 1)
-                else:
-                    # plain hostname or IPv6 without port
-                    _ssh_host, _port_str = _raw_host, ""
-                _ssh_port = int(_port_str) if _port_str.isdigit() else int(self.server.port or 22)
+                limit_error = await self._get_terminal_session_limit(self._user_id)
+                if limit_error:
+                    await self._safe_send_json({"type": "error", "message": f"SSH connect blocked: {limit_error['error']}"})
+                    await self._safe_send_json({"type": "status", "status": "disconnected"})
+                    return
 
-                connect_kwargs: dict[str, Any] = {
-                    "host": _ssh_host,
-                    "port": _ssh_port,
-                    "username": self.server.username,
-                    "known_hosts": None,  # WARNING: skip host key verification
-                    "connect_timeout": 10,
-                    "login_timeout": 20,
-                    "keepalive_interval": 20,
-                    "keepalive_count_max": 3,
-                }
-
-                # Bastion host via AsyncSSH tunnel option
-                network_config = self.server.network_config or {}
-                bastion = (
-                    (network_config.get("network") or {}).get("bastion_host")
-                    if isinstance(network_config, dict)
-                    else None
+                known_hosts = await ensure_server_known_hosts(self.server)
+                connect_kwargs = build_server_connect_kwargs(
+                    self.server,
+                    secret=secret or "",
+                    known_hosts=known_hosts,
+                    connect_timeout=max(1, int(getattr(settings, "SSH_CONNECT_TIMEOUT_SECONDS", 10) or 10)),
+                    login_timeout=max(1, int(getattr(settings, "SSH_LOGIN_TIMEOUT_SECONDS", 20) or 20)),
+                    keepalive_interval=max(1, int(getattr(settings, "SSH_KEEPALIVE_INTERVAL_SECONDS", 20) or 20)),
+                    keepalive_count_max=max(1, int(getattr(settings, "SSH_KEEPALIVE_COUNT_MAX", 3) or 3)),
                 )
-                if bastion:
-                    connect_kwargs["tunnel"] = str(bastion).strip()
-
-                if self.server.auth_method == "password":
-                    if not secret:
-                        raise ValueError(
-                            "Не удалось получить пароль сервера. "
-                            "Проверь сохранённый пароль сервера и MASTER_PASSWORD в .env."
-                        )
-                    connect_kwargs["password"] = secret
-                elif self.server.auth_method == "key":
-                    if not (self.server.key_path or "").strip():
-                        raise ValueError("Не указан путь к SSH ключу (key auth)")
-                    connect_kwargs["client_keys"] = [self.server.key_path]
-                elif self.server.auth_method == "key_password":
-                    if not (self.server.key_path or "").strip():
-                        raise ValueError("Не указан путь к SSH ключу (key+password auth)")
-                    if not secret:
-                        raise ValueError(
-                            "Не удалось получить пасфразу ключа. "
-                            "Проверь сохранённый секрет сервера и MASTER_PASSWORD в .env."
-                        )
-                    connect_kwargs["client_keys"] = [self.server.key_path]
-                    # For encrypted private keys, AsyncSSH expects passphrase
-                    connect_kwargs["passphrase"] = secret
-                else:
-                    raise ValueError(f"Неизвестный auth_method: {self.server.auth_method}")
+                network_config = self.server.network_config or {}
 
                 self._ssh_conn = await asyncssh.connect(**connect_kwargs)
                 self._ssh_proc = await self._ssh_conn.create_process(
@@ -463,6 +479,12 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                         'auth_method': self.server.auth_method,
                     },
                 )
+                self._server_connection_id = f"term-{uuid.uuid4().hex}"
+                await self._register_server_connection(
+                    user_id=self._user_id,
+                    server_id=self.server.id,
+                    connection_id=self._server_connection_id,
+                )
 
                 self._stdout_task = asyncio.create_task(self._stream_reader(self._ssh_proc.stdout, "stdout"))
                 self._stderr_task = asyncio.create_task(self._stream_reader(self._ssh_proc.stderr, "stderr"))
@@ -470,17 +492,18 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
 
             except Exception as e:
                 logger.exception("SSH terminal connect failed")
+                error_message = self._format_ssh_connect_error(e)
                 await log_user_activity_async(
                     user_id=self._user_id,
                     category='servers',
                     action='terminal_connect',
                     status='error',
-                    description=f'SSH terminal connect failed: {e}',
+                    description=f'SSH terminal connect failed: {error_message}',
                     entity_type='server',
                     entity_id=self.server.id if self.server else '',
                     entity_name=self.server.name if self.server else '',
                 )
-                await self._safe_send_json({"type": "error", "message": f"SSH connect failed: {e}"})
+                await self._safe_send_json({"type": "error", "message": f"SSH connect failed: {error_message}"})
                 await self._safe_send_json({"type": "status", "status": "disconnected"})
                 await self._disconnect_ssh()
 
@@ -490,9 +513,85 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         if not self._ssh_proc:
             return
         try:
+            await self._capture_terminal_input(data)
             self._ssh_proc.stdin.write(data)
         except Exception as e:
             await self._safe_send_json({"type": "error", "message": f"stdin write failed: {e}"})
+
+    @staticmethod
+    def _strip_terminal_input_sequences(data: str) -> str:
+        cleaned = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", data or "")
+        cleaned = re.sub(r"\x1b.", "", cleaned)
+        return cleaned
+
+    @contextlib.contextmanager
+    def _suppress_terminal_input_capture(self):
+        self._input_capture_suppress = int(getattr(self, "_input_capture_suppress", 0) or 0) + 1
+        try:
+            yield
+        finally:
+            self._input_capture_suppress = max(0, int(getattr(self, "_input_capture_suppress", 1) or 1) - 1)
+
+    async def _capture_terminal_input(self, data: str) -> None:
+        if int(getattr(self, "_input_capture_suppress", 0) or 0) > 0:
+            return
+
+        cleaned = self._strip_terminal_input_sequences(data)
+        if not cleaned:
+            return
+
+        for char in cleaned:
+            if char in ("\r", "\n"):
+                command = str(getattr(self, "_manual_input_buffer", "") or "").strip()
+                self._manual_input_buffer = ""
+                if command:
+                    await self._log_manual_terminal_command(command)
+                continue
+            if char in ("\x7f", "\b"):
+                self._manual_input_buffer = str(getattr(self, "_manual_input_buffer", "") or "")[:-1]
+                continue
+            if char == "\x15":
+                self._manual_input_buffer = ""
+                continue
+            if ord(char) < 32 and char != "\t":
+                continue
+            self._manual_input_buffer = (str(getattr(self, "_manual_input_buffer", "") or "") + char)[-8000:]
+
+    async def _log_manual_terminal_command(self, command: str) -> None:
+        if not command or not self.server or not self._user_id:
+            return
+
+        await log_user_activity_async(
+            user_id=self._user_id,
+            category="terminal",
+            action="terminal_command",
+            status="success",
+            description=command[:4000],
+            entity_type="server",
+            entity_id=self.server.id,
+            entity_name=self.server.name,
+            metadata={
+                "source": "interactive_shell",
+                "command_length": len(command),
+            },
+        )
+        await database_sync_to_async(self._persist_manual_terminal_command, thread_sensitive=True)(
+            user_id=self._user_id,
+            server_id=self.server.id,
+            command=command,
+        )
+
+    @staticmethod
+    def _persist_manual_terminal_command(*, user_id: int, server_id: int, command: str) -> None:
+        from servers.models import ServerCommandHistory
+
+        ServerCommandHistory.objects.create(
+            server_id=server_id,
+            user_id=user_id,
+            command=command,
+            output="",
+            exit_code=None,
+        )
 
     async def _handle_resize(self, content: dict[str, Any]):
         if not self._ssh_proc:
@@ -677,6 +776,15 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             await self._send_ai_event({"type": "ai_error", "message": "Server not loaded"})
             return
 
+        self._ai_audit_context = {
+            "user_id": self._user_id,
+            "channel": "ws",
+            "path": f"/ws/servers/{self.server.id}/terminal/",
+            "entity_type": "server",
+            "entity_id": str(self.server.id),
+            "entity_name": self.server.name,
+        }
+
         # Save user message to history
         self._add_to_history("user", msg)
         await log_user_activity_async(
@@ -695,26 +803,27 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         )
         await self._send_ai_event({"type": "ai_status", "status": "thinking", "execution_mode": requested_mode})
 
-        try:
-            forbidden_patterns, rules_context, required_checks, _ = await self._get_ai_rules_and_forbidden(
-                self._user_id,
-                self.server.id,
-            )
-            plan_obj = await self._ai_plan_commands(
-                user_message=msg,
-                rules_context=rules_context,
-                terminal_tail=(self._terminal_tail or "")[-2000:],
-                history=list(self._ai_history),
-                unavailable_cmds=set(getattr(self, "_unavailable_cmds", set())),
-                execution_mode=requested_mode,
-            )
-        except Exception as e:
-            err_msg = str(e).strip() or "Unknown error"
-            if any(hint in err_msg.lower() for hint in ("timeout", "429", "rate", "resource exhausted", "overloaded")):
-                err_msg = "Временная ошибка API (лимит или перегрузка). Попробуйте позже."
-            await self._send_ai_event({"type": "ai_error", "message": err_msg})
-            await self._send_ai_event({"type": "ai_status", "status": "idle"})
-            return
+        with audit_context(**self._ai_audit_context):
+            try:
+                forbidden_patterns, rules_context, required_checks, _ = await self._get_ai_rules_and_forbidden(
+                    self._user_id,
+                    self.server.id,
+                )
+                plan_obj = await self._ai_plan_commands(
+                    user_message=msg,
+                    rules_context=rules_context,
+                    terminal_tail=(self._terminal_tail or "")[-2000:],
+                    history=list(self._ai_history),
+                    unavailable_cmds=set(getattr(self, "_unavailable_cmds", set())),
+                    execution_mode=requested_mode,
+                )
+            except Exception as e:
+                err_msg = str(e).strip() or "Unknown error"
+                if any(hint in err_msg.lower() for hint in ("timeout", "429", "rate", "resource exhausted", "overloaded")):
+                    err_msg = "Временная ошибка API (лимит или перегрузка). Попробуйте позже."
+                await self._send_ai_event({"type": "ai_error", "message": err_msg})
+                await self._send_ai_event({"type": "ai_status", "status": "idle"})
+                return
 
         mode = str(plan_obj.get("mode") or "execute").lower().strip()
         assistant_text = str(plan_obj.get("assistant_text") or "").strip()
@@ -814,8 +923,9 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             return
 
         await self._send_ai_event({"type": "ai_status", "status": "running"})
-        async with self._ai_lock:
-            self._ai_task = asyncio.create_task(self._ai_process_queue())
+        with audit_context(**self._ai_audit_context):
+            async with self._ai_lock:
+                self._ai_task = asyncio.create_task(self._ai_process_queue())
 
     async def _handle_ai_confirm(self, content: dict[str, Any]):
         try:
@@ -843,8 +953,9 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         await self._send_ai_event({"type": "ai_command_status", "id": cmd_id, "status": "confirmed"})
         if should_start:
             await self._send_ai_event({"type": "ai_status", "status": "running"})
-            async with self._ai_lock:
-                self._ai_task = asyncio.create_task(self._ai_process_queue())
+            with audit_context(**getattr(self, "_ai_audit_context", {})):
+                async with self._ai_lock:
+                    self._ai_task = asyncio.create_task(self._ai_process_queue())
 
     async def _handle_ai_cancel(self, content: dict[str, Any]):
         try:
@@ -869,8 +980,9 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         await self._send_ai_event({"type": "ai_command_status", "id": cmd_id, "status": "skipped"})
         if should_start:
             await self._send_ai_event({"type": "ai_status", "status": "running"})
-            async with self._ai_lock:
-                self._ai_task = asyncio.create_task(self._ai_process_queue())
+            with audit_context(**getattr(self, "_ai_audit_context", {})):
+                async with self._ai_lock:
+                    self._ai_task = asyncio.create_task(self._ai_process_queue())
 
     def _add_to_history(self, role: str, text: str) -> None:
         """Append a message to the conversation history (max 20 entries)."""
@@ -1402,16 +1514,17 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             self._ai_active_cmd_id = cmd_id
             self._ai_active_output = ""
 
-        await self._ai_type_text(clean_cmd)
-        self._ssh_proc.stdin.write("\n")
+        with self._suppress_terminal_input_capture():
+            await self._ai_type_text(clean_cmd)
+            self._ssh_proc.stdin.write("\n")
 
-        # Marker line to capture exit status (filtered from UI output)
-        marker_prefix = self._marker_prefix()
-        marker_var = f"{marker_prefix}{cmd_id}"
-        marker_cmd = (
-            f"{marker_var}=$?; echo \"{marker_prefix}{cmd_id}:${{{marker_var}}}__\""
-        )
-        self._ssh_proc.stdin.write(marker_cmd + "\n")
+            # Marker line to capture exit status (filtered from UI output)
+            marker_prefix = self._marker_prefix()
+            marker_var = f"{marker_prefix}{cmd_id}"
+            marker_cmd = (
+                f"{marker_var}=$?; echo \"{marker_prefix}{cmd_id}:${{{marker_var}}}__\""
+            )
+            self._ssh_proc.stdin.write(marker_cmd + "\n")
 
         # For streaming commands: schedule Ctrl+C after 8 s to allow output capture
         interrupt_task: Optional[asyncio.Task] = None
@@ -2166,7 +2279,7 @@ EXIT_CODE: {exit_code}
         finally:
             self._ssh_conn = None
 
-        if self.scope.get("user") and getattr(self.scope["user"], "is_authenticated", False):
+        if was_connected and self.scope.get("user") and getattr(self.scope["user"], "is_authenticated", False):
             await self._safe_send_json({"type": "status", "status": "disconnected"})
 
         if was_connected and self.server and self._user_id:
@@ -2180,6 +2293,10 @@ EXIT_CODE: {exit_code}
                 entity_id=self.server.id,
                 entity_name=self.server.name,
             )
+
+        if self._server_connection_id:
+            await self._mark_server_connection_closed(self._server_connection_id)
+            self._server_connection_id = None
 
     async def _stream_reader(self, reader: asyncssh.SSHReader[str], stream: str):
         try:
@@ -2372,6 +2489,13 @@ EXIT_CODE: {exit_code}
         return bool(user and user_can_feature(user, "servers"))
 
     @database_sync_to_async
+    def _get_terminal_session_limit(self, user_id: int) -> dict[str, object] | None:
+        from django.contrib.auth.models import User
+
+        user = User.objects.filter(id=user_id).first()
+        return get_terminal_session_limit_error(user)
+
+    @database_sync_to_async
     def _get_server(self, user_id: int, server_id: int) -> Server:
         now = timezone.now()
         return (
@@ -2386,6 +2510,25 @@ EXIT_CODE: {exit_code}
             )
             .distinct()
             .get()
+        )
+
+    @database_sync_to_async
+    def _register_server_connection(self, user_id: int, server_id: int, connection_id: str) -> None:
+        ServerConnection.objects.update_or_create(
+            connection_id=connection_id,
+            defaults={
+                "server_id": server_id,
+                "user_id": user_id,
+                "status": "connected",
+                "disconnected_at": None,
+            },
+        )
+
+    @database_sync_to_async
+    def _mark_server_connection_closed(self, connection_id: str) -> None:
+        ServerConnection.objects.filter(connection_id=connection_id).update(
+            status="disconnected",
+            disconnected_at=timezone.now(),
         )
 
     @database_sync_to_async

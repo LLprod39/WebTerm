@@ -65,9 +65,11 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
+from app.runtime_limits import get_pipeline_run_limit_error
 from core_ui.managed_secrets import get_mcp_secret_env, get_mcp_secret_env_keys
 from .mcp_client import MCPClientError, inspect_mcp_server
 from .models import AgentConfig, MCPServerPool, Pipeline, PipelineRun, PipelineTemplate, PipelineTrigger
+from .pipeline_runtime import get_executor_for_run, update_runtime_control
 from .pipeline_validation import ensure_json_object, validate_pipeline_definition
 from .skill_authoring import parse_csv_items, scaffold_skill, validate_skill_dir, validate_skills
 from .skill_registry import SkillNotFoundError, get_skill, list_skills, normalise_skill_slugs
@@ -189,6 +191,12 @@ def _validation_err(errors: list[str], *, prefix: str = "Validation failed") -> 
     return JsonResponse({"error": message, "details": errors}, status=400)
 
 
+def _require_admin(request, *, message: str = "Admin access required") -> JsonResponse | None:
+    if getattr(request.user, "is_staff", False):
+        return None
+    return _err(message, 403)
+
+
 def _extract_json_object(raw_text: str) -> dict:
     text = (raw_text or "").strip()
     if not text:
@@ -301,7 +309,7 @@ def _sanitize_graph_patch(raw_graph_patch: object, *, fallback_anchor: str | Non
 # ---------------------------------------------------------------------------
 
 
-@require_feature('agents')
+@require_feature('studio')
 def api_pipelines(request):
     if request.method == "GET":
         qs = Pipeline.objects.filter(owner=request.user).order_by("-updated_at")
@@ -335,7 +343,7 @@ def api_pipelines(request):
     return _err("Method not allowed", 405)
 
 
-@require_feature('agents')
+@require_feature('studio')
 def api_pipeline_detail(request, pipeline_id: int):
     pipeline = _get_pipeline(request, pipeline_id)
     if pipeline is None:
@@ -365,13 +373,17 @@ def api_pipeline_detail(request, pipeline_id: int):
     return _err("Method not allowed", 405)
 
 
-@require_feature('agents')
+@require_feature('studio')
 @require_http_methods(["POST"])
 def api_pipeline_run(request, pipeline_id: int):
     """Trigger a manual pipeline run."""
     pipeline = _get_pipeline(request, pipeline_id)
     if pipeline is None:
         return _err("Pipeline not found", 404)
+
+    limit_error = get_pipeline_run_limit_error(pipeline.owner)
+    if limit_error:
+        return JsonResponse(limit_error, status=429)
 
     payload = _json_body(request)
     context, error = ensure_json_object(payload.get("context", {}), label="context")
@@ -393,7 +405,7 @@ def api_pipeline_run(request, pipeline_id: int):
     return _ok(run.to_dict(), status=202)
 
 
-@require_feature('agents')
+@require_feature('studio')
 @require_http_methods(["POST"])
 def api_pipeline_clone(request, pipeline_id: int):
     pipeline = _get_pipeline(request, pipeline_id)
@@ -413,7 +425,7 @@ def api_pipeline_clone(request, pipeline_id: int):
     return _ok(clone.to_detail_dict(), status=201)
 
 
-@require_feature('agents')
+@require_feature('studio')
 def api_pipeline_runs(request, pipeline_id: int):
     pipeline = _get_pipeline(request, pipeline_id)
     if pipeline is None:
@@ -422,7 +434,7 @@ def api_pipeline_runs(request, pipeline_id: int):
     return _ok([r.to_dict() for r in runs])
 
 
-@require_feature('agents')
+@require_feature('studio')
 @require_http_methods(["POST"])
 def api_pipeline_assistant(request):
     data = _json_body(request)
@@ -481,9 +493,9 @@ def api_pipeline_assistant(request):
             "id": agent.pk,
             "name": agent.name,
             "description": agent.description,
-            "mcp_server_ids": list(agent.mcp_servers.values_list("id", flat=True)),
+            "mcp_server_ids": list(agent.mcp_servers.filter(owner=request.user).values_list("id", flat=True)),
             "skill_slugs": list(agent.skill_slugs or []),
-            "server_scope_ids": list(agent.server_scope.values_list("id", flat=True)),
+            "server_scope_ids": list(agent.server_scope.filter(user=request.user).values_list("id", flat=True)),
         }
         for agent in AgentConfig.objects.filter(owner=request.user).order_by("name")
     ]
@@ -675,13 +687,13 @@ def _get_pipeline(request, pipeline_id: int) -> Pipeline | None:
 # ---------------------------------------------------------------------------
 
 
-@require_feature('agents')
+@require_feature('studio')
 def api_runs(request):
     qs = PipelineRun.objects.filter(pipeline__owner=request.user).order_by("-created_at")[:100]
     return _ok([r.to_dict() for r in qs])
 
 
-@require_feature('agents')
+@require_feature('studio')
 def api_run_detail(request, run_id: int):
     try:
         run = PipelineRun.objects.get(pk=run_id, pipeline__owner=request.user)
@@ -690,7 +702,7 @@ def api_run_detail(request, run_id: int):
     return _ok(run.to_dict())
 
 
-@require_feature('agents')
+@require_feature('studio')
 @require_http_methods(["POST"])
 def api_run_stop(request, run_id: int):
     try:
@@ -698,11 +710,14 @@ def api_run_stop(request, run_id: int):
     except PipelineRun.DoesNotExist:
         return _err("Run not found", 404)
 
-    if run.status == PipelineRun.STATUS_RUNNING:
+    executor = get_executor_for_run(run.id)
+    control, stop_delivered = update_runtime_control(run, live_executor=executor, stop_requested=True)
+
+    if run.status in {PipelineRun.STATUS_PENDING, PipelineRun.STATUS_RUNNING}:
         run.status = PipelineRun.STATUS_STOPPED
         run.finished_at = timezone.now()
         run.save(update_fields=["status", "finished_at"])
-    return _ok({"ok": True})
+    return _ok({"ok": True, "live_executor": stop_delivered, "runtime_control": control})
 
 
 @csrf_exempt
@@ -778,7 +793,7 @@ def api_run_approve(request, run_id: int, node_id: str):
 # ---------------------------------------------------------------------------
 
 
-@require_feature('agents')
+@require_feature('studio')
 def api_agents(request):
     if request.method == "GET":
         qs = AgentConfig.objects.filter(owner=request.user).order_by("-updated_at")
@@ -789,7 +804,9 @@ def api_agents(request):
         name = data.get("name", "").strip()
         if not name:
             return _err("name is required")
-
+        requested_mcp_ids = _normalise_related_ids(
+            data.get("mcp_server_ids") if "mcp_server_ids" in data else data.get("mcp_servers")
+        )
         agent = AgentConfig.objects.create(
             name=name,
             description=data.get("description", ""),
@@ -804,26 +821,18 @@ def api_agents(request):
             ),
             owner=request.user,
         )
-        _set_m2m(
+        _set_owned_mcp_servers(agent, request.user, requested_mcp_ids)
+        _set_owned_server_scope(
             agent,
-            "mcp_servers",
-            _normalise_related_ids(data.get("mcp_server_ids") if "mcp_server_ids" in data else data.get("mcp_servers")),
-            MCPServerPool,
-        )
-        from servers.models import Server
-
-        _set_m2m(
-            agent,
-            "server_scope",
+            request.user,
             _normalise_related_ids(data.get("server_scope_ids") if "server_scope_ids" in data else data.get("server_scope")),
-            Server,
         )
         return _ok(agent.to_dict(), status=201)
 
     return _err("Method not allowed", 405)
 
 
-@require_feature('agents')
+@require_feature('studio')
 def api_agent_detail(request, agent_id: int):
     try:
         agent = AgentConfig.objects.get(pk=agent_id, owner=request.user)
@@ -854,20 +863,15 @@ def api_agent_detail(request, agent_id: int):
             )
         agent.save()
         if "mcp_server_ids" in data or "mcp_servers" in data:
-            _set_m2m(
-                agent,
-                "mcp_servers",
-                _normalise_related_ids(data.get("mcp_server_ids") if "mcp_server_ids" in data else data.get("mcp_servers")),
-                MCPServerPool,
+            requested_mcp_ids = _normalise_related_ids(
+                data.get("mcp_server_ids") if "mcp_server_ids" in data else data.get("mcp_servers")
             )
+            _set_owned_mcp_servers(agent, request.user, requested_mcp_ids)
         if "server_scope_ids" in data or "server_scope" in data:
-            from servers.models import Server
-
-            _set_m2m(
+            _set_owned_server_scope(
                 agent,
-                "server_scope",
+                request.user,
                 _normalise_related_ids(data.get("server_scope_ids") if "server_scope_ids" in data else data.get("server_scope")),
-                Server,
             )
         return _ok(agent.to_dict())
 
@@ -878,10 +882,18 @@ def api_agent_detail(request, agent_id: int):
     return _err("Method not allowed", 405)
 
 
-def _set_m2m(obj, attr: str, ids: list, model):
-    if ids is not None:
-        items = list(model.objects.filter(pk__in=ids))
-        getattr(obj, attr).set(items)
+def _set_owned_mcp_servers(agent: AgentConfig, owner, ids: list[int] | None):
+    requested_ids = ids or []
+    items = list(MCPServerPool.objects.filter(pk__in=requested_ids, owner=owner))
+    agent.mcp_servers.set(items)
+
+
+def _set_owned_server_scope(agent: AgentConfig, owner, ids: list[int] | None):
+    from servers.models import Server
+
+    requested_ids = ids or []
+    items = list(Server.objects.filter(pk__in=requested_ids, user=owner))
+    agent.server_scope.set(items)
 
 
 def _normalise_related_ids(raw_values) -> list[int]:
@@ -1060,13 +1072,13 @@ def _skill_workspace_response(slug: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-@require_feature('agents')
+@require_feature('studio')
 @require_http_methods(["GET"])
 def api_skills(_request):
     return _ok([skill.to_summary_dict() for skill in list_skills()])
 
 
-@require_feature('agents')
+@require_feature('studio')
 @require_http_methods(["GET"])
 def api_skill_detail(_request, slug: str):
     try:
@@ -1076,15 +1088,18 @@ def api_skill_detail(_request, slug: str):
     return _ok(skill.to_detail_dict())
 
 
-@require_feature('agents')
+@require_feature('studio')
 @require_http_methods(["GET"])
 def api_skill_templates(_request):
     return _ok([item.to_dict() for item in list_skill_templates()])
 
 
-@require_feature('agents')
+@require_feature('studio')
 @require_http_methods(["POST"])
 def api_skill_scaffold(request):
+    admin_error = _require_admin(request)
+    if admin_error:
+        return admin_error
     data = _json_body(request)
     template_slug = str(data.get("template_slug") or "").strip()
     template = get_skill_template(template_slug) if template_slug else None
@@ -1153,9 +1168,12 @@ def api_skill_scaffold(request):
     )
 
 
-@require_feature('agents')
+@require_feature('studio')
 @require_http_methods(["POST"])
 def api_skill_validate(request):
+    admin_error = _require_admin(request)
+    if admin_error:
+        return admin_error
     data = _json_body(request)
     slugs = _normalise_string_list(data.get("slugs"))
     strict = bool(data.get("strict"))
@@ -1183,17 +1201,23 @@ def api_skill_validate(request):
     )
 
 
-@require_feature('agents')
+@require_feature('studio')
 @require_http_methods(["GET"])
-def api_skill_workspace(_request, slug: str):
+def api_skill_workspace(request, slug: str):
+    admin_error = _require_admin(request)
+    if admin_error:
+        return admin_error
     try:
         return _ok(_skill_workspace_response(slug))
     except SkillNotFoundError:
         return _err("Skill not found", 404)
 
 
-@require_feature('agents')
+@require_feature('studio')
 def api_skill_workspace_file(request, slug: str):
+    admin_error = _require_admin(request)
+    if admin_error:
+        return admin_error
     try:
         skill_dir = _skill_dir_from_slug(slug)
     except SkillNotFoundError:
@@ -1359,8 +1383,11 @@ MCP_TEMPLATES = [
 ]
 
 
-@require_feature('agents')
+@require_feature('studio')
 def api_mcp_list(request):
+    admin_error = _require_admin(request)
+    if admin_error:
+        return admin_error
     if request.method == "GET":
         qs = MCPServerPool.objects.filter(owner=request.user).order_by("name")
         return _ok([_mcp_to_dict(m) for m in qs])
@@ -1389,8 +1416,11 @@ def api_mcp_list(request):
     return _err("Method not allowed", 405)
 
 
-@require_feature('agents')
+@require_feature('studio')
 def api_mcp_detail(request, mcp_id: int):
+    admin_error = _require_admin(request)
+    if admin_error:
+        return admin_error
     try:
         mcp = MCPServerPool.objects.get(pk=mcp_id, owner=request.user)
     except MCPServerPool.DoesNotExist:
@@ -1417,9 +1447,12 @@ def api_mcp_detail(request, mcp_id: int):
     return _err("Method not allowed", 405)
 
 
-@require_feature('agents')
+@require_feature('studio')
 @require_http_methods(["POST"])
 def api_mcp_test(request, mcp_id: int):
+    admin_error = _require_admin(request)
+    if admin_error:
+        return admin_error
     try:
         mcp = MCPServerPool.objects.get(pk=mcp_id, owner=request.user)
     except MCPServerPool.DoesNotExist:
@@ -1483,14 +1516,17 @@ def _test_mcp_connection(mcp: MCPServerPool) -> tuple[bool, str | None]:
         return False, str(exc)
 
 
-@require_feature('agents')
+@require_feature('studio')
 def api_mcp_templates(request):
     return _ok(MCP_TEMPLATES)
 
 
-@require_feature('agents')
+@require_feature('studio')
 @require_http_methods(["GET"])
 def api_mcp_tools(request, mcp_id: int):
+    admin_error = _require_admin(request)
+    if admin_error:
+        return admin_error
     try:
         mcp = MCPServerPool.objects.get(pk=mcp_id, owner=request.user)
     except MCPServerPool.DoesNotExist:
@@ -1527,7 +1563,7 @@ def _mcp_to_dict(mcp: MCPServerPool) -> dict:
 # ---------------------------------------------------------------------------
 
 
-@require_feature('agents')
+@require_feature('studio')
 def api_triggers(request):
     if request.method == "GET":
         pipeline_id = request.GET.get("pipeline_id")
@@ -1569,7 +1605,7 @@ def api_triggers(request):
     return _err("Method not allowed", 405)
 
 
-@require_feature('agents')
+@require_feature('studio')
 def api_trigger_detail(request, trigger_id: int):
     try:
         trigger = PipelineTrigger.objects.get(pk=trigger_id, pipeline__owner=request.user)
@@ -1630,6 +1666,10 @@ def api_trigger_receive(request, token: str):
 
     context = _map_payload(payload, trigger.webhook_payload_map)
 
+    limit_error = get_pipeline_run_limit_error(trigger.pipeline.owner)
+    if limit_error:
+        return JsonResponse(limit_error, status=429)
+
     run = PipelineRun.objects.create(
         pipeline=trigger.pipeline,
         trigger=trigger,
@@ -1671,13 +1711,13 @@ def _map_payload(payload: dict, mapping: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
-@require_feature('agents')
+@require_feature('studio')
 def api_templates(request):
     templates = PipelineTemplate.objects.all().order_by("category", "name")
     return _ok([t.to_dict() for t in templates])
 
 
-@require_feature('agents')
+@require_feature('studio')
 @require_http_methods(["POST"])
 def api_template_use(request, slug: str):
     try:
@@ -1694,7 +1734,7 @@ def api_template_use(request, slug: str):
 # ---------------------------------------------------------------------------
 
 
-@require_feature('agents')
+@require_feature('studio')
 def api_studio_servers(request):
     from servers.models import Server
 
@@ -1707,12 +1747,16 @@ def api_studio_servers(request):
 # ---------------------------------------------------------------------------
 
 
-@require_feature('agents')
+@require_feature('studio')
 def api_notification_settings(request):
     """
     GET  /api/studio/notifications/  — return current notification settings
     POST /api/studio/notifications/  — save notification settings
     """
+    admin_error = _require_admin(request)
+    if admin_error:
+        return admin_error
+
     if request.method == "GET":
         cfg = _load_notif_config()
         # Mask password in GET response
@@ -1741,10 +1785,13 @@ def api_notification_settings(request):
     return _err("Method not allowed", 405)
 
 
-@require_feature('agents')
+@require_feature('studio')
 @require_http_methods(["POST"])
 def api_notification_test_telegram(request):
     """POST /api/studio/notifications/test-telegram/ — send a test Telegram message."""
+    admin_error = _require_admin(request)
+    if admin_error:
+        return admin_error
     import asyncio
 
     cfg = _load_notif_config()
@@ -1777,10 +1824,13 @@ def api_notification_test_telegram(request):
         return _err(f"Send failed: {exc}")
 
 
-@require_feature('agents')
+@require_feature('studio')
 @require_http_methods(["POST"])
 def api_notification_test_email(request):
     """POST /api/studio/notifications/test-email/ — send a test email."""
+    admin_error = _require_admin(request)
+    if admin_error:
+        return admin_error
     import smtplib
     from email.mime.text import MIMEText
 
