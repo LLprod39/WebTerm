@@ -1,3 +1,0 @@
-# По умолчанию — мини-сборка (для тестов, без PyTorch и моделей RAG).
-# Для полной версии с RAG и эмбеддингами: pip install -r requirements-full.txt
--r requirements-mini.txt

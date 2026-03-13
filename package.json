@@ -1,14 +1,23 @@
 {
-  "name": "webterm-workspace",
+  "name": "vite_react_shadcn_ts",
   "private": true,
+  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "build:dev": "vite build --mode development",
+    "lint": "eslint .",
     "preview": "vite preview",
-    "lint": "eslint ai-server-terminal-main/src",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:smoke": "playwright test --grep @smoke",
+    "test:e2e:a11y": "playwright test e2e/a11y.spec.ts",
+    "test:e2e:visual": "playwright test e2e/visual.spec.ts",
+    "test:e2e:visual:update": "playwright test e2e/visual.spec.ts --update-snapshots",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:debug": "playwright test --debug"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -40,7 +49,6 @@
     "@radix-ui/react-toggle-group": "^1.1.10",
     "@radix-ui/react-tooltip": "^1.2.7",
     "@tanstack/react-query": "^5.83.0",
-    "@types/js-yaml": "^4.0.9",
     "@types/react-syntax-highlighter": "^15.5.13",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-search": "^0.16.0",
@@ -53,7 +61,6 @@
     "embla-carousel-react": "^8.6.0",
     "framer-motion": "^12.34.3",
     "input-otp": "^1.4.2",
-    "js-yaml": "^4.1.1",
     "lucide-react": "^0.462.0",
     "next-themes": "^0.3.0",
     "react": "^18.3.1",
@@ -72,7 +79,9 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.1",
     "@eslint/js": "^9.32.0",
+    "@playwright/test": "^1.58.2",
     "@tailwindcss/typography": "^0.5.16",
     "@testing-library/jest-dom": "^6.6.0",
     "@testing-library/react": "^16.0.0",

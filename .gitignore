@@ -1,110 +1,24 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-!ai-server-terminal-main/src/lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Virtual Environment
-venv/
-ENV/
-env/
-.venv
-.venv*/
-
-# IDE / local tools
-.vscode/
-.idea/
-.cursor/
-.claude/
-.playwright-mcp/
-node_modules/
-ai-server-terminal-main/node_modules/
-
-# Temporary / cache (do not commit)
-.tmp/
-.tmp_*/
-tmp_*_check.js
-.tmp_*.js
-*.swp
-*.swo
-*~
-
-# Environment variables / secrets
-.env
-.env.*
-!.env.example
-!.env.template
-.env.local
-.env.*.local
-
-# Model configuration
-.model_config.json
-
-# Studio notification settings (may contain SMTP/Telegram secrets)
-.notification_config.json
-!.notification_config.example.json
-
-# Private keys / certs / keystores (never commit)
-*.pem
-*.key
-*.p12
-*.pfx
-*.crt
-*.cer
-*.jks
-id_rsa
-id_rsa.pub
-id_ed25519
-id_ed25519.pub
-
-# Qdrant data
-qdrant_data/
-*.db
-*.sqlite
-db.sqlite3
-db.sqlite3-shm
-db.sqlite3-wal
-
 # Logs
+logs
 *.log
-logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# OS
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
 .DS_Store
-Thumbs.db
-
-# NiceGUI
-.nicegui/
-
-# Temporary files
-tmp/
-temp/
-*.tmp
-
-# Large binaries (GitHub 100 MB limit)
-*.exe
-**/claude.exe
-
-# Deployment files that must stay tracked
-!docker-compose.yml
-!docker-compose.postgres-mcp.yml
-!keycloak_profiles.json
-!create_pipeline.sql
-!create_mega_pipeline.py
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

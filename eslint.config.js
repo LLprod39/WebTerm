@@ -5,20 +5,10 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  {
-    ignores: [
-      "dist",
-      "node_modules",
-      "ai-server-terminal-main/node_modules",
-      "ai-server-terminal-main/e2e",
-      "venv",
-      "venv/**",
-      ".codex-logs",
-    ],
-  },
+  { ignores: ["dist"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
-    files: ["ai-server-terminal-main/src/**/*.{ts,tsx}"],
+    files: ["**/*.{ts,tsx}"],
     languageOptions: {
       ecmaVersion: 2020,
       globals: globals.browser,
@@ -30,21 +20,25 @@ export default tseslint.config(
     rules: {
       ...reactHooks.configs.recommended.rules,
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
-      "@typescript-eslint/ban-ts-comment": "off",
-      "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/no-empty-object-type": "off",
       "@typescript-eslint/no-unused-vars": "off",
-      "no-empty": "off",
-      "prefer-const": "off",
     },
   },
   {
-    files: [
-      "ai-server-terminal-main/src/components/ui/**/*.{ts,tsx}",
-      "ai-server-terminal-main/src/lib/i18n.tsx",
-    ],
+    files: ["src/components/ui/**/*.{ts,tsx}", "src/lib/i18n.tsx"],
     rules: {
       "react-refresh/only-export-components": "off",
+    },
+  },
+  {
+    files: ["e2e/**/*.{ts,tsx}"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
+  {
+    files: ["src/pages/AgentsPage.tsx", "src/pages/MCPHubPage.tsx", "src/pages/PipelineEditorPage.tsx"],
+    rules: {
+      "@typescript-eslint/ban-ts-comment": "off",
     },
   },
 );

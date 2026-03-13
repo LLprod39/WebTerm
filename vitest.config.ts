@@ -7,17 +7,10 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
-    setupFiles: ["./ai-server-terminal-main/src/test/setup.ts"],
-    include: ["ai-server-terminal-main/src/**/*.{test,spec}.{ts,tsx}"],
-    exclude: [
-      "ai-server-terminal-main/e2e/**",
-      "node_modules/**",
-      "dist/**",
-    ],
+    setupFiles: ["./src/test/setup.ts"],
+    include: ["src/**/*.{test,spec}.{ts,tsx}"],
   },
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "ai-server-terminal-main", "src"),
-    },
+    alias: { "@": path.resolve(__dirname, "./src") },
   },
 });
