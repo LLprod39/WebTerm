@@ -1,2 +1,0 @@
-# For mini_prod this is intentionally identical to mini runtime.
--r requirements-mini.txt
