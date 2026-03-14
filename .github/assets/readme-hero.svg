@@ -1,0 +1,115 @@
+<svg width="1280" height="420" viewBox="0 0 1280 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="80" y1="40" x2="1180" y2="420" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#09121E"/>
+      <stop offset="1" stop-color="#101827"/>
+    </linearGradient>
+    <radialGradient id="glowA" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(250 72) rotate(55) scale(480 720)">
+      <stop stop-color="#1D4ED8" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#1D4ED8" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowB" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1010 120) rotate(120) scale(420 420)">
+      <stop stop-color="#14B8A6" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#14B8A6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="panelStroke" x1="720" y1="54" x2="1202" y2="368" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2F4B74"/>
+      <stop offset="1" stop-color="#18253A"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="116" y2="116" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#60A5FA"/>
+      <stop offset="1" stop-color="#14B8A6"/>
+    </linearGradient>
+    <filter id="shadow" x="672" y="28" width="558" height="364" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="12"/>
+      <feGaussianBlur stdDeviation="18"/>
+      <feComposite in2="hardAlpha" operator="out"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.0156863 0 0 0 0 0.0588235 0 0 0 0 0.129412 0 0 0 0.48 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_hero"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_hero" result="shape"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="420" rx="28" fill="url(#bg)"/>
+  <rect width="1280" height="420" rx="28" fill="url(#glowA)"/>
+  <rect width="1280" height="420" rx="28" fill="url(#glowB)"/>
+
+  <g opacity="0.08">
+    <path d="M0 78H1280" stroke="white"/>
+    <path d="M0 144H1280" stroke="white"/>
+    <path d="M0 210H1280" stroke="white"/>
+    <path d="M0 276H1280" stroke="white"/>
+    <path d="M0 342H1280" stroke="white"/>
+    <path d="M154 0V420" stroke="white"/>
+    <path d="M308 0V420" stroke="white"/>
+    <path d="M462 0V420" stroke="white"/>
+    <path d="M616 0V420" stroke="white"/>
+  </g>
+
+  <circle cx="104" cy="88" r="12" fill="#60A5FA"/>
+  <circle cx="104" cy="88" r="28" fill="#60A5FA" fill-opacity="0.18"/>
+  <path d="M100 88H108" stroke="white" stroke-width="2" stroke-linecap="round"/>
+  <path d="M104 84V92" stroke="white" stroke-width="2" stroke-linecap="round"/>
+
+  <text x="138" y="78" fill="#9FB3C8" font-family="Segoe UI, Arial, sans-serif" font-size="15" letter-spacing="0.24em">SERVER OPS / AUTOMATION / STUDIO</text>
+  <text x="80" y="164" fill="white" font-family="Segoe UI, Arial, sans-serif" font-size="68" font-weight="700">WebTerm</text>
+  <text x="80" y="203" fill="#B8C6D8" font-family="Segoe UI, Arial, sans-serif" font-size="22">Servers, terminals and controlled automation in one workspace.</text>
+  <text x="80" y="242" fill="#7E94AE" font-family="Segoe UI, Arial, sans-serif" font-size="18">Django API + WebSocket backend, React SPA, Studio for pipelines and a separate WinUI desktop shell.</text>
+
+  <g font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="600">
+    <rect x="80" y="286" width="90" height="36" rx="18" fill="#112033" stroke="#1F3B5F"/>
+    <text x="109" y="309" fill="#CFE5FF">SSH</text>
+
+    <rect x="182" y="286" width="90" height="36" rx="18" fill="#112033" stroke="#1F3B5F"/>
+    <text x="211" y="309" fill="#CFE5FF">RDP</text>
+
+    <rect x="284" y="286" width="108" height="36" rx="18" fill="#112033" stroke="#1F3B5F"/>
+    <text x="312" y="309" fill="#CFE5FF">Agents</text>
+
+    <rect x="404" y="286" width="120" height="36" rx="18" fill="#112033" stroke="#1F3B5F"/>
+    <text x="430" y="309" fill="#CFE5FF">Pipelines</text>
+
+    <rect x="536" y="286" width="92" height="36" rx="18" fill="#112033" stroke="#1F3B5F"/>
+    <text x="565" y="309" fill="#CFE5FF">MCP</text>
+  </g>
+
+  <text x="82" y="356" fill="#7E94AE" font-family="Consolas, 'Courier New', monospace" font-size="16">$ inventory + access + shared context + live runs</text>
+
+  <g filter="url(#shadow)">
+    <rect x="708" y="54" width="486" height="292" rx="24" fill="#0F1724" stroke="url(#panelStroke)"/>
+    <rect x="708" y="54" width="486" height="48" rx="24" fill="#121D2C"/>
+    <circle cx="742" cy="78" r="6" fill="#F87171"/>
+    <circle cx="764" cy="78" r="6" fill="#FBBF24"/>
+    <circle cx="786" cy="78" r="6" fill="#34D399"/>
+    <text x="824" y="84" fill="#B7C4D4" font-family="Segoe UI, Arial, sans-serif" font-size="16">Platform overview</text>
+
+    <rect x="734" y="124" width="196" height="84" rx="18" fill="#111C2A" stroke="#1F3047"/>
+    <text x="758" y="154" fill="#88A1BE" font-family="Segoe UI, Arial, sans-serif" font-size="12" letter-spacing="0.18em">FLEET</text>
+    <text x="758" y="186" fill="white" font-family="Segoe UI, Arial, sans-serif" font-size="32" font-weight="700">24</text>
+    <text x="812" y="186" fill="#9BB0C8" font-family="Segoe UI, Arial, sans-serif" font-size="16">servers online</text>
+
+    <rect x="950" y="124" width="218" height="84" rx="18" fill="#111C2A" stroke="#1F3047"/>
+    <text x="974" y="154" fill="#88A1BE" font-family="Segoe UI, Arial, sans-serif" font-size="12" letter-spacing="0.18em">STUDIO</text>
+    <text x="974" y="186" fill="white" font-family="Segoe UI, Arial, sans-serif" font-size="32" font-weight="700">7</text>
+    <text x="1012" y="186" fill="#9BB0C8" font-family="Segoe UI, Arial, sans-serif" font-size="16">active pipelines</text>
+
+    <rect x="734" y="228" width="266" height="88" rx="18" fill="#0D1623" stroke="#1F3047"/>
+    <text x="758" y="254" fill="#88A1BE" font-family="Segoe UI, Arial, sans-serif" font-size="12" letter-spacing="0.18em">INVENTORY</text>
+    <circle cx="764" cy="279" r="5" fill="#34D399"/>
+    <text x="780" y="284" fill="#E5EDF6" font-family="Segoe UI, Arial, sans-serif" font-size="15">core-web-01</text>
+    <text x="900" y="284" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="13">online</text>
+    <circle cx="764" cy="301" r="5" fill="#60A5FA"/>
+    <text x="780" y="306" fill="#E5EDF6" font-family="Segoe UI, Arial, sans-serif" font-size="15">db-main-02</text>
+    <text x="887" y="306" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="13">monitored</text>
+
+    <rect x="1020" y="228" width="148" height="88" rx="18" fill="#0D1623" stroke="#1F3047"/>
+    <text x="1044" y="254" fill="#88A1BE" font-family="Segoe UI, Arial, sans-serif" font-size="12" letter-spacing="0.18em">LIVE</text>
+    <rect x="1044" y="268" width="100" height="8" rx="4" fill="#16304A"/>
+    <rect x="1044" y="268" width="68" height="8" rx="4" fill="url(#accent)"/>
+    <rect x="1044" y="286" width="84" height="8" rx="4" fill="#16304A"/>
+    <rect x="1044" y="286" width="44" height="8" rx="4" fill="#F59E0B"/>
+    <text x="1044" y="311" fill="#B7C4D4" font-family="Segoe UI, Arial, sans-serif" font-size="14">agents / ws / logs</text>
+  </g>
+</svg>
