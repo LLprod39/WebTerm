@@ -558,12 +558,14 @@ function SettingsSection({
   children: ReactNode;
 }) {
   return (
-    <section className="space-y-3 rounded-xl border border-border bg-secondary/20 p-4">
-      <div>
-        <h4 className="text-sm font-semibold text-foreground">{title}</h4>
-        <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+    <section className="space-y-2.5">
+      <div className="px-0.5">
+        <h4 className="text-[13px] font-semibold text-foreground">{title}</h4>
+        <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">{description}</p>
       </div>
-      {children}
+      <div className="rounded-lg border border-border/50 bg-secondary/15 p-3">
+        {children}
+      </div>
     </section>
   );
 }
@@ -580,10 +582,10 @@ function ToggleRow({
   onCheckedChange: (checked: boolean) => void;
 }) {
   return (
-    <div className="flex items-start justify-between gap-3 rounded-lg border border-border/60 bg-background/80 px-3 py-2.5">
+    <div className="flex items-center justify-between gap-3 py-1.5">
       <div className="min-w-0">
-        <div className="text-sm font-medium text-foreground">{title}</div>
-        <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+        <div className="text-[13px] font-medium text-foreground">{title}</div>
+        <p className="mt-0.5 text-[11px] text-muted-foreground">{description}</p>
       </div>
       <Switch checked={checked} onCheckedChange={onCheckedChange} />
     </div>
@@ -591,7 +593,7 @@ function ToggleRow({
 }
 
 function InputLabel({ children }: { children: ReactNode }) {
-  return <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{children}</label>;
+  return <label className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{children}</label>;
 }
 
 export function AiPanel({
@@ -662,49 +664,37 @@ export function AiPanel({
   return (
     <>
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent className="max-h-[90vh] max-w-3xl overflow-hidden">
-          <DialogHeader>
-            <DialogTitle>Настройки AI Assistant</DialogTitle>
-            <DialogDescription>
-              Параметры применяются к текущему чату сразу. При необходимости сохраните их как глобальные значения по умолчанию.
+        <DialogContent className="max-h-[85vh] max-w-2xl overflow-hidden rounded-xl border-border/60">
+          <DialogHeader className="pb-0">
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Settings2 className="h-4 w-4 text-primary" />
+              Настройки AI
+            </DialogTitle>
+            <DialogDescription className="text-[11px]">
+              Параметры применяются сразу к текущему чату.
             </DialogDescription>
           </DialogHeader>
 
-          <DialogBody className="max-h-[calc(90vh-9.5rem)] space-y-4 overflow-y-auto">
+          <DialogBody className="max-h-[calc(85vh-8rem)] space-y-5 overflow-y-auto py-2">
             <SettingsSection
-              title="Режим ответа"
-              description="Fast подходит для коротких ответов и быстрых действий. Step оставляет больше пояснений и чаще просит подтверждение."
+              title="Режим"
+              description="Выберите как AI будет отвечать и выполнять команды."
             >
-              <div className="space-y-3 rounded-lg border border-border/60 bg-background/80 px-3 py-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-medium text-foreground">Режим чата</div>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      `Ask` предлагает команды без автозапуска. `Agent` выполняет их сразу. Быстрый переключатель: `/mode ask` и `/mode agent`.
-                    </p>
-                  </div>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[13px] text-foreground">Чат</span>
                   <ChatModeSelector mode={chatMode} onChange={onChatModeChange} />
                 </div>
-
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-medium text-foreground">Стиль выполнения</div>
-                    <p className="mt-0.5 text-xs text-muted-foreground">Можно переключать прямо в чате или здесь.</p>
-                  </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[13px] text-foreground">Стиль</span>
                   <ModeSelector mode={executionMode} onChange={onModeChange} />
                 </div>
-
-                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_140px]">
-                  <div>
-                    <InputLabel>Авто-отчёт</InputLabel>
-                    <p className="mb-2 text-xs text-muted-foreground">
-                      `Auto` включает summary в `Step` и отключает в `Fast`. `On` и `Off` принудительно переопределяют это поведение.
-                    </p>
-                  </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[13px] text-foreground">Авто-отчёт</span>
                   <select
                     value={settings.autoReport}
                     onChange={(event) => updateSettings({ autoReport: event.target.value === "on" || event.target.value === "off" ? event.target.value : "auto" })}
-                    className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+                    className="h-8 rounded-md border border-border bg-background px-2.5 text-xs text-foreground focus:border-primary focus:outline-none"
                   >
                     <option value="auto">Auto</option>
                     <option value="on">Всегда On</option>
@@ -715,21 +705,21 @@ export function AiPanel({
             </SettingsSection>
 
             <SettingsSection
-              title="Память и отчёты"
-              description="Контекст можно хранить между запросами, ограничивать по TTL и очищать отдельно от видимого чата."
+              title="Память"
+              description="Контекст между запросами и управление историей."
             >
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <ToggleRow
                   title="Сохранять контекст"
-                  description="Если выключить, каждый новый запрос пойдёт без накопленной памяти и без записи summary в backend-память."
+                  description="AI помнит предыдущие запросы в рамках сессии."
                   checked={settings.memoryEnabled}
                   onCheckedChange={(checked) => updateSettings({ memoryEnabled: checked })}
                 />
 
-                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_120px]">
-                  <div className="rounded-lg border border-border/60 bg-background/80 px-3 py-2.5">
-                    <InputLabel>TTL памяти</InputLabel>
-                    <p className="text-xs text-muted-foreground">Сколько последних пользовательских запросов учитывать в памяти чата. Диапазон: 1-20.</p>
+                <div className="flex items-center justify-between gap-3 py-1.5">
+                  <div>
+                    <div className="text-[13px] font-medium text-foreground">TTL памяти</div>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">Количество запросов (1–20)</p>
                   </div>
                   <input
                     type="number"
@@ -738,18 +728,15 @@ export function AiPanel({
                     value={settings.memoryTtlRequests}
                     disabled={!settings.memoryEnabled}
                     onChange={(event) => updateSettings({ memoryTtlRequests: Math.max(1, Math.min(20, Number(event.target.value || 1))) })}
-                    className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                    className="h-8 w-16 rounded-md border border-border bg-background px-2.5 text-center text-xs text-foreground focus:border-primary focus:outline-none disabled:opacity-40"
                   />
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/60 bg-background/80 px-3 py-3">
-                  <div>
-                    <div className="text-sm font-medium text-foreground">Ручное управление памятью</div>
-                    <p className="mt-0.5 text-xs text-muted-foreground">Очищает server-side memory текущего AI-чата, но не удаляет сообщения из панели.</p>
-                  </div>
-                  <Button type="button" variant="outline" onClick={onClearMemory} className="gap-2">
-                    <Trash2 className="h-4 w-4" />
-                    Очистить память
+                <div className="flex items-center justify-between gap-3 pt-1">
+                  <span className="text-[13px] text-foreground">Очистить память</span>
+                  <Button type="button" variant="outline" size="sm" onClick={onClearMemory} className="h-7 gap-1.5 text-xs">
+                    <Trash2 className="h-3 w-3" />
+                    Очистить
                   </Button>
                 </div>
               </div>
@@ -757,42 +744,35 @@ export function AiPanel({
 
             <SettingsSection
               title="Безопасность"
-              description="Опасные команды можно отправлять только с подтверждением, а allowlist/blocklist ограничивает набор допустимых команд."
+              description="Контроль опасных команд и ограничение допустимых операций."
             >
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <ToggleRow
-                  title="Подтверждать опасные команды"
-                  description="Опасные операции останутся в плане, но потребуют явного подтверждения пользователя."
+                  title="Подтверждать опасные"
+                  description="Требовать ручное подтверждение для опасных операций."
                   checked={settings.confirmDangerousCommands}
                   onCheckedChange={(checked) => updateSettings({ confirmDangerousCommands: checked })}
                 />
 
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="rounded-lg border border-border/60 bg-background/80 p-3">
-                    <InputLabel>Whitelist команд</InputLabel>
-                    <p className="mb-2 text-xs text-muted-foreground">
-                      Одна маска на строку. Если список не пустой, AI сможет запускать только совпадающие команды. Поддерживается `re:`.
-                    </p>
+                <div className="grid gap-2.5 pt-1 md:grid-cols-2">
+                  <div>
+                    <InputLabel>Whitelist</InputLabel>
                     <textarea
                       value={whitelistText}
                       onChange={(event) => updateSettings({ whitelistPatterns: normalizePatternList(event.target.value) })}
-                      rows={6}
-                      placeholder={"sudo systemctl\njournalctl -u nginx\nre:^docker\\s+ps"}
-                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+                      rows={4}
+                      placeholder={"sudo systemctl\nre:^docker\\s+ps"}
+                      className="w-full rounded-md border border-border bg-background px-2.5 py-2 font-mono text-[11px] text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none"
                     />
                   </div>
-
-                  <div className="rounded-lg border border-border/60 bg-background/80 p-3">
-                    <InputLabel>Blocklist команд</InputLabel>
-                    <p className="mb-2 text-xs text-muted-foreground">
-                      Всё, что совпадёт с этими паттернами, backend сразу заблокирует. Поддерживается `re:`.
-                    </p>
+                  <div>
+                    <InputLabel>Blocklist</InputLabel>
                     <textarea
                       value={blacklistText}
                       onChange={(event) => updateSettings({ blacklistPatterns: normalizePatternList(event.target.value) })}
-                      rows={6}
+                      rows={4}
                       placeholder={"rm -rf /\nshutdown\nre:^mkfs"}
-                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+                      className="w-full rounded-md border border-border bg-background px-2.5 py-2 font-mono text-[11px] text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none"
                     />
                   </div>
                 </div>
@@ -800,19 +780,19 @@ export function AiPanel({
             </SettingsSection>
 
             <SettingsSection
-              title="Видимость в чате"
-              description="Можно отдельно показывать предлагаемые команды и уже выполненные действия, не меняя поведение backend."
+              title="Отображение"
+              description="Какие элементы показывать в чате."
             >
-              <div className="space-y-3">
+              <div className="space-y-1">
                 <ToggleRow
-                  title="Показывать предлагаемые команды"
-                  description="Команды в статусе `pending` и ожидающие подтверждения будут видны в AI-чате."
+                  title="Предлагаемые команды"
+                  description="Показывать команды в статусе pending."
                   checked={settings.showSuggestedCommands}
                   onCheckedChange={(checked) => updateSettings({ showSuggestedCommands: checked })}
                 />
                 <ToggleRow
-                  title="Показывать выполненные команды"
-                  description="Команды со статусами `running`, `done`, `skipped` и `cancelled` будут оставаться в ленте чата."
+                  title="Выполненные команды"
+                  description="Показывать done/skipped/cancelled команды."
                   checked={settings.showExecutedCommands}
                   onCheckedChange={(checked) => updateSettings({ showExecutedCommands: checked })}
                 />
@@ -820,86 +800,74 @@ export function AiPanel({
             </SettingsSection>
           </DialogBody>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onResetToDefaults} className="gap-2">
-              <RotateCcw className="h-4 w-4" />
-              Сбросить чат к глобальным
+          <DialogFooter className="gap-2 pt-0">
+            <Button type="button" variant="ghost" size="sm" onClick={onResetToDefaults} className="gap-1.5 text-xs text-muted-foreground">
+              <RotateCcw className="h-3 w-3" />
+              Сбросить
             </Button>
-            <Button type="button" onClick={onSaveDefaults} className="gap-2">
-              <Check className="h-4 w-4" />
-              Сохранить как глобальные
+            <Button type="button" size="sm" onClick={onSaveDefaults} className="gap-1.5 text-xs">
+              <Check className="h-3 w-3" />
+              Сохранить глобально
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <div className="flex h-full flex-col bg-card">
+        {/* Header */}
         <div className="shrink-0 border-b border-border px-3 py-2">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <div className={`flex h-7 w-7 items-center justify-center rounded-lg transition-all ${
-                isGenerating ? "bg-primary/25 shadow-md shadow-primary/20" : "bg-primary/10"
+              <div className={`flex h-6 w-6 items-center justify-center rounded-md transition-all ${
+                isGenerating ? "bg-primary/20 shadow-sm shadow-primary/20" : "bg-primary/10"
               }`}>
-                <Bot className="h-4 w-4 text-primary" />
+                <Bot className="h-3.5 w-3.5 text-primary" />
               </div>
-              <div>
-                <h3 className="text-sm font-medium leading-none text-foreground">AI Assistant</h3>
-                <p className="mt-0.5 text-[10px]">
-                  {isGenerating ? <span className="animate-pulse text-warning">обрабатывает...</span> : <span className="text-success">готов</span>}
-                </p>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[13px] font-medium text-foreground">AI</span>
+                <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                  isGenerating ? "bg-warning/15 text-warning animate-pulse" : "bg-success/15 text-success"
+                }`}>
+                  {isGenerating ? "думает..." : "готов"}
+                </span>
               </div>
             </div>
 
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0.5">
               <Button
                 type="button"
                 size="sm"
                 variant="ghost"
-                className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
                 onClick={() => setSettingsOpen(true)}
-                title="Настройки ассистента"
+                title="Настройки"
                 aria-label="AI settings"
               >
                 <Settings2 className="h-3.5 w-3.5" />
               </Button>
 
               {isGenerating ? (
-                <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0 text-warning hover:bg-warning/10" onClick={onStop} title="Остановить" aria-label="Stop">
+                <Button type="button" size="sm" variant="ghost" className="h-6 w-6 p-0 text-warning hover:bg-warning/10" onClick={onStop} title="Стоп" aria-label="Stop">
                   <Square className="h-3.5 w-3.5" />
                 </Button>
               ) : null}
 
               {messages.length > 0 ? (
-                <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" onClick={onClearChat} title="Очистить чат" aria-label="Clear chat">
-                  <Trash2 className="h-3.5 w-3.5" />
+                <Button type="button" size="sm" variant="ghost" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={onClearChat} title="Очистить" aria-label="Clear">
+                  <Trash2 className="h-3 w-3" />
                 </Button>
               ) : null}
 
-              <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" onClick={onClose} aria-label="Close">
-                <X className="h-4 w-4" />
+              <Button type="button" size="sm" variant="ghost" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground" onClick={onClose} aria-label="Close">
+                <X className="h-3.5 w-3.5" />
               </Button>
             </div>
           </div>
         </div>
 
-        <div className="space-y-2 border-b border-border/60 px-3 py-2">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Режим чата</span>
-            <ChatModeSelector mode={chatMode} onChange={onChatModeChange} />
-          </div>
-          <div className={`rounded-xl border px-3 py-2 ${currentChatMode.badge}`}>
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-xs font-semibold">{currentChatMode.label}</div>
-                <p className="mt-0.5 text-[11px] opacity-90">{currentChatMode.desc}</p>
-              </div>
-              <code className="rounded bg-background/60 px-2 py-1 text-[10px] font-mono text-foreground/80">/mode {chatMode}</code>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex shrink-0 items-center justify-between border-b border-border/60 px-3 py-1.5">
-          <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Стиль</span>
+        {/* Compact mode bar */}
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/50 px-3 py-1.5">
+          <ChatModeSelector mode={chatMode} onChange={onChatModeChange} />
           <ModeSelector mode={executionMode} onChange={onModeChange} />
         </div>
 
@@ -955,32 +923,29 @@ export function AiPanel({
           <div ref={messagesEndRef} />
         </div>
 
-        <div className="shrink-0 border-t border-border p-2.5">
+        <div className="shrink-0 border-t border-border p-2">
           {messages.length > 0 ? (
-            <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-border/70 bg-secondary/25 px-3 py-2">
-              <div>
-                <div className="text-xs font-medium text-foreground">Ручной отчёт</div>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">Сформировать summary по завершённым командам текущего AI-диалога.</p>
-              </div>
-              <Button type="button" size="sm" variant="outline" onClick={() => onGenerateReport?.(false)} disabled={!canGenerateReport}>
-                <FileText className="h-3.5 w-3.5" />
-                Сформировать отчёт
+            <div className="mb-1.5 flex items-center justify-between gap-2 rounded-lg bg-secondary/30 px-2.5 py-1.5">
+              <span className="text-[11px] text-muted-foreground">Сформировать отчёт</span>
+              <Button type="button" size="sm" variant="ghost" onClick={() => onGenerateReport?.(false)} disabled={!canGenerateReport} className="h-6 gap-1 px-2 text-[11px]">
+                <FileText className="h-3 w-3" />
+                Отчёт
               </Button>
             </div>
           ) : null}
 
-          <div className="flex items-end gap-2">
+          <div className="flex items-end gap-1.5">
             <textarea
               ref={textareaRef}
               value={input}
               onChange={handleInput}
               onKeyDown={handleKeyDown}
-              placeholder="Сообщение... (Enter — отправить, /mode ask | /mode agent)"
+              placeholder="Сообщение... (Enter — отправить)"
               rows={1}
-              className="min-h-[36px] max-h-[120px] flex-1 resize-none rounded-xl border border-border bg-secondary px-3 py-2 text-sm text-foreground transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+              className="min-h-[34px] max-h-[120px] flex-1 resize-none rounded-lg border border-border bg-secondary/50 px-2.5 py-2 text-[13px] text-foreground transition-colors placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none"
             />
-            <Button type="button" size="sm" onClick={() => handleSend()} disabled={!input.trim() || isGenerating} className="h-9 w-9 shrink-0 rounded-xl p-0" aria-label="Send">
-              <Send className="h-4 w-4" />
+            <Button type="button" size="sm" onClick={() => handleSend()} disabled={!input.trim() || isGenerating} className="h-[34px] w-[34px] shrink-0 rounded-lg p-0" aria-label="Send">
+              <Send className="h-3.5 w-3.5" />
             </Button>
           </div>
         </div>
