@@ -393,64 +393,56 @@ function WorkspaceWindow({
         <section
           onMouseDown={onFocus}
           className={cn(
-            "relative flex min-h-0 flex-col overflow-hidden border border-border/90 bg-[linear-gradient(180deg,rgba(18,25,39,0.99),rgba(11,17,28,0.985))] shadow-[0_28px_100px_-48px_rgba(0,0,0,0.98)]",
+            "relative flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-lg",
             desktopMode ? "absolute" : "relative",
-            maximized ? "rounded-[1.1rem]" : "rounded-[1.35rem]",
-            active ? "ring-1 ring-primary/20" : "",
-            dragging || resizing ? "shadow-[0_30px_100px_-40px_rgba(0,0,0,1)]" : "",
+            active ? "ring-1 ring-primary/25 shadow-xl" : "",
+            dragging || resizing ? "shadow-2xl" : "",
             className,
           )}
           style={style}
         >
+          {/* Compact KDE-like title bar */}
           <header
             onPointerDown={onHeaderPointerDown}
             onDoubleClick={desktopMode ? onHeaderDoubleClick : undefined}
             className={cn(
-              "flex items-center justify-between border-b border-border/75 bg-slate-900/95 px-4 py-3 select-none",
+              "flex h-9 items-center justify-between border-b border-border/80 bg-muted/50 px-2.5 select-none",
               desktopMode && !maximized ? "cursor-grab active:cursor-grabbing" : "",
             )}
           >
-            <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/75 bg-background text-foreground">
-                {icon}
-              </div>
-              <div className="min-w-0">
-                <div className="truncate text-sm font-semibold text-foreground">{title}</div>
-                <div className="truncate text-[11px] text-muted-foreground">{subtitle}</div>
-              </div>
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="flex h-5 w-5 items-center justify-center text-muted-foreground [&>svg]:h-3.5 [&>svg]:w-3.5">{icon}</span>
+              <span className="truncate text-xs font-medium text-foreground">{title}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className={cn("rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide", statusClass(status))}>
-                {status}
-              </span>
+            <div className="flex items-center gap-0.5">
               <button
                 type="button"
                 data-no-window-drag="true"
                 onClick={onMinimize}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-border/75 bg-background/92 text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
+                className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 aria-label={`Minimize ${title}`}
               >
-                <Minus className="h-4 w-4" />
+                <Minus className="h-3 w-3" />
               </button>
               {desktopMode ? (
                 <button
                   type="button"
                   data-no-window-drag="true"
                   onClick={onToggleMaximize}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-border/75 bg-background text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
+                  className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   aria-label={maximized ? `Restore ${title}` : `Maximize ${title}`}
                 >
-                  {maximized ? <Copy className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
+                  {maximized ? <Copy className="h-3 w-3" /> : <Square className="h-3 w-3" />}
                 </button>
               ) : null}
               <button
                 type="button"
                 data-no-window-drag="true"
                 onClick={onClose}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-border/75 bg-background text-muted-foreground transition-colors hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive"
                 aria-label={`Close ${title}`}
               >
-                <X className="h-4 w-4" />
+                <X className="h-3 w-3" />
               </button>
             </div>
           </header>
@@ -459,27 +451,22 @@ function WorkspaceWindow({
             <div
               data-no-window-drag="true"
               onPointerDown={onResizePointerDown}
-              className="absolute bottom-0 right-0 h-5 w-5 cursor-se-resize"
+              className="absolute bottom-0 right-0 h-4 w-4 cursor-se-resize"
               aria-hidden="true"
             >
-              <div className="absolute bottom-1.5 right-1.5 h-2.5 w-2.5 rounded-sm border-b-2 border-r-2 border-border/80" />
+              <div className="absolute bottom-1 right-1 h-2 w-2 border-b-2 border-r-2 border-border/60" />
             </div>
           ) : null}
         </section>
       </ContextMenuTrigger>
-      <ContextMenuContent className="w-56 rounded-xl border-border bg-background/98">
+      <ContextMenuContent className="w-48 rounded-lg border-border bg-card">
         <ContextMenuLabel>{title}</ContextMenuLabel>
-        <ContextMenuItem onSelect={onFocus}>Focus Window</ContextMenuItem>
-        <ContextMenuItem onSelect={onMinimize}>{minimized ? "Restore From Taskbar" : "Minimize"}</ContextMenuItem>
-        {desktopMode ? <ContextMenuItem onSelect={onToggleMaximize}>{maximized ? "Restore Window" : "Maximize Window"}</ContextMenuItem> : null}
-        {desktopMode ? <ContextMenuItem onSelect={onResetPosition}>Reset Window Position</ContextMenuItem> : null}
+        <ContextMenuItem onSelect={onFocus}>Focus</ContextMenuItem>
+        <ContextMenuItem onSelect={onMinimize}>{minimized ? "Restore" : "Minimize"}</ContextMenuItem>
+        {desktopMode ? <ContextMenuItem onSelect={onToggleMaximize}>{maximized ? "Restore" : "Maximize"}</ContextMenuItem> : null}
+        {desktopMode ? <ContextMenuItem onSelect={onResetPosition}>Reset Position</ContextMenuItem> : null}
         <ContextMenuSeparator />
-        <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={onClose}>
-          Close Window
-        </ContextMenuItem>
-        <ContextMenuLabel className="pt-2 text-[11px] font-normal text-muted-foreground">
-          {appId}
-        </ContextMenuLabel>
+        <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={onClose}>Close</ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   );
