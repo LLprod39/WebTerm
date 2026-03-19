@@ -1835,7 +1835,7 @@ export async function downloadServerFile(
     }
   }
 
-  const blob = new Blob(chunks, { type: response.headers.get("Content-Type") || "application/octet-stream" });
+  const blob = new Blob(chunks as BlobPart[], { type: response.headers.get("Content-Type") || "application/octet-stream" });
   return { blob, filename, size: loaded } satisfies SftpDownloadResult;
 }
 
