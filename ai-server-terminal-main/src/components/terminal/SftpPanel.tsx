@@ -11,6 +11,7 @@ import {
 import {
   ArrowUp,
   Download,
+  ExternalLink,
   File,
   FileCode2,
   Folder,
@@ -19,6 +20,7 @@ import {
   Pencil,
   RefreshCw,
   Save,
+  Shield,
   Trash2,
   Upload,
   X,
