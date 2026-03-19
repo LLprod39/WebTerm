@@ -227,6 +227,12 @@ function getDefaultWindowGeometry(appId: WorkspaceAppId, zIndex: number): Worksp
       return { x: 74, y: 56, width: 1180, height: 708, minimized: false, maximized: false, zIndex };
     case "packages":
       return { x: 130, y: 108, width: 900, height: 600, minimized: false, maximized: false, zIndex };
+    case "text-editor":
+      return { x: 60, y: 50, width: 1100, height: 700, minimized: false, maximized: false, zIndex };
+    case "quick-run":
+      return { x: 100, y: 80, width: 900, height: 600, minimized: false, maximized: false, zIndex };
+    case "settings":
+      return { x: 80, y: 60, width: 1000, height: 680, minimized: false, maximized: false, zIndex };
     default:
       return { x: 88, y: 56, width: 980, height: 640, minimized: false, maximized: false, zIndex };
   }
