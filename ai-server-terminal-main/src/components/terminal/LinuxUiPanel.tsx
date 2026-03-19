@@ -2077,28 +2077,21 @@ function NetworkWindow({
 
 function PackageRow({ item }: { item: LinuxUiPackageItem }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-background/90 px-3 py-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="truncate font-mono text-sm text-foreground">{item.name}</div>
-          <div className="mt-1 break-words text-[11px] text-muted-foreground">{item.version}</div>
-        </div>
-      </div>
+    <div className="flex items-center justify-between rounded-lg border border-border/70 bg-background/90 px-3 py-2">
+      <span className="truncate font-mono text-xs text-foreground">{item.name}</span>
+      <span className="shrink-0 ml-2 text-[10px] text-muted-foreground font-mono">{item.version}</span>
     </div>
   );
 }
 
-function PackagesWindow({
-  server,
-  active,
-  packageManager,
-}: {
-  server: FrontendServer;
-  active: boolean;
-  packageManager: string;
-}) {
+function PackagesWindow({ server, active, packageManager }: { server: FrontendServer; active: boolean; packageManager: string }) {
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
+  const [installPkg, setInstallPkg] = useState("");
+  const [actionOutput, setActionOutput] = useState("");
+  const [isRunning, setIsRunning] = useState(false);
+  const [tab, setTab] = useState<"installed" | "updates" | "actions">("installed");
 
   const packagesQuery = useQuery({
     queryKey: ["linux-ui", server.id, "packages"],
@@ -2106,116 +2099,100 @@ function PackagesWindow({
     enabled: active && Boolean(packageManager),
     staleTime: 20_000,
   });
-
   const packagesPayload = packagesQuery.data?.packages;
   const installedPackages = useMemo(() => {
     const items = packagesPayload?.installed || [];
     if (!deferredSearch) return items;
     return items.filter((item) => `${item.name} ${item.version}`.toLowerCase().includes(deferredSearch));
   }, [deferredSearch, packagesPayload?.installed]);
-
   const updateLines = useMemo(() => {
     const items = packagesPayload?.updates || [];
     if (!deferredSearch) return items;
     return items.filter((item) => item.toLowerCase().includes(deferredSearch));
   }, [deferredSearch, packagesPayload?.updates]);
 
+  const runPkgCmd = useCallback(async (cmd: string) => {
+    setIsRunning(true);
+    setActionOutput(`$ ${cmd}\n`);
+    try {
+      const { executeServerCommand } = await import("@/lib/api");
+      const res = await executeServerCommand(server.id, cmd);
+      setActionOutput((p) => p + [res.output?.stdout, res.output?.stderr, res.error].filter(Boolean).join("\n") + `\nExit: ${res.output?.exit_code ?? "?"}`);
+      void queryClient.invalidateQueries({ queryKey: ["linux-ui", server.id, "packages"] });
+    } catch (err) {
+      setActionOutput((p) => p + (err instanceof Error ? err.message : "Failed"));
+    } finally { setIsRunning(false); }
+  }, [server.id, queryClient]);
+
+  const installCmd = installPkg.trim() ? (
+    packageManager === "apt" ? `apt-get install -y ${installPkg.trim()}` :
+    packageManager === "yum" ? `yum install -y ${installPkg.trim()}` :
+    packageManager === "dnf" ? `dnf install -y ${installPkg.trim()}` :
+    packageManager === "pacman" ? `pacman -S --noconfirm ${installPkg.trim()}` :
+    packageManager === "apk" ? `apk add ${installPkg.trim()}` : ""
+  ) : "";
+  const updateCmd =
+    packageManager === "apt" ? "apt-get update && apt-get upgrade -y" :
+    packageManager === "yum" ? "yum update -y" :
+    packageManager === "dnf" ? "dnf upgrade -y" :
+    packageManager === "pacman" ? "pacman -Syu --noconfirm" :
+    packageManager === "apk" ? "apk update && apk upgrade" : "";
+
+  if (!packageManager) return <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No package manager detected.</div>;
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="border-b border-border/60 px-4 py-3">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <div className="text-sm font-medium text-foreground">package inspector</div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              Read installed versions and update previews for the package manager available on this host.
-            </div>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Filter packages and updates..."
-              className="h-9 min-w-[16rem] bg-background/95 text-sm"
-            />
-            <Button type="button" size="sm" variant="outline" className="h-9 gap-1.5 text-xs" onClick={() => void packagesQuery.refetch()} disabled={!packageManager}>
-              <RefreshCw className={cn("h-3.5 w-3.5", packagesQuery.isFetching && "animate-spin")} />
-              Refresh
-            </Button>
-          </div>
-        </div>
-        {!packageManager ? (
-          <div className="mt-3 rounded-2xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-            No supported package manager was detected on this host.
-          </div>
-        ) : null}
-        <div className="mt-4 grid gap-2 md:grid-cols-4">
-          <SummaryCard label="Manager" value={(packagesPayload?.package_manager || packageManager || "N/A").toUpperCase()} hint="Detected package toolchain" />
-          <SummaryCard label="Installed" value={packagesPayload?.summary.installed_common || 0} hint="Common packages found" />
-          <SummaryCard label="Updates" value={packagesPayload?.summary.update_candidates || 0} hint="Previewed upgrade lines" alert={(packagesPayload?.summary.update_candidates || 0) > 0} />
-          <SummaryCard label="Scope" value="Read only" hint="Guided actions can come later" />
+      <div className="flex items-center gap-0.5 border-b border-border/60 bg-muted/30 px-2">
+        {(["installed", "updates", "actions"] as const).map((t) => (
+          <button key={t} type="button" onClick={() => setTab(t)} className={cn("px-3 py-2 text-xs", tab === t ? "text-foreground border-b-2 border-primary" : "text-muted-foreground hover:text-foreground")}>
+            {t === "installed" ? `Packages (${installedPackages.length})` : t === "updates" ? "Updates" : "Install / Update"}
+          </button>
+        ))}
+        <div className="ml-auto flex items-center gap-2 py-1">
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filter..." className="h-7 w-40 text-xs" />
+          <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => void packagesQuery.refetch()}>
+            <RefreshCw className={cn("h-3 w-3", packagesQuery.isFetching && "animate-spin")} />
+          </Button>
         </div>
       </div>
-
-      <div className="min-h-0 flex-1 overflow-hidden p-4">
-        <div className="grid h-full min-h-0 gap-4 xl:grid-cols-[20rem_minmax(0,1fr)]">
-          <section className="min-h-0 overflow-hidden rounded-3xl border border-border/70 bg-background/88">
-            <div className="border-b border-border/60 px-4 py-3">
-              <div className="text-sm font-medium text-foreground">Installed packages</div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                Common package set for {packagesPayload?.package_manager || packageManager || "this host"}.
-              </div>
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="p-3">
+          {tab === "installed" && (
+            <div className="space-y-1">
+              {packagesQuery.isLoading ? <div className="py-8 text-center text-sm text-muted-foreground">Loading...</div>
+                : installedPackages.length === 0 ? <div className="py-8 text-center text-sm text-muted-foreground">No matches.</div>
+                : installedPackages.map((item) => <PackageRow key={`${item.name}-${item.version}`} item={item} />)}
             </div>
-            <ScrollArea className="h-full max-h-full">
-              <div className="space-y-2 p-3">
-                {packagesQuery.error instanceof Error ? (
-                  <div className="rounded-2xl border border-destructive/35 bg-destructive/10 px-3 py-3 text-sm text-destructive">
-                    {packagesQuery.error.message}
-                  </div>
-                ) : null}
-                {packagesQuery.isLoading ? (
-                  <div className="rounded-2xl border border-border/70 bg-background/92 px-3 py-6 text-center text-sm text-muted-foreground">
-                    Loading package data...
-                  </div>
-                ) : null}
-                {!packagesQuery.isLoading && installedPackages.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-border/70 bg-background/92 px-3 py-6 text-center text-sm text-muted-foreground">
-                    No installed packages match the current filter.
-                  </div>
-                ) : null}
-                {installedPackages.map((item) => (
-                  <PackageRow key={`${item.name}-${item.version}`} item={item} />
-                ))}
-              </div>
-            </ScrollArea>
-          </section>
-
-          <section className="grid min-h-0 gap-4 lg:grid-rows-[minmax(0,1fr)_12rem]">
-            <div className="min-h-0 overflow-hidden rounded-3xl border border-border/70 bg-background/88">
-              <div className="border-b border-border/60 px-4 py-3">
-                <div className="text-sm font-medium text-foreground">Update preview</div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  Short preview from the current package manager. This is informational and does not change the host.
+          )}
+          {tab === "updates" && (
+            <pre className="whitespace-pre-wrap font-mono text-[11px] leading-5 text-foreground">{updateLines.length > 0 ? updateLines.join("\n") : "No updates available."}</pre>
+          )}
+          {tab === "actions" && (
+            <div className="space-y-3">
+              <div className="rounded-xl border border-border/70 bg-background/90 p-3">
+                <div className="text-xs font-medium text-foreground mb-2">Install Package</div>
+                <div className="flex items-center gap-2">
+                  <Input value={installPkg} onChange={(e) => setInstallPkg(e.target.value)} placeholder="e.g. nginx htop" className="h-8 flex-1 text-xs font-mono"
+                    onKeyDown={(e) => { if (e.key === "Enter" && installCmd) void runPkgCmd(installCmd); }} />
+                  <Button type="button" size="sm" className="h-8 text-xs" disabled={!installCmd || isRunning} onClick={() => void runPkgCmd(installCmd)}>Install</Button>
                 </div>
               </div>
-              <ScrollArea className="h-full">
-                <pre className="whitespace-pre-wrap break-words px-4 py-4 font-mono text-[12px] leading-5 text-foreground">
-                  {updateLines.length > 0
-                    ? updateLines.join("\n")
-                    : packagesQuery.isLoading
-                    ? "Loading package updates..."
-                    : "No update preview lines are available."}
-                </pre>
-              </ScrollArea>
+              <div className="rounded-xl border border-border/70 bg-background/90 p-3">
+                <div className="text-xs font-medium text-foreground mb-2">System Update</div>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 rounded bg-muted px-2 py-1.5 text-[11px] text-muted-foreground font-mono">{updateCmd}</code>
+                  <Button type="button" size="sm" variant="outline" className="h-8 text-xs" disabled={isRunning} onClick={() => void runPkgCmd(updateCmd)}>Update</Button>
+                </div>
+              </div>
+              {actionOutput && (
+                <div className="rounded-xl border border-border/70 bg-card p-3">
+                  <pre className="max-h-48 overflow-auto whitespace-pre-wrap font-mono text-[11px] leading-5 text-foreground/80">{actionOutput}</pre>
+                </div>
+              )}
             </div>
-
-            <div className="rounded-3xl border border-border/70 bg-card/88 p-4 text-xs leading-5 text-muted-foreground">
-              <div className="text-sm font-medium text-foreground">Operational notes</div>
-              <div className="mt-2">This window is intentionally read-only for now. It gives you version visibility before guided package actions are introduced.</div>
-              <div className="mt-2">Different distros expose updates differently, so the preview is best-effort and capability-aware.</div>
-            </div>
-          </section>
+          )}
         </div>
-      </div>
+      </ScrollArea>
     </div>
   );
 }
