@@ -3040,6 +3040,11 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
     focusApp(appId);
   }, [appMap, focusApp]);
 
+  const openFileInEditor = useCallback((path: string) => {
+    setPendingEditorPath(path);
+    launchApp("text-editor");
+  }, [launchApp]);
+
   const closeApp = useCallback((appId: WorkspaceAppId) => {
     const nextOpenApps = openAppsRef.current.filter((item) => item !== appId);
     openAppsRef.current = nextOpenApps;
