@@ -139,7 +139,7 @@ const WINDOW_MARGIN = 16;
 const MIN_WINDOW_WIDTH = 420;
 const MIN_WINDOW_HEIGHT = 280;
 const MAXIMIZED_WINDOW_MARGIN = 10;
-const APP_IDS: WorkspaceAppId[] = ["files", "overview", "services", "processes", "logs", "disk", "network", "docker", "packages"];
+const APP_IDS: WorkspaceAppId[] = ["files", "overview", "services", "processes", "logs", "disk", "network", "docker", "packages", "text-editor", "quick-run", "settings"];
 
 function formatUptime(seconds: number | null) {
   if (!seconds || seconds <= 0) return "Unknown";
