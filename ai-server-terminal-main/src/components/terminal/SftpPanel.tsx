@@ -120,7 +120,7 @@ function entryIcon(entry: SftpEntry) {
 }
 
 export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function SftpPanel(
-  { server, active = true }: SftpPanelProps,
+  { server, active = true, onOpenInEditor }: SftpPanelProps,
   ref,
 ) {
   const { toast } = useToast();
