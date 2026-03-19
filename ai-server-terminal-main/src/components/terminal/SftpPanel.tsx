@@ -708,18 +708,81 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
                 <FileCode2 className="mr-1 h-3.5 w-3.5" />
                 Edit
               </Button>
+              {onOpenInEditor ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs"
+                  onClick={() => selectedEntry && !selectedEntry.is_dir && onOpenInEditor(selectedEntry.path)}
+                  disabled={!selectedEntry || selectedEntry.is_dir}
+                >
+                  <ExternalLink className="mr-1 h-3.5 w-3.5" />
+                  Open in Editor
+                </Button>
+              ) : null}
               <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={handleRename} disabled={!selectedEntry}>
                 <Pencil className="mr-1 h-3.5 w-3.5" />
                 Rename
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs"
+                onClick={() => {
+                  if (!selectedEntry) return;
+                  const newPerms = prompt(`chmod for ${selectedEntry.name}:`, selectedEntry.permissions || "644");
+                  if (!newPerms) return;
+                  void executeServerCommand(server.id, `chmod ${newPerms} ${JSON.stringify(selectedEntry.path)}`).then((res) => {
+                    if (res.success) {
+                      toast({ title: "Permissions changed", description: `${selectedEntry.name} → ${newPerms}` });
+                      refreshDirectory();
+                    } else {
+                      toast({ variant: "destructive", description: res.error || "chmod failed" });
+                    }
+                  });
+                }}
+                disabled={!selectedEntry}
+              >
+                <Shield className="mr-1 h-3.5 w-3.5" />
+                chmod
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs"
+                onClick={() => {
+                  if (!selectedEntry) return;
+                  const newOwner = prompt(`chown for ${selectedEntry.name} (user:group):`, "");
+                  if (!newOwner) return;
+                  const flag = selectedEntry.is_dir ? "-R " : "";
+                  void executeServerCommand(server.id, `chown ${flag}${newOwner} ${JSON.stringify(selectedEntry.path)}`).then((res) => {
+                    if (res.success) {
+                      toast({ title: "Owner changed", description: `${selectedEntry.name} → ${newOwner}` });
+                      refreshDirectory();
+                    } else {
+                      toast({ variant: "destructive", description: res.error || "chown failed" });
+                    }
+                  });
+                }}
+                disabled={!selectedEntry}
+              >
+                <User className="mr-1 h-3.5 w-3.5" />
+                chown
               </Button>
               <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={handleDelete} disabled={!selectedEntry}>
                 <Trash2 className="mr-1 h-3.5 w-3.5" />
                 Delete
               </Button>
             </div>
-            <div className="mt-2 text-[11px] text-muted-foreground">
-              Drag and drop files into the terminal or this panel to upload into <span className="font-mono">{currentPath}</span>.
-            </div>
+            {selectedEntry && (
+              <div className="mt-2 flex items-center gap-3 text-[11px] text-muted-foreground font-mono">
+                <span>{selectedEntry.permissions || "---"}</span>
+                <span>{selectedEntry.name}</span>
+              </div>
+            )}
           </div>
         </div>
 
