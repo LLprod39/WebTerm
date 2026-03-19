@@ -79,7 +79,7 @@ import {
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-type WorkspaceAppId = "files" | "overview" | "services" | "processes" | "logs" | "disk" | "network" | "docker" | "packages";
+type WorkspaceAppId = "files" | "overview" | "services" | "processes" | "logs" | "disk" | "network" | "docker" | "packages" | "text-editor" | "quick-run" | "settings";
 type WorkspaceAppStatus = "live" | "ready" | "next" | "unavailable";
 
 interface LinuxUiPanelProps {
