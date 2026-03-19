@@ -558,12 +558,14 @@ function SettingsSection({
   children: ReactNode;
 }) {
   return (
-    <section className="space-y-3 rounded-xl border border-border bg-secondary/20 p-4">
-      <div>
-        <h4 className="text-sm font-semibold text-foreground">{title}</h4>
-        <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+    <section className="space-y-2.5">
+      <div className="px-0.5">
+        <h4 className="text-[13px] font-semibold text-foreground">{title}</h4>
+        <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">{description}</p>
       </div>
-      {children}
+      <div className="rounded-lg border border-border/50 bg-secondary/15 p-3">
+        {children}
+      </div>
     </section>
   );
 }
@@ -580,10 +582,10 @@ function ToggleRow({
   onCheckedChange: (checked: boolean) => void;
 }) {
   return (
-    <div className="flex items-start justify-between gap-3 rounded-lg border border-border/60 bg-background/80 px-3 py-2.5">
+    <div className="flex items-center justify-between gap-3 py-1.5">
       <div className="min-w-0">
-        <div className="text-sm font-medium text-foreground">{title}</div>
-        <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+        <div className="text-[13px] font-medium text-foreground">{title}</div>
+        <p className="mt-0.5 text-[11px] text-muted-foreground">{description}</p>
       </div>
       <Switch checked={checked} onCheckedChange={onCheckedChange} />
     </div>
@@ -591,7 +593,7 @@ function ToggleRow({
 }
 
 function InputLabel({ children }: { children: ReactNode }) {
-  return <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{children}</label>;
+  return <label className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{children}</label>;
 }
 
 export function AiPanel({
