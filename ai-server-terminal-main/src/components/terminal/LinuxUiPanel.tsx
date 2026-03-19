@@ -3243,6 +3243,9 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
                         {appId === "network" ? <NetworkWindow server={server} active={active} networkEnabled={Boolean(availableApps?.network)} /> : null}
                         {appId === "docker" ? <DockerWindow server={server} active={active} dockerEnabled={Boolean(availableApps?.docker)} /> : null}
                         {appId === "packages" ? <PackagesWindow server={server} active={active} packageManager={capabilities?.package_manager || ""} /> : null}
+                        {appId === "text-editor" ? <TextEditorWindow server={server} active={active && activeApp === "text-editor"} /> : null}
+                        {appId === "quick-run" ? <QuickRunWindow server={server} active={active && activeApp === "quick-run"} /> : null}
+                        {appId === "settings" ? <SystemSettingsWindow server={server} active={active && activeApp === "settings"} /> : null}
                       </WorkspaceWindow>
                     );
                   })}
