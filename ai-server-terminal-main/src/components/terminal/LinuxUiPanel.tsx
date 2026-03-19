@@ -162,9 +162,9 @@ function capabilityPills(capabilities: LinuxUiCapabilities | undefined) {
 }
 
 function statusClass(status: WorkspaceAppStatus) {
-  if (status === "live") return "border-emerald-500/20 bg-emerald-500/10 text-emerald-300";
-  if (status === "ready") return "border-primary/20 bg-primary/10 text-primary";
-  if (status === "next") return "border-amber-500/20 bg-amber-500/10 text-amber-300";
+  if (status === "live") return "border-emerald-500/30 bg-emerald-500/10 text-emerald-400";
+  if (status === "ready") return "border-primary/30 bg-primary/10 text-primary";
+  if (status === "next") return "border-amber-500/30 bg-amber-500/10 text-amber-400";
   return "border-border bg-muted text-muted-foreground";
 }
 
@@ -281,49 +281,28 @@ function pickTopVisibleApp(
 
 function DesktopIcon({
   title,
-  subtitle,
   icon,
   onOpen,
   status,
-  active,
-  open,
 }: {
   title: string;
-  subtitle: string;
   icon: ReactNode;
   onOpen: () => void;
   status: WorkspaceAppStatus;
-  active?: boolean;
-  open?: boolean;
 }) {
-  const badgeLabel = active ? "active" : open ? "open" : status;
-  const badgeClass = active
-    ? "border-primary/30 bg-primary/15 text-primary"
-    : open
-      ? "border-sky-500/25 bg-sky-500/10 text-sky-300"
-      : statusClass(status);
-
   return (
     <button
       type="button"
-      onClick={onOpen}
+      onDoubleClick={onOpen}
       className={cn(
-        "group flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left transition-all",
-        active
-          ? "border-primary/35 bg-primary/12 shadow-[0_18px_35px_-24px_rgba(0,0,0,0.85)]"
-          : "border-border/80 bg-card/96 hover:border-primary/25 hover:bg-card",
+        "group flex w-20 flex-col items-center gap-1.5 rounded-lg p-2 text-center transition-colors hover:bg-primary/10",
+        status === "unavailable" && "opacity-40 pointer-events-none",
       )}
     >
-      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border/80 bg-background/95 text-foreground shadow-[0_12px_24px_-20px_rgba(0,0,0,0.9)] group-hover:border-primary/35 group-hover:bg-primary/10 group-hover:text-primary">
+      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-card/80 text-foreground shadow-sm border border-border/60 group-hover:bg-primary/15 group-hover:text-primary group-hover:border-primary/30 transition-colors">
         {icon}
       </div>
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium text-foreground">{title}</div>
-        <div className="mt-1 line-clamp-2 text-[11px] leading-4 text-muted-foreground">{subtitle}</div>
-      </div>
-      <span className={cn("shrink-0 rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide", badgeClass)}>
-        {badgeLabel}
-      </span>
+      <span className="text-[11px] leading-tight text-foreground/80 group-hover:text-foreground line-clamp-2">{title}</span>
     </button>
   );
 }
@@ -346,65 +325,17 @@ function TaskbarButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex min-w-36 items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs transition-colors",
+        "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-colors",
         active
-          ? "border-primary/35 bg-primary/15 text-foreground shadow-[0_14px_25px_-18px_rgba(0,0,0,0.9)]"
+          ? "bg-primary/20 text-foreground"
           : minimized
-            ? "border-border/80 bg-background/90 text-muted-foreground hover:bg-secondary/90 hover:text-foreground"
-            : "border-border/80 bg-card/95 text-muted-foreground hover:bg-secondary/90 hover:text-foreground",
+            ? "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground"
+            : "bg-card/60 text-muted-foreground hover:bg-card hover:text-foreground",
       )}
     >
-      <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-border/70 bg-background">{icon}</span>
-      <span className="truncate">{title}</span>
-    </button>
-  );
-}
-
-function WorkspaceDockAppButton({
-  title,
-  subtitle,
-  icon,
-  status,
-  active,
-  open,
-  onOpen,
-}: {
-  title: string;
-  subtitle: string;
-  icon: ReactNode;
-  status: WorkspaceAppStatus;
-  active?: boolean;
-  open?: boolean;
-  onOpen: () => void;
-}) {
-  const badgeLabel = active ? "active" : open ? "open" : status;
-  const badgeClass = active
-    ? "border-primary/35 bg-primary/15 text-primary"
-    : open
-      ? "border-sky-500/30 bg-sky-500/12 text-sky-300"
-      : statusClass(status);
-
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className={cn(
-        "group flex min-w-[15rem] max-w-[16.5rem] items-center gap-3 rounded-[1.15rem] border px-3 py-3 text-left transition-all",
-        active
-          ? "border-primary/35 bg-primary/12 shadow-[0_18px_42px_-28px_rgba(0,0,0,0.95)]"
-          : "border-border/80 bg-slate-950/92 hover:border-primary/25 hover:bg-slate-900/96",
-      )}
-    >
-      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border/80 bg-background/95 text-foreground shadow-[0_12px_24px_-20px_rgba(0,0,0,0.95)] group-hover:border-primary/35 group-hover:bg-primary/10 group-hover:text-primary">
-        {icon}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium text-foreground">{title}</div>
-        <div className="mt-1 line-clamp-2 text-[11px] leading-4 text-muted-foreground">{subtitle}</div>
-      </div>
-      <span className={cn("shrink-0 rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide", badgeClass)}>
-        {badgeLabel}
-      </span>
+      <span className="flex h-5 w-5 items-center justify-center [&>svg]:h-3.5 [&>svg]:w-3.5">{icon}</span>
+      <span className="max-w-24 truncate">{title}</span>
+      {active && <span className="ml-auto h-1 w-1 rounded-full bg-primary" />}
     </button>
   );
 }
@@ -462,64 +393,56 @@ function WorkspaceWindow({
         <section
           onMouseDown={onFocus}
           className={cn(
-            "relative flex min-h-0 flex-col overflow-hidden border border-border/90 bg-[linear-gradient(180deg,rgba(18,25,39,0.99),rgba(11,17,28,0.985))] shadow-[0_28px_100px_-48px_rgba(0,0,0,0.98)]",
+            "relative flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-lg",
             desktopMode ? "absolute" : "relative",
-            maximized ? "rounded-[1.1rem]" : "rounded-[1.35rem]",
-            active ? "ring-1 ring-primary/20" : "",
-            dragging || resizing ? "shadow-[0_30px_100px_-40px_rgba(0,0,0,1)]" : "",
+            active ? "ring-1 ring-primary/25 shadow-xl" : "",
+            dragging || resizing ? "shadow-2xl" : "",
             className,
           )}
           style={style}
         >
+          {/* Compact KDE-like title bar */}
           <header
             onPointerDown={onHeaderPointerDown}
             onDoubleClick={desktopMode ? onHeaderDoubleClick : undefined}
             className={cn(
-              "flex items-center justify-between border-b border-border/75 bg-slate-900/95 px-4 py-3 select-none",
+              "flex h-9 items-center justify-between border-b border-border/80 bg-muted/50 px-2.5 select-none",
               desktopMode && !maximized ? "cursor-grab active:cursor-grabbing" : "",
             )}
           >
-            <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/75 bg-background text-foreground">
-                {icon}
-              </div>
-              <div className="min-w-0">
-                <div className="truncate text-sm font-semibold text-foreground">{title}</div>
-                <div className="truncate text-[11px] text-muted-foreground">{subtitle}</div>
-              </div>
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="flex h-5 w-5 items-center justify-center text-muted-foreground [&>svg]:h-3.5 [&>svg]:w-3.5">{icon}</span>
+              <span className="truncate text-xs font-medium text-foreground">{title}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className={cn("rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide", statusClass(status))}>
-                {status}
-              </span>
+            <div className="flex items-center gap-0.5">
               <button
                 type="button"
                 data-no-window-drag="true"
                 onClick={onMinimize}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-border/75 bg-background/92 text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
+                className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 aria-label={`Minimize ${title}`}
               >
-                <Minus className="h-4 w-4" />
+                <Minus className="h-3 w-3" />
               </button>
               {desktopMode ? (
                 <button
                   type="button"
                   data-no-window-drag="true"
                   onClick={onToggleMaximize}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-border/75 bg-background text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
+                  className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   aria-label={maximized ? `Restore ${title}` : `Maximize ${title}`}
                 >
-                  {maximized ? <Copy className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
+                  {maximized ? <Copy className="h-3 w-3" /> : <Square className="h-3 w-3" />}
                 </button>
               ) : null}
               <button
                 type="button"
                 data-no-window-drag="true"
                 onClick={onClose}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-border/75 bg-background text-muted-foreground transition-colors hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive"
                 aria-label={`Close ${title}`}
               >
-                <X className="h-4 w-4" />
+                <X className="h-3 w-3" />
               </button>
             </div>
           </header>
@@ -528,27 +451,22 @@ function WorkspaceWindow({
             <div
               data-no-window-drag="true"
               onPointerDown={onResizePointerDown}
-              className="absolute bottom-0 right-0 h-5 w-5 cursor-se-resize"
+              className="absolute bottom-0 right-0 h-4 w-4 cursor-se-resize"
               aria-hidden="true"
             >
-              <div className="absolute bottom-1.5 right-1.5 h-2.5 w-2.5 rounded-sm border-b-2 border-r-2 border-border/80" />
+              <div className="absolute bottom-1 right-1 h-2 w-2 border-b-2 border-r-2 border-border/60" />
             </div>
           ) : null}
         </section>
       </ContextMenuTrigger>
-      <ContextMenuContent className="w-56 rounded-xl border-border bg-background/98">
+      <ContextMenuContent className="w-48 rounded-lg border-border bg-card">
         <ContextMenuLabel>{title}</ContextMenuLabel>
-        <ContextMenuItem onSelect={onFocus}>Focus Window</ContextMenuItem>
-        <ContextMenuItem onSelect={onMinimize}>{minimized ? "Restore From Taskbar" : "Minimize"}</ContextMenuItem>
-        {desktopMode ? <ContextMenuItem onSelect={onToggleMaximize}>{maximized ? "Restore Window" : "Maximize Window"}</ContextMenuItem> : null}
-        {desktopMode ? <ContextMenuItem onSelect={onResetPosition}>Reset Window Position</ContextMenuItem> : null}
+        <ContextMenuItem onSelect={onFocus}>Focus</ContextMenuItem>
+        <ContextMenuItem onSelect={onMinimize}>{minimized ? "Restore" : "Minimize"}</ContextMenuItem>
+        {desktopMode ? <ContextMenuItem onSelect={onToggleMaximize}>{maximized ? "Restore" : "Maximize"}</ContextMenuItem> : null}
+        {desktopMode ? <ContextMenuItem onSelect={onResetPosition}>Reset Position</ContextMenuItem> : null}
         <ContextMenuSeparator />
-        <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={onClose}>
-          Close Window
-        </ContextMenuItem>
-        <ContextMenuLabel className="pt-2 text-[11px] font-normal text-muted-foreground">
-          {appId}
-        </ContextMenuLabel>
+        <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={onClose}>Close</ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   );
@@ -3183,361 +3101,195 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
+      {/* Desktop area — takes all space above taskbar */}
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(38,166,154,0.12),transparent_32%),radial-gradient(circle_at_bottom_right,rgba(15,118,110,0.14),transparent_36%),linear-gradient(180deg,rgba(11,18,32,1),rgba(9,14,24,1))]" />
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-[linear-gradient(180deg,rgba(56,189,248,0.05),transparent)]" />
+        {/* Subtle desktop wallpaper effect */}
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(var(--primary)/0.06),transparent_60%)]" />
 
-        <header className="relative z-10 border-b border-border/70 bg-background/96 px-4 py-3">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="min-w-0">
-              <div className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground">Linux Workspace</div>
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-                <h2 className="truncate text-lg font-semibold text-foreground">{server.name}</h2>
-                <span className="rounded-full border border-border/75 bg-card/95 px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
-                  {server.username}@{server.host}:{server.port}
-                </span>
-                {capabilities?.os_name ? (
-                  <span className="rounded-full border border-border/75 bg-card/95 px-2 py-0.5 text-[10px] text-muted-foreground">
-                    {capabilities.os_name}
-                  </span>
-                ) : null}
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Full desktop-style workspace inside the platform theme. Windows can be moved, resized, minimized, and restored without dropping back to the shell.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              {onClose ? (
-                <Button type="button" size="sm" variant="outline" className="h-8 bg-card/95 text-xs" onClick={onClose}>
-                  Exit Workspace
-                </Button>
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <div ref={workspaceCanvasRef} className="relative z-10 h-full min-h-0 overflow-y-auto p-3 lg:overflow-hidden lg:p-4">
+              {server.server_type !== "ssh" ? (
+                <div className="rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">
+                  Linux Workspace is available only for SSH servers.
+                </div>
               ) : null}
-            </div>
-          </div>
-        </header>
 
-        <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden">
-          <aside className="border-b border-border/70 bg-slate-950/96 px-4 py-4">
-            <div className="flex h-full min-h-0 flex-col">
-              <div className="flex flex-col gap-4 pb-3 xl:flex-row xl:items-end xl:justify-between">
-                <div>
-                  <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Workspace Dock</div>
-                  <div className="mt-1 text-sm font-medium text-foreground">Apps and windows stay inside the same workspace surface.</div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    Launch tools from this dock instead of a detached side rail.
+              {server.server_type === "ssh" && errorMessage ? (
+                <div className="mb-3 rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                  {errorMessage}
+                </div>
+              ) : null}
+
+              {server.server_type === "ssh" && (capabilitiesQuery.isLoading || overviewQuery.isLoading) ? (
+                <div className="flex h-full min-h-[22rem] items-center justify-center">
+                  <div className="rounded-xl border border-border bg-card px-8 py-10 text-center">
+                    <RefreshCw className="mx-auto mb-3 h-5 w-5 animate-spin text-primary" />
+                    <div className="text-sm font-medium text-foreground">Loading workspace...</div>
+                    <div className="mt-1 text-xs text-muted-foreground">Collecting host capabilities</div>
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button type="button" size="sm" variant="outline" className="h-9 bg-background/95 text-xs" onClick={refresh}>
-                    <RefreshCw className={cn("mr-1 h-3.5 w-3.5", (capabilitiesQuery.isFetching || overviewQuery.isFetching) && "animate-spin")} />
-                    Refresh
-                  </Button>
-                  <Button type="button" size="sm" variant="outline" className="h-9 bg-background/95 text-xs" onClick={rearrangeOpenWindows} disabled={openApps.length === 0}>
-                    Rearrange Windows
-                  </Button>
-                  <Button type="button" size="sm" variant="outline" className="h-9 bg-background/95 text-xs" onClick={minimizeAllWindows} disabled={openApps.length === 0}>
-                    Minimize All
-                  </Button>
-                </div>
-              </div>
-              <ScrollArea className="min-h-0 flex-1">
-                <div className="flex w-max min-w-full gap-3 pb-1 pr-4">
-                  {desktopApps.map((app) => (
-                    <ContextMenu key={app.id}>
-                      <ContextMenuTrigger asChild>
-                        <div>
-                          <WorkspaceDockAppButton
+              ) : null}
+
+              {server.server_type === "ssh" && !capabilitiesQuery.isLoading && !overviewQuery.isLoading ? (
+                <div className="relative min-h-full gap-3 lg:h-full">
+                  {/* Desktop icons grid — shown when no windows are open */}
+                  {openApps.length === 0 ? (
+                    <div className="flex h-full items-start justify-start p-4">
+                      <div className="grid grid-cols-4 gap-1 sm:grid-cols-5 lg:grid-cols-6">
+                        {desktopApps.map((app) => (
+                          <DesktopIcon
+                            key={app.id}
                             title={app.title}
-                            subtitle={app.subtitle}
                             icon={app.icon}
                             status={app.status}
-                            active={activeApp === app.id && !windowStates[app.id]?.minimized}
-                            open={openApps.includes(app.id)}
                             onOpen={() => launchApp(app.id)}
                           />
-                        </div>
-                      </ContextMenuTrigger>
-                      <ContextMenuContent className="w-56 rounded-xl border-border bg-background/98">
-                        <ContextMenuLabel>{app.title}</ContextMenuLabel>
-                        <ContextMenuItem onSelect={() => launchApp(app.id)} disabled={app.status === "unavailable"}>
-                          {openApps.includes(app.id) ? "Focus Window" : "Open"}
-                        </ContextMenuItem>
-                        {openApps.includes(app.id) ? <ContextMenuItem onSelect={() => toggleMaximizeApp(app.id)}>{windowStates[app.id]?.maximized ? "Restore Window" : "Maximize Window"}</ContextMenuItem> : null}
-                        {openApps.includes(app.id) ? (
-                          <ContextMenuItem onSelect={() => resetWindowPosition(app.id)}>
-                            Reset Window Position
-                          </ContextMenuItem>
-                        ) : null}
-                        {openApps.includes(app.id) ? (
-                          <ContextMenuItem onSelect={() => closeApp(app.id)} className="text-destructive focus:text-destructive">
-                            Close Window
-                          </ContextMenuItem>
-                        ) : null}
-                        <ContextMenuSeparator />
-                        <ContextMenuLabel className="pt-2 text-[11px] font-normal text-muted-foreground">
-                          {app.status === "unavailable" ? "Unavailable on this host" : app.subtitle}
-                        </ContextMenuLabel>
-                      </ContextMenuContent>
-                    </ContextMenu>
-                  ))}
-                </div>
-              </ScrollArea>
-            </div>
-          </aside>
-
-          <main className="relative min-h-0 flex-1 overflow-hidden px-4 py-4">
-            <div className="relative h-full min-h-0 overflow-hidden rounded-[1.75rem] border border-border/80 bg-slate-950/92 shadow-[0_30px_110px_-62px_rgba(0,0,0,1)]">
-              <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.02),transparent_20%,transparent_82%,rgba(255,255,255,0.02))]" />
-              <div className="absolute inset-0 opacity-15 [background-image:linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:24px_24px]" />
-
-              <ContextMenu>
-                <ContextMenuTrigger asChild>
-                  <div ref={workspaceCanvasRef} className="relative z-10 h-full min-h-0 overflow-y-auto p-4 lg:overflow-hidden lg:p-5">
-                {server.server_type !== "ssh" ? (
-                  <div className="rounded-3xl border border-border bg-card/95 p-6 text-sm text-muted-foreground">
-                    Linux Workspace is available only for SSH servers.
-                  </div>
-                ) : null}
-
-                {server.server_type === "ssh" && errorMessage ? (
-                  <div className="mb-4 rounded-3xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
-                    {errorMessage}
-                  </div>
-                ) : null}
-
-                {server.server_type === "ssh" && (capabilitiesQuery.isLoading || overviewQuery.isLoading) ? (
-                  <div className="flex h-full min-h-[22rem] items-center justify-center">
-                    <div className="rounded-3xl border border-border/70 bg-card/96 px-8 py-10 text-center shadow-[0_24px_80px_-45px_rgba(0,0,0,0.95)]">
-                      <RefreshCw className="mx-auto mb-3 h-5 w-5 animate-spin text-primary" />
-                      <div className="text-sm font-medium text-foreground">Booting Linux Workspace</div>
-                      <div className="mt-1 text-xs text-muted-foreground">Collecting host capabilities and preparing desktop windows...</div>
-                    </div>
-                  </div>
-                ) : null}
-
-                {server.server_type === "ssh" && !capabilitiesQuery.isLoading && !overviewQuery.isLoading ? (
-                  <div className="relative min-h-full gap-4 lg:h-full">
-                    {openApps.length === 0 ? (
-                      <div className="flex h-full min-h-[30rem] items-center justify-center">
-                        <div className="w-full max-w-5xl rounded-[2rem] border border-border/75 bg-slate-950/94 p-6 shadow-[0_28px_90px_-48px_rgba(0,0,0,0.98)]">
-                          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                            <div>
-                              <div className="text-sm font-semibold text-foreground">Workspace ready</div>
-                              <div className="mt-1 text-xs text-muted-foreground">
-                                Open a tool from the dock or launch one of the panels below. Windows now use the main canvas instead of wasting the center area.
-                              </div>
-                            </div>
-                            <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-                              <span className="rounded-full border border-border/70 bg-background/94 px-2.5 py-1">{server.username}@{server.host}</span>
-                              {capabilities?.os_name ? <span className="rounded-full border border-border/70 bg-background/94 px-2.5 py-1">{capabilities.os_name}</span> : null}
-                              {capabilities?.package_manager ? <span className="rounded-full border border-border/70 bg-background/94 px-2.5 py-1">{capabilities.package_manager}</span> : null}
-                            </div>
-                          </div>
-
-                          <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                            {desktopApps.map((app) => (
-                              <DesktopIcon
-                                key={app.id}
-                                title={app.title}
-                                subtitle={app.subtitle}
-                                icon={app.icon}
-                                status={app.status}
-                                active={false}
-                                open={false}
-                                onOpen={() => launchApp(app.id)}
-                              />
-                            ))}
-                          </div>
-                        </div>
+                        ))}
                       </div>
-                    ) : null}
+                    </div>
+                  ) : null}
 
-                    {visibleWindowApps.map((appId) => {
-                      const app = appMap[appId];
-                      if (!app) return null;
+                  {/* Floating windows */}
+                  {visibleWindowApps.map((appId) => {
+                    const app = appMap[appId];
+                    if (!app) return null;
 
-                      return (
-                        <WorkspaceWindow
-                          key={appId}
-                          appId={appId}
-                          title={app.title}
-                          subtitle={app.subtitle}
-                          icon={app.icon}
-                          status={app.status}
-                          active={activeApp === appId}
-                          minimized={Boolean(windowStates[appId]?.minimized)}
-                          maximized={Boolean(windowStates[appId]?.maximized)}
-                          desktopMode={isDesktopShell}
-                          dragging={dragState?.appId === appId}
-                          resizing={resizeState?.appId === appId}
-                          style={getWindowStyle(appId)}
-                          className={cn(mobileWindowClass(appId), isDesktopShell && "absolute")}
-                          onFocus={() => focusApp(appId)}
-                          onMinimize={() => minimizeApp(appId)}
-                          onToggleMaximize={() => toggleMaximizeApp(appId)}
-                          onResetPosition={() => resetWindowPosition(appId)}
-                          onClose={() => closeApp(appId)}
-                          onHeaderPointerDown={(event) => handleWindowHeaderPointerDown(appId, event)}
-                          onHeaderDoubleClick={() => toggleMaximizeApp(appId)}
-                          onResizePointerDown={(event) => handleWindowResizePointerDown(appId, event)}
-                        >
-                          {appId === "files" ? (
-                            <SftpPanel server={server} active={active && activeApp === "files"} />
-                          ) : null}
-
-                          {appId === "overview" ? (
-                            <OverviewWindow
-                              overview={overviewQuery.data?.overview}
-                              capabilities={capabilities}
-                              onOpenFiles={() => launchApp("files")}
-                              onOpenServices={() => launchApp("services")}
-                              onOpenDisk={() => launchApp("disk")}
-                              onOpenLogs={() => launchApp("logs")}
-                            />
-                          ) : null}
-
-                          {appId === "services" ? (
-                            <ServicesWindow
-                              server={server}
-                              active={active}
-                              servicesEnabled={Boolean(availableApps?.services)}
-                              logsEnabled={Boolean(availableApps?.logs)}
-                              onOpenLogs={() => launchApp("logs")}
-                            />
-                          ) : null}
-
-                          {appId === "processes" ? (
-                            <ProcessesWindow
-                              server={server}
-                              active={active}
-                            />
-                          ) : null}
-
-                          {appId === "logs" ? (
-                            <LogsWindow
-                              server={server}
-                              active={active}
-                              logsEnabled={Boolean(availableApps?.logs)}
-                            />
-                          ) : null}
-
-                          {appId === "disk" ? (
-                            <DiskWindow
-                              server={server}
-                              active={active}
-                              diskEnabled={Boolean(availableApps?.disk)}
-                            />
-                          ) : null}
-
-                          {appId === "network" ? (
-                            <NetworkWindow
-                              server={server}
-                              active={active}
-                              networkEnabled={Boolean(availableApps?.network)}
-                            />
-                          ) : null}
-
-                          {appId === "docker" ? (
-                            <DockerWindow
-                              server={server}
-                              active={active}
-                              dockerEnabled={Boolean(availableApps?.docker)}
-                            />
-                          ) : null}
-
-                          {appId === "packages" ? (
-                            <PackagesWindow
-                              server={server}
-                              active={active}
-                              packageManager={capabilities?.package_manager || ""}
-                            />
-                          ) : null}
-                        </WorkspaceWindow>
-                      );
-                    })}
-                  </div>
-                ) : null}
-                  </div>
-                </ContextMenuTrigger>
-                <ContextMenuContent className="w-60 rounded-xl border-border bg-background/98">
-                  <ContextMenuLabel>Workspace</ContextMenuLabel>
-                  <ContextMenuItem onSelect={refresh}>Refresh Workspace</ContextMenuItem>
-                  <ContextMenuItem onSelect={() => launchApp("files")}>Open Files</ContextMenuItem>
-                  <ContextMenuItem onSelect={() => launchApp("overview")}>Open Overview</ContextMenuItem>
-                  <ContextMenuItem onSelect={() => launchApp("services")} disabled={!availableApps?.services}>
-                    Open Services
-                  </ContextMenuItem>
-                  <ContextMenuItem onSelect={() => launchApp("processes")}>Open Processes</ContextMenuItem>
-                  <ContextMenuItem onSelect={() => launchApp("logs")}>Open Logs</ContextMenuItem>
-                  <ContextMenuSeparator />
-                  <ContextMenuItem onSelect={rearrangeOpenWindows}>Rearrange Windows</ContextMenuItem>
-                  <ContextMenuItem onSelect={minimizeAllWindows} disabled={openApps.length === 0}>
-                    Minimize All Windows
-                  </ContextMenuItem>
-                  <ContextMenuSeparator />
-                  <ContextMenuItem
-                    onSelect={closeAllWindows}
-                    disabled={openApps.length === 0}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    Close All Windows
-                  </ContextMenuItem>
-                </ContextMenuContent>
-              </ContextMenu>
+                    return (
+                      <WorkspaceWindow
+                        key={appId}
+                        appId={appId}
+                        title={app.title}
+                        subtitle={app.subtitle}
+                        icon={app.icon}
+                        status={app.status}
+                        active={activeApp === appId}
+                        minimized={Boolean(windowStates[appId]?.minimized)}
+                        maximized={Boolean(windowStates[appId]?.maximized)}
+                        desktopMode={isDesktopShell}
+                        dragging={dragState?.appId === appId}
+                        resizing={resizeState?.appId === appId}
+                        style={getWindowStyle(appId)}
+                        className={cn(mobileWindowClass(appId), isDesktopShell && "absolute")}
+                        onFocus={() => focusApp(appId)}
+                        onMinimize={() => minimizeApp(appId)}
+                        onToggleMaximize={() => toggleMaximizeApp(appId)}
+                        onResetPosition={() => resetWindowPosition(appId)}
+                        onClose={() => closeApp(appId)}
+                        onHeaderPointerDown={(event) => handleWindowHeaderPointerDown(appId, event)}
+                        onHeaderDoubleClick={() => toggleMaximizeApp(appId)}
+                        onResizePointerDown={(event) => handleWindowResizePointerDown(appId, event)}
+                      >
+                        {appId === "files" ? (
+                          <SftpPanel server={server} active={active && activeApp === "files"} />
+                        ) : null}
+                        {appId === "overview" ? (
+                          <OverviewWindow
+                            overview={overviewQuery.data?.overview}
+                            capabilities={capabilities}
+                            onOpenFiles={() => launchApp("files")}
+                            onOpenServices={() => launchApp("services")}
+                            onOpenDisk={() => launchApp("disk")}
+                            onOpenLogs={() => launchApp("logs")}
+                          />
+                        ) : null}
+                        {appId === "services" ? (
+                          <ServicesWindow server={server} active={active} servicesEnabled={Boolean(availableApps?.services)} logsEnabled={Boolean(availableApps?.logs)} onOpenLogs={() => launchApp("logs")} />
+                        ) : null}
+                        {appId === "processes" ? <ProcessesWindow server={server} active={active} /> : null}
+                        {appId === "logs" ? <LogsWindow server={server} active={active} logsEnabled={Boolean(availableApps?.logs)} /> : null}
+                        {appId === "disk" ? <DiskWindow server={server} active={active} diskEnabled={Boolean(availableApps?.disk)} /> : null}
+                        {appId === "network" ? <NetworkWindow server={server} active={active} networkEnabled={Boolean(availableApps?.network)} /> : null}
+                        {appId === "docker" ? <DockerWindow server={server} active={active} dockerEnabled={Boolean(availableApps?.docker)} /> : null}
+                        {appId === "packages" ? <PackagesWindow server={server} active={active} packageManager={capabilities?.package_manager || ""} /> : null}
+                      </WorkspaceWindow>
+                    );
+                  })}
+                </div>
+              ) : null}
             </div>
-          </main>
+          </ContextMenuTrigger>
+          <ContextMenuContent className="w-52 rounded-lg border-border bg-card">
+            <ContextMenuLabel>Desktop</ContextMenuLabel>
+            {desktopApps.map((app) => (
+              <ContextMenuItem key={app.id} onSelect={() => launchApp(app.id)} disabled={app.status === "unavailable"}>
+                {app.title}
+              </ContextMenuItem>
+            ))}
+            <ContextMenuSeparator />
+            <ContextMenuItem onSelect={refresh}>Refresh</ContextMenuItem>
+            <ContextMenuItem onSelect={rearrangeOpenWindows} disabled={openApps.length === 0}>Rearrange Windows</ContextMenuItem>
+            <ContextMenuItem onSelect={minimizeAllWindows} disabled={openApps.length === 0}>Show Desktop</ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem onSelect={closeAllWindows} disabled={openApps.length === 0} className="text-destructive focus:text-destructive">
+              Close All
+            </ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
+      </div>
+
+      {/* KDE-style bottom taskbar */}
+      <footer className="relative z-20 flex h-11 items-center gap-1 border-t border-border bg-card/95 px-2 backdrop-blur-sm">
+        {/* App launcher button */}
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-8 w-8 shrink-0 p-0 text-primary hover:bg-primary/15"
+              onClick={() => {
+                if (openApps.length === 0) {
+                  launchApp("overview");
+                } else {
+                  minimizeAllWindows();
+                }
+              }}
+            >
+              <Monitor className="h-4 w-4" />
+            </Button>
+          </ContextMenuTrigger>
+          <ContextMenuContent className="w-48 rounded-lg border-border bg-card">
+            <ContextMenuLabel className="text-[11px]">{server.name}</ContextMenuLabel>
+            {desktopApps.map((app) => (
+              <ContextMenuItem key={app.id} onSelect={() => launchApp(app.id)} disabled={app.status === "unavailable"}>
+                <span className="mr-2 flex h-4 w-4 items-center justify-center [&>svg]:h-3 [&>svg]:w-3">{app.icon}</span>
+                {app.title}
+              </ContextMenuItem>
+            ))}
+            <ContextMenuSeparator />
+            <ContextMenuItem onSelect={refresh}>Refresh</ContextMenuItem>
+            {onClose ? <ContextMenuItem onSelect={onClose} className="text-destructive focus:text-destructive">Exit Workspace</ContextMenuItem> : null}
+          </ContextMenuContent>
+        </ContextMenu>
+
+        <div className="mx-1 h-5 w-px bg-border/60" />
+
+        {/* Running app buttons */}
+        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+          {taskbarApps.map(({ app, minimized }) => {
+            if (!app) return null;
+            return (
+              <TaskbarButton
+                key={app.id}
+                title={app.title}
+                icon={app.icon}
+                active={activeApp === app.id && !minimized}
+                minimized={minimized}
+                onClick={() => toggleTaskbarApp(app.id)}
+              />
+            );
+          })}
         </div>
 
-        <footer className="relative z-10 border-t border-border/70 bg-slate-950/96 px-4 py-3">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-2 rounded-2xl border border-border/75 bg-background/94 px-3 py-2 text-xs text-muted-foreground">
-              <HardDrive className="h-3.5 w-3.5 text-primary" />
-              <span>
-                {openApps.length} window{openApps.length === 1 ? "" : "s"} open
-                {openApps.length !== visibleWindowApps.length ? `, ${visibleWindowApps.length} visible` : ""}
-              </span>
-            </div>
-            <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1 lg:justify-end">
-              {taskbarApps.map(({ app, minimized }) => {
-                if (!app) return null;
-                return (
-                  <ContextMenu key={app.id}>
-                    <ContextMenuTrigger asChild>
-                      <div>
-                        <TaskbarButton
-                          title={app.title}
-                          icon={app.icon}
-                          active={activeApp === app.id && !minimized}
-                          minimized={minimized}
-                          onClick={() => toggleTaskbarApp(app.id)}
-                        />
-                      </div>
-                    </ContextMenuTrigger>
-                    <ContextMenuContent className="w-56 rounded-xl border-border bg-background/98">
-                      <ContextMenuLabel>{app.title}</ContextMenuLabel>
-                      <ContextMenuItem onSelect={() => focusApp(app.id)}>
-                        {minimized ? "Restore Window" : "Bring To Front"}
-                      </ContextMenuItem>
-                      <ContextMenuItem onSelect={() => minimizeApp(app.id)}>
-                        {minimized ? "Keep Minimized" : "Minimize"}
-                      </ContextMenuItem>
-                      <ContextMenuItem onSelect={() => toggleMaximizeApp(app.id)}>
-                        {windowStates[app.id]?.maximized ? "Restore Window" : "Maximize Window"}
-                      </ContextMenuItem>
-                      <ContextMenuItem onSelect={() => resetWindowPosition(app.id)}>Reset Window Position</ContextMenuItem>
-                      <ContextMenuSeparator />
-                      <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => closeApp(app.id)}>
-                        Close Window
-                      </ContextMenuItem>
-                    </ContextMenuContent>
-                  </ContextMenu>
-                );
-              })}
-            </div>
-          </div>
-        </footer>
-      </div>
+        {/* System tray — server info */}
+        <div className="mx-1 h-5 w-px bg-border/60" />
+        <div className="flex shrink-0 items-center gap-2 text-[11px] text-muted-foreground">
+          <span className="hidden sm:inline font-mono">{server.username}@{server.host}</span>
+          {capabilities?.os_name ? <span className="hidden lg:inline">· {capabilities.os_name}</span> : null}
+          <span className="tabular-nums">{openApps.length}w</span>
+        </div>
+      </footer>
     </div>
   );
 }

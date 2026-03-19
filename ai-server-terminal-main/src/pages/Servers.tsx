@@ -457,7 +457,7 @@ export default function Servers() {
     if (!vars) return text;
 
     for (const [name, value] of Object.entries(vars)) {
-      text = text.replaceAll(`{${name}}`, String(value));
+      text = text.split(`{${name}}`).join(String(value));
     }
 
     return text;
