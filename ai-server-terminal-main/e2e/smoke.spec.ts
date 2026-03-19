@@ -39,6 +39,8 @@ test.describe("Smoke scenarios", () => {
     await expect(page.getByRole("heading", { name: "Pipeline Workspace" })).toBeVisible();
 
     await page.getByRole("button", { name: /^Run$/ }).first().click();
-    expect(harness.getCalls("/api/studio/pipelines/101/run/", "POST").length).toBeGreaterThan(0);
+    await expect
+      .poll(() => harness.getCalls("/api/studio/pipelines/101/run/", "POST").length)
+      .toBeGreaterThan(0);
   });
 });
