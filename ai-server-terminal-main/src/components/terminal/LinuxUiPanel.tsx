@@ -2846,6 +2846,27 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
       status: capabilities?.package_manager ? "live" : "unavailable",
       icon: <Package className="h-5 w-5" />,
     },
+    {
+      id: "text-editor",
+      title: "Text Editor",
+      subtitle: "Edit config files directly",
+      status: "live" as WorkspaceAppStatus,
+      icon: <FileCode2 className="h-5 w-5" />,
+    },
+    {
+      id: "quick-run",
+      title: "Quick Run",
+      subtitle: "Execute commands with output",
+      status: "live" as WorkspaceAppStatus,
+      icon: <Terminal className="h-5 w-5" />,
+    },
+    {
+      id: "settings",
+      title: "Settings",
+      subtitle: "System info, users, cron, security",
+      status: "live" as WorkspaceAppStatus,
+      icon: <Settings className="h-5 w-5" />,
+    },
   ], [availableApps?.disk, availableApps?.docker, availableApps?.logs, availableApps?.network, availableApps?.services, capabilities?.package_manager]);
 
   const appMap = useMemo(
