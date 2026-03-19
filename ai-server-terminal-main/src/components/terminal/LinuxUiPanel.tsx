@@ -3157,22 +3157,20 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
 
               {server.server_type === "ssh" && !capabilitiesQuery.isLoading && !overviewQuery.isLoading ? (
                 <div className="relative min-h-full gap-3 lg:h-full">
-                  {/* Desktop icons grid — shown when no windows are open */}
-                  {openApps.length === 0 ? (
-                    <div className="flex h-full items-start justify-start p-4">
-                      <div className="grid grid-cols-4 gap-1 sm:grid-cols-5 lg:grid-cols-6">
-                        {desktopApps.map((app) => (
-                          <DesktopIcon
-                            key={app.id}
-                            title={app.title}
-                            icon={app.icon}
-                            status={app.status}
-                            onOpen={() => launchApp(app.id)}
-                          />
-                        ))}
-                      </div>
+                  {/* Desktop icons grid — always visible */}
+                  <div className="absolute inset-0 flex items-start justify-start p-4 pointer-events-none z-0">
+                    <div className="grid grid-cols-4 gap-1 sm:grid-cols-5 lg:grid-cols-6 pointer-events-auto">
+                      {desktopApps.map((app) => (
+                        <DesktopIcon
+                          key={app.id}
+                          title={app.title}
+                          icon={app.icon}
+                          status={app.status}
+                          onOpen={() => launchApp(app.id)}
+                        />
+                      ))}
                     </div>
-                  ) : null}
+                  </div>
 
                   {/* Floating windows */}
                   {visibleWindowApps.map((appId) => {
