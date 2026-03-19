@@ -95,6 +95,7 @@ interface WorkspaceAppDefinition {
   subtitle: string;
   status: WorkspaceAppStatus;
   icon: ReactNode;
+  hidden?: boolean;
 }
 
 interface WorkspaceWindowState {
