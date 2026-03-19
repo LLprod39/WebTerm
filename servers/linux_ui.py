@@ -53,6 +53,59 @@ printf 'disk_line=%s\n' "$(df -kP / 2>/dev/null | awk 'NR==2 {print $2\",\"$3\",
 printf 'process_count=%s\n' "$(ps aux --no-headers 2>/dev/null | wc -l | tr -d ' ')"
 """
 
+SETTINGS_COMMAND = """
+printf '__GENERAL_HOSTNAME__\n'
+hostname -f 2>/dev/null || hostname 2>/dev/null || true
+printf '\n__GENERAL_TIMEZONE__\n'
+timedatectl show --property=Timezone --value 2>/dev/null || cat /etc/timezone 2>/dev/null || echo unknown
+printf '\n__GENERAL_KERNEL__\n'
+uname -r 2>/dev/null || true
+printf '\n__GENERAL_OS_RELEASE__\n'
+cat /etc/os-release 2>/dev/null | head -5
+printf '\n__GENERAL_UPTIME__\n'
+uptime -p 2>/dev/null || uptime 2>/dev/null || true
+printf '\n__GENERAL_ARCH__\n'
+uname -m 2>/dev/null || true
+printf '\n__GENERAL_CPU__\n'
+printf '%s\n' "$(nproc 2>/dev/null | tr -d '\n') $(awk -F: '/model name/ {gsub(/^[ \t]+/, "", $2); print $2; exit}' /proc/cpuinfo 2>/dev/null)"
+printf '\n__GENERAL_MEMORY__\n'
+free -h 2>/dev/null | awk 'NR==2 {print $2}'
+printf '\n__USERS_CURRENT__\n'
+whoami 2>/dev/null || id -un 2>/dev/null || true
+printf '\n__USERS_LIST__\n'
+awk -F: '$3 >= 1000 && $3 < 65534 { print $1":"$3":"$6":"$7 }' /etc/passwd 2>/dev/null
+printf '\n__USERS_LOGGED_IN__\n'
+who 2>/dev/null || w -h 2>/dev/null || true
+printf '\n__USERS_LAST_LOGINS__\n'
+last -10 2>/dev/null | head -12
+printf '\n__USERS_SUDO_GROUP__\n'
+getent group sudo 2>/dev/null || getent group wheel 2>/dev/null || echo 'N/A'
+printf '\n__CRONTAB_USER__\n'
+crontab -l 2>/dev/null || echo 'No crontab for current user'
+printf '\n__CRONTAB_SYSTEM__\n'
+cat /etc/crontab 2>/dev/null || echo 'No /etc/crontab'
+printf '\n__CRONTAB_DIRS__\n'
+ls -la /etc/cron.d/ 2>/dev/null | tail -20 || echo 'No /etc/cron.d/'
+printf '\n__CRONTAB_TIMERS__\n'
+systemctl list-timers --no-pager 2>/dev/null | head -20 || echo 'systemctl unavailable'
+printf '\n__ENVIRONMENT_VARS__\n'
+env | sort | head -50
+printf '\n__ENVIRONMENT_PATH__\n'
+echo "${PATH:-}" | tr ':' '\n'
+printf '\n__ENVIRONMENT_SHELL__\n'
+echo "${SHELL:-}"
+printf '\n__ENVIRONMENT_LOCALE__\n'
+locale 2>/dev/null | head -5
+printf '\n__SECURITY_SSH_CONFIG__\n'
+grep -E '^(PermitRootLogin|PasswordAuthentication|PubkeyAuthentication|Port|AllowUsers|AllowGroups)' /etc/ssh/sshd_config 2>/dev/null || echo 'Cannot read sshd_config'
+printf '\n__SECURITY_FIREWALL__\n'
+ufw status 2>/dev/null || iptables -L -n --line-numbers 2>/dev/null | head -30 || firewall-cmd --list-all 2>/dev/null || echo 'No firewall tool detected'
+printf '\n__SECURITY_FAILED_LOGINS__\n'
+journalctl -u sshd --no-pager -n 20 --grep='Failed' 2>/dev/null || grep 'Failed' /var/log/auth.log 2>/dev/null | tail -10 || echo 'No failed login data'
+printf '\n__SECURITY_OPEN_PORTS__\n'
+ss -tlnp 2>/dev/null | head -25 || netstat -tlnp 2>/dev/null | head -25 || echo 'Cannot list ports'
+"""
+
 DISK_COMMAND = """
 printf '__MOUNTS__\n'
 df -kP 2>/dev/null | awk 'NR>1 {print $1"\t"$2"\t"$3"\t"$4"\t"$5"\t"$6}'
@@ -244,6 +297,20 @@ def _as_float(value: str | None) -> float | None:
         return float(str(value or "").strip())
     except (TypeError, ValueError):
         return None
+
+
+def _parse_marked_sections(raw: str) -> dict[str, str]:
+    sections: dict[str, list[str]] = {}
+    current: str | None = None
+    for line in str(raw or "").splitlines():
+        marker = re.fullmatch(r"__([A-Z0-9_]+)__", line.strip())
+        if marker:
+            current = marker.group(1)
+            sections.setdefault(current, [])
+            continue
+        if current is not None:
+            sections[current].append(line)
+    return {key: "\n".join(lines).strip() for key, lines in sections.items()}
 
 
 async def _run_command(server: Server, *, secret: str = "", command: str) -> str:
@@ -697,6 +764,9 @@ async def get_linux_ui_capabilities(server: Server, *, secret: str = "") -> dict
             "files": True,
             "terminal": True,
             "ai": True,
+            "text_editor": True,
+            "quick_run": commands["bash"] or commands["sh"],
+            "settings": commands["bash"] or commands["sh"],
             "services": commands["systemctl"],
             "logs": commands["journalctl"],
             "processes": True,
@@ -704,6 +774,63 @@ async def get_linux_ui_capabilities(server: Server, *, secret: str = "") -> dict
             "network": commands["ss"] or commands["ip"],
             "docker": commands["docker"],
             "packages": bool(package_manager),
+        },
+    }
+
+
+async def get_linux_ui_settings(server: Server, *, secret: str = "") -> dict[str, Any]:
+    raw = await _run_command(server, secret=secret, command=SETTINGS_COMMAND)
+    sections = _parse_marked_sections(raw)
+
+    user_accounts = []
+    for line in sections.get("USERS_LIST", "").splitlines():
+        parts = [part.strip() for part in line.split(":", 3)]
+        if len(parts) != 4:
+            continue
+        user_accounts.append(
+            {
+                "name": parts[0],
+                "uid": parts[1],
+                "home": parts[2],
+                "shell": parts[3],
+            }
+        )
+
+    return {
+        "general": {
+            "hostname": sections.get("GENERAL_HOSTNAME", "") or server.host,
+            "timezone": sections.get("GENERAL_TIMEZONE", "") or "unknown",
+            "kernel": sections.get("GENERAL_KERNEL", ""),
+            "os_release": sections.get("GENERAL_OS_RELEASE", ""),
+            "uptime": sections.get("GENERAL_UPTIME", ""),
+            "architecture": sections.get("GENERAL_ARCH", ""),
+            "cpu": sections.get("GENERAL_CPU", ""),
+            "total_memory": sections.get("GENERAL_MEMORY", ""),
+        },
+        "users": {
+            "current_user": sections.get("USERS_CURRENT", "") or server.username,
+            "sudo_group": sections.get("USERS_SUDO_GROUP", "") or "N/A",
+            "accounts": user_accounts,
+            "logged_in": sections.get("USERS_LOGGED_IN", ""),
+            "last_logins": sections.get("USERS_LAST_LOGINS", ""),
+        },
+        "crontab": {
+            "user_crontab": sections.get("CRONTAB_USER", ""),
+            "system_crontab": sections.get("CRONTAB_SYSTEM", ""),
+            "cron_dirs": sections.get("CRONTAB_DIRS", ""),
+            "timers": sections.get("CRONTAB_TIMERS", ""),
+        },
+        "environment": {
+            "shell": sections.get("ENVIRONMENT_SHELL", ""),
+            "locale": sections.get("ENVIRONMENT_LOCALE", ""),
+            "path_directories": [line for line in sections.get("ENVIRONMENT_PATH", "").splitlines() if line.strip()],
+            "variables": sections.get("ENVIRONMENT_VARS", ""),
+        },
+        "security": {
+            "ssh_config": sections.get("SECURITY_SSH_CONFIG", ""),
+            "firewall": sections.get("SECURITY_FIREWALL", ""),
+            "failed_logins": sections.get("SECURITY_FAILED_LOGINS", ""),
+            "listening_ports": sections.get("SECURITY_OPEN_PORTS", ""),
         },
     }
 

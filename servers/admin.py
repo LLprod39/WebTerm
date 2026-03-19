@@ -1,17 +1,18 @@
 from django.contrib import admin
+
 from .models import (
-    Server,
-    ServerGroup,
-    ServerConnection,
-    ServerCommandHistory,
-    ServerGroupMember,
-    ServerGroupTag,
-    ServerGroupSubscription,
-    ServerGroupPermission,
-    ServerHealthCheck,
-    ServerAlert,
-    ServerAgent,
     AgentRun,
+    Server,
+    ServerAgent,
+    ServerAlert,
+    ServerCommandHistory,
+    ServerConnection,
+    ServerGroup,
+    ServerGroupMember,
+    ServerGroupPermission,
+    ServerGroupSubscription,
+    ServerGroupTag,
+    ServerHealthCheck,
 )
 
 
@@ -32,9 +33,9 @@ class ServerAdmin(admin.ModelAdmin):
 
 @admin.register(ServerConnection)
 class ServerConnectionAdmin(admin.ModelAdmin):
-    list_display = ['server', 'user', 'status', 'connected_at', 'disconnected_at']
-    list_filter = ['status', 'connected_at']
-    readonly_fields = ['connected_at', 'disconnected_at']
+    list_display = ['server', 'user', 'status', 'connected_at', 'last_seen_at', 'disconnected_at']
+    list_filter = ['status', 'connected_at', 'last_seen_at']
+    readonly_fields = ['connected_at', 'last_seen_at', 'disconnected_at']
 
 
 @admin.register(ServerCommandHistory)

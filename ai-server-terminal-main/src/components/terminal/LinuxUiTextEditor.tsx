@@ -28,6 +28,7 @@ interface EditorTab {
   content: string;
   originalContent: string;
   encoding: string;
+  isNew: boolean;
   dirty: boolean;
   loading: boolean;
   error: string | null;
@@ -77,6 +78,7 @@ export function TextEditorWindow({
         content: "",
         originalContent: "",
         encoding: "utf-8",
+        isNew: false,
         dirty: false,
         loading: true,
         error: null,
@@ -97,22 +99,41 @@ export function TextEditorWindow({
                   content: res.file.content,
                   originalContent: res.file.content,
                   encoding: res.file.encoding || "utf-8",
+                  isNew: false,
                   loading: false,
                 }
               : t,
           ),
         );
       } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to read file";
+        const isMissingFileError = /не найдены|not found|404/i.test(message);
         setTabs((prev) =>
           prev.map((t) =>
             t.id === id
-              ? { ...t, loading: false, error: err instanceof Error ? err.message : "Failed to read file" }
+              ? isMissingFileError
+                ? {
+                    ...t,
+                    content: "",
+                    originalContent: "",
+                    encoding: "utf-8",
+                    isNew: true,
+                    loading: false,
+                    error: null,
+                  }
+                : { ...t, loading: false, error: message }
               : t,
           ),
         );
+        if (isMissingFileError) {
+          toast({
+            title: "New file",
+            description: `${filePath} will be created when you save it`,
+          });
+        }
       }
     },
-    [server.id, tabs],
+    [server.id, tabs, toast],
   );
 
   useEffect(() => {
@@ -135,7 +156,7 @@ export function TextEditorWindow({
         setTabs((prev) =>
           prev.map((t) =>
             t.id === tabId
-              ? { ...t, originalContent: t.content, dirty: false }
+              ? { ...t, originalContent: t.content, dirty: false, isNew: false }
               : t,
           ),
         );
@@ -264,7 +285,7 @@ export function TextEditorWindow({
             <Input
               value={openPath}
               onChange={(e) => setOpenPath(e.target.value)}
-              placeholder="/etc/nginx/nginx.conf or relative path..."
+              placeholder="/etc/nginx/nginx.conf or relative path (new files are allowed)..."
               className="h-8 flex-1 font-mono text-xs"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && openPath.trim()) {
@@ -281,7 +302,7 @@ export function TextEditorWindow({
               disabled={!openPath.trim()}
               onClick={() => void openFile(openPath.trim())}
             >
-              Open
+              Open / Create
             </Button>
             {tabs.length > 0 && (
               <Button
@@ -373,6 +394,9 @@ export function TextEditorWindow({
               <span className="font-mono truncate max-w-64">{activeTab.path}</span>
               <span>{getLanguageHint(activeTab.filename)}</span>
               <span>{activeTab.encoding}</span>
+              {activeTab.isNew && (
+                <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-400">New file</span>
+              )}
             </>
           )}
         </div>

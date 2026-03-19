@@ -133,6 +133,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
     _stdout_task: Optional[asyncio.Task[None]] = None
     _stderr_task: Optional[asyncio.Task[None]] = None
     _wait_task: Optional[asyncio.Task[None]] = None
+    _connection_heartbeat_task: Optional[asyncio.Task[None]] = None
     _connect_lock: asyncio.Lock
 
     _ai_lock: asyncio.Lock
@@ -356,6 +357,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         self._input_capture_suppress = 0
         self._ai_audit_context: dict[str, Any] = {}
         self._server_connection_id: str | None = None
+        self._connection_heartbeat_task = None
 
         can_servers = await self._user_can_servers(user.id)
         logger.debug("WS connect: user={} can_servers={}", user, can_servers)
@@ -454,6 +456,8 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             await self._handle_ai_clear_memory()
             return
         if msg_type == "ping":
+            if self._server_connection_id:
+                await self._touch_server_connection(self._server_connection_id)
             await self._safe_send_json({"type": "pong"})
             return
 
@@ -495,6 +499,45 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                 e,
                 server_id=getattr(self.server, "id", None),
             )
+
+    @staticmethod
+    def _terminal_session_heartbeat_interval() -> int:
+        try:
+            interval = int(getattr(settings, "SSH_TERMINAL_SESSION_HEARTBEAT_SECONDS", 30) or 30)
+        except Exception:
+            interval = 30
+        return max(interval, 0)
+
+    def _start_connection_heartbeat(self) -> None:
+        if not self._server_connection_id:
+            return
+        interval = self._terminal_session_heartbeat_interval()
+        if interval <= 0:
+            return
+        if self._connection_heartbeat_task and not self._connection_heartbeat_task.done():
+            self._connection_heartbeat_task.cancel()
+        self._connection_heartbeat_task = asyncio.create_task(self._run_connection_heartbeat(interval))
+
+    async def _stop_connection_heartbeat(self) -> None:
+        task = self._connection_heartbeat_task
+        self._connection_heartbeat_task = None
+        if not task or task.done():
+            return
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+    async def _run_connection_heartbeat(self, interval: int) -> None:
+        try:
+            while self._server_connection_id:
+                await asyncio.sleep(interval)
+                if not self._server_connection_id or not (self._ssh_conn or self._ssh_proc):
+                    return
+                await self._touch_server_connection(self._server_connection_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Terminal connection heartbeat failed")
 
     async def _send_ai_event(self, payload: dict[str, Any]) -> None:
         await self._safe_send_json(self._with_ai_run_id(payload))
@@ -595,6 +638,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                     server_id=self.server.id,
                     connection_id=self._server_connection_id,
                 )
+                self._start_connection_heartbeat()
 
                 self._stdout_task = asyncio.create_task(self._stream_reader(self._ssh_proc.stdout, "stdout"))
                 self._stderr_task = asyncio.create_task(self._stream_reader(self._ssh_proc.stderr, "stderr"))
@@ -2520,6 +2564,8 @@ EXIT_CODE: {exit_code}
     async def _disconnect_ssh(self):
         was_connected = bool(self._ssh_conn or self._ssh_proc)
 
+        await self._stop_connection_heartbeat()
+
         # Cancel streaming tasks first to avoid sending on closed socket
         await self._cancel_ai()
         current = asyncio.current_task()
@@ -2788,21 +2834,33 @@ EXIT_CODE: {exit_code}
 
     @database_sync_to_async
     def _register_server_connection(self, user_id: int, server_id: int, connection_id: str) -> None:
+        now = timezone.now()
         ServerConnection.objects.update_or_create(
             connection_id=connection_id,
             defaults={
                 "server_id": server_id,
                 "user_id": user_id,
                 "status": "connected",
+                "last_seen_at": now,
                 "disconnected_at": None,
             },
         )
 
     @database_sync_to_async
+    def _touch_server_connection(self, connection_id: str) -> None:
+        ServerConnection.objects.filter(
+            connection_id=connection_id,
+            status="connected",
+            disconnected_at__isnull=True,
+        ).update(last_seen_at=timezone.now())
+
+    @database_sync_to_async
     def _mark_server_connection_closed(self, connection_id: str) -> None:
+        now = timezone.now()
         ServerConnection.objects.filter(connection_id=connection_id).update(
             status="disconnected",
-            disconnected_at=timezone.now(),
+            last_seen_at=now,
+            disconnected_at=now,
         )
 
     @database_sync_to_async

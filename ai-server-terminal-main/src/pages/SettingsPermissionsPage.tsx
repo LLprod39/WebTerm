@@ -1,128 +1,333 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+
 import {
+  deleteAccessGroupPermission,
   deleteAccessPermission,
+  fetchAccessGroupPermissions,
+  fetchAccessGroups,
   fetchAccessPermissions,
   fetchAccessUsers,
+  updateAccessGroupPermission,
   updateAccessPermission,
+  upsertAccessGroupPermission,
   upsertAccessPermission,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/lib/i18n";
+import {
+  ACCESS_UI_TEXT,
+  getAccessFeatureLabel,
+  localizeAccessFeatures,
+} from "@/lib/accessUiText";
 
-function SummaryPill({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-full border border-transparent bg-background/30 px-3 py-1 text-xs text-muted-foreground">
-      <span className="font-medium text-foreground">{value}</span> {label}
-    </div>
-  );
-}
+const FALLBACK_FEATURES = [
+  { value: "servers", label: "Servers" },
+  { value: "dashboard", label: "Dashboard" },
+  { value: "agents", label: "Agents" },
+  { value: "studio", label: "Studio" },
+  { value: "settings", label: "Settings" },
+  { value: "orchestrator", label: "Orchestrator" },
+  { value: "knowledge_base", label: "Knowledge Base" },
+];
 
 export default function SettingsPermissionsPage() {
+  const { lang } = useI18n();
+  const copy = ACCESS_UI_TEXT[lang].permissions;
+  const common = ACCESS_UI_TEXT[lang].common;
   const queryClient = useQueryClient();
-  const [newUserId, setNewUserId] = useState<number>(0);
-  const [newFeature, setNewFeature] = useState<string>("");
-  const [newAllowed, setNewAllowed] = useState<boolean>(true);
+  const [userForm, setUserForm] = useState({
+    userId: 0,
+    feature: "",
+    allowed: true,
+  });
+  const [groupForm, setGroupForm] = useState({
+    groupId: 0,
+    feature: "",
+    allowed: true,
+  });
 
   const { data: permsData, isLoading, error } = useQuery({
     queryKey: ["access", "permissions"],
     queryFn: fetchAccessPermissions,
   });
-  const { data: usersData } = useQuery({ queryKey: ["access", "users"], queryFn: fetchAccessUsers });
+  const { data: groupPermsData } = useQuery({
+    queryKey: ["access", "group-permissions"],
+    queryFn: fetchAccessGroupPermissions,
+  });
+  const { data: usersData } = useQuery({
+    queryKey: ["access", "users"],
+    queryFn: fetchAccessUsers,
+  });
+  const { data: groupsData } = useQuery({
+    queryKey: ["access", "groups"],
+    queryFn: fetchAccessGroups,
+  });
 
   const permissions = useMemo(() => permsData?.permissions ?? [], [permsData?.permissions]);
-  const features = useMemo(() => permsData?.features ?? [], [permsData?.features]);
+  const groupPermissions = useMemo(
+    () => groupPermsData?.permissions ?? permsData?.group_permissions ?? [],
+    [groupPermsData?.permissions, permsData?.group_permissions],
+  );
+  const features = useMemo(
+    () => localizeAccessFeatures(lang, permsData?.features ?? groupPermsData?.features ?? FALLBACK_FEATURES),
+    [groupPermsData?.features, lang, permsData?.features],
+  );
   const users = useMemo(() => usersData?.users ?? [], [usersData?.users]);
+  const groups = useMemo(() => groupsData?.groups ?? [], [groupsData?.groups]);
 
   useEffect(() => {
-    if (!newUserId && users.length) setNewUserId(users[0].id);
-    if (!newFeature && features.length) setNewFeature(features[0].value);
-  }, [newUserId, newFeature, users, features]);
+    if (!users.length || !features.length) return;
+    setUserForm((current) => ({
+      userId: current.userId || users[0].id,
+      feature: current.feature || features[0].value,
+      allowed: current.allowed,
+    }));
+  }, [features, users]);
+
+  useEffect(() => {
+    if (!groups.length || !features.length) return;
+    setGroupForm((current) => ({
+      groupId: current.groupId || groups[0].id,
+      feature: current.feature || features[0].value,
+      allowed: current.allowed,
+    }));
+  }, [features, groups]);
 
   const reload = async () => {
-    await queryClient.invalidateQueries({ queryKey: ["access", "permissions"] });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["access", "permissions"] }),
+      queryClient.invalidateQueries({ queryKey: ["access", "group-permissions"] }),
+      queryClient.invalidateQueries({ queryKey: ["access", "users"] }),
+      queryClient.invalidateQueries({ queryKey: ["access", "groups"] }),
+    ]);
   };
 
-  const onCreate = async () => {
-    if (!newUserId || !newFeature) return;
-    await upsertAccessPermission({ user_id: newUserId, feature: newFeature, allowed: newAllowed });
+  const createUserPermission = async () => {
+    if (!userForm.userId || !userForm.feature) return;
+    await upsertAccessPermission({
+      user_id: userForm.userId,
+      feature: userForm.feature,
+      allowed: userForm.allowed,
+    });
     await reload();
   };
 
-  const toggleAllowed = async (permId: number, allowed: boolean) => {
+  const createGroupPermission = async () => {
+    if (!groupForm.groupId || !groupForm.feature) return;
+    await upsertAccessGroupPermission({
+      group_id: groupForm.groupId,
+      feature: groupForm.feature,
+      allowed: groupForm.allowed,
+    });
+    await reload();
+  };
+
+  const toggleUserPermission = async (permId: number, allowed: boolean) => {
     await updateAccessPermission(permId, !allowed);
     await reload();
   };
 
-  const remove = async (permId: number) => {
-    if (!confirm("Delete permission?")) return;
+  const toggleGroupPermission = async (permId: number, allowed: boolean) => {
+    await updateAccessGroupPermission(permId, !allowed);
+    await reload();
+  };
+
+  const removeUserPermission = async (permId: number) => {
+    if (!confirm(copy.deleteUserPermission)) return;
     await deleteAccessPermission(permId);
     await reload();
   };
 
-  if (isLoading) return <div className="p-6 text-sm text-muted-foreground">Loading permissions...</div>;
-  if (error) return <div className="p-6 text-sm text-destructive">Failed to load permissions.</div>;
+  const removeGroupPermission = async (permId: number) => {
+    if (!confirm(copy.deleteGroupPermission)) return;
+    await deleteAccessGroupPermission(permId);
+    await reload();
+  };
+
+  if (isLoading) {
+    return <div className="p-6 text-sm text-muted-foreground">{copy.loading}</div>;
+  }
+  if (error) {
+    return <div className="p-6 text-sm text-destructive">{copy.error}</div>;
+  }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
-      <h1 className="text-2xl font-semibold text-foreground">Permissions</h1>
+    <div className="mx-auto max-w-6xl space-y-6 p-6">
+      <div>
+        <h1 className="text-2xl font-semibold text-foreground">{copy.title}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{copy.subtitle}</p>
+      </div>
 
-      <section className="bg-card border border-border rounded-lg p-4 space-y-3">
-        <h2 className="text-sm font-medium">Add / Update Permission</h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <select
-            value={newUserId}
-            onChange={(e) => setNewUserId(Number(e.target.value))}
-            className="bg-secondary border border-border rounded-md px-3 py-2 text-sm"
-          >
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.username}
-              </option>
-            ))}
-          </select>
-          <select
-            value={newFeature}
-            onChange={(e) => setNewFeature(e.target.value)}
-            className="bg-secondary border border-border rounded-md px-3 py-2 text-sm"
-          >
-            {features.map((f) => (
-              <option key={f.value} value={f.value}>
-                {f.label}
-              </option>
-            ))}
-          </select>
-          <select
-            value={newAllowed ? "1" : "0"}
-            onChange={(e) => setNewAllowed(e.target.value === "1")}
-            className="bg-secondary border border-border rounded-md px-3 py-2 text-sm"
-          >
-            <option value="1">Allow</option>
-            <option value="0">Deny</option>
-          </select>
-          <Button onClick={onCreate}>Save</Button>
-        </div>
-      </section>
-
-      <section className="bg-card border border-border rounded-lg divide-y divide-border">
-        {permissions.map((p) => (
-          <div key={p.id} className="p-4 flex items-center gap-3">
-            <div>
-              <div className="font-medium">{p.username}</div>
-              <div className="text-xs text-muted-foreground">
-                {p.feature_display || p.feature} • {p.allowed ? "Allowed" : "Denied"}
-              </div>
-            </div>
-            <div className="ml-auto flex gap-2">
-              <Button size="sm" variant="outline" onClick={() => toggleAllowed(p.id, p.allowed)}>
-                Toggle
-              </Button>
-              <Button size="sm" variant="destructive" onClick={() => remove(p.id)}>
-                Delete
-              </Button>
-            </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <section className="space-y-3 rounded-lg border border-border bg-card p-4">
+          <h2 className="text-sm font-medium text-foreground">{copy.userOverrideTitle}</h2>
+          <div className="grid gap-3 md:grid-cols-4">
+            <select
+              value={userForm.userId}
+              onChange={(e) =>
+                setUserForm((current) => ({ ...current, userId: Number(e.target.value) }))
+              }
+              className="rounded-md border border-border bg-secondary px-3 py-2 text-sm"
+            >
+              {users.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.username}
+                </option>
+              ))}
+            </select>
+            <select
+              value={userForm.feature}
+              onChange={(e) =>
+                setUserForm((current) => ({ ...current, feature: e.target.value }))
+              }
+              className="rounded-md border border-border bg-secondary px-3 py-2 text-sm"
+            >
+              {features.map((feature) => (
+                <option key={feature.value} value={feature.value}>
+                  {feature.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={userForm.allowed ? "1" : "0"}
+              onChange={(e) =>
+                setUserForm((current) => ({ ...current, allowed: e.target.value === "1" }))
+              }
+              className="rounded-md border border-border bg-secondary px-3 py-2 text-sm"
+            >
+              <option value="1">{common.allow}</option>
+              <option value="0">{common.deny}</option>
+            </select>
+            <Button onClick={() => void createUserPermission()} disabled={!users.length || !features.length}>
+              {common.save}
+            </Button>
           </div>
-        ))}
-      </section>
+        </section>
+
+        <section className="space-y-3 rounded-lg border border-border bg-card p-4">
+          <h2 className="text-sm font-medium text-foreground">{copy.groupPolicyTitle}</h2>
+          <div className="grid gap-3 md:grid-cols-4">
+            <select
+              value={groupForm.groupId}
+              onChange={(e) =>
+                setGroupForm((current) => ({ ...current, groupId: Number(e.target.value) }))
+              }
+              className="rounded-md border border-border bg-secondary px-3 py-2 text-sm"
+            >
+              {groups.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={groupForm.feature}
+              onChange={(e) =>
+                setGroupForm((current) => ({ ...current, feature: e.target.value }))
+              }
+              className="rounded-md border border-border bg-secondary px-3 py-2 text-sm"
+            >
+              {features.map((feature) => (
+                <option key={feature.value} value={feature.value}>
+                  {feature.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={groupForm.allowed ? "1" : "0"}
+              onChange={(e) =>
+                setGroupForm((current) => ({ ...current, allowed: e.target.value === "1" }))
+              }
+              className="rounded-md border border-border bg-secondary px-3 py-2 text-sm"
+            >
+              <option value="1">{common.allow}</option>
+              <option value="0">{common.deny}</option>
+            </select>
+            <Button onClick={() => void createGroupPermission()} disabled={!groups.length || !features.length}>
+              {common.save}
+            </Button>
+          </div>
+        </section>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <section className="rounded-lg border border-border bg-card">
+          <div className="border-b border-border px-4 py-3">
+            <h2 className="text-sm font-medium text-foreground">{copy.userListTitle}</h2>
+          </div>
+          <div className="divide-y divide-border">
+            {permissions.length ? (
+              permissions.map((permission) => (
+                <div key={permission.id} className="flex items-center gap-3 px-4 py-3">
+                  <div>
+                    <div className="font-medium text-foreground">{permission.username}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {getAccessFeatureLabel(lang, permission.feature, permission.feature_display)} • {permission.allowed ? common.allowed : common.denied}
+                    </div>
+                  </div>
+                  <div className="ml-auto flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void toggleUserPermission(permission.id, permission.allowed)}
+                    >
+                      {common.toggle}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => void removeUserPermission(permission.id)}
+                    >
+                      {common.delete}
+                    </Button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="px-4 py-5 text-sm text-muted-foreground">{copy.noUserOverrides}</div>
+            )}
+          </div>
+        </section>
+
+        <section className="rounded-lg border border-border bg-card">
+          <div className="border-b border-border px-4 py-3">
+            <h2 className="text-sm font-medium text-foreground">{copy.groupListTitle}</h2>
+          </div>
+          <div className="divide-y divide-border">
+            {groupPermissions.length ? (
+              groupPermissions.map((permission) => (
+                <div key={permission.id} className="flex items-center gap-3 px-4 py-3">
+                  <div>
+                    <div className="font-medium text-foreground">{permission.group_name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {getAccessFeatureLabel(lang, permission.feature, permission.feature_display)} • {permission.allowed ? common.allowed : common.denied}
+                    </div>
+                  </div>
+                  <div className="ml-auto flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void toggleGroupPermission(permission.id, permission.allowed)}
+                    >
+                      {common.toggle}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => void removeGroupPermission(permission.id)}
+                    >
+                      {common.delete}
+                    </Button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="px-4 py-5 text-sm text-muted-foreground">{copy.noGroupPolicies}</div>
+            )}
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

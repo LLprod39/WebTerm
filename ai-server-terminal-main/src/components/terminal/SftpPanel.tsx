@@ -32,10 +32,11 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  chmodServerFile,
+  chownServerFile,
   createServerFolder,
   deleteServerFile,
   downloadServerFile,
-  executeServerCommand,
   listServerFiles,
   readServerTextFile,
   renameServerFile,
@@ -99,6 +100,26 @@ function formatTimestamp(value: number) {
   } catch {
     return "";
   }
+}
+
+function defaultPermissionMode(entry: SftpEntry) {
+  if (entry.permissions_octal) {
+    return entry.permissions_octal.replace(/^0+/, "") || "0";
+  }
+
+  const symbolic = entry.permissions || "";
+  if (symbolic.length < 10) return entry.is_dir ? "755" : "644";
+  const triplets = [symbolic.slice(1, 4), symbolic.slice(4, 7), symbolic.slice(7, 10)];
+  const octal = triplets
+    .map((segment) => {
+      let value = 0;
+      if (segment.includes("r")) value += 4;
+      if (segment.includes("w")) value += 2;
+      if (/[xsStT]/.test(segment)) value += 1;
+      return String(value);
+    })
+    .join("");
+  return octal || (entry.is_dir ? "755" : "644");
 }
 
 function transferStatusLabel(item: TransferItem) {
@@ -731,18 +752,26 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
                 size="sm"
                 variant="outline"
                 className="h-8 text-xs"
-                onClick={() => {
+                onClick={async () => {
                   if (!selectedEntry) return;
-                  const newPerms = prompt(`chmod for ${selectedEntry.name}:`, selectedEntry.permissions || "644");
+                  const newPerms = prompt(`chmod for ${selectedEntry.name}:`, defaultPermissionMode(selectedEntry));
                   if (!newPerms) return;
-                  void executeServerCommand(server.id, `chmod ${newPerms} ${JSON.stringify(selectedEntry.path)}`).then((res) => {
-                    if (res.success) {
-                      toast({ title: "Permissions changed", description: `${selectedEntry.name} → ${newPerms}` });
-                      refreshDirectory();
-                    } else {
-                      toast({ variant: "destructive", description: res.error || "chmod failed" });
-                    }
-                  });
+                  const normalizedMode = newPerms.trim();
+                  if (!/^[0-7]{3,4}$/.test(normalizedMode)) {
+                    toast({ variant: "destructive", description: "Use octal mode like 644 or 0755" });
+                    return;
+                  }
+                  try {
+                    const result = await chmodServerFile(server.id, selectedEntry.path, normalizedMode);
+                    if (!result.success) throw new Error(result.error || "chmod failed");
+                    toast({ title: "Permissions changed", description: `${selectedEntry.name} → ${normalizedMode}` });
+                    refreshDirectory();
+                  } catch (error) {
+                    toast({
+                      variant: "destructive",
+                      description: error instanceof Error ? error.message : "chmod failed",
+                    });
+                  }
                 }}
                 disabled={!selectedEntry}
               >
@@ -754,19 +783,21 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
                 size="sm"
                 variant="outline"
                 className="h-8 text-xs"
-                onClick={() => {
+                onClick={async () => {
                   if (!selectedEntry) return;
                   const newOwner = prompt(`chown for ${selectedEntry.name} (user:group):`, "");
                   if (!newOwner) return;
-                  const flag = selectedEntry.is_dir ? "-R " : "";
-                  void executeServerCommand(server.id, `chown ${flag}${newOwner} ${JSON.stringify(selectedEntry.path)}`).then((res) => {
-                    if (res.success) {
-                      toast({ title: "Owner changed", description: `${selectedEntry.name} → ${newOwner}` });
-                      refreshDirectory();
-                    } else {
-                      toast({ variant: "destructive", description: res.error || "chown failed" });
-                    }
-                  });
+                  try {
+                    const result = await chownServerFile(server.id, selectedEntry.path, newOwner.trim(), selectedEntry.is_dir);
+                    if (!result.success) throw new Error(result.error || "chown failed");
+                    toast({ title: "Owner changed", description: `${selectedEntry.name} → ${newOwner.trim()}` });
+                    refreshDirectory();
+                  } catch (error) {
+                    toast({
+                      variant: "destructive",
+                      description: error instanceof Error ? error.message : "chown failed",
+                    });
+                  }
                 }}
                 disabled={!selectedEntry}
               >

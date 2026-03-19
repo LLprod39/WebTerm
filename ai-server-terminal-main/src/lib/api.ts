@@ -161,6 +161,9 @@ function demoFallback<T>(path: string, _options: RequestInit = {}): T {
           files: true,
           terminal: true,
           ai: true,
+          text_editor: true,
+          quick_run: true,
+          settings: true,
           services: true,
           logs: true,
           processes: true,
@@ -189,6 +192,53 @@ function demoFallback<T>(path: string, _options: RequestInit = {}): T {
         load: { one: 0.24, five: 0.31, fifteen: 0.28 },
         memory: { total_mb: 4096, used_mb: 1380, percent: 33.7 },
         disk: { mount: "/", total_gb: 79.3, used_gb: 24.1, percent: 30.4 },
+      },
+    } as T;
+  }
+  if (path.includes("/ui/settings")) {
+    return {
+      success: true,
+      server: { id: 1, name: "demo-linux", host: "192.168.1.10", username: "demo" },
+      observed_at: new Date().toISOString(),
+      settings: {
+        general: {
+          hostname: "demo-linux.local",
+          timezone: "Asia/Qyzylorda",
+          kernel: "6.8.0-41-generic",
+          os_release: "PRETTY_NAME=\"Ubuntu 24.04 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"",
+          uptime: "up 3 days, 4 hours",
+          architecture: "x86_64",
+          cpu: "8 AMD EPYC Demo vCPU",
+          total_memory: "8.0Gi",
+        },
+        users: {
+          current_user: "demo",
+          sudo_group: "sudo:x:27:demo",
+          accounts: [
+            { name: "demo", uid: "1000", home: "/home/demo", shell: "/bin/bash" },
+            { name: "deploy", uid: "1001", home: "/srv/deploy", shell: "/bin/bash" },
+          ],
+          logged_in: "demo pts/0 2026-03-19 09:42 (192.168.1.15)",
+          last_logins: "demo pts/0 192.168.1.15 Fri Mar 19 09:42   still logged in",
+        },
+        crontab: {
+          user_crontab: "*/5 * * * * /usr/local/bin/health-check",
+          system_crontab: "SHELL=/bin/sh\n17 * * * * root cd / && run-parts --report /etc/cron.hourly",
+          cron_dirs: "-rw-r--r-- 1 root root  72 Mar 19 08:00 certbot\n-rw-r--r-- 1 root root 120 Mar 19 08:05 backups",
+          timers: "Fri 2026-03-19 10:00:00 +05 17min left apt-daily.timer apt-daily.service",
+        },
+        environment: {
+          shell: "/bin/bash",
+          locale: "LANG=en_US.UTF-8\nLC_TIME=en_US.UTF-8",
+          path_directories: ["/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin", "/sbin", "/bin"],
+          variables: "HOME=/home/demo\nLANG=en_US.UTF-8\nSHELL=/bin/bash\nUSER=demo",
+        },
+        security: {
+          ssh_config: "PermitRootLogin no\nPasswordAuthentication no\nPubkeyAuthentication yes\nPort 22",
+          firewall: "Status: active\n22/tcp ALLOW Anywhere\n80/tcp ALLOW Anywhere",
+          failed_logins: "Mar 19 08:17:01 demo-linux sshd[2231]: Failed password for invalid user admin from 203.0.113.17 port 43122 ssh2",
+          listening_ports: "LISTEN 0 128 0.0.0.0:22 0.0.0.0:*\nLISTEN 0 511 0.0.0.0:80 0.0.0.0:*",
+        },
       },
     } as T;
   }
@@ -681,6 +731,60 @@ function demoFallback<T>(path: string, _options: RequestInit = {}): T {
       },
     } as T;
   }
+  if (path.includes("/servers/api/") && path.includes("/files/chmod/")) {
+    let filePath = "/home/demo/deploy.log";
+    try {
+      const body =
+        typeof _options.body === "string" && _options.body
+          ? (JSON.parse(_options.body) as { path?: string })
+          : null;
+      filePath = body?.path || filePath;
+    } catch {
+      // noop
+    }
+    return {
+      success: true,
+      path: filePath.split("/").slice(0, -1).join("/") || "/",
+      entry: {
+        name: filePath.split("/").filter(Boolean).pop() || "deploy.log",
+        path: filePath,
+        kind: "file",
+        is_dir: false,
+        is_symlink: false,
+        size: 18432,
+        permissions: "-rw-r-----",
+        permissions_octal: "0640",
+        modified_at: Math.floor(Date.now() / 1000),
+      },
+    } as T;
+  }
+  if (path.includes("/servers/api/") && path.includes("/files/chown/")) {
+    let filePath = "/home/demo/deploy.log";
+    try {
+      const body =
+        typeof _options.body === "string" && _options.body
+          ? (JSON.parse(_options.body) as { path?: string })
+          : null;
+      filePath = body?.path || filePath;
+    } catch {
+      // noop
+    }
+    return {
+      success: true,
+      path: filePath.split("/").slice(0, -1).join("/") || "/",
+      entry: {
+        name: filePath.split("/").filter(Boolean).pop() || "deploy.log",
+        path: filePath,
+        kind: "file",
+        is_dir: false,
+        is_symlink: false,
+        size: 18432,
+        permissions: "-rw-r--r--",
+        permissions_octal: "0644",
+        modified_at: Math.floor(Date.now() / 1000),
+      },
+    } as T;
+  }
 
   // Settings page
   if (path.includes("/api/settings/activity")) return DEMO_ACTIVITY_LOGS as T;
@@ -747,6 +851,7 @@ function demoFallback<T>(path: string, _options: RequestInit = {}): T {
         is_symlink: false,
         size: 18432,
         permissions: "-rw-r--r--",
+        permissions_octal: "0644",
         modified_at: Math.floor(Date.now() / 1000) - 3600,
       },
       {
@@ -757,6 +862,7 @@ function demoFallback<T>(path: string, _options: RequestInit = {}): T {
         is_symlink: false,
         size: 0,
         permissions: "drwxr-xr-x",
+        permissions_octal: "0755",
         modified_at: Math.floor(Date.now() / 1000) - 86400,
       },
     ],
@@ -767,9 +873,105 @@ function demoFallback<T>(path: string, _options: RequestInit = {}): T {
   if (path.includes("/shares")) return { success: true, shares: [] } as T;
 
   if (path.includes("/api/health")) return { status: "ok" } as T;
-  if (path.includes("/api/access/users")) return { success: true, users: [] } as T;
-  if (path.includes("/api/access/groups")) return { success: true, groups: [] } as T;
-  if (path.includes("/api/access/permissions")) return { success: true, permissions: [] } as T;
+  if (path.includes("/api/access/users")) return {
+    success: true,
+    features: [
+      { value: "servers", label: "Servers" },
+      { value: "dashboard", label: "Dashboard" },
+      { value: "agents", label: "Agents" },
+      { value: "studio", label: "Studio" },
+      { value: "settings", label: "Settings" },
+      { value: "orchestrator", label: "Orchestrator" },
+      { value: "knowledge_base", label: "Knowledge Base" },
+    ],
+    users: [
+      {
+        id: 1,
+        username: "demo",
+        email: "demo@example.com",
+        is_staff: true,
+        is_active: true,
+        is_superuser: false,
+        access_profile: "admin_full",
+        groups: [{ id: 1, name: "Operators" }],
+        effective_permissions: {
+          servers: true,
+          dashboard: true,
+          agents: true,
+          studio: true,
+          settings: true,
+          orchestrator: true,
+          knowledge_base: true,
+        },
+        explicit_permissions: {},
+        group_permissions: { servers: true, studio: true },
+        group_permission_sources: {
+          servers: [{ group_id: 1, group_name: "Operators", allowed: true }],
+          studio: [{ group_id: 1, group_name: "Operators", allowed: true }],
+        },
+        permission_sources: {
+          servers: "group_explicit",
+          dashboard: "staff_default",
+          agents: "staff_default",
+          studio: "group_explicit",
+          settings: "staff_default",
+          orchestrator: "staff_default",
+          knowledge_base: "staff_default",
+        },
+      },
+    ],
+  } as T;
+  if (path.includes("/api/access/groups")) return {
+    success: true,
+    features: [
+      { value: "servers", label: "Servers" },
+      { value: "dashboard", label: "Dashboard" },
+      { value: "agents", label: "Agents" },
+      { value: "studio", label: "Studio" },
+      { value: "settings", label: "Settings" },
+      { value: "orchestrator", label: "Orchestrator" },
+      { value: "knowledge_base", label: "Knowledge Base" },
+    ],
+    groups: [
+      {
+        id: 1,
+        name: "Operators",
+        member_count: 1,
+        members: [{ id: 1, username: "demo" }],
+        explicit_permissions: { servers: true, studio: true },
+      },
+    ],
+  } as T;
+  if (path.includes("/api/access/group-permissions")) return {
+    success: true,
+    features: [
+      { value: "servers", label: "Servers" },
+      { value: "dashboard", label: "Dashboard" },
+      { value: "agents", label: "Agents" },
+      { value: "studio", label: "Studio" },
+      { value: "settings", label: "Settings" },
+      { value: "orchestrator", label: "Orchestrator" },
+      { value: "knowledge_base", label: "Knowledge Base" },
+    ],
+    permissions: [
+      { id: 1, group_id: 1, group_name: "Operators", feature: "servers", feature_display: "Servers", allowed: true },
+      { id: 2, group_id: 1, group_name: "Operators", feature: "studio", feature_display: "Studio", allowed: true },
+    ],
+  } as T;
+  if (path.includes("/api/access/permissions")) return {
+    success: true,
+    features: [
+      { value: "servers", label: "Servers" },
+      { value: "dashboard", label: "Dashboard" },
+      { value: "agents", label: "Agents" },
+      { value: "studio", label: "Studio" },
+      { value: "settings", label: "Settings" },
+      { value: "orchestrator", label: "Orchestrator" },
+      { value: "knowledge_base", label: "Knowledge Base" },
+    ],
+    permissions: [],
+    group_permissions: [],
+  } as T;
   if (path.includes("/api/studio/templates")) return [] as T;
   if (path.includes("/api/studio/pipelines")) return [] as T;
   if (path.includes("/api/studio/runs")) return [] as T;
@@ -792,6 +994,8 @@ export interface AuthUser {
   username: string;
   email: string;
   is_staff: boolean;
+  access_profile?: string;
+  permission_sources?: Record<string, string>;
   features: {
     servers: boolean;
     dashboard: boolean;
@@ -799,6 +1003,7 @@ export interface AuthUser {
     studio: boolean;
     settings: boolean;
     orchestrator: boolean;
+    knowledge_base?: boolean;
   };
 }
 
@@ -865,6 +1070,7 @@ export interface SftpEntry {
   is_symlink: boolean;
   size: number;
   permissions: string;
+  permissions_octal?: string;
   modified_at: number;
 }
 
@@ -924,6 +1130,9 @@ export interface LinuxUiCapabilities {
     files: boolean;
     terminal: boolean;
     ai: boolean;
+    text_editor: boolean;
+    quick_run: boolean;
+    settings: boolean;
     services: boolean;
     logs: boolean;
     processes: boolean;
@@ -966,6 +1175,58 @@ export interface LinuxUiCapabilitiesResponse {
   observed_at: string;
   server: Pick<FrontendServer, "id" | "name" | "host" | "username">;
   capabilities: LinuxUiCapabilities;
+}
+
+export interface LinuxUiSettingsAccount {
+  name: string;
+  uid: string;
+  home: string;
+  shell: string;
+}
+
+export interface LinuxUiSettingsSnapshot {
+  general: {
+    hostname: string;
+    timezone: string;
+    kernel: string;
+    os_release: string;
+    uptime: string;
+    architecture: string;
+    cpu: string;
+    total_memory: string;
+  };
+  users: {
+    current_user: string;
+    sudo_group: string;
+    accounts: LinuxUiSettingsAccount[];
+    logged_in: string;
+    last_logins: string;
+  };
+  crontab: {
+    user_crontab: string;
+    system_crontab: string;
+    cron_dirs: string;
+    timers: string;
+  };
+  environment: {
+    shell: string;
+    locale: string;
+    path_directories: string[];
+    variables: string;
+  };
+  security: {
+    ssh_config: string;
+    firewall: string;
+    failed_logins: string;
+    listening_ports: string;
+  };
+}
+
+export interface LinuxUiSettingsResponse {
+  success: boolean;
+  observed_at: string;
+  server: Pick<FrontendServer, "id" | "name" | "host" | "username">;
+  settings: LinuxUiSettingsSnapshot;
 }
 
 export interface LinuxUiOverviewResponse {
@@ -1344,6 +1605,9 @@ export interface AccessUser {
   groups?: Array<{ id: number; name: string }>;
   effective_permissions?: Record<string, boolean>;
   explicit_permissions?: Record<string, boolean>;
+  group_permissions?: Record<string, boolean>;
+  group_permission_sources?: Record<string, Array<{ group_id: number; group_name: string; allowed: boolean }>>;
+  permission_sources?: Record<string, string>;
 }
 
 export interface AccessGroup {
@@ -1351,12 +1615,22 @@ export interface AccessGroup {
   name: string;
   member_count: number;
   members?: Array<{ id: number; username: string }>;
+  explicit_permissions?: Record<string, boolean>;
 }
 
 export interface AccessPermission {
   id: number;
   user_id: number;
   username: string;
+  feature: string;
+  feature_display?: string;
+  allowed: boolean;
+}
+
+export interface AccessGroupPermission {
+  id: number;
+  group_id: number;
+  group_name: string;
   feature: string;
   feature_display?: string;
   allowed: boolean;
@@ -1590,6 +1864,10 @@ export async function fetchLinuxUiCapabilities(serverId: number) {
   return apiFetch<LinuxUiCapabilitiesResponse>(`/servers/api/${serverId}/ui/capabilities/`);
 }
 
+export async function fetchLinuxUiSettings(serverId: number) {
+  return apiFetch<LinuxUiSettingsResponse>(`/servers/api/${serverId}/ui/settings/`);
+}
+
 export async function fetchLinuxUiOverview(serverId: number) {
   return apiFetch<LinuxUiOverviewResponse>(`/servers/api/${serverId}/ui/overview/`);
 }
@@ -1688,6 +1966,20 @@ export async function writeServerTextFile(serverId: number, path: string, conten
   return apiFetch<SftpTextFileResponse>(`/servers/api/${serverId}/files/write/`, {
     method: "POST",
     body: JSON.stringify({ path, content }),
+  });
+}
+
+export async function chmodServerFile(serverId: number, path: string, mode: string) {
+  return apiFetch<SftpMutationResponse>(`/servers/api/${serverId}/files/chmod/`, {
+    method: "POST",
+    body: JSON.stringify({ path, mode }),
+  });
+}
+
+export async function chownServerFile(serverId: number, path: string, owner: string, recursive = false) {
+  return apiFetch<SftpMutationResponse>(`/servers/api/${serverId}/files/chown/`, {
+    method: "POST",
+    body: JSON.stringify({ path, owner, recursive }),
   });
 }
 
@@ -2114,7 +2406,7 @@ export async function fetchSettingsActivity(limit = 30, days = 14) {
 }
 
 export async function fetchAccessUsers() {
-  return apiFetch<{ users: AccessUser[] }>("/api/access/users/");
+  return apiFetch<{ users: AccessUser[]; features?: Array<{ value: string; label: string }> }>("/api/access/users/");
 }
 
 export async function createAccessUser(payload: Record<string, unknown>) {
@@ -2143,7 +2435,7 @@ export async function setAccessUserPassword(userId: number, password: string) {
 }
 
 export async function fetchAccessGroups() {
-  return apiFetch<{ groups: AccessGroup[] }>("/api/access/groups/");
+  return apiFetch<{ groups: AccessGroup[]; features?: Array<{ value: string; label: string }> }>("/api/access/groups/");
 }
 
 export async function createAccessGroup(payload: Record<string, unknown>) {
@@ -2165,7 +2457,11 @@ export async function deleteAccessGroup(groupId: number) {
 }
 
 export async function fetchAccessPermissions() {
-  return apiFetch<{ permissions: AccessPermission[]; features: Array<{ value: string; label: string }> }>(
+  return apiFetch<{
+    permissions: AccessPermission[];
+    group_permissions?: AccessGroupPermission[];
+    features: Array<{ value: string; label: string }>;
+  }>(
     "/api/access/permissions/",
   );
 }
@@ -2186,6 +2482,32 @@ export async function updateAccessPermission(permId: number, allowed: boolean) {
 
 export async function deleteAccessPermission(permId: number) {
   return apiFetch<{ success: boolean; message: string }>(`/api/access/permissions/${permId}/`, {
+    method: "DELETE",
+  });
+}
+
+export async function fetchAccessGroupPermissions() {
+  return apiFetch<{ permissions: AccessGroupPermission[]; features: Array<{ value: string; label: string }> }>(
+    "/api/access/group-permissions/",
+  );
+}
+
+export async function upsertAccessGroupPermission(payload: { group_id: number; feature: string; allowed: boolean }) {
+  return apiFetch<{ success: boolean; permission: AccessGroupPermission }>("/api/access/group-permissions/", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAccessGroupPermission(permId: number, allowed: boolean) {
+  return apiFetch<{ success: boolean; permission: AccessGroupPermission }>(`/api/access/group-permissions/${permId}/`, {
+    method: "PUT",
+    body: JSON.stringify({ allowed }),
+  });
+}
+
+export async function deleteAccessGroupPermission(permId: number) {
+  return apiFetch<{ success: boolean; message: string }>(`/api/access/group-permissions/${permId}/`, {
     method: "DELETE",
   });
 }

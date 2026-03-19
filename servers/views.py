@@ -21,7 +21,6 @@ from .models import (
     Server,
     ServerShare,
     ServerGroup,
-    ServerConnection,
     ServerCommandHistory,
     ServerKnowledge,
     ServerGroupMember,
@@ -33,7 +32,7 @@ from .models import (
     ServerAgent,
     AgentRun,
 )
-from app.runtime_limits import get_agent_run_limit_error
+from app.runtime_limits import get_active_terminal_connections_queryset, get_agent_run_limit_error
 from app.tools.ssh_tools import ssh_manager
 from core_ui.activity import log_user_activity
 from core_ui.models import UserActivityLog
@@ -43,6 +42,7 @@ from .agent_background import launch_agent_run_background, launch_plan_execution
 from .agent_runtime import get_engine_for_agent, get_engine_for_run, update_runtime_control
 from .linux_ui import (
     get_linux_ui_capabilities,
+    get_linux_ui_settings,
     get_linux_ui_disk,
     get_linux_ui_docker,
     get_linux_ui_docker_logs,
@@ -58,6 +58,8 @@ from .linux_ui import (
     run_linux_ui_service_action,
 )
 from .sftp import (
+    change_owner,
+    change_permissions,
     create_directory,
     delete_path,
     download_file,
@@ -97,7 +99,7 @@ def server_list(request):
     shares_by_server = {s.server_id: s for s in active_shares}
 
     connected_server_ids = set(
-        ServerConnection.objects.filter(server_id__in=server_ids, status="connected").values_list("server_id", flat=True)
+        get_active_terminal_connections_queryset().filter(server_id__in=server_ids).values_list("server_id", flat=True)
     )
 
     groups = list(ServerGroup.objects.filter(user=request.user).order_by('name'))
@@ -155,7 +157,7 @@ def frontend_bootstrap(request):
     shares_by_server = {s.server_id: s for s in active_shares}
 
     connected_server_ids = set(
-        ServerConnection.objects.filter(server_id__in=server_ids, status="connected").values_list("server_id", flat=True)
+        get_active_terminal_connections_queryset().filter(server_id__in=server_ids).values_list("server_id", flat=True)
     )
 
     servers_payload = []
@@ -1050,6 +1052,41 @@ def server_linux_ui_capabilities(request, server_id):
 @login_required
 @require_feature('servers')
 @require_http_methods(["GET"])
+def server_linux_ui_settings(request, server_id):
+    server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+    try:
+        _require_ssh_server(server)
+        secret = _resolve_server_secret(server, request, {})
+        settings_snapshot = async_to_sync(get_linux_ui_settings)(server, secret=secret or "")
+        log_user_activity(
+            user=request.user,
+            request=request,
+            category='servers',
+            action='server_linux_ui_settings',
+            status=UserActivityLog.STATUS_SUCCESS,
+            description=f'Retrieved Linux UI settings snapshot for "{server.name}"',
+            entity_type='server',
+            entity_id=server.id,
+            entity_name=server.name,
+        )
+        return JsonResponse({
+            "success": True,
+            "server": {
+                "id": server.id,
+                "name": server.name,
+                "host": server.host,
+                "username": server.username,
+            },
+            "settings": settings_snapshot,
+            "observed_at": timezone.now().isoformat(),
+        })
+    except Exception as exc:
+        return _linux_ui_error_response(exc)
+
+
+@login_required
+@require_feature('servers')
+@require_http_methods(["GET"])
 def server_linux_ui_overview(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
     try:
@@ -1665,6 +1702,82 @@ def server_file_write_text(request, server_id):
             metadata={'path': result["path"], 'size': result["size"]},
         )
         return JsonResponse({"success": True, "file": result})
+    except Exception as exc:
+        return _sftp_error_response(exc)
+
+
+@login_required
+@require_feature('servers')
+@require_http_methods(["POST"])
+def server_file_chmod(request, server_id):
+    server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+    try:
+        _require_ssh_server(server)
+        data = json.loads(request.body or "{}")
+        password = _resolve_server_secret(server, request, data)
+        result = async_to_sync(change_permissions)(
+            server,
+            secret=password or "",
+            path=str(data.get("path") or ""),
+            mode=str(data.get("mode") or ""),
+        )
+        log_user_activity(
+            user=request.user,
+            request=request,
+            category='servers',
+            action='server_file_chmod',
+            status=UserActivityLog.STATUS_SUCCESS,
+            description=f'Changed file permissions on "{server.name}"',
+            entity_type='server',
+            entity_id=server.id,
+            entity_name=server.name,
+            metadata={'path': result["entry"]["path"], 'mode': data.get("mode")},
+        )
+        return JsonResponse({"success": True, **result})
+    except Exception as exc:
+        return _sftp_error_response(exc)
+
+
+@login_required
+@require_feature('servers')
+@require_http_methods(["POST"])
+def server_file_chown(request, server_id):
+    server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+    try:
+        _require_ssh_server(server)
+        data = json.loads(request.body or "{}")
+        password = _resolve_server_secret(server, request, data)
+        owner_spec = str(data.get("owner") or "").strip()
+        owner_name = owner_spec
+        group_name = ""
+        if ":" in owner_spec:
+            owner_name, group_name = owner_spec.split(":", 1)
+
+        result = async_to_sync(change_owner)(
+            server,
+            secret=password or "",
+            path=str(data.get("path") or ""),
+            owner=owner_name or None,
+            group=group_name or None,
+            recursive=bool(data.get("recursive")),
+        )
+        log_user_activity(
+            user=request.user,
+            request=request,
+            category='servers',
+            action='server_file_chown',
+            status=UserActivityLog.STATUS_SUCCESS,
+            description=f'Changed file owner on "{server.name}"',
+            entity_type='server',
+            entity_id=server.id,
+            entity_name=server.name,
+            metadata={
+                'path': result["entry"]["path"],
+                'owner': owner_spec,
+                'recursive': bool(data.get("recursive")),
+            },
+        )
+        return JsonResponse({"success": True, **result})
     except Exception as exc:
         return _sftp_error_response(exc)
 

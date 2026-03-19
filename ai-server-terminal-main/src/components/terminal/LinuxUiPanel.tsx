@@ -2828,26 +2828,36 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
     {
       id: "text-editor",
       title: "Text Editor",
-      subtitle: "Edit config files directly",
-      status: "live" as WorkspaceAppStatus,
+      subtitle: availableApps?.text_editor ? "Edit config files directly" : "Text editing unavailable on this host",
+      status: availableApps?.text_editor ? "live" : "unavailable",
       icon: <FileCode2 className="h-5 w-5" />,
       hidden: true,
     },
     {
       id: "quick-run",
       title: "Quick Run",
-      subtitle: "Execute commands with output",
-      status: "live" as WorkspaceAppStatus,
+      subtitle: availableApps?.quick_run ? "Execute commands with output" : "Shell execution unavailable",
+      status: availableApps?.quick_run ? "live" : "unavailable",
       icon: <Terminal className="h-5 w-5" />,
     },
     {
       id: "settings",
       title: "Settings",
-      subtitle: "System info, users, cron, security",
-      status: "live" as WorkspaceAppStatus,
+      subtitle: availableApps?.settings ? "System info, users, cron, security" : "Settings snapshot unavailable",
+      status: availableApps?.settings ? "live" : "unavailable",
       icon: <Settings className="h-5 w-5" />,
     },
-  ], [availableApps?.disk, availableApps?.docker, availableApps?.logs, availableApps?.network, availableApps?.services, capabilities?.package_manager]);
+  ], [
+    availableApps?.disk,
+    availableApps?.docker,
+    availableApps?.logs,
+    availableApps?.network,
+    availableApps?.quick_run,
+    availableApps?.services,
+    availableApps?.settings,
+    availableApps?.text_editor,
+    capabilities?.package_manager,
+  ]);
 
   const appMap = useMemo(
     () => Object.fromEntries(apps.map((app) => [app.id, app])) as Record<WorkspaceAppId, WorkspaceAppDefinition>,

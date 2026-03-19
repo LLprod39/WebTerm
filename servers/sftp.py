@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import contextlib
 import posixpath
+import re
 import stat as stat_module
+import uuid
 from contextlib import asynccontextmanager
 from tempfile import SpooledTemporaryFile
 from typing import Any, AsyncIterator
@@ -13,6 +16,7 @@ from servers.models import Server
 from servers.ssh_host_keys import build_server_connect_kwargs, ensure_server_known_hosts
 
 TEXT_FILE_MAX_BYTES = 256 * 1024
+OWNER_GROUP_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 
 def _normalize_path_value(value: bytes | str | asyncssh_sftp.SFTPName) -> str:
@@ -67,6 +71,7 @@ def _serialize_entry(path: str, name: str, attrs: asyncssh.SFTPAttrs) -> dict[st
         "is_symlink": kind == "symlink",
         "size": int(getattr(attrs, "size", 0) or 0),
         "permissions": stat_module.filemode(permissions) if isinstance(permissions, int) else "",
+        "permissions_octal": format(permissions & 0o7777, "04o") if isinstance(permissions, int) else "",
         "modified_at": int(getattr(attrs, "mtime", 0) or 0),
     }
 
@@ -84,6 +89,44 @@ async def resolve_remote_path(sftp: asyncssh_sftp.SFTPClient, path: str | None) 
     target = path or "."
     resolved = await sftp.realpath(target)
     return _normalize_path_value(resolved)
+
+
+async def resolve_remote_file_path(sftp: asyncssh_sftp.SFTPClient, path: str | None) -> str:
+    target = str(path or "").strip()
+    if not target:
+        raise ValueError("Не указан путь к файлу")
+
+    normalized_target = target.replace("\\", "/")
+    filename = posixpath.basename(normalized_target.rstrip("/"))
+    if not filename or filename in {".", ".."}:
+        raise ValueError("Некорректный путь к файлу")
+
+    parent_hint = posixpath.dirname(normalized_target) or "."
+    parent_path = await resolve_remote_path(sftp, parent_hint)
+    parent_attrs = await sftp.stat(parent_path)
+    if _entry_kind(parent_attrs) != "dir":
+        raise NotADirectoryError(parent_path)
+
+    return join_remote_path(parent_path, filename)
+
+
+def normalize_permission_mode(mode: str | int) -> int:
+    if isinstance(mode, int):
+        return mode & 0o7777
+
+    raw_mode = str(mode or "").strip()
+    if not re.fullmatch(r"[0-7]{3,4}", raw_mode):
+        raise ValueError("Укажите права в octal формате, например 644 или 0755")
+    return int(raw_mode, 8)
+
+
+def normalize_owner_group(value: str | None, *, label: str) -> str | None:
+    normalized = str(value or "").strip()
+    if not normalized:
+        return None
+    if not OWNER_GROUP_NAME_PATTERN.fullmatch(normalized):
+        raise ValueError(f"Некорректное значение поля {label}")
+    return normalized
 
 
 async def get_directory_listing(server: Server, *, secret: str = "", path: str | None = None) -> dict[str, Any]:
@@ -155,6 +198,21 @@ async def _remove_tree(sftp: asyncssh_sftp.SFTPClient, target_path: str) -> None
         await _remove_tree(sftp, join_remote_path(target_path, name))
 
     await sftp.rmdir(target_path)
+
+
+async def _walk_tree_paths(sftp: asyncssh_sftp.SFTPClient, target_path: str) -> list[str]:
+    attrs = await sftp.lstat(target_path)
+    paths = [target_path]
+    if _entry_kind(attrs) != "dir":
+        return paths
+
+    async for entry in sftp.scandir(target_path):
+        name = _normalize_path_value(entry.filename)
+        if not name or name in {".", ".."}:
+            continue
+        child_path = join_remote_path(target_path, name)
+        paths.extend(await _walk_tree_paths(sftp, child_path))
+    return paths
 
 
 async def delete_path(server: Server, *, secret: str = "", path: str, recursive: bool = False) -> dict[str, Any]:
@@ -275,17 +333,35 @@ async def write_text_file(
     max_bytes: int = TEXT_FILE_MAX_BYTES,
 ) -> dict[str, Any]:
     async with open_server_sftp(server, secret=secret) as sftp:
-        target_path = await resolve_remote_path(sftp, path)
-        attrs = await sftp.stat(target_path)
-        if _entry_kind(attrs) == "dir":
-            raise IsADirectoryError(target_path)
+        target_path = await resolve_remote_file_path(sftp, path)
+        attrs = None
+        if await sftp.exists(target_path):
+            attrs = await sftp.stat(target_path)
+            if _entry_kind(attrs) == "dir":
+                raise IsADirectoryError(target_path)
 
         payload = str(content or "").encode("utf-8")
         if len(payload) > max_bytes:
             raise ValueError(f"Файл слишком большой для сохранения через редактор (>{max_bytes} bytes)")
 
-        async with sftp.open(target_path, "wb", encoding=None) as remote_file:
-            await remote_file.write(payload)
+        parent_path = posixpath.dirname(target_path.rstrip("/")) or "/"
+        filename = posixpath.basename(target_path)
+        temp_path = join_remote_path(parent_path, f".{filename}.tmp-{uuid.uuid4().hex}")
+
+        try:
+            async with sftp.open(temp_path, "wb", encoding=None) as remote_file:
+                await remote_file.write(payload)
+
+            permissions = getattr(attrs, "permissions", None)
+            if isinstance(permissions, int):
+                await sftp.chmod(temp_path, permissions & 0o7777)
+
+            await sftp.rename(temp_path, target_path)
+        except Exception:
+            with contextlib.suppress(Exception):
+                if await sftp.exists(temp_path):
+                    await sftp.remove(temp_path)
+            raise
 
         updated_attrs = await sftp.stat(target_path)
         return {
@@ -294,4 +370,53 @@ async def write_text_file(
             "size": int(getattr(updated_attrs, "size", 0) or 0),
             "encoding": "utf-8",
             "content": str(content or ""),
+        }
+
+
+async def change_permissions(
+    server: Server,
+    *,
+    secret: str = "",
+    path: str,
+    mode: str | int,
+) -> dict[str, Any]:
+    normalized_mode = normalize_permission_mode(mode)
+    async with open_server_sftp(server, secret=secret) as sftp:
+        target_path = await resolve_remote_path(sftp, path)
+        await sftp.chmod(target_path, normalized_mode)
+        attrs = await sftp.stat(target_path)
+        return {
+            "path": posixpath.dirname(target_path.rstrip("/")) or "/",
+            "entry": _serialize_entry(target_path, posixpath.basename(target_path), attrs),
+        }
+
+
+async def change_owner(
+    server: Server,
+    *,
+    secret: str = "",
+    path: str,
+    owner: str | None = None,
+    group: str | None = None,
+    recursive: bool = False,
+) -> dict[str, Any]:
+    normalized_owner = normalize_owner_group(owner, label="owner")
+    normalized_group = normalize_owner_group(group, label="group")
+    if not normalized_owner and not normalized_group:
+        raise ValueError("Укажите owner, group или оба значения")
+
+    async with open_server_sftp(server, secret=secret) as sftp:
+        target_path = await resolve_remote_path(sftp, path)
+        targets = await _walk_tree_paths(sftp, target_path) if recursive else [target_path]
+        for item_path in targets:
+            await sftp.chown(
+                item_path,
+                owner=normalized_owner,
+                group=normalized_group,
+                follow_symlinks=False,
+            )
+        attrs = await sftp.stat(target_path)
+        return {
+            "path": posixpath.dirname(target_path.rstrip("/")) or "/",
+            "entry": _serialize_entry(target_path, posixpath.basename(target_path), attrs),
         }

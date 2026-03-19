@@ -307,10 +307,15 @@ class ServerConnection(models.Model):
     connection_id = models.CharField(max_length=100, unique=True)  # Internal connection ID
     status = models.CharField(max_length=20, default="connected")  # connected, disconnected, error
     connected_at = models.DateTimeField(auto_now_add=True)
+    last_seen_at = models.DateTimeField(default=timezone.now)
     disconnected_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-connected_at"]
+        indexes = [
+            models.Index(fields=["user", "status", "-last_seen_at"]),
+            models.Index(fields=["status", "-last_seen_at"]),
+        ]
 
     def __str__(self):
         return f"{self.server.name} - {self.status}"

@@ -2,6 +2,7 @@
 WEU AI Agent - Views
 Full-featured web interface for AI Agent system
 """
+
 import asyncio
 import csv
 import json
@@ -69,6 +70,14 @@ from core_ui.decorators import require_feature, async_login_required, async_requ
 from core_ui.activity import log_user_activity
 from core_ui.logging_setup import log_sink_summary
 from core_ui.audit import maybe_apply_log_retention
+from core_ui.access import (
+    access_feature_labels,
+    access_feature_slugs,
+    build_user_access_payload,
+    feature_allowed_for_user,
+    load_group_permission_sources,
+    load_user_explicit_permissions,
+)
 from core_ui.models import ChatSession, ChatMessage, UserActivityLog
 from core_ui.middleware import get_template_name
 
@@ -105,10 +114,9 @@ async def get_orchestrator():
     This function is kept for backward compatibility only.
     """
     import warnings
+
     warnings.warn(
-        "get_orchestrator() is deprecated. Use get_unified_orchestrator() instead.",
-        DeprecationWarning,
-        stacklevel=2
+        "get_orchestrator() is deprecated. Use get_unified_orchestrator() instead.", DeprecationWarning, stacklevel=2
     )
     return await get_unified_orchestrator()
 
@@ -127,6 +135,7 @@ def get_rag_engine():
 # Health Check (no auth)
 # ============================================
 
+
 @require_GET
 def api_health(request):
     """
@@ -134,50 +143,56 @@ def api_health(request):
     Returns: status ('ok'|'degraded'|'error'), timestamp (ISO), services: {django, rag}.
     """
     try:
-        services = {'django': 'ok'}
+        services = {"django": "ok"}
         observability = log_sink_summary()
         # RAG: use cached engine if already created (no heavy init), else treat as ok if import works
         try:
             if _rag_engine is not None:
-                services['rag'] = 'ok' if _rag_engine.available else 'unavailable'
+                services["rag"] = "ok" if _rag_engine.available else "unavailable"
             else:
                 # avoid get_rag_engine() here — it can do heavy init; module already imported
-                services['rag'] = 'ok'
+                services["rag"] = "ok"
         except Exception:
-            services['rag'] = 'unavailable'
-        services['channels'] = 'ok'
-        status = 'degraded' if services.get('rag') == 'unavailable' else 'ok'
-        return JsonResponse({
-            'status': status,
-            'timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z',
-            'services': services,
-            'observability': observability,
-        })
+            services["rag"] = "unavailable"
+        services["channels"] = "ok"
+        status = "degraded" if services.get("rag") == "unavailable" else "ok"
+        return JsonResponse(
+            {
+                "status": status,
+                "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+                "services": services,
+                "observability": observability,
+            }
+        )
     except Exception:
-        return JsonResponse({
-            'status': 'error',
-            'timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z',
-            'services': {'django': 'error', 'rag': 'unavailable'},
-            'observability': {'request_id_header': 'X-Request-ID'},
-        }, status=500)
+        return JsonResponse(
+            {
+                "status": "error",
+                "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+                "services": {"django": "error", "rag": "unavailable"},
+                "observability": {"request_id_header": "X-Request-ID"},
+            },
+            status=500,
+        )
 
 
 # ============================================
 # Authentication Views
 # ============================================
 
+
 class CustomLoginView(LoginView):
-    template_name = 'login.html'
+    template_name = "login.html"
     redirect_authenticated_user = True
-    
+
     def get_template_names(self):
         """Return mobile or desktop login template based on device."""
-        return [get_template_name(self.request, 'login.html')]
+        return [get_template_name(self.request, "login.html")]
 
     def get_success_url(self):
         """Server-only accounts should land directly on Servers tab after login."""
         if is_server_only_user(self.request.user):
-            return reverse('servers:server_list')
+            return reverse("servers:server_list")
         return super().get_success_url()
 
 
@@ -229,21 +244,16 @@ def frontend_settings_permissions_redirect(request):
 def _auth_user_payload(user):
     if not user or not getattr(user, "is_authenticated", False):
         return None
-    can_agents = bool(user_can_feature(user, "agents"))
-    can_dashboard = bool(user.is_staff and can_agents)
+    access = build_user_access_payload(user)
+    features = access["effective_permissions"]
     return {
         "id": user.id,
         "username": user.username,
         "email": user.email or "",
         "is_staff": bool(user.is_staff),
-        "features": {
-            "servers": bool(user_can_feature(user, "servers")),
-            "dashboard": can_dashboard,
-            "agents": can_agents,
-            "studio": can_agents,
-            "settings": bool(user_can_feature(user, "settings")),
-            "orchestrator": bool(user_can_feature(user, "orchestrator")),
-        },
+        "access_profile": access["access_profile"],
+        "permission_sources": access["permission_sources"],
+        "features": {feature: bool(features.get(feature, False)) for feature in access_feature_slugs()},
     }
 
 
@@ -273,6 +283,7 @@ def api_ws_token(request):
     if not request.user or not request.user.is_authenticated:
         return JsonResponse({"error": "Not authenticated"}, status=401)
     from django.core.signing import TimestampSigner
+
     signer = TimestampSigner(salt="ws-token")
     token = signer.sign(str(request.user.id))
     return JsonResponse({"token": token})
@@ -361,9 +372,7 @@ def api_auth_login(request):
         entity_type="auth",
         metadata={"auth_mode": auth_mode, "backend": auth_backend or ""},
     )
-    next_url = reverse("servers:server_list")
-    if user.is_staff and user_can_feature(user, "agents"):
-        next_url = reverse("dashboard")
+    next_url = reverse("dashboard") if user_can_feature(user, "dashboard") else reverse("servers:server_list")
 
     return JsonResponse(
         {
@@ -396,23 +405,33 @@ def api_auth_logout(request):
 # Public / Semi-Public Landing
 # ============================================
 
+
 def welcome_view(request):
     """Public landing page: pitch, gallery, features, trust, CTA. No auth required."""
-    return render(request, 'welcome.html')
+    return render(request, "welcome.html")
 
 
 def docs_ui_guide_view(request):
     """Documentation: UI guide. No auth required."""
-    return render(request, 'docs_ui_guide.html')
+    return render(request, "docs_ui_guide.html")
 
 
 @login_required
 def mobile_app_view(request):
     """Mobile PWA — compact app shell for phones."""
-    return render(request, 'mobile_app.html')
+    return render(request, "mobile_app.html")
 
 
-_ALLOWED_LANDING_VIDEOS = {'agent.mp4', 'mcp.mp4', 'server.mp4', 'task.mp4', 'agent.mkv', 'mcp.mkv', 'server.mkv', 'task.mkv'}
+_ALLOWED_LANDING_VIDEOS = {
+    "agent.mp4",
+    "mcp.mp4",
+    "server.mp4",
+    "task.mp4",
+    "agent.mkv",
+    "mcp.mkv",
+    "server.mkv",
+    "task.mkv",
+}
 
 
 @require_GET
@@ -420,7 +439,7 @@ def serve_landing_video(request, filename):
     """Раздача видео для лендинга (не зависит от staticfiles). Файлы в core_ui/static/landing/videos/."""
     if filename not in _ALLOWED_LANDING_VIDEOS:
         raise Http404
-    video_dir = (Path(settings.BASE_DIR) / 'core_ui' / 'static' / 'landing' / 'videos').resolve()
+    video_dir = (Path(settings.BASE_DIR) / "core_ui" / "static" / "landing" / "videos").resolve()
     filepath = (video_dir / filename).resolve()
     try:
         filepath.relative_to(video_dir)
@@ -428,42 +447,44 @@ def serve_landing_video(request, filename):
         raise Http404
     if not filepath.is_file():
         raise Http404
-    content_type = 'video/mp4' if filename.endswith('.mp4') else 'video/x-matroska'
-    return FileResponse(open(filepath, 'rb'), content_type=content_type, as_attachment=False)
+    content_type = "video/mp4" if filename.endswith(".mp4") else "video/x-matroska"
+    return FileResponse(open(filepath, "rb"), content_type=content_type, as_attachment=False)
 
 
 # ============================================
 # Main Page Views
 # ============================================
 
+
 @login_required
-@require_feature('orchestrator', redirect_on_forbidden=True)
+@require_feature("orchestrator", redirect_on_forbidden=True)
 def chat_view(request):
     """Main chat interface"""
     default_provider = model_manager.config.default_provider
     rag = get_rag_engine()
     context = {
-        'default_provider': default_provider,
-        'is_auto_default': default_provider == 'auto',
-        'is_gemini_default': default_provider == 'gemini',
-        'is_grok_default': default_provider == 'grok',
-        'rag_available': rag.available,
-        'rag_build': getattr(rag, 'rag_build', 'full'),
+        "default_provider": default_provider,
+        "is_auto_default": default_provider == "auto",
+        "is_gemini_default": default_provider == "gemini",
+        "is_grok_default": default_provider == "grok",
+        "rag_available": rag.available,
+        "rag_build": getattr(rag, "rag_build", "full"),
     }
 
     # Check for start_task_id
-    task_id = request.GET.get('task_id')
+    task_id = request.GET.get("task_id")
     if task_id:
         try:
             # Lazy import to avoid circular dependency
             from tasks.models import Task
+
             task = Task.objects.get(id=task_id)
             initial_prompt = f"I need you to execute this task: '{task.title}'.\n\nDescription:\n{task.description}\n\nPlease analyze it and start working on it."
-            context['initial_prompt'] = initial_prompt.replace('\n', '\\n').replace("'", "\\'")
+            context["initial_prompt"] = initial_prompt.replace("\n", "\\n").replace("'", "\\'")
         except Exception as exc:
             logger.warning(f"Failed to prefill task prompt for task_id={task_id}: {exc}")
 
-    template = get_template_name(request, 'chat.html')
+    template = get_template_name(request, "chat.html")
     return render(request, template, context)
 
 
@@ -472,30 +493,30 @@ index = chat_view
 
 
 @login_required
-@require_feature('orchestrator', redirect_on_forbidden=True)
+@require_feature("orchestrator", redirect_on_forbidden=True)
 def orchestrator_view(request):
     """Orchestrator dashboard - shows agent workflow"""
     # Use cached orchestrator instance to avoid slow initialization
     # Tools will be loaded asynchronously via API
     context = {
-        'tool_count': 0,  # Will be updated via API
+        "tool_count": 0,  # Will be updated via API
     }
-    template = get_template_name(request, 'orchestrator.html')
+    template = get_template_name(request, "orchestrator.html")
     return render(request, template, context)
 
 
 @login_required
-@require_feature('agents', redirect_on_forbidden=True)
+@require_feature("agents", redirect_on_forbidden=True)
 def monitor_view(request):
     """AI Monitor - unified monitoring dashboard for agent and workflow runs."""
-    return render(request, 'monitor.html', {})
+    return render(request, "monitor.html", {})
 
 
 @login_required
 def dashboard_view(request):
     """Dashboard entry for mini build: staff monitoring page."""
-    if (not request.user.is_staff) or (not user_can_feature(request.user, "agents")):
-        return redirect('servers:server_list')
+    if not user_can_feature(request.user, "dashboard"):
+        return redirect("servers:server_list")
 
     return _admin_dashboard_view(request)
 
@@ -503,8 +524,8 @@ def dashboard_view(request):
 @login_required
 def api_dashboard_stats(request):
     """Backward-compat alias to admin dashboard API in mini build."""
-    if (not request.user.is_staff) or (not user_can_feature(request.user, "agents")):
-        return JsonResponse({'error': 'Forbidden'}, status=403)
+    if not user_can_feature(request.user, "dashboard"):
+        return JsonResponse({"error": "Forbidden"}, status=403)
 
     return api_admin_dashboard(request)
 
@@ -591,11 +612,7 @@ def _sum_anthropic_costs(payload: dict) -> float:
         for row in rows:
             amount = row.get("amount")
             if isinstance(amount, dict):
-                value = _to_float(
-                    amount.get("value")
-                    or amount.get("usd")
-                    or amount.get("amount")
-                )
+                value = _to_float(amount.get("value") or amount.get("usd") or amount.get("amount"))
             else:
                 value = _to_float(amount)
             if value is not None:
@@ -839,8 +856,8 @@ def _collect_admin_dashboard_data(include_version: bool = False) -> dict:
     from servers.models import Server, ServerConnection
     from core_ui.models import LLMUsageLog
 
-    Task = _model_or_none('tasks', 'Task')
-    AgentRun = _model_or_none('agent_hub', 'AgentRun')
+    Task = _model_or_none("tasks", "Task")
+    AgentRun = _model_or_none("agent_hub", "AgentRun")
 
     now = tz.now()
     today = date.today()
@@ -849,38 +866,39 @@ def _collect_admin_dashboard_data(include_version: bool = False) -> dict:
     last_7d = now - timedelta(days=7)
 
     online_user_ids = list(
-        UserActivityLog.objects.filter(created_at__gte=last_5min)
-        .values_list('user_id', flat=True).distinct()
+        UserActivityLog.objects.filter(created_at__gte=last_5min).values_list("user_id", flat=True).distinct()
     )
     online_users = []
     for user in User.objects.filter(id__in=online_user_ids):
-        last_log = UserActivityLog.objects.filter(user=user).order_by('-created_at').first()
-        online_users.append({
-            'username': user.username,
-            'action': last_log.action if last_log else '',
-            'time': last_log.created_at.isoformat() if last_log else '',
-        })
+        last_log = UserActivityLog.objects.filter(user=user).order_by("-created_at").first()
+        online_users.append(
+            {
+                "username": user.username,
+                "action": last_log.action if last_log else "",
+                "time": last_log.created_at.isoformat() if last_log else "",
+            }
+        )
 
     ai_requests_today = UserActivityLog.objects.filter(
-        action__in=['chat_request', 'terminal_ai_request', 'chat_message', 'llm_request'],
+        action__in=["chat_request", "terminal_ai_request", "chat_message", "llm_request"],
         created_at__date=today,
     ).count()
 
-    active_connections = ServerConnection.objects.filter(status='connected').select_related('server', 'user')
+    active_connections = ServerConnection.objects.filter(status="connected").select_related("server", "user")
     terminals = [
         {
-            'server': conn.server.name,
-            'user': conn.user.username if conn.user_id else 'unknown',
-            'connected_at': conn.connected_at.isoformat(),
+            "server": conn.server.name,
+            "user": conn.user.username if conn.user_id else "unknown",
+            "connected_at": conn.connected_at.isoformat(),
         }
         for conn in active_connections
     ]
 
     if AgentRun is not None:
-        agents_running = AgentRun.objects.filter(status='running').count()
+        agents_running = AgentRun.objects.filter(status="running").count()
         agents_today = AgentRun.objects.filter(created_at__date=today).count()
-        succeeded_24h = AgentRun.objects.filter(status='completed', created_at__gte=last_24h).count()
-        failed_24h = AgentRun.objects.filter(status='failed', created_at__gte=last_24h).count()
+        succeeded_24h = AgentRun.objects.filter(status="completed", created_at__gte=last_24h).count()
+        failed_24h = AgentRun.objects.filter(status="failed", created_at__gte=last_24h).count()
     else:
         agents_running = 0
         agents_today = 0
@@ -890,106 +908,116 @@ def _collect_admin_dashboard_data(include_version: bool = False) -> dict:
     total_finished_24h = succeeded_24h + failed_24h
     success_rate = round(succeeded_24h / total_finished_24h * 100) if total_finished_24h > 0 else 100
 
-    cost_per_1k = {'gemini': 0.0005, 'grok': 0.005, 'claude': 0.003, 'openai': 0.002}
+    cost_per_1k = {"gemini": 0.0005, "grok": 0.005, "claude": 0.003, "openai": 0.002}
     api_usage = {}
-    for provider in ('gemini', 'grok', 'claude', 'openai'):
+    for provider in ("gemini", "grok", "claude", "openai"):
         qs = LLMUsageLog.objects.filter(provider=provider, created_at__date=today)
-        agg = qs.aggregate(inp=Sum('input_tokens'), out=Sum('output_tokens'))
-        inp, out = agg['inp'] or 0, agg['out'] or 0
+        agg = qs.aggregate(inp=Sum("input_tokens"), out=Sum("output_tokens"))
+        inp, out = agg["inp"] or 0, agg["out"] or 0
         estimated_cost = round((inp + out) / 1000 * cost_per_1k.get(provider, 0.001), 4)
         api_usage[provider] = {
-            'calls': qs.count(),
-            'input_tokens': inp,
-            'output_tokens': out,
-            'errors': qs.filter(status__in=['error', 'timeout']).count(),
-            'estimated_cost_usd': estimated_cost,
-            'actual_spend_usd': None,
-            'balance_usd': None,
-            'billing_source': 'estimated_logs',
-            'billing_note': 'Estimated from local token counters.',
-            'cost_usd': estimated_cost,
+            "calls": qs.count(),
+            "input_tokens": inp,
+            "output_tokens": out,
+            "errors": qs.filter(status__in=["error", "timeout"]).count(),
+            "estimated_cost_usd": estimated_cost,
+            "actual_spend_usd": None,
+            "balance_usd": None,
+            "billing_source": "estimated_logs",
+            "billing_note": "Estimated from local token counters.",
+            "cost_usd": estimated_cost,
         }
 
     providers = {}
-    for provider in ('gemini', 'grok', 'claude', 'openai'):
-        enabled = getattr(model_manager.config, f'{provider}_enabled', False)
+    for provider in ("gemini", "grok", "claude", "openai"):
+        enabled = getattr(model_manager.config, f"{provider}_enabled", False)
         providers[provider] = {
-            'enabled': enabled,
-            'model': model_manager.get_chat_model(provider) if enabled else '',
+            "enabled": enabled,
+            "model": model_manager.get_chat_model(provider) if enabled else "",
         }
 
     billing_data = _get_provider_billing_snapshot(now.astimezone(timezone.utc), providers)
     for provider, usage in api_usage.items():
         billing = billing_data.get(provider, {})
-        actual_spend = billing.get('actual_spend_usd')
-        usage['actual_spend_usd'] = actual_spend
-        usage['balance_usd'] = billing.get('balance_usd')
-        usage['billing_source'] = billing.get('billing_source', 'estimated_logs')
-        usage['billing_note'] = billing.get('billing_note', '')
+        actual_spend = billing.get("actual_spend_usd")
+        usage["actual_spend_usd"] = actual_spend
+        usage["balance_usd"] = billing.get("balance_usd")
+        usage["billing_source"] = billing.get("billing_source", "estimated_logs")
+        usage["billing_note"] = billing.get("billing_note", "")
         if actual_spend is not None:
-            usage['cost_usd'] = round(actual_spend, 4)
+            usage["cost_usd"] = round(actual_spend, 4)
 
     hourly = list(
         UserActivityLog.objects.filter(created_at__gte=last_24h)
-        .annotate(hour=TruncHour('created_at'))
-        .values('hour')
-        .annotate(count=Count('id'))
-        .order_by('hour')
+        .annotate(hour=TruncHour("created_at"))
+        .values("hour")
+        .annotate(count=Count("id"))
+        .order_by("hour")
     )
-    hourly_activity = [{'hour': h['hour'].isoformat(), 'count': h['count']} for h in hourly]
+    hourly_activity = [{"hour": h["hour"].isoformat(), "count": h["count"]} for h in hourly]
 
     top_users = list(
         UserActivityLog.objects.filter(created_at__gte=last_7d, user__isnull=False)
-        .values('user__username')
+        .values("user__username")
         .annotate(
-            total=Count('id'),
-            ai_requests=Count('id', filter=Q(action__in=['chat_request', 'terminal_ai_request', 'chat_message', 'llm_request'])),
-            terminal_sessions=Count('id', filter=Q(category='terminal')),
+            total=Count("id"),
+            ai_requests=Count(
+                "id", filter=Q(action__in=["chat_request", "terminal_ai_request", "chat_message", "llm_request"])
+            ),
+            terminal_sessions=Count("id", filter=Q(category="terminal")),
         )
-        .order_by('-total')[:10]
+        .order_by("-total")[:10]
     )
     top_users = [
         {
-            'username': row['user__username'],
-            'total': row['total'],
-            'ai_requests': row['ai_requests'],
-            'terminal_sessions': row['terminal_sessions'],
+            "username": row["user__username"],
+            "total": row["total"],
+            "ai_requests": row["ai_requests"],
+            "terminal_sessions": row["terminal_sessions"],
         }
         for row in top_users
     ]
 
-    recent_activity = list(UserActivityLog.objects.select_related('user').order_by('-created_at')[:20])
+    recent_activity = list(UserActivityLog.objects.select_related("user").order_by("-created_at")[:20])
     recent_activity = [
         {
-            'user': row.username_snapshot or (row.user.username if row.user_id else 'system'),
-            'category': row.category,
-            'action': row.action,
-            'time': row.created_at.isoformat(),
+            "user": row.username_snapshot or (row.user.username if row.user_id else "system"),
+            "category": row.category,
+            "action": row.action,
+            "time": row.created_at.isoformat(),
         }
         for row in recent_activity
     ]
 
     tasks_total = Task.objects.count() if Task is not None else 0
-    tasks_in_progress = Task.objects.filter(status='IN_PROGRESS').count() if Task is not None else 0
+    tasks_in_progress = Task.objects.filter(status="IN_PROGRESS").count() if Task is not None else 0
 
     # Fleet health from monitoring
     from servers.models import ServerHealthCheck, ServerAlert
 
-    fleet_health = {'avg_cpu': 0, 'avg_memory': 0, 'avg_disk': 0, 'healthy': 0, 'warning': 0, 'critical': 0, 'unreachable': 0}
+    fleet_health = {
+        "avg_cpu": 0,
+        "avg_memory": 0,
+        "avg_disk": 0,
+        "healthy": 0,
+        "warning": 0,
+        "critical": 0,
+        "unreachable": 0,
+    }
     try:
         from django.db.models import Max, Avg as AvgF
-        latest_per_server = (
-            ServerHealthCheck.objects.values("server_id")
-            .annotate(last_id=Max("id"))
-        )
+
+        latest_per_server = ServerHealthCheck.objects.values("server_id").annotate(last_id=Max("id"))
         latest_ids = [r["last_id"] for r in latest_per_server]
         if latest_ids:
             agg = ServerHealthCheck.objects.filter(id__in=latest_ids).aggregate(
-                avg_cpu=AvgF("cpu_percent"), avg_mem=AvgF("memory_percent"), avg_disk=AvgF("disk_percent"),
+                avg_cpu=AvgF("cpu_percent"),
+                avg_mem=AvgF("memory_percent"),
+                avg_disk=AvgF("disk_percent"),
             )
-            fleet_health['avg_cpu'] = round(agg['avg_cpu'] or 0, 1)
-            fleet_health['avg_memory'] = round(agg['avg_mem'] or 0, 1)
-            fleet_health['avg_disk'] = round(agg['avg_disk'] or 0, 1)
+            fleet_health["avg_cpu"] = round(agg["avg_cpu"] or 0, 1)
+            fleet_health["avg_memory"] = round(agg["avg_mem"] or 0, 1)
+            fleet_health["avg_disk"] = round(agg["avg_disk"] or 0, 1)
             for hc in ServerHealthCheck.objects.filter(id__in=latest_ids).values_list("status", flat=True):
                 fleet_health[hc] = fleet_health.get(hc, 0) + 1
     except Exception:
@@ -997,135 +1025,137 @@ def _collect_admin_dashboard_data(include_version: bool = False) -> dict:
 
     active_alerts_count = ServerAlert.objects.filter(is_resolved=False).count()
     recent_alerts = list(
-        ServerAlert.objects.filter(is_resolved=False)
-        .select_related("server")
-        .order_by("-created_at")[:10]
+        ServerAlert.objects.filter(is_resolved=False).select_related("server").order_by("-created_at")[:10]
     )
     alerts_list = [
         {
-            'server': a.server.name,
-            'type': a.alert_type,
-            'severity': a.severity,
-            'title': a.title,
-            'time': a.created_at.isoformat(),
+            "server": a.server.name,
+            "type": a.alert_type,
+            "severity": a.severity,
+            "title": a.title,
+            "time": a.created_at.isoformat(),
         }
         for a in recent_alerts
     ]
 
     data = {
-        'online_users': {'count': len(online_user_ids), 'total_registered': User.objects.count(), 'users': online_users},
-        'ai': {'requests_today': ai_requests_today},
-        'terminals': {'active': active_connections.count(), 'connections': terminals},
-        'agents': {
-            'running': agents_running,
-            'today': agents_today,
-            'succeeded_24h': succeeded_24h,
-            'failed_24h': failed_24h,
-            'success_rate': success_rate,
+        "online_users": {
+            "count": len(online_user_ids),
+            "total_registered": User.objects.count(),
+            "users": online_users,
         },
-        'api_usage': api_usage,
-        'api_calls_today': sum(v['calls'] for v in api_usage.values()),
-        'providers': providers,
-        'servers': {'total': Server.objects.count(), 'active': Server.objects.filter(is_active=True).count()},
-        'tasks': {'total': tasks_total, 'in_progress': tasks_in_progress},
-        'hourly_activity': hourly_activity,
-        'top_users': top_users,
-        'recent_activity': recent_activity,
-        'fleet_health': fleet_health,
-        'active_alerts_count': active_alerts_count,
-        'alerts': alerts_list,
+        "ai": {"requests_today": ai_requests_today},
+        "terminals": {"active": active_connections.count(), "connections": terminals},
+        "agents": {
+            "running": agents_running,
+            "today": agents_today,
+            "succeeded_24h": succeeded_24h,
+            "failed_24h": failed_24h,
+            "success_rate": success_rate,
+        },
+        "api_usage": api_usage,
+        "api_calls_today": sum(v["calls"] for v in api_usage.values()),
+        "providers": providers,
+        "servers": {"total": Server.objects.count(), "active": Server.objects.filter(is_active=True).count()},
+        "tasks": {"total": tasks_total, "in_progress": tasks_in_progress},
+        "hourly_activity": hourly_activity,
+        "top_users": top_users,
+        "recent_activity": recent_activity,
+        "fleet_health": fleet_health,
+        "active_alerts_count": active_alerts_count,
+        "alerts": alerts_list,
     }
     if include_version:
-        data['app_version'] = getattr(settings, 'WEU_VERSION', '2.0.0')
+        data["app_version"] = getattr(settings, "WEU_VERSION", "2.0.0")
     return data
 
 
 def _admin_dashboard_view(request):
     """Render admin monitoring dashboard."""
-    if (not request.user.is_staff) or (not user_can_feature(request.user, "agents")):
-        return redirect('servers:server_list')
+    if not user_can_feature(request.user, "dashboard"):
+        return redirect("servers:server_list")
 
     context = _collect_admin_dashboard_data(include_version=True)
-    context['hourly_activity'] = json.dumps(context['hourly_activity'])
-    return render(request, 'admin_dashboard.html', context)
+    context["hourly_activity"] = json.dumps(context["hourly_activity"])
+    return render(request, "admin_dashboard.html", context)
 
 
 @login_required
 @require_http_methods(["GET"])
 def api_admin_dashboard(request):
     """JSON API for admin dashboard auto-refresh."""
-    if (not request.user.is_staff) or (not user_can_feature(request.user, "agents")):
-        return JsonResponse({'error': 'Forbidden'}, status=403)
+    if not user_can_feature(request.user, "dashboard"):
+        return JsonResponse({"error": "Forbidden"}, status=403)
 
     data = _collect_admin_dashboard_data(include_version=True)
-    return JsonResponse({'success': True, 'data': data})
+    return JsonResponse({"success": True, "data": data})
 
 
 @login_required
 @require_http_methods(["GET"])
 def api_admin_users_activity(request):
     """Detailed user activity logs for admin dashboard with filtering."""
-    if (not request.user.is_staff) or (not user_can_feature(request.user, "agents")):
-        return JsonResponse({'error': 'Forbidden'}, status=403)
+    if not user_can_feature(request.user, "dashboard"):
+        return JsonResponse({"error": "Forbidden"}, status=403)
 
     from django.db.models import Count, Q as QQ
 
     try:
-        limit = min(int(request.GET.get('limit', 50)), 200)
-        offset = max(0, int(request.GET.get('offset', 0)))
-        days = min(int(request.GET.get('days', 7)), 90)
+        limit = min(int(request.GET.get("limit", 50)), 200)
+        offset = max(0, int(request.GET.get("offset", 0)))
+        days = min(int(request.GET.get("days", 7)), 90)
     except (TypeError, ValueError):
         limit, offset, days = 50, 0, 7
 
     since = django_timezone.now() - timedelta(days=days)
-    qs = UserActivityLog.objects.select_related('user').filter(created_at__gte=since)
+    qs = UserActivityLog.objects.select_related("user").filter(created_at__gte=since)
 
-    user_id = request.GET.get('user_id')
+    user_id = request.GET.get("user_id")
     if user_id:
         qs = qs.filter(user_id=int(user_id))
 
-    category = request.GET.get('category', '').strip()
+    category = request.GET.get("category", "").strip()
     if category:
         qs = qs.filter(category=category)
 
-    search = request.GET.get('search', '').strip()
+    search = request.GET.get("search", "").strip()
     if search:
         qs = qs.filter(
-            QQ(username_snapshot__icontains=search) |
-            QQ(action__icontains=search) |
-            QQ(description__icontains=search) |
-            QQ(entity_name__icontains=search)
+            QQ(username_snapshot__icontains=search)
+            | QQ(action__icontains=search)
+            | QQ(description__icontains=search)
+            | QQ(entity_name__icontains=search)
         )
 
     total = qs.count()
-    rows = list(qs.order_by('-created_at')[offset:offset + limit])
+    rows = list(qs.order_by("-created_at")[offset : offset + limit])
 
     events = [
         {
-            'id': r.id,
-            'user_id': r.user_id,
-            'username': r.username_snapshot or (r.user.username if r.user_id else 'system'),
-            'category': r.category,
-            'action': r.action,
-            'status': r.status,
-            'description': r.description[:300],
-            'entity_type': r.entity_type,
-            'entity_name': r.entity_name,
-            'ip_address': r.ip_address or '',
-            'created_at': r.created_at.isoformat(),
+            "id": r.id,
+            "user_id": r.user_id,
+            "username": r.username_snapshot or (r.user.username if r.user_id else "system"),
+            "category": r.category,
+            "action": r.action,
+            "status": r.status,
+            "description": r.description[:300],
+            "entity_type": r.entity_type,
+            "entity_name": r.entity_name,
+            "ip_address": r.ip_address or "",
+            "created_at": r.created_at.isoformat(),
         }
         for r in rows
     ]
 
-    return JsonResponse({'success': True, 'total': total, 'events': events})
+    return JsonResponse({"success": True, "total": total, "events": events})
 
 
 @login_required
 @require_http_methods(["GET"])
 def api_admin_users_sessions(request):
     """Active user sessions - who's online now and what they're doing."""
-    if (not request.user.is_staff) or (not user_can_feature(request.user, "agents")):
-        return JsonResponse({'error': 'Forbidden'}, status=403)
+    if not user_can_feature(request.user, "dashboard"):
+        return JsonResponse({"error": "Forbidden"}, status=403)
 
     from django.contrib.auth.models import User as AuthUser
     from django.db.models import Max, Count
@@ -1134,72 +1164,81 @@ def api_admin_users_sessions(request):
     last_5min = django_timezone.now() - timedelta(minutes=5)
 
     active_user_ids = list(
-        UserActivityLog.objects.filter(created_at__gte=last_5min)
-        .values_list('user_id', flat=True).distinct()
+        UserActivityLog.objects.filter(created_at__gte=last_5min).values_list("user_id", flat=True).distinct()
     )
 
     sessions = []
-    for user in AuthUser.objects.filter(id__in=active_user_ids).order_by('username'):
-        last_log = UserActivityLog.objects.filter(user=user).order_by('-created_at').first()
-        active_terminals = ServerConnection.objects.filter(user=user, status='connected').count()
+    for user in AuthUser.objects.filter(id__in=active_user_ids).order_by("username"):
+        last_log = UserActivityLog.objects.filter(user=user).order_by("-created_at").first()
+        active_terminals = ServerConnection.objects.filter(user=user, status="connected").count()
         today_actions = UserActivityLog.objects.filter(user=user, created_at__date=django_timezone.now().date()).count()
 
-        sessions.append({
-            'user_id': user.id,
-            'username': user.username,
-            'email': user.email,
-            'is_staff': user.is_staff,
-            'last_action': last_log.action if last_log else '',
-            'last_category': last_log.category if last_log else '',
-            'last_activity': last_log.created_at.isoformat() if last_log else '',
-            'active_terminals': active_terminals,
-            'today_actions': today_actions,
-        })
+        sessions.append(
+            {
+                "user_id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "is_staff": user.is_staff,
+                "last_action": last_log.action if last_log else "",
+                "last_category": last_log.category if last_log else "",
+                "last_activity": last_log.created_at.isoformat() if last_log else "",
+                "active_terminals": active_terminals,
+                "today_actions": today_actions,
+            }
+        )
 
     total_registered = AuthUser.objects.count()
-    total_active_today = UserActivityLog.objects.filter(
-        created_at__date=django_timezone.now().date()
-    ).values('user_id').distinct().count()
+    total_active_today = (
+        UserActivityLog.objects.filter(created_at__date=django_timezone.now().date())
+        .values("user_id")
+        .distinct()
+        .count()
+    )
 
-    return JsonResponse({
-        'success': True,
-        'online_count': len(sessions),
-        'total_registered': total_registered,
-        'active_today': total_active_today,
-        'sessions': sessions,
-    })
+    return JsonResponse(
+        {
+            "success": True,
+            "online_count": len(sessions),
+            "total_registered": total_registered,
+            "active_today": total_active_today,
+            "sessions": sessions,
+        }
+    )
 
 
 @login_required
-@require_feature('knowledge_base', redirect_on_forbidden=True)
+@require_feature("knowledge_base", redirect_on_forbidden=True)
 def knowledge_base_view(request):
     """Knowledge Base (RAG) management - optimized for fast loading"""
     rag = get_rag_engine()
-    rag_type = 'Qdrant' if (hasattr(rag, 'use_qdrant') and rag.use_qdrant) else ('InMemory' if rag.available else 'mini')
+    rag_type = (
+        "Qdrant" if (hasattr(rag, "use_qdrant") and rag.use_qdrant) else ("InMemory" if rag.available else "mini")
+    )
     context = {
-        'documents': [],
-        'doc_count': 0,
-        'rag_available': rag.available,
-        'rag_type': rag_type,
-        'rag_build': getattr(rag, 'rag_build', 'full'),
+        "documents": [],
+        "doc_count": 0,
+        "rag_available": rag.available,
+        "rag_type": rag_type,
+        "rag_build": getattr(rag, "rag_build", "full"),
     }
-    template = get_template_name(request, 'knowledge_base.html')
+    template = get_template_name(request, "knowledge_base.html")
     return render(request, template, context)
 
 
 @login_required
 def settings_view(request):
     """Settings page — конфиг подгружается через /api/settings/ и /api/models/. Only for staff or users with settings permission."""
-    if not user_can_feature(request.user, 'settings'):
-        return redirect('index')
-    template = get_template_name(request, 'settings.html')
+    if not user_can_feature(request.user, "settings"):
+        return redirect("index")
+    template = get_template_name(request, "settings.html")
     context = {}
-    if user_can_feature(request.user, 'tasks'):
+    if user_can_feature(request.user, "tasks"):
         try:
             from tasks.permissions import get_projects_for_user
-            context['settings_projects'] = list(get_projects_for_user(request.user).order_by('-updated_at')[:50])
+
+            context["settings_projects"] = list(get_projects_for_user(request.user).order_by("-updated_at")[:50])
         except Exception:
-            context['settings_projects'] = []
+            context["settings_projects"] = []
     return render(request, template, context)
 
 
@@ -1209,46 +1248,17 @@ def settings_view(request):
 
 
 def _access_feature_slugs():
-    from core_ui.models import FEATURE_CHOICES
-    return [slug for slug, _ in FEATURE_CHOICES]
+    return access_feature_slugs()
 
 
-def _feature_allowed_for_user(user, feature: str, explicit_permissions: dict) -> bool:
-    """Effective access (explicit row > defaults), aligned with core_ui.context_processors."""
-    from core_ui.models import DEFAULT_ALLOWED_FEATURES
-
-    if user.is_staff:
-        explicit = explicit_permissions.get(feature)
-        return True if explicit is None else bool(explicit)
-
-    if feature == 'settings':
-        return bool(explicit_permissions.get('settings', False))
-
-    explicit = explicit_permissions.get(feature)
-    if explicit is not None:
-        return bool(explicit)
-    return feature in DEFAULT_ALLOWED_FEATURES
+def _feature_allowed_for_user(
+    user, feature: str, explicit_permissions: dict, group_permissions: dict | None = None
+) -> bool:
+    return feature_allowed_for_user(user, feature, explicit_permissions, group_permissions)
 
 
-def _build_user_access_payload(user, explicit_permissions: dict) -> dict:
-    features = _access_feature_slugs()
-    effective = {
-        feature: _feature_allowed_for_user(user, feature, explicit_permissions)
-        for feature in features
-    }
-
-    if effective.get('servers') and all(not allowed for f, allowed in effective.items() if f != 'servers'):
-        profile = 'server_only'
-    elif user.is_staff and all(effective.values()):
-        profile = 'admin_full'
-    else:
-        profile = 'custom'
-
-    return {
-        'effective_permissions': effective,
-        'explicit_permissions': explicit_permissions,
-        'access_profile': profile,
-    }
+def _build_user_access_payload(user, explicit_permissions: dict, group_permission_sources: dict | None = None) -> dict:
+    return build_user_access_payload(user, explicit_permissions, group_permission_sources)
 
 
 def _apply_access_profile(user, profile: str) -> None:
@@ -1256,39 +1266,81 @@ def _apply_access_profile(user, profile: str) -> None:
     from core_ui.models import UserAppPermission
 
     features = _access_feature_slugs()
-    profile = (profile or '').strip()
-    if profile not in {'server_only', 'admin_full', 'reset_defaults', 'custom'}:
-        raise ValueError('Invalid access profile')
+    profile = (profile or "").strip()
+    if profile not in {"server_only", "admin_full", "reset_defaults", "custom"}:
+        raise ValueError("Invalid access profile")
 
-    if profile == 'custom':
+    if profile == "custom":
         return
 
-    if profile == 'reset_defaults':
+    if profile == "reset_defaults":
         UserAppPermission.objects.filter(user=user).delete()
         return
 
-    if profile == 'server_only' and user.is_superuser:
-        raise ValueError('Cannot apply server-only profile to superuser')
+    if profile == "server_only" and user.is_superuser:
+        raise ValueError("Cannot apply server-only profile to superuser")
 
-    if profile == 'server_only':
-        target = {feature: (feature == 'servers') for feature in features}
+    if profile == "server_only":
+        target = {feature: (feature == "servers") for feature in features}
         if user.is_staff:
             user.is_staff = False
-            user.save(update_fields=['is_staff'])
+            user.save(update_fields=["is_staff"])
     else:
         # admin_full
         target = {feature: True for feature in features}
         if not user.is_staff:
             user.is_staff = True
-            user.save(update_fields=['is_staff'])
+            user.save(update_fields=["is_staff"])
 
     with transaction.atomic():
         for feature, allowed in target.items():
             UserAppPermission.objects.update_or_create(
                 user=user,
                 feature=feature,
-                defaults={'allowed': allowed},
+                defaults={"allowed": allowed},
             )
+
+
+def _apply_user_explicit_permissions(user, permissions: dict | None) -> None:
+    from core_ui.models import UserAppPermission
+
+    if permissions is None:
+        return
+
+    valid_features = set(_access_feature_slugs())
+    with transaction.atomic():
+        for feature, raw_value in dict(permissions).items():
+            if feature not in valid_features:
+                continue
+            if raw_value is None or raw_value == "":
+                UserAppPermission.objects.filter(user=user, feature=feature).delete()
+            else:
+                UserAppPermission.objects.update_or_create(
+                    user=user,
+                    feature=feature,
+                    defaults={"allowed": bool(raw_value)},
+                )
+
+
+def _apply_group_explicit_permissions(group, permissions: dict | None) -> None:
+    from core_ui.models import GroupAppPermission
+
+    if permissions is None:
+        return
+
+    valid_features = set(_access_feature_slugs())
+    with transaction.atomic():
+        for feature, raw_value in dict(permissions).items():
+            if feature not in valid_features:
+                continue
+            if raw_value is None or raw_value == "":
+                GroupAppPermission.objects.filter(group=group, feature=feature).delete()
+            else:
+                GroupAppPermission.objects.update_or_create(
+                    group=group,
+                    feature=feature,
+                    defaults={"allowed": bool(raw_value)},
+                )
 
 
 def _get_access_data():
@@ -1296,9 +1348,9 @@ def _get_access_data():
     from django.contrib.auth.models import User, Group
     from core_ui.models import UserAppPermission
 
-    users = list(User.objects.all().prefetch_related('groups').order_by('username'))
-    groups = Group.objects.all().prefetch_related('user_set').order_by('name')
-    permissions = UserAppPermission.objects.select_related('user').all().order_by('user__username', 'feature')
+    users = list(User.objects.all().prefetch_related("groups").order_by("username"))
+    groups = Group.objects.all().prefetch_related("user_set").order_by("name")
+    permissions = UserAppPermission.objects.select_related("user").all().order_by("user__username", "feature")
 
     explicit_by_user: dict[int, dict[str, bool]] = defaultdict(dict)
     for p in permissions:
@@ -1307,60 +1359,65 @@ def _get_access_data():
     users_with_access = []
     for user in users:
         access = _build_user_access_payload(user, explicit_by_user.get(user.id, {}))
-        users_with_access.append({
-            'user': user,
-            'access_profile': access['access_profile'],
-            'effective_permissions': access['effective_permissions'],
-            'explicit_permissions': access['explicit_permissions'],
-        })
+        users_with_access.append(
+            {
+                "user": user,
+                "access_profile": access["access_profile"],
+                "effective_permissions": access["effective_permissions"],
+                "explicit_permissions": access["explicit_permissions"],
+            }
+        )
 
     return {
-        'users': users,
-        'users_with_access': users_with_access,
-        'groups': groups,
-        'permissions': permissions,
-        'feature_slugs': _access_feature_slugs(),
+        "users": users,
+        "users_with_access": users_with_access,
+        "groups": groups,
+        "permissions": permissions,
+        "feature_slugs": _access_feature_slugs(),
     }
 
 
 @login_required
 def settings_access_view(request):
     """Единая страница «Управление доступом» с вкладками: Пользователи, Группы, Права. Доступ: settings."""
-    if not user_can_feature(request.user, 'settings'):
-        return redirect('index')
-    tab = request.GET.get('tab', 'users')
-    if tab not in ('users', 'groups', 'permissions'):
-        tab = 'users'
+    if not user_can_feature(request.user, "settings"):
+        return redirect("index")
+    tab = request.GET.get("tab", "users")
+    if tab not in ("users", "groups", "permissions"):
+        tab = "users"
     ctx = _get_access_data()
-    ctx['active_tab'] = tab
-    return render(request, 'settings_access.html', ctx)
+    ctx["active_tab"] = tab
+    return render(request, "settings_access.html", ctx)
 
 
 @login_required
 def settings_users_view(request):
     """Редирект на единую страницу управления с вкладкой «Пользователи»."""
-    if not user_can_feature(request.user, 'settings'):
-        return redirect('index')
+    if not user_can_feature(request.user, "settings"):
+        return redirect("index")
     from django.urls import reverse
-    return redirect(reverse('settings_access') + '?tab=users')
+
+    return redirect(reverse("settings_access") + "?tab=users")
 
 
 @login_required
 def settings_groups_view(request):
     """Редирект на единую страницу управления с вкладкой «Группы»."""
-    if not user_can_feature(request.user, 'settings'):
-        return redirect('index')
+    if not user_can_feature(request.user, "settings"):
+        return redirect("index")
     from django.urls import reverse
-    return redirect(reverse('settings_access') + '?tab=groups')
+
+    return redirect(reverse("settings_access") + "?tab=groups")
 
 
 @login_required
 def settings_permissions_view(request):
     """Редирект на единую страницу управления с вкладкой «Права»."""
-    if not user_can_feature(request.user, 'settings'):
-        return redirect('index')
+    if not user_can_feature(request.user, "settings"):
+        return redirect("index")
     from django.urls import reverse
-    return redirect(reverse('settings_access') + '?tab=permissions')
+
+    return redirect(reverse("settings_access") + "?tab=permissions")
 
 
 # ============================================
@@ -1369,15 +1426,14 @@ def settings_permissions_view(request):
 # agent: agent -p --force --output-format stream-json --stream-partial-output --workspace ... --model auto "..."
 # ============================================
 
+
 def _resolve_cursor_cli_command() -> str:
     """Путь к бинарнику Cursor CLI (agent). Аналогично agent_hub."""
     path_from_env = (os.getenv("CURSOR_CLI_PATH") or "").strip()
     if path_from_env:
         if Path(path_from_env).exists():
             return path_from_env
-        raise FileNotFoundError(
-            f"CURSOR_CLI_PATH задан, но файл не найден: {path_from_env}"
-        )
+        raise FileNotFoundError(f"CURSOR_CLI_PATH задан, но файл не найден: {path_from_env}")
     cfg = getattr(settings, "CLI_RUNTIME_CONFIG", None) or {}
     cursor_cfg = cfg.get("cursor") or {}
     cmd = cursor_cfg.get("command", "agent")
@@ -1387,9 +1443,7 @@ def _resolve_cursor_cli_command() -> str:
         return cmd
     resolved = shutil.which(cmd)
     if not resolved:
-        raise FileNotFoundError(
-            "Cursor CLI (agent) не найден. Добавьте agent в PATH или задайте CURSOR_CLI_PATH."
-        )
+        raise FileNotFoundError("Cursor CLI (agent) не найден. Добавьте agent в PATH или задайте CURSOR_CLI_PATH.")
     return resolved
 
 
@@ -1403,10 +1457,13 @@ def _get_servers_context_for_prompt(user_id: int) -> str:
     try:
         from servers.models import Server
         from servers.secret_utils import get_server_auth_secret
+
         master_pwd = os.environ.get("MASTER_PASSWORD", "").strip()
-        servers = list(Server.objects.filter(user_id=user_id).only(
-            "id", "name", "host", "port", "username", "auth_method", "key_path", "encrypted_password", "salt"
-        ))
+        servers = list(
+            Server.objects.filter(user_id=user_id).only(
+                "id", "name", "host", "port", "username", "auth_method", "key_path", "encrypted_password", "salt"
+            )
+        )
         if not servers:
             return ""
         lines = [
@@ -1426,7 +1483,9 @@ def _get_servers_context_for_prompt(user_id: int) -> str:
                     logger.debug(f"Password decryption failed for server {s.name}: {e}")
                     pwd_decrypted = ""
             if auth == "key" and key_path:
-                cmd_hint = f"ssh -i {key_path} -o StrictHostKeyChecking=no {s.username}@{s.host} -p {s.port} '<COMMAND>'"
+                cmd_hint = (
+                    f"ssh -i {key_path} -o StrictHostKeyChecking=no {s.username}@{s.host} -p {s.port} '<COMMAND>'"
+                )
             elif pwd_decrypted:
                 safe_pwd = pwd_decrypted.replace("'", "'\\''")
                 cmd_hint = f"sshpass -p '{safe_pwd}' ssh -o StrictHostKeyChecking=no {s.username}@{s.host} -p {s.port} '<COMMAND>'"
@@ -1536,11 +1595,11 @@ async def _stream_cursor_cli(
 # API Endpoints
 # ============================================
 
+
 def _chat_history_from_session(session):
     """Build list of {role, content} from ChatMessage for orchestrator initial_history."""
     return [
-        {"role": m.role, "content": m.content}
-        for m in session.messages.order_by('created_at').only('role', 'content')
+        {"role": m.role, "content": m.content} for m in session.messages.order_by("created_at").only("role", "content")
     ]
 
 
@@ -1585,6 +1644,7 @@ def _load_task_context_for_user(user_id: int, task_id) -> dict:
 def _get_server_names_for_user(user_id: int):
     """Синхронный запрос к ORM — вызывать только через sync_to_async из async-контекста."""
     from servers.models import Server
+
     return list(Server.objects.filter(user_id=user_id).values_list("name", flat=True))
 
 
@@ -1594,6 +1654,7 @@ async def _try_server_command_by_name(user_id: int, message: str):
     Возвращает строку результата или None, если «сервер по имени» не распознан.
     """
     import re
+
     try:
         from app.tools.server_tools import ServerExecuteTool
     except ImportError as e:
@@ -1629,7 +1690,7 @@ async def _try_server_command_by_name(user_id: int, message: str):
         else:
             m = re.search(r"(?:выполни|запусти|команду)\s+([^\n.!?\]]+)", message, re.IGNORECASE)
             if m:
-                cmd = m.group(1).strip().strip('"\'')
+                cmd = m.group(1).strip().strip("\"'")
                 if cmd and len(cmd) < 200:
                     command = cmd
             if "df" in msg and "df -h" not in command and "df " not in command:
@@ -1651,21 +1712,21 @@ async def _try_server_command_by_name(user_id: int, message: str):
 
 
 @login_required
-@require_feature('orchestrator')
+@require_feature("orchestrator")
 @require_http_methods(["GET"])
 def api_chats_list(request):
     """Список чатов текущего пользователя."""
     try:
-        last_msg_qs = ChatMessage.objects.filter(session=OuterRef('pk')).order_by('-created_at')
+        last_msg_qs = ChatMessage.objects.filter(session=OuterRef("pk")).order_by("-created_at")
         sessions = (
             ChatSession.objects.filter(user=request.user)
             .annotate(
-                last_message=Subquery(last_msg_qs.values('content')[:1]),
-                last_message_role=Subquery(last_msg_qs.values('role')[:1]),
-                last_message_at=Subquery(last_msg_qs.values('created_at')[:1]),
-                message_count=Count('messages'),
+                last_message=Subquery(last_msg_qs.values("content")[:1]),
+                last_message_role=Subquery(last_msg_qs.values("role")[:1]),
+                last_message_at=Subquery(last_msg_qs.values("created_at")[:1]),
+                message_count=Count("messages"),
             )
-            .order_by('-updated_at')[:50]
+            .order_by("-updated_at")[:50]
         )
 
         def _preview(text):
@@ -1676,16 +1737,18 @@ def api_chats_list(request):
 
         items = []
         for s in sessions:
-            items.append({
-                "id": s.id,
-                "title": s.title,
-                "created_at": s.created_at.isoformat(),
-                "updated_at": s.updated_at.isoformat(),
-                "preview": _preview(getattr(s, "last_message", "")),
-                "last_message_role": getattr(s, "last_message_role", None),
-                "last_message_at": s.last_message_at.isoformat() if getattr(s, "last_message_at", None) else None,
-                "message_count": s.message_count or 0,
-            })
+            items.append(
+                {
+                    "id": s.id,
+                    "title": s.title,
+                    "created_at": s.created_at.isoformat(),
+                    "updated_at": s.updated_at.isoformat(),
+                    "preview": _preview(getattr(s, "last_message", "")),
+                    "last_message_role": getattr(s, "last_message_role", None),
+                    "last_message_at": s.last_message_at.isoformat() if getattr(s, "last_message_at", None) else None,
+                    "message_count": s.message_count or 0,
+                }
+            )
         return JsonResponse({"chats": items})
     except Exception as e:
         logger.error(f"api_chats_list: {e}")
@@ -1693,7 +1756,7 @@ def api_chats_list(request):
 
 
 @login_required
-@require_feature('orchestrator')
+@require_feature("orchestrator")
 @require_http_methods(["POST"])
 def api_chats_create(request):
     """Создать новый чат. Body: {} или {"title": "..."}. Возвращает { "id", "title" }."""
@@ -1710,7 +1773,7 @@ def api_chats_create(request):
 
 
 @login_required
-@require_feature('orchestrator')
+@require_feature("orchestrator")
 @require_http_methods(["GET"])
 def api_chat_detail(request, chat_id):
     """Получить чат по id с сообщениями. Доступ только к своим чатам."""
@@ -1720,63 +1783,65 @@ def api_chat_detail(request, chat_id):
             return JsonResponse({"error": "Not found"}, status=404)
         messages = [
             {"role": m.role, "content": m.content, "created_at": m.created_at.isoformat()}
-            for m in session.messages.order_by('created_at')
+            for m in session.messages.order_by("created_at")
         ]
-        return JsonResponse({
-            "id": session.id,
-            "title": session.title,
-            "created_at": session.created_at.isoformat(),
-            "updated_at": session.updated_at.isoformat(),
-            "messages": messages,
-        })
+        return JsonResponse(
+            {
+                "id": session.id,
+                "title": session.title,
+                "created_at": session.created_at.isoformat(),
+                "updated_at": session.updated_at.isoformat(),
+                "messages": messages,
+            }
+        )
     except Exception as e:
         logger.error(f"api_chat_detail: {e}")
         return JsonResponse({"error": str(e)}, status=500)
 
 
 @async_login_required
-@async_require_feature('orchestrator')
+@async_require_feature("orchestrator")
 async def chat_api(request):
     """
     Async API endpoint for chat streaming.
     Expects JSON: { "message": "user input", "model": "auto|gemini|grok|openai|claude", "chat_id": null|int }
     model=auto → Cursor CLI; chat_id — сессия для истории и сохранения сообщений.
     """
-    if request.method != 'POST':
-        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    if request.method != "POST":
+        return JsonResponse({"error": "Method not allowed"}, status=405)
 
     try:
         data = json.loads(request.body)
-        user_message = data.get('message', '')
-        model = data.get('model', model_manager.config.default_provider)
-        specific_model = data.get('specific_model')
-        use_rag = data.get('use_rag', True)
-        chat_id = data.get('chat_id')
-        task_context_id = data.get('task_context_id')
-        workspace_param = data.get('workspace', '').strip()  # Для IDE: имя проекта или относительный путь
+        user_message = data.get("message", "")
+        model = data.get("model", model_manager.config.default_provider)
+        specific_model = data.get("specific_model")
+        use_rag = data.get("use_rag", True)
+        chat_id = data.get("chat_id")
+        task_context_id = data.get("task_context_id")
+        workspace_param = data.get("workspace", "").strip()  # Для IDE: имя проекта или относительный путь
 
         if not user_message:
-            return JsonResponse({'error': 'Empty message'}, status=400)
+            return JsonResponse({"error": "Empty message"}, status=400)
 
         # request.user доступен только в sync-контексте — получаем user_id через sync_to_async
-        user_id = await sync_to_async(
-            lambda r: r.user.id if getattr(r.user, 'is_authenticated', False) else None
-        )(request)
+        user_id = await sync_to_async(lambda r: r.user.id if getattr(r.user, "is_authenticated", False) else None)(
+            request
+        )
         if user_id:
             await sync_to_async(log_user_activity, thread_sensitive=True)(
                 user_id=user_id,
                 request=request,
-                category='assistant',
-                action='chat_request',
+                category="assistant",
+                action="chat_request",
                 status=UserActivityLog.STATUS_SUCCESS,
                 description=user_message[:400],
-                entity_type='chat_session',
-                entity_id=str(chat_id or ''),
+                entity_type="chat_session",
+                entity_id=str(chat_id or ""),
                 metadata={
-                    'model': model,
-                    'specific_model': specific_model or '',
-                    'use_rag': bool(use_rag),
-                    'workspace': workspace_param or '',
+                    "model": model,
+                    "specific_model": specific_model or "",
+                    "use_rag": bool(use_rag),
+                    "workspace": workspace_param or "",
                 },
             )
 
@@ -1800,7 +1865,7 @@ async def chat_api(request):
                 effective_model = model
                 if model == "auto":
                     effective_model = model_manager.config.default_provider or "cursor"
-                
+
                 if effective_model == "cursor" or effective_model == "auto":  # fallback
                     if not session and user_id:
                         session = await asyncio.to_thread(
@@ -1817,11 +1882,17 @@ async def chat_api(request):
                             yield f"CHAT_ID:{created_session_id}\n"
                         yield server_result
                         if user_id and session:
+
                             def _save_auto():
-                                ChatMessage.objects.create(session=session, role=ChatMessage.ROLE_USER, content=user_message)
-                                ChatMessage.objects.create(session=session, role=ChatMessage.ROLE_ASSISTANT, content=server_result)
+                                ChatMessage.objects.create(
+                                    session=session, role=ChatMessage.ROLE_USER, content=user_message
+                                )
+                                ChatMessage.objects.create(
+                                    session=session, role=ChatMessage.ROLE_ASSISTANT, content=server_result
+                                )
                                 session.title = (user_message[:80] or session.title).strip() or session.title
                                 session.save(update_fields=["title", "updated_at"])
+
                             await asyncio.to_thread(_save_auto)
                         return
                     workspace = getattr(settings, "BASE_DIR", "")
@@ -1842,7 +1913,11 @@ async def chat_api(request):
                             f"- description: {task_context.get('description')}\n"
                             "If user asks about 'this task', refer to this context instead of listing all tasks.\n\n"
                         )
-                    prompt_with_servers = (servers_ctx + "\n\n" + task_ctx_prompt + user_message) if (servers_ctx or task_ctx_prompt) else user_message
+                    prompt_with_servers = (
+                        (servers_ctx + "\n\n" + task_ctx_prompt + user_message)
+                        if (servers_ctx or task_ctx_prompt)
+                        else user_message
+                    )
                     if created_session_id is not None:
                         yield f"CHAT_ID:{created_session_id}\n"
                     async for chunk in _stream_cursor_cli(
@@ -1856,11 +1931,17 @@ async def chat_api(request):
                         yield chunk
                     full_text = "".join(accumulated)
                     if user_id and session:
+
                         def _save_auto():
-                            ChatMessage.objects.create(session=session, role=ChatMessage.ROLE_USER, content=user_message)
-                            ChatMessage.objects.create(session=session, role=ChatMessage.ROLE_ASSISTANT, content=full_text)
+                            ChatMessage.objects.create(
+                                session=session, role=ChatMessage.ROLE_USER, content=user_message
+                            )
+                            ChatMessage.objects.create(
+                                session=session, role=ChatMessage.ROLE_ASSISTANT, content=full_text
+                            )
                             session.title = (user_message[:80] or session.title).strip() or session.title
                             session.save(update_fields=["title", "updated_at"])
+
                         await asyncio.to_thread(_save_auto)
                     return
                 if not session and user_id:
@@ -1873,7 +1954,7 @@ async def chat_api(request):
                     created_session_id = session.id
                 if created_session_id is not None:
                     yield f"CHAT_ID:{created_session_id}\n"
-                
+
                 # Разрешаем workspace если передан
                 workspace_path = None
                 if workspace_param:
@@ -1883,7 +1964,7 @@ async def chat_api(request):
                     except ValueError as e:
                         yield f"\n\n❌ Ошибка workspace: {e}\n"
                         return
-                
+
                 # Формируем execution_context (IDE: без RAG и без лишнего контекста серверов)
                 execution_context = {}
                 if user_id:
@@ -1893,18 +1974,18 @@ async def chat_api(request):
                 if workspace_path:
                     execution_context["workspace_path"] = workspace_path
                     execution_context["from_ide"] = True
-                
+
                 # В режиме IDE не подмешиваем RAG (чтобы не тянуть чек-листы и посторонние данные)
                 use_rag_effective = use_rag if not workspace_path else False
                 execution_context["rag_enabled"] = bool(use_rag_effective)
-                
+
                 # Используем UnifiedOrchestrator с auto mode selection
                 orchestrator = await get_unified_orchestrator()
-                orchestrator_mode = data.get('mode')  # Опциональный параметр mode
+                orchestrator_mode = data.get("mode")  # Опциональный параметр mode
                 # Для чата по умолчанию используем простой chat mode (без ReAct loop)
                 if not orchestrator_mode and not workspace_path:
                     orchestrator_mode = "chat"
-                
+
                 # Передаем effective_model (уже заменен auto -> default_provider)
                 async for chunk in orchestrator.process_user_message(
                     user_message,
@@ -1920,255 +2001,227 @@ async def chat_api(request):
                     yield chunk
                 full_text = "".join(accumulated)
                 if user_id and session:
+
                     def _save():
                         ChatMessage.objects.create(session=session, role=ChatMessage.ROLE_USER, content=user_message)
                         ChatMessage.objects.create(session=session, role=ChatMessage.ROLE_ASSISTANT, content=full_text)
                         session.title = (user_message[:80] or session.title).strip() or session.title
                         session.save(update_fields=["title", "updated_at"])
+
                     await asyncio.to_thread(_save)
             except FileNotFoundError as e:
                 yield f"\n\n❌ {e}"
             except Exception as e:
                 yield f"\n\n❌ Error: {str(e)}"
 
-        return StreamingHttpResponse(event_stream(), content_type='text/plain; charset=utf-8')
+        return StreamingHttpResponse(event_stream(), content_type="text/plain; charset=utf-8")
 
     except json.JSONDecodeError:
-        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({"error": str(e)}, status=500)
 
 
 @login_required
-@require_feature('knowledge_base')
+@require_feature("knowledge_base")
 @require_http_methods(["POST"])
 def rag_add_api(request):
     """Add text to RAG knowledge base"""
     try:
         data = json.loads(request.body)
-        text = data.get('text', '')
-        source = data.get('source', 'manual')
-        
+        text = data.get("text", "")
+        source = data.get("source", "manual")
+
         if not text:
-            return JsonResponse({'success': False, 'error': 'Empty text'}, status=400)
-        
+            return JsonResponse({"success": False, "error": "Empty text"}, status=400)
+
         rag = get_rag_engine()
         if not rag.available:
-            return JsonResponse({'success': False, 'error': 'RAG not available'}, status=503)
-        
+            return JsonResponse({"success": False, "error": "RAG not available"}, status=503)
+
         doc_id = rag.add_text(text, source, user_id=request.user.id)
-        
+
         if doc_id is None:
-            return JsonResponse({
-                'success': False,
-                'error': 'Failed to add document to RAG'
-            }, status=500)
-        
-        return JsonResponse({
-            'success': True,
-            'doc_id': doc_id,
-            'message': 'Document added successfully'
-        })
+            return JsonResponse({"success": False, "error": "Failed to add document to RAG"}, status=500)
+
+        return JsonResponse({"success": True, "doc_id": doc_id, "message": "Document added successfully"})
     except json.JSONDecodeError:
-        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+        return JsonResponse({"success": False, "error": "Invalid JSON"}, status=400)
     except Exception as e:
         logger.error(f"Error in rag_add_api: {e}")
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        return JsonResponse({"success": False, "error": str(e)}, status=500)
 
 
 @login_required
-@require_feature('knowledge_base')
+@require_feature("knowledge_base")
 @require_http_methods(["POST"])
 def rag_query_api(request):
     """Query RAG knowledge base"""
     try:
         data = json.loads(request.body)
-        query = data.get('query', '')
-        n_results = data.get('n_results', 5)
-        
+        query = data.get("query", "")
+        n_results = data.get("n_results", 5)
+
         if not query:
-            return JsonResponse({'success': False, 'error': 'Empty query'}, status=400)
-        
+            return JsonResponse({"success": False, "error": "Empty query"}, status=400)
+
         rag = get_rag_engine()
         if not rag.available:
-            return JsonResponse({
-                'success': False,
-                'error': 'RAG not available',
-                'documents': [[]],
-                'metadatas': [[]]
-            }, status=503)
-        
+            return JsonResponse(
+                {"success": False, "error": "RAG not available", "documents": [[]], "metadatas": [[]]}, status=503
+            )
+
         try:
             results = rag.query(query, n_results, user_id=request.user.id)
-            
-            return JsonResponse({
-                'success': True,
-                'documents': results.get('documents', [[]]),
-                'metadatas': results.get('metadatas', [[]])
-            })
+
+            return JsonResponse(
+                {
+                    "success": True,
+                    "documents": results.get("documents", [[]]),
+                    "metadatas": results.get("metadatas", [[]]),
+                }
+            )
         except Exception as query_error:
             logger.error(f"Error querying RAG: {query_error}")
-            return JsonResponse({
-                'success': False,
-                'error': f'Query failed: {str(query_error)}',
-                'documents': [[]],
-                'metadatas': [[]]
-            }, status=500)
+            return JsonResponse(
+                {"success": False, "error": f"Query failed: {str(query_error)}", "documents": [[]], "metadatas": [[]]},
+                status=500,
+            )
     except json.JSONDecodeError:
-        return JsonResponse({
-            'success': False,
-            'error': 'Invalid JSON',
-            'documents': [[]],
-            'metadatas': [[]]
-        }, status=400)
+        return JsonResponse(
+            {"success": False, "error": "Invalid JSON", "documents": [[]], "metadatas": [[]]}, status=400
+        )
     except Exception as e:
         logger.error(f"Error in rag_query_api: {e}")
-        return JsonResponse({
-            'success': False,
-            'error': str(e),
-            'documents': [[]],
-            'metadatas': [[]]
-        }, status=500)
+        return JsonResponse({"success": False, "error": str(e), "documents": [[]], "metadatas": [[]]}, status=500)
 
 
 @login_required
-@require_feature('knowledge_base')
+@require_feature("knowledge_base")
 @require_http_methods(["POST"])
 def rag_reset_api(request):
     """Reset RAG database"""
     try:
         rag = get_rag_engine()
         if not rag.available:
-            return JsonResponse({'success': False, 'error': 'RAG not available'}, status=503)
-        
+            return JsonResponse({"success": False, "error": "RAG not available"}, status=503)
+
         try:
             rag.reset_db(user_id=request.user.id)
-            return JsonResponse({
-                'success': True,
-                'message': 'Database reset successfully'
-            })
+            return JsonResponse({"success": True, "message": "Database reset successfully"})
         except Exception as reset_error:
             logger.error(f"Error resetting RAG: {reset_error}")
-            return JsonResponse({
-                'success': False,
-                'error': f'Reset failed: {str(reset_error)}'
-            }, status=500)
+            return JsonResponse({"success": False, "error": f"Reset failed: {str(reset_error)}"}, status=500)
     except Exception as e:
         logger.error(f"Error in rag_reset_api: {e}")
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        return JsonResponse({"success": False, "error": str(e)}, status=500)
 
 
 @login_required
-@require_feature('knowledge_base')
+@require_feature("knowledge_base")
 @require_http_methods(["POST"])
 def rag_delete_api(request):
     """Delete a single document by id"""
     try:
         data = json.loads(request.body) if request.body else {}
-        doc_id = data.get('doc_id') or data.get('id')
+        doc_id = data.get("doc_id") or data.get("id")
         if not doc_id:
-            return JsonResponse({'success': False, 'error': 'doc_id required'}, status=400)
+            return JsonResponse({"success": False, "error": "doc_id required"}, status=400)
         rag = get_rag_engine()
         if not rag.available:
-            return JsonResponse({'success': False, 'error': 'RAG not available'}, status=503)
+            return JsonResponse({"success": False, "error": "RAG not available"}, status=503)
         removed = rag.delete_document(str(doc_id), user_id=request.user.id)
         if removed:
-            return JsonResponse({'success': True, 'message': 'Document deleted'})
-        return JsonResponse({'success': False, 'error': 'Document not found'}, status=404)
+            return JsonResponse({"success": True, "message": "Document deleted"})
+        return JsonResponse({"success": False, "error": "Document not found"}, status=404)
     except json.JSONDecodeError:
-        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+        return JsonResponse({"success": False, "error": "Invalid JSON"}, status=400)
     except Exception as e:
         logger.error(f"Error in rag_delete_api: {e}")
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        return JsonResponse({"success": False, "error": str(e)}, status=500)
 
 
 @login_required
-@require_feature('knowledge_base')
+@require_feature("knowledge_base")
 def rag_documents_api(request):
     """Get documents from RAG with pagination - optimized for performance"""
     try:
         rag = get_rag_engine()
         if not rag.available:
-            return JsonResponse({
-                'success': False,
-                'error': 'RAG not available',
-                'documents': [],
-                'doc_count': 0
-            })
-        
+            return JsonResponse({"success": False, "error": "RAG not available", "documents": [], "doc_count": 0})
+
         # Get pagination parameters
-        limit = int(request.GET.get('limit', 50))  # Default 50 documents
-        offset = int(request.GET.get('offset', 0))
-        
+        limit = int(request.GET.get("limit", 50))  # Default 50 documents
+        offset = int(request.GET.get("offset", 0))
+
         # Get documents (limited for performance)
         all_documents = rag.get_documents(limit=limit + offset, user_id=request.user.id)
-        
+
         # Apply pagination
-        documents = all_documents[offset:offset + limit]
+        documents = all_documents[offset : offset + limit]
         total_count = len(all_documents) if offset == 0 else len(all_documents)
-        
-        return JsonResponse({
-            'success': True,
-            'documents': documents,
-            'doc_count': total_count,
-            'has_more': len(all_documents) > offset + limit
-        })
+
+        return JsonResponse(
+            {
+                "success": True,
+                "documents": documents,
+                "doc_count": total_count,
+                "has_more": len(all_documents) > offset + limit,
+            }
+        )
     except Exception as e:
         logger.error(f"Error getting documents: {e}")
-        return JsonResponse({
-            'success': False,
-            'error': str(e),
-            'documents': [],
-            'doc_count': 0
-        })
+        return JsonResponse({"success": False, "error": str(e), "documents": [], "doc_count": 0})
 
 
 @login_required
-@require_feature('orchestrator')
+@require_feature("orchestrator")
 def api_tools_list(request):
     """Get list of available tools via UnifiedOrchestrator"""
     try:
         orchestrator = async_to_sync(get_unified_orchestrator)()
         tools = orchestrator.get_available_tools()
-        return JsonResponse({'tools': tools, 'count': len(tools)})
+        return JsonResponse({"tools": tools, "count": len(tools)})
     except Exception as e:
         logger.error(f"Error loading tools: {e}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({"error": str(e)}, status=500)
 
 
 @login_required
 def api_models_list(request):
     """Get list of available models for dropdowns (Studio LLM node, settings). Any logged-in user may read."""
     try:
-        gemini_models = model_manager.get_available_models('gemini')
-        grok_models = model_manager.get_available_models('grok')
-        openai_models = model_manager.get_available_models('openai')
-        claude_models = model_manager.get_available_models('claude')
+        gemini_models = model_manager.get_available_models("gemini")
+        grok_models = model_manager.get_available_models("grok")
+        openai_models = model_manager.get_available_models("openai")
+        claude_models = model_manager.get_available_models("claude")
         c = model_manager.config
-        return JsonResponse({
-            'gemini': gemini_models,
-            'grok': grok_models,
-            'openai': openai_models,
-            'claude': claude_models,
-            'rag_defaults': [
-                'models/text-embedding-004',
-                'models/text-embedding-005',
-                'models/embedding-001',
-            ],
-            'current': {
-                'chat_gemini': c.chat_model_gemini,
-                'chat_grok': c.chat_model_grok,
-                'chat_openai': getattr(c, 'chat_model_openai', 'gpt-5-mini'),
-                'chat_claude': getattr(c, 'chat_model_claude', 'claude-sonnet-4-6'),
-                'rag_model': c.rag_model,
-                'agent_model_gemini': c.agent_model_gemini,
-                'agent_model_grok': c.agent_model_grok,
-                'agent_model_openai': getattr(c, 'agent_model_openai', 'gpt-5-mini'),
-                'default_provider': c.default_provider,
+        return JsonResponse(
+            {
+                "gemini": gemini_models,
+                "grok": grok_models,
+                "openai": openai_models,
+                "claude": claude_models,
+                "rag_defaults": [
+                    "models/text-embedding-004",
+                    "models/text-embedding-005",
+                    "models/embedding-001",
+                ],
+                "current": {
+                    "chat_gemini": c.chat_model_gemini,
+                    "chat_grok": c.chat_model_grok,
+                    "chat_openai": getattr(c, "chat_model_openai", "gpt-5-mini"),
+                    "chat_claude": getattr(c, "chat_model_claude", "claude-sonnet-4-6"),
+                    "rag_model": c.rag_model,
+                    "agent_model_gemini": c.agent_model_gemini,
+                    "agent_model_grok": c.agent_model_grok,
+                    "agent_model_openai": getattr(c, "agent_model_openai", "gpt-5-mini"),
+                    "default_provider": c.default_provider,
+                },
             }
-        })
+        )
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({"error": str(e)}, status=500)
 
 
 @login_required
@@ -2180,46 +2233,50 @@ def api_models_refresh(request):
     Fetch models from provider API and return refreshed list. Any logged-in user (e.g. Studio) may call.
     """
     try:
-        data = json.loads(request.body or '{}')
+        data = json.loads(request.body or "{}")
     except json.JSONDecodeError:
-        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
 
-    provider = (data.get('provider') or '').strip().lower()
-    if provider not in {'gemini', 'grok', 'openai', 'claude'}:
-        return JsonResponse({'error': 'provider must be one of: gemini, grok, openai, claude'}, status=400)
+    provider = (data.get("provider") or "").strip().lower()
+    if provider not in {"gemini", "grok", "openai", "claude"}:
+        return JsonResponse({"error": "provider must be one of: gemini, grok, openai, claude"}, status=400)
 
-    if provider == 'gemini' and not (os.getenv('GEMINI_API_KEY') or '').strip():
-        return JsonResponse({'error': 'GEMINI_API_KEY is not configured'}, status=400)
-    if provider == 'grok' and not (os.getenv('GROK_API_KEY') or '').strip():
-        return JsonResponse({'error': 'GROK_API_KEY is not configured'}, status=400)
-    if provider == 'openai' and not ((os.getenv('OPENAI_API_KEY') or '').strip() or (os.getenv('CODEX_API_KEY') or '').strip()):
-        return JsonResponse({'error': 'OPENAI_API_KEY or CODEX_API_KEY is not configured'}, status=400)
-    if provider == 'claude' and not (os.getenv('ANTHROPIC_API_KEY') or '').strip():
-        return JsonResponse({'error': 'ANTHROPIC_API_KEY is not configured'}, status=400)
+    if provider == "gemini" and not (os.getenv("GEMINI_API_KEY") or "").strip():
+        return JsonResponse({"error": "GEMINI_API_KEY is not configured"}, status=400)
+    if provider == "grok" and not (os.getenv("GROK_API_KEY") or "").strip():
+        return JsonResponse({"error": "GROK_API_KEY is not configured"}, status=400)
+    if provider == "openai" and not (
+        (os.getenv("OPENAI_API_KEY") or "").strip() or (os.getenv("CODEX_API_KEY") or "").strip()
+    ):
+        return JsonResponse({"error": "OPENAI_API_KEY or CODEX_API_KEY is not configured"}, status=400)
+    if provider == "claude" and not (os.getenv("ANTHROPIC_API_KEY") or "").strip():
+        return JsonResponse({"error": "ANTHROPIC_API_KEY is not configured"}, status=400)
 
     try:
-        if provider == 'gemini':
+        if provider == "gemini":
             models = asyncio.run(model_manager.fetch_available_gemini_models())
-        elif provider == 'grok':
+        elif provider == "grok":
             models = asyncio.run(model_manager.fetch_available_grok_models())
-        elif provider == 'claude':
+        elif provider == "claude":
             models = asyncio.run(model_manager.fetch_available_claude_models())
         else:
             models = asyncio.run(model_manager.fetch_available_openai_models())
 
-        return JsonResponse({
-            'success': True,
-            'provider': provider,
-            'models': models,
-            'count': len(models),
-        })
+        return JsonResponse(
+            {
+                "success": True,
+                "provider": provider,
+                "models": models,
+                "count": len(models),
+            }
+        )
     except Exception as e:
-        logger.exception('api_models_refresh error: %s', e)
-        return JsonResponse({'error': str(e)}, status=500)
+        logger.exception("api_models_refresh error: %s", e)
+        return JsonResponse({"error": str(e)}, status=500)
 
 
 @login_required
-@require_feature('orchestrator')
+@require_feature("orchestrator")
 @require_http_methods(["POST"])
 def api_clear_history(request):
     """Clear conversation history via UnifiedOrchestrator"""
@@ -2230,262 +2287,282 @@ def api_clear_history(request):
         log_user_activity(
             user=request.user,
             request=request,
-            category='assistant',
-            action='chat_history_clear',
+            category="assistant",
+            action="chat_history_clear",
             status=UserActivityLog.STATUS_SUCCESS,
-            description='Cleared chat history',
-            entity_type='chat',
+            description="Cleared chat history",
+            entity_type="chat",
         )
-        return JsonResponse({'success': True, 'message': 'History cleared'})
+        return JsonResponse({"success": True, "message": "History cleared"})
     except Exception as e:
         log_user_activity(
             user=request.user,
             request=request,
-            category='assistant',
-            action='chat_history_clear',
+            category="assistant",
+            action="chat_history_clear",
             status=UserActivityLog.STATUS_ERROR,
-            description=f'Failed to clear chat history: {e}',
-            entity_type='chat',
+            description=f"Failed to clear chat history: {e}",
+            entity_type="chat",
         )
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({"error": str(e)}, status=500)
 
 
 @login_required
 @require_http_methods(["GET", "POST"])
 def api_settings(request):
     """GET: return full settings config. POST: update settings. Only for staff or users with settings permission."""
-    if not user_can_feature(request.user, 'settings'):
-        return JsonResponse({'error': 'Forbidden'}, status=403)
-    if request.method == 'GET':
+    if not user_can_feature(request.user, "settings"):
+        return JsonResponse({"error": "Forbidden"}, status=403)
+    if request.method == "GET":
         try:
             model_manager.load_config()
             c = model_manager.config
-            delegate_ui = 'chat'
-            if 'tasks' in (getattr(settings, 'INSTALLED_APPS', None) or []):
+            delegate_ui = "chat"
+            if "tasks" in (getattr(settings, "INSTALLED_APPS", None) or []):
                 try:
                     from tasks.models import UserDelegatePreference
+
                     pref = UserDelegatePreference.objects.filter(user=request.user).first()
                     if pref:
                         delegate_ui = pref.delegate_ui
                 except Exception as e:
                     logger.debug("Failed to load delegate preference: %s", e)
-            
+
             # Provider Registry для статусов
             from app.core.provider_registry import get_provider_registry
-            registry = get_provider_registry()
-            
-            return JsonResponse({
-                'success': True,
-                'config': {
-                    'default_provider': c.default_provider,
-                    'internal_llm_provider': getattr(c, 'internal_llm_provider', 'grok') or 'grok',
-                    'default_orchestrator_mode': getattr(c, 'default_orchestrator_mode', 'ralph_internal') or 'ralph_internal',
-                    'ralph_max_iterations': getattr(c, 'ralph_max_iterations', 20) or 20,
-                    'ralph_completion_promise': getattr(c, 'ralph_completion_promise', 'COMPLETE') or 'COMPLETE',
-                    'gemini_enabled': getattr(c, 'gemini_enabled', False),
-                    'grok_enabled': getattr(c, 'grok_enabled', True),
-                    'openai_enabled': getattr(c, 'openai_enabled', False),
-                    'claude_enabled': getattr(c, 'claude_enabled', False),
-                    'chat_model_gemini': c.chat_model_gemini,
-                    'chat_model_grok': c.chat_model_grok,
-                    'chat_model_openai': getattr(c, 'chat_model_openai', 'gpt-5-mini'),
-                    'chat_model_claude': getattr(c, 'chat_model_claude', 'claude-sonnet-4-6'),
-                    'rag_model': c.rag_model,
-                    'agent_model_gemini': c.agent_model_gemini,
-                    'agent_model_grok': c.agent_model_grok,
-                    'agent_model_openai': getattr(c, 'agent_model_openai', 'gpt-5-mini'),
-                    'default_agent_output_path': getattr(c, 'default_agent_output_path', '') or '',
-                    'cursor_chat_mode': getattr(c, 'cursor_chat_mode', 'ask') or 'ask',
-                    'cursor_sandbox': getattr(c, 'cursor_sandbox', '') or '',
-                    'cursor_approve_mcps': getattr(c, 'cursor_approve_mcps', False),
-                    'allow_model_selection': getattr(c, 'allow_model_selection', False),
-                    'delegate_ui': delegate_ui,
-                    'domain_auth_enabled': (
-                        getattr(c, 'domain_auth_enabled', None)
-                        if getattr(c, 'domain_auth_enabled', None) is not None
-                        else bool(getattr(settings, 'DOMAIN_AUTH_ENABLED', False))
-                    ),
-                    'domain_auth_header': (
-                        getattr(c, 'domain_auth_header', None)
-                        if getattr(c, 'domain_auth_header', None)
-                        else str(getattr(settings, 'DOMAIN_AUTH_HEADER', 'REMOTE_USER') or 'REMOTE_USER')
-                    ),
-                    'domain_auth_auto_create': (
-                        getattr(c, 'domain_auth_auto_create', None)
-                        if getattr(c, 'domain_auth_auto_create', None) is not None
-                        else bool(getattr(settings, 'DOMAIN_AUTH_AUTO_CREATE', True))
-                    ),
-                    'domain_auth_lowercase_usernames': (
-                        getattr(c, 'domain_auth_lowercase_usernames', None)
-                        if getattr(c, 'domain_auth_lowercase_usernames', None) is not None
-                        else bool(getattr(settings, 'DOMAIN_AUTH_LOWERCASE_USERNAMES', True))
-                    ),
-                    'domain_auth_default_profile': (
-                        getattr(c, 'domain_auth_default_profile', None)
-                        if getattr(c, 'domain_auth_default_profile', None)
-                        else str(getattr(settings, 'DOMAIN_AUTH_DEFAULT_PROFILE', 'server_only') or 'server_only')
-                    ),
-                    # OpenAI Responses API reasoning effort
-                    'openai_reasoning_effort': getattr(c, 'openai_reasoning_effort', 'low') or 'low',
-                    # Purpose-based LLM settings
-                    'chat_llm_provider': getattr(c, 'chat_llm_provider', '') or '',
-                    'chat_llm_model': getattr(c, 'chat_llm_model', '') or '',
-                    'agent_llm_provider': getattr(c, 'agent_llm_provider', '') or '',
-                    'agent_llm_model': getattr(c, 'agent_llm_model', '') or '',
-                    'orchestrator_llm_provider': getattr(c, 'orchestrator_llm_provider', '') or '',
-                    'orchestrator_llm_model': getattr(c, 'orchestrator_llm_model', '') or '',
-                    'log_terminal_commands': getattr(c, 'log_terminal_commands', True),
-                    'log_ai_assistant': getattr(c, 'log_ai_assistant', True),
-                    'log_agent_runs': getattr(c, 'log_agent_runs', True),
-                    'log_pipeline_runs': getattr(c, 'log_pipeline_runs', True),
-                    'log_auth_events': getattr(c, 'log_auth_events', True),
-                    'log_server_changes': getattr(c, 'log_server_changes', True),
-                    'log_settings_changes': getattr(c, 'log_settings_changes', True),
-                    'log_file_operations': getattr(c, 'log_file_operations', False),
-                    'log_mcp_calls': getattr(c, 'log_mcp_calls', True),
-                    'log_http_requests': getattr(c, 'log_http_requests', True),
-                    'retention_days': getattr(c, 'retention_days', 90) or 90,
-                    'export_format': getattr(c, 'export_format', 'json') or 'json',
-                },
-                'api_keys': {
-                    'gemini_set': bool(os.getenv('GEMINI_API_KEY')),
-                    'grok_set': bool(os.getenv('GROK_API_KEY')),
-                    'openai_set': bool(os.getenv('OPENAI_API_KEY') or os.getenv('CODEX_API_KEY')),
-                    'anthropic_set': bool(os.getenv('ANTHROPIC_API_KEY')),
-                    'claude_set': bool(os.getenv('ANTHROPIC_API_KEY')),
-                    'cursor_set': bool(os.getenv('CURSOR_API_KEY')),
-                    'codex_set': bool(os.getenv('CODEX_API_KEY') or os.getenv('OPENAI_API_KEY')),
-                },
-                'providers': registry.get_all_providers(),
-            })
-        except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
-    if request.method == 'POST':
+            registry = get_provider_registry()
+
+            return JsonResponse(
+                {
+                    "success": True,
+                    "config": {
+                        "default_provider": c.default_provider,
+                        "internal_llm_provider": getattr(c, "internal_llm_provider", "grok") or "grok",
+                        "default_orchestrator_mode": getattr(c, "default_orchestrator_mode", "ralph_internal")
+                        or "ralph_internal",
+                        "ralph_max_iterations": getattr(c, "ralph_max_iterations", 20) or 20,
+                        "ralph_completion_promise": getattr(c, "ralph_completion_promise", "COMPLETE") or "COMPLETE",
+                        "gemini_enabled": getattr(c, "gemini_enabled", False),
+                        "grok_enabled": getattr(c, "grok_enabled", True),
+                        "openai_enabled": getattr(c, "openai_enabled", False),
+                        "claude_enabled": getattr(c, "claude_enabled", False),
+                        "chat_model_gemini": c.chat_model_gemini,
+                        "chat_model_grok": c.chat_model_grok,
+                        "chat_model_openai": getattr(c, "chat_model_openai", "gpt-5-mini"),
+                        "chat_model_claude": getattr(c, "chat_model_claude", "claude-sonnet-4-6"),
+                        "rag_model": c.rag_model,
+                        "agent_model_gemini": c.agent_model_gemini,
+                        "agent_model_grok": c.agent_model_grok,
+                        "agent_model_openai": getattr(c, "agent_model_openai", "gpt-5-mini"),
+                        "default_agent_output_path": getattr(c, "default_agent_output_path", "") or "",
+                        "cursor_chat_mode": getattr(c, "cursor_chat_mode", "ask") or "ask",
+                        "cursor_sandbox": getattr(c, "cursor_sandbox", "") or "",
+                        "cursor_approve_mcps": getattr(c, "cursor_approve_mcps", False),
+                        "allow_model_selection": getattr(c, "allow_model_selection", False),
+                        "delegate_ui": delegate_ui,
+                        "domain_auth_enabled": (
+                            getattr(c, "domain_auth_enabled", None)
+                            if getattr(c, "domain_auth_enabled", None) is not None
+                            else bool(getattr(settings, "DOMAIN_AUTH_ENABLED", False))
+                        ),
+                        "domain_auth_header": (
+                            getattr(c, "domain_auth_header", None)
+                            if getattr(c, "domain_auth_header", None)
+                            else str(getattr(settings, "DOMAIN_AUTH_HEADER", "REMOTE_USER") or "REMOTE_USER")
+                        ),
+                        "domain_auth_auto_create": (
+                            getattr(c, "domain_auth_auto_create", None)
+                            if getattr(c, "domain_auth_auto_create", None) is not None
+                            else bool(getattr(settings, "DOMAIN_AUTH_AUTO_CREATE", True))
+                        ),
+                        "domain_auth_lowercase_usernames": (
+                            getattr(c, "domain_auth_lowercase_usernames", None)
+                            if getattr(c, "domain_auth_lowercase_usernames", None) is not None
+                            else bool(getattr(settings, "DOMAIN_AUTH_LOWERCASE_USERNAMES", True))
+                        ),
+                        "domain_auth_default_profile": (
+                            getattr(c, "domain_auth_default_profile", None)
+                            if getattr(c, "domain_auth_default_profile", None)
+                            else str(getattr(settings, "DOMAIN_AUTH_DEFAULT_PROFILE", "server_only") or "server_only")
+                        ),
+                        # OpenAI Responses API reasoning effort
+                        "openai_reasoning_effort": getattr(c, "openai_reasoning_effort", "low") or "low",
+                        # Purpose-based LLM settings
+                        "chat_llm_provider": getattr(c, "chat_llm_provider", "") or "",
+                        "chat_llm_model": getattr(c, "chat_llm_model", "") or "",
+                        "agent_llm_provider": getattr(c, "agent_llm_provider", "") or "",
+                        "agent_llm_model": getattr(c, "agent_llm_model", "") or "",
+                        "orchestrator_llm_provider": getattr(c, "orchestrator_llm_provider", "") or "",
+                        "orchestrator_llm_model": getattr(c, "orchestrator_llm_model", "") or "",
+                        "log_terminal_commands": getattr(c, "log_terminal_commands", True),
+                        "log_ai_assistant": getattr(c, "log_ai_assistant", True),
+                        "log_agent_runs": getattr(c, "log_agent_runs", True),
+                        "log_pipeline_runs": getattr(c, "log_pipeline_runs", True),
+                        "log_auth_events": getattr(c, "log_auth_events", True),
+                        "log_server_changes": getattr(c, "log_server_changes", True),
+                        "log_settings_changes": getattr(c, "log_settings_changes", True),
+                        "log_file_operations": getattr(c, "log_file_operations", False),
+                        "log_mcp_calls": getattr(c, "log_mcp_calls", True),
+                        "log_http_requests": getattr(c, "log_http_requests", True),
+                        "retention_days": getattr(c, "retention_days", 90) or 90,
+                        "export_format": getattr(c, "export_format", "json") or "json",
+                    },
+                    "api_keys": {
+                        "gemini_set": bool(os.getenv("GEMINI_API_KEY")),
+                        "grok_set": bool(os.getenv("GROK_API_KEY")),
+                        "openai_set": bool(os.getenv("OPENAI_API_KEY") or os.getenv("CODEX_API_KEY")),
+                        "anthropic_set": bool(os.getenv("ANTHROPIC_API_KEY")),
+                        "claude_set": bool(os.getenv("ANTHROPIC_API_KEY")),
+                        "cursor_set": bool(os.getenv("CURSOR_API_KEY")),
+                        "codex_set": bool(os.getenv("CODEX_API_KEY") or os.getenv("OPENAI_API_KEY")),
+                    },
+                    "providers": registry.get_all_providers(),
+                }
+            )
+        except Exception as e:
+            return JsonResponse({"success": False, "error": str(e)}, status=500)
+
+    if request.method == "POST":
         try:
             data = json.loads(request.body)
             audit_logging_keys = {
-                'log_terminal_commands',
-                'log_ai_assistant',
-                'log_agent_runs',
-                'log_pipeline_runs',
-                'log_auth_events',
-                'log_server_changes',
-                'log_settings_changes',
-                'log_file_operations',
-                'log_mcp_calls',
-                'log_http_requests',
-                'retention_days',
-                'export_format',
+                "log_terminal_commands",
+                "log_ai_assistant",
+                "log_agent_runs",
+                "log_pipeline_runs",
+                "log_auth_events",
+                "log_server_changes",
+                "log_settings_changes",
+                "log_file_operations",
+                "log_mcp_calls",
+                "log_http_requests",
+                "retention_days",
+                "export_format",
             }
             allowed = {
-                'default_provider', 'chat_model_gemini', 'chat_model_grok',
-                'chat_model_openai',
-                'rag_model', 'agent_model_gemini', 'agent_model_grok',
-                'agent_model_openai',
-                'default_agent_output_path', 'cursor_chat_mode',
-                'cursor_sandbox', 'cursor_approve_mcps',
-                'internal_llm_provider',  # Провайдер для внутренних вызовов (workflow, анализ)
-                'allow_model_selection',  # Разрешить выбор моделей в workflow
-                'gemini_enabled',  # Включение/отключение Gemini API
-                'grok_enabled',    # Включение/отключение Grok API
-                'openai_enabled',  # Включение/отключение OpenAI API
-                'claude_enabled',  # Включение/отключение Claude API
-                'chat_model_claude',   # Выбранная модель Claude
-                'default_orchestrator_mode',  # react | ralph_internal | ralph_cli
-                'ralph_max_iterations',
-                'ralph_completion_promise',
-                'domain_auth_enabled',
-                'domain_auth_header',
-                'domain_auth_auto_create',
-                'domain_auth_lowercase_usernames',
-                'domain_auth_default_profile',
+                "default_provider",
+                "chat_model_gemini",
+                "chat_model_grok",
+                "chat_model_openai",
+                "rag_model",
+                "agent_model_gemini",
+                "agent_model_grok",
+                "agent_model_openai",
+                "default_agent_output_path",
+                "cursor_chat_mode",
+                "cursor_sandbox",
+                "cursor_approve_mcps",
+                "internal_llm_provider",  # Провайдер для внутренних вызовов (workflow, анализ)
+                "allow_model_selection",  # Разрешить выбор моделей в workflow
+                "gemini_enabled",  # Включение/отключение Gemini API
+                "grok_enabled",  # Включение/отключение Grok API
+                "openai_enabled",  # Включение/отключение OpenAI API
+                "claude_enabled",  # Включение/отключение Claude API
+                "chat_model_claude",  # Выбранная модель Claude
+                "default_orchestrator_mode",  # react | ralph_internal | ralph_cli
+                "ralph_max_iterations",
+                "ralph_completion_promise",
+                "domain_auth_enabled",
+                "domain_auth_header",
+                "domain_auth_auto_create",
+                "domain_auth_lowercase_usernames",
+                "domain_auth_default_profile",
                 # Purpose-based LLM settings
-                'chat_llm_provider', 'chat_llm_model',
-                'agent_llm_provider', 'agent_llm_model',
-                'orchestrator_llm_provider', 'orchestrator_llm_model',
+                "chat_llm_provider",
+                "chat_llm_model",
+                "agent_llm_provider",
+                "agent_llm_model",
+                "orchestrator_llm_provider",
+                "orchestrator_llm_model",
                 # OpenAI reasoning effort (Responses API)
-                'openai_reasoning_effort',
+                "openai_reasoning_effort",
                 # Audit logging
-                'log_terminal_commands',
-                'log_ai_assistant',
-                'log_agent_runs',
-                'log_pipeline_runs',
-                'log_auth_events',
-                'log_server_changes',
-                'log_settings_changes',
-                'log_file_operations',
-                'log_mcp_calls',
-                'log_http_requests',
-                'retention_days',
-                'export_format',
+                "log_terminal_commands",
+                "log_ai_assistant",
+                "log_agent_runs",
+                "log_pipeline_runs",
+                "log_auth_events",
+                "log_server_changes",
+                "log_settings_changes",
+                "log_file_operations",
+                "log_mcp_calls",
+                "log_http_requests",
+                "retention_days",
+                "export_format",
             }
             requested_audit_keys = sorted(key for key in data.keys() if key in audit_logging_keys)
             if requested_audit_keys and not request.user.is_staff:
                 return JsonResponse(
-                    {'success': False, 'error': 'Only admins can update audit logging settings'},
+                    {"success": False, "error": "Only admins can update audit logging settings"},
                     status=403,
                 )
-            if 'domain_auth_header' in data and data['domain_auth_header'] is not None:
-                data['domain_auth_header'] = str(data['domain_auth_header']).strip() or 'REMOTE_USER'
-            if 'domain_auth_default_profile' in data and data['domain_auth_default_profile'] is not None:
-                profile = str(data['domain_auth_default_profile']).strip().lower()
-                if profile not in {'server_only', 'admin_full', 'reset_defaults', 'custom'}:
-                    return JsonResponse({'success': False, 'error': 'Invalid domain_auth_default_profile'}, status=400)
-                data['domain_auth_default_profile'] = profile
-            if 'retention_days' in data and data['retention_days'] is not None:
+            if "domain_auth_header" in data and data["domain_auth_header"] is not None:
+                data["domain_auth_header"] = str(data["domain_auth_header"]).strip() or "REMOTE_USER"
+            if "domain_auth_default_profile" in data and data["domain_auth_default_profile"] is not None:
+                profile = str(data["domain_auth_default_profile"]).strip().lower()
+                if profile not in {"server_only", "admin_full", "reset_defaults", "custom"}:
+                    return JsonResponse({"success": False, "error": "Invalid domain_auth_default_profile"}, status=400)
+                data["domain_auth_default_profile"] = profile
+            if "retention_days" in data and data["retention_days"] is not None:
                 try:
-                    data['retention_days'] = max(1, min(int(data['retention_days']), 3650))
+                    data["retention_days"] = max(1, min(int(data["retention_days"]), 3650))
                 except (TypeError, ValueError):
-                    return JsonResponse({'success': False, 'error': 'Invalid retention_days'}, status=400)
-            if 'export_format' in data and data['export_format'] is not None:
-                export_format = str(data['export_format']).strip().lower()
-                if export_format not in {'json', 'csv', 'syslog'}:
-                    return JsonResponse({'success': False, 'error': 'Invalid export_format'}, status=400)
-                data['export_format'] = export_format
+                    return JsonResponse({"success": False, "error": "Invalid retention_days"}, status=400)
+            if "export_format" in data and data["export_format"] is not None:
+                export_format = str(data["export_format"]).strip().lower()
+                if export_format not in {"json", "csv", "syslog"}:
+                    return JsonResponse({"success": False, "error": "Invalid export_format"}, status=400)
+                data["export_format"] = export_format
             # Если выбран провайдер через purpose-based ключи, включить его (чтобы не было fallback на grok)
-            for provider_key in ('chat_llm_provider', 'agent_llm_provider', 'orchestrator_llm_provider', 'internal_llm_provider'):
+            for provider_key in (
+                "chat_llm_provider",
+                "agent_llm_provider",
+                "orchestrator_llm_provider",
+                "internal_llm_provider",
+            ):
                 p = data.get(provider_key)
-                if p in ('gemini', 'grok', 'openai', 'claude'):
-                    data[f'{p}_enabled'] = True
+                if p in ("gemini", "grok", "openai", "claude"):
+                    data[f"{p}_enabled"] = True
             for key, value in data.items():
                 if key in allowed and value is not None:
                     model_manager.update_config(**{key: value})
             model_manager.save_config()
             # Per-user delegate_ui preference
-            if 'delegate_ui' in data and data['delegate_ui'] in ('chat', 'task_form'):
+            if "delegate_ui" in data and data["delegate_ui"] in ("chat", "task_form"):
                 from tasks.models import UserDelegatePreference
+
                 UserDelegatePreference.objects.update_or_create(
                     user=request.user,
-                    defaults={'delegate_ui': data['delegate_ui']},
+                    defaults={"delegate_ui": data["delegate_ui"]},
                 )
             changed_keys = sorted([k for k, v in data.items() if k in allowed and v is not None])
-            if 'delegate_ui' in data and data.get('delegate_ui') in ('chat', 'task_form'):
-                changed_keys.append('delegate_ui')
+            if "delegate_ui" in data and data.get("delegate_ui") in ("chat", "task_form"):
+                changed_keys.append("delegate_ui")
             log_user_activity(
                 user=request.user,
                 request=request,
-                category='settings',
-                action='settings_update',
+                category="settings",
+                action="settings_update",
                 status=UserActivityLog.STATUS_SUCCESS,
-                description='Updated settings',
-                entity_type='settings',
-                metadata={'changed_keys': changed_keys},
+                description="Updated settings",
+                entity_type="settings",
+                metadata={"changed_keys": changed_keys},
             )
-            return JsonResponse({'success': True, 'message': 'Settings updated'})
+            return JsonResponse({"success": True, "message": "Settings updated"})
         except Exception as e:
             log_user_activity(
                 user=request.user,
                 request=request,
-                category='settings',
-                action='settings_update',
+                category="settings",
+                action="settings_update",
                 status=UserActivityLog.STATUS_ERROR,
-                description=f'Settings update failed: {e}',
-                entity_type='settings',
+                description=f"Settings update failed: {e}",
+                entity_type="settings",
             )
-            return JsonResponse({'success': False, 'error': str(e)}, status=500)
+            return JsonResponse({"success": False, "error": str(e)}, status=500)
 
-    return JsonResponse({'error': 'Method not allowed'}, status=405)
+    return JsonResponse({"error": "Method not allowed"}, status=405)
 
 
 @login_required
@@ -2496,44 +2573,46 @@ def api_settings_check(request):
     Returns: { configured: true|false, missing: ['gemini_key','grok_key'] }
     Checks that API keys in settings are non-empty. Only for users with settings permission.
     """
-    if not user_can_feature(request.user, 'settings'):
-        return JsonResponse({'configured': False, 'missing': ['gemini_key', 'grok_key']}, status=403)
+    if not user_can_feature(request.user, "settings"):
+        return JsonResponse({"configured": False, "missing": ["gemini_key", "grok_key"]}, status=403)
     try:
-        gemini_ok = bool((os.getenv('GEMINI_API_KEY') or '').strip())
-        grok_ok = bool((os.getenv('GROK_API_KEY') or '').strip())
+        gemini_ok = bool((os.getenv("GEMINI_API_KEY") or "").strip())
+        grok_ok = bool((os.getenv("GROK_API_KEY") or "").strip())
         missing = []
         if not gemini_ok:
-            missing.append('gemini_key')
+            missing.append("gemini_key")
         if not grok_ok:
-            missing.append('grok_key')
-        return JsonResponse({
-            'configured': len(missing) == 0,
-            'missing': missing,
-        })
+            missing.append("grok_key")
+        return JsonResponse(
+            {
+                "configured": len(missing) == 0,
+                "missing": missing,
+            }
+        )
     except Exception as e:
-        logger.exception('api_settings_check error: %s', e)
-        return JsonResponse({'configured': False, 'missing': ['gemini_key', 'grok_key']}, status=500)
+        logger.exception("api_settings_check error: %s", e)
+        return JsonResponse({"configured": False, "missing": ["gemini_key", "grok_key"]}, status=500)
 
 
 @login_required
-@require_feature('settings')
+@require_feature("settings")
 @require_GET
 def api_settings_activity_logs(request):
     """Activity log stream + aggregated stats for settings page."""
     try:
         if not request.user.is_staff:
-            return JsonResponse({'success': False, 'error': 'Forbidden'}, status=403)
+            return JsonResponse({"success": False, "error": "Forbidden"}, status=403)
         maybe_apply_log_retention()
         try:
-            limit = int(request.GET.get('limit', 50))
+            limit = int(request.GET.get("limit", 50))
         except (TypeError, ValueError):
             limit = 50
         try:
-            offset = int(request.GET.get('offset', 0))
+            offset = int(request.GET.get("offset", 0))
         except (TypeError, ValueError):
             offset = 0
         try:
-            days = int(request.GET.get('days', 14))
+            days = int(request.GET.get("days", 14))
         except (TypeError, ValueError):
             days = 14
 
@@ -2541,14 +2620,14 @@ def api_settings_activity_logs(request):
         offset = max(0, offset)
         days = max(1, min(days, 365))
 
-        user_id_raw = (request.GET.get('user_id') or '').strip()
-        category = (request.GET.get('category') or '').strip().lower()
-        action = (request.GET.get('action') or '').strip().lower()
-        status = (request.GET.get('status') or '').strip().lower()
-        search = (request.GET.get('search') or '').strip()
-        export_format = (request.GET.get('format') or '').strip().lower() or None
+        user_id_raw = (request.GET.get("user_id") or "").strip()
+        category = (request.GET.get("category") or "").strip().lower()
+        action = (request.GET.get("action") or "").strip().lower()
+        status = (request.GET.get("status") or "").strip().lower()
+        search = (request.GET.get("search") or "").strip()
+        export_format = (request.GET.get("format") or "").strip().lower() or None
 
-        base_qs = UserActivityLog.objects.select_related('user')
+        base_qs = UserActivityLog.objects.select_related("user")
         since = datetime.now(timezone.utc) - timedelta(days=days)
         filtered = base_qs.filter(created_at__gte=since)
 
@@ -2556,12 +2635,12 @@ def api_settings_activity_logs(request):
             try:
                 filtered = filtered.filter(user_id=int(user_id_raw))
             except (TypeError, ValueError):
-                return JsonResponse({'success': False, 'error': 'Invalid user_id'}, status=400)
-        if category and category != 'all':
+                return JsonResponse({"success": False, "error": "Invalid user_id"}, status=400)
+        if category and category != "all":
             filtered = filtered.filter(category=category)
-        if action and action != 'all':
+        if action and action != "all":
             filtered = filtered.filter(action=action)
-        if status and status != 'all':
+        if status and status != "all":
             filtered = filtered.filter(status=status)
         if search:
             filtered = filtered.filter(
@@ -2573,160 +2652,171 @@ def api_settings_activity_logs(request):
             )
 
         total = filtered.count()
-        ordered_qs = filtered.order_by('-created_at')
-        rows = list(ordered_qs[offset: offset + limit])
+        ordered_qs = filtered.order_by("-created_at")
+        rows = list(ordered_qs[offset : offset + limit])
         events = []
         for row in rows:
-            username = ''
+            username = ""
             if row.user_id and row.user:
                 username = row.user.username
             elif row.username_snapshot:
                 username = row.username_snapshot
             events.append(
                 {
-                    'id': row.id,
-                    'created_at': row.created_at.isoformat(),
-                    'user_id': row.user_id,
-                    'username': username or 'unknown',
-                    'category': row.category,
-                    'action': row.action,
-                    'status': row.status,
-                    'description': row.description,
-                    'entity_type': row.entity_type,
-                    'entity_id': row.entity_id,
-                    'entity_name': row.entity_name,
-                    'ip_address': row.ip_address or '',
-                    'user_agent': row.user_agent or '',
-                    'metadata': row.metadata or {},
+                    "id": row.id,
+                    "created_at": row.created_at.isoformat(),
+                    "user_id": row.user_id,
+                    "username": username or "unknown",
+                    "category": row.category,
+                    "action": row.action,
+                    "status": row.status,
+                    "description": row.description,
+                    "entity_type": row.entity_type,
+                    "entity_id": row.entity_id,
+                    "entity_name": row.entity_name,
+                    "ip_address": row.ip_address or "",
+                    "user_agent": row.user_agent or "",
+                    "metadata": row.metadata or {},
                 }
             )
 
-        if export_format in {'csv', 'syslog'}:
+        if export_format in {"csv", "syslog"}:
             export_rows = list(ordered_qs[:5000])
-            if export_format == 'csv':
+            if export_format == "csv":
                 buffer = StringIO()
                 writer = csv.writer(buffer)
-                writer.writerow([
-                    'created_at',
-                    'user_id',
-                    'username',
-                    'category',
-                    'action',
-                    'status',
-                    'description',
-                    'entity_type',
-                    'entity_id',
-                    'entity_name',
-                    'ip_address',
-                    'user_agent',
-                    'metadata',
-                ])
+                writer.writerow(
+                    [
+                        "created_at",
+                        "user_id",
+                        "username",
+                        "category",
+                        "action",
+                        "status",
+                        "description",
+                        "entity_type",
+                        "entity_id",
+                        "entity_name",
+                        "ip_address",
+                        "user_agent",
+                        "metadata",
+                    ]
+                )
                 for row in export_rows:
-                    username = row.user.username if row.user_id and row.user else (row.username_snapshot or 'unknown')
-                    writer.writerow([
-                        row.created_at.isoformat(),
-                        row.user_id or '',
-                        username,
-                        row.category,
-                        row.action,
-                        row.status,
-                        row.description,
-                        row.entity_type,
-                        row.entity_id,
-                        row.entity_name,
-                        row.ip_address or '',
-                        row.user_agent or '',
-                        json.dumps(row.metadata or {}, ensure_ascii=False),
-                    ])
-                response = HttpResponse(buffer.getvalue(), content_type='text/csv; charset=utf-8')
-                response['Content-Disposition'] = f'attachment; filename="activity-logs-{days}d.csv"'
+                    username = row.user.username if row.user_id and row.user else (row.username_snapshot or "unknown")
+                    writer.writerow(
+                        [
+                            row.created_at.isoformat(),
+                            row.user_id or "",
+                            username,
+                            row.category,
+                            row.action,
+                            row.status,
+                            row.description,
+                            row.entity_type,
+                            row.entity_id,
+                            row.entity_name,
+                            row.ip_address or "",
+                            row.user_agent or "",
+                            json.dumps(row.metadata or {}, ensure_ascii=False),
+                        ]
+                    )
+                response = HttpResponse(buffer.getvalue(), content_type="text/csv; charset=utf-8")
+                response["Content-Disposition"] = f'attachment; filename="activity-logs-{days}d.csv"'
                 return response
 
             lines = []
             for row in export_rows:
-                username = row.user.username if row.user_id and row.user else (row.username_snapshot or 'unknown')
+                username = row.user.username if row.user_id and row.user else (row.username_snapshot or "unknown")
                 lines.append(
                     f"{row.created_at.isoformat()} weu-audit username={username} category={row.category} "
                     f"action={row.action} status={row.status} entity={row.entity_type}:{row.entity_id} "
                     f"description={json.dumps(row.description or '', ensure_ascii=False)} "
                     f"metadata={json.dumps(row.metadata or {}, ensure_ascii=False)}"
                 )
-            response = HttpResponse("\n".join(lines), content_type='text/plain; charset=utf-8')
-            response['Content-Disposition'] = f'attachment; filename="activity-logs-{days}d.syslog"'
+            response = HttpResponse("\n".join(lines), content_type="text/plain; charset=utf-8")
+            response["Content-Disposition"] = f'attachment; filename="activity-logs-{days}d.syslog"'
             return response
 
         summary = {
-            'total_events': total,
-            'total_users': filtered.exclude(user_id__isnull=True).values('user_id').distinct().count(),
-            'login_count': filtered.filter(action='login').count(),
-            'assistant_requests': filtered.filter(action__in=['chat_request', 'terminal_ai_request', 'llm_request']).count(),
-            'server_connections': filtered.filter(action__in=['terminal_connect', 'rdp_connect']).count(),
-            'server_changes': filtered.filter(action__in=['server_create', 'server_update', 'server_delete', 'servers_bulk_update']).count(),
+            "total_events": total,
+            "total_users": filtered.exclude(user_id__isnull=True).values("user_id").distinct().count(),
+            "login_count": filtered.filter(action="login").count(),
+            "assistant_requests": filtered.filter(
+                action__in=["chat_request", "terminal_ai_request", "llm_request"]
+            ).count(),
+            "server_connections": filtered.filter(action__in=["terminal_connect", "rdp_connect"]).count(),
+            "server_changes": filtered.filter(
+                action__in=["server_create", "server_update", "server_delete", "servers_bulk_update"]
+            ).count(),
         }
 
         user_stats_rows = (
-            filtered.values('user_id', 'user__username', 'username_snapshot')
+            filtered.values("user_id", "user__username", "username_snapshot")
             .annotate(
-                events_total=Count('id'),
-                logins=Count('id', filter=Q(action='login')),
-                ai_requests=Count('id', filter=Q(action__in=['chat_request', 'terminal_ai_request', 'llm_request'])),
-                server_connections=Count('id', filter=Q(action__in=['terminal_connect', 'rdp_connect'])),
-                server_changes=Count('id', filter=Q(action__in=['server_create', 'server_update', 'server_delete', 'servers_bulk_update'])),
+                events_total=Count("id"),
+                logins=Count("id", filter=Q(action="login")),
+                ai_requests=Count("id", filter=Q(action__in=["chat_request", "terminal_ai_request", "llm_request"])),
+                server_connections=Count("id", filter=Q(action__in=["terminal_connect", "rdp_connect"])),
+                server_changes=Count(
+                    "id",
+                    filter=Q(action__in=["server_create", "server_update", "server_delete", "servers_bulk_update"]),
+                ),
             )
-            .order_by('-events_total')[:50]
+            .order_by("-events_total")[:50]
         )
 
         user_stats = []
         for row in user_stats_rows:
-            username = row.get('user__username') or row.get('username_snapshot') or 'unknown'
+            username = row.get("user__username") or row.get("username_snapshot") or "unknown"
             user_stats.append(
                 {
-                    'user_id': row.get('user_id'),
-                    'username': username,
-                    'events_total': row.get('events_total', 0),
-                    'logins': row.get('logins', 0),
-                    'ai_requests': row.get('ai_requests', 0),
-                    'server_connections': row.get('server_connections', 0),
-                    'server_changes': row.get('server_changes', 0),
+                    "user_id": row.get("user_id"),
+                    "username": username,
+                    "events_total": row.get("events_total", 0),
+                    "logins": row.get("logins", 0),
+                    "ai_requests": row.get("ai_requests", 0),
+                    "server_connections": row.get("server_connections", 0),
+                    "server_changes": row.get("server_changes", 0),
                 }
             )
 
         users = list(
             UserActivityLog.objects.exclude(user_id__isnull=True)
-            .values('user_id', 'user__username')
+            .values("user_id", "user__username")
             .distinct()
-            .order_by('user__username')[:500]
+            .order_by("user__username")[:500]
         )
         user_options = [
             {
-                'id': u.get('user_id'),
-                'username': u.get('user__username') or 'unknown',
+                "id": u.get("user_id"),
+                "username": u.get("user__username") or "unknown",
             }
             for u in users
         ]
 
         return JsonResponse(
             {
-                'success': True,
-                'events': events,
-                'summary': summary,
-                'user_stats': user_stats,
-                'users': user_options,
-                'paging': {
-                    'limit': limit,
-                    'offset': offset,
-                    'total': total,
-                    'has_more': (offset + limit) < total,
+                "success": True,
+                "events": events,
+                "summary": summary,
+                "user_stats": user_stats,
+                "users": user_options,
+                "paging": {
+                    "limit": limit,
+                    "offset": offset,
+                    "total": total,
+                    "has_more": (offset + limit) < total,
                 },
             }
         )
     except Exception as e:
-        logger.exception('api_settings_activity_logs error: %s', e)
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        logger.exception("api_settings_activity_logs error: %s", e)
+        return JsonResponse({"success": False, "error": str(e)}, status=500)
 
 
 @login_required
-@require_feature('settings')
+@require_feature("settings")
 @require_GET
 def api_disk_usage(request):
     """
@@ -2737,172 +2827,172 @@ def api_disk_usage(request):
     try:
         report = get_disk_usage_report(
             include_root=True,
-            media_root=getattr(settings, 'MEDIA_ROOT', None),
-            uploaded_files_dir=getattr(settings, 'UPLOADED_FILES_DIR', None),
-            agent_projects_dir=getattr(settings, 'AGENT_PROJECTS_DIR', None),
-            base_dir=getattr(settings, 'BASE_DIR', None),
+            media_root=getattr(settings, "MEDIA_ROOT", None),
+            uploaded_files_dir=getattr(settings, "UPLOADED_FILES_DIR", None),
+            agent_projects_dir=getattr(settings, "AGENT_PROJECTS_DIR", None),
+            base_dir=getattr(settings, "BASE_DIR", None),
         )
         # Добавляем человекочитаемые размеры для удобства
         for entry in report:
-            if 'error' in entry:
+            if "error" in entry:
                 continue
-            total = entry.get('total')
-            used = entry.get('used')
-            free = entry.get('free')
+            total = entry.get("total")
+            used = entry.get("used")
+            free = entry.get("free")
             if total is not None:
-                entry['total_human'] = _format_bytes(total)
+                entry["total_human"] = _format_bytes(total)
             if used is not None:
-                entry['used_human'] = _format_bytes(used)
+                entry["used_human"] = _format_bytes(used)
             if free is not None:
-                entry['free_human'] = _format_bytes(free)
-        return JsonResponse({'paths': report})
+                entry["free_human"] = _format_bytes(free)
+        return JsonResponse({"paths": report})
     except Exception as e:
-        logger.exception('api_disk_usage error: %s', e)
-        return JsonResponse({'paths': [], 'error': str(e)}, status=500)
+        logger.exception("api_disk_usage error: %s", e)
+        return JsonResponse({"paths": [], "error": str(e)}, status=500)
 
 
 def _format_bytes(n: int) -> str:
     """Форматирует байты в человекочитаемый вид (KB, MB, GB, TB)."""
-    for unit in ('B', 'KB', 'MB', 'GB', 'TB'):
+    for unit in ("B", "KB", "MB", "GB", "TB"):
         if abs(n) < 1024:
-            return f'{n:.1f} {unit}'
+            return f"{n:.1f} {unit}"
         n /= 1024
-    return f'{n:.1f} PB'
+    return f"{n:.1f} PB"
 
 
 @login_required
-@require_feature('agents')
+@require_feature("agents")
 def api_agents_list(request):
     """Get list of available agents"""
     try:
         agent_manager = get_agent_manager()
         agents = agent_manager.list_agents()
-        return JsonResponse({'agents': agents})
+        return JsonResponse({"agents": agents})
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({"error": str(e)}, status=500)
 
 
 @async_login_required
-@async_require_feature('agents')
+@async_require_feature("agents")
 @require_http_methods(["POST"])
 async def api_agent_execute(request):
     """Execute an agent with a task"""
     try:
         data = json.loads(request.body)
-        agent_name = data.get('agent_name')
-        task = data.get('task')
-        context = data.get('context', {})
-        
+        agent_name = data.get("agent_name")
+        task = data.get("task")
+        context = data.get("context", {})
+
         if not agent_name or not task:
-            return JsonResponse({'error': 'agent_name and task are required'}, status=400)
-        
+            return JsonResponse({"error": "agent_name and task are required"}, status=400)
+
         agent_manager = get_agent_manager()
         result = await agent_manager.execute_agent(agent_name, task, context)
-        
+
         return JsonResponse(result)
     except json.JSONDecodeError:
-        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({"error": str(e)}, status=500)
 
 
 @login_required
-@require_feature('knowledge_base')
+@require_feature("knowledge_base")
 @require_http_methods(["POST"])
 def api_upload_file(request):
     """Upload file and add to RAG"""
     try:
-        if 'file' not in request.FILES:
-            return JsonResponse({'error': 'No file provided'}, status=400)
-        
-        uploaded_file = request.FILES['file']
+        if "file" not in request.FILES:
+            return JsonResponse({"error": "No file provided"}, status=400)
+
+        uploaded_file = request.FILES["file"]
         filename = uploaded_file.name
-        
+
         # Check if file type is supported
         if not FileProcessor.is_supported(filename):
-            return JsonResponse({
-                'error': f'Unsupported file type. Supported: {", ".join(FileProcessor.SUPPORTED_EXTENSIONS.keys())}'
-            }, status=400)
-        
+            return JsonResponse(
+                {"error": f"Unsupported file type. Supported: {', '.join(FileProcessor.SUPPORTED_EXTENSIONS.keys())}"},
+                status=400,
+            )
+
         # Generate unique filename
         file_ext = Path(filename).suffix
         unique_filename = f"{uuid.uuid4()}{file_ext}"
         file_path = settings.UPLOADED_FILES_DIR / unique_filename
-        
+
         # Save file
-        with open(file_path, 'wb') as f:
+        with open(file_path, "wb") as f:
             for chunk in uploaded_file.chunks():
                 f.write(chunk)
-        
+
         # Process file and extract text
         result = FileProcessor.process_file(str(file_path), filename)
-        
-        if result['error']:
+
+        if result["error"]:
             # Delete file if processing failed
             try:
                 os.remove(file_path)
             except Exception as exc:
                 logger.warning(f"Failed to remove uploaded file {file_path}: {exc}")
-            return JsonResponse({'error': result['error']}, status=400)
-        
+            return JsonResponse({"error": result["error"]}, status=400)
+
         # Add to RAG
         rag = get_rag_engine()
-        if rag.available and result['text']:
-            doc_id = rag.add_text(
-                result['text'],
-                source=f"upload:{filename}",
-                user_id=request.user.id
-            )
-            result['metadata']['rag_doc_id'] = doc_id
-        
-        return JsonResponse({
-            'success': True,
-            'filename': filename,
-            'text_preview': result['text'][:500] + '...' if len(result['text']) > 500 else result['text'],
-            'text_length': len(result['text']),
-            'metadata': result['metadata']
-        })
-        
+        if rag.available and result["text"]:
+            doc_id = rag.add_text(result["text"], source=f"upload:{filename}", user_id=request.user.id)
+            result["metadata"]["rag_doc_id"] = doc_id
+
+        return JsonResponse(
+            {
+                "success": True,
+                "filename": filename,
+                "text_preview": result["text"][:500] + "..." if len(result["text"]) > 500 else result["text"],
+                "text_length": len(result["text"]),
+                "metadata": result["metadata"],
+            }
+        )
+
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({"error": str(e)}, status=500)
 
 
 # ============================================
 # IDE API (Web IDE with file tree and editor)
 # ============================================
 
+
 def _resolve_ide_workspace(workspace_param: str) -> Path:
     """
     Разрешает workspace параметр в безопасный Path внутри AGENT_PROJECTS_DIR.
-    
+
     Args:
         workspace_param: имя проекта (папка в AGENT_PROJECTS_DIR) или относительный путь
-        
+
     Returns:
         Path к workspace директории
-        
+
     Raises:
         ValueError: если путь выходит за пределы AGENT_PROJECTS_DIR
     """
     if not workspace_param or not workspace_param.strip():
         raise ValueError("workspace parameter is required")
-    
+
     # Нормализуем: убираем начальные/конечные слеши и точки
-    normalized = workspace_param.strip().strip('/').strip('\\')
-    
+    normalized = workspace_param.strip().strip("/").strip("\\")
+
     # Защита от путей с ..
-    if '..' in normalized or normalized.startswith('/'):
+    if ".." in normalized or normalized.startswith("/"):
         raise ValueError("Invalid workspace path")
-    
+
     # Собираем полный путь
     projects_dir = Path(settings.AGENT_PROJECTS_DIR)
     workspace_path = projects_dir / normalized
-    
+
     # Проверяем, что итоговый путь находится внутри AGENT_PROJECTS_DIR
     try:
         resolved = workspace_path.resolve()
         projects_resolved = projects_dir.resolve()
-        
+
         # Проверка через is_relative_to (Python 3.9+)
         if not str(resolved).startswith(str(projects_resolved)):
             raise ValueError(f"Workspace path must be within AGENT_PROJECTS_DIR")
@@ -2910,12 +3000,12 @@ def _resolve_ide_workspace(workspace_param: str) -> Path:
         if isinstance(e, ValueError):
             raise
         raise ValueError(f"Invalid workspace path: {e}")
-    
+
     return workspace_path
 
 
 @login_required
-@require_feature('orchestrator')
+@require_feature("orchestrator")
 @require_http_methods(["GET"])
 def api_ide_list_files(request):
     """
@@ -2924,77 +3014,79 @@ def api_ide_list_files(request):
     Возвращает список файлов и папок в указанной директории.
     """
     try:
-        workspace_param = request.GET.get('workspace', '').strip()
-        path_param = request.GET.get('path', '').strip()
-        
+        workspace_param = request.GET.get("workspace", "").strip()
+        path_param = request.GET.get("path", "").strip()
+
         if not workspace_param:
-            return JsonResponse({'error': 'workspace parameter is required'}, status=400)
-        
+            return JsonResponse({"error": "workspace parameter is required"}, status=400)
+
         # Разрешаем workspace
         try:
             workspace_root = _resolve_ide_workspace(workspace_param)
         except ValueError as e:
-            return JsonResponse({'error': str(e)}, status=403)
-        
+            return JsonResponse({"error": str(e)}, status=403)
+
         # Нормализуем path внутри workspace
         if path_param:
             # Убираем начальные слеши
-            path_param = path_param.strip('/').strip('\\')
+            path_param = path_param.strip("/").strip("\\")
             # Защита от ..
-            if '..' in path_param:
-                return JsonResponse({'error': 'Invalid path'}, status=400)
+            if ".." in path_param:
+                return JsonResponse({"error": "Invalid path"}, status=400)
             target_path = workspace_root / path_param
         else:
             target_path = workspace_root
-        
+
         # Проверяем, что target_path всё ещё внутри workspace_root
         try:
             target_resolved = target_path.resolve()
             workspace_resolved = workspace_root.resolve()
             if not str(target_resolved).startswith(str(workspace_resolved)):
-                return JsonResponse({'error': 'Path outside workspace'}, status=403)
+                return JsonResponse({"error": "Path outside workspace"}, status=403)
         except (OSError, ValueError) as e:
             logger.debug(f"Invalid path resolution: {e}")
-            return JsonResponse({'error': 'Invalid path'}, status=400)
-        
+            return JsonResponse({"error": "Invalid path"}, status=400)
+
         # Проверяем существование
         if not target_path.exists():
-            return JsonResponse({'error': 'Path not found'}, status=404)
-        
+            return JsonResponse({"error": "Path not found"}, status=404)
+
         if not target_path.is_dir():
-            return JsonResponse({'error': 'Path is not a directory'}, status=400)
-        
+            return JsonResponse({"error": "Path is not a directory"}, status=400)
+
         # Собираем список файлов и папок
         files = []
         try:
             for item in sorted(target_path.iterdir()):
                 # Пропускаем скрытые файлы/папки (начинающиеся с .)
-                if item.name.startswith('.'):
+                if item.name.startswith("."):
                     continue
-                
-                item_type = 'dir' if item.is_dir() else 'file'
+
+                item_type = "dir" if item.is_dir() else "file"
                 # Относительный путь от workspace_root
                 rel_path = item.relative_to(workspace_root)
-                files.append({
-                    'name': item.name,
-                    'path': str(rel_path).replace('\\', '/'),  # Нормализуем слеши
-                    'type': item_type,
-                })
+                files.append(
+                    {
+                        "name": item.name,
+                        "path": str(rel_path).replace("\\", "/"),  # Нормализуем слеши
+                        "type": item_type,
+                    }
+                )
         except PermissionError:
-            return JsonResponse({'error': 'Permission denied'}, status=403)
+            return JsonResponse({"error": "Permission denied"}, status=403)
         except Exception as e:
             logger.error(f"Error listing directory {target_path}: {e}")
-            return JsonResponse({'error': str(e)}, status=500)
-        
-        return JsonResponse({'files': files})
-        
+            return JsonResponse({"error": str(e)}, status=500)
+
+        return JsonResponse({"files": files})
+
     except Exception as e:
         logger.error(f"api_ide_list_files error: {e}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({"error": str(e)}, status=500)
 
 
 @login_required
-@require_feature('orchestrator')
+@require_feature("orchestrator")
 @require_http_methods(["GET"])
 def api_ide_read_file(request):
     """
@@ -3003,23 +3095,23 @@ def api_ide_read_file(request):
     Возвращает содержимое файла.
     """
     try:
-        workspace_param = request.GET.get('workspace', '').strip()
-        path_param = request.GET.get('path', '').strip()
-        
+        workspace_param = request.GET.get("workspace", "").strip()
+        path_param = request.GET.get("path", "").strip()
+
         if not workspace_param or not path_param:
-            return JsonResponse({'error': 'workspace and path parameters are required'}, status=400)
-        
+            return JsonResponse({"error": "workspace and path parameters are required"}, status=400)
+
         # Разрешаем workspace
         try:
             workspace_root = _resolve_ide_workspace(workspace_param)
         except ValueError as e:
-            return JsonResponse({'error': str(e)}, status=403)
-        
+            return JsonResponse({"error": str(e)}, status=403)
+
         # Нормализуем path
-        path_param = path_param.strip('/').strip('\\')
-        if '..' in path_param:
-            return JsonResponse({'error': 'Invalid path'}, status=400)
-        
+        path_param = path_param.strip("/").strip("\\")
+        if ".." in path_param:
+            return JsonResponse({"error": "Invalid path"}, status=400)
+
         file_path = workspace_root / path_param
 
         # Проверяем безопасность пути
@@ -3027,42 +3119,43 @@ def api_ide_read_file(request):
             file_resolved = file_path.resolve()
             workspace_resolved = workspace_root.resolve()
             if not str(file_resolved).startswith(str(workspace_resolved)):
-                return JsonResponse({'error': 'Path outside workspace'}, status=403)
+                return JsonResponse({"error": "Path outside workspace"}, status=403)
         except (OSError, ValueError) as e:
             logger.debug(f"Invalid path resolution: {e}")
-            return JsonResponse({'error': 'Invalid path'}, status=400)
-        
+            return JsonResponse({"error": "Invalid path"}, status=400)
+
         # Проверяем существование и что это файл
         if not file_path.exists():
-            return JsonResponse({'error': 'File not found'}, status=404)
-        
+            return JsonResponse({"error": "File not found"}, status=404)
+
         if not file_path.is_file():
-            return JsonResponse({'error': 'Path is not a file'}, status=400)
-        
+            return JsonResponse({"error": "Path is not a file"}, status=400)
+
         # Читаем файл
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
         except UnicodeDecodeError:
             # Пробуем как бинарный файл
-            return JsonResponse({'error': 'File is not a text file'}, status=400)
+            return JsonResponse({"error": "File is not a text file"}, status=400)
         except PermissionError:
-            return JsonResponse({'error': 'Permission denied'}, status=403)
+            return JsonResponse({"error": "Permission denied"}, status=403)
         except Exception as e:
             logger.error(f"Error reading file {file_path}: {e}")
-            return JsonResponse({'error': str(e)}, status=500)
-        
+            return JsonResponse({"error": str(e)}, status=500)
+
         from django.http import HttpResponse
-        response = HttpResponse(content, content_type='text/plain; charset=utf-8')
+
+        response = HttpResponse(content, content_type="text/plain; charset=utf-8")
         return response
-        
+
     except Exception as e:
         logger.error(f"api_ide_read_file error: {e}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({"error": str(e)}, status=500)
 
 
 @login_required
-@require_feature('orchestrator')
+@require_feature("orchestrator")
 @require_http_methods(["PUT", "POST"])
 def api_ide_write_file(request):
     """
@@ -3073,30 +3166,30 @@ def api_ide_write_file(request):
     """
     try:
         # Парсим данные из JSON или form
-        if request.content_type and 'application/json' in request.content_type:
+        if request.content_type and "application/json" in request.content_type:
             data = json.loads(request.body)
-            workspace_param = data.get('workspace', '').strip()
-            path_param = data.get('path', '').strip()
-            content = data.get('content', '')
+            workspace_param = data.get("workspace", "").strip()
+            path_param = data.get("path", "").strip()
+            content = data.get("content", "")
         else:
-            workspace_param = request.GET.get('workspace', '').strip()
-            path_param = request.GET.get('path', '').strip()
-            content = request.body.decode('utf-8') if request.body else ''
-        
+            workspace_param = request.GET.get("workspace", "").strip()
+            path_param = request.GET.get("path", "").strip()
+            content = request.body.decode("utf-8") if request.body else ""
+
         if not workspace_param or not path_param:
-            return JsonResponse({'error': 'workspace and path parameters are required'}, status=400)
-        
+            return JsonResponse({"error": "workspace and path parameters are required"}, status=400)
+
         # Разрешаем workspace
         try:
             workspace_root = _resolve_ide_workspace(workspace_param)
         except ValueError as e:
-            return JsonResponse({'error': str(e)}, status=403)
-        
+            return JsonResponse({"error": str(e)}, status=403)
+
         # Нормализуем path
-        path_param = path_param.strip('/').strip('\\')
-        if '..' in path_param:
-            return JsonResponse({'error': 'Invalid path'}, status=400)
-        
+        path_param = path_param.strip("/").strip("\\")
+        if ".." in path_param:
+            return JsonResponse({"error": "Invalid path"}, status=400)
+
         file_path = workspace_root / path_param
 
         # Проверяем безопасность пути
@@ -3104,65 +3197,68 @@ def api_ide_write_file(request):
             file_resolved = file_path.resolve()
             workspace_resolved = workspace_root.resolve()
             if not str(file_resolved).startswith(str(workspace_resolved)):
-                return JsonResponse({'error': 'Path outside workspace'}, status=403)
+                return JsonResponse({"error": "Path outside workspace"}, status=403)
         except (OSError, ValueError) as e:
             logger.debug(f"Invalid path resolution: {e}")
-            return JsonResponse({'error': 'Invalid path'}, status=400)
-        
+            return JsonResponse({"error": "Invalid path"}, status=400)
+
         # Создаём родительские директории если нужно
         try:
             file_path.parent.mkdir(parents=True, exist_ok=True)
         except PermissionError:
-            return JsonResponse({'error': 'Permission denied'}, status=403)
+            return JsonResponse({"error": "Permission denied"}, status=403)
         except Exception as e:
             logger.error(f"Error creating parent directories for {file_path}: {e}")
-            return JsonResponse({'error': str(e)}, status=500)
-        
+            return JsonResponse({"error": str(e)}, status=500)
+
         # Записываем файл
         try:
-            with open(file_path, 'w', encoding='utf-8') as f:
+            with open(file_path, "w", encoding="utf-8") as f:
                 f.write(content)
         except PermissionError:
-            return JsonResponse({'error': 'Permission denied'}, status=403)
+            return JsonResponse({"error": "Permission denied"}, status=403)
         except Exception as e:
             logger.error(f"Error writing file {file_path}: {e}")
-            return JsonResponse({'error': str(e)}, status=500)
-        
-        return JsonResponse({
-            'success': True,
-            'path': str(file_path.relative_to(workspace_root)).replace('\\', '/'),
-            'message': 'File saved successfully'
-        })
-        
+            return JsonResponse({"error": str(e)}, status=500)
+
+        return JsonResponse(
+            {
+                "success": True,
+                "path": str(file_path.relative_to(workspace_root)).replace("\\", "/"),
+                "message": "File saved successfully",
+            }
+        )
+
     except json.JSONDecodeError:
-        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as e:
         logger.error(f"api_ide_write_file error: {e}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({"error": str(e)}, status=500)
 
 
 @login_required
-@require_feature('orchestrator')
+@require_feature("orchestrator")
 def ide_view(request):
     """
     Страница веб-IDE с редактором кода, деревом файлов и чатом.
     """
     # Получаем проект из query параметра если есть
-    project = request.GET.get('project', '').strip()
+    project = request.GET.get("project", "").strip()
 
     context = {
-        'project': project,
+        "project": project,
     }
 
-    return render(request, 'ide.html', context)
+    return render(request, "ide.html", context)
 
 
 # ============================================
 # Access Management API (Users, Groups, Permissions)
 # ============================================
 
+
 @login_required
-@require_feature('settings')
+@require_feature("settings")
 @require_http_methods(["GET", "POST"])
 def api_access_users(request):
     """
@@ -3170,51 +3266,52 @@ def api_access_users(request):
     POST /api/access/users/ - создание нового пользователя
     """
     from django.contrib.auth.models import User, Group
-    from core_ui.models import UserAppPermission
 
-    if request.method == 'GET':
-        users = User.objects.all().prefetch_related('groups').order_by('username')
-        features = _access_feature_slugs()
-
-        permissions_by_user: dict[int, dict[str, bool]] = defaultdict(dict)
-        for row in UserAppPermission.objects.all().values('user_id', 'feature', 'allowed'):
-            permissions_by_user[row['user_id']][row['feature']] = bool(row['allowed'])
+    if request.method == "GET":
+        users = User.objects.all().prefetch_related("groups").order_by("username")
+        features = access_feature_labels()
 
         data = []
         for u in users:
-            explicit = permissions_by_user.get(u.id, {})
-            access = _build_user_access_payload(u, explicit)
-            data.append({
-                'id': u.id,
-                'username': u.username,
-                'email': u.email or '',
-                'is_staff': u.is_staff,
-                'is_active': u.is_active,
-                'is_superuser': u.is_superuser,
-                'date_joined': u.date_joined.isoformat(),
-                'groups': [{'id': g.id, 'name': g.name} for g in u.groups.all()],
-                'access_profile': access['access_profile'],
-                'effective_permissions': access['effective_permissions'],
-                'explicit_permissions': access['explicit_permissions'],
-            })
-        return JsonResponse({'users': data, 'features': features})
+            explicit = load_user_explicit_permissions(u)
+            group_sources = load_group_permission_sources(u)
+            access = _build_user_access_payload(u, explicit, group_sources)
+            data.append(
+                {
+                    "id": u.id,
+                    "username": u.username,
+                    "email": u.email or "",
+                    "is_staff": u.is_staff,
+                    "is_active": u.is_active,
+                    "is_superuser": u.is_superuser,
+                    "date_joined": u.date_joined.isoformat(),
+                    "groups": [{"id": g.id, "name": g.name} for g in u.groups.all()],
+                    "access_profile": access["access_profile"],
+                    "effective_permissions": access["effective_permissions"],
+                    "explicit_permissions": access["explicit_permissions"],
+                    "group_permissions": access["group_permissions"],
+                    "group_permission_sources": access["group_permission_sources"],
+                    "permission_sources": access["permission_sources"],
+                }
+            )
+        return JsonResponse({"users": data, "features": features})
 
-    if request.method == 'POST':
+    if request.method == "POST":
         try:
             data = json.loads(request.body)
-            username = data.get('username', '').strip()
-            email = data.get('email', '').strip()
-            password = data.get('password', '')
-            is_staff = data.get('is_staff', False)
-            is_active = data.get('is_active', True)
-            access_profile = (data.get('access_profile') or '').strip()
+            username = data.get("username", "").strip()
+            email = data.get("email", "").strip()
+            password = data.get("password", "")
+            is_staff = data.get("is_staff", False)
+            is_active = data.get("is_active", True)
+            access_profile = (data.get("access_profile") or "").strip()
 
             if not username:
-                return JsonResponse({'error': 'Username is required'}, status=400)
+                return JsonResponse({"error": "Username is required"}, status=400)
             if not password:
-                return JsonResponse({'error': 'Password is required'}, status=400)
+                return JsonResponse({"error": "Password is required"}, status=400)
             if User.objects.filter(username=username).exists():
-                return JsonResponse({'error': 'Username already exists'}, status=400)
+                return JsonResponse({"error": "Username already exists"}, status=400)
 
             user = User.objects.create_user(
                 username=username,
@@ -3226,7 +3323,7 @@ def api_access_users(request):
             user.save()
 
             # Добавляем в группы если указаны
-            group_ids = data.get('groups', [])
+            group_ids = data.get("groups", [])
             if group_ids:
                 groups = Group.objects.filter(id__in=group_ids)
                 user.groups.set(groups)
@@ -3235,36 +3332,44 @@ def api_access_users(request):
             if access_profile:
                 _apply_access_profile(user, access_profile)
             else:
-                _apply_access_profile(user, 'server_only')
+                _apply_access_profile(user, "server_only")
 
-            explicit = {
-                p.feature: bool(p.allowed)
-                for p in UserAppPermission.objects.filter(user=user).only('feature', 'allowed')
-            }
-            access = _build_user_access_payload(user, explicit)
+            _apply_user_explicit_permissions(user, data.get("explicit_permissions"))
 
-            return JsonResponse({
-                'success': True,
-                'user': {
-                    'id': user.id,
-                    'username': user.username,
-                    'email': user.email,
-                    'is_staff': user.is_staff,
-                    'is_active': user.is_active,
-                    'access_profile': access['access_profile'],
+            explicit = load_user_explicit_permissions(user)
+            group_sources = load_group_permission_sources(user)
+            access = _build_user_access_payload(user, explicit, group_sources)
+
+            return JsonResponse(
+                {
+                    "success": True,
+                    "user": {
+                        "id": user.id,
+                        "username": user.username,
+                        "email": user.email,
+                        "is_staff": user.is_staff,
+                        "is_active": user.is_active,
+                        "access_profile": access["access_profile"],
+                        "groups": [{"id": g.id, "name": g.name} for g in user.groups.all()],
+                        "effective_permissions": access["effective_permissions"],
+                        "explicit_permissions": access["explicit_permissions"],
+                        "group_permissions": access["group_permissions"],
+                        "group_permission_sources": access["group_permission_sources"],
+                        "permission_sources": access["permission_sources"],
+                    },
                 }
-            })
+            )
         except ValueError as e:
-            return JsonResponse({'error': str(e)}, status=400)
+            return JsonResponse({"error": str(e)}, status=400)
         except json.JSONDecodeError:
-            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
         except Exception as e:
-            logger.exception('api_access_users POST error: %s', e)
-            return JsonResponse({'error': str(e)}, status=500)
+            logger.exception("api_access_users POST error: %s", e)
+            return JsonResponse({"error": str(e)}, status=500)
 
 
 @login_required
-@require_feature('settings')
+@require_feature("settings")
 @require_http_methods(["GET", "PUT", "DELETE"])
 def api_access_user_detail(request, user_id):
     """
@@ -3278,102 +3383,114 @@ def api_access_user_detail(request, user_id):
     try:
         user = User.objects.get(id=user_id)
     except User.DoesNotExist:
-        return JsonResponse({'error': 'User not found'}, status=404)
+        return JsonResponse({"error": "User not found"}, status=404)
 
-    if request.method == 'GET':
-        explicit = {
-            p.feature: bool(p.allowed)
-            for p in UserAppPermission.objects.filter(user=user).only('feature', 'allowed')
-        }
-        access = _build_user_access_payload(user, explicit)
-        return JsonResponse({
-            'user': {
-                'id': user.id,
-                'username': user.username,
-                'email': user.email or '',
-                'is_staff': user.is_staff,
-                'is_active': user.is_active,
-                'is_superuser': user.is_superuser,
-                'date_joined': user.date_joined.isoformat(),
-                'groups': [{'id': g.id, 'name': g.name} for g in user.groups.all()],
-                'access_profile': access['access_profile'],
-                'effective_permissions': access['effective_permissions'],
-                'explicit_permissions': access['explicit_permissions'],
+    if request.method == "GET":
+        explicit = load_user_explicit_permissions(user)
+        group_sources = load_group_permission_sources(user)
+        access = _build_user_access_payload(user, explicit, group_sources)
+        return JsonResponse(
+            {
+                "user": {
+                    "id": user.id,
+                    "username": user.username,
+                    "email": user.email or "",
+                    "is_staff": user.is_staff,
+                    "is_active": user.is_active,
+                    "is_superuser": user.is_superuser,
+                    "date_joined": user.date_joined.isoformat(),
+                    "groups": [{"id": g.id, "name": g.name} for g in user.groups.all()],
+                    "access_profile": access["access_profile"],
+                    "effective_permissions": access["effective_permissions"],
+                    "explicit_permissions": access["explicit_permissions"],
+                    "group_permissions": access["group_permissions"],
+                    "group_permission_sources": access["group_permission_sources"],
+                    "permission_sources": access["permission_sources"],
+                }
             }
-        })
+        )
 
-    if request.method == 'PUT':
+    if request.method == "PUT":
         try:
             data = json.loads(request.body)
 
             # Нельзя редактировать суперпользователя (кроме себя если тоже superuser)
             if user.is_superuser and user.id != request.user.id:
-                return JsonResponse({'error': 'Cannot edit superuser'}, status=403)
+                return JsonResponse({"error": "Cannot edit superuser"}, status=403)
 
             # Обновляем поля
-            if 'email' in data:
-                user.email = data['email'].strip()
-            if 'is_staff' in data:
-                user.is_staff = bool(data['is_staff'])
-            if 'is_active' in data:
-                user.is_active = bool(data['is_active'])
-            if 'username' in data and data['username'].strip():
-                new_username = data['username'].strip()
+            if "email" in data:
+                user.email = data["email"].strip()
+            if "is_staff" in data:
+                user.is_staff = bool(data["is_staff"])
+            if "is_active" in data:
+                user.is_active = bool(data["is_active"])
+            if "username" in data and data["username"].strip():
+                new_username = data["username"].strip()
                 if new_username != user.username:
                     if User.objects.filter(username=new_username).exists():
-                        return JsonResponse({'error': 'Username already exists'}, status=400)
+                        return JsonResponse({"error": "Username already exists"}, status=400)
                     user.username = new_username
 
             user.save()
 
             # Обновляем группы если указаны
-            if 'groups' in data:
-                group_ids = data['groups']
+            if "groups" in data:
+                group_ids = data["groups"]
                 groups = Group.objects.filter(id__in=group_ids)
                 user.groups.set(groups)
 
-            if 'access_profile' in data:
-                _apply_access_profile(user, data.get('access_profile'))
+            if "access_profile" in data:
+                _apply_access_profile(user, data.get("access_profile"))
 
-            explicit = {
-                p.feature: bool(p.allowed)
-                for p in UserAppPermission.objects.filter(user=user).only('feature', 'allowed')
-            }
-            access = _build_user_access_payload(user, explicit)
+            if "explicit_permissions" in data:
+                _apply_user_explicit_permissions(user, data.get("explicit_permissions"))
 
-            return JsonResponse({
-                'success': True,
-                'user': {
-                    'id': user.id,
-                    'username': user.username,
-                    'email': user.email,
-                    'is_staff': user.is_staff,
-                    'is_active': user.is_active,
-                    'access_profile': access['access_profile'],
+            explicit = load_user_explicit_permissions(user)
+            group_sources = load_group_permission_sources(user)
+            access = _build_user_access_payload(user, explicit, group_sources)
+
+            return JsonResponse(
+                {
+                    "success": True,
+                    "user": {
+                        "id": user.id,
+                        "username": user.username,
+                        "email": user.email,
+                        "is_staff": user.is_staff,
+                        "is_active": user.is_active,
+                        "access_profile": access["access_profile"],
+                        "groups": [{"id": g.id, "name": g.name} for g in user.groups.all()],
+                        "effective_permissions": access["effective_permissions"],
+                        "explicit_permissions": access["explicit_permissions"],
+                        "group_permissions": access["group_permissions"],
+                        "group_permission_sources": access["group_permission_sources"],
+                        "permission_sources": access["permission_sources"],
+                    },
                 }
-            })
+            )
         except ValueError as e:
-            return JsonResponse({'error': str(e)}, status=400)
+            return JsonResponse({"error": str(e)}, status=400)
         except json.JSONDecodeError:
-            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
         except Exception as e:
-            logger.exception('api_access_user_detail PUT error: %s', e)
-            return JsonResponse({'error': str(e)}, status=500)
+            logger.exception("api_access_user_detail PUT error: %s", e)
+            return JsonResponse({"error": str(e)}, status=500)
 
-    if request.method == 'DELETE':
+    if request.method == "DELETE":
         # Нельзя удалить себя
         if user.id == request.user.id:
-            return JsonResponse({'error': 'Cannot delete yourself'}, status=400)
+            return JsonResponse({"error": "Cannot delete yourself"}, status=400)
         # Нельзя удалить суперпользователя
         if user.is_superuser:
-            return JsonResponse({'error': 'Cannot delete superuser'}, status=403)
+            return JsonResponse({"error": "Cannot delete superuser"}, status=403)
 
         user.delete()
-        return JsonResponse({'success': True, 'message': 'User deleted'})
+        return JsonResponse({"success": True, "message": "User deleted"})
 
 
 @login_required
-@require_feature('settings')
+@require_feature("settings")
 @require_http_methods(["POST"])
 def api_access_user_password(request, user_id):
     """
@@ -3384,32 +3501,32 @@ def api_access_user_password(request, user_id):
     try:
         user = User.objects.get(id=user_id)
     except User.DoesNotExist:
-        return JsonResponse({'error': 'User not found'}, status=404)
+        return JsonResponse({"error": "User not found"}, status=404)
 
     # Нельзя менять пароль суперпользователя (кроме себя)
     if user.is_superuser and user.id != request.user.id:
-        return JsonResponse({'error': 'Cannot change superuser password'}, status=403)
+        return JsonResponse({"error": "Cannot change superuser password"}, status=403)
 
     try:
         data = json.loads(request.body)
-        new_password = data.get('password', '')
+        new_password = data.get("password", "")
 
         if not new_password or len(new_password) < 4:
-            return JsonResponse({'error': 'Password must be at least 4 characters'}, status=400)
+            return JsonResponse({"error": "Password must be at least 4 characters"}, status=400)
 
         user.set_password(new_password)
         user.save()
 
-        return JsonResponse({'success': True, 'message': 'Password changed'})
+        return JsonResponse({"success": True, "message": "Password changed"})
     except json.JSONDecodeError:
-        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as e:
-        logger.exception('api_access_user_password error: %s', e)
-        return JsonResponse({'error': str(e)}, status=500)
+        logger.exception("api_access_user_password error: %s", e)
+        return JsonResponse({"error": str(e)}, status=500)
 
 
 @login_required
-@require_feature('settings')
+@require_feature("settings")
 @require_http_methods(["POST"])
 def api_access_user_profile(request, user_id):
     """
@@ -3417,53 +3534,55 @@ def api_access_user_profile(request, user_id):
     profile: server_only | admin_full | reset_defaults | custom
     """
     from django.contrib.auth.models import User
-    from core_ui.models import UserAppPermission
 
     try:
         user = User.objects.get(id=user_id)
     except User.DoesNotExist:
-        return JsonResponse({'error': 'User not found'}, status=404)
+        return JsonResponse({"error": "User not found"}, status=404)
 
     if user.is_superuser and user.id != request.user.id:
-        return JsonResponse({'error': 'Cannot edit superuser'}, status=403)
+        return JsonResponse({"error": "Cannot edit superuser"}, status=403)
 
     try:
         data = json.loads(request.body)
-        profile = (data.get('profile') or '').strip()
+        profile = (data.get("profile") or "").strip()
         if not profile:
-            return JsonResponse({'error': 'profile is required'}, status=400)
+            return JsonResponse({"error": "profile is required"}, status=400)
 
         _apply_access_profile(user, profile)
 
-        explicit = {
-            p.feature: bool(p.allowed)
-            for p in UserAppPermission.objects.filter(user=user).only('feature', 'allowed')
-        }
-        access = _build_user_access_payload(user, explicit)
+        explicit = load_user_explicit_permissions(user)
+        group_sources = load_group_permission_sources(user)
+        access = _build_user_access_payload(user, explicit, group_sources)
 
-        return JsonResponse({
-            'success': True,
-            'user': {
-                'id': user.id,
-                'username': user.username,
-                'is_staff': user.is_staff,
-                'is_active': user.is_active,
-            },
-            'access_profile': access['access_profile'],
-            'effective_permissions': access['effective_permissions'],
-            'explicit_permissions': access['explicit_permissions'],
-        })
+        return JsonResponse(
+            {
+                "success": True,
+                "user": {
+                    "id": user.id,
+                    "username": user.username,
+                    "is_staff": user.is_staff,
+                    "is_active": user.is_active,
+                },
+                "access_profile": access["access_profile"],
+                "effective_permissions": access["effective_permissions"],
+                "explicit_permissions": access["explicit_permissions"],
+                "group_permissions": access["group_permissions"],
+                "group_permission_sources": access["group_permission_sources"],
+                "permission_sources": access["permission_sources"],
+            }
+        )
     except ValueError as e:
-        return JsonResponse({'error': str(e)}, status=400)
+        return JsonResponse({"error": str(e)}, status=400)
     except json.JSONDecodeError:
-        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as e:
-        logger.exception('api_access_user_profile error: %s', e)
-        return JsonResponse({'error': str(e)}, status=500)
+        logger.exception("api_access_user_profile error: %s", e)
+        return JsonResponse({"error": str(e)}, status=500)
 
 
 @login_required
-@require_feature('settings')
+@require_feature("settings")
 @require_http_methods(["GET", "POST"])
 def api_access_groups(request):
     """
@@ -3471,53 +3590,71 @@ def api_access_groups(request):
     POST /api/access/groups/ - создание новой группы
     """
     from django.contrib.auth.models import Group
+    from core_ui.models import GroupAppPermission
 
-    if request.method == 'GET':
-        groups = Group.objects.all().prefetch_related('user_set').order_by('name')
-        data = [{
-            'id': g.id,
-            'name': g.name,
-            'members': [{'id': u.id, 'username': u.username} for u in g.user_set.all()],
-            'member_count': g.user_set.count(),
-        } for g in groups]
-        return JsonResponse({'groups': data})
+    if request.method == "GET":
+        groups = Group.objects.all().prefetch_related("user_set").order_by("name")
+        permissions_by_group: dict[int, dict[str, bool]] = defaultdict(dict)
+        for row in GroupAppPermission.objects.all().values("group_id", "feature", "allowed"):
+            permissions_by_group[row["group_id"]][row["feature"]] = bool(row["allowed"])
+        data = [
+            {
+                "id": g.id,
+                "name": g.name,
+                "members": [{"id": u.id, "username": u.username} for u in g.user_set.all()],
+                "member_count": g.user_set.count(),
+                "explicit_permissions": permissions_by_group.get(g.id, {}),
+            }
+            for g in groups
+        ]
+        return JsonResponse({"groups": data, "features": access_feature_labels()})
 
-    if request.method == 'POST':
+    if request.method == "POST":
         try:
             data = json.loads(request.body)
-            name = data.get('name', '').strip()
+            name = data.get("name", "").strip()
 
             if not name:
-                return JsonResponse({'error': 'Group name is required'}, status=400)
+                return JsonResponse({"error": "Group name is required"}, status=400)
             if Group.objects.filter(name=name).exists():
-                return JsonResponse({'error': 'Group already exists'}, status=400)
+                return JsonResponse({"error": "Group already exists"}, status=400)
 
             group = Group.objects.create(name=name)
 
             # Добавляем членов если указаны
-            member_ids = data.get('members', [])
+            member_ids = data.get("members", [])
             if member_ids:
                 from django.contrib.auth.models import User
+
                 members = User.objects.filter(id__in=member_ids)
                 group.user_set.set(members)
 
-            return JsonResponse({
-                'success': True,
-                'group': {
-                    'id': group.id,
-                    'name': group.name,
-                    'member_count': group.user_set.count(),
+            _apply_group_explicit_permissions(group, data.get("explicit_permissions") or data.get("permissions"))
+
+            return JsonResponse(
+                {
+                    "success": True,
+                    "group": {
+                        "id": group.id,
+                        "name": group.name,
+                        "member_count": group.user_set.count(),
+                        "members": [{"id": u.id, "username": u.username} for u in group.user_set.all()],
+                        "explicit_permissions": {
+                            row.feature: bool(row.allowed)
+                            for row in GroupAppPermission.objects.filter(group=group).only("feature", "allowed")
+                        },
+                    },
                 }
-            })
+            )
         except json.JSONDecodeError:
-            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
         except Exception as e:
-            logger.exception('api_access_groups POST error: %s', e)
-            return JsonResponse({'error': str(e)}, status=500)
+            logger.exception("api_access_groups POST error: %s", e)
+            return JsonResponse({"error": str(e)}, status=500)
 
 
 @login_required
-@require_feature('settings')
+@require_feature("settings")
 @require_http_methods(["GET", "PUT", "DELETE"])
 def api_access_group_detail(request, group_id):
     """
@@ -3526,60 +3663,77 @@ def api_access_group_detail(request, group_id):
     DELETE /api/access/groups/<id>/ - удалить группу
     """
     from django.contrib.auth.models import Group, User
+    from core_ui.models import GroupAppPermission
 
     try:
-        group = Group.objects.prefetch_related('user_set').get(id=group_id)
+        group = Group.objects.prefetch_related("user_set").get(id=group_id)
     except Group.DoesNotExist:
-        return JsonResponse({'error': 'Group not found'}, status=404)
+        return JsonResponse({"error": "Group not found"}, status=404)
 
-    if request.method == 'GET':
-        return JsonResponse({
-            'group': {
-                'id': group.id,
-                'name': group.name,
-                'members': [{'id': u.id, 'username': u.username} for u in group.user_set.all()],
+    if request.method == "GET":
+        return JsonResponse(
+            {
+                "group": {
+                    "id": group.id,
+                    "name": group.name,
+                    "members": [{"id": u.id, "username": u.username} for u in group.user_set.all()],
+                    "explicit_permissions": {
+                        row.feature: bool(row.allowed)
+                        for row in GroupAppPermission.objects.filter(group=group).only("feature", "allowed")
+                    },
+                }
             }
-        })
+        )
 
-    if request.method == 'PUT':
+    if request.method == "PUT":
         try:
             data = json.loads(request.body)
 
-            if 'name' in data and data['name'].strip():
-                new_name = data['name'].strip()
+            if "name" in data and data["name"].strip():
+                new_name = data["name"].strip()
                 if new_name != group.name:
                     if Group.objects.filter(name=new_name).exists():
-                        return JsonResponse({'error': 'Group name already exists'}, status=400)
+                        return JsonResponse({"error": "Group name already exists"}, status=400)
                     group.name = new_name
                     group.save()
 
             # Обновляем членов если указаны
-            if 'members' in data:
-                member_ids = data['members']
+            if "members" in data:
+                member_ids = data["members"]
                 members = User.objects.filter(id__in=member_ids)
                 group.user_set.set(members)
 
-            return JsonResponse({
-                'success': True,
-                'group': {
-                    'id': group.id,
-                    'name': group.name,
-                    'member_count': group.user_set.count(),
-                }
-            })
-        except json.JSONDecodeError:
-            return JsonResponse({'error': 'Invalid JSON'}, status=400)
-        except Exception as e:
-            logger.exception('api_access_group_detail PUT error: %s', e)
-            return JsonResponse({'error': str(e)}, status=500)
+            if "explicit_permissions" in data or "permissions" in data:
+                _apply_group_explicit_permissions(group, data.get("explicit_permissions") or data.get("permissions"))
 
-    if request.method == 'DELETE':
+            return JsonResponse(
+                {
+                    "success": True,
+                    "group": {
+                        "id": group.id,
+                        "name": group.name,
+                        "member_count": group.user_set.count(),
+                        "members": [{"id": u.id, "username": u.username} for u in group.user_set.all()],
+                        "explicit_permissions": {
+                            row.feature: bool(row.allowed)
+                            for row in GroupAppPermission.objects.filter(group=group).only("feature", "allowed")
+                        },
+                    },
+                }
+            )
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
+        except Exception as e:
+            logger.exception("api_access_group_detail PUT error: %s", e)
+            return JsonResponse({"error": str(e)}, status=500)
+
+    if request.method == "DELETE":
         group.delete()
-        return JsonResponse({'success': True, 'message': 'Group deleted'})
+        return JsonResponse({"success": True, "message": "Group deleted"})
 
 
 @login_required
-@require_feature('settings')
+@require_feature("settings")
 @require_http_methods(["POST", "DELETE"])
 def api_access_group_members(request, group_id):
     """
@@ -3591,37 +3745,37 @@ def api_access_group_members(request, group_id):
     try:
         group = Group.objects.get(id=group_id)
     except Group.DoesNotExist:
-        return JsonResponse({'error': 'Group not found'}, status=404)
+        return JsonResponse({"error": "Group not found"}, status=404)
 
     try:
         data = json.loads(request.body)
-        user_id = data.get('user_id')
+        user_id = data.get("user_id")
 
         if not user_id:
-            return JsonResponse({'error': 'user_id is required'}, status=400)
+            return JsonResponse({"error": "user_id is required"}, status=400)
 
         try:
             user = User.objects.get(id=user_id)
         except User.DoesNotExist:
-            return JsonResponse({'error': 'User not found'}, status=404)
+            return JsonResponse({"error": "User not found"}, status=404)
 
-        if request.method == 'POST':
+        if request.method == "POST":
             group.user_set.add(user)
-            return JsonResponse({'success': True, 'message': f'{user.username} added to {group.name}'})
+            return JsonResponse({"success": True, "message": f"{user.username} added to {group.name}"})
 
-        if request.method == 'DELETE':
+        if request.method == "DELETE":
             group.user_set.remove(user)
-            return JsonResponse({'success': True, 'message': f'{user.username} removed from {group.name}'})
+            return JsonResponse({"success": True, "message": f"{user.username} removed from {group.name}"})
 
     except json.JSONDecodeError:
-        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as e:
-        logger.exception('api_access_group_members error: %s', e)
-        return JsonResponse({'error': str(e)}, status=500)
+        logger.exception("api_access_group_members error: %s", e)
+        return JsonResponse({"error": str(e)}, status=500)
 
 
 @login_required
-@require_feature('settings')
+@require_feature("settings")
 @require_http_methods(["GET", "POST"])
 def api_access_permissions(request):
     """
@@ -3629,76 +3783,156 @@ def api_access_permissions(request):
     POST /api/access/permissions/ - создание/обновление права
     """
     from django.contrib.auth.models import User
-    from core_ui.models import UserAppPermission, FEATURE_CHOICES
+    from core_ui.models import UserAppPermission, GroupAppPermission
 
-    if request.method == 'GET':
-        permissions = UserAppPermission.objects.select_related('user').all().order_by('user__username', 'feature')
-        data = [{
-            'id': p.id,
-            'user_id': p.user.id,
-            'username': p.user.username,
-            'feature': p.feature,
-            'feature_display': p.get_feature_display(),
-            'allowed': p.allowed,
-        } for p in permissions]
+    if request.method == "GET":
+        permissions = UserAppPermission.objects.select_related("user").all().order_by("user__username", "feature")
+        data = [
+            {
+                "id": p.id,
+                "user_id": p.user.id,
+                "username": p.user.username,
+                "feature": p.feature,
+                "feature_display": p.get_feature_display(),
+                "allowed": p.allowed,
+            }
+            for p in permissions
+        ]
 
-        # Также возвращаем список доступных фич
-        features = [{'value': f[0], 'label': f[1]} for f in FEATURE_CHOICES]
+        group_permissions = GroupAppPermission.objects.select_related("group").all().order_by("group__name", "feature")
+        group_data = [
+            {
+                "id": p.id,
+                "group_id": p.group.id,
+                "group_name": p.group.name,
+                "feature": p.feature,
+                "feature_display": p.get_feature_display(),
+                "allowed": p.allowed,
+            }
+            for p in group_permissions
+        ]
 
-        return JsonResponse({'permissions': data, 'features': features})
+        return JsonResponse({"permissions": data, "group_permissions": group_data, "features": access_feature_labels()})
 
-    if request.method == 'POST':
+    if request.method == "POST":
         try:
             data = json.loads(request.body)
-            user_id = data.get('user_id')
-            feature = data.get('feature', '').strip()
-            allowed = data.get('allowed', True)
+            user_id = data.get("user_id")
+            feature = data.get("feature", "").strip()
+            allowed = data.get("allowed", True)
 
             if not user_id:
-                return JsonResponse({'error': 'user_id is required'}, status=400)
+                return JsonResponse({"error": "user_id is required"}, status=400)
             if not feature:
-                return JsonResponse({'error': 'feature is required'}, status=400)
+                return JsonResponse({"error": "feature is required"}, status=400)
 
             # Проверяем что feature валидный
-            valid_features = [f[0] for f in FEATURE_CHOICES]
+            valid_features = _access_feature_slugs()
             if feature not in valid_features:
-                return JsonResponse({'error': f'Invalid feature. Valid: {valid_features}'}, status=400)
+                return JsonResponse({"error": f"Invalid feature. Valid: {valid_features}"}, status=400)
 
             try:
                 user = User.objects.get(id=user_id)
             except User.DoesNotExist:
-                return JsonResponse({'error': 'User not found'}, status=404)
+                return JsonResponse({"error": "User not found"}, status=404)
 
             if user.is_superuser and user.id != request.user.id:
-                return JsonResponse({'error': 'Cannot edit superuser'}, status=403)
+                return JsonResponse({"error": "Cannot edit superuser"}, status=403)
 
             # Создаем или обновляем
             perm, created = UserAppPermission.objects.update_or_create(
-                user=user,
-                feature=feature,
-                defaults={'allowed': bool(allowed)}
+                user=user, feature=feature, defaults={"allowed": bool(allowed)}
             )
 
-            return JsonResponse({
-                'success': True,
-                'created': created,
-                'permission': {
-                    'id': perm.id,
-                    'user_id': perm.user.id,
-                    'username': perm.user.username,
-                    'feature': perm.feature,
-                    'allowed': perm.allowed,
+            return JsonResponse(
+                {
+                    "success": True,
+                    "created": created,
+                    "permission": {
+                        "id": perm.id,
+                        "user_id": perm.user.id,
+                        "username": perm.user.username,
+                        "feature": perm.feature,
+                        "allowed": perm.allowed,
+                    },
                 }
-            })
+            )
         except json.JSONDecodeError:
-            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
         except Exception as e:
-            logger.exception('api_access_permissions POST error: %s', e)
-            return JsonResponse({'error': str(e)}, status=500)
+            logger.exception("api_access_permissions POST error: %s", e)
+            return JsonResponse({"error": str(e)}, status=500)
 
 
 @login_required
-@require_feature('settings')
+@require_feature("settings")
+@require_http_methods(["GET", "POST"])
+def api_access_group_permissions(request):
+    """Group-level feature permissions."""
+    from django.contrib.auth.models import Group
+    from core_ui.models import GroupAppPermission
+
+    if request.method == "GET":
+        permissions = GroupAppPermission.objects.select_related("group").all().order_by("group__name", "feature")
+        data = [
+            {
+                "id": row.id,
+                "group_id": row.group_id,
+                "group_name": row.group.name,
+                "feature": row.feature,
+                "feature_display": row.get_feature_display(),
+                "allowed": row.allowed,
+            }
+            for row in permissions
+        ]
+        return JsonResponse({"permissions": data, "features": access_feature_labels()})
+
+    try:
+        data = json.loads(request.body)
+        group_id = data.get("group_id")
+        feature = str(data.get("feature") or "").strip()
+        allowed = data.get("allowed", True)
+
+        if not group_id:
+            return JsonResponse({"error": "group_id is required"}, status=400)
+        if not feature:
+            return JsonResponse({"error": "feature is required"}, status=400)
+        if feature not in _access_feature_slugs():
+            return JsonResponse({"error": "Invalid feature"}, status=400)
+
+        try:
+            group = Group.objects.get(id=group_id)
+        except Group.DoesNotExist:
+            return JsonResponse({"error": "Group not found"}, status=404)
+
+        perm, created = GroupAppPermission.objects.update_or_create(
+            group=group,
+            feature=feature,
+            defaults={"allowed": bool(allowed)},
+        )
+        return JsonResponse(
+            {
+                "success": True,
+                "created": created,
+                "permission": {
+                    "id": perm.id,
+                    "group_id": perm.group_id,
+                    "group_name": perm.group.name,
+                    "feature": perm.feature,
+                    "feature_display": perm.get_feature_display(),
+                    "allowed": perm.allowed,
+                },
+            }
+        )
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+    except Exception as e:
+        logger.exception("api_access_group_permissions error: %s", e)
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@login_required
+@require_feature("settings")
 @require_http_methods(["PUT", "DELETE"])
 def api_access_permission_detail(request, perm_id):
     """
@@ -3708,36 +3942,80 @@ def api_access_permission_detail(request, perm_id):
     from core_ui.models import UserAppPermission
 
     try:
-        perm = UserAppPermission.objects.select_related('user').get(id=perm_id)
+        perm = UserAppPermission.objects.select_related("user").get(id=perm_id)
     except UserAppPermission.DoesNotExist:
-        return JsonResponse({'error': 'Permission not found'}, status=404)
+        return JsonResponse({"error": "Permission not found"}, status=404)
 
     if perm.user.is_superuser and perm.user.id != request.user.id:
-        return JsonResponse({'error': 'Cannot edit superuser'}, status=403)
+        return JsonResponse({"error": "Cannot edit superuser"}, status=403)
 
-    if request.method == 'PUT':
+    if request.method == "PUT":
         try:
             data = json.loads(request.body)
-            if 'allowed' in data:
-                perm.allowed = bool(data['allowed'])
+            if "allowed" in data:
+                perm.allowed = bool(data["allowed"])
                 perm.save()
 
-            return JsonResponse({
-                'success': True,
-                'permission': {
-                    'id': perm.id,
-                    'user_id': perm.user.id,
-                    'username': perm.user.username,
-                    'feature': perm.feature,
-                    'allowed': perm.allowed,
+            return JsonResponse(
+                {
+                    "success": True,
+                    "permission": {
+                        "id": perm.id,
+                        "user_id": perm.user.id,
+                        "username": perm.user.username,
+                        "feature": perm.feature,
+                        "allowed": perm.allowed,
+                    },
                 }
-            })
+            )
         except json.JSONDecodeError:
-            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
         except Exception as e:
-            logger.exception('api_access_permission_detail PUT error: %s', e)
-            return JsonResponse({'error': str(e)}, status=500)
+            logger.exception("api_access_permission_detail PUT error: %s", e)
+            return JsonResponse({"error": str(e)}, status=500)
 
-    if request.method == 'DELETE':
+    if request.method == "DELETE":
         perm.delete()
-        return JsonResponse({'success': True, 'message': 'Permission deleted'})
+        return JsonResponse({"success": True, "message": "Permission deleted"})
+
+
+@login_required
+@require_feature("settings")
+@require_http_methods(["PUT", "DELETE"])
+def api_access_group_permission_detail(request, perm_id):
+    from core_ui.models import GroupAppPermission
+
+    try:
+        perm = GroupAppPermission.objects.select_related("group").get(id=perm_id)
+    except GroupAppPermission.DoesNotExist:
+        return JsonResponse({"error": "Permission not found"}, status=404)
+
+    if request.method == "PUT":
+        try:
+            data = json.loads(request.body)
+            if "allowed" in data:
+                perm.allowed = bool(data["allowed"])
+                perm.save(update_fields=["allowed"])
+
+            return JsonResponse(
+                {
+                    "success": True,
+                    "permission": {
+                        "id": perm.id,
+                        "group_id": perm.group_id,
+                        "group_name": perm.group.name,
+                        "feature": perm.feature,
+                        "feature_display": perm.get_feature_display(),
+                        "allowed": perm.allowed,
+                    },
+                }
+            )
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
+        except Exception as e:
+            logger.exception("api_access_group_permission_detail PUT error: %s", e)
+            return JsonResponse({"error": str(e)}, status=500)
+
+    if request.method == "DELETE":
+        perm.delete()
+        return JsonResponse({"success": True, "message": "Permission deleted"})
