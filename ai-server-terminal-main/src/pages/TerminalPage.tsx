@@ -1073,78 +1073,84 @@ export default function TerminalPage() {
             />
           ) : null}
 
-          <div className={sidePanelMode === "ai" ? "flex h-full min-h-0 flex-col" : "hidden"}>
-            <div className="min-h-0 flex-1 overflow-hidden">
-              <AiPanel
-                onClose={() => setSidePanelMode("none")}
-                onSend={handleSendAi}
-                onStop={handleStopAi}
-                onConfirm={handleConfirm}
-                onCancel={handleCancel}
-                onReply={handleReply}
-                onGenerateReport={handleGenerateReport}
-                onClearMemory={handleClearAiMemory}
-                onSettingsChange={handleSettingsChange}
-                onSaveDefaults={handleSaveAiDefaults}
-                onResetToDefaults={handleResetAiPreferences}
-                onClearChat={handleClearChat}
-                messages={aiMessages}
-                isGenerating={isAiGenerating}
-                chatMode={activeChatMode}
-                onChatModeChange={handleChatModeChange}
-                executionMode={activeExecutionMode}
-                settings={activeAiSettings}
-                onModeChange={handleModeChange}
-              />
+          {sidePanelMode === "ai" ? (
+            <div className="flex h-full min-h-0 flex-col">
+              <div className="min-h-0 flex-1 overflow-hidden">
+                <AiPanel
+                  onClose={() => setSidePanelMode("none")}
+                  onSend={handleSendAi}
+                  onStop={handleStopAi}
+                  onConfirm={handleConfirm}
+                  onCancel={handleCancel}
+                  onReply={handleReply}
+                  onGenerateReport={handleGenerateReport}
+                  onClearMemory={handleClearAiMemory}
+                  onSettingsChange={handleSettingsChange}
+                  onSaveDefaults={handleSaveAiDefaults}
+                  onResetToDefaults={handleResetAiPreferences}
+                  onClearChat={handleClearChat}
+                  messages={aiMessages}
+                  isGenerating={isAiGenerating}
+                  chatMode={activeChatMode}
+                  onChatModeChange={handleChatModeChange}
+                  executionMode={activeExecutionMode}
+                  settings={activeAiSettings}
+                  onModeChange={handleModeChange}
+                />
+              </div>
             </div>
-          </div>
+          ) : null}
 
-          <div className={sidePanelMode === "ui" ? "flex h-full min-h-0 flex-col" : "hidden"}>
-            <div className="relative h-full min-h-0 flex-1">
-              {tabs.map((tab) => {
-                const tabServer = findServer(servers, tab.serverId);
-                if (!tabServer) return null;
-                return (
-                  <div
-                    key={tab.id}
-                    className={`absolute inset-0 ${tab.id === activeTabId ? "z-10" : "pointer-events-none opacity-0"}`}
-                    aria-hidden={tab.id === activeTabId ? undefined : true}
-                  >
-                    <LinuxUiPanel
-                      server={tabServer}
-                      active={tab.id === activeTabId}
-                      onClose={() => setSidePanelMode("none")}
-                      onOpenAi={() => setSidePanelMode("ai")}
-                    />
-                  </div>
-                );
-              })}
+          {sidePanelMode === "ui" ? (
+            <div className="flex h-full min-h-0 flex-col">
+              <div className="relative h-full min-h-0 flex-1">
+                {tabs.map((tab) => {
+                  const tabServer = findServer(servers, tab.serverId);
+                  if (!tabServer) return null;
+                  return (
+                    <div
+                      key={tab.id}
+                      className={`absolute inset-0 ${tab.id === activeTabId ? "z-10" : "pointer-events-none opacity-0"}`}
+                      aria-hidden={tab.id === activeTabId ? undefined : true}
+                    >
+                      <LinuxUiPanel
+                        server={tabServer}
+                        active={tab.id === activeTabId}
+                        onClose={() => setSidePanelMode("none")}
+                        onOpenAi={() => setSidePanelMode("ai")}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          ) : null}
 
-          <div className={sidePanelMode === "files" ? "flex h-full min-h-0 flex-col" : "hidden"}>
-            <div className="relative h-full min-h-0 flex-1">
-              {tabs.map((tab) => {
-                const tabServer = findServer(servers, tab.serverId);
-                if (!tabServer) return null;
-                return (
-                  <div
-                    key={tab.id}
-                    className={`absolute inset-0 ${tab.id === activeTabId ? "z-10" : "pointer-events-none opacity-0"}`}
-                    aria-hidden={tab.id === activeTabId ? undefined : true}
-                  >
-                    <SftpPanel
-                      ref={(handle) => {
-                        sftpRefs.current[tab.id] = handle;
-                      }}
-                      server={tabServer}
-                      active={tab.id === activeTabId}
-                    />
-                  </div>
-                );
-              })}
+          {sidePanelMode === "files" ? (
+            <div className="flex h-full min-h-0 flex-col">
+              <div className="relative h-full min-h-0 flex-1">
+                {tabs.map((tab) => {
+                  const tabServer = findServer(servers, tab.serverId);
+                  if (!tabServer) return null;
+                  return (
+                    <div
+                      key={tab.id}
+                      className={`absolute inset-0 ${tab.id === activeTabId ? "z-10" : "pointer-events-none opacity-0"}`}
+                      aria-hidden={tab.id === activeTabId ? undefined : true}
+                    >
+                      <SftpPanel
+                        ref={(handle) => {
+                          sftpRefs.current[tab.id] = handle;
+                        }}
+                        server={tabServer}
+                        active={tab.id === activeTabId}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
       </div>
 

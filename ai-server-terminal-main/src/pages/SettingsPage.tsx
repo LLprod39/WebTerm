@@ -43,6 +43,7 @@ import {
   refreshModels,
   saveSettings,
   fetchAuthSession,
+  type SettingsConfig,
 } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -86,9 +87,52 @@ const LLM_PROVIDERS = [
   { value: "gemini", label: "Gemini (Google)" },
   { value: "openai", label: "OpenAI" },
   { value: "claude", label: "Claude (Anthropic)" },
+  { value: "ollama", label: "Ollama" },
 ];
 
 const AUTO_REASONING_VALUE = "__auto__";
+const AUTO_OLLAMA_THINKING_VALUE = "__auto__";
+const LLM_PROVIDER_VALUES = LLM_PROVIDERS.map((provider) => provider.value);
+const OLLAMA_RUNTIME_OPTIONS = [
+  { value: "auto", label: "Авто" },
+  { value: "local", label: "Только локально" },
+  { value: "cloud", label: "Только облако" },
+];
+const OLLAMA_THINKING_OPTIONS = [
+  { value: AUTO_OLLAMA_THINKING_VALUE, label: "Авто" },
+  { value: "off", label: "Выкл" },
+  { value: "on", label: "Вкл" },
+  { value: "low", label: "Низкий" },
+  { value: "medium", label: "Средний" },
+  { value: "high", label: "Высокий" },
+];
+const PROVIDER_API_STATUS_KEY: Record<string, string> = {
+  gemini: "gemini_set",
+  grok: "grok_set",
+  openai: "openai_set",
+  claude: "claude_set",
+  ollama: "ollama_set",
+};
+
+function getProviderLabel(value: string): string {
+  return LLM_PROVIDERS.find((provider) => provider.value === value)?.label || value;
+}
+
+function getProviderEnabled(config: SettingsConfig, provider: string): boolean {
+  if (provider === "gemini") return config.gemini_enabled;
+  if (provider === "openai") return config.openai_enabled;
+  if (provider === "claude") return config.claude_enabled;
+  if (provider === "ollama") return config.ollama_enabled;
+  return config.grok_enabled;
+}
+
+function getSavedModelForProvider(config: SettingsConfig, provider: string): string {
+  if (provider === "gemini") return config.chat_model_gemini || "";
+  if (provider === "openai") return config.chat_model_openai || "";
+  if (provider === "claude") return config.chat_model_claude || "";
+  if (provider === "ollama") return config.chat_model_ollama || "";
+  return config.chat_model_grok || "";
+}
 
 function PurposeModelSelector({
   label, description, icon: Icon, provider, model, availableModels,
@@ -108,7 +152,7 @@ function PurposeModelSelector({
           <p className="text-[10px] text-muted-foreground">{description}</p>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <label className="text-[10px] font-medium text-muted-foreground uppercase">Провайдер</label>
           <Select value={provider} onValueChange={onProviderChange}>
@@ -136,6 +180,10 @@ function PurposeModelSelector({
             </div>
           )}
         </div>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground">
+        <span>{getProviderLabel(provider)}</span>
+        <span>{availableModels.length ? `${availableModels.length} моделей в каталоге` : "Ручной ввод модели"}</span>
       </div>
       {availableModels.length > 0 && (
         <Button size="sm" variant="ghost" className="h-5 text-[9px] px-1.5 gap-1 text-muted-foreground" onClick={onRefresh} disabled={refreshing}>
@@ -180,11 +228,13 @@ const DEFAULT_LOGGING_CONFIG = {
   export_format: "json",
 };
 const LOGGING_KEYS = Object.keys(DEFAULT_LOGGING_CONFIG);
+type SettingsTabValue = "ai" | "access" | "logging" | "activity";
 
 export default function SettingsPage() {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<SettingsTabValue>("ai");
 
   const { data: authData } = useQuery({
     queryKey: ["auth", "session"],
@@ -205,6 +255,7 @@ export default function SettingsPage() {
     queryFn: fetchModels,
     staleTime: 30_000,
   });
+  const currentConfig = settingsData?.config;
 
   // Activity with date range
   const [activitySearch, setActivitySearch] = useState("");
@@ -235,6 +286,11 @@ export default function SettingsPage() {
   const [agentModel, setAgentModel] = useState("");
   const [orchProvider, setOrchProvider] = useState("grok");
   const [orchModel, setOrchModel] = useState("");
+  const [ollamaBaseUrl, setOllamaBaseUrl] = useState("http://127.0.0.1:11434");
+  const [ollamaRuntimeMode, setOllamaRuntimeMode] = useState("auto");
+  const [ollamaCloudEnabled, setOllamaCloudEnabled] = useState(false);
+  const [ollamaCloudBaseUrl, setOllamaCloudBaseUrl] = useState("https://ollama.com");
+  const [ollamaThinkMode, setOllamaThinkMode] = useState<string>(AUTO_OLLAMA_THINKING_VALUE);
   const [refreshingPurpose, setRefreshingPurpose] = useState<string | null>(null);
   const [reasoningEffort, setReasoningEffort] = useState<string>(AUTO_REASONING_VALUE);
   const [refreshing, setRefreshing] = useState(false);
@@ -243,48 +299,108 @@ export default function SettingsPage() {
   const [loggingConfig, setLoggingConfig] = useState({ ...DEFAULT_LOGGING_CONFIG });
   const [loggingSaved, setLoggingSaved] = useState(false);
 
-  useEffect(() => {
-    const config = settingsData?.config;
-    if (!config) return;
-    const llmProviders = ["gemini", "grok", "openai", "claude"];
-    const activeProvider = llmProviders.includes(config.internal_llm_provider || "")
+  const hydrateAiForm = useCallback((config: SettingsConfig) => {
+    const activeProvider = LLM_PROVIDER_VALUES.includes(config.internal_llm_provider || "")
       ? config.internal_llm_provider
-      : llmProviders.includes(config.default_provider || "")
+      : LLM_PROVIDER_VALUES.includes(config.default_provider || "")
         ? config.default_provider
         : "grok";
     setProvider(activeProvider);
-    if (activeProvider === "gemini") setModel(config.chat_model_gemini || "");
-    else if (activeProvider === "openai") setModel(config.chat_model_openai || "");
-    else if (activeProvider === "claude") setModel(config.chat_model_claude || "");
-    else setModel(config.chat_model_grok || "");
-
+    setModel(getSavedModelForProvider(config, activeProvider));
     setChatProvider(config.chat_llm_provider || activeProvider);
     setChatModel(config.chat_llm_model || "");
     setAgentProvider(config.agent_llm_provider || activeProvider);
     setAgentModel(config.agent_llm_model || "");
     setOrchProvider(config.orchestrator_llm_provider || activeProvider);
     setOrchModel(config.orchestrator_llm_model || "");
+    setOllamaBaseUrl(config.ollama_base_url || "http://127.0.0.1:11434");
+    setOllamaRuntimeMode(config.ollama_runtime_mode || "auto");
+    setOllamaCloudEnabled(Boolean(config.ollama_cloud_enabled));
+    setOllamaCloudBaseUrl(config.ollama_cloud_base_url || "https://ollama.com");
+    setOllamaThinkMode(config.ollama_think_mode || AUTO_OLLAMA_THINKING_VALUE);
     setReasoningEffort(config.openai_reasoning_effort || AUTO_REASONING_VALUE);
     setLoggingConfig({
       ...DEFAULT_LOGGING_CONFIG,
       ...Object.fromEntries(LOGGING_KEYS.map((key) => [key, config[key] ?? DEFAULT_LOGGING_CONFIG[key]])),
     });
-  }, [settingsData]);
+  }, []);
+
+  useEffect(() => {
+    if (!currentConfig) return;
+    hydrateAiForm(currentConfig);
+  }, [currentConfig, hydrateAiForm]);
 
   const getModelsForProvider = useCallback((p: string): string[] => {
     if (!modelsData) return [];
     if (p === "gemini") return modelsData.gemini || [];
     if (p === "openai") return modelsData.openai || [];
     if (p === "claude") return modelsData.claude || [];
+    if (p === "ollama") {
+      const localModels = modelsData.ollama_local || [];
+      const cloudModels = modelsData.ollama_cloud || [];
+      const ordered = ollamaRuntimeMode === "cloud"
+        ? [...cloudModels, ...localModels]
+        : [...localModels, ...cloudModels];
+      return Array.from(new Set(ordered));
+    }
     return modelsData.grok || [];
-  }, [modelsData]);
+  }, [modelsData, ollamaRuntimeMode]);
 
   const availableModels = useMemo(() => getModelsForProvider(provider), [getModelsForProvider, provider]);
+  const getSuggestedModelForProvider = useCallback((nextProvider: string, preferredModel = ""): string => {
+    const models = getModelsForProvider(nextProvider);
+    if (!models.length) {
+      return preferredModel;
+    }
+    if (preferredModel && models.includes(preferredModel)) {
+      return preferredModel;
+    }
+    if (currentConfig) {
+      const savedModel = getSavedModelForProvider(currentConfig, nextProvider);
+      if (savedModel && models.includes(savedModel)) {
+        return savedModel;
+      }
+    }
+    return models[0];
+  }, [currentConfig, getModelsForProvider]);
+
+  const handleDefaultProviderChange = useCallback((nextProvider: string) => {
+    setProvider(nextProvider);
+    setModel(getSuggestedModelForProvider(nextProvider));
+  }, [getSuggestedModelForProvider]);
+
+  const applyDefaultToAll = useCallback(() => {
+    const nextModel = model || getSuggestedModelForProvider(provider);
+    setChatProvider(provider);
+    setChatModel(nextModel);
+    setAgentProvider(provider);
+    setAgentModel(nextModel);
+    setOrchProvider(provider);
+    setOrchModel(nextModel);
+  }, [getSuggestedModelForProvider, model, provider]);
+
+  const fillMissingModels = useCallback(() => {
+    setModel((current) => current || getSuggestedModelForProvider(provider));
+    setChatModel((current) => current || getSuggestedModelForProvider(chatProvider));
+    setAgentModel((current) => current || getSuggestedModelForProvider(agentProvider));
+    setOrchModel((current) => current || getSuggestedModelForProvider(orchProvider));
+  }, [
+    agentProvider,
+    chatProvider,
+    getSuggestedModelForProvider,
+    orchProvider,
+    provider,
+  ]);
+
+  const resetAiDraft = useCallback(() => {
+    if (!currentConfig) return;
+    hydrateAiForm(currentConfig);
+  }, [currentConfig, hydrateAiForm]);
 
   const onRefreshPurpose = async (p: string) => {
     setRefreshingPurpose(p);
     try {
-      await refreshModels(p as "gemini" | "grok" | "openai" | "claude");
+      await refreshModels(p as "gemini" | "grok" | "openai" | "claude" | "ollama");
       await queryClient.invalidateQueries({ queryKey: ["settings", "models"] });
     } finally { setRefreshingPurpose(null); }
   };
@@ -297,6 +413,11 @@ export default function SettingsPage() {
         agent_llm_provider: agentProvider, agent_llm_model: agentModel,
         orchestrator_llm_provider: orchProvider, orchestrator_llm_model: orchModel,
         internal_llm_provider: chatProvider,
+        ollama_base_url: ollamaBaseUrl,
+        ollama_runtime_mode: ollamaRuntimeMode,
+        ollama_cloud_enabled: ollamaCloudEnabled,
+        ollama_cloud_base_url: ollamaCloudBaseUrl,
+        ollama_think_mode: ollamaThinkMode === AUTO_OLLAMA_THINKING_VALUE ? "" : ollamaThinkMode,
         openai_reasoning_effort: reasoningEffort === AUTO_REASONING_VALUE ? "" : reasoningEffort,
       });
       await queryClient.invalidateQueries({ queryKey: ["settings", "config"] });
@@ -306,21 +427,44 @@ export default function SettingsPage() {
   const onSave = async () => {
     setSaving(true);
     try {
-      const llmProviders = ["gemini", "grok", "openai", "claude"];
-      const isLlmProvider = llmProviders.includes(provider);
-      const payload: Record<string, unknown> = { default_provider: provider };
+      const isLlmProvider = LLM_PROVIDER_VALUES.includes(provider);
+      const payload: Record<string, unknown> = {
+        default_provider: provider,
+        ollama_base_url: ollamaBaseUrl,
+        ollama_runtime_mode: ollamaRuntimeMode,
+        ollama_cloud_enabled: ollamaCloudEnabled,
+        ollama_cloud_base_url: ollamaCloudBaseUrl,
+        ollama_think_mode: ollamaThinkMode === AUTO_OLLAMA_THINKING_VALUE ? "" : ollamaThinkMode,
+      };
       if (provider === "gemini") payload.chat_model_gemini = model;
       if (provider === "grok") payload.chat_model_grok = model;
       if (provider === "openai") payload.chat_model_openai = model;
       if (provider === "claude") payload.chat_model_claude = model;
+      if (provider === "ollama") payload.chat_model_ollama = model;
       if (isLlmProvider) {
         payload.internal_llm_provider = provider;
         payload.gemini_enabled = provider === "gemini";
         payload.grok_enabled = provider === "grok";
         payload.openai_enabled = provider === "openai";
         payload.claude_enabled = provider === "claude";
+        payload.ollama_enabled = provider === "ollama";
       }
       await saveSettings(payload);
+      await queryClient.invalidateQueries({ queryKey: ["settings", "config"] });
+    } finally { setSaving(false); }
+  };
+
+  const onSaveOllama = async () => {
+    setSaving(true);
+    try {
+      await saveSettings({
+        ollama_base_url: ollamaBaseUrl,
+        ollama_runtime_mode: ollamaRuntimeMode,
+        ollama_cloud_enabled: ollamaCloudEnabled,
+        ollama_cloud_base_url: ollamaCloudBaseUrl,
+        ollama_think_mode: ollamaThinkMode === AUTO_OLLAMA_THINKING_VALUE ? "" : ollamaThinkMode,
+        openai_reasoning_effort: reasoningEffort === AUTO_REASONING_VALUE ? "" : reasoningEffort,
+      });
       await queryClient.invalidateQueries({ queryKey: ["settings", "config"] });
     } finally { setSaving(false); }
   };
@@ -328,7 +472,7 @@ export default function SettingsPage() {
   const onRefreshModels = async () => {
     setRefreshing(true);
     try {
-      await refreshModels(provider as "gemini" | "grok" | "openai" | "claude");
+      await refreshModels(provider as "gemini" | "grok" | "openai" | "claude" | "ollama");
       await queryClient.invalidateQueries({ queryKey: ["settings", "models"] });
     } finally { setRefreshing(false); }
   };
@@ -376,6 +520,13 @@ export default function SettingsPage() {
     return filtered;
   }, [activityData, activitySearch, dateFrom, dateTo]);
 
+  useEffect(() => {
+    if (isAdmin) return;
+    if (activeTab === "logging" || activeTab === "activity") {
+      setActiveTab("ai");
+    }
+  }, [activeTab, isAdmin]);
+
   if (settingsLoading) {
     return <div className="p-6 text-sm text-muted-foreground">{t("loading")}</div>;
   }
@@ -385,6 +536,87 @@ export default function SettingsPage() {
 
   const config = settingsData.config;
   const apiKeys = settingsData.api_keys as Record<string, boolean> | undefined;
+  const savedActiveProvider = LLM_PROVIDER_VALUES.includes(config.internal_llm_provider || "")
+    ? config.internal_llm_provider
+    : LLM_PROVIDER_VALUES.includes(config.default_provider || "")
+      ? config.default_provider
+      : "grok";
+  const routeConfigs = [
+    {
+      key: "chat",
+      shortLabel: "Chat",
+      label: "Чат / Терминальный AI",
+      description: "Интерактивный помощник и терминальные подсказки",
+      icon: MessageSquare,
+      provider: chatProvider,
+      model: chatModel,
+    },
+    {
+      key: "agent",
+      shortLabel: "Agent",
+      label: "Агенты (ReAct)",
+      description: "Длинные задачи, инструменты и итерации",
+      icon: Bot,
+      provider: agentProvider,
+      model: agentModel,
+    },
+    {
+      key: "orchestrator",
+      shortLabel: "Pipeline",
+      label: "Оркестратор (Pipeline)",
+      description: "Планирование и координация пайплайнов",
+      icon: Workflow,
+      provider: orchProvider,
+      model: orchModel,
+    },
+  ];
+  const uniqueRouteProviders = Array.from(new Set(routeConfigs.map((route) => route.provider)));
+  const ollamaLocalModels = modelsData?.ollama_local || [];
+  const ollamaCloudModels = modelsData?.ollama_cloud || [];
+  const ollamaCatalogModels = getModelsForProvider("ollama");
+  const ollamaRoutingActive = provider === "ollama" || routeConfigs.some((route) => route.provider === "ollama");
+  const ollamaRuntimeSummary =
+    ollamaRuntimeMode === "cloud"
+      ? "Только облако"
+      : ollamaRuntimeMode === "local"
+        ? "Только локально"
+        : "Авто";
+  const providerOverview = LLM_PROVIDERS.map((providerOption) => {
+    const catalogSize = getModelsForProvider(providerOption.value).length;
+    const activeRoutes = routeConfigs
+      .filter((route) => route.provider === providerOption.value)
+      .map((route) => route.shortLabel);
+    const configured = providerOption.value === "ollama"
+      ? Boolean(apiKeys?.[PROVIDER_API_STATUS_KEY[providerOption.value]])
+      : Boolean(apiKeys?.[PROVIDER_API_STATUS_KEY[providerOption.value]]);
+    return {
+      ...providerOption,
+      catalogSize,
+      activeRoutes,
+      enabled: getProviderEnabled(config, providerOption.value),
+      configured,
+      isSelected: provider === providerOption.value,
+    };
+  });
+  const aiDraftDirty = (
+    provider !== savedActiveProvider ||
+    model !== getSavedModelForProvider(config, provider) ||
+    chatProvider !== (config.chat_llm_provider || savedActiveProvider) ||
+    chatModel !== (config.chat_llm_model || "") ||
+    agentProvider !== (config.agent_llm_provider || savedActiveProvider) ||
+    agentModel !== (config.agent_llm_model || "") ||
+    orchProvider !== (config.orchestrator_llm_provider || savedActiveProvider) ||
+    orchModel !== (config.orchestrator_llm_model || "") ||
+    ollamaBaseUrl !== (config.ollama_base_url || "http://127.0.0.1:11434") ||
+    ollamaRuntimeMode !== (config.ollama_runtime_mode || "auto") ||
+    ollamaCloudEnabled !== Boolean(config.ollama_cloud_enabled) ||
+    ollamaCloudBaseUrl !== (config.ollama_cloud_base_url || "https://ollama.com") ||
+    ollamaThinkMode !== (config.ollama_think_mode || AUTO_OLLAMA_THINKING_VALUE) ||
+    reasoningEffort !== (config.openai_reasoning_effort || AUTO_REASONING_VALUE)
+  );
+  const missingModelsCount = [model, ...routeConfigs.map((route) => route.model)].filter((value) => !value).length;
+  const catalogSyncedCount = providerOverview.filter((providerItem) => providerItem.catalogSize > 0).length;
+  const configuredProviderCount = providerOverview.filter((providerItem) => providerItem.configured).length;
 
   const LOGGING_ITEMS = [
     { key: "log_terminal_commands", label: "Команды терминала", desc: "Записывать все SSH-команды пользователей", icon: Terminal },
@@ -398,149 +630,513 @@ export default function SettingsPage() {
     { key: "log_file_operations", label: "Файловые операции", desc: "Загрузки, скачивания и изменения файлов", icon: FileText },
     { key: "log_http_requests", label: "HTTP/API запросы", desc: "Логировать каждый web/API запрос пользователя", icon: Globe },
   ];
+  const settingsTabs: Array<{
+    value: SettingsTabValue;
+    label: string;
+    description: string;
+    icon: React.ElementType;
+    badge?: string;
+  }> = [
+    {
+      value: "ai",
+      label: "AI модели",
+      description: "Провайдеры, роли, runtime и каталог моделей",
+      icon: Bot,
+      badge: aiDraftDirty ? "Черновик" : undefined,
+    },
+    {
+      value: "access",
+      label: "Доступ",
+      description: "Пользователи, группы и права доступа",
+      icon: Shield,
+    },
+    ...(isAdmin
+      ? [
+          {
+            value: "logging" as const,
+            label: "Логирование",
+            description: "Аудит, retention и экспорт",
+            icon: ScrollText,
+          },
+          {
+            value: "activity" as const,
+            label: "Журнал",
+            description: "Последние действия и история событий",
+            icon: Activity,
+            badge: filteredActivity.length ? String(filteredActivity.length) : undefined,
+          },
+        ]
+      : []),
+  ];
+  const activeTabMeta = settingsTabs.find((tab) => tab.value === activeTab) || settingsTabs[0];
 
   return (
-    <div className="p-5 max-w-5xl mx-auto space-y-4">
-      <div>
-        <h1 className="text-lg font-semibold text-foreground">{t("settings.title")}</h1>
-        <p className="text-xs text-muted-foreground mt-0.5">Управление платформой, моделями, доступом и аудитом</p>
-      </div>
+    <div className="min-h-full w-full px-4 py-5 xl:px-6 2xl:px-8">
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as SettingsTabValue)} className="space-y-5">
+        <div className="mx-auto w-full max-w-[1520px] space-y-5">
+          <div className="rounded-2xl border border-border bg-card px-5 py-5 shadow-sm lg:px-6">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-primary/80">Settings Workspace</p>
+                <h1 className="text-2xl font-semibold text-foreground">{t("settings.title")}</h1>
+                <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+                  Более широкий и спокойный layout без узкой центральной колонки и без перегруженной боковой навигации.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline">{activeTabMeta.label}</Badge>
+                <Badge variant="secondary">{configuredProviderCount} настроено</Badge>
+                <Badge variant="outline">Ollama {ollamaRuntimeSummary}</Badge>
+                {aiDraftDirty ? <Badge>Есть черновик</Badge> : <Badge variant="secondary">Без несохраненных изменений</Badge>}
+              </div>
+            </div>
 
-      <Tabs defaultValue="ai" className="space-y-4">
-        <TabsList className="w-full justify-start bg-secondary/30 p-1 flex-wrap">
-          <TabsTrigger value="ai" className="gap-1.5 data-[state=active]:bg-card">
-            <Bot className="h-3.5 w-3.5" /> AI модели
-          </TabsTrigger>
-          <TabsTrigger value="access" className="gap-1.5 data-[state=active]:bg-card">
-            <Shield className="h-3.5 w-3.5" /> Доступ
-          </TabsTrigger>
-          {isAdmin && (
-            <TabsTrigger value="logging" className="gap-1.5 data-[state=active]:bg-card">
-              <ScrollText className="h-3.5 w-3.5" /> Логирование
-            </TabsTrigger>
-          )}
-          {isAdmin && (
-            <TabsTrigger value="activity" className="gap-1.5 data-[state=active]:bg-card">
-              <Activity className="h-3.5 w-3.5" /> Журнал
-            </TabsTrigger>
-          )}
-        </TabsList>
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-xl border border-border bg-background px-4 py-3">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Раздел</p>
+                <p className="mt-1 text-sm font-medium text-foreground">{activeTabMeta.label}</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">{activeTabMeta.description}</p>
+              </div>
+              <div className="rounded-xl border border-border bg-background px-4 py-3">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Основная модель</p>
+                <p className="mt-1 text-sm font-medium text-foreground">{getProviderLabel(provider)}</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">{model || "Модель не выбрана"}</p>
+              </div>
+              <div className="rounded-xl border border-border bg-background px-4 py-3">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Маршруты</p>
+                <p className="mt-1 text-sm font-medium text-foreground">{uniqueRouteProviders.length} провайдера</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">{routeConfigs.map((route) => route.shortLabel).join(" / ")}</p>
+              </div>
+              <div className="rounded-xl border border-border bg-background px-4 py-3">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Ollama</p>
+                <p className="mt-1 text-sm font-medium text-foreground">{ollamaCatalogModels.length} моделей</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">{ollamaLocalModels.length} local, {ollamaCloudModels.length} cloud</p>
+              </div>
+            </div>
+          </div>
+
+          <TabsList className="flex h-auto w-max min-w-full justify-start gap-1 overflow-x-auto rounded-xl bg-secondary/35 p-1">
+            {settingsTabs.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <TabsTrigger
+                  key={tab.value}
+                  value={tab.value}
+                  className="gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 data-[state=active]:bg-card data-[state=active]:shadow-sm"
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  <span>{tab.label}</span>
+                  {tab.badge ? <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">{tab.badge}</Badge> : null}
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
 
         {/* ==================== AI TAB ==================== */}
         <TabsContent value="ai" className="space-y-4">
-          {/* Default model */}
-          <SectionCard title="Основная модель" icon={Bot} description="Модель по умолчанию для всех задач">
+          <div className="flex flex-col gap-3 rounded-xl border border-border bg-card px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-foreground">AI модели и маршрутизация</p>
+              <p className="max-w-3xl text-xs text-muted-foreground">
+                Сначала выбери провайдера по умолчанию, потом разнеси модели по ролям, и только после этого трогай runtime и reasoning.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant={aiDraftDirty ? "default" : "secondary"}>
+                {aiDraftDirty ? "Есть несохраненные изменения" : "AI-конфиг синхронизирован"}
+              </Badge>
+              <Badge variant="outline">
+                {uniqueRouteProviders.length > 1 ? "Раздельная маршрутизация" : "Один провайдер на все роли"}
+              </Badge>
+              <Badge variant="outline">
+                {missingModelsCount === 0 ? "Пустых моделей нет" : `${missingModelsCount} полей без модели`}
+              </Badge>
+            </div>
+          </div>
+
+          <SectionCard title="Провайдер по умолчанию" icon={Bot} description="Выбор основного провайдера и модели для общего режима">
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-medium text-muted-foreground uppercase">Провайдер</label>
-                  <Select value={provider} onValueChange={setProvider}>
-                    <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {LLM_PROVIDERS.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-medium text-muted-foreground uppercase">Модель</label>
-                  {availableModels.length > 0 ? (
-                    <Select value={model} onValueChange={setModel}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+                {providerOverview.map((providerItem) => (
+                  <button
+                    key={providerItem.value}
+                    type="button"
+                    onClick={() => handleDefaultProviderChange(providerItem.value)}
+                    className={cn(
+                      "rounded-xl border p-3 text-left transition-all",
+                      providerItem.isSelected
+                        ? "border-primary bg-primary/5 shadow-sm"
+                        : "border-border bg-card hover:border-primary/30 hover:bg-primary/5"
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground">{providerItem.label}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {providerItem.catalogSize ? `${providerItem.catalogSize} моделей` : "Каталог пуст, доступен ручной ввод"}
+                        </p>
+                      </div>
+                      {providerItem.isSelected && <Badge className="shrink-0">Основной</Badge>}
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      <Badge variant={providerItem.configured ? "secondary" : "outline"}>
+                        {providerItem.configured ? "Готов" : "Требует настройку"}
+                      </Badge>
+                      <Badge variant={providerItem.enabled ? "secondary" : "outline"}>
+                        {providerItem.enabled ? "Активен" : "Не включен"}
+                      </Badge>
+                    </div>
+                    <p className="mt-3 text-[11px] text-muted-foreground">
+                      {providerItem.activeRoutes.length > 0
+                        ? `Маршруты: ${providerItem.activeRoutes.join(", ")}`
+                        : "Отдельные роли пока не используют этот провайдер"}
+                    </p>
+                  </button>
+                ))}
+              </div>
+
+              <div className="rounded-xl border border-border bg-card/80 p-4 space-y-4">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Провайдер</label>
+                    <Select value={provider} onValueChange={handleDefaultProviderChange}>
                       <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {availableModels.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                        {LLM_PROVIDERS.map((providerItem) => (
+                          <SelectItem key={providerItem.value} value={providerItem.value}>{providerItem.label}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
-                  ) : (
-                    <div className="flex gap-2">
-                      <Input value={model} onChange={(e) => setModel(e.target.value)} placeholder="Model name" className="h-9" />
-                      <Button size="sm" variant="outline" className="h-9 px-3" onClick={onRefreshModels} disabled={refreshing}>
-                        <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
-                      </Button>
-                    </div>
-                  )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Модель</label>
+                    {availableModels.length > 0 ? (
+                      <Select value={model} onValueChange={setModel}>
+                        <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {availableModels.map((providerModel) => (
+                            <SelectItem key={providerModel} value={providerModel}>{providerModel}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <div className="flex gap-2">
+                        <Input value={model} onChange={(e) => setModel(e.target.value)} placeholder="Model name" className="h-9" />
+                        <Button size="sm" variant="outline" className="h-9 px-3" onClick={onRefreshModels} disabled={refreshing}>
+                          <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="flex gap-2">
-                <Button size="sm" className="gap-1.5" onClick={onSave} disabled={saving}>
-                  <Save className="h-3.5 w-3.5" /> {saving ? "Сохранение..." : "Сохранить"}
-                </Button>
-                {availableModels.length > 0 && (
-                  <Button size="sm" variant="outline" className="gap-1.5" onClick={onRefreshModels} disabled={refreshing}>
-                    <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} /> Обновить модели
+
+                <div className="flex flex-col gap-2 rounded-lg border border-dashed border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium">{getProviderLabel(provider)}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {availableModels.length
+                        ? "Модель можно выбрать из синхронизированного каталога."
+                        : "Для этого провайдера сейчас используется ручной ввод модели."}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="secondary">{availableModels.length ? `${availableModels.length} вариантов` : "Ручной ввод"}</Badge>
+                    <Badge variant="outline">{getProviderEnabled(config, provider) ? "Провайдер включен" : "Провайдер еще не активирован"}</Badge>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" className="gap-1.5" onClick={onSave} disabled={saving}>
+                    <Save className="h-3.5 w-3.5" /> {saving ? "Сохранение..." : "Сохранить основную"}
                   </Button>
-                )}
+                  <Button size="sm" variant="outline" className="gap-1.5" onClick={onRefreshModels} disabled={refreshing}>
+                    <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} /> Обновить каталог
+                  </Button>
+                </div>
               </div>
             </div>
           </SectionCard>
 
-          {/* Purpose-based models */}
-          <SectionCard title="Модели по назначению" icon={Cpu} description="Отдельные модели для разных задач платформы">
-            <div className="space-y-3">
-              <PurposeModelSelector
-                label="Чат / Терминальный AI" description="AI помощник в терминале" icon={MessageSquare}
-                provider={chatProvider} model={chatModel} availableModels={getModelsForProvider(chatProvider)}
-                onProviderChange={(p) => { setChatProvider(p); setChatModel(""); }}
-                onModelChange={setChatModel} onRefresh={() => onRefreshPurpose(chatProvider)}
-                refreshing={refreshingPurpose === chatProvider}
-              />
-              <PurposeModelSelector
-                label="Агенты (ReAct)" description="Выполнение задач с инструментами" icon={Bot}
-                provider={agentProvider} model={agentModel} availableModels={getModelsForProvider(agentProvider)}
-                onProviderChange={(p) => { setAgentProvider(p); setAgentModel(""); }}
-                onModelChange={setAgentModel} onRefresh={() => onRefreshPurpose(agentProvider)}
-                refreshing={refreshingPurpose === agentProvider}
-              />
-              <PurposeModelSelector
-                label="Оркестратор (Pipeline)" description="Планирование в мультиагентных пайплайнах" icon={Workflow}
-                provider={orchProvider} model={orchModel} availableModels={getModelsForProvider(orchProvider)}
-                onProviderChange={(p) => { setOrchProvider(p); setOrchModel(""); }}
-                onModelChange={setOrchModel} onRefresh={() => onRefreshPurpose(orchProvider)}
-                refreshing={refreshingPurpose === orchProvider}
-              />
-
-              {/* Reasoning effort */}
-              <div className="rounded-lg border border-border p-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-medium">OpenAI Reasoning Effort</p>
-                    <p className="text-[10px] text-muted-foreground">Глубина reasoning в Responses API</p>
-                  </div>
-                  <Select value={reasoningEffort} onValueChange={setReasoningEffort}>
-                    <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={AUTO_REASONING_VALUE}>Auto</SelectItem>
-                      <SelectItem value="none">None ⚡⚡</SelectItem>
-                      <SelectItem value="low">Low ⚡</SelectItem>
-                      <SelectItem value="medium">Medium ⚖️</SelectItem>
-                      <SelectItem value="high">High 🔬</SelectItem>
-                    </SelectContent>
-                  </Select>
+          <SectionCard title="Маршруты по ролям" icon={Cpu} description="Отдельные пары провайдер/модель для чата, агентов и pipeline-оркестратора">
+            <div className="space-y-4">
+              <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/20 p-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-foreground">Быстрые действия</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Можно скопировать основную модель в роли, дозаполнить пустые поля или откатить AI-черновик к сохраненному состоянию.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" className="gap-1.5" onClick={applyDefaultToAll}>
+                    <Bot className="h-3.5 w-3.5" /> Копировать основную
+                  </Button>
+                  <Button size="sm" variant="outline" className="gap-1.5" onClick={fillMissingModels}>
+                    <Cpu className="h-3.5 w-3.5" /> Заполнить пустые
+                  </Button>
+                  <Button size="sm" variant="ghost" className="gap-1.5" onClick={resetAiDraft}>
+                    <RefreshCw className="h-3.5 w-3.5" /> Сбросить черновик
+                  </Button>
+                  <Button size="sm" className="gap-1.5" onClick={onSavePurpose} disabled={saving}>
+                    <Save className="h-3.5 w-3.5" /> {saving ? "Сохранение..." : "Сохранить маршруты"}
+                  </Button>
                 </div>
               </div>
 
-              <Button size="sm" className="gap-1.5" onClick={onSavePurpose} disabled={saving}>
-                <Save className="h-3.5 w-3.5" /> {saving ? "Сохранение..." : "Сохранить модели"}
-              </Button>
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+                <PurposeModelSelector
+                  label="Чат / Терминальный AI"
+                  description="Интерактивный AI помощник"
+                  icon={MessageSquare}
+                  provider={chatProvider}
+                  model={chatModel}
+                  availableModels={getModelsForProvider(chatProvider)}
+                  onProviderChange={(nextProvider) => {
+                    setChatProvider(nextProvider);
+                    setChatModel(getSuggestedModelForProvider(nextProvider));
+                  }}
+                  onModelChange={setChatModel}
+                  onRefresh={() => onRefreshPurpose(chatProvider)}
+                  refreshing={refreshingPurpose === chatProvider}
+                />
+                <PurposeModelSelector
+                  label="Агенты (ReAct)"
+                  description="Инструменты, планирование и итерации"
+                  icon={Bot}
+                  provider={agentProvider}
+                  model={agentModel}
+                  availableModels={getModelsForProvider(agentProvider)}
+                  onProviderChange={(nextProvider) => {
+                    setAgentProvider(nextProvider);
+                    setAgentModel(getSuggestedModelForProvider(nextProvider));
+                  }}
+                  onModelChange={setAgentModel}
+                  onRefresh={() => onRefreshPurpose(agentProvider)}
+                  refreshing={refreshingPurpose === agentProvider}
+                />
+                <PurposeModelSelector
+                  label="Оркестратор (Pipeline)"
+                  description="Координация multi-step pipeline run"
+                  icon={Workflow}
+                  provider={orchProvider}
+                  model={orchModel}
+                  availableModels={getModelsForProvider(orchProvider)}
+                  onProviderChange={(nextProvider) => {
+                    setOrchProvider(nextProvider);
+                    setOrchModel(getSuggestedModelForProvider(nextProvider));
+                  }}
+                  onModelChange={setOrchModel}
+                  onRefresh={() => onRefreshPurpose(orchProvider)}
+                  refreshing={refreshingPurpose === orchProvider}
+                />
+              </div>
+            </div>
+          </SectionCard>
+
+          <SectionCard title="Runtime и расширенные опции" icon={Database} description="Ollama local/cloud runtime и управление reasoning">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              <div className="rounded-xl border border-border p-4 space-y-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-xs font-medium">Ollama Runtime</p>
+                    <p className="text-[11px] text-muted-foreground">Один провайдер для локального `ollama serve` и облачного `ollama.com/api`</p>
+                  </div>
+                  <Badge variant={ollamaRoutingActive ? "default" : "secondary"}>
+                    {ollamaRoutingActive ? `Используется · ${ollamaRuntimeSummary}` : `Готов · ${ollamaRuntimeSummary}`}
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Режим runtime</label>
+                    <Select
+                      value={ollamaRuntimeMode}
+                      onValueChange={(value) => {
+                        setOllamaRuntimeMode(value);
+                        if (value === "cloud") {
+                          setOllamaCloudEnabled(true);
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {OLLAMA_RUNTIME_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
+                      <div>
+                        <p className="text-xs font-medium">Ollama Cloud</p>
+                        <p className="text-[10px] text-muted-foreground">Прямой доступ к `ollama.com/api`</p>
+                      </div>
+                      <Switch
+                        checked={ollamaCloudEnabled}
+                        onCheckedChange={(checked) => {
+                          setOllamaCloudEnabled(checked);
+                          if (!checked && ollamaRuntimeMode === "cloud") {
+                            setOllamaRuntimeMode("auto");
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-medium text-muted-foreground uppercase">Local Base URL</label>
+                  <Input
+                    value={ollamaBaseUrl}
+                    onChange={(e) => setOllamaBaseUrl(e.target.value)}
+                    placeholder="http://127.0.0.1:11434"
+                    className="h-9"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-medium text-muted-foreground uppercase">Cloud API URL</label>
+                  <Input
+                    value={ollamaCloudBaseUrl}
+                    onChange={(e) => setOllamaCloudBaseUrl(e.target.value)}
+                    placeholder="https://ollama.com"
+                    className="h-9"
+                    disabled={!ollamaCloudEnabled}
+                  />
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" className="gap-1.5" onClick={onSaveOllama} disabled={saving}>
+                    <Save className="h-3.5 w-3.5" /> {saving ? "Сохранение..." : "Сохранить runtime"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5"
+                    onClick={() => onRefreshPurpose("ollama")}
+                    disabled={refreshingPurpose === "ollama"}
+                  >
+                    <RefreshCw className={cn("h-3.5 w-3.5", refreshingPurpose === "ollama" && "animate-spin")} />
+                    Проверить модели
+                  </Button>
+                </div>
+
+                <div className="rounded-lg border border-dashed border-border px-4 py-3">
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="secondary">{ollamaLocalModels.length ? `${ollamaLocalModels.length} local` : "local: 0"}</Badge>
+                    <Badge variant="secondary">{ollamaCloudModels.length ? `${ollamaCloudModels.length} cloud` : "cloud: 0"}</Badge>
+                    <Badge variant="outline">{ollamaRuntimeSummary}</Badge>
+                    <Badge variant="outline">{ollamaCatalogModels.length} всего в каталоге</Badge>
+                  </div>
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    `Auto` держит локальный runtime основным. `Cloud only` идёт напрямую в `ollama.com/api`. Для облака нужен `OLLAMA_API_KEY`, а cloud-модели в списке помечаются суффиксом `(cloud)`.
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border p-4 space-y-4">
+                <div>
+                  <p className="text-xs font-medium">Reasoning Controls</p>
+                  <p className="text-[11px] text-muted-foreground">Отдельные настройки для thinking-моделей в Ollama и reasoning в OpenAI</p>
+                </div>
+
+                <div className="space-y-2">
+                  <div>
+                    <p className="text-xs font-medium">Ollama Thinking</p>
+                    <p className="text-[11px] text-muted-foreground">Для `glm-4.7-flash` и других thinking-моделей отправляет `think=false/true/low/medium/high`</p>
+                  </div>
+
+                  <Select value={ollamaThinkMode} onValueChange={setOllamaThinkMode}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {OLLAMA_THINKING_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <div className="rounded-lg border border-dashed border-border px-4 py-3">
+                    <p className="text-xs font-medium">
+                      {ollamaThinkMode === AUTO_OLLAMA_THINKING_VALUE
+                        ? "Модель сама решает, включать ли reasoning."
+                        : ollamaThinkMode === "off"
+                          ? "Reasoning будет принудительно отключен."
+                          : `В Ollama будет отправлен think=${ollamaThinkMode}.`}
+                    </p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Для cloud и local runtime используется один и тот же параметр `think`, если модель его поддерживает.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div>
+                    <p className="text-xs font-medium">OpenAI Reasoning</p>
+                    <p className="text-[11px] text-muted-foreground">Управляет глубиной reasoning для Responses API, если OpenAI участвует в маршрутах</p>
+                  </div>
+
+                  <Select value={reasoningEffort} onValueChange={setReasoningEffort}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={AUTO_REASONING_VALUE}>Auto</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <div className="rounded-lg border border-dashed border-border px-4 py-3">
+                    <p className="text-xs font-medium">
+                      {provider === "openai" || routeConfigs.some((route) => route.provider === "openai")
+                        ? "OpenAI сейчас участвует в активной схеме."
+                        : "OpenAI сейчас не выбран, но параметр можно подготовить заранее."}
+                    </p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      `Auto` оставляет выбор движку. `Low/Medium/High` полезны, когда нужно жестче контролировать стоимость и глубину ответа.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </SectionCard>
 
           {/* API Keys status */}
           {apiKeys && isAdmin && (
             <SectionCard title="API ключи" icon={Key} description="Статус подключения провайдеров">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3">
                 {[
                   { name: "Gemini", key: "gemini_set", enabled: config.gemini_enabled },
                   { name: "Grok", key: "grok_set", enabled: config.grok_enabled },
                   { name: "OpenAI", key: "openai_set", enabled: config.openai_enabled },
                   { name: "Claude", key: "claude_set", enabled: config.claude_enabled },
+                  { name: "Ollama Local", key: "ollama_local_set", enabled: config.ollama_enabled && ollamaRuntimeMode !== "cloud" },
+                  { name: "Ollama Cloud", key: "ollama_cloud_set", enabled: config.ollama_enabled && ollamaCloudEnabled },
                 ].map((p) => (
-                  <div key={p.name} className="flex items-center gap-3 rounded-lg border border-border px-3 py-3">
-                    <div className={cn("h-2.5 w-2.5 rounded-full", apiKeys[p.key] ? "bg-green-500" : "bg-red-500")} />
+                  <div key={p.name} className="rounded-lg border border-border px-3 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className={cn("h-2.5 w-2.5 rounded-full", apiKeys[p.key] ? "bg-green-500" : "bg-red-500")} />
+                      <div>
+                        <p className="text-xs font-medium">{p.name}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {apiKeys[p.key]
+                            ? "Подключен"
+                            : p.name === "Ollama Local"
+                              ? "Нужен Base URL"
+                              : p.name === "Ollama Cloud"
+                                ? "Нужен OLLAMA_API_KEY"
+                                : "Не задан"}
+                          {p.enabled ? " · Активен" : ""}
+                        </p>
+                      </div>
+                    </div>
                     <div>
-                      <p className="text-xs font-medium">{p.name}</p>
-                      <p className="text-[10px] text-muted-foreground">
-                        {apiKeys[p.key] ? "Подключен" : "Не задан"}
-                        {p.enabled ? " · Активен" : ""}
+                      <p className="mt-3 text-[10px] text-muted-foreground">
+                        {p.name === "Ollama Local"
+                          ? (ollamaBaseUrl || "http://127.0.0.1:11434")
+                          : p.name === "Ollama Cloud"
+                            ? (ollamaCloudBaseUrl || "https://ollama.com")
+                          : "Ключ сохранен в backend"}
                       </p>
                     </div>
                   </div>
@@ -708,7 +1304,7 @@ export default function SettingsPage() {
               <div className="space-y-4">
                 {/* Filters */}
                 <div className="flex flex-wrap items-center gap-3">
-                  <div className="relative flex-1 min-w-[200px] max-w-sm">
+                  <div className="relative flex-1 min-w-[240px] xl:max-w-md">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                     <Input
                       value={activitySearch}
@@ -831,6 +1427,7 @@ export default function SettingsPage() {
             </SectionCard>
           </TabsContent>
         )}
+        </div>
       </Tabs>
     </div>
   );

@@ -319,7 +319,7 @@ test("works with pipeline actions from Studio", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Pipeline Workspace" })).toBeVisible();
 
   await page.getByRole("button", { name: /^Run$/ }).first().click();
-  expect(harness.getCalls("/api/studio/pipelines/101/run/", "POST").length).toBeGreaterThan(0);
+  await expect.poll(() => harness.getCalls("/api/studio/pipelines/101/run/", "POST").length).toBe(1);
 
   const pipelineCard = page.locator("article").filter({ hasText: "Nightly Patch" }).first();
   await pipelineCard.locator("button").first().click();
@@ -345,10 +345,10 @@ test("manages MCP registry and notification test actions", async ({ page }) => {
   await page.getByPlaceholder("npx").fill("npx");
   await page.getByRole("button", { name: /^Save$/ }).click();
   await expect(page.getByText("PagerDuty MCP")).toBeVisible();
-  expect(harness.getCalls("/api/studio/mcp/", "POST").length).toBeGreaterThan(0);
+  await expect.poll(() => harness.getCalls("/api/studio/mcp/", "POST").length).toBe(1);
 
   await page.goto("/studio/notifications");
-  await expect(page.getByText("Notification settings")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Notification Settings" })).toBeVisible();
 
   await page.locator('input[type="password"]').first().fill("tg-token");
   await page.locator('input[placeholder="123456789"]').fill("123456789");

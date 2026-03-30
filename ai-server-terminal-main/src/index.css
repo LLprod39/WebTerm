@@ -20,10 +20,10 @@
     --primary-foreground: 220 15% 8%;
 
     --secondary: 220 8% 17%;
-    --secondary-foreground: 220 8% 72%;
+    --secondary-foreground: 220 8% 78%;
 
     --muted: 220 8% 16%;
-    --muted-foreground: 220 6% 50%;
+    --muted-foreground: 220 8% 68%;
 
     --accent: 174 60% 46%;
     --accent-foreground: 220 15% 8%;
@@ -46,7 +46,7 @@
     --terminal-cursor: 174 60% 46%;
 
     --sidebar-background: 220 10% 10%;
-    --sidebar-foreground: 220 6% 52%;
+    --sidebar-foreground: 220 8% 72%;
     --sidebar-primary: 174 60% 46%;
     --sidebar-primary-foreground: 220 15% 8%;
     --sidebar-accent: 220 8% 16%;

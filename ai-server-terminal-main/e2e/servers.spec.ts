@@ -30,6 +30,12 @@ type ServerItem = {
   last_connected: string | null;
 };
 
+async function suppressAlerts(page: import("@playwright/test").Page) {
+  await page.addInitScript(() => {
+    window.alert = () => undefined;
+  });
+}
+
 function makeServersHandler() {
   let nextServerId = 2;
   let nextGroupId = 12;
@@ -180,6 +186,22 @@ function makeServersHandler() {
     if (req.path.match(/^\/servers\/api\/\d+\/get\/$/) && req.method === "GET") {
       const id = Number(req.path.split("/")[3]);
       return json(serverDetails[id]);
+    }
+
+    if (req.path.match(/^\/servers\/api\/\d+\/update\/$/) && req.method === "POST") {
+      const id = Number(req.path.split("/")[3]);
+      const target = servers.find((item) => item.id === id);
+      const details = serverDetails[id];
+      if (details) Object.assign(details, req.body || {});
+      if (target) {
+        Object.assign(target, {
+          name: String(req.body?.name || target.name),
+          host: String(req.body?.host || target.host),
+          port: Number(req.body?.port || target.port),
+          username: String(req.body?.username || target.username),
+        });
+      }
+      return json({ success: true, message: "Updated" });
     }
 
     if (req.path.match(/^\/servers\/api\/\d+\/delete\/$/) && req.method === "POST") {
@@ -334,6 +356,7 @@ function makeServersHandler() {
 }
 
 test("manages server catalog and groups", async ({ page }) => {
+  await suppressAlerts(page);
   const handler = makeServersHandler();
   const harness = await installApiHarness(page, handler);
 
@@ -360,11 +383,12 @@ test("manages server catalog and groups", async ({ page }) => {
   await expect(page.getByText("Edge Team")).toBeVisible();
 
   await page.getByRole("button", { name: "Follow" }).last().click();
-  expect(harness.getCalls("/servers/api/groups/12/subscribe/", "POST").length).toBeGreaterThan(0);
+  await expect.poll(() => harness.getCalls("/servers/api/groups/12/subscribe/", "POST").length).toBe(1);
 });
 
 test("uses advanced server actions for sharing, knowledge, context, security and command run", async ({ page }) => {
-  await installApiHarness(page, makeServersHandler());
+  await suppressAlerts(page);
+  const harness = await installApiHarness(page, makeServersHandler());
 
   await page.goto("/servers");
 
@@ -385,17 +409,28 @@ test("uses advanced server actions for sharing, knowledge, context, security and
   await page.getByRole("button", { name: "Add" }).click();
   await expect(page.getByText("Rotation note")).toBeVisible();
 
-  await advancedDialog.getByRole("button", { name: "Context" }).click();
-  await page.getByRole("button", { name: "Save Global Context" }).click();
+  await advancedDialog.getByRole("button", { name: "Server Rules" }).click();
+  await page.getByPlaceholder("Instructions specific to this server").fill("Prefer canary rollout for nginx restarts");
+  await page.getByPlaceholder('{\"env_vars\": {\"KEY\": \"value\"}}').fill('{\"env_vars\":{\"ROLE\":\"edge\"}}');
+  await page.getByRole("button", { name: "Save server override" }).click();
+  await expect.poll(() => harness.getCalls("/servers/api/1/update/", "POST").length).toBe(1);
+  await expect
+    .poll(() => harness.getCalls("/servers/api/1/update/", "POST")[0]?.body)
+    .toMatchObject({
+      corporate_context: "Prefer canary rollout for nginx restarts",
+      network_config: { env_vars: { ROLE: "edge" } },
+    });
 
   await advancedDialog.getByRole("button", { name: "Security" }).click();
   await page.locator('input[type="password"]').first().fill("master-pass");
   await page.getByRole("button", { name: "Set Session MP" }).click();
+  await expect.poll(() => harness.getCalls("/servers/api/master-password/set/", "POST").length).toBe(1);
   await page.getByRole("button", { name: "Reveal Server Password" }).click();
   await expect(page.locator('input[value="revealed-password"]')).toBeVisible();
 
   await advancedDialog.getByRole("button", { name: "Execute" }).click();
   await page.getByPlaceholder("hostname").fill("uname -a");
   await page.getByRole("button", { name: "Run" }).click();
+  await expect.poll(() => harness.getCalls("/servers/api/1/execute/", "POST").length).toBe(1);
   await expect(page.locator("textarea").filter({ hasText: "Executed: uname -a" })).toBeVisible();
 });

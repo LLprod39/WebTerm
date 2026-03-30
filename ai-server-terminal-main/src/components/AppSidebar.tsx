@@ -64,6 +64,8 @@ export function AppSidebar() {
           <button
             onClick={toggleSidebar}
             className="ml-auto text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Collapse sidebar"
+            title="Collapse sidebar"
           >
             <ChevronLeft className="h-3.5 w-3.5" />
           </button>

@@ -4,12 +4,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
   AlertTriangle,
+  CalendarDays,
+  Clock3,
   Code2,
+  ChevronRight,
   Copy,
   FileCode2,
   FileText,
   FolderOpen,
   HardDrive,
+  LayoutGrid,
   Minus,
   Monitor,
   Network,
@@ -17,11 +21,15 @@ import {
   Play,
   RefreshCw,
   RotateCcw,
+  Search,
   Server,
   Settings,
   Settings2,
+  Shield,
   Square,
   Terminal,
+  Volume2,
+  Wifi,
   X,
 } from "lucide-react";
 
@@ -95,6 +103,7 @@ interface WorkspaceAppDefinition {
   subtitle: string;
   status: WorkspaceAppStatus;
   icon: ReactNode;
+  accentClass: string;
   hidden?: boolean;
 }
 
@@ -141,6 +150,13 @@ const MIN_WINDOW_WIDTH = 420;
 const MIN_WINDOW_HEIGHT = 280;
 const MAXIMIZED_WINDOW_MARGIN = 10;
 const APP_IDS: WorkspaceAppId[] = ["files", "overview", "services", "processes", "logs", "disk", "network", "docker", "packages", "text-editor", "quick-run", "settings"];
+const DEFAULT_OPEN_APPS: WorkspaceAppId[] = [];
+const DEFAULT_ACTIVE_APP: WorkspaceAppId = "overview";
+const DESKTOP_GRID_STYLE: CSSProperties = {
+  backgroundImage:
+    "linear-gradient(rgba(148,163,184,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.06) 1px, transparent 1px)",
+  backgroundSize: "132px 132px",
+};
 
 function formatUptime(seconds: number | null) {
   if (!seconds || seconds <= 0) return "Unknown";
@@ -305,26 +321,226 @@ function DesktopIcon({
   icon,
   onOpen,
   status,
+  accentClass,
 }: {
   title: string;
   icon: ReactNode;
   onOpen: () => void;
   status: WorkspaceAppStatus;
+  accentClass: string;
 }) {
   return (
     <button
       type="button"
       onClick={onOpen}
       className={cn(
-        "group flex w-20 flex-col items-center gap-1.5 rounded-lg p-2 text-center transition-colors hover:bg-primary/10",
+        "group relative flex w-[5.5rem] flex-col items-center gap-2 rounded-2xl p-2.5 text-center transition-all duration-150 hover:bg-card/80",
         status === "unavailable" && "opacity-40 pointer-events-none",
       )}
     >
-      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-card/80 text-foreground shadow-sm border border-border/60 group-hover:bg-primary/15 group-hover:text-primary group-hover:border-primary/30 transition-colors">
-        {icon}
+      <div
+        className={cn(
+          "relative flex h-14 w-14 items-center justify-center rounded-[1.15rem] border border-border bg-card text-primary shadow-sm transition-all duration-150 group-hover:-translate-y-0.5 group-hover:border-primary/30",
+          "bg-gradient-to-br",
+          accentClass,
+        )}
+      >
+        <div className="absolute inset-[1px] rounded-[1rem] bg-background/80" />
+        <div className="relative z-10 [&>svg]:h-5 [&>svg]:w-5">{icon}</div>
+        <span
+          className={cn(
+            "absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full border border-card",
+            status === "live" ? "bg-emerald-400" : status === "ready" ? "bg-primary" : "bg-muted-foreground",
+          )}
+        />
       </div>
-      <span className="text-[11px] leading-tight text-foreground/80 group-hover:text-foreground line-clamp-2">{title}</span>
+      <div className="space-y-1">
+        <span className="block line-clamp-2 text-[11px] font-medium leading-tight text-foreground">
+          {title}
+        </span>
+        <span className="block text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+          {status === "live" ? "ready" : status}
+        </span>
+      </div>
     </button>
+  );
+}
+
+function DesktopStatCard({
+  icon,
+  label,
+  value,
+  hint,
+  progress,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  hint: string;
+  progress?: number | null;
+}) {
+  const clampedProgress = progress == null || Number.isNaN(progress) ? null : Math.max(0, Math.min(progress, 100));
+
+  return (
+    <div className="rounded-[1.25rem] border border-border bg-card/95 p-4 text-left shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">{label}</div>
+          <div className="mt-2 text-xl font-semibold text-foreground">{value}</div>
+        </div>
+        <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary [&>svg]:h-4 [&>svg]:w-4">
+          {icon}
+        </div>
+      </div>
+      <div className="mt-2 text-xs leading-5 text-muted-foreground">{hint}</div>
+      {clampedProgress != null ? (
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-secondary">
+          <div
+            className="h-full rounded-full bg-primary"
+            style={{ width: `${Math.max(clampedProgress, 6)}%` }}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function LauncherMenu({
+  apps,
+  server,
+  query,
+  onQueryChange,
+  onLaunch,
+  onRefresh,
+  onShowDesktop,
+  onCloseWorkspace,
+  openApps,
+}: {
+  apps: WorkspaceAppDefinition[];
+  server: FrontendServer;
+  query: string;
+  onQueryChange: (value: string) => void;
+  onLaunch: (appId: WorkspaceAppId) => void;
+  onRefresh: () => void;
+  onShowDesktop: () => void;
+  onCloseWorkspace?: () => void;
+  openApps: WorkspaceAppId[];
+}) {
+  const normalizedQuery = query.trim().toLowerCase();
+  const pinnedAppIds = ["overview", "files", "services", "logs", "quick-run", "settings"];
+  const pinnedApps = apps.filter((app) => pinnedAppIds.includes(app.id));
+  const filteredApps = apps.filter((app) => {
+    if (!normalizedQuery) return true;
+    return `${app.title} ${app.subtitle}`.toLowerCase().includes(normalizedQuery);
+  });
+
+  return (
+    <div className="absolute bottom-[4.35rem] left-0 z-30 w-[min(29rem,calc(100vw-1.5rem))] overflow-hidden rounded-[1.5rem] border border-border bg-card/95 p-4 shadow-2xl">
+      <div className="relative z-10">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="text-[11px] uppercase tracking-[0.28em] text-muted-foreground">Application Launcher</div>
+            <div className="mt-2 truncate text-2xl font-semibold tracking-tight text-foreground">{server.name}</div>
+            <div className="mt-1 truncate font-mono text-xs text-muted-foreground">{server.username}@{server.host}</div>
+          </div>
+          <div className="rounded-[1.15rem] border border-primary/20 bg-primary/10 px-3 py-2 text-right">
+            <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Running</div>
+            <div className="text-lg font-semibold text-foreground">{openApps.length}</div>
+          </div>
+        </div>
+
+        <div className="relative mt-4">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            placeholder="Search applications, tools, settings..."
+            className="h-11 rounded-2xl border-border bg-background pl-10 text-sm text-foreground placeholder:text-muted-foreground"
+          />
+        </div>
+
+        <div className="mt-5">
+          <div className="mb-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Pinned</div>
+          <div className="grid grid-cols-3 gap-2">
+            {pinnedApps.map((app) => (
+              <button
+                key={app.id}
+                type="button"
+                onClick={() => onLaunch(app.id)}
+                disabled={app.status === "unavailable"}
+                className={cn(
+                  "rounded-[1.15rem] border border-border px-3 py-3 text-left transition-all duration-150",
+                  "bg-background/70 hover:border-primary/25 hover:bg-secondary/70 disabled:cursor-not-allowed disabled:opacity-45",
+                )}
+              >
+                <div className={cn("flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-gradient-to-br text-primary", app.accentClass)}>
+                  <div className="[&>svg]:h-4 [&>svg]:w-4">{app.icon}</div>
+                </div>
+                <div className="mt-2 truncate text-sm font-medium text-foreground">{app.title}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-5">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">All Applications</div>
+            <div className="text-[11px] text-muted-foreground">{filteredApps.length} visible</div>
+          </div>
+          <div className="max-h-64 space-y-1 overflow-y-auto pr-1">
+            {filteredApps.map((app) => (
+              <button
+                key={app.id}
+                type="button"
+                onClick={() => onLaunch(app.id)}
+                disabled={app.status === "unavailable"}
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-[1.1rem] border border-transparent px-3 py-2.5 text-left transition-colors",
+                  "hover:border-border hover:bg-secondary/60 disabled:cursor-not-allowed disabled:opacity-45",
+                )}
+              >
+                <div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-border bg-gradient-to-br text-primary", app.accentClass)}>
+                  <div className="[&>svg]:h-4 [&>svg]:w-4">{app.icon}</div>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-medium text-foreground">{app.title}</span>
+                    <span className={cn("rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide", statusClass(app.status))}>
+                      {app.status}
+                    </span>
+                  </div>
+                  <div className="mt-0.5 truncate text-xs text-muted-foreground">{app.subtitle}</div>
+                </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+              </button>
+            ))}
+            {filteredApps.length === 0 ? (
+              <div className="rounded-[1.1rem] border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+                Nothing matched the current search.
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="mt-5 grid grid-cols-3 gap-2">
+          <Button type="button" variant="outline" className="h-10 rounded-2xl border-border bg-background text-xs text-foreground hover:bg-secondary" onClick={onRefresh}>
+            Refresh
+          </Button>
+          <Button type="button" variant="outline" className="h-10 rounded-2xl border-border bg-background text-xs text-foreground hover:bg-secondary" onClick={onShowDesktop}>
+            Show Desktop
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 rounded-2xl border-border bg-background text-xs text-foreground hover:bg-secondary"
+            onClick={onCloseWorkspace}
+            disabled={!onCloseWorkspace}
+          >
+            Close UI
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -334,29 +550,33 @@ function TaskbarButton({
   active,
   minimized,
   onClick,
+  accentClass,
 }: {
   title: string;
   icon: ReactNode;
   active: boolean;
   minimized?: boolean;
   onClick: () => void;
+  accentClass: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-colors",
+        "group relative flex h-10 min-w-[8rem] items-center gap-2 rounded-[1rem] border px-3 py-2 transition-all duration-150",
         active
-          ? "bg-primary/20 text-foreground"
+          ? "border-primary/25 bg-secondary text-foreground shadow-sm"
           : minimized
-            ? "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground"
-            : "bg-card/60 text-muted-foreground hover:bg-card hover:text-foreground",
+            ? "border-border bg-background/70 text-muted-foreground hover:border-primary/20 hover:bg-secondary/70 hover:text-foreground"
+            : "border-border bg-background/80 text-muted-foreground hover:border-primary/20 hover:bg-secondary hover:text-foreground",
       )}
     >
-      <span className="flex h-5 w-5 items-center justify-center [&>svg]:h-3.5 [&>svg]:w-3.5">{icon}</span>
-      <span className="max-w-24 truncate">{title}</span>
-      {active && <span className="ml-auto h-1 w-1 rounded-full bg-primary" />}
+      <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-border bg-gradient-to-br text-primary", accentClass)}>
+        <div className="[&>svg]:h-4 [&>svg]:w-4">{icon}</div>
+      </div>
+      <span className="max-w-28 truncate text-sm">{title}</span>
+      {active ? <span className="absolute inset-x-3 bottom-1 h-[3px] rounded-full bg-primary" /> : null}
     </button>
   );
 }
@@ -414,33 +634,42 @@ function WorkspaceWindow({
         <section
           onMouseDown={onFocus}
           className={cn(
-            "relative flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-lg",
+            "relative flex min-h-0 flex-col overflow-hidden rounded-[1.35rem] border border-border bg-card shadow-xl",
             desktopMode ? "absolute" : "relative",
-            active ? "ring-1 ring-primary/25 shadow-xl" : "",
+            active ? "border-primary/30" : "",
             dragging || resizing ? "shadow-2xl" : "",
             className,
           )}
           style={style}
         >
-          {/* Compact KDE-like title bar */}
           <header
             onPointerDown={onHeaderPointerDown}
             onDoubleClick={desktopMode ? onHeaderDoubleClick : undefined}
             className={cn(
-              "flex h-9 items-center justify-between border-b border-border/80 bg-muted/50 px-2.5 select-none",
+              "relative z-10 flex h-11 items-center justify-between border-b border-border px-3.5 select-none",
               desktopMode && !maximized ? "cursor-grab active:cursor-grabbing" : "",
             )}
           >
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="flex h-5 w-5 items-center justify-center text-muted-foreground [&>svg]:h-3.5 [&>svg]:w-3.5">{icon}</span>
-              <span className="truncate text-xs font-medium text-foreground">{title}</span>
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-border bg-secondary text-primary [&>svg]:h-4 [&>svg]:w-4">
+                {icon}
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="truncate text-sm font-medium text-foreground">{title}</span>
+                  <span className={cn("rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide", statusClass(status))}>
+                    {status}
+                  </span>
+                </div>
+                <div className="truncate text-[11px] text-muted-foreground">{subtitle}</div>
+              </div>
             </div>
-            <div className="flex items-center gap-0.5">
+            <div className="flex items-center gap-1">
               <button
                 type="button"
                 data-no-window-drag="true"
                 onClick={onMinimize}
-                className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                 aria-label={`Minimize ${title}`}
               >
                 <Minus className="h-3 w-3" />
@@ -450,7 +679,7 @@ function WorkspaceWindow({
                   type="button"
                   data-no-window-drag="true"
                   onClick={onToggleMaximize}
-                  className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                   aria-label={maximized ? `Restore ${title}` : `Maximize ${title}`}
                 >
                   {maximized ? <Copy className="h-3 w-3" /> : <Square className="h-3 w-3" />}
@@ -460,27 +689,27 @@ function WorkspaceWindow({
                 type="button"
                 data-no-window-drag="true"
                 onClick={onClose}
-                className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive"
+                className="flex h-7 w-7 items-center justify-center rounded-full border border-destructive/20 bg-destructive/10 text-destructive transition-colors hover:bg-destructive/20"
                 aria-label={`Close ${title}`}
               >
                 <X className="h-3 w-3" />
               </button>
             </div>
           </header>
-          <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
+          <div className="relative z-10 min-h-0 flex-1 overflow-hidden">{children}</div>
           {desktopMode && !maximized ? (
             <div
               data-no-window-drag="true"
               onPointerDown={onResizePointerDown}
-              className="absolute bottom-0 right-0 h-4 w-4 cursor-se-resize"
+              className="absolute bottom-0 right-0 h-5 w-5 cursor-se-resize"
               aria-hidden="true"
             >
-              <div className="absolute bottom-1 right-1 h-2 w-2 border-b-2 border-r-2 border-border/60" />
+              <div className="absolute bottom-1.5 right-1.5 h-2.5 w-2.5 border-b-2 border-r-2 border-muted-foreground/50" />
             </div>
           ) : null}
         </section>
       </ContextMenuTrigger>
-      <ContextMenuContent className="w-48 rounded-lg border-border bg-card">
+      <ContextMenuContent className="w-48 rounded-lg border-border bg-popover text-popover-foreground">
         <ContextMenuLabel>{title}</ContextMenuLabel>
         <ContextMenuItem onSelect={onFocus}>Focus</ContextMenuItem>
         <ContextMenuItem onSelect={onMinimize}>{minimized ? "Restore" : "Minimize"}</ContextMenuItem>
@@ -1554,12 +1783,25 @@ function DiskMountRow({
 function DiskPathRow({
   item,
   label,
+  selected,
+  onClick,
 }: {
   item: LinuxUiDiskPathStat;
   label: string;
+  selected: boolean;
+  onClick: () => void;
 }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-background/90 px-3 py-3">
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "w-full rounded-2xl border px-3 py-3 text-left transition-colors",
+        selected
+          ? "border-primary/30 bg-primary/10"
+          : "border-border/70 bg-background/90 hover:border-primary/20 hover:bg-secondary/50",
+      )}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="truncate font-mono text-xs text-foreground">{item.path}</div>
@@ -1569,7 +1811,7 @@ function DiskPathRow({
           {item.size_mb != null ? `${item.size_mb} MB` : "n/a"}
         </span>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -1577,12 +1819,20 @@ function DiskWindow({
   server,
   active,
   diskEnabled,
+  onOpenInEditor,
 }: {
   server: FrontendServer;
   active: boolean;
   diskEnabled: boolean;
+  onOpenInEditor?: (path: string) => void;
 }) {
   const [selectedMountPath, setSelectedMountPath] = useState<string | null>(null);
+  const [mountSearch, setMountSearch] = useState("");
+  const [pathSearch, setPathSearch] = useState("");
+  const [mountSort, setMountSort] = useState<"usage" | "name" | "size">("usage");
+  const [showCriticalOnly, setShowCriticalOnly] = useState(false);
+  const [detailTab, setDetailTab] = useState<"directories" | "logs" | "cleanup">("directories");
+  const [selectedArtifactPath, setSelectedArtifactPath] = useState<string | null>(null);
 
   const diskQuery = useQuery({
     queryKey: ["linux-ui", server.id, "disk"],
@@ -1593,20 +1843,105 @@ function DiskWindow({
 
   const diskPayload = diskQuery.data?.disk;
   const mounts = diskPayload?.mounts || [];
+  const normalizedMountSearch = mountSearch.trim().toLowerCase();
+  const normalizedPathSearch = pathSearch.trim().toLowerCase();
+  const filteredMounts = useMemo(() => {
+    const next = mounts.filter((item) => {
+      if (showCriticalOnly && (item.percent || 0) < 80) return false;
+      if (!normalizedMountSearch) return true;
+      return `${item.mount} ${item.filesystem}`.toLowerCase().includes(normalizedMountSearch);
+    });
+
+    return [...next].sort((left, right) => {
+      if (mountSort === "name") return left.mount.localeCompare(right.mount);
+      if (mountSort === "size") return (right.size_gb || 0) - (left.size_gb || 0);
+      return (right.percent || 0) - (left.percent || 0);
+    });
+  }, [mountSort, mounts, normalizedMountSearch, showCriticalOnly]);
 
   useEffect(() => {
-    if (!mounts.length) {
+    if (!filteredMounts.length) {
       if (selectedMountPath != null) setSelectedMountPath(null);
       return;
     }
-    if (!mounts.some((item) => item.mount === selectedMountPath)) {
-      setSelectedMountPath(mounts[0].mount);
+    if (!filteredMounts.some((item) => item.mount === selectedMountPath)) {
+      setSelectedMountPath(filteredMounts[0].mount);
     }
-  }, [mounts, selectedMountPath]);
+  }, [filteredMounts, selectedMountPath]);
 
   const selectedMount = useMemo(() => {
-    return mounts.find((item) => item.mount === selectedMountPath) || mounts[0] || null;
-  }, [mounts, selectedMountPath]);
+    return mounts.find((item) => item.mount === selectedMountPath) || filteredMounts[0] || mounts[0] || null;
+  }, [filteredMounts, mounts, selectedMountPath]);
+
+  const isPathInSelectedMount = useCallback((path: string) => {
+    if (!selectedMount) return true;
+    const mount = selectedMount.mount.replace(/\/+$/, "") || "/";
+    if (mount === "/") return true;
+    return path === mount || path.startsWith(`${mount}/`);
+  }, [selectedMount]);
+
+  const visibleTopDirectories = useMemo(() => {
+    return (diskPayload?.top_directories || []).filter((item) => {
+      if (!isPathInSelectedMount(item.path)) return false;
+      if (!normalizedPathSearch) return true;
+      return item.path.toLowerCase().includes(normalizedPathSearch);
+    });
+  }, [diskPayload?.top_directories, isPathInSelectedMount, normalizedPathSearch]);
+
+  const visibleLargeLogs = useMemo(() => {
+    return (diskPayload?.large_logs || []).filter((item) => {
+      if (!isPathInSelectedMount(item.path)) return false;
+      if (!normalizedPathSearch) return true;
+      return item.path.toLowerCase().includes(normalizedPathSearch);
+    });
+  }, [diskPayload?.large_logs, isPathInSelectedMount, normalizedPathSearch]);
+
+  const visibleCleanupCandidates = useMemo(() => {
+    return (diskPayload?.cleanup_candidates || []).filter((item) => {
+      if (!isPathInSelectedMount(item)) return false;
+      if (!normalizedPathSearch) return true;
+      return item.toLowerCase().includes(normalizedPathSearch);
+    });
+  }, [diskPayload?.cleanup_candidates, isPathInSelectedMount, normalizedPathSearch]);
+
+  const detailItems = useMemo(() => {
+    if (detailTab === "directories") {
+      return visibleTopDirectories.map((item) => ({
+        path: item.path,
+        sizeMb: item.size_mb,
+        label: "Directory footprint",
+        kind: "directory" as const,
+      }));
+    }
+    if (detailTab === "logs") {
+      return visibleLargeLogs.map((item) => ({
+        path: item.path,
+        sizeMb: item.size_mb,
+        label: "Log footprint",
+        kind: "log" as const,
+      }));
+    }
+    return visibleCleanupCandidates.map((item) => ({
+      path: item,
+      sizeMb: null,
+      label: "Cleanup candidate",
+      kind: "cleanup" as const,
+    }));
+  }, [detailTab, visibleCleanupCandidates, visibleLargeLogs, visibleTopDirectories]);
+
+  useEffect(() => {
+    if (!detailItems.length) {
+      if (selectedArtifactPath != null) setSelectedArtifactPath(null);
+      return;
+    }
+    if (!detailItems.some((item) => item.path === selectedArtifactPath)) {
+      setSelectedArtifactPath(detailItems[0].path);
+    }
+  }, [detailItems, selectedArtifactPath]);
+
+  const selectedArtifact = useMemo(() => {
+    return detailItems.find((item) => item.path === selectedArtifactPath) || detailItems[0] || null;
+  }, [detailItems, selectedArtifactPath]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -1634,6 +1969,41 @@ function DiskWindow({
           <SummaryCard label="Top Dir" value={diskPayload?.summary.top_directory_mb != null ? `${diskPayload.summary.top_directory_mb} MB` : "N/A"} hint="Largest common root discovered" />
           <SummaryCard label="Cleanup" value={diskPayload?.summary.cleanup_candidates || 0} hint="Old /tmp candidates" alert={(diskPayload?.summary.cleanup_candidates || 0) > 0} />
         </div>
+        <div className="mt-4 flex flex-col gap-2 xl:flex-row xl:items-center">
+          <Input
+            value={mountSearch}
+            onChange={(event) => setMountSearch(event.target.value)}
+            placeholder="Filter mounts..."
+            className="h-9 min-w-[14rem] bg-background/95 text-sm"
+          />
+          <Input
+            value={pathSearch}
+            onChange={(event) => setPathSearch(event.target.value)}
+            placeholder="Filter directories, logs, cleanup..."
+            className="h-9 min-w-[18rem] bg-background/95 text-sm"
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" size="sm" variant={showCriticalOnly ? "default" : "outline"} className="h-9 text-xs" onClick={() => setShowCriticalOnly((current) => !current)}>
+              Critical only
+            </Button>
+            {([
+              { value: "usage", label: "Usage" },
+              { value: "size", label: "Size" },
+              { value: "name", label: "Name" },
+            ] as const).map((item) => (
+              <Button
+                key={item.value}
+                type="button"
+                size="sm"
+                variant={mountSort === item.value ? "default" : "outline"}
+                className="h-9 text-xs"
+                onClick={() => setMountSort(item.value)}
+              >
+                {item.label}
+              </Button>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden p-4">
@@ -1641,7 +2011,7 @@ function DiskWindow({
           <section className="min-h-0 overflow-hidden rounded-3xl border border-border/70 bg-background/88">
             <div className="border-b border-border/60 px-4 py-3">
               <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Mounts</div>
-              <div className="mt-1 text-xs text-muted-foreground">{mounts.length} filesystems visible</div>
+              <div className="mt-1 text-xs text-muted-foreground">{filteredMounts.length} of {mounts.length} filesystems visible</div>
             </div>
             <ScrollArea className="h-full max-h-full">
               <div className="space-y-2 p-3">
@@ -1655,12 +2025,12 @@ function DiskWindow({
                     Loading disk data...
                   </div>
                 ) : null}
-                {!diskQuery.isLoading && mounts.length === 0 ? (
+                {!diskQuery.isLoading && filteredMounts.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-border/70 bg-background/92 px-3 py-6 text-center text-sm text-muted-foreground">
-                    No mount data is available for this host.
+                    No mounts match the current filter.
                   </div>
                 ) : null}
-                {mounts.map((mount) => (
+                {filteredMounts.map((mount) => (
                   <DiskMountRow
                     key={`${mount.filesystem}-${mount.mount}`}
                     mount={mount}
@@ -1672,15 +2042,29 @@ function DiskWindow({
             </ScrollArea>
           </section>
 
-          <section className="grid min-h-0 gap-4 lg:grid-rows-[auto_minmax(0,1fr)_13rem]">
+          <section className="grid min-h-0 gap-4 lg:grid-rows-[auto_auto_minmax(0,1fr)]">
             <div className="rounded-3xl border border-border/70 bg-background/88 p-4">
               {selectedMount ? (
                 <>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-2">
                     <h3 className="font-mono text-sm text-foreground">{selectedMount.mount}</h3>
                     <span className={cn("rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide", diskUsageClass(selectedMount.percent))}>
                       {selectedMount.percent != null ? `${selectedMount.percent.toFixed(1)}% full` : "usage unknown"}
                     </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => void navigator.clipboard.writeText(selectedMount.mount)}>
+                        <Copy className="mr-1.5 h-3.5 w-3.5" />
+                        Copy mount
+                      </Button>
+                      {onOpenInEditor && visibleLargeLogs[0] ? (
+                        <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => onOpenInEditor(visibleLargeLogs[0].path)}>
+                          <FileCode2 className="mr-1.5 h-3.5 w-3.5" />
+                          Open top log
+                        </Button>
+                      ) : null}
+                    </div>
                   </div>
                   <div className="mt-1 text-xs text-muted-foreground">{selectedMount.filesystem}</div>
                   <div className="mt-4 h-3 rounded-full bg-background/96">
@@ -1703,68 +2087,113 @@ function DiskWindow({
               )}
             </div>
 
-            <div className="grid min-h-0 gap-4 lg:grid-cols-2">
-              <div className="min-h-0 overflow-hidden rounded-3xl border border-border/70 bg-background/88">
-                <div className="border-b border-border/60 px-4 py-3">
-                  <div className="text-sm font-medium text-foreground">Largest directories</div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    Common writable roots only. This avoids expensive full-filesystem scans on every refresh.
-                  </div>
-                </div>
-                <ScrollArea className="h-full max-h-full">
-                  <div className="space-y-2 p-3">
-                    {diskPayload?.top_directories.length ? diskPayload.top_directories.map((item) => (
-                      <DiskPathRow key={item.path} item={item} label="Directory footprint" />
-                    )) : (
-                      <div className="rounded-2xl border border-dashed border-border/70 bg-background/92 px-3 py-6 text-center text-sm text-muted-foreground">
-                        No directory footprint data available.
-                      </div>
-                    )}
-                  </div>
-                </ScrollArea>
-              </div>
-
-              <div className="min-h-0 overflow-hidden rounded-3xl border border-border/70 bg-background/88">
-                <div className="border-b border-border/60 px-4 py-3">
-                  <div className="text-sm font-medium text-foreground">Largest logs</div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    Heavy log files are often the fastest cleanup win during incidents.
-                  </div>
-                </div>
-                <ScrollArea className="h-full max-h-full">
-                  <div className="space-y-2 p-3">
-                    {diskPayload?.large_logs.length ? diskPayload.large_logs.map((item) => (
-                      <DiskPathRow key={item.path} item={item} label="Log footprint" />
-                    )) : (
-                      <div className="rounded-2xl border border-dashed border-border/70 bg-background/92 px-3 py-6 text-center text-sm text-muted-foreground">
-                        No heavy log files were detected.
-                      </div>
-                    )}
-                  </div>
-                </ScrollArea>
+            <div className="rounded-3xl border border-border/70 bg-background/88 px-4 py-3">
+              <div className="flex flex-wrap items-center gap-2">
+                {([
+                  { value: "directories", label: `Directories (${visibleTopDirectories.length})` },
+                  { value: "logs", label: `Logs (${visibleLargeLogs.length})` },
+                  { value: "cleanup", label: `Cleanup (${visibleCleanupCandidates.length})` },
+                ] as const).map((item) => (
+                  <Button
+                    key={item.value}
+                    type="button"
+                    size="sm"
+                    variant={detailTab === item.value ? "default" : "outline"}
+                    className="h-8 text-xs"
+                    onClick={() => setDetailTab(item.value)}
+                  >
+                    {item.label}
+                  </Button>
+                ))}
               </div>
             </div>
 
-            <div className="min-h-0 overflow-hidden rounded-3xl border border-border/70 bg-background/88">
-              <div className="border-b border-border/60 px-4 py-3">
-                <div className="text-sm font-medium text-foreground">Cleanup candidates</div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  Old top-level `/tmp` entries are surfaced here first. Review before deleting anything.
+            <div className="grid min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
+              <section className="min-h-0 overflow-hidden rounded-3xl border border-border/70 bg-background/88">
+                <div className="border-b border-border/60 px-4 py-3">
+                  <div className="text-sm font-medium text-foreground">
+                    {detailTab === "directories" ? "Largest directories" : detailTab === "logs" ? "Largest logs" : "Cleanup candidates"}
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {detailTab === "directories"
+                      ? "Common writable roots only. This keeps the scan responsive."
+                      : detailTab === "logs"
+                        ? "Heavy log files are often the fastest cleanup win."
+                        : "Old top-level `/tmp` entries are surfaced here first."}
+                  </div>
                 </div>
-              </div>
-              <ScrollArea className="h-full">
-                <div className="space-y-2 p-3">
-                  {diskPayload?.cleanup_candidates.length ? diskPayload.cleanup_candidates.map((path) => (
-                    <div key={path} className="rounded-2xl border border-border/70 bg-background/90 px-3 py-3 font-mono text-xs text-foreground">
-                      {path}
+                <ScrollArea className="h-full">
+                  <div className="space-y-2 p-3">
+                    {detailItems.length > 0 ? detailItems.map((item) => (
+                      item.kind === "cleanup" ? (
+                        <button
+                          key={item.path}
+                          type="button"
+                          onClick={() => setSelectedArtifactPath(item.path)}
+                          className={cn(
+                            "w-full rounded-2xl border px-3 py-3 text-left transition-colors",
+                            selectedArtifact?.path === item.path
+                              ? "border-primary/30 bg-primary/10"
+                              : "border-border/70 bg-background/90 hover:border-primary/20 hover:bg-secondary/50",
+                          )}
+                        >
+                          <div className="font-mono text-xs text-foreground">{item.path}</div>
+                          <div className="mt-1 text-[11px] text-muted-foreground">{item.label}</div>
+                        </button>
+                      ) : (
+                        <DiskPathRow
+                          key={item.path}
+                          item={{ path: item.path, size_mb: item.sizeMb }}
+                          label={item.label}
+                          selected={selectedArtifact?.path === item.path}
+                          onClick={() => setSelectedArtifactPath(item.path)}
+                        />
+                      )
+                    )) : (
+                      <div className="rounded-2xl border border-dashed border-border/70 bg-background/92 px-3 py-6 text-center text-sm text-muted-foreground">
+                        No items match the current storage filter.
+                      </div>
+                    )}
+                  </div>
+                </ScrollArea>
+              </section>
+
+              <section className="min-h-0 rounded-3xl border border-border/70 bg-background/88 p-4">
+                {selectedArtifact ? (
+                  <div className="space-y-4">
+                    <div>
+                      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{selectedArtifact.label}</div>
+                      <div className="mt-2 break-all font-mono text-xs text-foreground">{selectedArtifact.path}</div>
                     </div>
-                  )) : (
-                    <div className="rounded-2xl border border-dashed border-border/70 bg-background/92 px-3 py-6 text-center text-sm text-muted-foreground">
-                      No stale `/tmp` entries were found in the current scan.
+                    <div className="grid gap-2">
+                      <SummaryCard
+                        label="Type"
+                        value={selectedArtifact.kind}
+                        hint={selectedMount ? selectedMount.mount : "Selected storage object"}
+                      />
+                      <SummaryCard
+                        label="Size"
+                        value={selectedArtifact.sizeMb != null ? `${selectedArtifact.sizeMb} MB` : "N/A"}
+                        hint={selectedArtifact.kind === "cleanup" ? "Temporary candidate size unavailable" : "Reported footprint"}
+                      />
                     </div>
-                  )}
-                </div>
-              </ScrollArea>
+                    <div className="grid gap-2">
+                      <Button type="button" size="sm" variant="outline" className="h-9 justify-start text-xs" onClick={() => void navigator.clipboard.writeText(selectedArtifact.path)}>
+                        <Copy className="mr-2 h-3.5 w-3.5" />
+                        Copy path
+                      </Button>
+                      {selectedArtifact.kind === "log" && onOpenInEditor ? (
+                        <Button type="button" size="sm" variant="outline" className="h-9 justify-start text-xs" onClick={() => onOpenInEditor(selectedArtifact.path)}>
+                          <FileCode2 className="mr-2 h-3.5 w-3.5" />
+                          Open in editor
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">Select a directory, log, or cleanup candidate to inspect it.</div>
+                )}
+              </section>
             </div>
           </section>
         </div>
@@ -1823,9 +2252,42 @@ function NetworkInterfaceRow({
   );
 }
 
-function ListeningSocketRow({ item }: { item: LinuxUiListeningSocket }) {
+function extractSocketPort(localAddress: string) {
+  const raw = String(localAddress || "").trim();
+  if (!raw) return "";
+  const bracketMatch = raw.match(/\]:(\d+)$/);
+  if (bracketMatch?.[1]) return bracketMatch[1];
+  const plainMatch = raw.match(/:(\d+)$/);
+  return plainMatch?.[1] || "";
+}
+
+function isSocketExposed(localAddress: string) {
+  const raw = String(localAddress || "").trim().toLowerCase();
+  return raw.startsWith("0.0.0.0:") || raw.startsWith("[::]:") || raw.startsWith("*:") || raw.startsWith(":::") || raw === "::";
+}
+
+function ListeningSocketRow({
+  item,
+  selected,
+  onClick,
+}: {
+  item: LinuxUiListeningSocket;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  const exposed = isSocketExposed(item.local_address);
+
   return (
-    <div className="rounded-2xl border border-border/70 bg-background/90 px-3 py-3">
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "w-full rounded-2xl border px-3 py-3 text-left transition-colors",
+        selected
+          ? "border-primary/30 bg-primary/10"
+          : "border-border/70 bg-background/90 hover:border-primary/20 hover:bg-secondary/50",
+      )}
+    >
       <div className="flex flex-wrap items-center gap-2">
         <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
           {item.protocol}
@@ -1833,10 +2295,20 @@ function ListeningSocketRow({ item }: { item: LinuxUiListeningSocket }) {
         <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
           {item.state || "unknown"}
         </span>
+        {exposed ? (
+          <span className="rounded-full border border-destructive/20 bg-destructive/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-destructive">
+            exposed
+          </span>
+        ) : null}
+        {extractSocketPort(item.local_address) ? (
+          <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+            port {extractSocketPort(item.local_address)}
+          </span>
+        ) : null}
       </div>
       <div className="mt-2 font-mono text-xs text-foreground">{item.local_address || "n/a"}</div>
       <div className="mt-1 text-[11px] text-muted-foreground">{item.process || item.peer_address || "Process metadata unavailable"}</div>
-    </div>
+    </button>
   );
 }
 
@@ -1852,6 +2324,12 @@ function NetworkWindow({
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
   const [selectedInterfaceName, setSelectedInterfaceName] = useState<string | null>(null);
+  const [selectedSocketKey, setSelectedSocketKey] = useState<string | null>(null);
+  const [selectedRoute, setSelectedRoute] = useState<string | null>(null);
+  const [protocolFilter, setProtocolFilter] = useState<"all" | "tcp" | "udp">("all");
+  const [showUpOnly, setShowUpOnly] = useState(false);
+  const [showExposedOnly, setShowExposedOnly] = useState(false);
+  const [networkTab, setNetworkTab] = useState<"interfaces" | "sockets" | "routes">("interfaces");
 
   const networkQuery = useQuery({
     queryKey: ["linux-ui", server.id, "network"],
@@ -1863,8 +2341,8 @@ function NetworkWindow({
   const networkPayload = networkQuery.data?.network;
   const interfaces = networkPayload?.interfaces || [];
   const filteredInterfaces = useMemo(() => {
-    if (!deferredSearch) return interfaces;
     return interfaces.filter((item) => {
+      if (showUpOnly && item.state !== "UP") return false;
       const haystack = [
         item.name,
         item.state,
@@ -1875,19 +2353,21 @@ function NetworkWindow({
       ]
         .join(" ")
         .toLowerCase();
-      return haystack.includes(deferredSearch);
+      return !deferredSearch || haystack.includes(deferredSearch);
     });
-  }, [deferredSearch, interfaces]);
+  }, [deferredSearch, interfaces, showUpOnly]);
 
   const filteredListening = useMemo(() => {
     const listening = networkPayload?.listening || [];
-    if (!deferredSearch) return listening;
     return listening.filter((item) =>
-      `${item.protocol} ${item.state} ${item.local_address} ${item.peer_address} ${item.process}`
-        .toLowerCase()
-        .includes(deferredSearch),
+      {
+        if (protocolFilter !== "all" && !item.protocol.toLowerCase().includes(protocolFilter)) return false;
+        if (showExposedOnly && !isSocketExposed(item.local_address)) return false;
+        const haystack = `${item.protocol} ${item.state} ${item.local_address} ${item.peer_address} ${item.process}`.toLowerCase();
+        return !deferredSearch || haystack.includes(deferredSearch);
+      },
     );
-  }, [deferredSearch, networkPayload?.listening]);
+  }, [deferredSearch, networkPayload?.listening, protocolFilter, showExposedOnly]);
 
   const filteredRoutes = useMemo(() => {
     const routes = networkPayload?.routes || [];
@@ -1908,6 +2388,34 @@ function NetworkWindow({
   const selectedInterface = useMemo(() => {
     return interfaces.find((item) => item.name === selectedInterfaceName) || filteredInterfaces[0] || interfaces[0] || null;
   }, [filteredInterfaces, interfaces, selectedInterfaceName]);
+
+  useEffect(() => {
+    if (!filteredListening.length) {
+      if (selectedSocketKey != null) setSelectedSocketKey(null);
+      return;
+    }
+    const socketKeys = filteredListening.map((item) => `${item.protocol}:${item.local_address}:${item.process}`);
+    if (!selectedSocketKey || !socketKeys.includes(selectedSocketKey)) {
+      setSelectedSocketKey(socketKeys[0]);
+    }
+  }, [filteredListening, selectedSocketKey]);
+
+  const selectedSocket = useMemo(() => {
+    return filteredListening.find((item) => `${item.protocol}:${item.local_address}:${item.process}` === selectedSocketKey) || filteredListening[0] || null;
+  }, [filteredListening, selectedSocketKey]);
+
+  useEffect(() => {
+    if (!filteredRoutes.length) {
+      if (selectedRoute != null) setSelectedRoute(null);
+      return;
+    }
+    if (!selectedRoute || !filteredRoutes.includes(selectedRoute)) {
+      setSelectedRoute(filteredRoutes[0]);
+    }
+  }, [filteredRoutes, selectedRoute]);
+
+  const selectedSocketPort = selectedSocket ? extractSocketPort(selectedSocket.local_address) : "";
+  const exposedCount = filteredListening.filter((item) => isSocketExposed(item.local_address)).length;
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -1942,6 +2450,43 @@ function NetworkWindow({
           <SummaryCard label="Addresses" value={networkPayload?.summary.addresses || 0} hint="IPv4 and IPv6 addresses" />
           <SummaryCard label="Routes" value={networkPayload?.summary.routes || 0} hint="Visible route entries" />
           <SummaryCard label="Listening" value={networkPayload?.summary.listening || 0} hint="Open listening sockets" alert={(networkPayload?.summary.listening || 0) > 0} />
+        </div>
+        <div className="mt-4 flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" size="sm" variant={showUpOnly ? "default" : "outline"} className="h-9 text-xs" onClick={() => setShowUpOnly((current) => !current)}>
+              Up only
+            </Button>
+            <Button type="button" size="sm" variant={showExposedOnly ? "default" : "outline"} className="h-9 text-xs" onClick={() => setShowExposedOnly((current) => !current)}>
+              Exposed only
+            </Button>
+            {([
+              { value: "all", label: "All protocols" },
+              { value: "tcp", label: "TCP" },
+              { value: "udp", label: "UDP" },
+            ] as const).map((item) => (
+              <Button
+                key={item.value}
+                type="button"
+                size="sm"
+                variant={protocolFilter === item.value ? "default" : "outline"}
+                className="h-9 text-xs"
+                onClick={() => setProtocolFilter(item.value)}
+              >
+                {item.label}
+              </Button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+            <span className="rounded-full border border-border/70 bg-background/94 px-2 py-1">
+              ip {networkPayload?.tools.ip ? "ready" : "missing"}
+            </span>
+            <span className="rounded-full border border-border/70 bg-background/94 px-2 py-1">
+              ss {networkPayload?.tools.ss ? "ready" : "missing"}
+            </span>
+            <span className="rounded-full border border-destructive/20 bg-destructive/10 px-2 py-1 text-destructive">
+              exposed {exposedCount}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -1983,20 +2528,47 @@ function NetworkWindow({
             </ScrollArea>
           </section>
 
-          <section className="grid min-h-0 gap-4 lg:grid-rows-[auto_minmax(0,1fr)_14rem]">
+          <section className="grid min-h-0 gap-4 lg:grid-rows-[auto_auto_minmax(0,1fr)_14rem]">
+            <div className="rounded-3xl border border-border/70 bg-background/88 px-4 py-3">
+              <div className="flex flex-wrap items-center gap-2">
+                {([
+                  { value: "interfaces", label: `Interfaces (${filteredInterfaces.length})` },
+                  { value: "sockets", label: `Sockets (${filteredListening.length})` },
+                  { value: "routes", label: `Routes (${filteredRoutes.length})` },
+                ] as const).map((item) => (
+                  <Button
+                    key={item.value}
+                    type="button"
+                    size="sm"
+                    variant={networkTab === item.value ? "default" : "outline"}
+                    className="h-8 text-xs"
+                    onClick={() => setNetworkTab(item.value)}
+                  >
+                    {item.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
             <div className="rounded-3xl border border-border/70 bg-background/88 p-4">
-              {selectedInterface ? (
+              {networkTab === "interfaces" && selectedInterface ? (
                 <>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="font-mono text-sm text-foreground">{selectedInterface.name}</h3>
-                    <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                      {selectedInterface.state}
-                    </span>
-                    {selectedInterface.mtu != null ? (
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-mono text-sm text-foreground">{selectedInterface.name}</h3>
                       <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                        mtu {selectedInterface.mtu}
+                        {selectedInterface.state}
                       </span>
-                    ) : null}
+                      {selectedInterface.mtu != null ? (
+                        <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                          mtu {selectedInterface.mtu}
+                        </span>
+                      ) : null}
+                    </div>
+                    <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => void navigator.clipboard.writeText(selectedInterface.name)}>
+                      <Copy className="mr-1.5 h-3.5 w-3.5" />
+                      Copy iface
+                    </Button>
                   </div>
                   <div className="mt-2 text-xs text-muted-foreground">
                     {selectedInterface.kind} {selectedInterface.mac ? `• ${selectedInterface.mac}` : ""}
@@ -2031,9 +2603,56 @@ function NetworkWindow({
                     </div>
                   </div>
                 </>
-              ) : (
-                <div className="text-sm text-muted-foreground">Select an interface to inspect addresses and flags.</div>
-              )}
+              ) : null}
+              {networkTab === "sockets" && selectedSocket ? (
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-mono text-sm text-foreground">{selectedSocket.local_address || "n/a"}</h3>
+                      <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                        {selectedSocket.protocol}
+                      </span>
+                      {isSocketExposed(selectedSocket.local_address) ? (
+                        <span className="rounded-full border border-destructive/20 bg-destructive/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-destructive">
+                          exposed
+                        </span>
+                      ) : null}
+                    </div>
+                    <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => void navigator.clipboard.writeText(selectedSocket.local_address)}>
+                      <Copy className="mr-1.5 h-3.5 w-3.5" />
+                      Copy socket
+                    </Button>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <SummaryCard label="Port" value={selectedSocketPort || "N/A"} hint="Parsed from bind address" />
+                    <SummaryCard label="State" value={selectedSocket.state || "unknown"} hint="Reported listener state" />
+                    <SummaryCard label="Exposure" value={isSocketExposed(selectedSocket.local_address) ? "Public" : "Local"} hint="Bind scope" alert={isSocketExposed(selectedSocket.local_address)} />
+                  </div>
+                  <div className="rounded-2xl border border-border/70 bg-card/88 p-3">
+                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Process</div>
+                    <div className="mt-2 font-mono text-xs text-foreground">{selectedSocket.process || "Process metadata unavailable"}</div>
+                    <div className="mt-2 text-[11px] text-muted-foreground">{selectedSocket.peer_address || "No peer metadata"}</div>
+                  </div>
+                </div>
+              ) : null}
+              {networkTab === "routes" ? (
+                selectedRoute ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-medium text-foreground">Selected route</h3>
+                      <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => void navigator.clipboard.writeText(selectedRoute)}>
+                        <Copy className="mr-1.5 h-3.5 w-3.5" />
+                        Copy route
+                      </Button>
+                    </div>
+                    <pre className="whitespace-pre-wrap break-words rounded-2xl border border-border/70 bg-card/88 px-3 py-3 font-mono text-[11px] leading-5 text-foreground">
+                      {selectedRoute}
+                    </pre>
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">Select a route to inspect it.</div>
+                )
+              ) : null}
             </div>
 
             <div className="min-h-0 overflow-hidden rounded-3xl border border-border/70 bg-background/88">
@@ -2045,9 +2664,20 @@ function NetworkWindow({
               </div>
               <ScrollArea className="h-full max-h-full">
                 <div className="space-y-2 p-3">
-                  {filteredListening.length > 0 ? filteredListening.map((item, index) => (
-                    <ListeningSocketRow key={`${item.protocol}-${item.local_address}-${index}`} item={item} />
-                  )) : (
+                  {filteredListening.length > 0 ? filteredListening.map((item, index) => {
+                    const socketKey = `${item.protocol}:${item.local_address}:${item.process}`;
+                    return (
+                      <ListeningSocketRow
+                        key={`${socketKey}-${index}`}
+                        item={item}
+                        selected={selectedSocketKey === socketKey}
+                        onClick={() => {
+                          setSelectedSocketKey(socketKey);
+                          setNetworkTab("sockets");
+                        }}
+                      />
+                    );
+                  }) : (
                     <div className="rounded-2xl border border-dashed border-border/70 bg-background/92 px-3 py-6 text-center text-sm text-muted-foreground">
                       No listening sockets match the current filter.
                     </div>
@@ -2064,9 +2694,30 @@ function NetworkWindow({
                 </div>
               </div>
               <ScrollArea className="h-full">
-                <pre className="whitespace-pre-wrap break-words px-4 py-4 font-mono text-[12px] leading-5 text-foreground">
-                  {filteredRoutes.length > 0 ? filteredRoutes.join("\n") : "No route entries match the current filter."}
-                </pre>
+                <div className="space-y-2 p-3">
+                  {filteredRoutes.length > 0 ? filteredRoutes.map((route) => (
+                    <button
+                      key={route}
+                      type="button"
+                      onClick={() => {
+                        setSelectedRoute(route);
+                        setNetworkTab("routes");
+                      }}
+                      className={cn(
+                        "w-full rounded-2xl border px-3 py-3 text-left transition-colors",
+                        selectedRoute === route
+                          ? "border-primary/30 bg-primary/10"
+                          : "border-border/70 bg-background/90 hover:border-primary/20 hover:bg-secondary/50",
+                      )}
+                    >
+                      <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-foreground">{route}</pre>
+                    </button>
+                  )) : (
+                    <div className="rounded-2xl border border-dashed border-border/70 bg-background/92 px-3 py-6 text-center text-sm text-muted-foreground">
+                      No route entries match the current filter.
+                    </div>
+                  )}
+                </div>
               </ScrollArea>
             </div>
           </section>
@@ -2592,6 +3243,7 @@ function PlaceholderWindow({
 
 export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelProps) {
   const workspaceCanvasRef = useRef<HTMLDivElement | null>(null);
+  const launcherSurfaceRef = useRef<HTMLDivElement | null>(null);
   const zCounterRef = useRef(APP_IDS.length + 6);
   const capabilitiesQuery = useQuery({
     queryKey: ["linux-ui", server.id, "capabilities"],
@@ -2610,12 +3262,15 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
   const [isDesktopShell, setIsDesktopShell] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth >= DESKTOP_BREAKPOINT : true,
   );
-  const [openApps, setOpenApps] = useState<WorkspaceAppId[]>(["files", "overview"]);
-  const [activeApp, setActiveApp] = useState<WorkspaceAppId>("files");
+  const [openApps, setOpenApps] = useState<WorkspaceAppId[]>(DEFAULT_OPEN_APPS);
+  const [activeApp, setActiveApp] = useState<WorkspaceAppId>(DEFAULT_ACTIVE_APP);
   const [windowStates, setWindowStates] = useState<Record<WorkspaceAppId, WorkspaceWindowState>>(() => buildInitialWindowStates());
   const [dragState, setDragState] = useState<WorkspaceDragState | null>(null);
   const [resizeState, setResizeState] = useState<WorkspaceResizeState | null>(null);
   const [pendingEditorPath, setPendingEditorPath] = useState<string | null>(null);
+  const [launcherOpen, setLauncherOpen] = useState(false);
+  const [launcherQuery, setLauncherQuery] = useState("");
+  const [clockNow, setClockNow] = useState(() => new Date());
 
   const openAppsRef = useRef(openApps);
   const activeAppRef = useRef(activeApp);
@@ -2658,13 +3313,47 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
   useEffect(() => {
     zCounterRef.current = APP_IDS.length + 6;
     const initialStates = buildInitialWindowStates();
+    openAppsRef.current = DEFAULT_OPEN_APPS;
+    activeAppRef.current = DEFAULT_ACTIVE_APP;
     windowStatesRef.current = initialStates;
-    setOpenApps(["files", "overview"]);
-    setActiveApp("files");
+    setOpenApps(DEFAULT_OPEN_APPS);
+    setActiveApp(DEFAULT_ACTIVE_APP);
     setWindowStates(initialStates);
     setDragState(null);
     setResizeState(null);
+    setLauncherOpen(false);
+    setLauncherQuery("");
   }, [server.id]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setClockNow(new Date());
+    }, 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!launcherOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (target && launcherSurfaceRef.current?.contains(target)) return;
+      setLauncherOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setLauncherOpen(false);
+      }
+    };
+
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [launcherOpen]);
 
   useEffect(() => {
     if (!isDesktopShell) return;
@@ -2768,6 +3457,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
       subtitle: "Folders, uploads, delete, rename",
       status: "live",
       icon: <FolderOpen className="h-5 w-5" />,
+      accentClass: "from-primary/20 to-secondary",
     },
     {
       id: "overview",
@@ -2775,6 +3465,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
       subtitle: "Host summary and system markers",
       status: "live",
       icon: <Monitor className="h-5 w-5" />,
+      accentClass: "from-primary/15 to-background",
     },
     {
       id: "services",
@@ -2782,6 +3473,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
       subtitle: availableApps?.services ? "systemctl control center is live" : "Unavailable on this host",
       status: availableApps?.services ? "live" : "unavailable",
       icon: <Settings2 className="h-5 w-5" />,
+      accentClass: "from-secondary to-background",
     },
     {
       id: "processes",
@@ -2789,6 +3481,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
       subtitle: "Task manager for CPU and memory",
       status: "live",
       icon: <Activity className="h-5 w-5" />,
+      accentClass: "from-primary/12 to-secondary",
     },
     {
       id: "logs",
@@ -2796,6 +3489,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
       subtitle: availableApps?.logs ? "journalctl and file presets are live" : "File presets and service fallbacks are live",
       status: "live",
       icon: <FileText className="h-5 w-5" />,
+      accentClass: "from-primary/18 to-secondary",
     },
     {
       id: "disk",
@@ -2803,6 +3497,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
       subtitle: availableApps?.disk ? "Usage and cleanup signals are live" : "Disk inspection unavailable",
       status: availableApps?.disk ? "live" : "unavailable",
       icon: <HardDrive className="h-5 w-5" />,
+      accentClass: "from-secondary to-background",
     },
     {
       id: "network",
@@ -2810,6 +3505,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
       subtitle: availableApps?.network ? "Interfaces and ports are live" : "Network tooling not detected",
       status: availableApps?.network ? "live" : "unavailable",
       icon: <Network className="h-5 w-5" />,
+      accentClass: "from-primary/16 to-background",
     },
     {
       id: "docker",
@@ -2817,6 +3513,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
       subtitle: availableApps?.docker ? "Containers and logs are live" : "Docker not detected",
       status: availableApps?.docker ? "live" : "unavailable",
       icon: <Server className="h-5 w-5" />,
+      accentClass: "from-secondary to-background",
     },
     {
       id: "packages",
@@ -2824,6 +3521,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
       subtitle: capabilities?.package_manager ? `${capabilities.package_manager} inspector is live` : "Package manager not detected",
       status: capabilities?.package_manager ? "live" : "unavailable",
       icon: <Package className="h-5 w-5" />,
+      accentClass: "from-primary/15 to-secondary",
     },
     {
       id: "text-editor",
@@ -2831,6 +3529,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
       subtitle: availableApps?.text_editor ? "Edit config files directly" : "Text editing unavailable on this host",
       status: availableApps?.text_editor ? "live" : "unavailable",
       icon: <FileCode2 className="h-5 w-5" />,
+      accentClass: "from-primary/18 to-background",
       hidden: true,
     },
     {
@@ -2839,6 +3538,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
       subtitle: availableApps?.quick_run ? "Execute commands with output" : "Shell execution unavailable",
       status: availableApps?.quick_run ? "live" : "unavailable",
       icon: <Terminal className="h-5 w-5" />,
+      accentClass: "from-secondary to-background",
     },
     {
       id: "settings",
@@ -2846,6 +3546,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
       subtitle: availableApps?.settings ? "System info, users, cron, security" : "Settings snapshot unavailable",
       status: availableApps?.settings ? "live" : "unavailable",
       icon: <Settings className="h-5 w-5" />,
+      accentClass: "from-muted to-background",
     },
   ], [
     availableApps?.disk,
@@ -3026,6 +3727,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
       openAppsRef.current = nextOpenApps;
       setOpenApps(nextOpenApps);
     }
+    setLauncherOpen(false);
     focusApp(appId);
   }, [appMap, focusApp]);
 
@@ -3105,6 +3807,15 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
   const taskbarApps = openApps
     .map((appId) => ({ app: appMap[appId], minimized: Boolean(windowStates[appId]?.minimized) }))
     .filter((entry) => Boolean(entry.app));
+  const overview = overviewQuery.data?.overview;
+  const timeLabel = useMemo(
+    () => new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(clockNow),
+    [clockNow],
+  );
+  const dateLabel = useMemo(
+    () => new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric", month: "short" }).format(clockNow),
+    [clockNow],
+  );
 
   const closeAllWindows = useCallback(() => {
     openAppsRef.current = [];
@@ -3113,6 +3824,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
     setActiveApp("overview");
     setDragState(null);
     setResizeState(null);
+    setLauncherOpen(false);
   }, []);
 
   const getWindowStyle = useCallback(
@@ -3136,30 +3848,35 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
     "";
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
-      {/* Desktop area — takes all space above taskbar */}
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground">
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-        {/* Subtle desktop wallpaper effect */}
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(var(--primary)/0.06),transparent_60%)]" />
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(circle at 14% 16%, rgba(45,212,191,0.08), transparent 24%), radial-gradient(circle at 82% 10%, rgba(45,212,191,0.06), transparent 20%), linear-gradient(180deg, rgba(28,31,38,1) 0%, rgba(24,26,32,1) 100%)",
+          }}
+        />
+        <div className="pointer-events-none absolute inset-0 opacity-[0.14]" style={DESKTOP_GRID_STYLE} />
 
         <ContextMenu>
           <ContextMenuTrigger asChild>
             <div ref={workspaceCanvasRef} className="relative z-10 h-full min-h-0 overflow-y-auto p-3 lg:overflow-hidden lg:p-4">
               {server.server_type !== "ssh" ? (
-                <div className="rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">
+                <div className="rounded-[1.25rem] border border-border bg-card p-6 text-sm text-muted-foreground">
                   Linux Workspace is available only for SSH servers.
                 </div>
               ) : null}
 
               {server.server_type === "ssh" && errorMessage ? (
-                <div className="mb-3 rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                <div className="mb-3 rounded-[1.25rem] border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
                   {errorMessage}
                 </div>
               ) : null}
 
               {server.server_type === "ssh" && (capabilitiesQuery.isLoading || overviewQuery.isLoading) ? (
                 <div className="flex h-full min-h-[22rem] items-center justify-center">
-                  <div className="rounded-xl border border-border bg-card px-8 py-10 text-center">
+                  <div className="rounded-[1.5rem] border border-border bg-card px-8 py-10 text-center shadow-lg">
                     <RefreshCw className="mx-auto mb-3 h-5 w-5 animate-spin text-primary" />
                     <div className="text-sm font-medium text-foreground">Loading workspace...</div>
                     <div className="mt-1 text-xs text-muted-foreground">Collecting host capabilities</div>
@@ -3169,22 +3886,74 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
 
               {server.server_type === "ssh" && !capabilitiesQuery.isLoading && !overviewQuery.isLoading ? (
                 <div className="relative min-h-full gap-3 lg:h-full">
-                  {/* Desktop icons grid — always visible */}
-                  <div className="absolute inset-0 flex items-start justify-start p-4 pointer-events-none z-0">
-                    <div className="grid grid-cols-4 gap-1 sm:grid-cols-5 lg:grid-cols-6 pointer-events-auto">
+                  <div className="pointer-events-none absolute right-4 top-4 z-0 hidden w-[22rem] gap-3 xl:grid">
+                    <div className="rounded-[1.35rem] border border-border bg-card/95 p-4 shadow-sm">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground">Workspace Session</div>
+                          <div className="mt-2 truncate text-lg font-semibold text-foreground">{overview?.hostname || server.name}</div>
+                          <div className="mt-1 truncate font-mono text-xs text-muted-foreground">{server.username}@{server.host}</div>
+                        </div>
+                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
+                          <Shield className="h-4 w-4" />
+                        </div>
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-2 text-[11px]">
+                        <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
+                          {capabilities?.os_name || overview?.os_name || "Linux host"}
+                        </span>
+                        {capabilities?.package_manager ? (
+                          <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
+                            {capabilities.package_manager}
+                          </span>
+                        ) : null}
+                        <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
+                          {openApps.length} windows
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <DesktopStatCard
+                        icon={<Activity />}
+                        label="Memory"
+                        value={overview?.memory.percent != null ? `${overview.memory.percent.toFixed(0)}%` : "N/A"}
+                        hint={
+                          overview?.memory.used_mb != null && overview.memory.total_mb != null
+                            ? `${overview.memory.used_mb} / ${overview.memory.total_mb} MB`
+                            : "Usage unavailable"
+                        }
+                        progress={overview?.memory.percent ?? null}
+                      />
+                      <DesktopStatCard
+                        icon={<HardDrive />}
+                        label="Disk"
+                        value={overview?.disk.percent != null ? `${overview.disk.percent.toFixed(0)}%` : "N/A"}
+                        hint={
+                          overview?.disk.used_gb != null && overview.disk.total_gb != null
+                            ? `${overview.disk.used_gb} / ${overview.disk.total_gb} GB`
+                            : "Root filesystem"
+                        }
+                        progress={overview?.disk.percent ?? null}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="absolute left-4 top-4 z-0 max-h-[calc(100%-1rem)] overflow-hidden pointer-events-none">
+                    <div className="grid grid-flow-col auto-cols-[5.75rem] grid-rows-6 gap-x-4 gap-y-3 pointer-events-auto">
                       {desktopApps.map((app) => (
                         <DesktopIcon
                           key={app.id}
                           title={app.title}
                           icon={app.icon}
                           status={app.status}
+                          accentClass={app.accentClass}
                           onOpen={() => launchApp(app.id)}
                         />
                       ))}
                     </div>
                   </div>
 
-                  {/* Floating windows */}
                   {visibleWindowApps.map((appId) => {
                     const app = appMap[appId];
                     if (!app) return null;
@@ -3232,7 +4001,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
                         ) : null}
                         {appId === "processes" ? <ProcessesWindow server={server} active={active} /> : null}
                         {appId === "logs" ? <LogsWindow server={server} active={active} logsEnabled={Boolean(availableApps?.logs)} /> : null}
-                        {appId === "disk" ? <DiskWindow server={server} active={active} diskEnabled={Boolean(availableApps?.disk)} /> : null}
+                        {appId === "disk" ? <DiskWindow server={server} active={active} diskEnabled={Boolean(availableApps?.disk)} onOpenInEditor={openFileInEditor} /> : null}
                         {appId === "network" ? <NetworkWindow server={server} active={active} networkEnabled={Boolean(availableApps?.network)} /> : null}
                         {appId === "docker" ? <DockerWindow server={server} active={active} dockerEnabled={Boolean(availableApps?.docker)} /> : null}
                         {appId === "packages" ? <PackagesWindow server={server} active={active} packageManager={capabilities?.package_manager || ""} /> : null}
@@ -3246,7 +4015,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
               ) : null}
             </div>
           </ContextMenuTrigger>
-          <ContextMenuContent className="w-52 rounded-lg border-border bg-card">
+          <ContextMenuContent className="w-56 rounded-xl border-border bg-popover text-popover-foreground">
             <ContextMenuLabel>Desktop</ContextMenuLabel>
             {desktopApps.map((app) => (
               <ContextMenuItem key={app.id} onSelect={() => launchApp(app.id)} disabled={app.status === "unavailable"}>
@@ -3265,68 +4034,121 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
         </ContextMenu>
       </div>
 
-      {/* KDE-style bottom taskbar */}
-      <footer className="relative z-20 flex h-11 items-center gap-1 border-t border-border bg-card/95 px-2 backdrop-blur-sm">
-        {/* App launcher button */}
-        <ContextMenu>
-          <ContextMenuTrigger asChild>
-            <Button
+      <div ref={launcherSurfaceRef} className="relative z-20 px-3 pb-3 pt-2">
+        {launcherOpen ? (
+          <LauncherMenu
+            apps={apps}
+            server={server}
+            query={launcherQuery}
+            onQueryChange={setLauncherQuery}
+            onLaunch={launchApp}
+            onRefresh={() => {
+              refresh();
+              setLauncherOpen(false);
+            }}
+            onShowDesktop={() => {
+              minimizeAllWindows();
+              setLauncherOpen(false);
+            }}
+            onCloseWorkspace={
+              onClose
+                ? () => {
+                    setLauncherOpen(false);
+                    onClose();
+                  }
+                : undefined
+            }
+            openApps={openApps}
+          />
+        ) : null}
+
+        <footer className="relative flex h-14 items-center gap-2 rounded-[1.4rem] border border-border bg-card/95 px-3 shadow-lg">
+          <button
+            type="button"
+            onClick={() => setLauncherOpen((current) => !current)}
+            className={cn(
+              "flex h-10 w-10 shrink-0 items-center justify-center rounded-[1rem] border border-border bg-primary/10 text-primary transition-all duration-150 hover:bg-primary/15",
+              launcherOpen && "border-primary/35 bg-primary/15",
+            )}
+            aria-label="Open application launcher"
+          >
+            <LayoutGrid className="h-5 w-5" />
+          </button>
+
+          <div className="h-8 w-px bg-border" />
+
+          <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+            {taskbarApps.map(({ app, minimized }) => {
+              if (!app) return null;
+              return (
+                <TaskbarButton
+                  key={app.id}
+                  title={app.title}
+                  icon={app.icon}
+                  active={activeApp === app.id && !minimized}
+                  minimized={minimized}
+                  accentClass={app.accentClass}
+                  onClick={() => toggleTaskbarApp(app.id)}
+                />
+              );
+            })}
+          </div>
+
+          <div className="h-8 w-px bg-border" />
+
+          <div className="flex shrink-0 items-center gap-2">
+            <button
               type="button"
-              size="sm"
-              variant="ghost"
-              className="h-8 w-8 shrink-0 p-0 text-primary hover:bg-primary/15"
-              onClick={() => {
-                if (openApps.length === 0) {
-                  launchApp("overview");
-                } else {
-                  minimizeAllWindows();
-                }
-              }}
+              onClick={refresh}
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              aria-label="Refresh workspace"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={minimizeAllWindows}
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              aria-label="Show desktop"
             >
               <Monitor className="h-4 w-4" />
-            </Button>
-          </ContextMenuTrigger>
-          <ContextMenuContent className="w-48 rounded-lg border-border bg-card">
-            <ContextMenuLabel className="text-[11px]">{server.name}</ContextMenuLabel>
-            {desktopApps.map((app) => (
-              <ContextMenuItem key={app.id} onSelect={() => launchApp(app.id)} disabled={app.status === "unavailable"}>
-                <span className="mr-2 flex h-4 w-4 items-center justify-center [&>svg]:h-3 [&>svg]:w-3">{app.icon}</span>
-                {app.title}
-              </ContextMenuItem>
-            ))}
-            <ContextMenuSeparator />
-            <ContextMenuItem onSelect={refresh}>Refresh</ContextMenuItem>
-            {onClose ? <ContextMenuItem onSelect={onClose} className="text-destructive focus:text-destructive">Exit Workspace</ContextMenuItem> : null}
-          </ContextMenuContent>
-        </ContextMenu>
+            </button>
 
-        <div className="mx-1 h-5 w-px bg-border/60" />
+            <div className="hidden items-center gap-1 rounded-[1rem] border border-border bg-background px-2.5 py-1.5 lg:flex">
+              <Wifi className="h-3.5 w-3.5 text-muted-foreground" />
+              <Volume2 className="h-3.5 w-3.5 text-muted-foreground" />
+              <Shield className="h-3.5 w-3.5 text-muted-foreground" />
+            </div>
 
-        {/* Running app buttons */}
-        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
-          {taskbarApps.map(({ app, minimized }) => {
-            if (!app) return null;
-            return (
-              <TaskbarButton
-                key={app.id}
-                title={app.title}
-                icon={app.icon}
-                active={activeApp === app.id && !minimized}
-                minimized={minimized}
-                onClick={() => toggleTaskbarApp(app.id)}
-              />
-            );
-          })}
-        </div>
+            <div className="hidden rounded-[1rem] border border-border bg-background px-3 py-1.5 text-right xl:block">
+              <div className="truncate font-mono text-[11px] text-muted-foreground">{server.username}@{server.host}</div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground">{capabilities?.os_name || "Linux workspace"}</div>
+            </div>
 
-        {/* System tray — server info */}
-        <div className="mx-1 h-5 w-px bg-border/60" />
-        <div className="flex shrink-0 items-center gap-2 text-[11px] text-muted-foreground">
-          <span className="hidden sm:inline font-mono">{server.username}@{server.host}</span>
-          {capabilities?.os_name ? <span className="hidden lg:inline">· {capabilities.os_name}</span> : null}
-          <span className="tabular-nums">{openApps.length}w</span>
-        </div>
-      </footer>
+            <div className="rounded-[1rem] border border-border bg-background px-3 py-1.5 text-right">
+              <div className="flex items-center justify-end gap-1 text-[11px] text-muted-foreground">
+                <CalendarDays className="h-3.5 w-3.5" />
+                <span>{dateLabel}</span>
+              </div>
+              <div className="mt-0.5 flex items-center justify-end gap-1 text-sm font-semibold text-foreground">
+                <Clock3 className="h-3.5 w-3.5 text-primary" />
+                <span>{timeLabel}</span>
+              </div>
+            </div>
+
+            {onClose ? (
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-destructive/20 bg-destructive/10 text-destructive transition-colors hover:bg-destructive/20"
+                aria-label="Exit workspace"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            ) : null}
+          </div>
+        </footer>
+      </div>
     </div>
   );
 }

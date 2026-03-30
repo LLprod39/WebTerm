@@ -128,10 +128,13 @@ def test_admin_and_settings_endpoints_for_staff_user(monkeypatch):
     settings_payload = client.get("/api/settings/")
     assert settings_payload.status_code == 200
     assert settings_payload.json()["success"] is True
+    assert "ollama_enabled" in settings_payload.json()["config"]
+    assert "ollama_base_url" in settings_payload.json()["config"]
 
     models_payload = client.get("/api/models/")
     assert models_payload.status_code == 200
     assert "current" in models_payload.json()
+    assert "ollama" in models_payload.json()
 
     refresh = client.post(
         "/api/models/refresh/",
@@ -140,6 +143,29 @@ def test_admin_and_settings_endpoints_for_staff_user(monkeypatch):
     )
     assert refresh.status_code == 400
     assert "provider must be one of" in refresh.json()["error"]
+
+
+@pytest.mark.django_db
+def test_staff_can_refresh_ollama_models(monkeypatch):
+    staff = User.objects.create_user(username="staff-ollama", password="x", is_staff=True)
+    client = Client()
+    client.force_login(staff)
+
+    async def fake_fetch(self):
+        return ["llama3.2:latest", "qwen2.5-coder:7b"]
+
+    monkeypatch.setattr("app.core.model_config.ModelManager.fetch_available_ollama_models", fake_fetch, raising=False)
+
+    refresh = client.post(
+        "/api/models/refresh/",
+        data=_json({"provider": "ollama"}),
+        content_type="application/json",
+    )
+
+    assert refresh.status_code == 200
+    assert refresh.json()["success"] is True
+    assert refresh.json()["provider"] == "ollama"
+    assert refresh.json()["models"] == ["llama3.2:latest", "qwen2.5-coder:7b"]
 
 
 @pytest.mark.django_db

@@ -1,0 +1,177 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - region "Notifications (F8)":
+    - list
+  - region "Notifications alt+T"
+  - generic [ref=e4]:
+    - generic [ref=e8]:
+      - generic [ref=e9]:
+        - generic [ref=e11]: W
+        - generic [ref=e12]: WebTermAI
+        - button [ref=e13] [cursor=pointer]:
+          - img [ref=e14]
+      - list [ref=e19]:
+        - listitem [ref=e20]:
+          - link "Dashboard" [ref=e21] [cursor=pointer]:
+            - /url: /dashboard
+            - img [ref=e22]
+            - generic [ref=e27]: Dashboard
+        - listitem [ref=e28]:
+          - link "Servers" [ref=e29] [cursor=pointer]:
+            - /url: /servers
+            - img [ref=e30]
+            - generic [ref=e33]: Servers
+        - listitem [ref=e34]:
+          - link "Agents" [ref=e35] [cursor=pointer]:
+            - /url: /agents
+            - img [ref=e36]
+            - generic [ref=e39]: Agents
+        - listitem [ref=e40]:
+          - link "Studio" [ref=e41] [cursor=pointer]:
+            - /url: /studio
+            - img [ref=e42]
+            - generic [ref=e46]: Studio
+        - listitem [ref=e47]:
+          - link "Settings" [ref=e48] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e49]
+            - generic [ref=e52]: Settings
+      - generic [ref=e53]:
+        - generic [ref=e55]:
+          - button "EN" [ref=e56] [cursor=pointer]
+          - button "RU" [ref=e57] [cursor=pointer]
+        - generic [ref=e58]:
+          - generic [ref=e59]: A
+          - generic [ref=e60]:
+            - paragraph [ref=e61]: admin
+            - paragraph [ref=e62]: Operator
+          - button "Sign out" [ref=e63] [cursor=pointer]:
+            - img [ref=e64]
+    - main [ref=e68]:
+      - generic [ref=e69]:
+        - navigation [ref=e70]:
+          - generic [ref=e71]: Studio
+          - button "Pipelines" [ref=e72] [cursor=pointer]:
+            - img [ref=e73]
+            - text: Pipelines
+          - button "Skills" [ref=e77] [cursor=pointer]:
+            - img [ref=e78]
+            - text: Skills
+          - button "MCP" [ref=e80] [cursor=pointer]:
+            - img [ref=e81]
+            - text: MCP
+          - button "Agents" [ref=e84] [cursor=pointer]:
+            - img [ref=e85]
+            - text: Agents
+          - button "Runs" [ref=e88] [cursor=pointer]:
+            - img [ref=e89]
+            - text: Runs
+          - button "Alerts" [ref=e92] [cursor=pointer]:
+            - img [ref=e93]
+            - text: Alerts
+        - generic [ref=e98]:
+          - generic [ref=e100]:
+            - generic [ref=e101]:
+              - generic [ref=e102]: Studio Control
+              - generic [ref=e103]:
+                - heading "Pipeline Workspace" [level=1] [ref=e104]
+                - paragraph [ref=e105]: Build, run, and monitor automations from one place with a layout that stays stable on large screens.
+            - generic [ref=e106]:
+              - generic [ref=e107]:
+                - img [ref=e108]
+                - textbox "Search pipelines..." [ref=e111]
+              - button "New Pipeline" [ref=e112] [cursor=pointer]:
+                - img
+                - text: New Pipeline
+          - generic [ref=e113]:
+            - generic [ref=e114]:
+              - generic [ref=e115]:
+                - img [ref=e116]
+                - text: Pipelines
+              - generic [ref=e120]: "1"
+            - generic [ref=e121]:
+              - generic [ref=e122]:
+                - img [ref=e123]
+                - text: Skills
+              - generic [ref=e125]: "0"
+            - generic [ref=e126]:
+              - generic [ref=e127]:
+                - img [ref=e128]
+                - text: MCP Servers
+              - generic [ref=e131]: "1"
+            - generic [ref=e132]:
+              - generic [ref=e133]:
+                - img [ref=e134]
+                - text: Agents
+              - generic [ref=e137]: "0"
+            - generic [ref=e138]:
+              - generic [ref=e139]:
+                - img [ref=e140]
+                - text: Completed
+              - generic [ref=e143]: "0"
+              - generic [ref=e144]: runs
+            - generic [ref=e145]:
+              - generic [ref=e146]:
+                - img [ref=e147]
+                - text: Failed
+              - generic [ref=e151]: "0"
+              - generic [ref=e152]: runs
+          - generic [ref=e153]:
+            - generic [ref=e155]:
+              - generic [ref=e156]:
+                - generic [ref=e157]:
+                  - paragraph [ref=e158]: Pipelines
+                  - heading "All automations" [level=2] [ref=e159]
+                - paragraph [ref=e160]: 1 workflow available
+              - article [ref=e162] [cursor=pointer]:
+                - generic [ref=e163]:
+                  - generic [ref=e164]: ⚡
+                  - generic [ref=e165]:
+                    - generic [ref=e166]:
+                      - generic [ref=e167]:
+                        - generic [ref=e168]:
+                          - heading "Nightly Patch" [level=3] [ref=e169]
+                          - generic [ref=e170]: 3 nodes
+                        - paragraph [ref=e171]: Patch workflow
+                      - button [ref=e173]:
+                        - img
+                    - generic [ref=e174]:
+                      - generic [ref=e175]:
+                        - generic [ref=e176]: Updated 18d ago
+                        - generic [ref=e177]: ops
+                      - generic [ref=e178]:
+                        - button "Open" [ref=e179]
+                        - button "Run" [ref=e180]:
+                          - img
+                          - text: Run
+            - complementary [ref=e181]:
+              - generic [ref=e182]:
+                - heading "Quick Access" [level=3] [ref=e183]
+                - button "Skill Catalog Manage playbooks & guardrails" [ref=e184] [cursor=pointer]:
+                  - img [ref=e185]
+                  - generic [ref=e187]:
+                    - paragraph [ref=e188]: Skill Catalog
+                    - paragraph [ref=e189]: Manage playbooks & guardrails
+                - button "MCP Registry Model Context Protocol servers" [ref=e190] [cursor=pointer]:
+                  - img [ref=e191]
+                  - generic [ref=e194]:
+                    - paragraph [ref=e195]: MCP Registry
+                    - paragraph [ref=e196]: Model Context Protocol servers
+                - button "Agent Configs Configure AI agents" [ref=e197] [cursor=pointer]:
+                  - img [ref=e198]
+                  - generic [ref=e201]:
+                    - paragraph [ref=e202]: Agent Configs
+                    - paragraph [ref=e203]: Configure AI agents
+                - button "Execution History All pipeline runs" [ref=e204] [cursor=pointer]:
+                  - img [ref=e205]
+                  - generic [ref=e208]:
+                    - paragraph [ref=e209]: Execution History
+                    - paragraph [ref=e210]: All pipeline runs
+              - generic [ref=e211]:
+                - generic [ref=e212]:
+                  - heading "Recent Runs" [level=3] [ref=e213]
+                  - button "View all" [ref=e214] [cursor=pointer]
+                - paragraph [ref=e215]: No runs yet
+```

@@ -19,6 +19,7 @@ import {
   Loader2,
   Pencil,
   RefreshCw,
+  Search,
   Save,
   Shield,
   Trash2,
@@ -102,6 +103,13 @@ function formatTimestamp(value: number) {
   }
 }
 
+function buildChildPath(basePath: string, name: string) {
+  const normalizedName = String(name || "").trim().replace(/^\/+/, "");
+  if (!normalizedName) return basePath;
+  if (!basePath || basePath === ".") return normalizedName;
+  return `${basePath.replace(/\/+$/, "")}/${normalizedName}`;
+}
+
 function defaultPermissionMode(entry: SftpEntry) {
   if (entry.permissions_octal) {
     return entry.permissions_octal.replace(/^0+/, "") || "0";
@@ -156,6 +164,8 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
 
   const [currentPath, setCurrentPath] = useState(".");
   const [pathInput, setPathInput] = useState(".");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showHidden, setShowHidden] = useState(true);
   const [homePath, setHomePath] = useState(".");
   const [parentPath, setParentPath] = useState<string | null>(null);
   const [entries, setEntries] = useState<SftpEntry[]>([]);
@@ -172,6 +182,7 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
   const [editorError, setEditorError] = useState("");
   const [isEditorLoading, setIsEditorLoading] = useState(false);
   const [isEditorSaving, setIsEditorSaving] = useState(false);
+  const [transfersExpanded, setTransfersExpanded] = useState(true);
 
   const selectedEntry = useMemo(
     () => entries.find((entry) => entry.path === selectedPath) || null,
@@ -187,6 +198,40 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
     if (!editorPath) return "";
     return formatBytes(new TextEncoder().encode(editorContent).length);
   }, [editorContent, editorPath]);
+
+  const visibleEntries = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return [...entries]
+      .filter((entry) => (showHidden ? true : !entry.name.startsWith(".")))
+      .filter((entry) => {
+        if (!query) return true;
+        return `${entry.name} ${entry.path} ${entry.permissions || ""}`.toLowerCase().includes(query);
+      })
+      .sort((left, right) => {
+        if (left.is_dir !== right.is_dir) return left.is_dir ? -1 : 1;
+        return left.name.localeCompare(right.name, undefined, { sensitivity: "base", numeric: true });
+      });
+  }, [entries, searchQuery, showHidden]);
+
+  const breadcrumbSegments = useMemo(() => {
+    if (!currentPath || currentPath === ".") {
+      return [{ label: ".", path: "." }];
+    }
+    const absolute = currentPath.startsWith("/");
+    const segments = currentPath.split("/").filter(Boolean);
+    let cursor = absolute ? "" : "";
+    return segments.map((segment, index) => {
+      cursor = absolute
+        ? `${cursor}/${segment}`.replace(/\/+/g, "/")
+        : index === 0
+          ? segment
+          : `${cursor}/${segment}`;
+      return {
+        label: segment,
+        path: cursor || "/",
+      };
+    });
+  }, [currentPath]);
 
   const resetEditor = useCallback(() => {
     editorLoadSeqRef.current += 1;
@@ -528,6 +573,26 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
     }
   }, [currentPath, loadDirectory, server.id, toast]);
 
+  const handleCreateFile = useCallback(async () => {
+    const fileName = window.prompt("New file", "new-file.conf");
+    if (!fileName) return;
+    const nextPath = buildChildPath(currentPath, fileName);
+    try {
+      const result = await writeServerTextFile(server.id, nextPath, "");
+      setSelectedPath(result.file.path);
+      setEditorPath(result.file.path);
+      setEditorFilename(result.file.filename);
+      setEditorEncoding(result.file.encoding);
+      setEditorContent(result.file.content);
+      setSavedEditorContent(result.file.content);
+      setEditorError("");
+      toast({ description: "File created." });
+      void loadDirectory(currentPath);
+    } catch (err) {
+      toast({ variant: "destructive", description: err instanceof Error ? err.message : "Could not create file" });
+    }
+  }, [currentPath, loadDirectory, server.id, toast]);
+
   const handleRename = useCallback(async () => {
     if (!selectedEntry) {
       toast({ variant: "destructive", description: "Выберите файл или папку." });
@@ -596,12 +661,12 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
     [transfers],
   );
 
-  const showEditorPane = Boolean(editorPath) || isEditorLoading;
+  const showEditorPane = Boolean(editorPath) || isEditorLoading || Boolean(editorError);
 
   return (
     <div
       className={cn(
-        "flex h-full min-h-0 flex-col bg-card",
+        "flex h-full min-h-0 flex-col bg-card text-foreground",
         isDragging && "ring-2 ring-primary/60 ring-inset",
       )}
       onDragEnter={(event) => {
@@ -622,36 +687,78 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
       }}
       onDrop={handleDrop}
     >
-      <div className="border-b border-border px-4 py-3">
-        <div className="flex items-start justify-between gap-3">
+      <div className="border-b border-border bg-card px-4 py-3">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0">
             <div className="text-sm font-semibold text-foreground">Files</div>
             <div className="truncate font-mono text-[11px] text-muted-foreground">
               {server.username}@{server.host}:{server.port}
             </div>
           </div>
-          <div className="flex items-center gap-1">
-            <Button type="button" size="sm" variant="ghost" className="h-8 px-2" onClick={() => uploadInputRef.current?.click()}>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" size="sm" variant="outline" className="h-8 rounded-xl border-border bg-background px-3 text-xs text-foreground hover:bg-secondary" onClick={() => uploadInputRef.current?.click()}>
               <Upload className="h-3.5 w-3.5" />
+              <span className="ml-1.5">Upload</span>
             </Button>
-            <Button type="button" size="sm" variant="ghost" className="h-8 px-2" onClick={handleCreateFolder}>
+            <Button type="button" size="sm" variant="outline" className="h-8 rounded-xl border-border bg-background px-3 text-xs text-foreground hover:bg-secondary" onClick={handleCreateFolder}>
               <FolderPlus className="h-3.5 w-3.5" />
+              <span className="ml-1.5">Folder</span>
             </Button>
-            <Button type="button" size="sm" variant="ghost" className="h-8 px-2" onClick={refreshDirectory}>
+            <Button type="button" size="sm" variant="outline" className="h-8 rounded-xl border-border bg-background px-3 text-xs text-foreground hover:bg-secondary" onClick={handleCreateFile}>
+              <FileCode2 className="h-3.5 w-3.5" />
+              <span className="ml-1.5">File</span>
+            </Button>
+            <Button type="button" size="sm" variant="outline" className="h-8 rounded-xl border-border bg-background px-3 text-xs text-foreground hover:bg-secondary" onClick={refreshDirectory}>
               <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
+              <span className="ml-1.5">Refresh</span>
             </Button>
           </div>
         </div>
 
-        <div className="mt-3 flex items-center gap-2">
-          <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={() => void loadDirectory(homePath)}>
-            Home
-          </Button>
+        <div className="mt-3 flex flex-col gap-2 xl:flex-row xl:items-center">
+          <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
+            <Button type="button" size="sm" variant="outline" className="h-8 shrink-0 rounded-xl border-border bg-background px-3 text-xs text-foreground hover:bg-secondary" onClick={() => void loadDirectory(homePath)}>
+              Home
+            </Button>
+            {breadcrumbSegments.map((segment, index) => (
+              <button
+                key={`${segment.path}-${index}`}
+                type="button"
+                onClick={() => void loadDirectory(segment.path)}
+                className="shrink-0 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:border-primary/20 hover:bg-secondary hover:text-foreground"
+              >
+                {segment.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={showHidden ? "default" : "outline"}
+              className="h-8 rounded-xl border-border px-3 text-xs"
+              onClick={() => setShowHidden((value) => !value)}
+            >
+              Hidden
+            </Button>
+            <div className="relative min-w-[14rem] flex-1 xl:w-60">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search in current folder..."
+                className="h-8 rounded-xl border-border bg-background pl-9 text-xs text-foreground placeholder:text-muted-foreground"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-2 flex items-center gap-2">
           <Button
             type="button"
             size="sm"
             variant="outline"
-            className="h-8 px-2"
+            className="h-8 rounded-xl border-border bg-background px-2 text-xs text-foreground hover:bg-secondary"
             onClick={() => parentPath && void loadDirectory(parentPath)}
             disabled={!parentPath}
           >
@@ -666,21 +773,35 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
                 handleManualPathSubmit();
               }
             }}
-            className="h-8 text-xs font-mono"
+            className="h-8 rounded-xl border-border bg-background text-xs font-mono text-foreground placeholder:text-muted-foreground"
           />
+          <Button type="button" size="sm" variant="outline" className="h-8 rounded-xl border-border bg-background px-3 text-xs text-foreground hover:bg-secondary" onClick={handleManualPathSubmit}>
+            Go
+          </Button>
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col xl:flex-row">
+      <div className="grid min-h-0 flex-1 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <div className={cn("flex min-h-0 flex-1 flex-col", showEditorPane && "xl:border-r xl:border-border")}>
+          <div className="border-b border-border bg-secondary/20 px-4 py-2.5">
+            <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+              <span>{visibleEntries.length} items visible</span>
+              <span>•</span>
+              <span>{entries.filter((entry) => entry.is_dir).length} folders</span>
+              <span>•</span>
+              <span>{entries.filter((entry) => !entry.is_dir).length} files</span>
+            </div>
+          </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {error ? (
               <div className="px-4 py-6 text-sm text-destructive">{error}</div>
-            ) : entries.length === 0 && !isLoading ? (
-              <div className="px-4 py-6 text-sm text-muted-foreground">Папка пуста.</div>
+            ) : visibleEntries.length === 0 && !isLoading ? (
+              <div className="px-4 py-8 text-sm text-muted-foreground">
+                {entries.length === 0 ? "This directory is empty." : "Nothing matches the current filter."}
+              </div>
             ) : (
-              <div className="divide-y divide-border/40">
-                {entries.map((entry) => {
+              <div className="divide-y divide-border/60">
+                {visibleEntries.map((entry) => {
                   const Icon = entryIcon(entry);
                   const isSelected = entry.path === selectedPath;
                   const isEditing = entry.path === editorPath;
@@ -689,13 +810,13 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
                       key={entry.path}
                       type="button"
                       className={cn(
-                        "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-secondary/40",
-                        isSelected && "bg-primary/8",
+                        "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-secondary/50",
+                        isSelected && "bg-primary/10",
                       )}
                       onClick={() => setSelectedPath(entry.path)}
                       onDoubleClick={() => handleEntryOpen(entry)}
                     >
-                      <div className={cn("rounded-lg p-2", entry.is_dir ? "bg-primary/10 text-primary" : "bg-secondary text-muted-foreground")}>
+                      <div className={cn("rounded-xl p-2", entry.is_dir ? "bg-primary/10 text-primary" : "bg-secondary text-muted-foreground")}>
                         <Icon className="h-4 w-4" />
                       </div>
                       <div className="min-w-0 flex-1">
@@ -719,107 +840,10 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
               </div>
             )}
           </div>
-
-          <div className="border-t border-border px-4 py-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => selectedEntry && queueDownload(selectedEntry)} disabled={!selectedEntry || selectedEntry.is_dir}>
-                <Download className="mr-1 h-3.5 w-3.5" />
-                Download
-              </Button>
-              <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={handleOpenEditor} disabled={!selectedEntry || selectedEntry.is_dir}>
-                <FileCode2 className="mr-1 h-3.5 w-3.5" />
-                Edit
-              </Button>
-              {onOpenInEditor ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="h-8 text-xs"
-                  onClick={() => selectedEntry && !selectedEntry.is_dir && onOpenInEditor(selectedEntry.path)}
-                  disabled={!selectedEntry || selectedEntry.is_dir}
-                >
-                  <ExternalLink className="mr-1 h-3.5 w-3.5" />
-                  Open in Editor
-                </Button>
-              ) : null}
-              <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={handleRename} disabled={!selectedEntry}>
-                <Pencil className="mr-1 h-3.5 w-3.5" />
-                Rename
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-8 text-xs"
-                onClick={async () => {
-                  if (!selectedEntry) return;
-                  const newPerms = prompt(`chmod for ${selectedEntry.name}:`, defaultPermissionMode(selectedEntry));
-                  if (!newPerms) return;
-                  const normalizedMode = newPerms.trim();
-                  if (!/^[0-7]{3,4}$/.test(normalizedMode)) {
-                    toast({ variant: "destructive", description: "Use octal mode like 644 or 0755" });
-                    return;
-                  }
-                  try {
-                    const result = await chmodServerFile(server.id, selectedEntry.path, normalizedMode);
-                    if (!result.success) throw new Error(result.error || "chmod failed");
-                    toast({ title: "Permissions changed", description: `${selectedEntry.name} → ${normalizedMode}` });
-                    refreshDirectory();
-                  } catch (error) {
-                    toast({
-                      variant: "destructive",
-                      description: error instanceof Error ? error.message : "chmod failed",
-                    });
-                  }
-                }}
-                disabled={!selectedEntry}
-              >
-                <Shield className="mr-1 h-3.5 w-3.5" />
-                chmod
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-8 text-xs"
-                onClick={async () => {
-                  if (!selectedEntry) return;
-                  const newOwner = prompt(`chown for ${selectedEntry.name} (user:group):`, "");
-                  if (!newOwner) return;
-                  try {
-                    const result = await chownServerFile(server.id, selectedEntry.path, newOwner.trim(), selectedEntry.is_dir);
-                    if (!result.success) throw new Error(result.error || "chown failed");
-                    toast({ title: "Owner changed", description: `${selectedEntry.name} → ${newOwner.trim()}` });
-                    refreshDirectory();
-                  } catch (error) {
-                    toast({
-                      variant: "destructive",
-                      description: error instanceof Error ? error.message : "chown failed",
-                    });
-                  }
-                }}
-                disabled={!selectedEntry}
-              >
-                <User className="mr-1 h-3.5 w-3.5" />
-                chown
-              </Button>
-              <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={handleDelete} disabled={!selectedEntry}>
-                <Trash2 className="mr-1 h-3.5 w-3.5" />
-                Delete
-              </Button>
-            </div>
-            {selectedEntry && (
-              <div className="mt-2 flex items-center gap-3 text-[11px] text-muted-foreground font-mono">
-                <span>{selectedEntry.permissions || "---"}</span>
-                <span>{selectedEntry.name}</span>
-              </div>
-            )}
-          </div>
         </div>
 
         {showEditorPane ? (
-          <div className="flex min-h-0 w-full flex-col bg-background/70 xl:max-w-[48%] xl:min-w-[360px]">
+          <div className="flex min-h-0 w-full flex-col bg-background/60 xl:min-w-[360px]">
             <div className="border-b border-border px-4 py-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -827,23 +851,23 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
                     <FileCode2 className="h-4 w-4 text-primary" />
                     <span className="truncate">{editorFilename || "Text Editor"}</span>
                     {isEditorDirty ? (
-                      <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600">
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
                         unsaved
                       </span>
                     ) : null}
                   </div>
                   <div className="truncate font-mono text-[11px] text-muted-foreground">
-                    {editorPath || "Загрузка файла..."}
+                    {editorPath || "Loading file..."}
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Button type="button" size="sm" variant="ghost" className="h-8 px-2" onClick={() => void reloadEditor()} disabled={!editorPath || isEditorLoading || isEditorSaving}>
+                  <Button type="button" size="sm" variant="ghost" className="h-8 rounded-xl px-2 text-muted-foreground hover:bg-secondary hover:text-foreground" onClick={() => void reloadEditor()} disabled={!editorPath || isEditorLoading || isEditorSaving}>
                     <RefreshCw className={cn("h-3.5 w-3.5", isEditorLoading && "animate-spin")} />
                   </Button>
-                  <Button type="button" size="sm" variant="ghost" className="h-8 px-2" onClick={() => void saveEditor()} disabled={!editorPath || isEditorLoading || isEditorSaving || !isEditorDirty}>
+                  <Button type="button" size="sm" variant="ghost" className="h-8 rounded-xl px-2 text-muted-foreground hover:bg-secondary hover:text-foreground" onClick={() => void saveEditor()} disabled={!editorPath || isEditorLoading || isEditorSaving || !isEditorDirty}>
                     {isEditorSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                   </Button>
-                  <Button type="button" size="sm" variant="ghost" className="h-8 px-2" onClick={closeEditor} disabled={isEditorSaving}>
+                  <Button type="button" size="sm" variant="ghost" className="h-8 rounded-xl px-2 text-muted-foreground hover:bg-secondary hover:text-foreground" onClick={closeEditor} disabled={isEditorSaving}>
                     <X className="h-3.5 w-3.5" />
                   </Button>
                 </div>
@@ -854,12 +878,12 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
               {isEditorLoading ? (
                 <div className="flex min-h-[280px] flex-1 items-center justify-center text-sm text-muted-foreground">
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Открываем файл...
+                  Opening file...
                 </div>
               ) : (
                 <>
                   {editorError ? (
-                    <div className="border-b border-border bg-destructive/5 px-4 py-2 text-xs text-destructive">
+                    <div className="border-b border-border bg-destructive/10 px-4 py-2 text-xs text-destructive">
                       {editorError}
                     </div>
                   ) : null}
@@ -868,8 +892,8 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
                       value={editorContent}
                       onChange={(event) => setEditorContent(event.target.value)}
                       spellCheck={false}
-                      className="h-full min-h-[280px] resize-none border-border/60 bg-background font-mono text-xs leading-5"
-                      placeholder="Выберите текстовый файл для редактирования."
+                      className="h-full min-h-[280px] resize-none rounded-[1rem] border-border bg-card font-mono text-xs leading-5 text-foreground"
+                      placeholder="Select a text file to edit."
                       disabled={!editorPath || isEditorSaving}
                     />
                   </div>
@@ -883,80 +907,218 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
               )}
             </div>
           </div>
-        ) : null}
+        ) : (
+          <div className="flex min-h-0 flex-col border-l border-border bg-background/60">
+            <div className="border-b border-border px-4 py-3">
+              <div className="text-sm font-semibold text-foreground">Details</div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {selectedEntry ? "Focused actions for the selected file or folder." : "Select an entry to inspect it."}
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              {selectedEntry ? (
+                <div className="space-y-4">
+                  <div className="rounded-[1.1rem] border border-border bg-card p-4">
+                    <div className="flex items-start gap-3">
+                      <div className={cn("rounded-xl p-2.5", selectedEntry.is_dir ? "bg-primary/10 text-primary" : "bg-secondary text-muted-foreground")}>
+                        {selectedEntry.is_dir ? <Folder className="h-4 w-4" /> : <File className="h-4 w-4" />}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-foreground">{selectedEntry.name}</div>
+                        <div className="mt-1 break-all font-mono text-[11px] text-muted-foreground">{selectedEntry.path}</div>
+                      </div>
+                    </div>
+                    <div className="mt-4 grid gap-2">
+                      <div className="rounded-xl border border-border bg-background px-3 py-2">
+                        <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Permissions</div>
+                        <div className="mt-1 font-mono text-xs text-foreground">{selectedEntry.permissions || "---"}</div>
+                      </div>
+                      <div className="rounded-xl border border-border bg-background px-3 py-2">
+                        <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Modified</div>
+                        <div className="mt-1 text-xs text-foreground">{formatTimestamp(selectedEntry.modified_at) || "Unknown"}</div>
+                      </div>
+                      {!selectedEntry.is_dir ? (
+                        <div className="rounded-xl border border-border bg-background px-3 py-2">
+                          <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Size</div>
+                          <div className="mt-1 text-xs text-foreground">{formatBytes(selectedEntry.size)}</div>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Button type="button" size="sm" variant="outline" className="h-9 justify-start rounded-xl border-border bg-background text-xs text-foreground hover:bg-secondary" onClick={() => selectedEntry.is_dir ? void loadDirectory(selectedEntry.path) : queueDownload(selectedEntry)}>
+                      {selectedEntry.is_dir ? <FolderOpen className="mr-2 h-3.5 w-3.5" /> : <Download className="mr-2 h-3.5 w-3.5" />}
+                      {selectedEntry.is_dir ? "Open folder" : "Download"}
+                    </Button>
+                    {!selectedEntry.is_dir ? (
+                      <Button type="button" size="sm" variant="outline" className="h-9 justify-start rounded-xl border-border bg-background text-xs text-foreground hover:bg-secondary" onClick={handleOpenEditor}>
+                        <FileCode2 className="mr-2 h-3.5 w-3.5" />
+                        Edit here
+                      </Button>
+                    ) : null}
+                    {!selectedEntry.is_dir && onOpenInEditor ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-9 justify-start rounded-xl border-border bg-background text-xs text-foreground hover:bg-secondary"
+                        onClick={() => onOpenInEditor(selectedEntry.path)}
+                      >
+                        <ExternalLink className="mr-2 h-3.5 w-3.5" />
+                        Open in full editor
+                      </Button>
+                    ) : null}
+                    <Button type="button" size="sm" variant="outline" className="h-9 justify-start rounded-xl border-border bg-background text-xs text-foreground hover:bg-secondary" onClick={handleRename}>
+                      <Pencil className="mr-2 h-3.5 w-3.5" />
+                      Rename
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-9 justify-start rounded-xl border-border bg-background text-xs text-foreground hover:bg-secondary"
+                      onClick={async () => {
+                        const newPerms = prompt(`chmod for ${selectedEntry.name}:`, defaultPermissionMode(selectedEntry));
+                        if (!newPerms) return;
+                        const normalizedMode = newPerms.trim();
+                        if (!/^[0-7]{3,4}$/.test(normalizedMode)) {
+                          toast({ variant: "destructive", description: "Use octal mode like 644 or 0755" });
+                          return;
+                        }
+                        try {
+                          const result = await chmodServerFile(server.id, selectedEntry.path, normalizedMode);
+                          if (!result.success) throw new Error(result.error || "chmod failed");
+                          toast({ title: "Permissions changed", description: `${selectedEntry.name} → ${normalizedMode}` });
+                          refreshDirectory();
+                        } catch (error) {
+                          toast({
+                            variant: "destructive",
+                            description: error instanceof Error ? error.message : "chmod failed",
+                          });
+                        }
+                      }}
+                    >
+                      <Shield className="mr-2 h-3.5 w-3.5" />
+                      Change permissions
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-9 justify-start rounded-xl border-border bg-background text-xs text-foreground hover:bg-secondary"
+                      onClick={async () => {
+                        const newOwner = prompt(`chown for ${selectedEntry.name} (user:group):`, "");
+                        if (!newOwner) return;
+                        try {
+                          const result = await chownServerFile(server.id, selectedEntry.path, newOwner.trim(), selectedEntry.is_dir);
+                          if (!result.success) throw new Error(result.error || "chown failed");
+                          toast({ title: "Owner changed", description: `${selectedEntry.name} → ${newOwner.trim()}` });
+                          refreshDirectory();
+                        } catch (error) {
+                          toast({
+                            variant: "destructive",
+                            description: error instanceof Error ? error.message : "chown failed",
+                          });
+                        }
+                      }}
+                    >
+                      <User className="mr-2 h-3.5 w-3.5" />
+                      Change owner
+                    </Button>
+                    <Button type="button" size="sm" variant="outline" className="h-9 justify-start rounded-xl border-destructive/20 bg-destructive/10 text-xs text-destructive hover:bg-destructive/20" onClick={handleDelete}>
+                      <Trash2 className="mr-2 h-3.5 w-3.5" />
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex h-full items-center justify-center px-4 text-center text-sm text-muted-foreground">
+                  Select a file or folder to see metadata and focused actions.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="border-t border-border bg-secondary/20">
         <div className="flex items-center justify-between px-4 py-2">
-          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <button
+            type="button"
+            className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+            onClick={() => setTransfersExpanded((value) => !value)}
+          >
             Transfers {activeTransfers.length > 0 ? `(${activeTransfers.length})` : ""}
-          </div>
+          </button>
           {transfers.length > 0 ? (
             <Button
               type="button"
               size="sm"
               variant="ghost"
-              className="h-7 px-2 text-[11px]"
+              className="h-7 rounded-lg px-2 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground"
               onClick={() => setTransfers((prev) => prev.filter((item) => item.status === "queued" || item.status === "running"))}
             >
               Clear finished
             </Button>
           ) : null}
         </div>
-        <div className="max-h-56 overflow-y-auto">
-          {transfers.length === 0 ? (
-            <div className="px-4 pb-4 text-xs text-muted-foreground">Очередь передач пуста.</div>
-          ) : (
-            <div className="divide-y divide-border/40">
-              {transfers.map((item) => (
-                <div key={item.id} className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <div className={cn("rounded p-1.5", item.direction === "upload" ? "bg-primary/10 text-primary" : "bg-secondary text-muted-foreground")}>
-                      {item.direction === "upload" ? <Upload className="h-3.5 w-3.5" /> : <Download className="h-3.5 w-3.5" />}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm text-foreground">{item.name}</div>
-                      <div className="truncate text-[11px] text-muted-foreground">{transferStatusLabel(item)}</div>
-                    </div>
-                    {item.status === "running" ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : null}
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 px-2"
-                      onClick={() => (item.status === "running" || item.status === "queued" ? cancelTransfer(item.id) : removeTransfer(item.id))}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                  <div className="mt-2">
-                    <Progress value={item.progress} className="h-2" />
-                    <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
-                      <span>
-                        {formatBytes(item.loaded)}
-                        {item.total ? ` / ${formatBytes(item.total)}` : ""}
-                      </span>
-                      <span>{item.progress}%</span>
-                    </div>
-                    {item.status === "error" ? (
-                      <div className="mt-2 flex items-center gap-2">
-                        <Button type="button" size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => retryTransfer(item.id)}>
-                          Retry
-                        </Button>
-                        {item.direction === "upload" && item.error?.toLowerCase().includes("существ") ? (
-                          <Button type="button" size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => retryTransfer(item.id, true)}>
-                            Overwrite
-                          </Button>
-                        ) : null}
-                        <div className="truncate text-[11px] text-destructive">{item.error}</div>
+        {transfersExpanded ? (
+          <div className="max-h-56 overflow-y-auto">
+            {transfers.length === 0 ? (
+              <div className="px-4 pb-4 text-xs text-muted-foreground">Transfer queue is empty.</div>
+            ) : (
+              <div className="divide-y divide-border/60">
+                {transfers.map((item) => (
+                  <div key={item.id} className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <div className={cn("rounded-lg p-1.5", item.direction === "upload" ? "bg-primary/10 text-primary" : "bg-secondary text-muted-foreground")}>
+                        {item.direction === "upload" ? <Upload className="h-3.5 w-3.5" /> : <Download className="h-3.5 w-3.5" />}
                       </div>
-                    ) : null}
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm text-foreground">{item.name}</div>
+                        <div className="truncate text-[11px] text-muted-foreground">{transferStatusLabel(item)}</div>
+                      </div>
+                      {item.status === "running" ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : null}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 rounded-lg px-2 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                        onClick={() => (item.status === "running" || item.status === "queued" ? cancelTransfer(item.id) : removeTransfer(item.id))}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <div className="mt-2">
+                      <Progress value={item.progress} className="h-2" />
+                      <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
+                        <span>
+                          {formatBytes(item.loaded)}
+                          {item.total ? ` / ${formatBytes(item.total)}` : ""}
+                        </span>
+                        <span>{item.progress}%</span>
+                      </div>
+                      {item.status === "error" ? (
+                        <div className="mt-2 flex items-center gap-2">
+                          <Button type="button" size="sm" variant="outline" className="h-7 rounded-lg border-border bg-background text-[11px] text-foreground hover:bg-secondary" onClick={() => retryTransfer(item.id)}>
+                            Retry
+                          </Button>
+                          {item.direction === "upload" && item.error?.toLowerCase().includes("существ") ? (
+                            <Button type="button" size="sm" variant="outline" className="h-7 rounded-lg border-border bg-background text-[11px] text-foreground hover:bg-secondary" onClick={() => retryTransfer(item.id, true)}>
+                              Overwrite
+                            </Button>
+                          ) : null}
+                          <div className="truncate text-[11px] text-destructive">{item.error}</div>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : null}
       </div>
 
       <input

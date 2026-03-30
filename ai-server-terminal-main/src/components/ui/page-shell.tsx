@@ -139,7 +139,7 @@ export function SectionCard({
         <div className="flex items-start gap-3">
           {icon ? <div className="mt-0.5 text-muted-foreground">{icon}</div> : null}
           <div>
-            <div className="text-base font-semibold text-foreground">{title}</div>
+            <h2 className="text-base font-semibold text-foreground">{title}</h2>
             {description ? <div className="mt-1 text-sm leading-6 text-muted-foreground">{description}</div> : null}
           </div>
         </div>

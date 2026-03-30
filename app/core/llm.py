@@ -37,6 +37,8 @@ def _provider_timeout_seconds(provider: str, *, endpoint_name: str | None = None
         return _setting_int("LLM_GROK_STREAM_TIMEOUT_SECONDS", 60, minimum=1)
     if provider == "claude":
         return _setting_int("LLM_CLAUDE_STREAM_TIMEOUT_SECONDS", 120, minimum=1)
+    if provider == "ollama":
+        return _setting_int("LLM_OLLAMA_STREAM_TIMEOUT_SECONDS", 300, minimum=1)
     if provider == "openai" and endpoint_name == "responses":
         return _setting_int("LLM_OPENAI_RESPONSES_TIMEOUT_SECONDS", 300, minimum=1)
     if provider == "openai":
@@ -49,6 +51,20 @@ def _is_timeout_error(e: Exception) -> bool:
         return True
     s = str(e).lower()
     return "timeout" in s or "timed out" in s
+
+
+def _is_ollama_connect_error(e: Exception) -> bool:
+    try:
+        import aiohttp
+
+        if isinstance(e, (aiohttp.ClientConnectorError, aiohttp.ClientOSError, aiohttp.ClientConnectionError)):
+            return True
+    except ImportError:
+        pass
+    if isinstance(e, (ConnectionError, OSError)):
+        return True
+    s = str(e).lower()
+    return "cannot connect to host" in s or "failed to connect" in s or "connection refused" in s
 
 
 def _log_llm_usage(
@@ -180,6 +196,65 @@ class LLMProvider:
         self._gemini_client = None
         self._anthropic_client = None
 
+    @staticmethod
+    def _get_ollama_base_url() -> str:
+        return model_manager._get_ollama_base_url()
+
+    @staticmethod
+    def _get_ollama_base_urls() -> list[str]:
+        return model_manager._get_ollama_base_urls()
+
+    @staticmethod
+    def _get_ollama_cloud_base_url() -> str:
+        return model_manager._get_ollama_cloud_base_url()
+
+    @staticmethod
+    def _get_ollama_runtime_mode() -> str:
+        return model_manager._get_ollama_runtime_mode()
+
+    @staticmethod
+    def _get_ollama_think_value() -> Any | None:
+        think_mode = model_manager._get_ollama_think_mode()
+        if think_mode == "off":
+            return False
+        if think_mode == "on":
+            return True
+        if think_mode in {"low", "medium", "high"}:
+            return think_mode
+        return None
+
+    @staticmethod
+    def _build_ollama_request_targets(target_model: str) -> list[dict[str, Any]]:
+        normalized_model = model_manager._decode_ollama_cloud_model(target_model)
+        runtime_mode = model_manager._get_ollama_runtime_mode()
+        explicit_cloud_model = model_manager._is_ollama_cloud_model(target_model)
+
+        if explicit_cloud_model or runtime_mode == "cloud":
+            api_key = model_manager._get_ollama_api_key()
+            if not model_manager.config.ollama_cloud_enabled or not api_key:
+                return []
+            return [
+                {
+                    "kind": "cloud",
+                    "base_url": model_manager._get_ollama_cloud_base_url(),
+                    "headers": {
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {api_key}",
+                    },
+                    "model": normalized_model,
+                }
+            ]
+
+        return [
+            {
+                "kind": "local",
+                "base_url": base_url,
+                "headers": {"Content-Type": "application/json"},
+                "model": normalized_model,
+            }
+            for base_url in model_manager._get_ollama_base_urls()
+        ]
+
     def _get_gemini_client(self):
         """Lazy load Gemini client only when enabled"""
         if not model_manager.config.gemini_enabled:
@@ -242,7 +317,7 @@ class LLMProvider:
 
         Args:
             prompt: The prompt to send
-            model: Provider name (auto/gemini/grok/openai/claude). «auto» resolves via purpose.
+            model: Provider name (auto/gemini/grok/openai/claude/ollama). «auto» resolves via purpose.
             specific_model: Specific model version to use (overrides config)
             purpose: One of 'chat', 'agent', 'orchestrator' — used when model=='auto'
         """
@@ -256,6 +331,8 @@ class LLMProvider:
                 return bool(self.anthropic_api_key)
             if p == "openai":
                 return bool(self.openai_api_key)
+            if p == "ollama":
+                return False
             return False
 
         def _enabled(p: str) -> bool:
@@ -267,6 +344,8 @@ class LLMProvider:
                 return model_manager.config.claude_enabled and bool(self.anthropic_api_key)
             if p == "openai":
                 return model_manager.config.openai_enabled and bool(self.openai_api_key)
+            if p == "ollama":
+                return model_manager.config.ollama_enabled and bool(self._get_ollama_base_url())
             return False
 
         if model == "auto" or not model:
@@ -282,7 +361,7 @@ class LLMProvider:
                 model = preferred
             else:
                 # Fallback: pick first enabled provider
-                for candidate in ("openai", "claude", "grok", "gemini"):
+                for candidate in ("openai", "claude", "grok", "gemini", "ollama"):
                     if _enabled(candidate):
                         model = candidate
                         logger.warning(
@@ -713,6 +792,205 @@ class LLMProvider:
                         else:
                             yield f"Error calling OpenAI: {str(e)}"
                         return
+
+        elif model == "ollama":
+            if not model_manager.config.ollama_enabled:
+                yield "Error: Ollama is disabled in settings."
+                return
+
+            import aiohttp
+            import json
+
+            target_model = specific_model or model_manager.get_chat_model("ollama")
+            if not target_model:
+                yield "Error: Ollama model is not configured."
+                return
+
+            request_targets = self._build_ollama_request_targets(target_model)
+            if not request_targets:
+                if model_manager._is_ollama_cloud_model(target_model) or self._get_ollama_runtime_mode() == "cloud":
+                    yield "Error: Ollama Cloud requires `OLLAMA_API_KEY` and cloud mode enabled in settings."
+                else:
+                    yield "Error: Ollama runtime is not configured."
+                return
+
+            payload = {
+                "model": request_targets[0]["model"],
+                "messages": [
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": prompt},
+                ],
+                "stream": True,
+            }
+            think_value = self._get_ollama_think_value()
+            if think_value is not None:
+                payload["think"] = think_value
+            timeout = aiohttp.ClientTimeout(total=float(_provider_timeout_seconds("ollama")))
+            max_attempts = _retry_attempts()
+            _t0 = time.monotonic()
+            last_error = None
+
+            for base_index, request_target in enumerate(request_targets):
+                base_url = request_target["base_url"]
+                headers = dict(request_target["headers"])
+                payload["model"] = request_target["model"]
+                for attempt in range(max_attempts):
+                    try:
+                        async with aiohttp.ClientSession(timeout=timeout) as session:
+                            async with session.post(f"{base_url}/api/chat", headers=headers, json=payload) as response:
+                                if response.status == 200:
+                                    _output = ""
+                                    pending = ""
+                                    async for chunk_bytes in response.content.iter_any():
+                                        pending += chunk_bytes.decode("utf-8")
+                                        while "\n" in pending:
+                                            raw_line, pending = pending.split("\n", 1)
+                                            line = raw_line.strip()
+                                            if not line:
+                                                continue
+                                            try:
+                                                chunk_json = json.loads(line)
+                                            except json.JSONDecodeError:
+                                                logger.debug(f"Ollama: failed to parse stream line: {line[:160]}")
+                                                continue
+                                            content = ((chunk_json.get("message") or {}).get("content") or "")
+                                            if content:
+                                                _output += content
+                                                yield content
+                                            if chunk_json.get("done"):
+                                                break
+                                        else:
+                                            continue
+                                        break
+
+                                    if pending.strip():
+                                        try:
+                                            chunk_json = json.loads(pending.strip())
+                                            content = ((chunk_json.get("message") or {}).get("content") or "")
+                                            if content:
+                                                _output += content
+                                                yield content
+                                        except json.JSONDecodeError:
+                                            logger.debug(f"Ollama: trailing stream fragment ignored: {pending[:160]}")
+
+                                    if request_target["kind"] == "local" and base_url != model_manager.config.ollama_base_url:
+                                        logger.warning(
+                                            f"Ollama chat fallback: configured={model_manager.config.ollama_base_url or 'unset'} -> using {base_url}"
+                                        )
+                                    if request_target["kind"] == "local":
+                                        model_manager.config.ollama_base_url = base_url
+                                    _log_llm_usage(
+                                        "ollama",
+                                        payload["model"],
+                                        prompt,
+                                        _output,
+                                        int((time.monotonic() - _t0) * 1000),
+                                        purpose=purpose,
+                                        metadata={
+                                            "base_url": base_url,
+                                            "request_targets": [target["base_url"] for target in request_targets],
+                                            "source": request_target["kind"],
+                                            "think": payload.get("think"),
+                                        },
+                                    )
+                                    return
+
+                                error_text = await response.text()
+                                is_retryable = response.status == 429 or (500 <= response.status < 600)
+                                if is_retryable and attempt < max_attempts - 1:
+                                    yield "[Повтор попытки...]"
+                                    delay = RETRY_BACKOFF[min(attempt, len(RETRY_BACKOFF) - 1)]
+                                    await asyncio.sleep(delay)
+                                else:
+                                    _log_llm_usage(
+                                        "ollama",
+                                        payload["model"],
+                                        prompt,
+                                        "",
+                                        int((time.monotonic() - _t0) * 1000),
+                                        "error",
+                                        purpose=purpose,
+                                        metadata={
+                                            "base_url": base_url,
+                                            "request_targets": [target["base_url"] for target in request_targets],
+                                            "source": request_target["kind"],
+                                            "think": payload.get("think"),
+                                        },
+                                    )
+                                    if request_target["kind"] == "cloud":
+                                        yield f"Error from Ollama Cloud API: {response.status} - {error_text}"
+                                    else:
+                                        yield f"Error from Ollama API: {response.status} - {error_text}"
+                                    return
+                    except Exception as e:
+                        last_error = e
+                        has_next_base_url = base_index < len(request_targets) - 1
+                        if request_target["kind"] == "local" and _is_ollama_connect_error(e) and has_next_base_url:
+                            logger.warning(
+                                f"Ollama connect failed via {base_url}: {e}. Trying next base URL."
+                            )
+                            break
+
+                        err_retryable = _is_retryable_error(e) and attempt < max_attempts - 1
+                        if err_retryable:
+                            yield "[Повтор попытки...]"
+                            delay = RETRY_BACKOFF[min(attempt, len(RETRY_BACKOFF) - 1)]
+                            await asyncio.sleep(delay)
+                        else:
+                            logger.error(f"Ollama Error: {e}")
+                            _log_llm_usage(
+                                "ollama",
+                                payload["model"],
+                                prompt,
+                                "",
+                                int((time.monotonic() - _t0) * 1000),
+                                "timeout" if _is_timeout_error(e) else "error",
+                                purpose=purpose,
+                                metadata={
+                                    "base_url": base_url,
+                                    "request_targets": [target["base_url"] for target in request_targets],
+                                    "source": request_target["kind"],
+                                    "think": payload.get("think"),
+                                },
+                            )
+                            if _is_timeout_error(e):
+                                yield "Error: Timeout (Ollama stream)."
+                            elif request_target["kind"] == "local" and _is_ollama_connect_error(e) and len(request_targets) > 1:
+                                yield (
+                                    "Error: Ollama недоступен по localhost из backend runtime. "
+                                    "Проверь, что Ollama слушает Windows host не только на 127.0.0.1."
+                                )
+                            elif request_target["kind"] == "cloud":
+                                yield f"Error calling Ollama Cloud: {str(e)}"
+                            else:
+                                yield f"Error calling Ollama: {str(e)}"
+                            return
+
+            if last_error is not None:
+                logger.error(f"Ollama Error after trying all base URLs: {last_error}")
+                _log_llm_usage(
+                    "ollama",
+                    payload["model"],
+                    prompt,
+                    "",
+                    int((time.monotonic() - _t0) * 1000),
+                    "timeout" if _is_timeout_error(last_error) else "error",
+                    purpose=purpose,
+                    metadata={
+                        "request_targets": [target["base_url"] for target in request_targets],
+                        "think": payload.get("think"),
+                    },
+                )
+                if _is_timeout_error(last_error):
+                    yield "Error: Timeout (Ollama stream)."
+                elif any(target["kind"] == "cloud" for target in request_targets):
+                    yield "Error: Ollama Cloud не ответил по настроенному API endpoint."
+                else:
+                    yield (
+                        "Error: Ollama не доступен из backend. "
+                        "Сервис запущен, но runtime не может достучаться до него по всем известным адресам."
+                    )
+                return
 
         else:
             yield f"Unknown model: {model}"

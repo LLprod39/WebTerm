@@ -834,6 +834,12 @@ def _get_provider_billing_snapshot(now_utc: datetime, providers: dict) -> dict:
             "billing_source": "estimated_logs",
             "billing_note": "Set OPENAI_ADMIN_API_KEY for OpenAI organization costs.",
         },
+        "ollama": {
+            "actual_spend_usd": None,
+            "balance_usd": None,
+            "billing_source": "local_runtime",
+            "billing_note": "Ollama runs locally; billing and balance are not applicable.",
+        },
     }
 
     if providers.get("openai", {}).get("enabled"):
@@ -908,9 +914,9 @@ def _collect_admin_dashboard_data(include_version: bool = False) -> dict:
     total_finished_24h = succeeded_24h + failed_24h
     success_rate = round(succeeded_24h / total_finished_24h * 100) if total_finished_24h > 0 else 100
 
-    cost_per_1k = {"gemini": 0.0005, "grok": 0.005, "claude": 0.003, "openai": 0.002}
+    cost_per_1k = {"gemini": 0.0005, "grok": 0.005, "claude": 0.003, "openai": 0.002, "ollama": 0.0}
     api_usage = {}
-    for provider in ("gemini", "grok", "claude", "openai"):
+    for provider in ("gemini", "grok", "claude", "openai", "ollama"):
         qs = LLMUsageLog.objects.filter(provider=provider, created_at__date=today)
         agg = qs.aggregate(inp=Sum("input_tokens"), out=Sum("output_tokens"))
         inp, out = agg["inp"] or 0, agg["out"] or 0
@@ -929,7 +935,7 @@ def _collect_admin_dashboard_data(include_version: bool = False) -> dict:
         }
 
     providers = {}
-    for provider in ("gemini", "grok", "claude", "openai"):
+    for provider in ("gemini", "grok", "claude", "openai", "ollama"):
         enabled = getattr(model_manager.config, f"{provider}_enabled", False)
         providers[provider] = {
             "enabled": enabled,
@@ -1804,7 +1810,7 @@ def api_chat_detail(request, chat_id):
 async def chat_api(request):
     """
     Async API endpoint for chat streaming.
-    Expects JSON: { "message": "user input", "model": "auto|gemini|grok|openai|claude", "chat_id": null|int }
+    Expects JSON: { "message": "user input", "model": "auto|gemini|grok|openai|claude|ollama", "chat_id": null|int }
     model=auto → Cursor CLI; chat_id — сессия для истории и сохранения сообщений.
     """
     if request.method != "POST":
@@ -2195,6 +2201,9 @@ def api_models_list(request):
         grok_models = model_manager.get_available_models("grok")
         openai_models = model_manager.get_available_models("openai")
         claude_models = model_manager.get_available_models("claude")
+        ollama_models = model_manager.get_available_models("ollama")
+        ollama_local_models = getattr(model_manager, "available_ollama_local_models", []) or []
+        ollama_cloud_models = getattr(model_manager, "available_ollama_cloud_models", []) or []
         c = model_manager.config
         return JsonResponse(
             {
@@ -2202,6 +2211,9 @@ def api_models_list(request):
                 "grok": grok_models,
                 "openai": openai_models,
                 "claude": claude_models,
+                "ollama": ollama_models,
+                "ollama_local": ollama_local_models,
+                "ollama_cloud": ollama_cloud_models,
                 "rag_defaults": [
                     "models/text-embedding-004",
                     "models/text-embedding-005",
@@ -2212,11 +2224,15 @@ def api_models_list(request):
                     "chat_grok": c.chat_model_grok,
                     "chat_openai": getattr(c, "chat_model_openai", "gpt-5-mini"),
                     "chat_claude": getattr(c, "chat_model_claude", "claude-sonnet-4-6"),
+                    "chat_ollama": getattr(c, "chat_model_ollama", "") or "",
                     "rag_model": c.rag_model,
                     "agent_model_gemini": c.agent_model_gemini,
                     "agent_model_grok": c.agent_model_grok,
                     "agent_model_openai": getattr(c, "agent_model_openai", "gpt-5-mini"),
+                    "agent_model_ollama": getattr(c, "agent_model_ollama", "") or "",
                     "default_provider": c.default_provider,
+                    "ollama_runtime_mode": getattr(c, "ollama_runtime_mode", "auto") or "auto",
+                    "ollama_think_mode": getattr(c, "ollama_think_mode", "") or "",
                 },
             }
         )
@@ -2229,7 +2245,7 @@ def api_models_list(request):
 def api_models_refresh(request):
     """
     POST /api/models/refresh/
-    Body: { "provider": "gemini|grok|openai|claude" }
+    Body: { "provider": "gemini|grok|openai|claude|ollama" }
     Fetch models from provider API and return refreshed list. Any logged-in user (e.g. Studio) may call.
     """
     try:
@@ -2238,8 +2254,8 @@ def api_models_refresh(request):
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
     provider = (data.get("provider") or "").strip().lower()
-    if provider not in {"gemini", "grok", "openai", "claude"}:
-        return JsonResponse({"error": "provider must be one of: gemini, grok, openai, claude"}, status=400)
+    if provider not in {"gemini", "grok", "openai", "claude", "ollama"}:
+        return JsonResponse({"error": "provider must be one of: gemini, grok, openai, claude, ollama"}, status=400)
 
     if provider == "gemini" and not (os.getenv("GEMINI_API_KEY") or "").strip():
         return JsonResponse({"error": "GEMINI_API_KEY is not configured"}, status=400)
@@ -2259,6 +2275,8 @@ def api_models_refresh(request):
             models = asyncio.run(model_manager.fetch_available_grok_models())
         elif provider == "claude":
             models = asyncio.run(model_manager.fetch_available_claude_models())
+        elif provider == "ollama":
+            models = asyncio.run(model_manager.fetch_available_ollama_models())
         else:
             models = asyncio.run(model_manager.fetch_available_openai_models())
 
@@ -2347,14 +2365,24 @@ def api_settings(request):
                         "grok_enabled": getattr(c, "grok_enabled", True),
                         "openai_enabled": getattr(c, "openai_enabled", False),
                         "claude_enabled": getattr(c, "claude_enabled", False),
+                        "ollama_enabled": getattr(c, "ollama_enabled", False),
                         "chat_model_gemini": c.chat_model_gemini,
                         "chat_model_grok": c.chat_model_grok,
                         "chat_model_openai": getattr(c, "chat_model_openai", "gpt-5-mini"),
                         "chat_model_claude": getattr(c, "chat_model_claude", "claude-sonnet-4-6"),
+                        "chat_model_ollama": getattr(c, "chat_model_ollama", "") or "",
                         "rag_model": c.rag_model,
                         "agent_model_gemini": c.agent_model_gemini,
                         "agent_model_grok": c.agent_model_grok,
                         "agent_model_openai": getattr(c, "agent_model_openai", "gpt-5-mini"),
+                        "agent_model_ollama": getattr(c, "agent_model_ollama", "") or "",
+                        "ollama_base_url": getattr(c, "ollama_base_url", "http://127.0.0.1:11434")
+                        or "http://127.0.0.1:11434",
+                        "ollama_runtime_mode": getattr(c, "ollama_runtime_mode", "auto") or "auto",
+                        "ollama_cloud_enabled": getattr(c, "ollama_cloud_enabled", False),
+                        "ollama_cloud_base_url": getattr(c, "ollama_cloud_base_url", "https://ollama.com")
+                        or "https://ollama.com",
+                        "ollama_think_mode": getattr(c, "ollama_think_mode", "") or "",
                         "default_agent_output_path": getattr(c, "default_agent_output_path", "") or "",
                         "cursor_chat_mode": getattr(c, "cursor_chat_mode", "ask") or "ask",
                         "cursor_sandbox": getattr(c, "cursor_sandbox", "") or "",
@@ -2414,6 +2442,14 @@ def api_settings(request):
                         "openai_set": bool(os.getenv("OPENAI_API_KEY") or os.getenv("CODEX_API_KEY")),
                         "anthropic_set": bool(os.getenv("ANTHROPIC_API_KEY")),
                         "claude_set": bool(os.getenv("ANTHROPIC_API_KEY")),
+                        "ollama_local_set": bool(
+                            getattr(c, "ollama_base_url", "") or os.getenv("OLLAMA_BASE_URL") or "http://127.0.0.1:11434"
+                        ),
+                        "ollama_cloud_set": bool(os.getenv("OLLAMA_API_KEY")),
+                        "ollama_set": bool(
+                            getattr(c, "ollama_base_url", "") or os.getenv("OLLAMA_BASE_URL") or "http://127.0.0.1:11434"
+                        )
+                        or bool(os.getenv("OLLAMA_API_KEY")),
                         "cursor_set": bool(os.getenv("CURSOR_API_KEY")),
                         "codex_set": bool(os.getenv("CODEX_API_KEY") or os.getenv("OPENAI_API_KEY")),
                     },
@@ -2459,10 +2495,17 @@ def api_settings(request):
                 "grok_enabled",  # Включение/отключение Grok API
                 "openai_enabled",  # Включение/отключение OpenAI API
                 "claude_enabled",  # Включение/отключение Claude API
+                "ollama_enabled",  # Включение/отключение Ollama
                 "chat_model_claude",  # Выбранная модель Claude
+                "chat_model_ollama",  # Выбранная модель Ollama
                 "default_orchestrator_mode",  # react | ralph_internal | ralph_cli
                 "ralph_max_iterations",
                 "ralph_completion_promise",
+                "ollama_base_url",
+                "ollama_runtime_mode",
+                "ollama_cloud_enabled",
+                "ollama_cloud_base_url",
+                "ollama_think_mode",
                 "domain_auth_enabled",
                 "domain_auth_header",
                 "domain_auth_auto_create",
@@ -2475,6 +2518,7 @@ def api_settings(request):
                 "agent_llm_model",
                 "orchestrator_llm_provider",
                 "orchestrator_llm_model",
+                "agent_model_ollama",
                 # OpenAI reasoning effort (Responses API)
                 "openai_reasoning_effort",
                 # Audit logging
@@ -2514,6 +2558,20 @@ def api_settings(request):
                 if export_format not in {"json", "csv", "syslog"}:
                     return JsonResponse({"success": False, "error": "Invalid export_format"}, status=400)
                 data["export_format"] = export_format
+            if "ollama_base_url" in data and data["ollama_base_url"] is not None:
+                data["ollama_base_url"] = str(data["ollama_base_url"]).strip().rstrip("/") or "http://127.0.0.1:11434"
+            if "ollama_cloud_base_url" in data and data["ollama_cloud_base_url"] is not None:
+                data["ollama_cloud_base_url"] = str(data["ollama_cloud_base_url"]).strip().rstrip("/") or "https://ollama.com"
+            if "ollama_runtime_mode" in data and data["ollama_runtime_mode"] is not None:
+                runtime_mode = str(data["ollama_runtime_mode"]).strip().lower()
+                if runtime_mode not in {"auto", "local", "cloud"}:
+                    return JsonResponse({"success": False, "error": "Invalid ollama_runtime_mode"}, status=400)
+                data["ollama_runtime_mode"] = runtime_mode
+            if "ollama_think_mode" in data and data["ollama_think_mode"] is not None:
+                think_mode = str(data["ollama_think_mode"]).strip().lower()
+                if think_mode not in {"", "off", "on", "low", "medium", "high"}:
+                    return JsonResponse({"success": False, "error": "Invalid ollama_think_mode"}, status=400)
+                data["ollama_think_mode"] = think_mode
             # Если выбран провайдер через purpose-based ключи, включить его (чтобы не было fallback на grok)
             for provider_key in (
                 "chat_llm_provider",
@@ -2522,7 +2580,7 @@ def api_settings(request):
                 "internal_llm_provider",
             ):
                 p = data.get(provider_key)
-                if p in ("gemini", "grok", "openai", "claude"):
+                if p in ("gemini", "grok", "openai", "claude", "ollama"):
                     data[f"{p}_enabled"] = True
             for key, value in data.items():
                 if key in allowed and value is not None:

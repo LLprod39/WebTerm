@@ -4,10 +4,16 @@ Manages model selection for different purposes (chat, RAG, agent)
 """
 import os
 from typing import Dict, List, Optional
+from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 from pydantic import BaseModel
 from loguru import logger
 import httpx
 import json
+
+OLLAMA_CLOUD_MODEL_SUFFIX = " (cloud)"
+OLLAMA_RUNTIME_MODES = {"auto", "local", "cloud"}
+OLLAMA_THINK_MODES = {"", "off", "on", "low", "medium", "high"}
 
 
 class ModelConfig(BaseModel):
@@ -17,13 +23,15 @@ class ModelConfig(BaseModel):
     grok_enabled: bool = True  # Fallback for internal calls
     openai_enabled: bool = False
     claude_enabled: bool = False
+    ollama_enabled: bool = False
 
     # Chat models
     chat_model_gemini: str = "models/gemini-3-flash-preview"
     chat_model_grok: str = "grok-3"
     chat_model_openai: str = "gpt-5-mini"
     chat_model_claude: str = "claude-sonnet-4-6"
-    
+    chat_model_ollama: str = ""
+
     # RAG/Embedding models
     rag_model: str = "models/text-embedding-004"  # Gemini embedding
     
@@ -31,6 +39,7 @@ class ModelConfig(BaseModel):
     agent_model_gemini: str = "models/gemini-3-flash-preview"
     agent_model_grok: str = "grok-3"
     agent_model_openai: str = "gpt-5-mini"
+    agent_model_ollama: str = ""
     
     # Default provider (CLI agent): cursor = Cursor CLI, claude = Claude Code CLI
     # Note: "ralph" is NOT a valid provider - it's an orchestrator mode
@@ -38,7 +47,7 @@ class ModelConfig(BaseModel):
     
     # Провайдер для ВНУТРЕННИХ вызовов LLM (генерация workflow, анализ задач).
     # Когда default_provider - CLI agent, внутренние вызовы используют этот провайдер.
-    # Варианты: "gemini", "grok", "openai", "claude"
+    # Варианты: "gemini", "grok", "openai", "claude", "ollama"
     internal_llm_provider: str = "grok"
     
     # Default orchestrator mode: react | ralph_internal | ralph_cli
@@ -79,6 +88,13 @@ class ModelConfig(BaseModel):
     domain_auth_lowercase_usernames: Optional[bool] = None
     domain_auth_default_profile: Optional[str] = None
 
+    # Ollama runtime
+    ollama_base_url: str = "http://127.0.0.1:11434"
+    ollama_runtime_mode: str = "auto"
+    ollama_cloud_enabled: bool = False
+    ollama_cloud_base_url: str = "https://ollama.com"
+    ollama_think_mode: str = ""
+
     # Audit logging configuration
     log_terminal_commands: bool = True
     log_ai_assistant: bool = True
@@ -104,6 +120,9 @@ class ModelManager:
         self.available_grok_models: List[str] = []
         self.available_openai_models: List[str] = []
         self.available_claude_models: List[str] = []
+        self.available_ollama_models: List[str] = []
+        self.available_ollama_local_models: List[str] = []
+        self.available_ollama_cloud_models: List[str] = []
         self.gemini_api_key: Optional[str] = None
         self.grok_api_key: Optional[str] = None
         self.openai_api_key: Optional[str] = None
@@ -164,6 +183,187 @@ class ModelManager:
             or mid.startswith("o4")
             or mid.startswith("o5")
         )
+
+    @staticmethod
+    def _normalize_ollama_base_url(raw: Optional[str] = None) -> str:
+        value = (
+            (raw or "").strip()
+            or (os.getenv("OLLAMA_BASE_URL") or "").strip()
+            or "http://127.0.0.1:11434"
+        ).rstrip("/")
+        if "://" not in value:
+            value = f"http://{value}"
+        return value.rstrip("/")
+
+    @staticmethod
+    def _normalize_ollama_cloud_base_url(raw: Optional[str] = None) -> str:
+        value = (
+            (raw or "").strip()
+            or (os.getenv("OLLAMA_CLOUD_BASE_URL") or "").strip()
+            or "https://ollama.com"
+        ).rstrip("/")
+        if "://" not in value:
+            value = f"https://{value}"
+        return value.rstrip("/")
+
+    @staticmethod
+    def _normalize_ollama_runtime_mode(raw: Optional[str] = None) -> str:
+        value = (raw or "").strip().lower()
+        if value in OLLAMA_RUNTIME_MODES:
+            return value
+        return "auto"
+
+    @staticmethod
+    def _normalize_ollama_think_mode(raw: Optional[str] = None) -> str:
+        value = (raw or "").strip().lower()
+        if value in OLLAMA_THINK_MODES:
+            return value
+        return ""
+
+    @staticmethod
+    def _get_ollama_api_key() -> str:
+        return (os.getenv("OLLAMA_API_KEY") or "").strip()
+
+    @staticmethod
+    def _encode_ollama_cloud_model(model_id: str) -> str:
+        model_id = (model_id or "").strip()
+        if not model_id:
+            return ""
+        if model_id.endswith(OLLAMA_CLOUD_MODEL_SUFFIX):
+            return model_id
+        return f"{model_id}{OLLAMA_CLOUD_MODEL_SUFFIX}"
+
+    @staticmethod
+    def _is_ollama_cloud_model(model_id: Optional[str]) -> bool:
+        return (model_id or "").strip().endswith(OLLAMA_CLOUD_MODEL_SUFFIX)
+
+    @staticmethod
+    def _decode_ollama_cloud_model(model_id: Optional[str]) -> str:
+        value = (model_id or "").strip()
+        if value.endswith(OLLAMA_CLOUD_MODEL_SUFFIX):
+            return value[: -len(OLLAMA_CLOUD_MODEL_SUFFIX)].rstrip()
+        return value
+
+    @staticmethod
+    def _is_wsl_runtime() -> bool:
+        if os.getenv("WSL_DISTRO_NAME") or os.getenv("WSL_INTEROP"):
+            return True
+        for proc_file in ("/proc/sys/kernel/osrelease", "/proc/version"):
+            try:
+                if "microsoft" in Path(proc_file).read_text(encoding="utf-8", errors="ignore").lower():
+                    return True
+            except OSError:
+                continue
+        return False
+
+    @staticmethod
+    def _replace_ollama_host(base_url: str, host: str) -> str:
+        parsed = urlsplit(base_url)
+        scheme = parsed.scheme or "http"
+        port = parsed.port or 11434
+        auth = ""
+        if parsed.username:
+            auth = parsed.username
+            if parsed.password:
+                auth = f"{auth}:{parsed.password}"
+            auth = f"{auth}@"
+        path = parsed.path or ""
+        return urlunsplit((scheme, f"{auth}{host}:{port}", path, parsed.query, parsed.fragment)).rstrip("/")
+
+    def _get_ollama_base_url(self) -> str:
+        return self._normalize_ollama_base_url(self.config.ollama_base_url)
+
+    def _get_ollama_cloud_base_url(self) -> str:
+        return self._normalize_ollama_cloud_base_url(self.config.ollama_cloud_base_url)
+
+    def _get_ollama_runtime_mode(self) -> str:
+        return self._normalize_ollama_runtime_mode(self.config.ollama_runtime_mode)
+
+    def _get_ollama_think_mode(self) -> str:
+        return self._normalize_ollama_think_mode(self.config.ollama_think_mode)
+
+    def _get_ollama_base_urls(self) -> List[str]:
+        primary = self._get_ollama_base_url()
+        urls: List[str] = [primary]
+        parsed = urlsplit(primary)
+        host = (parsed.hostname or "").strip().lower()
+
+        if host not in {"127.0.0.1", "localhost", "::1"} or not self._is_wsl_runtime():
+            return urls
+
+        fallback_hosts: List[str] = ["host.docker.internal", "host.containers.internal"]
+        try:
+            for line in Path("/etc/resolv.conf").read_text(encoding="utf-8", errors="ignore").splitlines():
+                if line.startswith("nameserver "):
+                    candidate = (line.split(maxsplit=1)[1] or "").strip()
+                    if candidate:
+                        fallback_hosts.append(candidate)
+                    break
+        except OSError:
+            pass
+        try:
+            for line in Path("/proc/net/route").read_text(encoding="utf-8", errors="ignore").splitlines()[1:]:
+                parts = line.split()
+                if len(parts) < 3 or parts[1] != "00000000":
+                    continue
+                gateway_hex = parts[2]
+                if len(gateway_hex) != 8:
+                    continue
+                octets = [str(int(gateway_hex[i:i + 2], 16)) for i in range(0, 8, 2)]
+                fallback_hosts.append(".".join(reversed(octets)))
+                break
+        except OSError:
+            pass
+
+        seen_hosts: set[str] = set()
+        for fallback_host in fallback_hosts:
+            normalized_host = fallback_host.strip().lower()
+            if not normalized_host or normalized_host in seen_hosts:
+                continue
+            seen_hosts.add(normalized_host)
+            candidate_url = self._replace_ollama_host(primary, fallback_host.strip())
+            if candidate_url not in urls:
+                urls.append(candidate_url)
+        return urls
+
+    @staticmethod
+    def _extract_ollama_model_names(payload: dict, *, cloud: bool = False) -> List[str]:
+        seen: set[str] = set()
+        models: List[str] = []
+
+        for item in payload.get("models", []) or []:
+            model_id = item.get("name") or item.get("model")
+            if not isinstance(model_id, str):
+                continue
+            normalized = model_id.strip()
+            if not normalized:
+                continue
+            if cloud:
+                normalized = ModelManager._encode_ollama_cloud_model(normalized)
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            models.append(normalized)
+
+        return models
+
+    def _combine_ollama_models(self, local_models: List[str], cloud_models: List[str]) -> List[str]:
+        ordered_sources = (
+            [cloud_models, local_models]
+            if self._get_ollama_runtime_mode() == "cloud"
+            else [local_models, cloud_models]
+        )
+        seen: set[str] = set()
+        combined: List[str] = []
+
+        for source_models in ordered_sources:
+            for model_id in source_models:
+                if model_id in seen:
+                    continue
+                seen.add(model_id)
+                combined.append(model_id)
+
+        return combined
     
     async def fetch_available_gemini_models(self) -> List[str]:
         """
@@ -340,6 +540,68 @@ class ModelManager:
         except Exception as e:
             logger.error(f"Failed to fetch OpenAI models: {e}")
             return self._get_default_openai_models()
+
+    async def fetch_available_ollama_models(self) -> List[str]:
+        """Fetch Ollama models from local runtime and optional ollama.com cloud catalog."""
+        local_models: List[str] = []
+        cloud_models: List[str] = []
+        errors: List[str] = []
+
+        for base_url in self._get_ollama_base_urls():
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.get(f"{base_url}/api/tags")
+
+                if response.status_code != 200:
+                    errors.append(f"local {base_url} -> HTTP {response.status_code}")
+                    continue
+
+                local_models = self._extract_ollama_model_names(response.json())
+                self.available_ollama_local_models = local_models
+                if base_url != self.config.ollama_base_url:
+                    logger.warning(
+                        f"Ollama base URL fallback: configured={self.config.ollama_base_url or 'unset'} -> using {base_url}"
+                    )
+                self.config.ollama_base_url = base_url
+                logger.success(f"Fetched {len(local_models)} local Ollama models from {base_url}")
+                break
+            except Exception as e:
+                errors.append(f"local {base_url} -> {e}")
+
+        if not local_models:
+            self.available_ollama_local_models = []
+
+        if self.config.ollama_cloud_enabled:
+            api_key = self._get_ollama_api_key()
+            if not api_key:
+                errors.append("cloud https://ollama.com -> OLLAMA_API_KEY is not configured")
+            else:
+                cloud_base_url = self._get_ollama_cloud_base_url()
+                try:
+                    async with httpx.AsyncClient(timeout=10.0) as client:
+                        response = await client.get(
+                            f"{cloud_base_url}/api/tags",
+                            headers={"Authorization": f"Bearer {api_key}"},
+                        )
+
+                    if response.status_code != 200:
+                        errors.append(f"cloud {cloud_base_url} -> HTTP {response.status_code}")
+                    else:
+                        cloud_models = self._extract_ollama_model_names(response.json(), cloud=True)
+                        self.available_ollama_cloud_models = cloud_models
+                        logger.success(f"Fetched {len(cloud_models)} Ollama cloud models from {cloud_base_url}")
+                except Exception as e:
+                    errors.append(f"cloud {cloud_base_url} -> {e}")
+        else:
+            self.available_ollama_cloud_models = []
+
+        combined_models = self._combine_ollama_models(local_models, cloud_models)
+        self.available_ollama_models = combined_models
+        if combined_models:
+            return combined_models
+
+        logger.error(f"Failed to fetch Ollama models. Tried: {'; '.join(errors)}")
+        return self._get_default_ollama_models()
     
     def _get_default_gemini_models(self) -> List[str]:
         """Default Gemini models list (fallback)"""
@@ -362,6 +624,10 @@ class ModelManager:
             "gpt-5-mini",
             "gpt-5-nano",
         ]
+
+    def _get_default_ollama_models(self) -> List[str]:
+        """Ollama models are local-install specific; default to no cached models."""
+        return []
     
     async def refresh_models(self):
         """Refresh available models from both providers"""
@@ -378,6 +644,9 @@ class ModelManager:
 
         if self.anthropic_api_key or (os.getenv("ANTHROPIC_API_KEY") or "").strip():
             await self.fetch_available_claude_models()
+
+        if self.config.ollama_enabled:
+            await self.fetch_available_ollama_models()
     
     def resolve_purpose(self, purpose: str) -> tuple[str, str]:
         """Return (provider, model_str) for a given purpose: 'chat', 'agent', 'orchestrator'.
@@ -420,6 +689,8 @@ class ModelManager:
             return self.config.chat_model_openai
         if provider == "claude":
             return self.config.chat_model_claude
+        if provider == "ollama":
+            return self.config.chat_model_ollama or self._get_first_available_ollama_model()
         return self.config.chat_model_grok
 
     def get_agent_model(self, provider: Optional[str] = None) -> str:
@@ -433,7 +704,23 @@ class ModelManager:
             return self.config.agent_model_openai
         if provider == "claude":
             return self.config.chat_model_claude
+        if provider == "ollama":
+            return (
+                self.config.agent_model_ollama
+                or self.config.chat_model_ollama
+                or self._get_first_available_ollama_model()
+            )
         return self.config.agent_model_grok
+
+    def _get_first_available_ollama_model(self) -> str:
+        runtime_mode = self._get_ollama_runtime_mode()
+        if runtime_mode == "cloud" and self.available_ollama_cloud_models:
+            return self.available_ollama_cloud_models[0]
+        if self.available_ollama_local_models:
+            return self.available_ollama_local_models[0]
+        if self.available_ollama_cloud_models:
+            return self.available_ollama_cloud_models[0]
+        return self.available_ollama_models[0] if self.available_ollama_models else ""
     
     def get_rag_model(self) -> str:
         """Get configured RAG/embedding model"""
@@ -491,6 +778,10 @@ class ModelManager:
             if not self.available_claude_models:
                 return self._get_default_claude_models()
             return self.available_claude_models
+        if provider == "ollama":
+            if not self.available_ollama_models:
+                return self._get_default_ollama_models()
+            return self.available_ollama_models
         if not self.available_grok_models:
             return self._get_default_grok_models()
         return self.available_grok_models
@@ -505,6 +796,8 @@ class ModelManager:
             return self.config.openai_enabled
         elif provider == "claude":
             return self.config.claude_enabled
+        elif provider == "ollama":
+            return self.config.ollama_enabled
         # CLI providers always enabled if binary available
         return True
 

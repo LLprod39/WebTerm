@@ -36,6 +36,12 @@ class ProviderRegistry:
             "requires_key": "OPENAI_API_KEY",
             "check_method": "api"
         },
+        "ollama": {
+            "type": "api",
+            "name": "Ollama",
+            "enabled_by_default": False,
+            "check_method": "http"
+        },
         "cursor": {
             "type": "cli",
             "name": "Cursor CLI",
@@ -85,6 +91,8 @@ class ProviderRegistry:
                 return model_manager.config.grok_enabled
             elif provider == "openai":
                 return model_manager.config.openai_enabled
+            elif provider == "ollama":
+                return model_manager.config.ollama_enabled
         
         # CLI провайдеры - проверяем наличие binary
         elif info["type"] == "cli":
@@ -107,6 +115,16 @@ class ProviderRegistry:
                 key = os.getenv(info["requires_key"], "").strip()
             if not key:
                 return False
+
+        if provider == "ollama":
+            base_url = (
+                (model_manager.config.ollama_base_url or "").strip()
+                or os.getenv("OLLAMA_BASE_URL", "").strip()
+                or "http://127.0.0.1:11434"
+            )
+            cloud_enabled = bool(getattr(model_manager.config, "ollama_cloud_enabled", False))
+            cloud_api_key = bool((os.getenv("OLLAMA_API_KEY") or "").strip())
+            return bool(base_url) or (cloud_enabled and cloud_api_key)
         
         # Проверяем binary
         if info.get("requires_binary"):
@@ -216,7 +234,23 @@ class ProviderRegistry:
             else:
                 result["api_key_set"] = bool(os.getenv(key_name, "").strip())
                 result["api_key_name"] = key_name
-        
+
+        if provider == "ollama":
+            result["base_url"] = (
+                (model_manager.config.ollama_base_url or "").strip()
+                or os.getenv("OLLAMA_BASE_URL", "").strip()
+                or "http://127.0.0.1:11434"
+            )
+            result["runtime_mode"] = getattr(model_manager.config, "ollama_runtime_mode", "auto") or "auto"
+            result["cloud_enabled"] = bool(getattr(model_manager.config, "ollama_cloud_enabled", False))
+            result["cloud_api_key_set"] = bool((os.getenv("OLLAMA_API_KEY") or "").strip())
+            result["cloud_base_url"] = (
+                getattr(model_manager.config, "ollama_cloud_base_url", "").strip()
+                or os.getenv("OLLAMA_CLOUD_BASE_URL", "").strip()
+                or "https://ollama.com"
+            )
+            result["think_mode"] = getattr(model_manager.config, "ollama_think_mode", "") or ""
+
         if info.get("requires_binary"):
             binary = info["requires_binary"]
             result["binary_name"] = binary

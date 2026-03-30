@@ -789,7 +789,27 @@ function demoFallback<T>(path: string, _options: RequestInit = {}): T {
   // Settings page
   if (path.includes("/api/settings/activity")) return DEMO_ACTIVITY_LOGS as T;
   if (path.includes("/api/settings")) return DEMO_SETTINGS as T;
-  if (path.includes("/api/models/refresh")) return { success: true, provider: "gemini", models: ["gemini-2.0-flash"], count: 1 } as T;
+  if (path.includes("/api/models/refresh")) {
+    const requestedProvider = (() => {
+      try {
+        const raw = typeof _options.body === "string" ? JSON.parse(_options.body) : null;
+        return typeof raw?.provider === "string" ? raw.provider : "gemini";
+      } catch {
+        return "gemini";
+      }
+    })();
+    const demoModels =
+      requestedProvider === "ollama"
+        ? ["llama3.2:latest", "qwen2.5-coder:7b"]
+        : requestedProvider === "openai"
+          ? ["gpt-5-mini"]
+          : requestedProvider === "claude"
+            ? ["claude-sonnet-4-6"]
+            : requestedProvider === "grok"
+              ? ["grok-3"]
+              : ["gemini-2.0-flash"];
+    return { success: true, provider: requestedProvider, models: demoModels, count: demoModels.length } as T;
+  }
   if (path.includes("/api/models")) return DEMO_MODELS as T;
 
   // Admin dashboard — must match AdminDashboardData shape
@@ -1642,6 +1662,8 @@ export interface SettingsConfig {
   gemini_enabled: boolean;
   grok_enabled: boolean;
   openai_enabled: boolean;
+  ollama_enabled: boolean;
+  ollama_cloud_enabled?: boolean;
   chat_llm_provider: string;
   chat_llm_model: string;
   agent_llm_provider: string;
@@ -1653,6 +1675,12 @@ export interface SettingsConfig {
   chat_model_grok: string;
   chat_model_openai: string;
   chat_model_claude: string;
+  chat_model_ollama: string;
+  agent_model_ollama?: string;
+  ollama_base_url?: string;
+  ollama_runtime_mode?: string;
+  ollama_cloud_base_url?: string;
+  ollama_think_mode?: string;
   log_terminal_commands: boolean;
   log_ai_assistant: boolean;
   log_agent_runs: boolean;
@@ -1686,12 +1714,19 @@ export interface ModelsResponse {
   grok: string[];
   openai: string[];
   claude: string[];
+  ollama: string[];
+  ollama_local?: string[];
+  ollama_cloud?: string[];
   current: {
     default_provider: string;
     chat_gemini: string;
     chat_grok: string;
     chat_openai: string;
     chat_claude: string;
+    chat_ollama?: string;
+    agent_model_ollama?: string;
+    ollama_runtime_mode?: string;
+    ollama_think_mode?: string;
   };
 }
 
@@ -2394,7 +2429,7 @@ export async function fetchModels() {
   return apiFetch<ModelsResponse>("/api/models/");
 }
 
-export async function refreshModels(provider: "gemini" | "grok" | "openai" | "claude") {
+export async function refreshModels(provider: "gemini" | "grok" | "openai" | "claude" | "ollama") {
   return apiFetch<{ success: boolean; provider: string; models: string[]; count: number }>("/api/models/refresh/", {
     method: "POST",
     body: JSON.stringify({ provider }),

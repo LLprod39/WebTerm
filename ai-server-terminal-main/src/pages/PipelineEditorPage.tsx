@@ -334,6 +334,7 @@ const AGENT_PROVIDER_OPTIONS = [
   { value: "openai", label: "OpenAI" },
   { value: "grok", label: "Grok" },
   { value: "claude", label: "Claude" },
+  { value: "ollama", label: "Ollama" },
 ] as const;
 
 const DIRECT_LLM_PROVIDERS = AGENT_PROVIDER_OPTIONS.filter((item) => item.value !== "auto");
@@ -405,7 +406,7 @@ function getNodeDisplayLabel(node: PipelineNode | { id: string; type: string; la
 
 type ModelProvider = Exclude<keyof ModelsResponse, "current">;
 
-const MODEL_PROVIDERS: ModelProvider[] = ["gemini", "grok", "openai", "claude"];
+const MODEL_PROVIDERS: ModelProvider[] = ["gemini", "grok", "openai", "claude", "ollama"];
 
 function isModelProvider(value: string): value is ModelProvider {
   return MODEL_PROVIDERS.includes(value as ModelProvider);
@@ -1184,7 +1185,7 @@ function NodeConfigPanel({
                         }
                         set("provider", nextProvider);
                         setLoadingModelsFor(nextProvider);
-                        refreshModels(nextProvider as "gemini" | "grok" | "openai" | "claude")
+                          refreshModels(nextProvider as "gemini" | "grok" | "openai" | "claude" | "ollama")
                           .then((res) => {
                             queryClient.setQueryData(["api", "models"], (old: Record<string, unknown> | undefined) => ({
                               ...(old ?? {}),
@@ -1515,7 +1516,7 @@ function NodeConfigPanel({
                   onValueChange={(nextProvider) => {
                     set("provider", nextProvider);
                     setLoadingModelsFor(nextProvider);
-                    refreshModels(nextProvider as "gemini" | "grok" | "openai" | "claude")
+                          refreshModels(nextProvider as "gemini" | "grok" | "openai" | "claude" | "ollama")
                       .then((res) => {
                         queryClient.setQueryData(["api", "models"], (old: Record<string, unknown> | undefined) => ({
                           ...(old ?? {}),

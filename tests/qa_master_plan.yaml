@@ -1,0 +1,1544 @@
+meta:
+  title: "WEU AI Platform master QA plan"
+  version: "1.0"
+  last_updated: "2026-03-19"
+  objective: "Единый тест-план для UI, API, CLI, WebSocket, desktop API и интеграций."
+  source_of_truth:
+    - "C:/WebTrerm/AGENTS.md"
+    - "C:/WebTrerm/web_ui/settings.py"
+    - "C:/WebTrerm/web_ui/urls.py"
+    - "C:/WebTrerm/core_ui/urls.py"
+    - "C:/WebTrerm/core_ui/desktop_api/urls.py"
+    - "C:/WebTrerm/servers/urls.py"
+    - "C:/WebTrerm/studio/urls.py"
+    - "C:/WebTrerm/web_ui/routing.py"
+    - "C:/WebTrerm/servers/routing.py"
+    - "C:/WebTrerm/studio/routing.py"
+    - "C:/WebTrerm/ai-server-terminal-main/src/App.tsx"
+    - "C:/WebTrerm/ai-server-terminal-main/src/lib/api.ts"
+
+artifact_storage:
+  recommendation: "Разделить артефакты между GitHub и Notion, а канонический тест-план хранить в GitHub."
+  github:
+    role: "Источник правды для versioned QA-артефактов и автотестов."
+    store:
+      - "Файл плана: tests/qa_master_plan.yaml"
+      - "Pytest/Vitest/Playwright тесты и фикстуры"
+      - "CI artifacts: junit xml, coverage xml/html, Playwright report, traces, screenshots, videos"
+      - "Контракты API, seed-скрипты и mock fixtures"
+      - "Release smoke checklist в репозитории или в GitHub Issues/Projects"
+    why:
+      - "Ревьюится вместе с кодом"
+      - "История изменений прозрачна"
+      - "Удобно связывать тест-кейсы с PR, bugfix и автотестами"
+  notion:
+    role: "Операционный слой для ручного прогона, UAT и release coordination."
+    store:
+      - "Тест-раны по сборке и релизу"
+      - "Exploratory charters и notes"
+      - "Bug triage / QA board"
+      - "UAT sign-off"
+      - "Manual evidence links на видео, скриншоты, логи из GitHub artifacts"
+    why:
+      - "Удобен для статусов, владельцев, сроков и синхронизации с продуктовой командой"
+  decision:
+    canonical_plan: "GitHub"
+    execution_journal: "Notion"
+    defect_tracking: "GitHub Issues или существующий баг-трекер; в Notion только обзорный статус"
+
+priority_model:
+  smoke:
+    definition: "Минимальный набор критичных сценариев, который должен подтверждать жизнеспособность продукта после каждой поставки."
+    trigger:
+      - "Каждый PR в main/release ветку"
+      - "Каждый деплой в stage/prod"
+      - "Перед демо, UAT и hotfix release"
+    release_gate:
+      - "Все smoke тесты зелёные"
+      - "Нет blocker/critical дефектов в smoke scope"
+  regression:
+    definition: "Расширенный функциональный, интеграционный и edge-case набор для подтверждения, что изменения не ломают смежные области."
+    trigger:
+      - "Перед релизом"
+      - "После крупных изменений в auth, terminal, studio, integrations"
+      - "По итогам incident/postmortem"
+    release_gate:
+      - "Все обязательные regression suite для изменённого домена зелёные"
+      - "Открытые дефекты не блокируют заявленный сценарий использования"
+
+tooling:
+  auto:
+    ui_e2e:
+      tool: "Playwright"
+      scope:
+        - "Маршрутизация SPA"
+        - "Основные пользовательские потоки"
+        - "Navigation, auth, studio, terminal shell, visual/a11y smoke"
+    frontend_component:
+      tool: "Vitest + Testing Library"
+      scope:
+        - "Сложные состояния страниц и компонентов"
+        - "Локальная логика редакторов, форм и таблиц"
+    backend_api:
+      tool: "pytest + django test client + pytest-asyncio"
+      scope:
+        - "REST API"
+        - "Policy/unit tests"
+        - "Desktop API"
+        - "Management command tests"
+    websocket:
+      tool: "pytest + channels/websocket communicators"
+      scope:
+        - "SSH/RDP/agent/pipeline live channels"
+    cli:
+      tool: "pytest invoking Django management commands"
+      scope:
+        - "run_monitor"
+        - "run_scheduled_pipelines"
+        - "seed/scaffold/validate/setup commands"
+  manual:
+    scope:
+      - "RDP visual fidelity и интерактивность"
+      - "Реальные SSH/RDP соединения против тестового стенда"
+      - "SMTP/Telegram внешний delivery"
+      - "Domain SSO через реальный reverse proxy"
+      - "Long-run monitoring/scheduler behavior"
+      - "Exploratory mobile/responsive UX"
+
+release_checklist:
+  entry_criteria:
+    - "Собрана тестовая сборка backend + frontend"
+    - "Применены миграции"
+    - "Подготовлены тестовые пользователи: admin, staff, restricted user, shared user"
+    - "Есть хотя бы один SSH server, один RDP server, одна server group, один pipeline, один MCP server"
+    - "Заведены значения для smoke-интеграций или их controllable mocks"
+  smoke_checklist:
+    - "Auth flow работает: login, session, logout, ws-token"
+    - "SPA открывает /servers, /dashboard, /studio, /settings с корректным feature gating"
+    - "Servers bootstrap и server CRUD не сломаны"
+    - "SSH terminal page и ws-ticket открываются"
+    - "Pipeline list/run/detail/live updates работают"
+    - "MCP list/test/tools доступны для admin"
+    - "Notifications settings сохраняются"
+    - "Desktop API login/me/server create/ws-ticket работают"
+    - "Нет backend 500 и критичных console errors"
+  regression_exit_criteria:
+    - "Smoke pass rate 100%"
+    - "Regression pass rate по изменённым доменам не ниже согласованного порога"
+    - "Blocker и critical дефекты закрыты или formally accepted"
+    - "Все артефакты приложены: CI reports, manual evidence, bug links, sign-off"
+
+current_automation_baseline:
+  pytest_backend:
+    - "tests/test_core_ui_api_smoke.py"
+    - "tests/test_servers_api_smoke.py"
+    - "tests/test_studio_api_smoke.py"
+    - "tests/test_desktop_api.py"
+    - "tests/test_channel_layer_health.py"
+    - "tests/test_agent_and_pipeline_policy_enforcement.py"
+    - "tests/test_tools_and_policy_units.py"
+    - "tests/test_llm_runtime_unit.py"
+    - "tests/test_ssh_host_keys.py"
+  frontend_component:
+    - "ai-server-terminal-main/src/pages/Servers.test.tsx"
+  playwright_e2e:
+    - "ai-server-terminal-main/e2e/smoke.spec.ts"
+    - "ai-server-terminal-main/e2e/auth.spec.ts"
+    - "ai-server-terminal-main/e2e/navigation.spec.ts"
+    - "ai-server-terminal-main/e2e/servers.spec.ts"
+    - "ai-server-terminal-main/e2e/terminal.spec.ts"
+    - "ai-server-terminal-main/e2e/agents.spec.ts"
+    - "ai-server-terminal-main/e2e/studio.spec.ts"
+    - "ai-server-terminal-main/e2e/pipeline-live.spec.ts"
+    - "ai-server-terminal-main/e2e/settings.spec.ts"
+    - "ai-server-terminal-main/e2e/a11y.spec.ts"
+    - "ai-server-terminal-main/e2e/visual.spec.ts"
+  observed_strengths:
+    - "Есть базовый smoke на core_ui, servers, studio и desktop API"
+    - "Есть Playwright-контур для основных SPA-разделов"
+    - "Есть unit/policy coverage для MCP/skills/runtime guardrails"
+  observed_gaps:
+    - "Нет явного полного покрытия Linux UI endpoints, file manager и RDP"
+    - "Нет отдельного системного CLI regression на management commands"
+    - "Domain SSO и multi-backend config покрыты недостаточно"
+    - "Нет явного автотеста на WebSocket consumers для terminal/RDP/pipeline live"
+    - "Нет полной матрицы edge cases по network failures, retries, limits, permission boundaries"
+
+coverage_strategy:
+  principle:
+    - "Smoke закрывает только маршруты и критические транзакции продукта"
+    - "Regression закрывает все CRUD, live flows, integrations, permission boundaries и error handling"
+    - "Для всего, что связано с сетью и внешними провайдерами, комбинировать mocked auto + limited manual live check"
+  environments:
+    - "Local SQLite + InMemoryChannelLayer"
+    - "Stage PostgreSQL + Redis"
+    - "Mocked SMTP/Telegram/MCP/SSH"
+    - "Optional live sandbox for SSH/RDP/Keycloak"
+
+test_suites:
+  - suite: "Authentication, session, access"
+    cases:
+      - id: "AUTH-001"
+        priority: ["smoke", "regression"]
+        surface: ["UI", "API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Анонимный пользователь пытается открыть защищённый SPA route"
+        preconditions:
+          - "Пользователь не авторизован"
+        steps:
+          - "Открыть /servers"
+          - "Проверить redirect на /login?next="
+        expected:
+          - "Пользователь отправлен на login flow"
+          - "После успешного логина возвращается на исходный маршрут"
+        acceptance_criteria:
+          - "Redirect стабилен для /servers, /dashboard, /studio, /settings"
+          - "Нет белого экрана и console errors"
+
+      - id: "AUTH-002"
+        priority: ["smoke", "regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Login / session / ws-token / logout happy path"
+        preconditions:
+          - "Существует активный пользователь"
+        steps:
+          - "POST /api/auth/login/"
+          - "GET /api/auth/session/"
+          - "GET /api/auth/ws-token/"
+          - "POST /api/auth/logout/"
+        expected:
+          - "Login и logout успешны"
+          - "session отражает authenticated true/false"
+          - "ws-token выдаётся только для аутентифицированного пользователя"
+        acceptance_criteria:
+          - "HTTP коды и JSON schema стабильны"
+          - "Cookie/session корректно создаются и очищаются"
+
+      - id: "AUTH-003"
+        priority: ["regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "CSRF enforced на login/logout и mutation endpoints"
+        preconditions:
+          - "Client с включённой CSRF enforcement"
+        steps:
+          - "Повторить login/logout без csrf token"
+          - "Повторить login/logout с csrf token"
+        expected:
+          - "Без токена приходит 403"
+          - "С токеном запрос проходит"
+        acceptance_criteria:
+          - "CSRF одинаково работает для core_ui, servers, studio mutations"
+
+      - id: "AUTH-004"
+        priority: ["smoke", "regression"]
+        surface: ["UI", "API"]
+        tool: "auto"
+        automation_target: "add"
+        scenario: "FeatureGate ограничивает разделы по UserAppPermission"
+        preconditions:
+          - "Есть restricted user без dashboard/studio/settings"
+        steps:
+          - "Залогиниться restricted user"
+          - "Открыть /dashboard, /studio, /settings"
+        expected:
+          - "Пользователь редиректится на /servers"
+          - "Недоступные пункты не дают рабочий вход"
+        acceptance_criteria:
+          - "Нет обхода через прямой route"
+          - "Сессия не теряется"
+
+      - id: "AUTH-005"
+        priority: ["regression"]
+        surface: ["API", "Integration"]
+        tool: "manual"
+        automation_target: "later"
+        scenario: "Domain SSO auto-login через trusted header"
+        preconditions:
+          - "Включён DOMAIN_AUTH_ENABLED"
+          - "Reverse proxy пробрасывает корректный header"
+        steps:
+          - "Отправить запрос без локальной сессии, но с trusted identity header"
+          - "Повторить для существующего и нового пользователя"
+        expected:
+          - "Пользователь автоматически логинится"
+          - "При auto-create создаётся локальный user и применяются feature permissions"
+        acceptance_criteria:
+          - "Работают alias headers"
+          - "Некорректные значения не приводят к созданию мусорных username"
+
+      - id: "AUTH-006"
+        priority: ["regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "add"
+        scenario: "Session API корректно возвращает feature map и данные пользователя"
+        preconditions:
+          - "Есть user с кастомным набором прав"
+        steps:
+          - "GET /api/auth/session/"
+        expected:
+          - "JSON содержит authenticated, user, features"
+          - "Feature map совпадает с backend permission model"
+        acceptance_criteria:
+          - "Frontend gates могут полностью полагаться на ответ session endpoint"
+
+      - id: "AUTH-007"
+        priority: ["regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "add"
+        scenario: "Неверные credentials не ломают auth flow"
+        preconditions:
+          - "Существует пользователь"
+        steps:
+          - "Отправить login с неверным паролем"
+        expected:
+          - "Возвращается controlled error без 500"
+          - "Сессия не создаётся"
+        acceptance_criteria:
+          - "Ошибка пригодна для UI"
+          - "Не раскрываются лишние детали"
+
+  - suite: "Admin, settings, access management"
+    cases:
+      - id: "SET-001"
+        priority: ["smoke", "regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Staff user открывает admin dashboard и activity endpoints"
+        preconditions:
+          - "Есть staff user"
+        steps:
+          - "GET /api/admin/dashboard/"
+          - "GET /api/admin/users/activity/"
+          - "GET /api/admin/users/sessions/"
+        expected:
+          - "Все endpoints отвечают success"
+        acceptance_criteria:
+          - "Нет деградации админских агрегатов"
+
+      - id: "SET-002"
+        priority: ["regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Только admin может менять audit/settings"
+        preconditions:
+          - "Есть non-staff user с feature settings"
+        steps:
+          - "GET /api/settings/activity/"
+          - "POST /api/settings/"
+        expected:
+          - "Обе операции запрещены"
+        acceptance_criteria:
+          - "403 и объяснимое сообщение об ошибке"
+
+      - id: "SET-003"
+        priority: ["smoke", "regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Users CRUD через access API"
+        preconditions:
+          - "Есть admin"
+        steps:
+          - "List users"
+          - "Create user"
+          - "Get detail"
+          - "Update user"
+          - "Change password"
+          - "Update profile"
+        expected:
+          - "Все изменения отражаются в detail/list"
+        acceptance_criteria:
+          - "User management пригоден для settings UI"
+
+      - id: "SET-004"
+        priority: ["regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Groups CRUD и membership flow"
+        preconditions:
+          - "Есть admin и несколько пользователей"
+        steps:
+          - "Create group"
+          - "Update group"
+          - "Add/remove members"
+          - "Delete group"
+        expected:
+          - "Membership и group detail синхронизированы"
+        acceptance_criteria:
+          - "Нет orphan memberships"
+
+      - id: "SET-005"
+        priority: ["regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Permissions и group-permissions CRUD"
+        preconditions:
+          - "Есть admin"
+        steps:
+          - "List permissions"
+          - "Assign/update/revoke user and group permissions"
+        expected:
+          - "Feature flags сразу отражаются на session/access behavior"
+        acceptance_criteria:
+          - "Изменения прав не требуют ручной правки БД"
+
+      - id: "SET-006"
+        priority: ["regression"]
+        surface: ["UI"]
+        tool: "auto"
+        automation_target: "add"
+        scenario: "SPA settings pages показывают корректные таблицы и формы"
+        preconditions:
+          - "Есть admin user"
+        steps:
+          - "Открыть /settings, /settings/users, /settings/groups, /settings/permissions"
+          - "Провести одно изменение через UI"
+        expected:
+          - "Данные загружаются"
+          - "Сохранение проходит и UI refresh не ломается"
+        acceptance_criteria:
+          - "Settings UI соответствует API-контракту"
+
+      - id: "SET-007"
+        priority: ["regression"]
+        surface: ["API", "Integration"]
+        tool: "auto"
+        automation_target: "add"
+        scenario: "RequestAuditMiddleware прокидывает request id в response/header/log"
+        preconditions:
+          - "Аудит включён"
+        steps:
+          - "Вызвать API с HTTP_X_REQUEST_ID"
+        expected:
+          - "Response содержит тот же X-Request-ID"
+          - "Activity log сохраняет request id"
+        acceptance_criteria:
+          - "Сквозная трассировка не теряется"
+
+  - suite: "Desktop API"
+    cases:
+      - id: "DAPI-001"
+        priority: ["smoke", "regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Desktop auth login -> me -> refresh -> logout"
+        preconditions:
+          - "Есть desktop user"
+        steps:
+          - "POST /api/desktop/v1/auth/login/"
+          - "GET /api/desktop/v1/auth/me/"
+          - "POST /api/desktop/v1/auth/refresh/"
+          - "POST /api/desktop/v1/auth/logout/"
+        expected:
+          - "Bearer flow работает"
+          - "Access/refresh token life cycle корректен"
+        acceptance_criteria:
+          - "Desktop client может устойчиво поддерживать сессию"
+
+      - id: "DAPI-002"
+        priority: ["smoke", "regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Desktop create server c managed secret"
+        preconditions:
+          - "Есть desktop user"
+        steps:
+          - "POST /api/desktop/v1/servers/ с password"
+          - "GET detail"
+        expected:
+          - "Plaintext password не уходит в ответ"
+          - "Secret сохраняется как managed secret"
+        acceptance_criteria:
+          - "Секреты не торчат в JSON/logs"
+
+      - id: "DAPI-003"
+        priority: ["regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Desktop MCP create/detail hides secret_env values"
+        preconditions:
+          - "Есть staff desktop user"
+        steps:
+          - "POST /api/desktop/v1/mcp/"
+          - "GET /api/desktop/v1/mcp/{id}/"
+        expected:
+          - "Ответ содержит только secret_env_keys"
+          - "Реальные токены доступны только из managed secret storage"
+        acceptance_criteria:
+          - "Secret masking работает на collection и detail"
+
+      - id: "DAPI-004"
+        priority: ["smoke", "regression"]
+        surface: ["API", "WS"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Desktop terminal ws-ticket создаётся по bearer auth"
+        preconditions:
+          - "Есть desktop user и доступный server"
+        steps:
+          - "POST /api/desktop/v1/terminal/ws-ticket/"
+        expected:
+          - "Ответ содержит server_id, ws_token и ws path"
+        acceptance_criteria:
+          - "Desktop terminal может открыть websocket без cookie auth"
+
+      - id: "DAPI-005"
+        priority: ["regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "add"
+        scenario: "Desktop bootstrap, groups and context endpoints"
+        preconditions:
+          - "Есть группы и контексты"
+        steps:
+          - "GET /api/desktop/v1/bootstrap/"
+          - "GET /api/desktop/v1/servers/groups/"
+          - "GET global/group context endpoints"
+        expected:
+          - "Desktop получает полный read model для навигации"
+        acceptance_criteria:
+          - "Нет расхождения с web bootstrap"
+
+      - id: "DAPI-006"
+        priority: ["regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Shared server detail не раскрывает owner context и secret shared user"
+        preconditions:
+          - "Есть shared server с share_context false"
+        steps:
+          - "GET /api/desktop/v1/servers/{id}/"
+        expected:
+          - "notes, corporate_context, network_config и has_saved_secret ограничены"
+        acceptance_criteria:
+          - "Shared access соблюдает privacy boundaries"
+
+  - suite: "Servers inventory, groups, sharing, knowledge"
+    cases:
+      - id: "SRV-001"
+        priority: ["smoke", "regression"]
+        surface: ["UI", "API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Servers bootstrap и список инфраструктуры"
+        preconditions:
+          - "Есть серверы и группы"
+        steps:
+          - "GET /servers/api/frontend/bootstrap/"
+          - "Открыть /servers"
+        expected:
+          - "Список серверов, групп и stats отображается"
+        acceptance_criteria:
+          - "Главный экран продукта функционален"
+
+      - id: "SRV-002"
+        priority: ["smoke", "regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Server group CRUD + add/remove member + subscribe"
+        preconditions:
+          - "Есть owner и teammate"
+        steps:
+          - "Создать группу"
+          - "Обновить группу"
+          - "Добавить и удалить участника"
+          - "Подписаться на группу"
+        expected:
+          - "Все group actions успешны"
+        acceptance_criteria:
+          - "Group management поддерживает team workflow"
+
+      - id: "SRV-003"
+        priority: ["smoke", "regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Server CRUD + bulk update"
+        preconditions:
+          - "Есть owner"
+        steps:
+          - "Создать server"
+          - "Получить detail"
+          - "Обновить server"
+          - "Сделать bulk update"
+          - "Удалить server"
+        expected:
+          - "Server lifecycle работает end-to-end"
+        acceptance_criteria:
+          - "Frontend form может опираться на эти endpoints без ручных workaround"
+
+      - id: "SRV-004"
+        priority: ["regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Global context и group context CRUD"
+        preconditions:
+          - "Есть группа"
+        steps:
+          - "Сохранить global rules"
+          - "Прочитать global rules"
+          - "Сохранить group override"
+          - "Прочитать group override"
+        expected:
+          - "Контекст сохраняется и возвращается без потери структуры"
+        acceptance_criteria:
+          - "Rules, forbidden_commands и env vars устойчивы"
+
+      - id: "SRV-005"
+        priority: ["regression"]
+        surface: ["UI"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Servers page разделяет global/group/server rules scopes"
+        preconditions:
+          - "Есть server и group context"
+        steps:
+          - "Открыть rules editor в /servers"
+          - "Изменить global context"
+          - "Изменить group context"
+          - "Открыть server-level modal"
+        expected:
+          - "Каждый scope сохраняется в свой endpoint"
+        acceptance_criteria:
+          - "Нет смешивания server/group/global payload"
+
+      - id: "SRV-006"
+        priority: ["regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Server sharing create/list/revoke"
+        preconditions:
+          - "Есть owner и shared user"
+        steps:
+          - "Создать share"
+          - "Получить список shares"
+          - "Отозвать share"
+        expected:
+          - "Жизненный цикл share корректен"
+        acceptance_criteria:
+          - "Shared users получают только ожидаемый уровень доступа"
+
+      - id: "SRV-007"
+        priority: ["regression"]
+        surface: ["API", "UI"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Master password set/check/clear + reveal password"
+        preconditions:
+          - "Server сохранён с encrypted_password"
+        steps:
+          - "Set master password"
+          - "Check status"
+          - "Reveal server password"
+          - "Clear master password"
+        expected:
+          - "Password reveal работает только через мастер-пароль"
+        acceptance_criteria:
+          - "Пароль не раскрывается без нужного секрета"
+
+      - id: "SRV-008"
+        priority: ["regression"]
+        surface: ["API", "UI"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Server knowledge create/list/update/delete"
+        preconditions:
+          - "Есть server"
+        steps:
+          - "Создать knowledge item"
+          - "Получить список"
+          - "Изменить confidence/active/title"
+          - "Удалить item"
+        expected:
+          - "Knowledge lifecycle стабилен"
+        acceptance_criteria:
+          - "Knowledge usable для AI/server workflows"
+
+  - suite: "Server connectivity, terminal, RDP, Linux UI, files"
+    cases:
+      - id: "OPS-001"
+        priority: ["smoke", "regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Test connection и execute command через mocked SSH"
+        preconditions:
+          - "Есть server"
+        steps:
+          - "POST /servers/api/{id}/test/"
+          - "POST /servers/api/{id}/execute/"
+        expected:
+          - "Соединение и команда выполняются успешно"
+          - "Ответ содержит stdout/stderr/exit_code"
+        acceptance_criteria:
+          - "SSH integration contract стабилен"
+
+      - id: "OPS-002"
+        priority: ["regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Dangerous command блокируется safety layer"
+        preconditions:
+          - "Есть execute path"
+        steps:
+          - "Отправить опасную команду"
+        expected:
+          - "Команда не исполняется"
+          - "Пользователь получает controlled refusal"
+        acceptance_criteria:
+          - "app/tools/safety.py реально защищает destructive flows"
+
+      - id: "OPS-003"
+        priority: ["smoke", "regression"]
+        surface: ["UI", "WS"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "SSH terminal page открывается и подключает websocket"
+        preconditions:
+          - "Есть server и ws token"
+        steps:
+          - "Открыть /servers/{id}/terminal"
+          - "Подключиться к /ws/servers/{id}/terminal/"
+        expected:
+          - "Терминал рендерится"
+          - "Live session и ввод работают"
+        acceptance_criteria:
+          - "Нет disconnect loop"
+          - "Terminal usable в desktop и mobile layout"
+
+      - id: "OPS-004"
+        priority: ["regression"]
+        surface: ["UI", "WS"]
+        tool: "manual"
+        automation_target: "later"
+        scenario: "RDP page открывается и live session поддерживает интерактивность"
+        preconditions:
+          - "Есть RDP server"
+        steps:
+          - "Открыть /servers/{id}/rdp"
+          - "Проверить connect/disconnect/basic interaction"
+        expected:
+          - "Сессия не падает"
+          - "Экран и базовые действия доступны"
+        acceptance_criteria:
+          - "RDP сценарий пригоден для пользователя, а не только отдаёт placeholder"
+
+      - id: "OPS-005"
+        priority: ["regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "add"
+        scenario: "Linux UI capabilities and overview endpoints"
+        preconditions:
+          - "Есть Linux SSH server"
+        steps:
+          - "GET ui/capabilities"
+          - "GET ui/overview"
+          - "GET ui/settings"
+        expected:
+          - "Возвращается консистентный capabilities model и overview snapshot"
+        acceptance_criteria:
+          - "Frontend Linux UI может conditionally включать доступные приложения"
+
+      - id: "OPS-006"
+        priority: ["regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "add"
+        scenario: "Linux UI services/logs/action"
+        preconditions:
+          - "Есть server с systemd"
+        steps:
+          - "GET ui/services"
+          - "GET ui/services/logs?service="
+          - "POST ui/services/action"
+        expected:
+          - "Список сервисов, логи и action response валидны"
+        acceptance_criteria:
+          - "Mutating action помечен и возвращает достаточный audit/result context"
+
+      - id: "OPS-007"
+        priority: ["regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "add"
+        scenario: "Linux UI processes/logs/disk/network/packages/docker"
+        preconditions:
+          - "Есть server"
+        steps:
+          - "Получить endpoints процессов, логов, диска, сети, пакетов, docker"
+          - "Для docker/service action выполнить read-only smoke"
+        expected:
+          - "Все endpoints отвечают без 500"
+          - "JSON пригоден для UI widgets"
+        acceptance_criteria:
+          - "Ни один advanced tab не ломает страницу"
+
+      - id: "OPS-008"
+        priority: ["regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "add"
+        scenario: "Remote file manager list/read/write/rename/delete/upload/download/mkdir/chmod/chown"
+        preconditions:
+          - "Есть sandbox path на тестовом server"
+        steps:
+          - "Пройти полный файл lifecycle"
+        expected:
+          - "Все файловые операции возвращают корректный результат или permission error"
+        acceptance_criteria:
+          - "File manager usable для реальной админской задачи"
+          - "Ошибки прав/пути не приводят к 500"
+
+      - id: "OPS-009"
+        priority: ["regression"]
+        surface: ["UI"]
+        tool: "manual"
+        automation_target: "later"
+        scenario: "Mobile layout для /servers, terminal и advanced drawers"
+        preconditions:
+          - "Используется mobile viewport"
+        steps:
+          - "Открыть основные server pages на mobile"
+          - "Проверить sidebar, drawers, terminal viewport"
+        expected:
+          - "Нет перекрытий, unreachable controls, scroll traps"
+        acceptance_criteria:
+          - "Активные серверные сценарии доступны на мобильном layout"
+
+  - suite: "Monitoring, alerts, AI analysis, server agents"
+    cases:
+      - id: "MON-001"
+        priority: ["smoke", "regression"]
+        surface: ["API", "UI"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Monitoring dashboard и health history"
+        preconditions:
+          - "Есть health checks"
+        steps:
+          - "GET /servers/api/monitoring/dashboard/"
+          - "GET /servers/api/{id}/health/"
+        expected:
+          - "Dashboard и история возвращают expected payload"
+        acceptance_criteria:
+          - "Мониторинг не ломается после миграций и model changes"
+
+      - id: "MON-002"
+        priority: ["regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Запуск health check now"
+        preconditions:
+          - "Есть server"
+        steps:
+          - "POST /servers/api/{id}/health/check/"
+        expected:
+          - "Создаётся новый check result"
+        acceptance_criteria:
+          - "Manual re-check работает из UI"
+
+      - id: "MON-003"
+        priority: ["regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Alerts list and resolve"
+        preconditions:
+          - "Есть активный alert"
+        steps:
+          - "GET /servers/api/alerts/"
+          - "POST resolve"
+        expected:
+          - "Alert переходит в resolved"
+        acceptance_criteria:
+          - "Resolved state устойчиво сохраняется"
+
+      - id: "MON-004"
+        priority: ["regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Monitoring config доступен staff и защищён от non-staff"
+        preconditions:
+          - "Есть staff и non-staff users"
+        steps:
+          - "GET/POST monitoring config под разными ролями"
+        expected:
+          - "Staff разрешён, non-staff запрещён"
+        acceptance_criteria:
+          - "Administrative knobs не утекли в обычный аккаунт"
+
+      - id: "MON-005"
+        priority: ["regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "AI analyze server"
+        preconditions:
+          - "Есть server и mocked LLM"
+        steps:
+          - "POST /servers/api/{id}/ai-analyze/"
+        expected:
+          - "Возвращается структурированный анализ без hard crash"
+        acceptance_criteria:
+          - "LLM failures обрабатываются контролируемо"
+
+      - id: "MON-006"
+        priority: ["smoke", "regression"]
+        surface: ["UI", "API", "WS"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Server agents CRUD, run, stop, run detail/log"
+        preconditions:
+          - "Есть server agent"
+        steps:
+          - "Создать/обновить agent"
+          - "Запустить agent"
+          - "Открыть run detail/log"
+          - "Остановить agent"
+        expected:
+          - "Agent lifecycle end-to-end работает"
+        acceptance_criteria:
+          - "Пользователь видит актуальный статус и лог"
+
+      - id: "MON-007"
+        priority: ["regression"]
+        surface: ["API", "WS"]
+        tool: "auto"
+        automation_target: "add"
+        scenario: "Agent live websocket stream"
+        preconditions:
+          - "Есть run_id активного agent run"
+        steps:
+          - "Подключиться к /ws/agents/{run_id}/live/"
+          - "Получить минимум одно событие"
+        expected:
+          - "Соединение аутентифицировано и отдаёт live updates"
+        acceptance_criteria:
+          - "Live page не зависит от polling fallback"
+
+      - id: "MON-008"
+        priority: ["regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Approve plan / task update / task ai-refine"
+        preconditions:
+          - "Есть run с task list"
+        steps:
+          - "POST approve-plan"
+          - "POST task update"
+          - "POST task ai-refine"
+        expected:
+          - "Task workflow остаётся консистентным"
+        acceptance_criteria:
+          - "Human-in-the-loop шаги не ломают execution state"
+
+  - suite: "Studio pipelines, runs, triggers"
+    cases:
+      - id: "STD-001"
+        priority: ["smoke", "regression"]
+        surface: ["UI", "API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Pipelines list/detail/editor"
+        preconditions:
+          - "Есть studio user"
+        steps:
+          - "Открыть /studio"
+          - "Открыть /studio/pipeline/{id}"
+          - "Открыть /studio/pipeline/new"
+        expected:
+          - "Workspace и editor загружаются"
+        acceptance_criteria:
+          - "Studio entry flow не деградировал"
+
+      - id: "STD-002"
+        priority: ["smoke", "regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Pipeline CRUD + clone"
+        preconditions:
+          - "Есть studio user"
+        steps:
+          - "Create pipeline"
+          - "Get detail"
+          - "Update pipeline"
+          - "Clone pipeline"
+          - "Delete pipeline"
+        expected:
+          - "Все CRUD операции стабильны"
+        acceptance_criteria:
+          - "Редактор можно использовать без ручного исправления БД"
+
+      - id: "STD-003"
+        priority: ["smoke", "regression"]
+        surface: ["UI", "API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Run pipeline from Studio"
+        preconditions:
+          - "Есть pipeline"
+        steps:
+          - "POST /api/studio/pipelines/{id}/run/"
+          - "Открыть /studio/runs"
+          - "Открыть run detail"
+        expected:
+          - "Создаётся run со статусом pending/running"
+        acceptance_criteria:
+          - "Pipeline run виден и доступен через UI"
+
+      - id: "STD-004"
+        priority: ["regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Run stop и approve node"
+        preconditions:
+          - "Есть run"
+        steps:
+          - "POST stop"
+          - "POST approve/{node_id}"
+        expected:
+          - "Run status управляем и консистентен"
+        acceptance_criteria:
+          - "Manual approvals реально работают"
+
+      - id: "STD-005"
+        priority: ["regression"]
+        surface: ["WS"]
+        tool: "auto"
+        automation_target: "add"
+        scenario: "PipelineRunConsumer live updates"
+        preconditions:
+          - "Есть активный pipeline run"
+        steps:
+          - "Подключиться к /ws/studio/pipeline-runs/{run_id}/live/"
+          - "Дождаться progress/status event"
+        expected:
+          - "Live updates приходят в согласованном формате"
+        acceptance_criteria:
+          - "UI live run page не зависит только от ручного refresh"
+
+      - id: "STD-006"
+        priority: ["regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Webhook trigger receive"
+        preconditions:
+          - "У pipeline есть webhook trigger"
+        steps:
+          - "POST /api/studio/triggers/{token}/receive/"
+        expected:
+          - "Триггер создаёт run"
+        acceptance_criteria:
+          - "Webhook payload mapping применяется корректно"
+
+      - id: "STD-007"
+        priority: ["regression"]
+        surface: ["API", "CLI"]
+        tool: "auto"
+        automation_target: "add"
+        scenario: "Scheduled trigger fires via run_scheduled_pipelines"
+        preconditions:
+          - "Есть активный schedule trigger"
+        steps:
+          - "Запустить command --once"
+          - "Проверить созданный run или limit skip"
+        expected:
+          - "Команда либо корректно запускает run, либо корректно пишет skip"
+        acceptance_criteria:
+          - "Scheduler не создаёт дубли и учитывает last_triggered_at"
+
+      - id: "STD-008"
+        priority: ["regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Run limits enforced"
+        preconditions:
+          - "Есть active run limit"
+        steps:
+          - "Попытаться запустить pipeline при достигнутом лимите"
+        expected:
+          - "Получаем 429 и structured limit payload"
+        acceptance_criteria:
+          - "Система защищена от runaway run storms"
+
+      - id: "STD-009"
+        priority: ["regression"]
+        surface: ["UI"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Pipeline Workspace page запускает run из списка"
+        preconditions:
+          - "Есть pipeline cards"
+        steps:
+          - "Нажать Run в списке pipelines"
+        expected:
+          - "Фронтенд вызывает нужный endpoint"
+        acceptance_criteria:
+          - "Основной CTA студии функционален"
+
+      - id: "STD-010"
+        priority: ["regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Templates list/use"
+        preconditions:
+          - "Есть pipeline template"
+        steps:
+          - "GET /api/studio/templates/"
+          - "POST /api/studio/templates/{slug}/use/"
+        expected:
+          - "Из template создаётся новый pipeline"
+        acceptance_criteria:
+          - "Шаблоны пригодны для быстрого старта"
+
+  - suite: "Studio agents, skills, MCP, notifications"
+    cases:
+      - id: "STX-001"
+        priority: ["smoke", "regression"]
+        surface: ["API", "UI"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Studio agent config CRUD"
+        preconditions:
+          - "Есть admin/studio user"
+        steps:
+          - "Create agent config"
+          - "List/detail/update/delete"
+        expected:
+          - "Agent configs сохраняются с mcp_server_ids и server_scope_ids"
+        acceptance_criteria:
+          - "Studio agents page управляет конфигами без обходных путей"
+
+      - id: "STX-002"
+        priority: ["regression"]
+        surface: ["API", "CLI"]
+        tool: "auto"
+        automation_target: "add"
+        scenario: "Skills list/detail/scaffold/validate/workspace"
+        preconditions:
+          - "Есть skill roots"
+        steps:
+          - "GET skills list/detail"
+          - "POST scaffold"
+          - "POST validate"
+          - "GET workspace and workspace file"
+        expected:
+          - "Skill authoring endpoints устойчивы"
+        acceptance_criteria:
+          - "Scaffolded skill проходит структурную валидацию или возвращает controlled warnings/errors"
+
+      - id: "STX-003"
+        priority: ["regression"]
+        surface: ["CLI"]
+        tool: "auto"
+        automation_target: "add"
+        scenario: "Management commands scaffold_skill и validate_skills"
+        preconditions:
+          - "Есть временный skill root"
+        steps:
+          - "Вызвать scaffold_skill"
+          - "Вызвать validate_skills"
+        expected:
+          - "Команды создают и валидируют skill packs"
+        acceptance_criteria:
+          - "CLI usable для studio ops workflow"
+
+      - id: "STX-004"
+        priority: ["smoke", "regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "MCP CRUD + templates + test + tools"
+        preconditions:
+          - "Есть staff user"
+        steps:
+          - "Create MCP server"
+          - "List/detail/update"
+          - "POST test"
+          - "GET tools"
+          - "GET templates"
+          - "Delete MCP server"
+        expected:
+          - "MCP admin lifecycle проходит end-to-end"
+        acceptance_criteria:
+          - "Studio MCP hub пригоден для настройки коннекторов"
+
+      - id: "STX-005"
+        priority: ["regression"]
+        surface: ["Integration", "Unit"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "MCP HTTP/SSE helpers normalize URL, parse JSON-RPC and retry errors"
+        preconditions:
+          - "Есть mocked HTTPX transport"
+        steps:
+          - "Прогнать unit cases на _normalize_sse_url, _iter_sse_events, _extract_json_rpc_result"
+        expected:
+          - "Retry/error behavior контролируем"
+        acceptance_criteria:
+          - "MCP client не ломается на стандартных сетевых ошибках"
+
+      - id: "STX-006"
+        priority: ["regression"]
+        surface: ["Policy", "API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Skill runtime policies enforce pinned args and required preflight"
+        preconditions:
+          - "Есть agent/mcp node со skill policy"
+        steps:
+          - "Запустить mutating tool без preflight"
+          - "Повторить с preflight"
+        expected:
+          - "Без preflight - fail fast"
+          - "С preflight - success и injected pinned arguments"
+        acceptance_criteria:
+          - "Guardrails реально защищают продовые MCP операции"
+
+      - id: "STX-007"
+        priority: ["smoke", "regression"]
+        surface: ["API", "Integration"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Notifications save/test email/test telegram"
+        preconditions:
+          - "Есть staff user и mocked transports"
+        steps:
+          - "POST /api/studio/notifications/"
+          - "GET saved config"
+          - "POST test-email"
+          - "POST test-telegram"
+        expected:
+          - "Конфиг сохраняется"
+          - "Тестовые отправки возвращают success/failure без 500"
+        acceptance_criteria:
+          - "Notification center пригоден для initial setup"
+
+      - id: "STX-008"
+        priority: ["regression"]
+        surface: ["Integration"]
+        tool: "manual"
+        automation_target: "later"
+        scenario: "Real SMTP and Telegram delivery"
+        preconditions:
+          - "Есть sandbox SMTP и test telegram chat"
+        steps:
+          - "Сохранить реальные тестовые реквизиты"
+          - "Запустить тестовую отправку"
+        expected:
+          - "Сообщения реально доходят во внешние системы"
+        acceptance_criteria:
+          - "Тесты подтверждают не только конфиг, но и delivery path"
+
+      - id: "STX-009"
+        priority: ["regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Non-admin restrictions на MCP, notifications и skill workspace"
+        preconditions:
+          - "Есть non-admin user"
+        steps:
+          - "Попытаться открыть/изменить admin-only endpoints"
+        expected:
+          - "Получаем 403"
+        acceptance_criteria:
+          - "Studio admin surfaces не протекают обычным пользователям"
+
+  - suite: "CLI, ops scripts, environment and deployment contracts"
+    cases:
+      - id: "CLI-001"
+        priority: ["regression"]
+        surface: ["CLI"]
+        tool: "auto"
+        automation_target: "add"
+        scenario: "manage.py runserver uses default port 9000"
+        preconditions:
+          - "DJANGO_PORT не задан явно"
+        steps:
+          - "Проверить generated runserver args/behavior"
+        expected:
+          - "Локальный dev run поднимается на 9000"
+        acceptance_criteria:
+          - "Frontend proxy assumptions не нарушены"
+
+      - id: "CLI-002"
+        priority: ["regression"]
+        surface: ["CLI"]
+        tool: "auto"
+        automation_target: "add"
+        scenario: "seed_servers_for_frontend command creates expected groups and servers"
+        preconditions:
+          - "Есть superuser или передан username"
+        steps:
+          - "Запустить command"
+        expected:
+          - "Создаются группы и серверы без дублей"
+        acceptance_criteria:
+          - "Команда пригодна для подготовки demo/test стенда"
+
+      - id: "CLI-003"
+        priority: ["regression"]
+        surface: ["CLI"]
+        tool: "auto"
+        automation_target: "add"
+        scenario: "run_monitor --once and deep/quick modes"
+        preconditions:
+          - "Mocked monitor functions"
+        steps:
+          - "Запустить run_monitor --once"
+          - "Запустить run_monitor --once --deep"
+        expected:
+          - "Команда вызывает соответствующий режим check_all_servers"
+        acceptance_criteria:
+          - "Монитор можно безопасно запускать в cron/systemd"
+
+      - id: "CLI-004"
+        priority: ["regression"]
+        surface: ["CLI"]
+        tool: "auto"
+        automation_target: "add"
+        scenario: "load/setup management commands for templates and example pipelines"
+        preconditions:
+          - "Есть БД и нужные fixtures"
+        steps:
+          - "Вызвать load_pipeline_templates и setup_* commands"
+        expected:
+          - "Команды создают/обновляют ожидаемые записи"
+        acceptance_criteria:
+          - "Bootstrap studio environment повторяем"
+
+      - id: "CLI-005"
+        priority: ["regression"]
+        surface: ["Integration"]
+        tool: "manual"
+        automation_target: "later"
+        scenario: "Standalone key_mcp.py server can boot and answer MCP initialize"
+        preconditions:
+          - "Есть sandbox credentials или mocks"
+        steps:
+          - "Поднять standalone MCP server"
+          - "Выполнить initialize/tools/list"
+        expected:
+          - "Сервер соответствует ожидаемому MCP handshake"
+        acceptance_criteria:
+          - "Keycloak-related MCP сценарии пригодны для live testing"
+
+      - id: "CLI-006"
+        priority: ["regression"]
+        surface: ["Integration"]
+        tool: "manual"
+        automation_target: "later"
+        scenario: "Settings support SQLite fallback and PostgreSQL config"
+        preconditions:
+          - "Есть два набора env"
+        steps:
+          - "Запустить backend без POSTGRES_*"
+          - "Запустить backend с POSTGRES_*"
+        expected:
+          - "Обе конфигурации стартуют и проходят health check"
+        acceptance_criteria:
+          - "Переключение DB backend не ломает boot path"
+
+      - id: "CLI-007"
+        priority: ["regression"]
+        surface: ["Integration", "WS"]
+        tool: "manual"
+        automation_target: "later"
+        scenario: "Channels работают и с InMemoryLayer, и с Redis"
+        preconditions:
+          - "Есть две среды: local и stage"
+        steps:
+          - "Прогнать basic websocket flows в обеих конфигурациях"
+        expected:
+          - "WS подключения стабильны"
+        acceptance_criteria:
+          - "Продовая Redis-конфигурация не отличается по поведению от dev критично"
+
+      - id: "CLI-008"
+        priority: ["regression"]
+        surface: ["UI", "Integration"]
+        tool: "manual"
+        automation_target: "later"
+        scenario: "Vite proxy and FRONTEND_APP_URL alignment"
+        preconditions:
+          - "Backend на 9000, frontend на 8080/4173"
+        steps:
+          - "Проверить API и WS proxy"
+          - "Проверить redirects из Django в SPA"
+        expected:
+          - "Не возникает HTML fallback вместо JSON"
+        acceptance_criteria:
+          - "Локальная dev схема стабильна для команды"
+
+  - suite: "Cross-cutting edge cases"
+    cases:
+      - id: "EDGE-001"
+        priority: ["regression"]
+        surface: ["UI", "API"]
+        tool: "auto"
+        automation_target: "add"
+        scenario: "Backend unavailable -> frontend demo fallback or controlled error"
+        preconditions:
+          - "Backend отключён или отвечает HTML"
+        steps:
+          - "Вызвать ключевые apiFetch сценарии"
+        expected:
+          - "demoFallback включается только для поддержанных путей"
+          - "Пользователь получает controlled state"
+        acceptance_criteria:
+          - "Нет silent crash в SPA"
+
+      - id: "EDGE-002"
+        priority: ["regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "add"
+        scenario: "Invalid JSON / unsupported provider / missing ids"
+        preconditions:
+          - "Есть mutation endpoints"
+        steps:
+          - "Отправить заведомо невалидные payloads на representative endpoints"
+        expected:
+          - "400/404 с понятной ошибкой"
+        acceptance_criteria:
+          - "Валидация работает без 500"
+
+      - id: "EDGE-003"
+        priority: ["regression"]
+        surface: ["UI"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "A11y and visual smoke"
+        preconditions:
+          - "Playwright visual/a11y specs доступны"
+        steps:
+          - "Прогнать a11y.spec.ts и visual.spec.ts"
+        expected:
+          - "Нет грубых accessibility regressions и layout shifts"
+        acceptance_criteria:
+          - "Ключевые страницы визуально стабильны"
+
+      - id: "EDGE-004"
+        priority: ["regression"]
+        surface: ["API", "Policy"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Invalid skill policy fails fast"
+        preconditions:
+          - "Есть skill с конфликтным runtime_policy"
+        steps:
+          - "Запустить agent engine / multi-agent engine"
+        expected:
+          - "Run завершается со status failed и объяснением policy error"
+        acceptance_criteria:
+          - "Невалидные guardrails не доходят до runtime silently"
+
+      - id: "EDGE-005"
+        priority: ["regression"]
+        surface: ["API", "Integration"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Shared server restrictions and target server lock"
+        preconditions:
+          - "Есть target_server lock context или shared server without share"
+        steps:
+          - "Попытаться выполнить команду на другом сервере"
+        expected:
+          - "Операция блокируется"
+        acceptance_criteria:
+          - "Server-scoped actions не перепрыгивают на чужой host"
+
+      - id: "EDGE-006"
+        priority: ["regression"]
+        surface: ["API"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Secrets masking in responses and logs"
+        preconditions:
+          - "Есть server auth secret и MCP secret_env"
+        steps:
+          - "Запросить detail/list endpoints"
+          - "Проверить serialized payload"
+        expected:
+          - "Секреты скрыты"
+        acceptance_criteria:
+          - "Ни один секрет не возвращается plaintext в API"
+
+      - id: "EDGE-007"
+        priority: ["regression"]
+        surface: ["Integration"]
+        tool: "auto"
+        automation_target: "existing"
+        scenario: "Channel layer health verification"
+        preconditions:
+          - "Есть channel layer config"
+        steps:
+          - "Запустить verify_channel_layer_config"
+        expected:
+          - "Возвращается working backend metadata"
+        acceptance_criteria:
+          - "Базовая диагностика websocket layer не сломана"
+
+      - id: "EDGE-008"
+        priority: ["regression"]
+        surface: ["UI", "API"]
+        tool: "manual"
+        automation_target: "later"
+        scenario: "Long-running pages survive refresh/reconnect"
+        preconditions:
+          - "Есть active terminal session, agent run или pipeline run"
+        steps:
+          - "Обновить страницу"
+          - "Симулировать reconnect"
+        expected:
+          - "Пользователь не теряет критичный context"
+        acceptance_criteria:
+          - "Long-running workflows устойчивы к обычным проблемам браузера/сети"
+
+recommended_next_automation:
+  sprint_1:
+    - "Добавить pytest на Linux UI endpoints и file manager"
+    - "Добавить websocket integration tests для terminal/agent/pipeline live"
+    - "Добавить CLI tests для run_monitor, run_scheduled_pipelines, seed/scaffold/validate"
+    - "Добавить Playwright на FeatureGate и settings CRUD happy path"
+  sprint_2:
+    - "Добавить live-sandbox smoke для real SSH/RDP/MCP/SMTP/Telegram"
+    - "Добавить matrix run для SQLite/InMemory и PostgreSQL/Redis"
+    - "Добавить Notion release template, привязанную к suites из этого файла"
+
+acceptance_gate_summary:
+  product_ready_when:
+    - "Smoke suite полностью автоматизирован и выполняется в CI"
+    - "Все cases с priority smoke проходят"
+    - "Regression suite для изменённых доменов выполнен и задокументирован"
+    - "Manual evidence по real integrations приложено там, где автотест сознательно не покрывает live path"
+    - "Артефакты сохранены: GitHub для каноники и сырых отчетов, Notion для execution/journal"

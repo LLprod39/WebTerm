@@ -35,7 +35,7 @@ test.describe("Visual regression", () => {
   test("studio page snapshot", async ({ page }) => {
     await installPlatformMocks(page, { authenticated: true });
     await page.goto("/studio");
-    await expect(page.getByRole("heading", { name: "Automation Studio" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Pipeline Workspace" })).toBeVisible();
     await stabilizeVisuals(page);
     await expect(page).toHaveScreenshot("studio-page.png", { animations: "disabled", fullPage: true });
   });

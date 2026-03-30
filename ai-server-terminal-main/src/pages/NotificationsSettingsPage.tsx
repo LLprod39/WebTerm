@@ -45,6 +45,8 @@ function PasswordField({
         type="button"
         className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
         onClick={() => setVisible((current) => !current)}
+        aria-label={visible ? "Hide secret value" : "Show secret value"}
+        title={visible ? "Hide secret value" : "Show secret value"}
         tabIndex={-1}
       >
         {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -59,7 +61,7 @@ function HelpLink({ href, children }: { href: string; children: string }) {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex items-center gap-1 text-primary hover:underline"
+      className="inline-flex items-center gap-1 font-medium text-primary underline decoration-primary/70 underline-offset-2 hover:decoration-primary"
     >
       {children}
       <ExternalLink className="h-3 w-3" />
@@ -202,203 +204,203 @@ export default function NotificationsSettingsPage() {
     <div className="flex flex-col h-full">
       <StudioNav />
       <div className="flex-1 overflow-auto">
-    <PageShell width="6xl">
-      <SectionCard
-        title="Notification settings"
-        description="Studio uses these defaults for approvals, alerts, and reports."
-        icon={<Bell className="h-5 w-5 text-primary" />}
-        actions={
-          <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} className="gap-2">
-            {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            Save
-          </Button>
-        }
-      >
-        <div className="space-y-5">
-          <div className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-4 text-sm leading-6 text-muted-foreground">
-            These values act as Studio-wide defaults. Individual workflows can still override them
-            when needed.
-          </div>
+        <PageShell width="6xl">
+          <SectionCard
+            title="Notification Settings"
+            description="Studio uses these defaults for approvals, alerts, and reports."
+            icon={<Bell className="h-5 w-5 text-primary" />}
+            actions={
+              <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} className="gap-2">
+                {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Save
+              </Button>
+            }
+          >
+            <div className="space-y-5">
+              <div className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-4 text-sm leading-6 text-muted-foreground">
+                These values act as Studio-wide defaults. Individual workflows can still override them
+                when needed.
+              </div>
 
-          <div className="grid gap-3 md:grid-cols-3">
-            <DeliveryStatusRow
-              icon={Bot}
-              title="Telegram"
-              description="Fast approvals and short alerts."
-              ready={telegramReady}
-            />
-            <DeliveryStatusRow
-              icon={Mail}
-              title="Email"
-              description="Reports, escalation, and longer messages."
-              ready={emailReady}
-            />
-            <DeliveryStatusRow
-              icon={ExternalLink}
-              title="Public URL"
-              description="Approval links point here."
-              ready={siteReady}
-            />
-          </div>
-        </div>
-      </SectionCard>
-
-      <SectionCard
-        title="Telegram"
-        description="Use Telegram for quick approvals and immediate alerts."
-        icon={<Bot className="h-5 w-5 text-primary" />}
-      >
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Bot token</Label>
-              <PasswordField
-                value={form.telegram_bot_token || ""}
-                onChange={(value) => setField("telegram_bot_token", value)}
-                placeholder="1234567890:AAF..."
-              />
+              <div className="grid gap-3 md:grid-cols-3">
+                <DeliveryStatusRow
+                  icon={Bot}
+                  title="Telegram"
+                  description="Fast approvals and short alerts."
+                  ready={telegramReady}
+                />
+                <DeliveryStatusRow
+                  icon={Mail}
+                  title="Email"
+                  description="Reports, escalation, and longer messages."
+                  ready={emailReady}
+                />
+                <DeliveryStatusRow
+                  icon={ExternalLink}
+                  title="Public URL"
+                  description="Approval links point here."
+                  ready={siteReady}
+                />
+              </div>
             </div>
+          </SectionCard>
 
-            <div className="space-y-2">
-              <Label>Chat ID</Label>
-              <Input
-                value={form.telegram_chat_id || ""}
-                onChange={(event) => setField("telegram_chat_id", event.target.value)}
-                placeholder="123456789"
-                className="font-mono"
-              />
+          <SectionCard
+            title="Telegram"
+            description="Use Telegram for quick approvals and immediate alerts."
+            icon={<Bot className="h-5 w-5 text-primary" />}
+          >
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Bot token</Label>
+                  <PasswordField
+                    value={form.telegram_bot_token || ""}
+                    onChange={(value) => setField("telegram_bot_token", value)}
+                    placeholder="1234567890:AAF..."
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Chat ID</Label>
+                  <Input
+                    value={form.telegram_chat_id || ""}
+                    onChange={(event) => setField("telegram_chat_id", event.target.value)}
+                    placeholder="123456789"
+                    className="font-mono"
+                  />
+                </div>
+
+                <TestButton
+                  label="Send test Telegram message"
+                  disabled={!telegramReady}
+                  onTest={() => studioNotifications.testTelegram()}
+                />
+              </div>
+
+              <div className="workspace-subtle rounded-2xl px-4 py-4 text-sm leading-6 text-muted-foreground">
+                <p className="font-medium text-foreground">Quick setup</p>
+                <p className="mt-3">1. Create a bot with <HelpLink href="https://t.me/BotFather">@BotFather</HelpLink>.</p>
+                <p>2. Start the bot from your Telegram account.</p>
+                <p>3. Find your chat id with <HelpLink href="https://t.me/userinfobot">@userinfobot</HelpLink>.</p>
+              </div>
             </div>
+          </SectionCard>
 
-            <TestButton
-              label="Send test Telegram message"
-              disabled={!telegramReady}
-              onTest={() => studioNotifications.testTelegram()}
-            />
-          </div>
+          <SectionCard
+            title="Email"
+            description="Use SMTP for reports, escalations, and links that need an audit trail."
+            icon={<Mail className="h-5 w-5 text-primary" />}
+          >
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Recipient email</Label>
+                  <Input
+                    type="email"
+                    value={form.notify_email || ""}
+                    onChange={(event) => setField("notify_email", event.target.value)}
+                    placeholder="you@example.com"
+                  />
+                </div>
 
-          <div className="workspace-subtle rounded-2xl px-4 py-4 text-sm leading-6 text-muted-foreground">
-            <p className="font-medium text-foreground">Quick setup</p>
-            <p className="mt-3">1. Create a bot with <HelpLink href="https://t.me/BotFather">@BotFather</HelpLink>.</p>
-            <p>2. Start the bot from your Telegram account.</p>
-            <p>3. Find your chat id with <HelpLink href="https://t.me/userinfobot">@userinfobot</HelpLink>.</p>
-          </div>
-        </div>
-      </SectionCard>
+                <div className="space-y-2">
+                  <Label>SMTP host</Label>
+                  <Input
+                    value={form.smtp_host || ""}
+                    onChange={(event) => setField("smtp_host", event.target.value)}
+                    placeholder="smtp.gmail.com"
+                  />
+                </div>
 
-      <SectionCard
-        title="Email"
-        description="Use SMTP for reports, escalations, and links that need an audit trail."
-        icon={<Mail className="h-5 w-5 text-primary" />}
-      >
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2 md:col-span-2">
-              <Label>Recipient email</Label>
-              <Input
-                type="email"
-                value={form.notify_email || ""}
-                onChange={(event) => setField("notify_email", event.target.value)}
-                placeholder="you@example.com"
-              />
+                <div className="space-y-2">
+                  <Label>SMTP port</Label>
+                  <Input
+                    value={form.smtp_port || ""}
+                    onChange={(event) => setField("smtp_port", event.target.value)}
+                    placeholder="587"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>SMTP user</Label>
+                  <Input
+                    value={form.smtp_user || ""}
+                    onChange={(event) => setField("smtp_user", event.target.value)}
+                    placeholder="email@example.com"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>SMTP password</Label>
+                  <PasswordField
+                    value={form.smtp_password || ""}
+                    onChange={(value) => setField("smtp_password", value)}
+                    placeholder="App password"
+                  />
+                </div>
+
+                <div className="space-y-2 md:col-span-2">
+                  <Label>From address</Label>
+                  <Input
+                    value={form.from_email || ""}
+                    onChange={(event) => setField("from_email", event.target.value)}
+                    placeholder="WEU Platform <email@example.com>"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <TestButton
+                    label="Send test email"
+                    disabled={!emailReady}
+                    onTest={() => studioNotifications.testEmail()}
+                  />
+                </div>
+              </div>
+
+              <div className="workspace-subtle rounded-2xl px-4 py-4 text-sm leading-6 text-muted-foreground">
+                <p className="font-medium text-foreground">Provider notes</p>
+                <p className="mt-3">
+                  Gmail usually requires an <HelpLink href="https://myaccount.google.com/apppasswords">app password</HelpLink>.
+                </p>
+                <p>
+                  Yandex mail instructions:{" "}
+                  <HelpLink href="https://yandex.ru/support/yandex-360/customers/mail/ru/mail-clients/others">
+                    app password guide
+                  </HelpLink>
+                </p>
+              </div>
             </div>
+          </SectionCard>
 
-            <div className="space-y-2">
-              <Label>SMTP host</Label>
-              <Input
-                value={form.smtp_host || ""}
-                onChange={(event) => setField("smtp_host", event.target.value)}
-                placeholder="smtp.gmail.com"
-              />
+          <SectionCard
+            title="Public URL"
+            description="Approval links sent by email and Telegram will point to this address."
+            icon={<ExternalLink className="h-5 w-5 text-primary" />}
+          >
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="space-y-2">
+                <Label>Application URL</Label>
+                <Input
+                  value={form.site_url || ""}
+                  onChange={(event) => setField("site_url", event.target.value)}
+                  placeholder="https://your-server.example.com"
+                />
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Use the real external address that approvers can open from their network.
+                </p>
+              </div>
+
+              <div className="workspace-subtle rounded-2xl px-4 py-4 text-sm leading-6 text-muted-foreground">
+                <p className="font-medium text-foreground">How Studio uses it</p>
+                <p className="mt-3">1. Email and Telegram approval links are generated from this base URL.</p>
+                <p>2. If this is wrong, operators will land on a broken or local-only address.</p>
+                <p>3. Keep it aligned with the actual host that serves your app.</p>
+              </div>
             </div>
-
-            <div className="space-y-2">
-              <Label>SMTP port</Label>
-              <Input
-                value={form.smtp_port || ""}
-                onChange={(event) => setField("smtp_port", event.target.value)}
-                placeholder="587"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>SMTP user</Label>
-              <Input
-                value={form.smtp_user || ""}
-                onChange={(event) => setField("smtp_user", event.target.value)}
-                placeholder="email@example.com"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>SMTP password</Label>
-              <PasswordField
-                value={form.smtp_password || ""}
-                onChange={(value) => setField("smtp_password", value)}
-                placeholder="App password"
-              />
-            </div>
-
-            <div className="space-y-2 md:col-span-2">
-              <Label>From address</Label>
-              <Input
-                value={form.from_email || ""}
-                onChange={(event) => setField("from_email", event.target.value)}
-                placeholder="WEU Platform <email@example.com>"
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <TestButton
-                label="Send test email"
-                disabled={!emailReady}
-                onTest={() => studioNotifications.testEmail()}
-              />
-            </div>
-          </div>
-
-          <div className="workspace-subtle rounded-2xl px-4 py-4 text-sm leading-6 text-muted-foreground">
-            <p className="font-medium text-foreground">Provider notes</p>
-            <p className="mt-3">
-              Gmail usually requires an <HelpLink href="https://myaccount.google.com/apppasswords">app password</HelpLink>.
-            </p>
-            <p>
-              Yandex mail instructions:{" "}
-              <HelpLink href="https://yandex.ru/support/yandex-360/customers/mail/ru/mail-clients/others">
-                app password guide
-              </HelpLink>
-            </p>
-          </div>
-        </div>
-      </SectionCard>
-
-      <SectionCard
-        title="Public URL"
-        description="Approval links sent by email and Telegram will point to this address."
-        icon={<ExternalLink className="h-5 w-5 text-primary" />}
-      >
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="space-y-2">
-            <Label>Application URL</Label>
-            <Input
-              value={form.site_url || ""}
-              onChange={(event) => setField("site_url", event.target.value)}
-              placeholder="https://your-server.example.com"
-            />
-            <p className="text-xs leading-5 text-muted-foreground">
-              Use the real external address that approvers can open from their network.
-            </p>
-          </div>
-
-          <div className="workspace-subtle rounded-2xl px-4 py-4 text-sm leading-6 text-muted-foreground">
-            <p className="font-medium text-foreground">How Studio uses it</p>
-            <p className="mt-3">1. Email and Telegram approval links are generated from this base URL.</p>
-            <p>2. If this is wrong, operators will land on a broken or local-only address.</p>
-            <p>3. Keep it aligned with the actual host that serves your app.</p>
-          </div>
-        </div>
-      </SectionCard>
-    </PageShell>
-    </div>
+          </SectionCard>
+        </PageShell>
+      </div>
     </div>
   );
 }

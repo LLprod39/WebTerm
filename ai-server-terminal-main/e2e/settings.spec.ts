@@ -333,7 +333,7 @@ test("manages users from access catalog", async ({ page }) => {
   const harness = await installApiHarness(page, makeSettingsHandler());
 
   await page.goto("/settings/users");
-  await expect(page.getByText("Users")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Users" })).toBeVisible();
 
   await page.getByPlaceholder("Username").fill("qa-user");
   await page.getByPlaceholder("Email").fill("qa@example.com");
@@ -369,16 +369,18 @@ test("manages groups and explicit permissions", async ({ page }) => {
   await page.getByRole("button", { name: "Create Group" }).click();
   await expect(page.getByText("SRE Team")).toBeVisible();
 
-  page.once("dialog", async (dialog) => {
-    await dialog.accept("SRE Core");
-  });
-  await page.getByRole("button", { name: "Rename" }).last().click();
+  await page.getByRole("button", { name: "Edit Group" }).last().click();
+  await page.locator("input").last().fill("SRE Core");
+  await page.getByRole("button", { name: "Save" }).last().click();
+  await expect
+    .poll(() => harness.getCalls("/api/access/groups/3/", "PUT").length)
+    .toBeGreaterThan(0);
   await expect(page.getByText("SRE Core")).toBeVisible();
 
   await page.goto("/settings/permissions");
-  await expect(page.getByRole("heading", { name: "Permissions" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Permissions", exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Save" }).first().click();
   await expect
     .poll(() => harness.getCalls("/api/access/permissions/", "POST").length)
     .toBeGreaterThan(0);

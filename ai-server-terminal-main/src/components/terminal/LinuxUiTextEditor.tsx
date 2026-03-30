@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  Copy,
   FileCode2,
   FolderOpen,
   Loader2,
   Plus,
   RefreshCw,
+  RotateCcw,
   Save,
   X,
 } from "lucide-react";
@@ -35,9 +37,33 @@ interface EditorTab {
 }
 
 let tabSeq = 0;
+const RECENT_TEXT_FILES_STORAGE_KEY = "linux_ui_recent_text_files_v1";
 function nextTabId() {
   tabSeq += 1;
   return `tab_${tabSeq}`;
+}
+
+function readRecentTextFiles() {
+  try {
+    const raw = window.localStorage.getItem(RECENT_TEXT_FILES_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((item) => String(item || "").trim())
+      .filter(Boolean)
+      .slice(0, 8);
+  } catch {
+    return [];
+  }
+}
+
+function writeRecentTextFiles(paths: string[]) {
+  try {
+    window.localStorage.setItem(RECENT_TEXT_FILES_STORAGE_KEY, JSON.stringify(paths.slice(0, 8)));
+  } catch {
+    // noop
+  }
 }
 
 export function TextEditorWindow({
@@ -56,9 +82,23 @@ export function TextEditorWindow({
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [openPath, setOpenPath] = useState(initialPath || "");
   const [showOpenDialog, setShowOpenDialog] = useState(!initialPath);
+  const [recentPaths, setRecentPaths] = useState<string[]>(() => readRecentTextFiles());
+  const [softWrap, setSoftWrap] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const activeTab = tabs.find((t) => t.id === activeTabId) || null;
+  const activeLineCount = useMemo(() => (activeTab ? activeTab.content.split("\n").length : 0), [activeTab]);
+  const activeCharCount = useMemo(() => (activeTab ? activeTab.content.length : 0), [activeTab]);
+
+  const pushRecentPath = useCallback((path: string) => {
+    const normalized = String(path || "").trim();
+    if (!normalized) return;
+    setRecentPaths((prev) => {
+      const next = [normalized, ...prev.filter((item) => item !== normalized)].slice(0, 8);
+      writeRecentTextFiles(next);
+      return next;
+    });
+  }, []);
 
   const openFile = useCallback(
     async (filePath: string) => {
@@ -66,6 +106,7 @@ export function TextEditorWindow({
       if (existing) {
         setActiveTabId(existing.id);
         setShowOpenDialog(false);
+        pushRecentPath(filePath);
         return;
       }
 
@@ -91,6 +132,7 @@ export function TextEditorWindow({
       try {
         const res = await readServerTextFile(server.id, filePath);
         if (!res.success) throw new Error("Failed to read file");
+        pushRecentPath(filePath);
         setTabs((prev) =>
           prev.map((t) =>
             t.id === id
@@ -126,6 +168,7 @@ export function TextEditorWindow({
           ),
         );
         if (isMissingFileError) {
+          pushRecentPath(filePath);
           toast({
             title: "New file",
             description: `${filePath} will be created when you save it`,
@@ -133,7 +176,7 @@ export function TextEditorWindow({
         }
       }
     },
-    [server.id, tabs, toast],
+    [pushRecentPath, server.id, tabs, toast],
   );
 
   useEffect(() => {
@@ -153,6 +196,7 @@ export function TextEditorWindow({
       try {
         const res = await writeServerTextFile(server.id, tab.path, tab.content);
         if (!res.success) throw new Error("Failed to save");
+        pushRecentPath(tab.path);
         setTabs((prev) =>
           prev.map((t) =>
             t.id === tabId
@@ -169,7 +213,47 @@ export function TextEditorWindow({
         });
       }
     },
-    [server.id, tabs, toast],
+    [pushRecentPath, server.id, tabs, toast],
+  );
+
+  const reloadFile = useCallback(
+    async (tabId: string) => {
+      const tab = tabs.find((item) => item.id === tabId);
+      if (!tab || tab.isNew) return;
+
+      setTabs((prev) =>
+        prev.map((item) => (item.id === tabId ? { ...item, loading: true, error: null } : item)),
+      );
+
+      try {
+        const res = await readServerTextFile(server.id, tab.path);
+        if (!res.success) throw new Error("Failed to reload file");
+        setTabs((prev) =>
+          prev.map((item) =>
+            item.id === tabId
+              ? {
+                  ...item,
+                  content: res.file.content,
+                  originalContent: res.file.content,
+                  encoding: res.file.encoding || "utf-8",
+                  dirty: false,
+                  loading: false,
+                  error: null,
+                }
+              : item,
+          ),
+        );
+      } catch (err) {
+        setTabs((prev) =>
+          prev.map((item) =>
+            item.id === tabId
+              ? { ...item, loading: false, error: err instanceof Error ? err.message : "Failed to reload file" }
+              : item,
+          ),
+        );
+      }
+    },
+    [server.id, tabs],
   );
 
   const closeTab = useCallback(
@@ -228,10 +312,69 @@ export function TextEditorWindow({
     return map[ext] || "Plain text";
   };
 
+  const copyPath = useCallback(async () => {
+    if (!activeTab?.path) return;
+    await navigator.clipboard.writeText(activeTab.path);
+    toast({ title: "Path copied", description: activeTab.path });
+  }, [activeTab?.path, toast]);
+
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden" onKeyDown={handleKeyDown}>
-      {/* Tab bar */}
-      <div className="flex items-center gap-0.5 border-b border-border/60 bg-muted/30 px-1">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-card text-foreground" onKeyDown={handleKeyDown}>
+      <div className="border-b border-border bg-card px-3 py-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-foreground">Text Editor</div>
+            <div className="mt-1 truncate text-xs text-muted-foreground">
+              {activeTab?.path || "Open a config, script, or note file to edit it inline."}
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 rounded-xl border-border bg-background px-3 text-xs text-foreground hover:bg-secondary"
+              onClick={() => setShowOpenDialog(true)}
+            >
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              Open
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 rounded-xl border-border bg-background px-3 text-xs text-foreground hover:bg-secondary"
+              onClick={() => activeTabId && void saveFile(activeTabId)}
+              disabled={!activeTabId || !activeTab?.dirty}
+            >
+              <Save className="mr-1.5 h-3.5 w-3.5" />
+              Save
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 rounded-xl border-border bg-background px-3 text-xs text-foreground hover:bg-secondary"
+              onClick={copyPath}
+              disabled={!activeTab?.path}
+            >
+              <Copy className="mr-1.5 h-3.5 w-3.5" />
+              Copy Path
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={softWrap ? "default" : "outline"}
+              className="h-8 rounded-xl border-border px-3 text-xs"
+              onClick={() => setSoftWrap((value) => !value)}
+            >
+              Wrap
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-0.5 border-b border-border bg-secondary/30 px-2">
         <ScrollArea className="flex-1">
           <div className="flex items-center gap-0.5 py-1">
             {tabs.map((tab) => (
@@ -243,10 +386,10 @@ export function TextEditorWindow({
                   setShowOpenDialog(false);
                 }}
                 className={cn(
-                  "group flex items-center gap-1.5 rounded-t-md px-3 py-1.5 text-xs transition-colors",
+                  "group flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs transition-colors",
                   activeTabId === tab.id
-                    ? "bg-card text-foreground border border-b-0 border-border/60"
-                    : "text-muted-foreground hover:text-foreground hover:bg-card/50",
+                    ? "border border-border bg-background text-foreground"
+                    : "text-muted-foreground hover:bg-background/80 hover:text-foreground",
                 )}
               >
                 <FileCode2 className="h-3 w-3 shrink-0" />
@@ -258,7 +401,7 @@ export function TextEditorWindow({
                     e.stopPropagation();
                     closeTab(tab.id);
                   }}
-                  className="ml-0.5 flex h-4 w-4 items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-muted transition-opacity"
+                  className="ml-0.5 flex h-4 w-4 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100 hover:bg-secondary"
                 >
                   <X className="h-2.5 w-2.5" />
                 </button>
@@ -270,7 +413,7 @@ export function TextEditorWindow({
           type="button"
           size="sm"
           variant="ghost"
-          className="h-7 w-7 shrink-0 p-0"
+          className="h-7 w-7 shrink-0 rounded-xl p-0 text-muted-foreground hover:bg-secondary hover:text-foreground"
           onClick={() => setShowOpenDialog(true)}
         >
           <Plus className="h-3.5 w-3.5" />
@@ -279,14 +422,14 @@ export function TextEditorWindow({
 
       {/* Open file dialog */}
       {showOpenDialog && (
-        <div className="border-b border-border/60 bg-muted/20 px-4 py-3">
+        <div className="border-b border-border bg-secondary/20 px-4 py-3">
           <div className="flex items-center gap-2">
             <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" />
             <Input
               value={openPath}
               onChange={(e) => setOpenPath(e.target.value)}
               placeholder="/etc/nginx/nginx.conf or relative path (new files are allowed)..."
-              className="h-8 flex-1 font-mono text-xs"
+              className="h-8 flex-1 rounded-xl border-border bg-background font-mono text-xs text-foreground placeholder:text-muted-foreground"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && openPath.trim()) {
                   e.preventDefault();
@@ -298,7 +441,7 @@ export function TextEditorWindow({
             <Button
               type="button"
               size="sm"
-              className="h-8 text-xs"
+              className="h-8 rounded-xl text-xs"
               disabled={!openPath.trim()}
               onClick={() => void openFile(openPath.trim())}
             >
@@ -309,14 +452,14 @@ export function TextEditorWindow({
                 type="button"
                 size="sm"
                 variant="ghost"
-                className="h-8 text-xs"
+                className="h-8 rounded-xl text-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
                 onClick={() => setShowOpenDialog(false)}
               >
                 Cancel
               </Button>
             )}
           </div>
-          <div className="mt-2 flex flex-wrap gap-1.5">
+          <div className="mt-3 flex flex-wrap gap-1.5">
             {[
               "/etc/nginx/nginx.conf",
               "/etc/hosts",
@@ -330,23 +473,39 @@ export function TextEditorWindow({
                 key={path}
                 type="button"
                 onClick={() => void openFile(path)}
-                className="rounded-full border border-border/70 bg-background/90 px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors"
+                className="rounded-full border border-border bg-background px-2 py-0.5 text-[10px] text-muted-foreground transition-colors hover:border-primary/20 hover:bg-secondary hover:text-foreground"
               >
                 {path}
               </button>
             ))}
           </div>
+          {recentPaths.length > 0 ? (
+            <div className="mt-3">
+              <div className="mb-1.5 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Recent</div>
+              <div className="flex flex-wrap gap-1.5">
+                {recentPaths.map((path) => (
+                  <button
+                    key={path}
+                    type="button"
+                    onClick={() => void openFile(path)}
+                    className="rounded-full border border-border bg-background px-2.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:border-primary/20 hover:bg-secondary hover:text-foreground"
+                  >
+                    {path}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
 
-      {/* Editor area */}
-      <div className="min-h-0 flex-1 overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-hidden bg-transparent">
         {!activeTab ? (
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+          <div className="flex h-full items-center justify-center px-6 text-sm text-muted-foreground">
             <div className="text-center">
-              <FileCode2 className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
+              <FileCode2 className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
               <div>Open a file to start editing</div>
-              <div className="mt-1 text-xs">Enter a file path or click a quick-open preset</div>
+              <div className="mt-1 text-xs">Use a path, a preset, or a recent file from this workspace.</div>
             </div>
           </div>
         ) : activeTab.loading ? (
@@ -356,14 +515,14 @@ export function TextEditorWindow({
           </div>
         ) : activeTab.error ? (
           <div className="flex h-full items-center justify-center p-6">
-            <div className="max-w-md rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-center">
+            <div className="max-w-md rounded-[1.25rem] border border-destructive/25 bg-destructive/10 p-4 text-center">
               <AlertTriangle className="mx-auto h-5 w-5 text-destructive" />
               <div className="mt-2 text-sm text-destructive">{activeTab.error}</div>
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
-                className="mt-3 h-8 text-xs"
+                className="mt-3 h-8 rounded-xl border-border bg-background text-xs text-foreground hover:bg-secondary"
                 onClick={() => {
                   closeTab(activeTab.id);
                   setOpenPath(activeTab.path);
@@ -380,22 +539,24 @@ export function TextEditorWindow({
             value={activeTab.content}
             onChange={(e) => updateContent(activeTab.id, e.target.value)}
             spellCheck={false}
-            className="h-full w-full resize-none border-0 bg-card p-4 font-mono text-[13px] leading-6 text-foreground outline-none selection:bg-primary/20"
+            className={cn(
+              "h-full w-full resize-none border-0 bg-transparent p-5 font-mono text-[13px] leading-6 text-foreground outline-none selection:bg-primary/20",
+              softWrap ? "whitespace-pre-wrap break-words" : "whitespace-pre overflow-auto",
+            )}
             style={{ tabSize: 4 }}
           />
         )}
       </div>
 
-      {/* Status bar */}
-      <footer className="flex h-7 items-center justify-between border-t border-border/60 bg-muted/30 px-3 text-[11px] text-muted-foreground">
+      <footer className="flex min-h-8 items-center justify-between border-t border-border bg-secondary/20 px-3 py-2 text-[11px] text-muted-foreground">
         <div className="flex items-center gap-3">
           {activeTab && (
             <>
-              <span className="font-mono truncate max-w-64">{activeTab.path}</span>
+              <span className="max-w-64 truncate font-mono">{activeTab.path}</span>
               <span>{getLanguageHint(activeTab.filename)}</span>
               <span>{activeTab.encoding}</span>
               {activeTab.isNew && (
-                <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-400">New file</span>
+                <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground">New file</span>
               )}
             </>
           )}
@@ -404,19 +565,31 @@ export function TextEditorWindow({
           {activeTab && (
             <>
               {activeTab.dirty && (
-                <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">Modified</span>
+                <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">Modified</span>
               )}
-              <span>{activeTab.content.split("\n").length} lines</span>
+              <span>{activeLineCount} lines</span>
+              <span>{activeCharCount} chars</span>
               <Button
                 type="button"
                 size="sm"
                 variant="ghost"
-                className="h-5 gap-1 px-1.5 text-[11px]"
+                className="h-6 gap-1 rounded-lg px-2 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground"
                 onClick={() => void saveFile(activeTab.id)}
                 disabled={!activeTab.dirty}
               >
                 <Save className="h-3 w-3" />
                 Save
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-6 gap-1 rounded-lg px-2 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground"
+                onClick={() => void reloadFile(activeTab.id)}
+                disabled={activeTab.isNew}
+              >
+                <RotateCcw className="h-3 w-3" />
+                Reload
               </Button>
             </>
           )}
