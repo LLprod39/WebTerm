@@ -51,6 +51,12 @@ class MCPServerPool(models.Model):
 
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="mcp_pool")
     is_shared = models.BooleanField(default=False, help_text="Visible to all users")
+    shared_with = models.ManyToManyField(
+        User,
+        blank=True,
+        related_name="shared_studio_mcp_servers",
+        help_text="Specific users who can view and use this MCP server",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -140,6 +146,11 @@ class AgentConfig(models.Model):
 
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="agent_configs")
     is_shared = models.BooleanField(default=False)
+    shared_with = models.ManyToManyField(
+        User,
+        blank=True,
+        related_name="shared_studio_agent_configs",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -197,6 +208,11 @@ class Pipeline(models.Model):
 
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="pipelines")
     is_shared = models.BooleanField(default=False)
+    shared_with = models.ManyToManyField(
+        User,
+        blank=True,
+        related_name="shared_studio_pipelines",
+    )
     is_template = models.BooleanField(default=False, help_text="Bundled template, not user-created")
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -536,3 +552,32 @@ class PipelineTemplate(models.Model):
         )
         pipeline.sync_triggers_from_nodes()
         return pipeline
+
+
+class StudioSkillAccess(models.Model):
+    """Ownership and sharing metadata for filesystem-backed Studio skills."""
+
+    slug = models.SlugField(max_length=100, unique=True)
+    owner = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="owned_studio_skills",
+    )
+    is_shared = models.BooleanField(default=False, help_text="Visible to all users with skill access")
+    shared_with = models.ManyToManyField(
+        User,
+        blank=True,
+        related_name="shared_studio_skills",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["slug"]
+        verbose_name = "Studio Skill Access"
+        verbose_name_plural = "Studio Skill Access"
+
+    def __str__(self):
+        return self.slug

@@ -131,7 +131,7 @@ function isExecutedCommandStatus(status?: AiCommand["status"]) {
 
 function ModeSelector({ mode, onChange }: { mode: AiExecutionMode; onChange: (mode: AiExecutionMode) => void }) {
   return (
-    <div className="flex items-center gap-0.5 rounded-lg bg-secondary/80 p-0.5">
+    <div className="flex items-center gap-1 rounded-xl border border-border/70 bg-secondary/60 p-1">
       {(["auto", "fast", "step"] as AiExecutionMode[]).map((item) => {
         const cfg = modeConfig[item];
         const active = item === mode;
@@ -141,8 +141,8 @@ function ModeSelector({ mode, onChange }: { mode: AiExecutionMode; onChange: (mo
             type="button"
             onClick={() => onChange(item)}
             title={cfg.desc}
-            className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-all ${
-              active ? `bg-background shadow-sm ${cfg.color}` : "text-muted-foreground hover:text-foreground"
+            className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+              active ? `bg-card text-foreground ${cfg.color}` : "text-muted-foreground hover:text-foreground"
             }`}
           >
             <cfg.icon className="h-3 w-3" />
@@ -162,7 +162,7 @@ function ChatModeSelector({
   onChange: (mode: AiChatMode) => void;
 }) {
   return (
-    <div className="flex items-center gap-0.5 rounded-lg bg-secondary/80 p-0.5">
+    <div className="flex items-center gap-1 rounded-xl border border-border/70 bg-secondary/60 p-1">
       {(["ask", "agent"] as AiChatMode[]).map((item) => {
         const cfg = chatModeConfig[item];
         const active = item === mode;
@@ -172,8 +172,8 @@ function ChatModeSelector({
             type="button"
             onClick={() => onChange(item)}
             title={cfg.desc}
-            className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-all ${
-              active ? `bg-background shadow-sm ${cfg.tone}` : "text-muted-foreground hover:text-foreground"
+            className={`rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+              active ? `bg-card text-foreground ${cfg.tone}` : "text-muted-foreground hover:text-foreground"
             }`}
           >
             {cfg.label}
@@ -227,11 +227,11 @@ function MD({ content }: { content: string }) {
         li: ({ children }) => <li>{children}</li>,
         h1: ({ children }) => <h1 className="mb-1 text-sm font-bold text-foreground">{children}</h1>,
         h2: ({ children }) => <h2 className="mb-1 text-sm font-semibold text-primary">{children}</h2>,
-        h3: ({ children }) => <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{children}</h3>,
+        h3: ({ children }) => <h3 className="mb-1 text-sm font-semibold text-foreground">{children}</h3>,
         strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
         table: ({ children }) => (
           <div className="my-2 overflow-x-auto rounded-lg border border-border">
-            <table className="w-full border-collapse text-xs">{children}</table>
+            <table className="w-full border-collapse text-sm">{children}</table>
           </div>
         ),
         th: ({ children }) => <th className="border-b border-border bg-secondary/60 px-3 py-2 text-left font-semibold text-foreground">{children}</th>,
@@ -247,11 +247,11 @@ function MD({ content }: { content: string }) {
 
 function CmdStatusBadge({ status, exit_code }: { status?: AiCommand["status"]; exit_code?: number }) {
   if (!status || status === "pending") {
-    return <span className="rounded border border-border/60 px-1.5 py-0.5 text-[10px] text-muted-foreground">ожидает</span>;
+    return <span className="rounded-md border border-border/60 px-1.5 py-0.5 text-[11px] text-muted-foreground">ожидает</span>;
   }
   if (status === "running") {
     return (
-      <span className="flex items-center gap-1 whitespace-nowrap rounded border border-warning/30 bg-warning/10 px-1.5 py-0.5 text-[10px] text-warning">
+      <span className="flex items-center gap-1 whitespace-nowrap rounded-md border border-warning/30 bg-warning/10 px-1.5 py-0.5 text-[11px] text-warning">
         <Loader2 className="h-2.5 w-2.5 animate-spin" /> выполняется
       </span>
     );
@@ -259,7 +259,7 @@ function CmdStatusBadge({ status, exit_code }: { status?: AiCommand["status"]; e
   if (status === "done") {
     const ok = exit_code === 0 || exit_code === undefined;
     return (
-      <span className={`flex items-center gap-1 whitespace-nowrap rounded border px-1.5 py-0.5 text-[10px] ${
+      <span className={`flex items-center gap-1 whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[11px] ${
         ok ? "border-success/30 bg-success/10 text-success" : "border-destructive/30 bg-destructive/10 text-destructive"
       }`}>
         {ok ? <CheckCircle2 className="h-2.5 w-2.5" /> : <AlertTriangle className="h-2.5 w-2.5" />}
@@ -268,10 +268,10 @@ function CmdStatusBadge({ status, exit_code }: { status?: AiCommand["status"]; e
     );
   }
   if (status === "skipped" || status === "cancelled") {
-    return <span className="px-1.5 py-0.5 text-[10px] text-muted-foreground/50 line-through">пропущено</span>;
+    return <span className="px-1.5 py-0.5 text-[11px] text-muted-foreground/50 line-through">пропущено</span>;
   }
   if (status === "confirmed") {
-    return <span className="rounded border border-info/30 bg-info/10 px-1.5 py-0.5 text-[10px] text-info">подтверждено</span>;
+    return <span className="rounded-md border border-info/30 bg-info/10 px-1.5 py-0.5 text-[11px] text-info">подтверждено</span>;
   }
   return null;
 }
@@ -305,8 +305,8 @@ function CommandsMsg({
 
       {allCommands.length > 0 ? (
         visibleCommands.length > 0 ? (
-          <div className="overflow-hidden rounded-lg border border-border">
-            <div className="flex items-center gap-1.5 bg-secondary/60 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <div className="overflow-hidden rounded-xl border border-border">
+            <div className="flex items-center gap-1.5 bg-secondary/40 px-3 py-2 text-[11px] font-medium text-muted-foreground">
               <TerminalIcon className="h-3 w-3" /> Команды ({visibleCommands.length}/{allCommands.length})
             </div>
             <div className="divide-y divide-border/40">
@@ -349,7 +349,7 @@ function CommandsMsg({
             ) : null}
           </div>
         ) : (
-          <div className="rounded-lg border border-dashed border-border bg-secondary/20 px-3 py-2 text-xs text-muted-foreground">
+          <div className="rounded-xl border border-dashed border-border bg-secondary/20 px-3 py-2 text-sm text-muted-foreground">
             Команды скрыты настройками видимости для этого чата.
           </div>
         )
@@ -361,35 +361,32 @@ function CommandsMsg({
 function ReportMsg({ msg }: { msg: AiMessage }) {
   const [expanded, setExpanded] = useState(true);
   const cfg = {
-    ok: {
-      border: "border-success/40",
-      header: "bg-gradient-to-r from-success/15 to-success/5 text-success",
-      Icon: CheckCircle2,
-      label: "Выполнено успешно",
-      glow: "shadow-[0_0_12px_rgba(34,197,94,0.08)]",
-    },
-    warning: {
-      border: "border-warning/40",
-      header: "bg-gradient-to-r from-warning/15 to-warning/5 text-warning",
-      Icon: AlertTriangle,
-      label: "Выполнено с предупреждениями",
-      glow: "shadow-[0_0_12px_rgba(234,179,8,0.08)]",
-    },
-    error: {
-      border: "border-destructive/40",
-      header: "bg-gradient-to-r from-destructive/15 to-destructive/5 text-destructive",
-      Icon: AlertTriangle,
-      label: "Ошибки при выполнении",
-      glow: "shadow-[0_0_12px_rgba(239,68,68,0.08)]",
-    },
-  }[msg.reportStatus || "ok"];
+      ok: {
+        border: "border-success/40",
+        header: "bg-success/10 text-success",
+        Icon: CheckCircle2,
+        label: "Выполнено успешно",
+      },
+      warning: {
+        border: "border-warning/40",
+        header: "bg-warning/10 text-warning",
+        Icon: AlertTriangle,
+        label: "Выполнено с предупреждениями",
+      },
+      error: {
+        border: "border-destructive/40",
+        header: "bg-destructive/10 text-destructive",
+        Icon: AlertTriangle,
+        label: "Ошибки при выполнении",
+      },
+    }[msg.reportStatus || "ok"];
 
   return (
-    <div className={`overflow-hidden rounded-xl border ${cfg.border} ${cfg.glow}`}>
+    <div className={`overflow-hidden rounded-2xl border ${cfg.border}`}>
       <button
         type="button"
         onClick={() => setExpanded((value) => !value)}
-        className={`flex w-full items-center justify-between gap-2 px-4 py-2.5 text-xs font-semibold transition-colors hover:opacity-90 ${cfg.header}`}
+        className={`flex w-full items-center justify-between gap-2 px-4 py-3 text-sm font-medium transition-colors hover:opacity-90 ${cfg.header}`}
       >
         <div className="flex items-center gap-2">
           <cfg.Icon className="h-4 w-4" />
@@ -418,8 +415,8 @@ function QuestionMsg({ msg, onReply }: { msg: AiMessage; onReply?: (qId: string,
   };
 
   return (
-    <div className="overflow-hidden rounded-xl border border-primary/30 bg-primary/5">
-      <div className="flex items-center gap-2 bg-gradient-to-r from-primary/15 to-primary/5 px-4 py-2.5 text-xs font-semibold text-primary">
+    <div className="overflow-hidden rounded-2xl border border-primary/30 bg-primary/5">
+      <div className="flex items-center gap-2 bg-primary/10 px-4 py-3 text-sm font-medium text-primary">
         <HelpCircle className="h-4 w-4" /> Вопрос от AI
       </div>
       <div className="space-y-2.5 px-4 py-3">
@@ -439,10 +436,11 @@ function QuestionMsg({ msg, onReply }: { msg: AiMessage; onReply?: (qId: string,
                 if (event.key === "Enter") doReply(answer);
               }}
               placeholder="Ваш ответ..."
+              aria-label="Reply to AI question"
               autoFocus
-              className="flex-1 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs text-foreground transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+              className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none"
             />
-            <Button size="sm" className="h-8 rounded-lg px-2.5 text-xs" onClick={() => doReply(answer)} disabled={!answer.trim()}>
+            <Button size="sm" className="h-9 px-3 text-xs" onClick={() => doReply(answer)} disabled={!answer.trim()}>
               <Send className="h-3 w-3" />
             </Button>
           </div>
@@ -456,13 +454,13 @@ function QuestionMsg({ msg, onReply }: { msg: AiMessage; onReply?: (qId: string,
 
 function ProgressMsg({ msg }: { msg: AiMessage }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-border">
-      <div className="flex items-center justify-between bg-secondary/40 px-4 py-2.5">
-        <div className="min-w-0 flex items-center gap-2 text-xs text-muted-foreground">
+    <div className="overflow-hidden rounded-2xl border border-border">
+      <div className="flex items-center justify-between bg-secondary/30 px-4 py-3">
+        <div className="min-w-0 flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-warning" />
           <code className="truncate font-mono">{msg.progressCmd}</code>
         </div>
-        <span className="ml-2 flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+        <span className="ml-2 flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
           <Clock className="h-3 w-3" />
           {msg.progressElapsed}s
         </span>
@@ -478,8 +476,8 @@ function ProgressMsg({ msg }: { msg: AiMessage }) {
 
 function RecoveryMsg({ msg }: { msg: AiMessage }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-warning/30 bg-warning/5">
-      <div className="flex items-center gap-2 bg-gradient-to-r from-warning/15 to-warning/5 px-4 py-2.5 text-xs font-semibold text-warning">
+    <div className="overflow-hidden rounded-2xl border border-warning/30 bg-warning/5">
+      <div className="flex items-center gap-2 bg-warning/10 px-4 py-3 text-sm font-medium text-warning">
         <RotateCcw className="h-4 w-4" /> Автоисправление
       </div>
       <div className="space-y-2 px-4 py-3 text-xs">
@@ -521,7 +519,7 @@ function MsgRenderer({
   if (msg.role === "user") {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-primary px-3.5 py-2.5 text-sm leading-relaxed text-primary-foreground shadow-sm">
+        <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-primary px-3.5 py-2.5 text-sm leading-relaxed text-primary-foreground">
           {msg.content}
         </div>
       </div>
@@ -532,7 +530,7 @@ function MsgRenderer({
     return (
       <div className="flex items-start gap-2">
         <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
-        <div className="flex-1 rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive/90">
+        <div className="flex-1 rounded-2xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive/90">
           {msg.content}
         </div>
       </div>
@@ -541,7 +539,7 @@ function MsgRenderer({
 
   return (
     <div className="flex justify-start">
-      <div className="max-w-[95%] rounded-2xl rounded-tl-sm bg-secondary px-3.5 py-3 text-secondary-foreground shadow-sm">
+      <div className="max-w-[95%] rounded-2xl rounded-tl-sm border border-border/60 bg-secondary/65 px-3.5 py-3 text-secondary-foreground">
         <MD content={msg.content} />
       </div>
     </div>
@@ -593,7 +591,7 @@ function ToggleRow({
 }
 
 function InputLabel({ children }: { children: ReactNode }) {
-  return <label className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{children}</label>;
+  return <label className="mb-1 block text-[11px] font-medium text-muted-foreground">{children}</label>;
 }
 
 export function AiPanel({
@@ -815,18 +813,18 @@ export function AiPanel({
 
       <div className="flex h-full flex-col bg-card">
         {/* Header */}
-        <div className="shrink-0 border-b border-border px-3 py-2">
+        <div className="shrink-0 border-b border-border px-3.5 py-3">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <div className={`flex h-6 w-6 items-center justify-center rounded-md transition-all ${
-                isGenerating ? "bg-primary/20 shadow-sm shadow-primary/20" : "bg-primary/10"
+              <div className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${
+                isGenerating ? "bg-primary/15" : "bg-secondary"
               }`}>
                 <Bot className="h-3.5 w-3.5 text-primary" />
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-[13px] font-medium text-foreground">AI</span>
-                <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                  isGenerating ? "bg-warning/15 text-warning animate-pulse" : "bg-success/15 text-success"
+                <span className="text-sm font-medium text-foreground">AI</span>
+                <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${
+                  isGenerating ? "border-warning/20 bg-warning/10 text-warning" : "border-success/20 bg-success/10 text-success"
                 }`}>
                   {isGenerating ? "думает..." : "готов"}
                 </span>
@@ -834,12 +832,12 @@ export function AiPanel({
             </div>
 
             <div className="flex items-center gap-0.5">
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                onClick={() => setSettingsOpen(true)}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                  onClick={() => setSettingsOpen(true)}
                 title="Настройки"
                 aria-label="AI settings"
               >
@@ -847,18 +845,18 @@ export function AiPanel({
               </Button>
 
               {isGenerating ? (
-                <Button type="button" size="sm" variant="ghost" className="h-6 w-6 p-0 text-warning hover:bg-warning/10" onClick={onStop} title="Стоп" aria-label="Stop">
+                <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0 text-warning hover:bg-warning/10" onClick={onStop} title="Стоп" aria-label="Stop">
                   <Square className="h-3.5 w-3.5" />
                 </Button>
               ) : null}
 
               {messages.length > 0 ? (
-                <Button type="button" size="sm" variant="ghost" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={onClearChat} title="Очистить" aria-label="Clear">
+                <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" onClick={onClearChat} title="Очистить" aria-label="Clear">
                   <Trash2 className="h-3 w-3" />
                 </Button>
               ) : null}
 
-              <Button type="button" size="sm" variant="ghost" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground" onClick={onClose} aria-label="Close">
+              <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" onClick={onClose} aria-label="Close">
                 <X className="h-3.5 w-3.5" />
               </Button>
             </div>
@@ -866,7 +864,7 @@ export function AiPanel({
         </div>
 
         {/* Compact mode bar */}
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/50 px-3 py-1.5">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/50 px-3.5 py-2">
           <ChatModeSelector mode={chatMode} onChange={onChatModeChange} />
           <ModeSelector mode={executionMode} onChange={onModeChange} />
         </div>
@@ -874,12 +872,12 @@ export function AiPanel({
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3">
           {messages.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center space-y-4 py-8 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-secondary">
                 <Sparkles className="h-6 w-6 text-primary" />
               </div>
               <div>
                 <p className="text-sm font-medium text-foreground">Чем могу помочь?</p>
-                <p className="mt-1 text-xs text-muted-foreground">Задайте вопрос о терминале, сервере или текущем выводе.</p>
+                <p className="mt-1 text-sm text-muted-foreground">Задайте вопрос о терминале, сервере или текущем выводе.</p>
               </div>
               <div className="flex flex-wrap justify-center gap-1.5">
                 {quickPrompts.map((prompt) => (
@@ -887,7 +885,7 @@ export function AiPanel({
                     key={prompt}
                     type="button"
                     onClick={() => handleSend(prompt)}
-                    className="rounded-full border border-border/60 px-2.5 py-1.5 text-xs text-muted-foreground transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
+                    className="rounded-xl border border-border/60 px-3 py-2 text-sm text-muted-foreground transition-colors hover:border-primary/30 hover:bg-secondary hover:text-foreground"
                   >
                     {prompt}
                   </button>
@@ -909,7 +907,7 @@ export function AiPanel({
 
           {isGenerating ? (
             <div className="flex justify-start">
-              <div className="flex items-center gap-2.5 rounded-2xl rounded-tl-sm bg-secondary px-3.5 py-3 shadow-sm">
+              <div className="flex items-center gap-2.5 rounded-2xl rounded-tl-sm border border-border/60 bg-secondary/70 px-3.5 py-3">
                 <div className="flex gap-0.5">
                   {[0, 150, 300].map((delay) => (
                     <span key={delay} className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary" style={{ animationDelay: `${delay}ms` }} />
@@ -925,9 +923,9 @@ export function AiPanel({
 
         <div className="shrink-0 border-t border-border p-2">
           {messages.length > 0 ? (
-            <div className="mb-1.5 flex items-center justify-between gap-2 rounded-lg bg-secondary/30 px-2.5 py-1.5">
+            <div className="mb-1.5 flex items-center justify-between gap-2 rounded-xl border border-border/60 bg-secondary/20 px-2.5 py-2">
               <span className="text-[11px] text-muted-foreground">Сформировать отчёт</span>
-              <Button type="button" size="sm" variant="ghost" onClick={() => onGenerateReport?.(false)} disabled={!canGenerateReport} className="h-6 gap-1 px-2 text-[11px]">
+              <Button type="button" size="sm" variant="ghost" onClick={() => onGenerateReport?.(false)} disabled={!canGenerateReport} className="h-7 gap-1 px-2 text-[11px]">
                 <FileText className="h-3 w-3" />
                 Отчёт
               </Button>
@@ -940,11 +938,12 @@ export function AiPanel({
               value={input}
               onChange={handleInput}
               onKeyDown={handleKeyDown}
+              aria-label="AI message"
               placeholder="Сообщение... (Enter — отправить)"
               rows={1}
-              className="min-h-[34px] max-h-[120px] flex-1 resize-none rounded-lg border border-border bg-secondary/50 px-2.5 py-2 text-[13px] text-foreground transition-colors placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none"
+              className="min-h-[38px] max-h-[120px] flex-1 resize-none rounded-xl border border-border bg-secondary/40 px-3 py-2.5 text-[13px] text-foreground transition-colors placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none"
             />
-            <Button type="button" size="sm" onClick={() => handleSend()} disabled={!input.trim() || isGenerating} className="h-[34px] w-[34px] shrink-0 rounded-lg p-0" aria-label="Send">
+            <Button type="button" size="sm" onClick={() => handleSend()} disabled={!input.trim() || isGenerating} className="h-[38px] w-[38px] shrink-0 p-0" aria-label="Send">
               <Send className="h-3.5 w-3.5" />
             </Button>
           </div>

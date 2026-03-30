@@ -7,6 +7,7 @@ import { Suspense, lazy, type ReactNode } from "react";
 import { I18nProvider, useI18n } from "./lib/i18n";
 import AppLayout from "./components/AppLayout";
 import { fetchAuthSession } from "./lib/api";
+import { canAccessStudio, hasAnyFeatureAccess, hasFeatureAccess } from "./lib/featureAccess";
 
 const queryClient = new QueryClient();
 const Index = lazy(() => import("./pages/Index"));
@@ -71,7 +72,7 @@ function FeatureGate({
   feature,
   children,
 }: {
-  feature: "dashboard" | "agents" | "studio" | "settings";
+  feature: string | string[];
   children: ReactNode;
 }) {
   const location = useLocation();
@@ -89,7 +90,13 @@ function FeatureGate({
     return <Navigate to={`/login?next=${next}`} replace />;
   }
 
-  if (!data.user?.features?.[feature]) {
+  const allowed = Array.isArray(feature)
+    ? hasAnyFeatureAccess(data.user, feature)
+    : feature === "studio"
+      ? canAccessStudio(data.user)
+      : hasFeatureAccess(data.user, feature);
+
+  if (!allowed) {
     return <Navigate to="/servers" replace />;
   }
 
@@ -153,7 +160,7 @@ const App = () => (
                 <Route
                   path="/studio/pipeline/:id"
                   element={(
-                    <FeatureGate feature="studio">
+                    <FeatureGate feature="studio_pipelines">
                       <PipelineEditorPage />
                     </FeatureGate>
                   )}
@@ -161,7 +168,7 @@ const App = () => (
                 <Route
                   path="/studio/pipeline/new"
                   element={(
-                    <FeatureGate feature="studio">
+                    <FeatureGate feature="studio_pipelines">
                       <PipelineEditorPage />
                     </FeatureGate>
                   )}
@@ -169,7 +176,7 @@ const App = () => (
                 <Route
                   path="/studio/runs"
                   element={(
-                    <FeatureGate feature="studio">
+                    <FeatureGate feature="studio_runs">
                       <PipelineRunsPage />
                     </FeatureGate>
                   )}
@@ -177,7 +184,7 @@ const App = () => (
                 <Route
                   path="/studio/agents"
                   element={(
-                    <FeatureGate feature="studio">
+                    <FeatureGate feature="studio_agents">
                       <AgentConfigPage />
                     </FeatureGate>
                   )}
@@ -185,7 +192,7 @@ const App = () => (
                 <Route
                   path="/studio/skills"
                   element={(
-                    <FeatureGate feature="studio">
+                    <FeatureGate feature="studio_skills">
                       <StudioSkillsPage />
                     </FeatureGate>
                   )}
@@ -193,7 +200,7 @@ const App = () => (
                 <Route
                   path="/studio/mcp"
                   element={(
-                    <FeatureGate feature="studio">
+                    <FeatureGate feature="studio_mcp">
                       <MCPHubPage />
                     </FeatureGate>
                   )}
@@ -201,7 +208,7 @@ const App = () => (
                 <Route
                   path="/studio/notifications"
                   element={(
-                    <FeatureGate feature="studio">
+                    <FeatureGate feature="studio_notifications">
                       <NotificationsSettingsPage />
                     </FeatureGate>
                   )}

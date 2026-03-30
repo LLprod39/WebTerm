@@ -9,6 +9,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export function ConfirmActionDialog({
   open,
@@ -19,6 +20,7 @@ export function ConfirmActionDialog({
   cancelLabel = "Cancel",
   onConfirm,
   destructive = true,
+  contentClassName,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -28,10 +30,11 @@ export function ConfirmActionDialog({
   cancelLabel?: string;
   onConfirm: () => void | Promise<void>;
   destructive?: boolean;
+  contentClassName?: string;
 }) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="rounded-lg border-border bg-background">
+      <AlertDialogContent className={cn("rounded-lg border-border bg-background", contentClassName)}>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription className="leading-6">

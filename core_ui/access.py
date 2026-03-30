@@ -11,6 +11,23 @@ from core_ui.models import (
     UserAppPermission,
 )
 
+STUDIO_SECTION_FEATURES = {
+    "studio_pipelines",
+    "studio_runs",
+    "studio_agents",
+    "studio_skills",
+    "studio_mcp",
+    "studio_notifications",
+}
+
+LEGACY_FEATURE_FALLBACKS: dict[str, tuple[str, ...]] = {
+    # Keep older Studio/Agents profiles working for the core pipeline flows.
+    "studio_pipelines": ("studio", "agents"),
+    "studio_runs": ("studio", "agents"),
+    # Agent configs lived under the broader agents capability historically.
+    "studio_agents": ("agents",),
+}
+
 
 def access_feature_choices() -> list[tuple[str, str]]:
     return list(FEATURE_CHOICES)
@@ -89,6 +106,12 @@ def feature_allowed_for_user(
     if feature in grouped:
         return bool(grouped[feature])
 
+    for legacy_feature in LEGACY_FEATURE_FALLBACKS.get(feature, ()):
+        if legacy_feature in explicit:
+            return bool(explicit[legacy_feature])
+        if legacy_feature in grouped:
+            return bool(grouped[legacy_feature])
+
     if user.is_staff:
         return True
 
@@ -122,7 +145,25 @@ def build_user_access_payload(
         elif feature in grouped:
             effective[feature] = bool(grouped[feature])
             sources[feature] = "group_explicit"
-        elif user.is_staff:
+        else:
+            legacy_features = LEGACY_FEATURE_FALLBACKS.get(feature, ())
+            applied_legacy = False
+            for legacy_feature in legacy_features:
+                if legacy_feature in explicit:
+                    effective[feature] = bool(explicit[legacy_feature])
+                    sources[feature] = f"legacy_{legacy_feature}_user_explicit"
+                    applied_legacy = True
+                    break
+                if legacy_feature in grouped:
+                    effective[feature] = bool(grouped[legacy_feature])
+                    sources[feature] = f"legacy_{legacy_feature}_group_explicit"
+                    applied_legacy = True
+                    break
+            if applied_legacy:
+                continue
+        if feature in effective:
+            continue
+        if user.is_staff:
             effective[feature] = True
             sources[feature] = "staff_default"
         elif feature == "settings":

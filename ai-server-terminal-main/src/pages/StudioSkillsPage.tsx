@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ShareAccessEditor } from "@/components/studio/ShareAccessEditor";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -31,13 +32,16 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import {
+  fetchAuthSession,
   studioSkills,
+  studioShareUsers,
   type StudioSkill,
   type StudioSkillScaffoldPayload,
   type StudioSkillTemplate,
   type StudioSkillValidationResponse,
   type StudioSkillWorkspaceFile,
 } from "@/lib/api";
+import { hasFeatureAccess } from "@/lib/featureAccess";
 import { useI18n } from "@/lib/i18n";
 
 const SAFETY_LEVELS = ["low", "standard", "medium", "high", "critical"] as const;
@@ -198,6 +202,10 @@ function SkillCard({
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-medium text-foreground">{skill.name}</p>
             {skill.runtime_enforced && <span className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground">{tr("enforced", "enforced")}</span>}
+            {skill.is_owner ? <Badge variant="secondary">Mine</Badge> : null}
+            {!skill.is_owner && skill.owner_username ? <Badge variant="outline">Owner: {skill.owner_username}</Badge> : null}
+            {skill.is_shared ? <Badge variant="outline">Shared</Badge> : null}
+            {skill.can_edit === false ? <Badge variant="outline">Read only</Badge> : null}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
             {skill.service && <span>{skill.service}</span>}
@@ -260,10 +268,31 @@ export default function StudioSkillsPage() {
   const [slugTouched, setSlugTouched] = useState(false);
   const [validationReport, setValidationReport] = useState<StudioSkillValidationResponse | null>(null);
   const [strictValidation, setStrictValidation] = useState(false);
+  const [skillAccessDraft, setSkillAccessDraft] = useState({
+    is_shared: false,
+    shared_user_ids: [] as number[],
+  });
+
+  const { data: session } = useQuery({
+    queryKey: ["auth", "session"],
+    queryFn: fetchAuthSession,
+    staleTime: 60_000,
+    retry: false,
+  });
+  const user = session?.user ?? null;
+  const isAdmin = Boolean(user?.is_staff);
+  const canOpenAgents = hasFeatureAccess(user, "studio_agents");
+  const canOpenMcp = hasFeatureAccess(user, "studio_mcp");
 
   const { data: skills = [], isLoading } = useQuery({
     queryKey: ["studio", "skills"],
     queryFn: studioSkills.list,
+  });
+
+  const { data: shareUsers = [] } = useQuery({
+    queryKey: ["studio", "share-users"],
+    queryFn: studioShareUsers.list,
+    enabled: isAdmin,
   });
 
   const { data: templates = [] } = useQuery({
@@ -358,6 +387,14 @@ export default function StudioSkillsPage() {
     enabled: !!selectedSlug,
   });
 
+  useEffect(() => {
+    if (!selectedSkill) return;
+    setSkillAccessDraft({
+      is_shared: Boolean(selectedSkill.is_shared),
+      shared_user_ids: selectedSkill.shared_user_ids || [],
+    });
+  }, [selectedSkill]);
+
   const { data: workspace, isFetching: isFetchingWorkspace } = useQuery({
     queryKey: ["studio", "skills", "workspace", selectedSlug],
     queryFn: () => studioSkills.workspace(selectedSlug),
@@ -441,6 +478,23 @@ export default function StudioSkillsPage() {
     },
   });
 
+  const updateSkillAccessMutation = useMutation({
+    mutationFn: () => {
+      if (!selectedSkill) throw new Error("Skill is not selected");
+      return studioSkills.update(selectedSkill.slug, {
+        is_shared: skillAccessDraft.is_shared,
+        shared_user_ids: skillAccessDraft.shared_user_ids,
+      });
+    },
+    onSuccess: async (response) => {
+      await invalidateSkillQueries(response.slug);
+      toast({ description: tr("Доступ к скиллу обновлён", "Skill access updated") });
+    },
+    onError: (error: Error) => {
+      toast({ variant: "destructive", description: error.message });
+    },
+  });
+
   const openCreateDialog = (template?: StudioSkillTemplate | null) => {
     setSelectedTemplateSlug(template?.slug || "__none__");
     setWizard(createWizardState(template || null));
@@ -483,12 +537,12 @@ export default function StudioSkillsPage() {
   };
 
   const saveCurrentFile = () => {
-    if (!selectedFilePath) return;
+    if (!selectedFilePath || !canEditSelectedFile) return;
     updateFileMutation.mutate({ path: selectedFilePath, content: editorValue });
   };
 
   const removeCurrentFile = () => {
-    if (!selectedFilePath || selectedFilePath === "SKILL.md") return;
+    if (!selectedFilePath || selectedFilePath === "SKILL.md" || !canEditSelectedFile) return;
     const confirmed = window.confirm(
       tr(`Удалить файл ${selectedFilePath}? Это действие нельзя отменить.`, `Delete ${selectedFilePath}? This cannot be undone.`),
     );
@@ -499,6 +553,9 @@ export default function StudioSkillsPage() {
   const isEditorDirty = Boolean(selectedFileDetail && editorValue !== selectedFileDetail.content);
   const workspaceErrors = workspace?.validation.errors || [];
   const workspaceWarnings = workspace?.validation.warnings || [];
+  const canEditSkill = Boolean(selectedSkill?.can_edit);
+  const canShareSkill = Boolean(selectedSkill?.can_share && isAdmin);
+  const canEditSelectedFile = Boolean(selectedWorkspaceFile?.editable && canEditSkill);
 
   return (
     <div className="flex h-full flex-col">
@@ -533,10 +590,12 @@ export default function StudioSkillsPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-              <Button variant="outline" size="sm" onClick={() => navigate("/studio/mcp")} className="h-9 gap-1.5 rounded-md px-3">
-                <Server className="h-3.5 w-3.5" />
-                {tr("MCP Реестр", "MCP Registry")}
-              </Button>
+              {canOpenMcp ? (
+                <Button variant="outline" size="sm" onClick={() => navigate("/studio/mcp")} className="h-9 gap-1.5 rounded-md px-3">
+                  <Server className="h-3.5 w-3.5" />
+                  {tr("MCP Реестр", "MCP Registry")}
+                </Button>
+              ) : null}
               <Button variant="outline" size="sm" onClick={() => validateMutation.mutate()} className="h-9 gap-1.5 rounded-md px-3">
                 {validateMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Shield className="h-3.5 w-3.5" />}
                 {tr("Проверить библиотеку", "Validate Library")}
@@ -545,10 +604,12 @@ export default function StudioSkillsPage() {
                 <WandSparkles className="h-3.5 w-3.5" />
                 {tr("Новый скилл", "New Skill")}
               </Button>
-              <Button size="sm" variant="outline" onClick={() => navigate("/studio/agents")} className="h-9 gap-1.5 rounded-md px-3">
-                <Bot className="h-3.5 w-3.5" />
-                {tr("Конфиги агентов", "Agent Configs")}
-              </Button>
+              {canOpenAgents ? (
+                <Button size="sm" variant="outline" onClick={() => navigate("/studio/agents")} className="h-9 gap-1.5 rounded-md px-3">
+                  <Bot className="h-3.5 w-3.5" />
+                  {tr("Конфиги агентов", "Agent Configs")}
+                </Button>
+              ) : null}
             </div>
           </div>
         </section>
@@ -687,7 +748,33 @@ export default function StudioSkillsPage() {
                       <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{tr("Workspace path", "Workspace path")}</div>
                       <div className="mt-1 break-all font-mono text-[11px] text-foreground">{selectedSkill.path}</div>
                     </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {selectedSkill.is_owner ? <Badge variant="secondary">{tr("Мой скилл", "My skill")}</Badge> : null}
+                      {!selectedSkill.is_owner && selectedSkill.owner_username ? <Badge variant="outline">{tr(`Владелец: ${selectedSkill.owner_username}`, `Owner: ${selectedSkill.owner_username}`)}</Badge> : null}
+                      {selectedSkill.is_shared ? <Badge variant="outline">{tr("Shared", "Shared")}</Badge> : null}
+                      {selectedSkill.can_edit === false ? <Badge variant="outline">{tr("Только чтение", "Read only")}</Badge> : null}
+                    </div>
                   </div>
+
+                  {canShareSkill ? (
+                    <ShareAccessEditor
+                      title={tr("Доступ к скиллу", "Skill access")}
+                      description={tr("Админ может открыть этот скилл всем пользователям Studio Skills или выдать доступ только отдельным людям.", "Admin can expose this skill to everyone with Studio Skills access or share it with selected users only.")}
+                      isShared={skillAccessDraft.is_shared}
+                      sharedUserIds={skillAccessDraft.shared_user_ids}
+                      users={shareUsers}
+                      disabled={updateSkillAccessMutation.isPending}
+                      onSharedChange={(value) => setSkillAccessDraft((prev) => ({ ...prev, is_shared: value }))}
+                      onToggleUser={(userId) =>
+                        setSkillAccessDraft((prev) => ({
+                          ...prev,
+                          shared_user_ids: prev.shared_user_ids.includes(userId)
+                            ? prev.shared_user_ids.filter((id) => id !== userId)
+                            : [...prev.shared_user_ids, userId],
+                        }))
+                      }
+                    />
+                  ) : null}
 
                   <div className="grid gap-4 lg:grid-cols-2">
                     {selectedSkill.guardrail_summary?.length > 0 && (
@@ -745,18 +832,24 @@ export default function StudioSkillsPage() {
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-md px-3 text-[11px]" onClick={() => setCreateFileOpen(true)}>
+                        <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-md px-3 text-[11px]" onClick={() => setCreateFileOpen(true)} disabled={!canEditSkill}>
                           <FolderPlus className="h-3.5 w-3.5" />
                           {tr("Новый файл", "New File")}
                         </Button>
-                        <Button size="sm" className="h-8 gap-1.5 rounded-md px-3 text-[11px]" onClick={saveCurrentFile} disabled={!selectedFilePath || !isEditorDirty || updateFileMutation.isPending}>
+                        <Button size="sm" className="h-8 gap-1.5 rounded-md px-3 text-[11px]" onClick={saveCurrentFile} disabled={!selectedFilePath || !isEditorDirty || updateFileMutation.isPending || !canEditSelectedFile}>
                           {updateFileMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                           {tr("Сохранить", "Save")}
                         </Button>
-                        <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-md px-3 text-[11px]" onClick={removeCurrentFile} disabled={!selectedFilePath || selectedFilePath === "SKILL.md" || deleteFileMutation.isPending}>
+                        <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-md px-3 text-[11px]" onClick={removeCurrentFile} disabled={!selectedFilePath || selectedFilePath === "SKILL.md" || deleteFileMutation.isPending || !canEditSelectedFile}>
                           {deleteFileMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                           {tr("Удалить", "Delete")}
                         </Button>
+                        {canShareSkill ? (
+                          <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-md px-3 text-[11px]" onClick={() => updateSkillAccessMutation.mutate()} disabled={updateSkillAccessMutation.isPending}>
+                            {updateSkillAccessMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Shield className="h-3.5 w-3.5" />}
+                            {tr("Сохранить доступ", "Save access")}
+                          </Button>
+                        ) : null}
                       </div>
                     </div>
 
@@ -832,7 +925,7 @@ export default function StudioSkillsPage() {
                             </div>
 
                             <div className="p-4">
-                              <Textarea rows={20} value={editorValue} onChange={(event) => setEditorValue(event.target.value)} className="min-h-[360px] font-mono text-[12px] leading-5" />
+                              <Textarea rows={20} value={editorValue} onChange={(event) => setEditorValue(event.target.value)} className="min-h-[360px] font-mono text-[12px] leading-5" readOnly={!canEditSelectedFile} />
                               <div className="mt-3 flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
                                 <div className="text-[11px] text-muted-foreground">
                                   {selectedWorkspaceFile.path === "SKILL.md"
@@ -841,7 +934,7 @@ export default function StudioSkillsPage() {
                                 </div>
                                 <div className="flex flex-wrap items-center gap-2">
                                   {isEditorDirty ? <span className="text-[11px] text-amber-300">{tr("Есть несохранённые изменения", "Unsaved changes")}</span> : <span className="text-[11px] text-muted-foreground">{tr("Сохранено", "Saved")}</span>}
-                                  <Button size="sm" className="h-8 gap-1.5 rounded-md px-3 text-[11px]" onClick={saveCurrentFile} disabled={!isEditorDirty || updateFileMutation.isPending}>
+                                  <Button size="sm" className="h-8 gap-1.5 rounded-md px-3 text-[11px]" onClick={saveCurrentFile} disabled={!isEditorDirty || updateFileMutation.isPending || !canEditSelectedFile}>
                                     {updateFileMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                                     {tr("Сохранить файл", "Save file")}
                                   </Button>
@@ -1162,7 +1255,7 @@ export default function StudioSkillsPage() {
           </div>
           <div className="mt-4 flex justify-end gap-2">
             <Button variant="outline" onClick={() => setCreateFileOpen(false)}>{tr("Отмена", "Cancel")}</Button>
-            <Button onClick={() => createFileMutation.mutate({ path: createFilePath.trim(), content: createFileContent })} disabled={!createFilePath.trim() || createFileMutation.isPending} className="gap-1.5">
+            <Button onClick={() => createFileMutation.mutate({ path: createFilePath.trim(), content: createFileContent })} disabled={!createFilePath.trim() || createFileMutation.isPending || !canEditSkill} className="gap-1.5">
               {createFileMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FolderPlus className="h-3.5 w-3.5" />}
               {tr("Создать файл", "Create file")}
             </Button>

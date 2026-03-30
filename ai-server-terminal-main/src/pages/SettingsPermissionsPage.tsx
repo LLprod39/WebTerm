@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+  ACCESS_FEATURE_OPTIONS,
   deleteAccessGroupPermission,
   deleteAccessPermission,
   fetchAccessGroupPermissions,
@@ -14,6 +15,8 @@ import {
   upsertAccessPermission,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { EmptyState, SectionCard, StatusBadge } from "@/components/ui/page-shell";
+import { SettingsWorkspace } from "@/components/settings/SettingsWorkspace";
 import { useI18n } from "@/lib/i18n";
 import {
   ACCESS_UI_TEXT,
@@ -21,15 +24,17 @@ import {
   localizeAccessFeatures,
 } from "@/lib/accessUiText";
 
-const FALLBACK_FEATURES = [
-  { value: "servers", label: "Servers" },
-  { value: "dashboard", label: "Dashboard" },
-  { value: "agents", label: "Agents" },
-  { value: "studio", label: "Studio" },
-  { value: "settings", label: "Settings" },
-  { value: "orchestrator", label: "Orchestrator" },
-  { value: "knowledge_base", label: "Knowledge Base" },
-];
+const SELECT_CLASS = "h-10 rounded-xl border border-border bg-background/80 px-3 text-sm text-foreground";
+
+const FALLBACK_FEATURES = ACCESS_FEATURE_OPTIONS;
+
+function FieldLabel({ htmlFor, children }: { htmlFor?: string; children: string }) {
+  return (
+    <label htmlFor={htmlFor} className="mb-1.5 block text-[11px] font-medium text-muted-foreground">
+      {children}
+    </label>
+  );
+}
 
 export default function SettingsPermissionsPage() {
   const { lang } = useI18n();
@@ -153,181 +158,194 @@ export default function SettingsPermissionsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground">{copy.title}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{copy.subtitle}</p>
+    <SettingsWorkspace
+      title={copy.title}
+      description={copy.subtitle}
+      asideHint="Точечные правила лучше использовать как исключения. Базовый доступ держи в профилях и группах, чтобы схема прав оставалась читаемой."
+      actions={
+        <>
+          <StatusBadge label={`User Rules: ${permissions.length}`} dot={false} />
+          <StatusBadge label={`Group Rules: ${groupPermissions.length}`} tone="info" dot={false} />
+          <StatusBadge label={`Features: ${features.length}`} dot={false} />
+        </>
+      }
+    >
+      <div className="workspace-subtle rounded-xl px-4 py-3 text-sm leading-6 text-muted-foreground">
+        Здесь удобно хранить только исключения: разрешить или запретить конкретную фичу отдельно от основного профиля доступа.
+      </div>
+      <div className="grid gap-6 xl:grid-cols-2">
+        <SectionCard title={copy.userOverrideTitle} description="Точечное правило перекрывает стандартный доступ пользователя.">
+          <div className="grid gap-3 md:grid-cols-4">
+            <div>
+              <FieldLabel htmlFor="permission-user-select">{lang === "ru" ? "Пользователь" : "User"}</FieldLabel>
+              <select
+                id="permission-user-select"
+                value={userForm.userId}
+                onChange={(e) => setUserForm((current) => ({ ...current, userId: Number(e.target.value) }))}
+                className={SELECT_CLASS}
+              >
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.username}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <FieldLabel htmlFor="permission-feature-select">{lang === "ru" ? "Фича" : "Feature"}</FieldLabel>
+              <select
+                id="permission-feature-select"
+                value={userForm.feature}
+                onChange={(e) => setUserForm((current) => ({ ...current, feature: e.target.value }))}
+                className={SELECT_CLASS}
+              >
+                {features.map((feature) => (
+                  <option key={feature.value} value={feature.value}>
+                    {feature.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <FieldLabel htmlFor="permission-rule-select">{lang === "ru" ? "Правило" : "Rule"}</FieldLabel>
+              <select
+                id="permission-rule-select"
+                value={userForm.allowed ? "1" : "0"}
+                onChange={(e) => setUserForm((current) => ({ ...current, allowed: e.target.value === "1" }))}
+                className={SELECT_CLASS}
+              >
+                <option value="1">{common.allow}</option>
+                <option value="0">{common.deny}</option>
+              </select>
+            </div>
+            <div className="flex items-end">
+              <Button className="w-full" onClick={() => void createUserPermission()} disabled={!users.length || !features.length}>
+                {common.save}
+              </Button>
+            </div>
+          </div>
+        </SectionCard>
+
+        <SectionCard title={copy.groupPolicyTitle} description="Групповая политика применяется для всех участников группы.">
+          <div className="grid gap-3 md:grid-cols-4">
+            <div>
+              <FieldLabel htmlFor="group-permission-group-select">{lang === "ru" ? "Группа" : "Group"}</FieldLabel>
+              <select
+                id="group-permission-group-select"
+                value={groupForm.groupId}
+                onChange={(e) => setGroupForm((current) => ({ ...current, groupId: Number(e.target.value) }))}
+                className={SELECT_CLASS}
+              >
+                {groups.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <FieldLabel htmlFor="group-permission-feature-select">{lang === "ru" ? "Фича" : "Feature"}</FieldLabel>
+              <select
+                id="group-permission-feature-select"
+                value={groupForm.feature}
+                onChange={(e) => setGroupForm((current) => ({ ...current, feature: e.target.value }))}
+                className={SELECT_CLASS}
+              >
+                {features.map((feature) => (
+                  <option key={feature.value} value={feature.value}>
+                    {feature.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <FieldLabel htmlFor="group-permission-rule-select">{lang === "ru" ? "Правило" : "Rule"}</FieldLabel>
+              <select
+                id="group-permission-rule-select"
+                value={groupForm.allowed ? "1" : "0"}
+                onChange={(e) => setGroupForm((current) => ({ ...current, allowed: e.target.value === "1" }))}
+                className={SELECT_CLASS}
+              >
+                <option value="1">{common.allow}</option>
+                <option value="0">{common.deny}</option>
+              </select>
+            </div>
+            <div className="flex items-end">
+              <Button className="w-full" onClick={() => void createGroupPermission()} disabled={!groups.length || !features.length}>
+                {common.save}
+              </Button>
+            </div>
+          </div>
+        </SectionCard>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="space-y-3 rounded-lg border border-border bg-card p-4">
-          <h2 className="text-sm font-medium text-foreground">{copy.userOverrideTitle}</h2>
-          <div className="grid gap-3 md:grid-cols-4">
-            <select
-              value={userForm.userId}
-              onChange={(e) =>
-                setUserForm((current) => ({ ...current, userId: Number(e.target.value) }))
-              }
-              className="rounded-md border border-border bg-secondary px-3 py-2 text-sm"
-            >
-              {users.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.username}
-                </option>
-              ))}
-            </select>
-            <select
-              value={userForm.feature}
-              onChange={(e) =>
-                setUserForm((current) => ({ ...current, feature: e.target.value }))
-              }
-              className="rounded-md border border-border bg-secondary px-3 py-2 text-sm"
-            >
-              {features.map((feature) => (
-                <option key={feature.value} value={feature.value}>
-                  {feature.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={userForm.allowed ? "1" : "0"}
-              onChange={(e) =>
-                setUserForm((current) => ({ ...current, allowed: e.target.value === "1" }))
-              }
-              className="rounded-md border border-border bg-secondary px-3 py-2 text-sm"
-            >
-              <option value="1">{common.allow}</option>
-              <option value="0">{common.deny}</option>
-            </select>
-            <Button onClick={() => void createUserPermission()} disabled={!users.length || !features.length}>
-              {common.save}
-            </Button>
-          </div>
-        </section>
-
-        <section className="space-y-3 rounded-lg border border-border bg-card p-4">
-          <h2 className="text-sm font-medium text-foreground">{copy.groupPolicyTitle}</h2>
-          <div className="grid gap-3 md:grid-cols-4">
-            <select
-              value={groupForm.groupId}
-              onChange={(e) =>
-                setGroupForm((current) => ({ ...current, groupId: Number(e.target.value) }))
-              }
-              className="rounded-md border border-border bg-secondary px-3 py-2 text-sm"
-            >
-              {groups.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name}
-                </option>
-              ))}
-            </select>
-            <select
-              value={groupForm.feature}
-              onChange={(e) =>
-                setGroupForm((current) => ({ ...current, feature: e.target.value }))
-              }
-              className="rounded-md border border-border bg-secondary px-3 py-2 text-sm"
-            >
-              {features.map((feature) => (
-                <option key={feature.value} value={feature.value}>
-                  {feature.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={groupForm.allowed ? "1" : "0"}
-              onChange={(e) =>
-                setGroupForm((current) => ({ ...current, allowed: e.target.value === "1" }))
-              }
-              className="rounded-md border border-border bg-secondary px-3 py-2 text-sm"
-            >
-              <option value="1">{common.allow}</option>
-              <option value="0">{common.deny}</option>
-            </select>
-            <Button onClick={() => void createGroupPermission()} disabled={!groups.length || !features.length}>
-              {common.save}
-            </Button>
-          </div>
-        </section>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-lg border border-border bg-card">
-          <div className="border-b border-border px-4 py-3">
-            <h2 className="text-sm font-medium text-foreground">{copy.userListTitle}</h2>
-          </div>
-          <div className="divide-y divide-border">
+      <div className="grid gap-6 xl:grid-cols-2">
+        <SectionCard title={copy.userListTitle} description="Список точечных пользовательских правил.">
+          <div className="space-y-3">
             {permissions.length ? (
               permissions.map((permission) => (
-                <div key={permission.id} className="flex items-center gap-3 px-4 py-3">
-                  <div>
-                    <div className="font-medium text-foreground">{permission.username}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {getAccessFeatureLabel(lang, permission.feature, permission.feature_display)} • {permission.allowed ? common.allowed : common.denied}
+                <div key={permission.id} className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-background/50 px-4 py-3 md:flex-row md:items-center">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="font-medium text-foreground">{permission.username}</div>
+                      <StatusBadge
+                        label={permission.allowed ? common.allowed : common.denied}
+                        tone={permission.allowed ? "success" : "danger"}
+                      />
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {getAccessFeatureLabel(lang, permission.feature, permission.feature_display)}
                     </div>
                   </div>
-                  <div className="ml-auto flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => void toggleUserPermission(permission.id, permission.allowed)}
-                    >
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => void toggleUserPermission(permission.id, permission.allowed)}>
                       {common.toggle}
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => void removeUserPermission(permission.id)}
-                    >
+                    <Button size="sm" variant="destructive" onClick={() => void removeUserPermission(permission.id)}>
                       {common.delete}
                     </Button>
                   </div>
                 </div>
               ))
             ) : (
-              <div className="px-4 py-5 text-sm text-muted-foreground">{copy.noUserOverrides}</div>
+              <EmptyState title={copy.noUserOverrides} description="Когда создадите правило, оно появится здесь." />
             )}
           </div>
-        </section>
+        </SectionCard>
 
-        <section className="rounded-lg border border-border bg-card">
-          <div className="border-b border-border px-4 py-3">
-            <h2 className="text-sm font-medium text-foreground">{copy.groupListTitle}</h2>
-          </div>
-          <div className="divide-y divide-border">
+        <SectionCard title={copy.groupListTitle} description="Список явных групповых политик.">
+          <div className="space-y-3">
             {groupPermissions.length ? (
               groupPermissions.map((permission) => (
-                <div key={permission.id} className="flex items-center gap-3 px-4 py-3">
-                  <div>
-                    <div className="font-medium text-foreground">{permission.group_name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {getAccessFeatureLabel(lang, permission.feature, permission.feature_display)} • {permission.allowed ? common.allowed : common.denied}
+                <div key={permission.id} className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-background/50 px-4 py-3 md:flex-row md:items-center">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="font-medium text-foreground">{permission.group_name}</div>
+                      <StatusBadge
+                        label={permission.allowed ? common.allowed : common.denied}
+                        tone={permission.allowed ? "success" : "danger"}
+                      />
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {getAccessFeatureLabel(lang, permission.feature, permission.feature_display)}
                     </div>
                   </div>
-                  <div className="ml-auto flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => void toggleGroupPermission(permission.id, permission.allowed)}
-                    >
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => void toggleGroupPermission(permission.id, permission.allowed)}>
                       {common.toggle}
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => void removeGroupPermission(permission.id)}
-                    >
+                    <Button size="sm" variant="destructive" onClick={() => void removeGroupPermission(permission.id)}>
                       {common.delete}
                     </Button>
                   </div>
                 </div>
               ))
             ) : (
-              <div className="px-4 py-5 text-sm text-muted-foreground">{copy.noGroupPolicies}</div>
+              <EmptyState title={copy.noGroupPolicies} description="Когда зададите политику для группы, она появится здесь." />
             )}
           </div>
-        </section>
+        </SectionCard>
       </div>
-    </div>
+    </SettingsWorkspace>
   );
 }

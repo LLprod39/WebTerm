@@ -34,14 +34,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { ShareAccessEditor } from "@/components/studio/ShareAccessEditor";
 import { useToast } from "@/hooks/use-toast";
 import {
+  fetchAuthSession,
   studioAgents,
   studioMCP,
   studioServers,
+  studioShareUsers,
   studioSkills,
   type AgentConfig,
 } from "@/lib/api";
+import { hasFeatureAccess } from "@/lib/featureAccess";
 
 const ALL_TOOLS = [
   { id: "ssh_execute", label: "SSH Execute", description: "Run commands on servers" },
@@ -68,11 +72,21 @@ function AgentForm({
   onSave,
   onCancel,
   isPending,
+  canUseMcp,
+  canUseSkills,
+  shareUsers,
+  isAdmin,
+  canEdit,
 }: {
   initial: Partial<AgentConfig>;
   onSave: (payload: Partial<AgentConfig>) => void;
   onCancel: () => void;
   isPending: boolean;
+  canUseMcp: boolean;
+  canUseSkills: boolean;
+  shareUsers: Array<{ id: number; username: string; email?: string }>;
+  isAdmin: boolean;
+  canEdit: boolean;
 }) {
   const navigate = useNavigate();
   const [form, setForm] = useState<Partial<AgentConfig>>({
@@ -87,12 +101,16 @@ function AgentForm({
     skill_slugs: [],
     mcp_servers: [],
     server_scope: [],
+    is_shared: false,
+    shared_user_ids: [],
     ...initial,
   });
+  const readOnly = !canEdit;
 
   const { data: mcpList = [] } = useQuery({
     queryKey: ["studio", "mcp"],
     queryFn: studioMCP.list,
+    enabled: canUseMcp,
   });
 
   const { data: servers = [] } = useQuery({
@@ -103,6 +121,7 @@ function AgentForm({
   const { data: skills = [] } = useQuery({
     queryKey: ["studio", "skills"],
     queryFn: studioSkills.list,
+    enabled: canUseSkills,
   });
 
   const setField = (key: keyof AgentConfig, value: unknown) => {
@@ -151,6 +170,7 @@ function AgentForm({
 
   const mcpIds = (form.mcp_servers || []).map((item) => (typeof item === "number" ? item : item.id));
   const serverScopeIds = (form.server_scope || []).map((item) => (typeof item === "number" ? item : item.id));
+  const sharedUserIds = form.shared_user_ids || [];
 
   return (
     <div className="space-y-6">
@@ -161,6 +181,7 @@ function AgentForm({
             value={form.icon || "B"}
             onChange={(event) => setField("icon", event.target.value)}
             className="text-center text-lg"
+            disabled={readOnly}
           />
         </div>
         <div className="space-y-2">
@@ -169,6 +190,7 @@ function AgentForm({
             value={form.name || ""}
             onChange={(event) => setField("name", event.target.value)}
             placeholder="Ops triage agent"
+            disabled={readOnly}
           />
         </div>
       </div>
@@ -179,6 +201,7 @@ function AgentForm({
           value={form.description || ""}
           onChange={(event) => setField("description", event.target.value)}
           placeholder="Reusable agent for infrastructure checks and repair suggestions"
+          disabled={readOnly}
         />
       </div>
 
@@ -186,7 +209,7 @@ function AgentForm({
         <div className="space-y-2">
           <Label>Model</Label>
           <Select value={form.model || MODEL_OPTIONS[0]} onValueChange={(value) => setField("model", value)}>
-            <SelectTrigger>
+            <SelectTrigger disabled={readOnly}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -207,6 +230,7 @@ function AgentForm({
             max={50}
             value={form.max_iterations || 10}
             onChange={(event) => setField("max_iterations", Number(event.target.value) || 10)}
+            disabled={readOnly}
           />
         </div>
       </div>
@@ -218,6 +242,7 @@ function AgentForm({
           onChange={(event) => setField("system_prompt", event.target.value)}
           rows={4}
           placeholder="You are a careful operations agent. Verify before any risky action."
+          disabled={readOnly}
         />
       </div>
 
@@ -228,6 +253,7 @@ function AgentForm({
           onChange={(event) => setField("instructions", event.target.value)}
           rows={4}
           placeholder="Always gather context first. Avoid destructive commands unless explicitly approved."
+          disabled={readOnly}
         />
       </div>
 
@@ -243,6 +269,7 @@ function AgentForm({
                 checked={(form.allowed_tools || []).includes(tool.id)}
                 onCheckedChange={() => toggleTool(tool.id)}
                 className="mt-0.5"
+                disabled={readOnly}
               />
               <div>
                 <div className="text-sm font-medium text-foreground">{tool.label}</div>
@@ -253,7 +280,7 @@ function AgentForm({
         </div>
       </div>
 
-      {mcpList.length > 0 ? (
+      {canUseMcp && mcpList.length > 0 ? (
         <div className="space-y-3">
           <Label>MCP servers</Label>
           <div className="grid gap-2">
@@ -262,7 +289,7 @@ function AgentForm({
                 key={mcp.id}
                 className="flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 bg-background/30 px-3 py-3 transition-colors hover:bg-background/40"
               >
-                <Checkbox checked={mcpIds.includes(mcp.id)} onCheckedChange={() => toggleMcp(mcp.id)} />
+                <Checkbox checked={mcpIds.includes(mcp.id)} onCheckedChange={() => toggleMcp(mcp.id)} disabled={readOnly} />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-medium text-foreground">{mcp.name}</span>
@@ -280,7 +307,7 @@ function AgentForm({
         </div>
       ) : null}
 
-      {skills.length > 0 ? (
+      {canUseSkills && skills.length > 0 ? (
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-2">
             <Label>Skills</Label>
@@ -290,6 +317,7 @@ function AgentForm({
               size="sm"
               className="h-8 gap-1.5 rounded-md px-3 text-[11px]"
               onClick={() => navigate("/studio/skills")}
+              disabled={readOnly}
             >
               <BookOpen className="h-3.5 w-3.5" />
               Browse catalog
@@ -305,6 +333,7 @@ function AgentForm({
                   checked={(form.skill_slugs || []).includes(skill.slug)}
                   onCheckedChange={() => toggleSkill(skill.slug)}
                   className="mt-0.5"
+                  disabled={readOnly}
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -336,6 +365,7 @@ function AgentForm({
                 <Checkbox
                   checked={serverScopeIds.includes(server.id)}
                   onCheckedChange={() => toggleServerScope(server.id)}
+                  disabled={readOnly}
                 />
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium text-foreground">{server.name}</div>
@@ -345,6 +375,26 @@ function AgentForm({
             ))}
           </div>
         </div>
+      ) : null}
+
+      {isAdmin ? (
+        <ShareAccessEditor
+          title="Visibility"
+          description="Admin controls who can open and reuse this agent profile."
+          isShared={Boolean(form.is_shared)}
+          sharedUserIds={sharedUserIds}
+          users={shareUsers}
+          disabled={readOnly}
+          onSharedChange={(value) => setField("is_shared", value)}
+          onToggleUser={(userId) =>
+            setField(
+              "shared_user_ids",
+              sharedUserIds.includes(userId)
+                ? sharedUserIds.filter((id) => id !== userId)
+                : [...sharedUserIds, userId],
+            )
+          }
+        />
       ) : null}
 
       {form.skill_errors?.length ? (
@@ -366,7 +416,7 @@ function AgentForm({
         </Button>
         <Button
           onClick={() => onSave(form)}
-          disabled={!form.name?.trim() || isPending}
+          disabled={readOnly || !form.name?.trim() || isPending}
           className="gap-2"
         >
           {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
@@ -384,9 +434,26 @@ export default function AgentConfigPage() {
   const [editAgent, setEditAgent] = useState<Partial<AgentConfig> | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AgentConfig | null>(null);
 
+  const { data: session } = useQuery({
+    queryKey: ["auth", "session"],
+    queryFn: fetchAuthSession,
+    staleTime: 60_000,
+    retry: false,
+  });
+  const user = session?.user ?? null;
+  const isAdmin = Boolean(user?.is_staff);
+  const canUseMcp = hasFeatureAccess(user, "studio_mcp");
+  const canUseSkills = hasFeatureAccess(user, "studio_skills");
+
   const { data: agents = [], isLoading } = useQuery({
     queryKey: ["studio", "agents"],
     queryFn: studioAgents.list,
+  });
+
+  const { data: shareUsers = [] } = useQuery({
+    queryKey: ["studio", "share-users"],
+    queryFn: studioShareUsers.list,
+    enabled: isAdmin,
   });
 
   const createMutation = useMutation({
@@ -427,9 +494,11 @@ export default function AgentConfigPage() {
   });
 
   const handleSave = (payload: Partial<AgentConfig>) => {
-    if ((editAgent as AgentConfig | null)?.id) {
+    const editingAgent = editAgent as AgentConfig | null;
+    if (editingAgent?.id) {
+      if (editingAgent.can_edit === false) return;
       updateMutation.mutate({
-        id: (editAgent as AgentConfig).id,
+        id: editingAgent.id,
         payload,
       });
       return;
@@ -497,6 +566,12 @@ export default function AgentConfigPage() {
                       <CardDescription className="mt-1 text-xs">
                         {agent.description || "No description"}
                       </CardDescription>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {agent.is_owner ? <Badge variant="secondary">Mine</Badge> : null}
+                        {!agent.is_owner && agent.owner_username ? <Badge variant="outline">Owner: {agent.owner_username}</Badge> : null}
+                        {agent.is_shared ? <Badge variant="outline">Shared</Badge> : null}
+                        {agent.can_edit === false ? <Badge variant="outline">Read only</Badge> : null}
+                      </div>
                     </div>
                   </div>
 
@@ -506,17 +581,20 @@ export default function AgentConfigPage() {
                       variant="ghost"
                       className="h-8 w-8 rounded-xl"
                       onClick={() => setEditAgent(agent)}
+                      title={agent.can_edit === false ? "View agent" : "Edit agent"}
                     >
                       <Pencil className="h-4 w-4" />
                     </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8 rounded-xl text-destructive hover:text-destructive"
-                      onClick={() => setDeleteTarget(agent)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {agent.can_edit !== false ? (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 rounded-xl text-destructive hover:text-destructive"
+                        onClick={() => setDeleteTarget(agent)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
               </CardHeader>
@@ -581,7 +659,13 @@ export default function AgentConfigPage() {
       <Dialog open={editAgent !== null} onOpenChange={(nextOpen) => !nextOpen && setEditAgent(null)}>
         <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{(editAgent as AgentConfig | null)?.id ? "Edit agent" : "New agent"}</DialogTitle>
+            <DialogTitle>
+              {(editAgent as AgentConfig | null)?.id
+                ? (editAgent as AgentConfig | null)?.can_edit === false
+                  ? "View agent"
+                  : "Edit agent"
+                : "New agent"}
+            </DialogTitle>
             <DialogDescription>
               Configure model, tools, scopes, MCP servers, and skills for this reusable agent profile.
             </DialogDescription>
@@ -592,6 +676,11 @@ export default function AgentConfigPage() {
               onSave={handleSave}
               onCancel={() => setEditAgent(null)}
               isPending={createMutation.isPending || updateMutation.isPending}
+              canUseMcp={canUseMcp}
+              canUseSkills={canUseSkills}
+              shareUsers={shareUsers}
+              isAdmin={isAdmin}
+              canEdit={(editAgent as AgentConfig | null)?.can_edit !== false}
             />
           ) : null}
         </DialogContent>

@@ -3,7 +3,6 @@ import yaml from "js-yaml";
 import { Link } from "react-router-dom";
 import {
   addServerGroupMember,
-  
   clearMasterPassword,
   createServer,
   createServerGroup,
@@ -26,11 +25,11 @@ import {
   saveGlobalServerContext,
   saveGroupServerContext,
   setMasterPassword,
-  subscribeServerGroup,
   testServer,
   updateServer,
   updateServerGroup,
   updateServerKnowledge,
+  type FrontendGroup,
   type FrontendServer,
   type ServerDetailsResponse,
   type ServerGroupRole,
@@ -65,6 +64,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -94,6 +94,12 @@ interface ServerForm {
   notes: string;
   group_id: number | null;
   is_active: boolean;
+}
+
+interface ServerGroupForm {
+  name: string;
+  description: string;
+  color: string;
 }
 
 interface ShareItem {
@@ -344,6 +350,14 @@ function initialForm(): ServerForm {
   };
 }
 
+function initialGroupForm(): ServerGroupForm {
+  return {
+    name: "",
+    description: "",
+    color: "#3b82f6",
+  };
+}
+
 function asPayload(form: ServerForm) {
   return {
     name: form.name,
@@ -468,9 +482,10 @@ export default function Servers() {
   const [search, setSearch] = useState("");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [selectedServerId, setSelectedServerId] = useState<number | null>(null);
-  const [groupName, setGroupName] = useState("");
-  const [groupDescription, setGroupDescription] = useState("");
-  const [groupColor, setGroupColor] = useState("#3b82f6");
+  const [groupDialogOpen, setGroupDialogOpen] = useState(false);
+  const [editingGroup, setEditingGroup] = useState<FrontendGroup | null>(null);
+  const [groupDeleteTarget, setGroupDeleteTarget] = useState<FrontendGroup | null>(null);
+  const [groupForm, setGroupForm] = useState<ServerGroupForm>(initialGroupForm());
   const [groupSaving, setGroupSaving] = useState(false);
   // Playbook state
   const [playbooks, setPlaybooks] = useState<Playbook[]>(loadPlaybooks);
@@ -485,6 +500,7 @@ export default function Servers() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingServer, setEditingServer] = useState<FrontendServer | null>(null);
+  const [serverDeleteTarget, setServerDeleteTarget] = useState<FrontendServer | null>(null);
   const [form, setForm] = useState<ServerForm>(initialForm());
   const [saving, setSaving] = useState(false);
 
@@ -537,9 +553,17 @@ export default function Servers() {
 
   const servers = useMemo(() => data?.servers ?? [], [data?.servers]);
   const groups = useMemo(() => data?.groups ?? [], [data?.groups]);
+  const manageableGroups = useMemo(
+    () =>
+      groups.filter(
+        (group): group is FrontendGroup & { id: number; role: ServerGroupRole } =>
+          group.id !== null && Boolean(group.role),
+      ),
+    [groups],
+  );
   const onlineCount = servers.filter((server) => server.status === "online").length;
   const sharedCount = servers.filter((server) => server.is_shared).length;
-  const groupCount = groups.filter((group) => group.id !== null).length;
+  const groupCount = manageableGroups.length;
 
   const filtered = useMemo(() => {
     if (!search) return servers;
@@ -568,8 +592,8 @@ export default function Servers() {
   }, [filtered, selectedServerId]);
 
   const selectedRulesGroup = useMemo(
-    () => groups.find((group) => group.id === rulesGroupId) ?? null,
-    [groups, rulesGroupId],
+    () => manageableGroups.find((group) => group.id === rulesGroupId) ?? null,
+    [manageableGroups, rulesGroupId],
   );
 
   const parsedGlobalEnvironment = useMemo(() => {
@@ -696,16 +720,15 @@ export default function Servers() {
   };
 
   useEffect(() => {
-    const realGroups = groups.filter((group) => group.id !== null);
-    if (!realGroups.length) {
+    if (!manageableGroups.length) {
       setRulesGroupId(null);
       clearGroupContextState();
       return;
     }
-    if (!rulesGroupId || !realGroups.some((group) => group.id === rulesGroupId)) {
-      setRulesGroupId(realGroups[0].id);
+    if (!rulesGroupId || !manageableGroups.some((group) => group.id === rulesGroupId)) {
+      setRulesGroupId(manageableGroups[0].id);
     }
-  }, [clearGroupContextState, groups, rulesGroupId]);
+  }, [clearGroupContextState, manageableGroups, rulesGroupId]);
 
   useEffect(() => {
     if (mainTab !== "rules") return;
@@ -754,6 +777,26 @@ export default function Servers() {
     setDialogOpen(true);
   };
 
+  const openCreateGroup = () => {
+    setEditingGroup(null);
+    setGroupForm(initialGroupForm());
+    setGroupDialogOpen(true);
+  };
+
+  const openGroupSettings = (group: FrontendGroup) => {
+    setEditingGroup(group);
+    setGroupForm({
+      name: group.name,
+      description: group.description || "",
+      color: group.color || "#3b82f6",
+    });
+    setGroupDialogOpen(true);
+  };
+
+  const requestDeleteGroup = (group: FrontendGroup) => {
+    setGroupDeleteTarget(group);
+  };
+
   const openEdit = async (server: FrontendServer) => {
     setEditingServer(server);
     const details = await fetchServerDetails(server.id);
@@ -774,6 +817,10 @@ export default function Servers() {
     setDialogOpen(true);
   };
 
+  const requestDeleteServer = (server: FrontendServer) => {
+    setServerDeleteTarget(server);
+  };
+
   const onSave = async () => {
     setSaving(true);
     try {
@@ -786,9 +833,19 @@ export default function Servers() {
     }
   };
 
-  const onDelete = async (server: FrontendServer) => {
-    if (!confirm(tr("srv.delete_server_confirm", { name: server.name }))) return;
-    await deleteServer(server.id);
+  const onDelete = async () => {
+    if (!serverDeleteTarget?.id) return;
+    const targetId = serverDeleteTarget.id;
+    await deleteServer(targetId);
+    if (advancedServer?.id === targetId) {
+      setAdvancedOpen(false);
+      setAdvancedServer(null);
+    }
+    if (editingServer?.id === targetId) {
+      setDialogOpen(false);
+      setEditingServer(null);
+    }
+    setServerDeleteTarget(null);
     await reload();
   };
 
@@ -799,34 +856,48 @@ export default function Servers() {
     await reload();
   };
 
-  const onCreateGroup = async () => {
-    if (!groupName.trim()) return;
+  const closeGroupDialog = () => {
+    setGroupDialogOpen(false);
+    setEditingGroup(null);
+    setGroupForm(initialGroupForm());
+  };
+
+  const onSaveGroup = async () => {
+    if (!groupForm.name.trim()) return;
     setGroupSaving(true);
     try {
-      await createServerGroup({
-        name: groupName.trim(),
-        description: groupDescription.trim(),
-        color: groupColor,
-      });
-      setGroupName("");
-      setGroupDescription("");
-      setGroupColor("#3b82f6");
+      const payload = {
+        name: groupForm.name.trim(),
+        description: groupForm.description.trim(),
+        color: groupForm.color,
+      };
+      if (editingGroup?.id) {
+        await updateServerGroup(editingGroup.id, payload);
+      } else {
+        await createServerGroup(payload);
+      }
+      closeGroupDialog();
       await reload();
     } finally {
       setGroupSaving(false);
     }
   };
 
-  const onRenameGroup = async (groupId: number, name: string) => {
-    const next = prompt(t("srv.new_group_name"), name);
-    if (!next || next.trim() === name) return;
-    await updateServerGroup(groupId, { name: next.trim() });
-    await reload();
+  const openGroupRules = (groupId: number) => {
+    closeGroupDialog();
+    setRulesGroupId(groupId);
+    setRulesScopeTab("group");
+    setMainTab("rules");
   };
 
-  const onDeleteGroup = async (groupId: number, name: string) => {
-    if (!confirm(tr("srv.delete_group_confirm", { name }))) return;
-    await deleteServerGroup(groupId);
+  const onDeleteGroup = async () => {
+    if (!groupDeleteTarget?.id) return;
+    const targetId = groupDeleteTarget.id;
+    await deleteServerGroup(targetId);
+    if (editingGroup?.id === targetId) {
+      closeGroupDialog();
+    }
+    setGroupDeleteTarget(null);
     await reload();
   };
 
@@ -1023,6 +1094,7 @@ export default function Servers() {
   };
 
   const openAdvanced = async (server: FrontendServer) => {
+    const hasGroupRulesAccess = Boolean(server.group_id && manageableGroups.some((group) => group.id === server.group_id));
     setAdvancedServer(server);
     setAdvancedOpen(true);
     setAdvancedLoading(true);
@@ -1032,7 +1104,7 @@ export default function Servers() {
     setKnowledgeEditingId(null);
     setGroupMemberUser("");
     setGroupRemoveUserId("");
-    if (server.group_id) {
+    if (hasGroupRulesAccess && server.group_id) {
       setRulesGroupId(server.group_id);
     }
     try {
@@ -1040,7 +1112,7 @@ export default function Servers() {
         listServerShares(server.id).catch(() => ({ success: false, shares: [] })),
         listServerKnowledge(server.id).catch(() => ({ success: false, items: [], categories: [] })),
         getGlobalServerContext().catch(() => null),
-        server.group_id ? getGroupServerContext(server.group_id).catch(() => null) : Promise.resolve(null),
+        hasGroupRulesAccess && server.group_id ? getGroupServerContext(server.group_id).catch(() => null) : Promise.resolve(null),
         getMasterPasswordStatus().catch(() => ({ has_master_password: false })),
         fetchServerDetails(server.id).catch(() => null),
       ]);
@@ -1359,7 +1431,7 @@ export default function Servers() {
                                   <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => openEdit(server)}>
                                     <Settings className="h-3.5 w-3.5" />
                                   </Button>
-                                  <Button size="sm" variant="destructive" className="h-7 px-2" onClick={() => onDelete(server)}>
+                                  <Button size="sm" variant="destructive" className="h-7 px-2" onClick={() => requestDeleteServer(server)}>
                                     <Trash2 className="h-3.5 w-3.5" />
                                   </Button>
                                 </>
@@ -1377,57 +1449,85 @@ export default function Servers() {
         </TabsContent>
 
         <TabsContent value="groups" className="space-y-3">
-          <section className="bg-card border border-border rounded-lg p-4 space-y-3">
-            <h2 className="text-sm font-medium">{t("srv.groups")}</h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-              <Input placeholder={t("srv.group_name")} value={groupName} onChange={(e) => setGroupName(e.target.value)} />
-              <Input
-                placeholder={t("srv.description")}
-                value={groupDescription}
-                onChange={(e) => setGroupDescription(e.target.value)}
-              />
-              <Input type="color" value={groupColor} onChange={(e) => setGroupColor(e.target.value)} />
-              <Button onClick={onCreateGroup} disabled={!groupName.trim() || groupSaving}>
-                {groupSaving ? "..." : t("srv.create_group")}
+          <section className="overflow-hidden rounded-lg border border-border bg-card">
+            <div className="flex flex-col gap-3 border-b border-border px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <h2 className="text-sm font-semibold text-foreground">{t("srv.groups")}</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {tr("srv.groups_count", { count: groupCount })}
+                </p>
+              </div>
+              <Button size="sm" className="h-8 gap-1.5 self-start sm:self-auto" onClick={openCreateGroup}>
+                <Plus className="h-3.5 w-3.5" /> {t("srv.create_group")}
               </Button>
             </div>
-            <div className="space-y-2">
-              {groups
-                .filter((g) => g.id !== null)
-                .map((g) => (
-                  <div key={g.id!} className="flex items-center gap-2 border border-border rounded px-3 py-2">
-                    <div className="text-sm">
-                      {g.name}
-                      <span className="text-xs text-muted-foreground ml-2">{tr("srv.servers_count_value", { count: g.server_count })}</span>
+
+            {manageableGroups.length ? (
+              <div>
+                {manageableGroups.map((group, index) => (
+                  <article
+                    key={group.id!}
+                    className={`flex items-center gap-4 px-4 py-3 hover:bg-secondary/30 transition-colors ${
+                      index < manageableGroups.length - 1 ? "border-b border-border/50" : ""
+                    }`}
+                  >
+                    <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/70 bg-secondary/30">
+                      <Layers className="h-4 w-4 text-primary/80" />
+                      <span
+                        className="absolute bottom-1 right-1 h-2 w-2 rounded-full border border-card"
+                        style={{ backgroundColor: group.color }}
+                        aria-hidden="true"
+                      />
                     </div>
-                    <div className="ml-auto flex gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{group.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {group.description || t("srv.group_description_empty")} · {tr("srv.servers_count_value", { count: group.server_count })}
+                      </p>
+                    </div>
+                    <div className="flex gap-1.5 shrink-0">
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => {
-                          setRulesGroupId(g.id!);
-                          setRulesScopeTab("group");
-                          setMainTab("rules");
-                        }}
+                        className="h-7 gap-1.5 text-xs border-border hover:border-primary hover:text-primary"
+                        onClick={() => openGroupRules(group.id!)}
                       >
-                        {t("srv.rules_tab")}
+                        <Layers className="h-3 w-3" /> {t("srv.rules_tab")}
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => subscribeServerGroup(g.id!, "follow")}>
-                        {t("srv.follow")}
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => subscribeServerGroup(g.id!, "favorite")}>
-                        {t("srv.favorite")}
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => onRenameGroup(g.id!, g.name)}>
-                        {t("srv.rename")}
-                      </Button>
-                      <Button size="sm" variant="destructive" onClick={() => onDeleteGroup(g.id!, g.name)}>
-                        {t("srv.delete")}
-                      </Button>
+                      {group.can_edit && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2 border-border hover:border-primary hover:text-primary"
+                          onClick={() => openGroupSettings(group)}
+                          aria-label={`${t("nav.settings")} ${group.name}`}
+                          title={t("nav.settings")}
+                        >
+                          <Settings className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      {group.role === "owner" && (
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          className="h-7 px-2"
+                          onClick={() => requestDeleteGroup(group)}
+                          aria-label={`${t("srv.delete")} ${group.name}`}
+                          title={t("srv.delete")}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                     </div>
-                  </div>
+                  </article>
                 ))}
               </div>
+            ) : (
+              <div className="px-4 py-10 text-center">
+                <h3 className="text-sm font-medium text-foreground">{t("srv.groups_empty_title")}</h3>
+                <p className="mt-2 text-sm text-muted-foreground">{t("srv.groups_empty_text")}</p>
+              </div>
+            )}
           </section>
         </TabsContent>
 
@@ -1548,7 +1648,7 @@ export default function Servers() {
               </TabsContent>
 
               <TabsContent value="group" className="mt-0">
-                {!groups.some((group) => group.id !== null) ? (
+                {!manageableGroups.length ? (
                   <div className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
                     {t("srv.rules_group_empty")}
                   </div>
@@ -1572,9 +1672,7 @@ export default function Servers() {
                             onChange={(e) => setRulesGroupId(e.target.value ? Number(e.target.value) : null)}
                             className="flex h-9 w-full rounded-md border border-input bg-secondary/50 px-3 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                           >
-                            {groups
-                              .filter((group) => group.id !== null)
-                              .map((group) => (
+                            {manageableGroups.map((group) => (
                                 <option key={group.id!} value={group.id!}>
                                   {group.name}
                                 </option>
@@ -2005,9 +2103,7 @@ export default function Servers() {
                   className="flex h-10 w-full rounded-md border border-input bg-secondary/50 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   <option value="">{t("srv.no_group")}</option>
-                  {groups
-                    .filter((g) => g.id !== null)
-                    .map((g) => (
+                  {manageableGroups.map((g) => (
                       <option key={g.id!} value={g.id!}>{g.name}</option>
                     ))}
                 </select>
@@ -2029,6 +2125,73 @@ export default function Servers() {
             </Button>
             <Button size="sm" onClick={onSave} disabled={saving || !form.name || !form.host || !form.username}>
               {saving ? t("srv.saving") : editingServer ? t("srv.update") : t("srv.create")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={groupDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeGroupDialog();
+            return;
+          }
+          setGroupDialogOpen(true);
+        }}
+      >
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>{editingGroup ? t("srv.edit_group") : t("srv.create_group")}</DialogTitle>
+            <DialogDescription>{t("srv.group_settings")}</DialogDescription>
+          </DialogHeader>
+
+          <DialogBody className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">{t("srv.group_name")} *</Label>
+              <Input
+                value={groupForm.name}
+                onChange={(e) => setGroupForm((state) => ({ ...state, name: e.target.value }))}
+                placeholder={t("srv.group_name")}
+                className="bg-secondary/50"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">{t("srv.description")}</Label>
+              <Textarea
+                value={groupForm.description}
+                onChange={(e) => setGroupForm((state) => ({ ...state, description: e.target.value }))}
+                placeholder={t("srv.description")}
+                className="min-h-24 bg-secondary/50"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">{t("srv.group_color")}</Label>
+              <div className="flex items-center gap-3 rounded-md border border-border bg-secondary/30 px-3 py-2">
+                <Input
+                  type="color"
+                  value={groupForm.color}
+                  onChange={(e) => setGroupForm((state) => ({ ...state, color: e.target.value }))}
+                  className="h-8 w-12 cursor-pointer rounded border-0 bg-transparent p-0"
+                />
+                <div className="text-xs text-muted-foreground">{groupForm.color}</div>
+              </div>
+            </div>
+          </DialogBody>
+
+          <DialogFooter>
+            {editingGroup?.id && (
+              <Button variant="outline" size="sm" onClick={() => openGroupRules(editingGroup.id!)} className="mr-auto gap-1.5">
+                <Layers className="h-3.5 w-3.5" /> {t("srv.rules_tab")}
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={closeGroupDialog}>
+              {t("srv.cancel")}
+            </Button>
+            <Button size="sm" onClick={onSaveGroup} disabled={groupSaving || !groupForm.name.trim()}>
+              {groupSaving ? t("srv.saving") : editingGroup ? t("srv.update") : t("srv.create")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2126,7 +2289,7 @@ export default function Servers() {
                       </div>
                     )}
 
-                    {advancedServer?.group_id && (
+                    {advancedServer?.group_id && manageableGroups.some((group) => group.id === advancedServer.group_id) && (
                       <div className="border-t border-border pt-4">
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                           <div>
@@ -2140,12 +2303,7 @@ export default function Servers() {
                             size="sm"
                             variant="outline"
                             className="h-8"
-                            onClick={() => {
-                              setRulesGroupId(advancedServer.group_id!);
-                              setRulesScopeTab("group");
-                              setMainTab("rules");
-                              setAdvancedOpen(false);
-                            }}
+                            onClick={() => openGroupRules(advancedServer.group_id!)}
                           >
                             {t("srv.open_group_rules")}
                           </Button>
@@ -2180,10 +2338,6 @@ export default function Servers() {
                           </div>
                           <div className="flex items-end">
                             <Button size="sm" variant="outline" className="h-9 w-full text-destructive border-destructive/30 hover:bg-destructive/10" onClick={onRemoveGroupMember}>{t("srv.remove_member")}</Button>
-                          </div>
-                          <div className="flex items-end gap-2">
-                            <Button size="sm" variant="outline" className="h-9 flex-1" onClick={() => subscribeServerGroup(advancedServer.group_id!, "follow")}>{t("srv.follow_group")}</Button>
-                            <Button size="sm" variant="outline" className="h-9 flex-1" onClick={() => subscribeServerGroup(advancedServer.group_id!, "favorite")}>{t("srv.fav_group")}</Button>
                           </div>
                         </div>
                       </div>
@@ -2290,7 +2444,7 @@ export default function Servers() {
                           variant="outline"
                           className="h-8"
                           onClick={() => {
-                            if (advancedServer?.group_id) {
+                            if (advancedServer?.group_id && manageableGroups.some((group) => group.id === advancedServer.group_id)) {
                               setRulesGroupId(advancedServer.group_id);
                               setRulesScopeTab("group");
                             } else {
@@ -2431,6 +2585,32 @@ export default function Servers() {
           )}
         </DialogContent>
       </Dialog>
+
+      <ConfirmActionDialog
+        open={Boolean(serverDeleteTarget)}
+        onOpenChange={(open) => {
+          if (!open) setServerDeleteTarget(null);
+        }}
+        title={serverDeleteTarget ? tr("srv.delete_server_confirm", { name: serverDeleteTarget.name }) : t("srv.delete")}
+        description={t("srv.delete_server_description")}
+        confirmLabel={t("srv.delete")}
+        cancelLabel={t("srv.cancel")}
+        onConfirm={onDelete}
+        contentClassName="max-w-sm"
+      />
+
+      <ConfirmActionDialog
+        open={Boolean(groupDeleteTarget)}
+        onOpenChange={(open) => {
+          if (!open) setGroupDeleteTarget(null);
+        }}
+        title={groupDeleteTarget ? tr("srv.delete_group_confirm", { name: groupDeleteTarget.name }) : t("srv.delete")}
+        description={t("srv.delete_group_description")}
+        confirmLabel={t("srv.delete")}
+        cancelLabel={t("srv.cancel")}
+        onConfirm={onDeleteGroup}
+        contentClassName="max-w-sm"
+      />
     </div>
   );
 }

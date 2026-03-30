@@ -22,7 +22,7 @@ import {
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getStudioPipelineRunWsUrl, studioRuns, studioPipelines, type PipelineRun, type PipelineNode } from "@/lib/api";
+import { getStudioPipelineRunWsUrl, studioRuns, type PipelineRun, type PipelineNode } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 // ---------------------------------------------------------------------------
@@ -451,7 +451,6 @@ export default function PipelineRunsPage() {
   const navigate = useNavigate();
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [pipelineFilter, setPipelineFilter] = useState<number | null>(null);
 
   const { data: runs = [], isLoading, refetch } = useQuery({
     queryKey: ["studio", "runs"],
@@ -459,14 +458,8 @@ export default function PipelineRunsPage() {
     refetchInterval: 5000,
   });
 
-  const { data: pipelines = [] } = useQuery({
-    queryKey: ["studio", "pipelines"],
-    queryFn: () => studioPipelines.list(),
-  });
-
   const filtered = runs.filter((r) => {
     if (statusFilter !== "all" && r.status !== statusFilter) return false;
-    if (pipelineFilter && r.pipeline_id !== pipelineFilter) return false;
     return true;
   });
 

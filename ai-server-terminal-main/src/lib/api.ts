@@ -895,15 +895,7 @@ function demoFallback<T>(path: string, _options: RequestInit = {}): T {
   if (path.includes("/api/health")) return { status: "ok" } as T;
   if (path.includes("/api/access/users")) return {
     success: true,
-    features: [
-      { value: "servers", label: "Servers" },
-      { value: "dashboard", label: "Dashboard" },
-      { value: "agents", label: "Agents" },
-      { value: "studio", label: "Studio" },
-      { value: "settings", label: "Settings" },
-      { value: "orchestrator", label: "Orchestrator" },
-      { value: "knowledge_base", label: "Knowledge Base" },
-    ],
+    features: ACCESS_FEATURE_OPTIONS,
     users: [
       {
         id: 1,
@@ -919,21 +911,39 @@ function demoFallback<T>(path: string, _options: RequestInit = {}): T {
           dashboard: true,
           agents: true,
           studio: true,
+          studio_pipelines: true,
+          studio_runs: true,
+          studio_agents: true,
+          studio_skills: true,
+          studio_mcp: true,
+          studio_notifications: true,
           settings: true,
           orchestrator: true,
           knowledge_base: true,
         },
         explicit_permissions: {},
-        group_permissions: { servers: true, studio: true },
+        group_permissions: { servers: true, studio: true, studio_pipelines: true, studio_runs: true, studio_agents: true, studio_skills: true, studio_mcp: true, studio_notifications: true },
         group_permission_sources: {
           servers: [{ group_id: 1, group_name: "Operators", allowed: true }],
           studio: [{ group_id: 1, group_name: "Operators", allowed: true }],
+          studio_pipelines: [{ group_id: 1, group_name: "Operators", allowed: true }],
+          studio_runs: [{ group_id: 1, group_name: "Operators", allowed: true }],
+          studio_agents: [{ group_id: 1, group_name: "Operators", allowed: true }],
+          studio_skills: [{ group_id: 1, group_name: "Operators", allowed: true }],
+          studio_mcp: [{ group_id: 1, group_name: "Operators", allowed: true }],
+          studio_notifications: [{ group_id: 1, group_name: "Operators", allowed: true }],
         },
         permission_sources: {
           servers: "group_explicit",
           dashboard: "staff_default",
           agents: "staff_default",
           studio: "group_explicit",
+          studio_pipelines: "group_explicit",
+          studio_runs: "group_explicit",
+          studio_agents: "group_explicit",
+          studio_skills: "group_explicit",
+          studio_mcp: "group_explicit",
+          studio_notifications: "group_explicit",
           settings: "staff_default",
           orchestrator: "staff_default",
           knowledge_base: "staff_default",
@@ -943,55 +953,38 @@ function demoFallback<T>(path: string, _options: RequestInit = {}): T {
   } as T;
   if (path.includes("/api/access/groups")) return {
     success: true,
-    features: [
-      { value: "servers", label: "Servers" },
-      { value: "dashboard", label: "Dashboard" },
-      { value: "agents", label: "Agents" },
-      { value: "studio", label: "Studio" },
-      { value: "settings", label: "Settings" },
-      { value: "orchestrator", label: "Orchestrator" },
-      { value: "knowledge_base", label: "Knowledge Base" },
-    ],
+    features: ACCESS_FEATURE_OPTIONS,
     groups: [
       {
         id: 1,
         name: "Operators",
         member_count: 1,
         members: [{ id: 1, username: "demo" }],
-        explicit_permissions: { servers: true, studio: true },
+        explicit_permissions: { servers: true, studio: true, studio_pipelines: true, studio_runs: true, studio_agents: true, studio_skills: true, studio_mcp: true, studio_notifications: true },
       },
     ],
   } as T;
   if (path.includes("/api/access/group-permissions")) return {
     success: true,
-    features: [
-      { value: "servers", label: "Servers" },
-      { value: "dashboard", label: "Dashboard" },
-      { value: "agents", label: "Agents" },
-      { value: "studio", label: "Studio" },
-      { value: "settings", label: "Settings" },
-      { value: "orchestrator", label: "Orchestrator" },
-      { value: "knowledge_base", label: "Knowledge Base" },
-    ],
+    features: ACCESS_FEATURE_OPTIONS,
     permissions: [
       { id: 1, group_id: 1, group_name: "Operators", feature: "servers", feature_display: "Servers", allowed: true },
       { id: 2, group_id: 1, group_name: "Operators", feature: "studio", feature_display: "Studio", allowed: true },
+      { id: 3, group_id: 1, group_name: "Operators", feature: "studio_pipelines", feature_display: "Studio Pipelines", allowed: true },
+      { id: 4, group_id: 1, group_name: "Operators", feature: "studio_runs", feature_display: "Studio Runs", allowed: true },
+      { id: 5, group_id: 1, group_name: "Operators", feature: "studio_agents", feature_display: "Studio Agents", allowed: true },
+      { id: 6, group_id: 1, group_name: "Operators", feature: "studio_skills", feature_display: "Studio Skills", allowed: true },
+      { id: 7, group_id: 1, group_name: "Operators", feature: "studio_mcp", feature_display: "Studio MCP", allowed: true },
+      { id: 8, group_id: 1, group_name: "Operators", feature: "studio_notifications", feature_display: "Studio Notifications", allowed: true },
     ],
   } as T;
   if (path.includes("/api/access/permissions")) return {
     success: true,
-    features: [
-      { value: "servers", label: "Servers" },
-      { value: "dashboard", label: "Dashboard" },
-      { value: "agents", label: "Agents" },
-      { value: "studio", label: "Studio" },
-      { value: "settings", label: "Settings" },
-      { value: "orchestrator", label: "Orchestrator" },
-      { value: "knowledge_base", label: "Knowledge Base" },
-    ],
+    features: ACCESS_FEATURE_OPTIONS,
     permissions: [],
     group_permissions: [],
   } as T;
+  if (path.includes("/api/studio/share-users")) return [{ id: 1, username: "demo", email: "demo@example.com" }] as T;
   if (path.includes("/api/studio/templates")) return [] as T;
   if (path.includes("/api/studio/pipelines")) return [] as T;
   if (path.includes("/api/studio/runs")) return [] as T;
@@ -1009,6 +1002,40 @@ function demoFallback<T>(path: string, _options: RequestInit = {}): T {
 
 export type ServerStatus = "online" | "offline" | "unknown";
 
+export type StudioSectionFeature =
+  | "studio_pipelines"
+  | "studio_runs"
+  | "studio_agents"
+  | "studio_skills"
+  | "studio_mcp"
+  | "studio_notifications";
+
+export type FeatureFlag =
+  | "servers"
+  | "dashboard"
+  | "agents"
+  | "studio"
+  | StudioSectionFeature
+  | "settings"
+  | "orchestrator"
+  | "knowledge_base";
+
+export const ACCESS_FEATURE_OPTIONS: Array<{ value: FeatureFlag; label: string }> = [
+  { value: "servers", label: "Servers" },
+  { value: "dashboard", label: "Dashboard" },
+  { value: "agents", label: "Agents" },
+  { value: "studio", label: "Studio" },
+  { value: "studio_pipelines", label: "Studio Pipelines" },
+  { value: "studio_runs", label: "Studio Runs" },
+  { value: "studio_agents", label: "Studio Agents" },
+  { value: "studio_skills", label: "Studio Skills" },
+  { value: "studio_mcp", label: "Studio MCP" },
+  { value: "studio_notifications", label: "Studio Notifications" },
+  { value: "settings", label: "Settings" },
+  { value: "orchestrator", label: "Orchestrator" },
+  { value: "knowledge_base", label: "Knowledge Base" },
+];
+
 export interface AuthUser {
   id: number;
   username: string;
@@ -1016,15 +1043,7 @@ export interface AuthUser {
   is_staff: boolean;
   access_profile?: string;
   permission_sources?: Record<string, string>;
-  features: {
-    servers: boolean;
-    dashboard: boolean;
-    agents: boolean;
-    studio: boolean;
-    settings: boolean;
-    orchestrator: boolean;
-    knowledge_base?: boolean;
-  };
+  features: Record<FeatureFlag, boolean> & Partial<Record<string, boolean>>;
 }
 
 export interface AuthSessionResponse {
@@ -1584,14 +1603,18 @@ export interface SftpDownloadResult {
   size: number;
 }
 
+export type ServerGroupRole = "owner" | "admin" | "member" | "viewer";
+export type ServerGroupSubscriptionKind = "follow" | "favorite";
+
 export interface FrontendGroup {
   id: number | null;
   name: string;
+  description: string;
+  color: string;
   server_count: number;
+  role: ServerGroupRole | "";
+  can_edit: boolean;
 }
-
-export type ServerGroupRole = "owner" | "admin" | "member" | "viewer";
-export type ServerGroupSubscriptionKind = "follow" | "favorite";
 
 export interface FrontendActivity {
   id: number;
@@ -3049,6 +3072,11 @@ export interface PipelineListItem {
   created_at: string;
   updated_at: string;
   last_run: PipelineLastRun | null;
+  owner?: StudioSharedUser | null;
+  owner_username?: string;
+  is_owner?: boolean;
+  can_edit?: boolean;
+  access_mode?: StudioAccessMode;
 }
 
 export interface PipelineNode {
@@ -3100,7 +3128,29 @@ export interface PipelineRun {
   triggered_by: string | null;
 }
 
-export interface AgentConfig {
+export type StudioAccessMode = "owner" | "shared" | "admin";
+
+export interface StudioSharedUser {
+  id: number;
+  username: string;
+  email?: string;
+}
+
+export interface StudioAccessMetadata {
+  owner?: StudioSharedUser | null;
+  owner_username?: string;
+  is_owner?: boolean;
+  can_edit?: boolean;
+  can_share?: boolean;
+  is_shared?: boolean;
+  shared_user_ids?: number[];
+  shared_users?: StudioSharedUser[];
+  access_mode?: StudioAccessMode;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface AgentConfig extends StudioAccessMetadata {
   id: number;
   name: string;
   description: string;
@@ -3117,7 +3167,7 @@ export interface AgentConfig {
   server_scope: Array<{ id: number; name: string }>;
 }
 
-export interface StudioSkill {
+export interface StudioSkill extends StudioAccessMetadata {
   slug: string;
   name: string;
   description: string;
@@ -3193,6 +3243,8 @@ export interface StudioSkillScaffoldPayload {
   with_references?: boolean;
   with_assets?: boolean;
   force?: boolean;
+  is_shared?: boolean;
+  shared_user_ids?: number[];
 }
 
 export interface StudioSkillScaffoldResponse {
@@ -3226,7 +3278,7 @@ export interface StudioSkillWorkspaceMutationResponse {
   validation: StudioSkillValidationResult;
 }
 
-export interface MCPServer {
+export interface MCPServer extends StudioAccessMetadata {
   id: number;
   name: string;
   description: string;
@@ -3234,6 +3286,7 @@ export interface MCPServer {
   command: string;
   args: string[];
   env: Record<string, string>;
+  secret_env_keys?: string[];
   url: string;
   is_shared: boolean;
   last_test_ok: boolean | null;
@@ -3360,6 +3413,11 @@ export const studioAgents = {
 export const studioSkills = {
   list: () => apiFetch<StudioSkill[]>("/api/studio/skills/"),
   get: (slug: string) => apiFetch<StudioSkillDetail>(`/api/studio/skills/${encodeURIComponent(slug)}/`),
+  update: (slug: string, data: Partial<StudioSkillDetail>) =>
+    apiFetch<StudioSkillDetail>(`/api/studio/skills/${encodeURIComponent(slug)}/`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
   templates: () => apiFetch<StudioSkillTemplate[]>("/api/studio/skills/templates/"),
   scaffold: (data: StudioSkillScaffoldPayload) =>
     apiFetch<StudioSkillScaffoldResponse>("/api/studio/skills/scaffold/", { method: "POST", body: JSON.stringify(data) }),
@@ -3398,6 +3456,10 @@ export const studioMCP = {
   test: (id: number) => apiFetch<{ ok: boolean; error: string | null }>(`/api/studio/mcp/${id}/test/`, { method: "POST" }),
   templates: () => apiFetch<MCPTemplate[]>("/api/studio/mcp/templates/"),
   tools: (id: number) => apiFetch<MCPServerInspection>(`/api/studio/mcp/${id}/tools/`),
+};
+
+export const studioShareUsers = {
+  list: () => apiFetch<StudioSharedUser[]>("/api/studio/share-users/"),
 };
 
 // Triggers

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+  ACCESS_FEATURE_OPTIONS,
   createAccessGroup,
   deleteAccessGroup,
   fetchAccessGroups,
@@ -11,6 +12,8 @@ import {
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EmptyState, SectionCard, StatusBadge } from "@/components/ui/page-shell";
+import { SettingsWorkspace } from "@/components/settings/SettingsWorkspace";
 import { useI18n } from "@/lib/i18n";
 import {
   ACCESS_UI_TEXT,
@@ -20,16 +23,9 @@ import {
 } from "@/lib/accessUiText";
 
 type PermissionMode = "inherit" | "allow" | "deny";
+const SELECT_CLASS = "h-10 rounded-xl border border-border bg-background/80 px-3 text-sm text-foreground";
 
-const FALLBACK_FEATURES = [
-  { value: "servers", label: "Servers" },
-  { value: "dashboard", label: "Dashboard" },
-  { value: "agents", label: "Agents" },
-  { value: "studio", label: "Studio" },
-  { value: "settings", label: "Settings" },
-  { value: "orchestrator", label: "Orchestrator" },
-  { value: "knowledge_base", label: "Knowledge Base" },
-];
+const FALLBACK_FEATURES = ACCESS_FEATURE_OPTIONS;
 
 function createPermissionModes(
   features: Array<{ value: string; label: string }>,
@@ -53,6 +49,14 @@ function toggleId(source: number[], id: number) {
   return source.includes(id) ? source.filter((value) => value !== id) : [...source, id];
 }
 
+function FieldLabel({ htmlFor, children }: { htmlFor?: string; children: string }) {
+  return (
+    <label htmlFor={htmlFor} className="mb-1.5 block text-[11px] font-medium text-muted-foreground">
+      {children}
+    </label>
+  );
+}
+
 function MemberPicker({
   users,
   selectedIds,
@@ -71,10 +75,10 @@ function MemberPicker({
             key={user.id}
             type="button"
             onClick={() => onToggle(user.id)}
-            className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+            className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${
               active
                 ? "border-primary bg-primary/10 text-primary"
-                : "border-border text-muted-foreground hover:text-foreground"
+                : "border-border bg-background/60 text-muted-foreground hover:text-foreground"
             }`}
           >
             {user.username}
@@ -97,13 +101,14 @@ function PermissionModeField({
   onChange: (value: PermissionMode) => void;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-background/40 p-3">
+    <div className="rounded-2xl border border-border/70 bg-background/50 p-3">
       <div className="flex items-center justify-between gap-3">
         <div className="text-sm font-medium text-foreground">{label}</div>
         <select
           value={mode}
           onChange={(e) => onChange(e.target.value as PermissionMode)}
-          className="rounded-md border border-border bg-secondary px-2 py-1 text-xs"
+          className={SELECT_CLASS}
+          aria-label={`${label} mode`}
         >
           <option value="inherit">{ACCESS_UI_TEXT[lang].common.unset}</option>
           <option value="allow">{ACCESS_UI_TEXT[lang].common.allow}</option>
@@ -118,6 +123,7 @@ export default function SettingsGroupsPage() {
   const { lang } = useI18n();
   const copy = ACCESS_UI_TEXT[lang].groupsPage;
   const common = ACCESS_UI_TEXT[lang].common;
+  const directoryTitle = lang === "ru" ? "Каталог групп" : "Group directory";
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -214,49 +220,35 @@ export default function SettingsGroupsPage() {
     return <div className="p-6 text-sm text-destructive">{copy.error}</div>;
   }
 
+  const membersCount = groups.reduce((sum, group) => sum + group.member_count, 0);
+
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground">{copy.title}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{copy.subtitle}</p>
+    <SettingsWorkspace
+      title={copy.title}
+      description={copy.subtitle}
+      asideHint="Группа удобна как базовый контейнер доступа: сначала состав, затем общая политика. Индивидуальные исключения лучше не смешивать с групповой моделью."
+      actions={
+        <>
+          <StatusBadge label={`Groups: ${groups.length}`} dot={false} />
+          <StatusBadge label={`${common.members}: ${membersCount}`} tone="info" dot={false} />
+          <StatusBadge label={`Policies: ${features.length}`} dot={false} />
+        </>
+      }
+    >
+      <div className="workspace-subtle rounded-xl px-4 py-3 text-sm leading-6 text-muted-foreground">
+        Держи группу как понятную роль команды: название, участники, потом набор общих правил. Чем меньше точечных исключений, тем проще поддержка.
       </div>
-
-      <section className="space-y-4 rounded-lg border border-border bg-card p-4">
-        <h2 className="text-sm font-medium text-foreground">{copy.createTitle}</h2>
-        <Input value={createName} onChange={(e) => setCreateName(e.target.value)} placeholder={copy.namePlaceholder} />
-
-        <div className="space-y-2">
-          <div className="text-xs text-muted-foreground">{common.members}</div>
-          <MemberPicker users={users.map((user) => ({ id: user.id, username: user.username }))} selectedIds={createMembers} onToggle={(id) => setCreateMembers((prev) => toggleId(prev, id))} />
-        </div>
-
-        <div className="space-y-3">
-          <div className="text-xs text-muted-foreground">{copy.policyTitle}</div>
-          <div className="grid gap-3 md:grid-cols-2">
-            {features.map((feature) => (
-              <PermissionModeField
-                key={feature.value}
-                lang={lang}
-                label={feature.label}
-                mode={createPermissionModes[feature.value] || "inherit"}
-                onChange={(value) =>
-                  setCreatePermissionModes((state) => ({
-                    ...state,
-                    [feature.value]: value,
-                  }))
-                }
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <SectionCard title={directoryTitle} description="Группы, участники и явные политики доступа.">
+          <div className="space-y-4">
+            {groups.length === 0 ? (
+              <EmptyState
+                title="Групп пока нет"
+                description="Создайте первую группу справа и сразу назначьте ей участников и доступ."
               />
-            ))}
-          </div>
-        </div>
+            ) : null}
 
-        <Button onClick={() => void createGroup()} disabled={saving || !createName.trim()}>
-          {saving ? copy.creatingAction : copy.createAction}
-        </Button>
-      </section>
-
-      <section className="space-y-4">
-        {groups.map((group) => {
+            {groups.map((group) => {
           const isEditing = editingId === group.id;
           const draft = editing as {
             name?: string;
@@ -265,18 +257,33 @@ export default function SettingsGroupsPage() {
           };
 
           return (
-            <div key={group.id} className="rounded-lg border border-border bg-card p-4">
+            <div key={group.id} className="rounded-2xl border border-border/80 bg-background/50 p-4">
               {!isEditing ? (
                 <div className="space-y-3">
-                  <div className="flex items-start gap-3">
-                    <div>
-                      <div className="text-base font-medium text-foreground">{group.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {common.members}: {group.member_count}
-                        {group.members?.length ? ` • ${group.members.map((member) => member.username).join(", ")}` : ""}
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-base font-semibold text-foreground">{group.name}</div>
+                        <StatusBadge label={`${group.member_count} ${common.members.toLowerCase()}`} tone="info" />
+                      </div>
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        <div className="workspace-subtle rounded-xl px-3 py-3">
+                          <div className="text-[11px] font-medium text-muted-foreground">{common.members}</div>
+                          <div className="mt-1 text-sm text-foreground">
+                            {group.members?.length ? group.members.map((member) => member.username).join(", ") : common.none}
+                          </div>
+                        </div>
+                        <div className="workspace-subtle rounded-xl px-3 py-3">
+                          <div className="text-[11px] font-medium text-muted-foreground">{copy.explicitPolicy}</div>
+                          <div className="mt-1 text-sm text-foreground">
+                            {Object.entries(group.explicit_permissions || {})
+                              .map(([feature, allowed]) => `${getAccessFeatureLabel(lang, feature)}: ${allowed ? common.allowed.toLowerCase() : common.denied.toLowerCase()}`)
+                              .join(", ") || common.none}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    <div className="ml-auto flex gap-2">
+                    <div className="flex gap-2">
                       <Button size="sm" variant="outline" onClick={() => startEdit(group)}>
                         {copy.editAction}
                       </Button>
@@ -284,24 +291,22 @@ export default function SettingsGroupsPage() {
                         {common.delete}
                       </Button>
                     </div>
-                  </div>
-
-                  <div className="text-xs text-muted-foreground">
-                    {copy.explicitPolicy}:{" "}
-                    {Object.entries(group.explicit_permissions || {})
-                      .map(([feature, allowed]) => `${getAccessFeatureLabel(lang, feature)}:${allowed ? common.allowed.toLowerCase() : common.denied.toLowerCase()}`)
-                      .join(", ") || common.none}
-                  </div>
+                    </div>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <Input
-                    value={draft.name || ""}
-                    onChange={(e) => setEditing((state) => ({ ...state, name: e.target.value }))}
-                  />
+                  <div>
+                    <FieldLabel htmlFor={`group-name-${group.id}`}>{copy.namePlaceholder}</FieldLabel>
+                    <Input
+                      id={`group-name-${group.id}`}
+                      name="group-name"
+                      value={draft.name || ""}
+                      onChange={(e) => setEditing((state) => ({ ...state, name: e.target.value }))}
+                    />
+                  </div>
 
                   <div className="space-y-2">
-                    <div className="text-xs text-muted-foreground">{common.members}</div>
+                    <div className="text-[11px] font-medium text-muted-foreground">{common.members}</div>
                     <MemberPicker
                       users={users.map((user) => ({ id: user.id, username: user.username }))}
                       selectedIds={(draft.members as number[]) || []}
@@ -315,7 +320,7 @@ export default function SettingsGroupsPage() {
                   </div>
 
                   <div className="space-y-3">
-                    <div className="text-xs text-muted-foreground">{copy.policyTitle}</div>
+                    <div className="text-sm font-medium text-foreground">{copy.policyTitle}</div>
                     <div className="grid gap-3 md:grid-cols-2">
                       {features.map((feature) => (
                         <PermissionModeField
@@ -350,7 +355,78 @@ export default function SettingsGroupsPage() {
             </div>
           );
         })}
-      </section>
-    </div>
+          </div>
+        </SectionCard>
+
+        {editingId === null ? (
+          <SectionCard
+            title={copy.createTitle}
+            description="Создайте группу и задайте её состав и правила доступа."
+            className="xl:sticky xl:top-4"
+            bodyClassName="space-y-4"
+          >
+            <div>
+              <FieldLabel htmlFor="create-group-name">{copy.namePlaceholder}</FieldLabel>
+              <Input
+                id="create-group-name"
+                name="group-name"
+                value={createName}
+                onChange={(e) => setCreateName(e.target.value)}
+                placeholder={copy.namePlaceholder}
+              />
+            </div>
+
+            <div>
+              <div className="mb-1.5 text-[11px] font-medium text-muted-foreground">{common.members}</div>
+              <MemberPicker
+                users={users.map((user) => ({ id: user.id, username: user.username }))}
+                selectedIds={createMembers}
+                onToggle={(id) => setCreateMembers((prev) => toggleId(prev, id))}
+              />
+            </div>
+
+            <div className="space-y-3">
+              <div className="text-sm font-medium text-foreground">{copy.policyTitle}</div>
+              <div className="grid gap-3">
+                {features.map((feature) => (
+                  <PermissionModeField
+                    key={feature.value}
+                    lang={lang}
+                    label={feature.label}
+                    mode={createPermissionModes[feature.value] || "inherit"}
+                    onChange={(value) =>
+                      setCreatePermissionModes((state) => ({
+                        ...state,
+                        [feature.value]: value,
+                      }))
+                    }
+                  />
+                ))}
+              </div>
+            </div>
+
+            <Button onClick={() => void createGroup()} disabled={saving || !createName.trim()}>
+              {saving ? copy.creatingAction : copy.createAction}
+            </Button>
+          </SectionCard>
+        ) : (
+          <SectionCard
+            title={lang === "ru" ? "Создание временно скрыто" : "Creation temporarily hidden"}
+            description={
+              lang === "ru"
+                ? "Заверши редактирование текущей группы, чтобы не смешивать правку и создание в одном экране."
+                : "Finish editing the current group before creating a new one."
+            }
+            className="xl:sticky xl:top-4"
+          >
+            <div className="text-sm leading-6 text-muted-foreground">
+              {lang === "ru"
+                ? "Это уменьшает случайные ошибки, когда в форме одновременно открыт draft новой группы и режим редактирования существующей."
+                : "This keeps the page focused and avoids mixing a create draft with an active edit state."}
+            </div>
+          </SectionCard>
+        )}
+      </div>
+    </SettingsWorkspace>
   );
 }

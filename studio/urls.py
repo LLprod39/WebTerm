@@ -27,6 +27,7 @@ urlpatterns = [
     path("skills/<slug:slug>/workspace/", views.api_skill_workspace, name="skill_workspace"),
     path("skills/<slug:slug>/workspace/file/", views.api_skill_workspace_file, name="skill_workspace_file"),
     path("skills/<slug:slug>/", views.api_skill_detail, name="skill_detail"),
+    path("share-users/", views.api_share_users, name="share_users"),
     # MCP Pool
     path("mcp/", views.api_mcp_list, name="mcp_list"),
     path("mcp/templates/", views.api_mcp_templates, name="mcp_templates"),

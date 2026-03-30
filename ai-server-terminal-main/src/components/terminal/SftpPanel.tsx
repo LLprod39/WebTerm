@@ -661,8 +661,6 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
     [transfers],
   );
 
-  const showEditorPane = Boolean(editorPath) || isEditorLoading || Boolean(editorError);
-
   return (
     <div
       className={cn(
@@ -688,365 +686,140 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
       onDrop={handleDrop}
     >
       <div className="border-b border-border bg-card px-4 py-3">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
-            <div className="text-sm font-semibold text-foreground">Files</div>
+            <div className="text-sm font-semibold text-foreground">SFTP</div>
             <div className="truncate font-mono text-[11px] text-muted-foreground">
               {server.username}@{server.host}:{server.port}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" size="sm" variant="outline" className="h-8 rounded-xl border-border bg-background px-3 text-xs text-foreground hover:bg-secondary" onClick={() => uploadInputRef.current?.click()}>
+            <Button type="button" size="sm" variant="outline" className="h-8 border-border bg-background px-3 text-xs" onClick={() => uploadInputRef.current?.click()}>
               <Upload className="h-3.5 w-3.5" />
-              <span className="ml-1.5">Upload</span>
+              Upload
             </Button>
-            <Button type="button" size="sm" variant="outline" className="h-8 rounded-xl border-border bg-background px-3 text-xs text-foreground hover:bg-secondary" onClick={handleCreateFolder}>
-              <FolderPlus className="h-3.5 w-3.5" />
-              <span className="ml-1.5">Folder</span>
-            </Button>
-            <Button type="button" size="sm" variant="outline" className="h-8 rounded-xl border-border bg-background px-3 text-xs text-foreground hover:bg-secondary" onClick={handleCreateFile}>
-              <FileCode2 className="h-3.5 w-3.5" />
-              <span className="ml-1.5">File</span>
-            </Button>
-            <Button type="button" size="sm" variant="outline" className="h-8 rounded-xl border-border bg-background px-3 text-xs text-foreground hover:bg-secondary" onClick={refreshDirectory}>
+            <Button type="button" size="sm" variant="outline" className="h-8 border-border bg-background px-3 text-xs" onClick={refreshDirectory}>
               <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
-              <span className="ml-1.5">Refresh</span>
+              Refresh
             </Button>
           </div>
         </div>
 
-        <div className="mt-3 flex flex-col gap-2 xl:flex-row xl:items-center">
+        <div className="mt-3 flex flex-col gap-2 lg:flex-row lg:items-center">
           <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
-            <Button type="button" size="sm" variant="outline" className="h-8 shrink-0 rounded-xl border-border bg-background px-3 text-xs text-foreground hover:bg-secondary" onClick={() => void loadDirectory(homePath)}>
+            <Button type="button" size="sm" variant="outline" className="h-8 shrink-0 border-border bg-background px-3 text-xs" onClick={() => void loadDirectory(homePath)}>
               Home
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 shrink-0 border-border bg-background px-2 text-xs"
+              onClick={() => parentPath && void loadDirectory(parentPath)}
+              disabled={!parentPath}
+              aria-label="Open parent folder"
+            >
+              <ArrowUp className="h-3.5 w-3.5" />
             </Button>
             {breadcrumbSegments.map((segment, index) => (
               <button
                 key={`${segment.path}-${index}`}
                 type="button"
                 onClick={() => void loadDirectory(segment.path)}
-                className="shrink-0 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:border-primary/20 hover:bg-secondary hover:text-foreground"
+                className="shrink-0 rounded-lg border border-border bg-background px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
               >
                 {segment.label}
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant={showHidden ? "default" : "outline"}
-              className="h-8 rounded-xl border-border px-3 text-xs"
-              onClick={() => setShowHidden((value) => !value)}
-            >
-              Hidden
-            </Button>
-            <div className="relative min-w-[14rem] flex-1 xl:w-60">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search in current folder..."
-                className="h-8 rounded-xl border-border bg-background pl-9 text-xs text-foreground placeholder:text-muted-foreground"
-              />
-            </div>
+          <div className="relative min-w-[14rem] lg:w-64">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search files..."
+              aria-label="Search files"
+              className="h-8 border-border bg-background pl-9 text-xs"
+            />
           </div>
-        </div>
-
-        <div className="mt-2 flex items-center gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-8 rounded-xl border-border bg-background px-2 text-xs text-foreground hover:bg-secondary"
-            onClick={() => parentPath && void loadDirectory(parentPath)}
-            disabled={!parentPath}
-          >
-            <ArrowUp className="h-3.5 w-3.5" />
-          </Button>
-          <Input
-            value={pathInput}
-            onChange={(event) => setPathInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                handleManualPathSubmit();
-              }
-            }}
-            className="h-8 rounded-xl border-border bg-background text-xs font-mono text-foreground placeholder:text-muted-foreground"
-          />
-          <Button type="button" size="sm" variant="outline" className="h-8 rounded-xl border-border bg-background px-3 text-xs text-foreground hover:bg-secondary" onClick={handleManualPathSubmit}>
-            Go
-          </Button>
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 xl:grid-cols-[minmax(0,1fr)_24rem]">
-        <div className={cn("flex min-h-0 flex-1 flex-col", showEditorPane && "xl:border-r xl:border-border")}>
-          <div className="border-b border-border bg-secondary/20 px-4 py-2.5">
-            <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
-              <span>{visibleEntries.length} items visible</span>
-              <span>•</span>
-              <span>{entries.filter((entry) => entry.is_dir).length} folders</span>
-              <span>•</span>
-              <span>{entries.filter((entry) => !entry.is_dir).length} files</span>
-            </div>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="border-b border-border bg-secondary/20 px-4 py-2.5">
+          <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+            <span>{visibleEntries.length} items</span>
+            <span>•</span>
+            <span>{entries.filter((entry) => entry.is_dir).length} folders</span>
+            <span>•</span>
+            <span>{entries.filter((entry) => !entry.is_dir).length} files</span>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {error ? (
-              <div className="px-4 py-6 text-sm text-destructive">{error}</div>
-            ) : visibleEntries.length === 0 && !isLoading ? (
-              <div className="px-4 py-8 text-sm text-muted-foreground">
-                {entries.length === 0 ? "This directory is empty." : "Nothing matches the current filter."}
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {error ? (
+            <div className="px-4 py-6 text-sm text-destructive">{error}</div>
+          ) : visibleEntries.length === 0 && !isLoading ? (
+            <div className="workspace-empty m-4">
+              <div className="text-sm font-medium text-foreground">
+                {entries.length === 0 ? "This folder is empty." : "Nothing matched the current search."}
               </div>
-            ) : (
-              <div className="divide-y divide-border/60">
-                {visibleEntries.map((entry) => {
-                  const Icon = entryIcon(entry);
-                  const isSelected = entry.path === selectedPath;
-                  const isEditing = entry.path === editorPath;
-                  return (
+            </div>
+          ) : (
+            <div className="divide-y divide-border/60">
+              {visibleEntries.map((entry) => {
+                const Icon = entryIcon(entry);
+                const isSelected = entry.path === selectedPath;
+                return (
+                  <div
+                    key={entry.path}
+                    className={cn(
+                      "flex items-center gap-3 px-4 py-3 transition-colors hover:bg-secondary/40",
+                      isSelected && "bg-secondary/40",
+                    )}
+                  >
                     <button
-                      key={entry.path}
                       type="button"
-                      className={cn(
-                        "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-secondary/50",
-                        isSelected && "bg-primary/10",
-                      )}
+                      className="flex min-w-0 flex-1 items-center gap-3 text-left"
                       onClick={() => setSelectedPath(entry.path)}
-                      onDoubleClick={() => handleEntryOpen(entry)}
+                      onDoubleClick={() => (entry.is_dir ? void loadDirectory(entry.path) : queueDownload(entry))}
                     >
                       <div className={cn("rounded-xl p-2", entry.is_dir ? "bg-primary/10 text-primary" : "bg-secondary text-muted-foreground")}>
                         <Icon className="h-4 w-4" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <div className="truncate text-sm font-medium text-foreground">{entry.name}</div>
-                          {isEditing ? (
-                            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                              open
-                            </span>
-                          ) : null}
-                        </div>
-                        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                          <span>{entry.permissions || (entry.is_dir ? "dir" : "file")}</span>
+                        <div className="truncate text-sm font-medium text-foreground">{entry.name}</div>
+                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                          <span>{entry.is_dir ? "Folder" : "File"}</span>
                           {!entry.is_dir ? <span>{formatBytes(entry.size)}</span> : null}
+                          {entry.modified_at ? <span>{formatTimestamp(entry.modified_at)}</span> : null}
                         </div>
                       </div>
-                      <div className="shrink-0 text-[11px] text-muted-foreground">{formatTimestamp(entry.modified_at)}</div>
                     </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+
+                    {entry.is_dir ? (
+                      <Button type="button" size="sm" variant="ghost" className="h-8 px-2.5 text-xs" onClick={() => void loadDirectory(entry.path)}>
+                        Open
+                      </Button>
+                    ) : (
+                      <Button type="button" size="sm" variant="outline" className="h-8 border-border bg-background px-2.5 text-xs" onClick={() => queueDownload(entry)}>
+                        <Download className="mr-1.5 h-3.5 w-3.5" />
+                        Download
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
-
-        {showEditorPane ? (
-          <div className="flex min-h-0 w-full flex-col bg-background/60 xl:min-w-[360px]">
-            <div className="border-b border-border px-4 py-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                    <FileCode2 className="h-4 w-4 text-primary" />
-                    <span className="truncate">{editorFilename || "Text Editor"}</span>
-                    {isEditorDirty ? (
-                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                        unsaved
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="truncate font-mono text-[11px] text-muted-foreground">
-                    {editorPath || "Loading file..."}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Button type="button" size="sm" variant="ghost" className="h-8 rounded-xl px-2 text-muted-foreground hover:bg-secondary hover:text-foreground" onClick={() => void reloadEditor()} disabled={!editorPath || isEditorLoading || isEditorSaving}>
-                    <RefreshCw className={cn("h-3.5 w-3.5", isEditorLoading && "animate-spin")} />
-                  </Button>
-                  <Button type="button" size="sm" variant="ghost" className="h-8 rounded-xl px-2 text-muted-foreground hover:bg-secondary hover:text-foreground" onClick={() => void saveEditor()} disabled={!editorPath || isEditorLoading || isEditorSaving || !isEditorDirty}>
-                    {isEditorSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                  </Button>
-                  <Button type="button" size="sm" variant="ghost" className="h-8 rounded-xl px-2 text-muted-foreground hover:bg-secondary hover:text-foreground" onClick={closeEditor} disabled={isEditorSaving}>
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex min-h-0 flex-1 flex-col">
-              {isEditorLoading ? (
-                <div className="flex min-h-[280px] flex-1 items-center justify-center text-sm text-muted-foreground">
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Opening file...
-                </div>
-              ) : (
-                <>
-                  {editorError ? (
-                    <div className="border-b border-border bg-destructive/10 px-4 py-2 text-xs text-destructive">
-                      {editorError}
-                    </div>
-                  ) : null}
-                  <div className="min-h-0 flex-1 p-4">
-                    <Textarea
-                      value={editorContent}
-                      onChange={(event) => setEditorContent(event.target.value)}
-                      spellCheck={false}
-                      className="h-full min-h-[280px] resize-none rounded-[1rem] border-border bg-card font-mono text-xs leading-5 text-foreground"
-                      placeholder="Select a text file to edit."
-                      disabled={!editorPath || isEditorSaving}
-                    />
-                  </div>
-                  <div className="border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
-                    <div className="flex items-center justify-between gap-2">
-                      <span>{editorEncoding.toUpperCase()}</span>
-                      <span>{editorSizeLabel}</span>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="flex min-h-0 flex-col border-l border-border bg-background/60">
-            <div className="border-b border-border px-4 py-3">
-              <div className="text-sm font-semibold text-foreground">Details</div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                {selectedEntry ? "Focused actions for the selected file or folder." : "Select an entry to inspect it."}
-              </div>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">
-              {selectedEntry ? (
-                <div className="space-y-4">
-                  <div className="rounded-[1.1rem] border border-border bg-card p-4">
-                    <div className="flex items-start gap-3">
-                      <div className={cn("rounded-xl p-2.5", selectedEntry.is_dir ? "bg-primary/10 text-primary" : "bg-secondary text-muted-foreground")}>
-                        {selectedEntry.is_dir ? <Folder className="h-4 w-4" /> : <File className="h-4 w-4" />}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold text-foreground">{selectedEntry.name}</div>
-                        <div className="mt-1 break-all font-mono text-[11px] text-muted-foreground">{selectedEntry.path}</div>
-                      </div>
-                    </div>
-                    <div className="mt-4 grid gap-2">
-                      <div className="rounded-xl border border-border bg-background px-3 py-2">
-                        <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Permissions</div>
-                        <div className="mt-1 font-mono text-xs text-foreground">{selectedEntry.permissions || "---"}</div>
-                      </div>
-                      <div className="rounded-xl border border-border bg-background px-3 py-2">
-                        <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Modified</div>
-                        <div className="mt-1 text-xs text-foreground">{formatTimestamp(selectedEntry.modified_at) || "Unknown"}</div>
-                      </div>
-                      {!selectedEntry.is_dir ? (
-                        <div className="rounded-xl border border-border bg-background px-3 py-2">
-                          <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Size</div>
-                          <div className="mt-1 text-xs text-foreground">{formatBytes(selectedEntry.size)}</div>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Button type="button" size="sm" variant="outline" className="h-9 justify-start rounded-xl border-border bg-background text-xs text-foreground hover:bg-secondary" onClick={() => selectedEntry.is_dir ? void loadDirectory(selectedEntry.path) : queueDownload(selectedEntry)}>
-                      {selectedEntry.is_dir ? <FolderOpen className="mr-2 h-3.5 w-3.5" /> : <Download className="mr-2 h-3.5 w-3.5" />}
-                      {selectedEntry.is_dir ? "Open folder" : "Download"}
-                    </Button>
-                    {!selectedEntry.is_dir ? (
-                      <Button type="button" size="sm" variant="outline" className="h-9 justify-start rounded-xl border-border bg-background text-xs text-foreground hover:bg-secondary" onClick={handleOpenEditor}>
-                        <FileCode2 className="mr-2 h-3.5 w-3.5" />
-                        Edit here
-                      </Button>
-                    ) : null}
-                    {!selectedEntry.is_dir && onOpenInEditor ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="h-9 justify-start rounded-xl border-border bg-background text-xs text-foreground hover:bg-secondary"
-                        onClick={() => onOpenInEditor(selectedEntry.path)}
-                      >
-                        <ExternalLink className="mr-2 h-3.5 w-3.5" />
-                        Open in full editor
-                      </Button>
-                    ) : null}
-                    <Button type="button" size="sm" variant="outline" className="h-9 justify-start rounded-xl border-border bg-background text-xs text-foreground hover:bg-secondary" onClick={handleRename}>
-                      <Pencil className="mr-2 h-3.5 w-3.5" />
-                      Rename
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-9 justify-start rounded-xl border-border bg-background text-xs text-foreground hover:bg-secondary"
-                      onClick={async () => {
-                        const newPerms = prompt(`chmod for ${selectedEntry.name}:`, defaultPermissionMode(selectedEntry));
-                        if (!newPerms) return;
-                        const normalizedMode = newPerms.trim();
-                        if (!/^[0-7]{3,4}$/.test(normalizedMode)) {
-                          toast({ variant: "destructive", description: "Use octal mode like 644 or 0755" });
-                          return;
-                        }
-                        try {
-                          const result = await chmodServerFile(server.id, selectedEntry.path, normalizedMode);
-                          if (!result.success) throw new Error(result.error || "chmod failed");
-                          toast({ title: "Permissions changed", description: `${selectedEntry.name} → ${normalizedMode}` });
-                          refreshDirectory();
-                        } catch (error) {
-                          toast({
-                            variant: "destructive",
-                            description: error instanceof Error ? error.message : "chmod failed",
-                          });
-                        }
-                      }}
-                    >
-                      <Shield className="mr-2 h-3.5 w-3.5" />
-                      Change permissions
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-9 justify-start rounded-xl border-border bg-background text-xs text-foreground hover:bg-secondary"
-                      onClick={async () => {
-                        const newOwner = prompt(`chown for ${selectedEntry.name} (user:group):`, "");
-                        if (!newOwner) return;
-                        try {
-                          const result = await chownServerFile(server.id, selectedEntry.path, newOwner.trim(), selectedEntry.is_dir);
-                          if (!result.success) throw new Error(result.error || "chown failed");
-                          toast({ title: "Owner changed", description: `${selectedEntry.name} → ${newOwner.trim()}` });
-                          refreshDirectory();
-                        } catch (error) {
-                          toast({
-                            variant: "destructive",
-                            description: error instanceof Error ? error.message : "chown failed",
-                          });
-                        }
-                      }}
-                    >
-                      <User className="mr-2 h-3.5 w-3.5" />
-                      Change owner
-                    </Button>
-                    <Button type="button" size="sm" variant="outline" className="h-9 justify-start rounded-xl border-destructive/20 bg-destructive/10 text-xs text-destructive hover:bg-destructive/20" onClick={handleDelete}>
-                      <Trash2 className="mr-2 h-3.5 w-3.5" />
-                      Delete
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex h-full items-center justify-center px-4 text-center text-sm text-muted-foreground">
-                  Select a file or folder to see metadata and focused actions.
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </div>
 
       <div className="border-t border-border bg-secondary/20">
         <div className="flex items-center justify-between px-4 py-2">
           <button
             type="button"
-            className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+            className="text-[11px] font-medium text-muted-foreground"
             onClick={() => setTransfersExpanded((value) => !value)}
           >
             Transfers {activeTransfers.length > 0 ? `(${activeTransfers.length})` : ""}

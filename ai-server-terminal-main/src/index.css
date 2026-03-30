@@ -107,6 +107,26 @@
 }
 
 @layer components {
+  .enterprise-panel {
+    @apply rounded-2xl border border-border/70 bg-card/80 shadow-sm backdrop-blur-sm;
+  }
+
+  .workspace-panel {
+    @apply rounded-2xl border border-border/70 bg-card/75 shadow-sm backdrop-blur-sm;
+  }
+
+  .workspace-subtle {
+    @apply border border-border/60 bg-secondary/30;
+  }
+
+  .workspace-empty {
+    @apply flex flex-col gap-4 rounded-2xl border border-dashed border-border/70 bg-secondary/20 px-6 py-8;
+  }
+
+  .enterprise-kicker {
+    @apply text-[11px] font-medium uppercase tracking-[0.18em] text-primary/75;
+  }
+
   /* Corporate card style */
   .corp-card {
     @apply bg-card border border-border rounded-md;

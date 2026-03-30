@@ -6,9 +6,9 @@ import {
   useState,
   type MouseEvent as ReactMouseEvent,
 } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Bot, FolderOpen, Monitor, Plus, Search, Server, X } from "lucide-react";
+import { ArrowLeft, Bot, FolderOpen, Monitor, Plus, Search, Server, X } from "lucide-react";
 import {
   XTerminal,
   type AiAssistantSettings,
@@ -958,81 +958,121 @@ export default function TerminalPage() {
   if (!activeTab || !activeServer) return <div className="p-6 text-sm text-muted-foreground">Сервер не найден или недоступен.</div>;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem)]">
-      {/* Tab bar */}
-      <div className="flex items-center gap-0.5 px-2 pt-2 bg-background border-b border-border overflow-x-auto shrink-0">
-        {tabs.map((tab) => (
-          <button key={tab.id} onClick={() => setActiveTabId(tab.id)}
-            className={`group flex items-center gap-2 px-3 py-2 text-sm rounded-t-md border border-b-0 transition-colors shrink-0 ${
-              tab.id === activeTabId
-                ? "bg-card border-border text-foreground"
-                : "bg-transparent border-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-            }`}>
-            <StatusIndicator
-              status={tab.status === "connected" ? "online" : tab.status === "error" ? "offline" : "unknown"}
-              showLabel={false} />
-            <span className="truncate max-w-40">{formatTabName(tab)}</span>
-            {tabs.length > 1 && (
-              <span role="button" aria-label={`Close ${formatTabName(tab)}`}
-                onClick={(e) => { e.stopPropagation(); closeTab(tab.id); }}
-                className="opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity">
-                <X className="h-3 w-3" />
-              </span>
-            )}
-          </button>
-        ))}
-        <button onClick={addTab}
-          className="flex items-center gap-1 px-2.5 py-2 text-muted-foreground hover:text-primary transition-colors shrink-0 text-xs"
-          aria-label="Add tab" title="Подключить сервер">
-          <Plus className="h-4 w-4" />
-        </button>
-        <div className="ml-auto shrink-0 pl-2">
-          <Button
-            type="button"
-            size="sm"
-            variant={sidePanelMode === "files" ? "default" : "ghost"}
-            className="mr-1 h-8 gap-1.5 text-xs"
-            onClick={() => setSidePanelMode((current) => (current === "files" ? "none" : "files"))}
-            title={sidePanelMode === "files" ? "Скрыть файловую панель" : "Показать файловую панель"}
+    <div className="flex h-[100dvh] flex-col bg-background">
+      <div className="shrink-0 border-b border-border/80 bg-background/95 px-2.5 py-1.5">
+        <div className="flex items-center gap-2">
+          <Link
+            to="/servers"
+            className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
           >
-            <FolderOpen className="h-3.5 w-3.5" />
-            Files
-          </Button>
-          {activeServer?.server_type === "ssh" ? (
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Назад
+          </Link>
+
+          <div className="flex min-w-0 shrink-0 items-center gap-2 rounded-xl border border-border/70 bg-card/60 px-2.5 py-1.5">
+            <StatusIndicator
+              status={activeTab.status === "connected" ? "online" : activeTab.status === "error" ? "offline" : "unknown"}
+              showLabel={false}
+            />
+            <span className="truncate text-sm font-medium text-foreground">{formatTabName(activeTab)}</span>
+            <span className="hidden truncate text-[11px] text-muted-foreground lg:inline">
+              {activeServer.username}@{activeServer.host}:{activeServer.port}
+            </span>
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1 overflow-x-auto rounded-xl border border-border/70 bg-card/40 p-1">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTabId(tab.id)}
+                  className={`group flex shrink-0 items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm transition-colors ${
+                    tab.id === activeTabId
+                      ? "border-border bg-background text-foreground"
+                      : "border-transparent bg-transparent text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+                  }`}
+                >
+                  <StatusIndicator
+                    status={tab.status === "connected" ? "online" : tab.status === "error" ? "offline" : "unknown"}
+                    showLabel={false}
+                  />
+                  <span className="max-w-32 truncate">{formatTabName(tab)}</span>
+                  {tabs.length > 1 ? (
+                    <span
+                      role="button"
+                      aria-label={`Close ${formatTabName(tab)}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        closeTab(tab.id);
+                      }}
+                      className="opacity-0 transition-opacity group-hover:opacity-100 hover:text-destructive"
+                    >
+                      <X className="h-3 w-3" />
+                    </span>
+                  ) : null}
+                </button>
+              ))}
+
+              <button
+                onClick={addTab}
+                className="flex shrink-0 items-center gap-1 rounded-lg border border-dashed border-border/70 px-2.5 py-1.5 text-[11px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+                aria-label="Add tab"
+                title="Подключить сервер"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Сервер
+              </button>
+            </div>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-1 rounded-xl border border-border/70 bg-card/40 p-1">
             <Button
               type="button"
               size="sm"
-              variant={sidePanelMode === "ui" ? "default" : "ghost"}
-              className="mr-1 h-8 gap-1.5 text-xs"
-              onClick={() => {
-                if (sidePanelMode === "ui") {
-                  setSidePanelMode("none");
-                  return;
-                }
-                revealUiPanel();
-              }}
-              title={sidePanelMode === "ui" ? "Скрыть Linux Workspace" : "Показать Linux Workspace"}
+              variant={sidePanelMode === "files" ? "secondary" : "ghost"}
+              className="h-8 gap-1.5 px-2.5 text-[11px]"
+              onClick={() => setSidePanelMode((current) => (current === "files" ? "none" : "files"))}
+              title={sidePanelMode === "files" ? "Скрыть файловую панель" : "Показать файловую панель"}
             >
-              <Monitor className="h-3.5 w-3.5" />
-              UI
+              <FolderOpen className="h-3.5 w-3.5" />
+              SFTP
             </Button>
-          ) : null}
-          <Button
-            type="button"
-            size="sm"
-            variant={sidePanelMode === "ai" ? "default" : "ghost"}
-            className="h-8 gap-1.5 text-xs"
-            onClick={() => setSidePanelMode((current) => (current === "ai" ? "none" : "ai"))}
-            title={sidePanelMode === "ai" ? "Скрыть AI ассистента" : "Показать AI ассистента"}
-          >
-            <Bot className="h-3.5 w-3.5" />
-            AI
-          </Button>
+            {activeServer?.server_type === "ssh" ? (
+              <Button
+                type="button"
+                size="sm"
+                variant={sidePanelMode === "ui" ? "secondary" : "ghost"}
+                className="h-8 gap-1.5 px-2.5 text-[11px]"
+                onClick={() => {
+                  if (sidePanelMode === "ui") {
+                    setSidePanelMode("none");
+                    return;
+                  }
+                  revealUiPanel();
+                }}
+                title={sidePanelMode === "ui" ? "Скрыть Linux Workspace" : "Показать Linux Workspace"}
+              >
+                <Monitor className="h-3.5 w-3.5" />
+                Linux
+              </Button>
+            ) : null}
+              <Button
+                type="button"
+                size="sm"
+                variant={sidePanelMode === "ai" ? "secondary" : "ghost"}
+                className="h-8 gap-1.5 px-2.5 text-[11px]"
+                onClick={() => setSidePanelMode((current) => (current === "ai" ? "none" : "ai"))}
+                title={sidePanelMode === "ai" ? "Скрыть AI ассистента" : "Показать AI ассистента"}
+            >
+              <Bot className="h-3.5 w-3.5" />
+              AI
+            </Button>
+          </div>
         </div>
       </div>
 
       <div className="flex min-h-0 flex-1">
-        <div className={isUiMode ? "hidden" : "min-h-0 flex-1 bg-terminal-bg p-1"}>
+        <div className={isUiMode ? "hidden" : "min-h-0 flex-1 bg-terminal-bg p-0"}>
           <div className="relative h-full w-full">
             {tabs.map((tab) => (
               <div

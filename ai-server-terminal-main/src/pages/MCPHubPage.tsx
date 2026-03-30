@@ -34,8 +34,9 @@ import { EmptyState, PageShell, SectionCard, StatusBadge } from "@/components/ui
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { ShareAccessEditor } from "@/components/studio/ShareAccessEditor";
 import { useToast } from "@/hooks/use-toast";
-import { studioMCP, type MCPServer, type MCPTemplate } from "@/lib/api";
+import { fetchAuthSession, studioMCP, studioShareUsers, type MCPServer, type MCPTemplate } from "@/lib/api";
 
 function previewConnection(server: Pick<MCPServer, "transport" | "command" | "args" | "url">) {
   if (server.transport === "stdio") {
@@ -50,11 +51,17 @@ function MCPForm({
   onSave,
   onCancel,
   isPending,
+  shareUsers,
+  isAdmin,
+  canEdit,
 }: {
   initial: Partial<MCPServer>;
   onSave: (data: Partial<MCPServer>) => void;
   onCancel: () => void;
   isPending: boolean;
+  shareUsers: Array<{ id: number; username: string; email?: string }>;
+  isAdmin: boolean;
+  canEdit: boolean;
 }) {
   const [form, setForm] = useState<Partial<MCPServer>>({
     name: "",
@@ -64,8 +71,11 @@ function MCPForm({
     args: [],
     env: {},
     url: "",
+    is_shared: false,
+    shared_user_ids: [],
     ...initial,
   });
+  const readOnly = !canEdit;
   const [argsText, setArgsText] = useState((initial.args || []).join("\n"));
   const [envText, setEnvText] = useState(
     Object.entries(initial.env || {})
@@ -76,6 +86,7 @@ function MCPForm({
   const setField = (key: keyof MCPServer, value: unknown) => {
     setForm((current) => ({ ...current, [key]: value }));
   };
+  const sharedUserIds = form.shared_user_ids || [];
 
   const handleSave = () => {
     const args = argsText
@@ -103,6 +114,7 @@ function MCPForm({
             value={form.name || ""}
             onChange={(event) => setField("name", event.target.value)}
             placeholder="GitHub MCP"
+            disabled={readOnly}
           />
         </div>
         <div className="w-36 space-y-1.5">
@@ -111,7 +123,7 @@ function MCPForm({
             value={form.transport || "stdio"}
             onValueChange={(value) => setField("transport", value)}
           >
-            <SelectTrigger className="h-9 text-sm">
+            <SelectTrigger className="h-9 text-sm" disabled={readOnly}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -128,6 +140,7 @@ function MCPForm({
           value={form.description || ""}
           onChange={(event) => setField("description", event.target.value)}
           placeholder="What this MCP provides"
+          disabled={readOnly}
         />
       </div>
 
@@ -140,6 +153,7 @@ function MCPForm({
               onChange={(event) => setField("command", event.target.value)}
               placeholder="npx"
               className="font-mono text-sm"
+              disabled={readOnly}
             />
           </div>
 
@@ -151,6 +165,7 @@ function MCPForm({
               placeholder="-y&#10;@modelcontextprotocol/server-github"
               rows={5}
               className="font-mono text-xs"
+              disabled={readOnly}
             />
           </div>
 
@@ -162,6 +177,7 @@ function MCPForm({
               placeholder="GITHUB_PERSONAL_ACCESS_TOKEN=..."
               rows={4}
               className="font-mono text-xs"
+              disabled={readOnly}
             />
           </div>
         </>
@@ -173,9 +189,30 @@ function MCPForm({
             onChange={(event) => setField("url", event.target.value)}
             placeholder="https://mcp.example.com/sse"
             className="font-mono text-sm"
+            disabled={readOnly}
           />
         </div>
       )}
+
+      {isAdmin ? (
+        <ShareAccessEditor
+          title="Visibility"
+          description="Admin can expose this MCP server to everyone or only selected users."
+          isShared={Boolean(form.is_shared)}
+          sharedUserIds={sharedUserIds}
+          users={shareUsers}
+          disabled={readOnly}
+          onSharedChange={(value) => setField("is_shared", value)}
+          onToggleUser={(userId) =>
+            setField(
+              "shared_user_ids",
+              sharedUserIds.includes(userId)
+                ? sharedUserIds.filter((id) => id !== userId)
+                : [...sharedUserIds, userId],
+            )
+          }
+        />
+      ) : null}
 
       <div className="rounded-2xl border border-border/70 bg-background/30 px-4 py-3 text-sm text-muted-foreground">
         Templates are the fastest way to start. After loading one, you can still edit the command,
@@ -189,7 +226,7 @@ function MCPForm({
         <Button
           size="sm"
           onClick={handleSave}
-          disabled={!form.name?.trim() || isPending}
+          disabled={readOnly || !form.name?.trim() || isPending}
           className="gap-1.5"
         >
           {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
@@ -203,13 +240,28 @@ function MCPForm({
 export default function MCPHubPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [editorOpen, setEditorOpen] = useState(false);
   const [editMcp, setEditMcp] = useState<Partial<MCPServer> | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<MCPServer | null>(null);
   const [testingId, setTestingId] = useState<number | null>(null);
 
+  const { data: session } = useQuery({
+    queryKey: ["auth", "session"],
+    queryFn: fetchAuthSession,
+    staleTime: 60_000,
+    retry: false,
+  });
+  const isAdmin = Boolean(session?.user?.is_staff);
+
   const { data: mcpList = [], isLoading } = useQuery({
     queryKey: ["studio", "mcp"],
     queryFn: studioMCP.list,
+  });
+
+  const { data: shareUsers = [] } = useQuery({
+    queryKey: ["studio", "share-users"],
+    queryFn: studioShareUsers.list,
+    enabled: isAdmin,
   });
 
   const { data: templates = [] } = useQuery({
@@ -221,6 +273,7 @@ export default function MCPHubPage() {
     mutationFn: (payload: Partial<MCPServer>) => studioMCP.create(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["studio", "mcp"] });
+      setEditorOpen(false);
       setEditMcp(null);
       toast({ description: "MCP server added." });
     },
@@ -234,6 +287,7 @@ export default function MCPHubPage() {
       studioMCP.update(id, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["studio", "mcp"] });
+      setEditorOpen(false);
       setEditMcp(null);
       toast({ description: "MCP server updated." });
     },
@@ -275,9 +329,11 @@ export default function MCPHubPage() {
   });
 
   const handleSave = (payload: Partial<MCPServer>) => {
-    if ((editMcp as MCPServer | null)?.id) {
+    const editingMcp = editMcp as MCPServer | null;
+    if (editingMcp?.id) {
+      if (editingMcp.can_edit === false) return;
       updateMutation.mutate({
-        id: (editMcp as MCPServer).id,
+        id: editingMcp.id,
         payload,
       });
       return;
@@ -286,8 +342,18 @@ export default function MCPHubPage() {
     createMutation.mutate(payload);
   };
 
+  const openCreateDialog = () => {
+    setEditMcp({});
+    setEditorOpen(true);
+  };
+
+  const openEditDialog = (mcp: Partial<MCPServer>) => {
+    setEditMcp(mcp);
+    setEditorOpen(true);
+  };
+
   const handleUseTemplate = (template: MCPTemplate) => {
-    setEditMcp({
+    openEditDialog({
       name: template.name,
       description: template.description,
       transport: template.transport,
@@ -308,7 +374,7 @@ export default function MCPHubPage() {
         description="Manage Model Context Protocol servers used by Studio."
         icon={<Server className="h-5 w-5" />}
         actions={
-            <Button className="gap-1.5" onClick={() => setEditMcp({})}>
+            <Button type="button" className="gap-1.5" onClick={openCreateDialog}>
               <Plus className="h-4 w-4" />
               Add server
             </Button>
@@ -327,17 +393,17 @@ export default function MCPHubPage() {
                 Loading MCP servers...
               </div>
             ) : mcpList.length === 0 ? (
-              <EmptyState
-                icon={<Server className="h-5 w-5" />}
-                title="No MCP servers yet"
-                description="Add a custom server or start from one of the templates."
-                actions={
-                  <Button className="gap-1.5" onClick={() => setEditMcp({})}>
-                    <Plus className="h-4 w-4" />
-                    Add server
-                  </Button>
-                }
-              />
+                <EmptyState
+                  icon={<Server className="h-5 w-5" />}
+                  title="No MCP servers yet"
+                  description="Add a custom server or start from one of the templates."
+                  actions={
+                    <Button type="button" className="gap-1.5" onClick={openCreateDialog}>
+                      <Plus className="h-4 w-4" />
+                      Add server
+                    </Button>
+                  }
+                />
             ) : (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {mcpList.map((mcp) => {
@@ -362,41 +428,55 @@ export default function MCPHubPage() {
                             <CardDescription className="mt-1 text-xs">
                               {mcp.description || "No description"}
                             </CardDescription>
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {mcp.is_owner ? <Badge variant="secondary">Mine</Badge> : null}
+                              {!mcp.is_owner && mcp.owner_username ? <Badge variant="outline">Owner: {mcp.owner_username}</Badge> : null}
+                              {mcp.is_shared ? <Badge variant="outline">Shared</Badge> : null}
+                              {mcp.can_edit === false ? <Badge variant="outline">Read only</Badge> : null}
+                            </div>
                           </div>
 
                           <div className="flex gap-1">
+                            {mcp.can_edit !== false ? (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 rounded-xl"
+                                type="button"
+                                onClick={() => {
+                                  setTestingId(mcp.id);
+                                  testMutation.mutate(mcp.id);
+                                }}
+                                disabled={testingId === mcp.id}
+                              >
+                                {testingId === mcp.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <RefreshCw className="h-4 w-4" />
+                                )}
+                              </Button>
+                            ) : null}
                             <Button
+                              type="button"
                               size="icon"
                               variant="ghost"
                               className="h-8 w-8 rounded-xl"
-                              onClick={() => {
-                                setTestingId(mcp.id);
-                                testMutation.mutate(mcp.id);
-                              }}
-                              disabled={testingId === mcp.id}
-                            >
-                              {testingId === mcp.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <RefreshCw className="h-4 w-4" />
-                              )}
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-8 w-8 rounded-xl"
-                              onClick={() => setEditMcp(mcp)}
+                              onClick={() => openEditDialog(mcp)}
+                              title={mcp.can_edit === false ? "View server" : "Edit server"}
                             >
                               <Pencil className="h-4 w-4" />
                             </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-8 w-8 rounded-xl text-destructive hover:text-destructive"
-                              onClick={() => setDeleteTarget(mcp)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {mcp.can_edit !== false ? (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 rounded-xl text-destructive hover:text-destructive"
+                                type="button"
+                                onClick={() => setDeleteTarget(mcp)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            ) : null}
                           </div>
                         </div>
                       </CardHeader>
@@ -498,24 +578,32 @@ export default function MCPHubPage() {
         </Tabs>
       </SectionCard>
 
-      <Dialog open={editMcp !== null} onOpenChange={(nextOpen) => !nextOpen && setEditMcp(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{(editMcp as MCPServer | null)?.id ? "Edit MCP server" : "Add MCP server"}</DialogTitle>
-            <DialogDescription>
-              Configure either a local stdio command or a remote SSE endpoint.
-            </DialogDescription>
-          </DialogHeader>
-          {editMcp ? (
-            <MCPForm
-              initial={editMcp}
-              onSave={handleSave}
-              onCancel={() => setEditMcp(null)}
-              isPending={createMutation.isPending || updateMutation.isPending}
-            />
-          ) : null}
-        </DialogContent>
-      </Dialog>
+      {editorOpen && editMcp ? (
+        <SectionCard
+          title={
+            (editMcp as MCPServer | null)?.id
+              ? (editMcp as MCPServer | null)?.can_edit === false
+                ? "View MCP server"
+                : "Edit MCP server"
+              : "Add MCP server"
+          }
+          description="Configure either a local stdio command or a remote SSE endpoint."
+          icon={<Pencil className="h-5 w-5" />}
+        >
+          <MCPForm
+            initial={editMcp}
+            onSave={handleSave}
+            onCancel={() => {
+              setEditorOpen(false);
+              setEditMcp(null);
+            }}
+            isPending={createMutation.isPending || updateMutation.isPending}
+            shareUsers={shareUsers}
+            isAdmin={isAdmin}
+            canEdit={(editMcp as MCPServer | null)?.can_edit !== false}
+          />
+        </SectionCard>
+      ) : null}
 
       <Dialog open={deleteTarget !== null} onOpenChange={(nextOpen) => !nextOpen && setDeleteTarget(null)}>
         <DialogContent className="max-w-sm">

@@ -13,7 +13,7 @@ export function PageShell({
   const widthClass =
     width === "5xl" ? "max-w-5xl" : width === "6xl" ? "max-w-6xl" : width === "full" ? "max-w-none" : "max-w-7xl";
 
-  return <div className={cn("mx-auto space-y-6 px-6 py-6", widthClass, className)}>{children}</div>;
+  return <div className={cn("mx-auto space-y-5 px-4 py-5 sm:px-6", widthClass, className)}>{children}</div>;
 }
 
 export function PageGrid({
@@ -106,9 +106,9 @@ export function MetricCard({
     <div className={cn("rounded-lg border px-4 py-4", toneClass, className)}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
+          <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
           <div className="mt-2 text-2xl font-semibold text-foreground">{value}</div>
-          <div className="mt-2 text-xs leading-5 text-muted-foreground">{description}</div>
+          <div className="mt-2 text-sm leading-5 text-muted-foreground">{description}</div>
         </div>
         {icon ? <div className="text-muted-foreground">{icon}</div> : null}
       </div>

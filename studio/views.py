@@ -58,8 +58,11 @@ import shutil
 import threading
 from pathlib import Path, PurePosixPath
 
+from django.contrib.auth.models import User
 from django.conf import settings as django_settings
-from core_ui.decorators import require_feature
+from django.db.models import Q
+from core_ui.access import feature_allowed_for_user
+from core_ui.decorators import require_any_feature, require_feature
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
@@ -68,11 +71,20 @@ from django.views.decorators.http import require_http_methods
 from app.runtime_limits import get_pipeline_run_limit_error
 from core_ui.managed_secrets import get_mcp_secret_env, get_mcp_secret_env_keys
 from .mcp_client import MCPClientError, inspect_mcp_server
-from .models import AgentConfig, MCPServerPool, Pipeline, PipelineRun, PipelineTemplate, PipelineTrigger
+from .models import (
+    AgentConfig,
+    MCPServerPool,
+    Pipeline,
+    PipelineRun,
+    PipelineTemplate,
+    PipelineTrigger,
+    StudioSkillAccess,
+)
 from .pipeline_runtime import get_executor_for_run, update_runtime_control
 from .pipeline_validation import ensure_json_object, validate_pipeline_definition
 from .skill_authoring import parse_csv_items, scaffold_skill, validate_skill_dir, validate_skills
-from .skill_registry import SkillNotFoundError, get_skill, list_skills, normalise_skill_slugs
+from .skill_policy import compile_skill_policies
+from .skill_registry import SkillNotFoundError, get_skill, list_skills, normalise_skill_slugs, resolve_skills
 from .skill_templates import get_skill_template, list_skill_templates
 
 # ---------------------------------------------------------------------------
@@ -197,6 +209,225 @@ def _require_admin(request, *, message: str = "Admin access required") -> JsonRe
     return _err(message, 403)
 
 
+STUDIO_FEATURE_PIPELINES = "studio_pipelines"
+STUDIO_FEATURE_RUNS = "studio_runs"
+STUDIO_FEATURE_AGENTS = "studio_agents"
+STUDIO_FEATURE_SKILLS = "studio_skills"
+STUDIO_FEATURE_MCP = "studio_mcp"
+STUDIO_FEATURE_NOTIFICATIONS = "studio_notifications"
+
+
+def _is_admin(user) -> bool:
+    return bool(user and getattr(user, "is_authenticated", False) and getattr(user, "is_staff", False))
+
+
+def _user_has_feature(user, feature: str) -> bool:
+    return feature_allowed_for_user(user, feature)
+
+
+def _owner_payload(owner: User | None) -> dict | None:
+    if owner is None:
+        return None
+    return {"id": owner.id, "username": owner.username}
+
+
+def _shared_user_payloads(shared_users) -> list[dict]:
+    return [{"id": user.id, "username": user.username} for user in shared_users]
+
+
+def _access_mode(*, owner_id: int | None, viewer) -> str:
+    if _is_admin(viewer) and owner_id and owner_id != viewer.id:
+        return "admin"
+    if owner_id and viewer and owner_id == viewer.id:
+        return "owner"
+    return "shared"
+
+
+def _pipeline_queryset_for_user(user):
+    qs = Pipeline.objects.select_related("owner")
+    if _is_admin(user):
+        return qs.order_by("-updated_at")
+    return qs.filter(owner=user).order_by("-updated_at")
+
+
+def _run_queryset_for_user(user):
+    qs = PipelineRun.objects.select_related("pipeline", "pipeline__owner", "triggered_by")
+    if _is_admin(user):
+        return qs.order_by("-created_at")
+    return qs.filter(pipeline__owner=user).order_by("-created_at")
+
+
+def _agent_read_queryset_for_user(user):
+    qs = AgentConfig.objects.select_related("owner").prefetch_related("mcp_servers", "server_scope", "shared_with")
+    if _is_admin(user):
+        return qs.order_by("-updated_at")
+    return qs.filter(Q(owner=user) | Q(is_shared=True) | Q(shared_with=user)).distinct().order_by("-updated_at")
+
+
+def _agent_write_queryset_for_user(user):
+    qs = AgentConfig.objects.select_related("owner").prefetch_related("mcp_servers", "server_scope", "shared_with")
+    if _is_admin(user):
+        return qs
+    return qs.filter(owner=user)
+
+
+def _mcp_read_queryset_for_user(user):
+    qs = MCPServerPool.objects.select_related("owner").prefetch_related("shared_with")
+    if _is_admin(user):
+        return qs.order_by("name")
+    return qs.filter(Q(owner=user) | Q(is_shared=True) | Q(shared_with=user)).distinct().order_by("name")
+
+
+def _mcp_write_queryset_for_user(user):
+    qs = MCPServerPool.objects.select_related("owner").prefetch_related("shared_with")
+    if _is_admin(user):
+        return qs
+    return qs.filter(owner=user)
+
+
+def _skill_access_map(slugs: list[str]) -> dict[str, StudioSkillAccess]:
+    if not slugs:
+        return {}
+    rows = (
+        StudioSkillAccess.objects.filter(slug__in=slugs)
+        .select_related("owner")
+        .prefetch_related("shared_with")
+    )
+    return {row.slug.lower(): row for row in rows}
+
+
+def _get_skill_access(slug: str) -> StudioSkillAccess | None:
+    return (
+        StudioSkillAccess.objects.filter(slug=slug)
+        .select_related("owner")
+        .prefetch_related("shared_with")
+        .first()
+    )
+
+
+def _ensure_skill_access(slug: str, owner: User | None = None) -> StudioSkillAccess:
+    access, _created = StudioSkillAccess.objects.get_or_create(slug=slug, defaults={"owner": owner})
+    if owner is not None and access.owner_id is None:
+        access.owner = owner
+        access.save()
+    return (
+        StudioSkillAccess.objects.filter(pk=access.pk)
+        .select_related("owner")
+        .prefetch_related("shared_with")
+        .get()
+    )
+
+
+def _can_read_skill(user, access: StudioSkillAccess | None) -> bool:
+    if _is_admin(user):
+        return True
+    if access is None or not user or not getattr(user, "is_authenticated", False):
+        return False
+    if access.owner_id == user.id or access.is_shared:
+        return True
+    return any(shared_user.id == user.id for shared_user in access.shared_with.all())
+
+
+def _can_edit_skill(user, access: StudioSkillAccess | None) -> bool:
+    if _is_admin(user):
+        return True
+    return bool(access and user and getattr(user, "is_authenticated", False) and access.owner_id == user.id)
+
+
+def _apply_shared_users(instance, shared_user_ids: list[int]):
+    if instance.owner_id:
+        shared_user_ids = [user_id for user_id in shared_user_ids if user_id != instance.owner_id]
+    users = User.objects.filter(id__in=shared_user_ids, is_active=True).order_by("username")
+    instance.shared_with.set(users)
+
+
+def _skill_to_summary_dict(skill, viewer, access: StudioSkillAccess | None) -> dict:
+    shared_users = _shared_user_payloads(access.shared_with.all()) if access else []
+    data = skill.to_summary_dict()
+    data.update(
+        {
+            "path": skill.path,
+            "owner": _owner_payload(access.owner) if access else None,
+            "owner_username": access.owner.username if access and access.owner_id else "",
+            "is_owner": bool(access and access.owner_id == getattr(viewer, "id", None)),
+            "can_edit": _can_edit_skill(viewer, access),
+            "can_share": _is_admin(viewer),
+            "is_shared": bool(access and (access.is_shared or shared_users)),
+            "shared_user_ids": [item["id"] for item in shared_users],
+            "shared_users": shared_users,
+            "access_mode": _access_mode(owner_id=access.owner_id if access else None, viewer=viewer),
+        }
+    )
+    return data
+
+
+def _skill_to_detail_dict(skill, viewer, access: StudioSkillAccess | None) -> dict:
+    data = skill.to_detail_dict()
+    data.update(_skill_to_summary_dict(skill, viewer, access))
+    return data
+
+
+def _agent_to_dict(agent: AgentConfig, viewer) -> dict:
+    skills, skill_errors = resolve_skills(agent.skill_slugs or [])
+    _, policy_errors = compile_skill_policies(skills)
+    shared_users = _shared_user_payloads(agent.shared_with.all())
+    return {
+        "id": agent.pk,
+        "name": agent.name,
+        "description": agent.description,
+        "icon": agent.icon,
+        "system_prompt": agent.system_prompt,
+        "instructions": agent.instructions,
+        "model": agent.model,
+        "max_iterations": agent.max_iterations,
+        "allowed_tools": agent.allowed_tools,
+        "mcp_servers": list(agent.mcp_servers.all().values("id", "name", "transport")),
+        "skill_slugs": list(agent.skill_slugs or []),
+        "skills": [_skill_to_summary_dict(skill, viewer, _get_skill_access(skill.slug)) for skill in skills],
+        "skill_errors": [*skill_errors, *policy_errors],
+        "server_scope": list(agent.server_scope.all().values("id", "name")),
+        "owner": _owner_payload(agent.owner),
+        "owner_username": agent.owner.username,
+        "is_owner": agent.owner_id == getattr(viewer, "id", None),
+        "can_edit": _is_admin(viewer) or agent.owner_id == getattr(viewer, "id", None),
+        "can_share": _is_admin(viewer),
+        "is_shared": bool(agent.is_shared or shared_users),
+        "shared_user_ids": [item["id"] for item in shared_users],
+        "shared_users": shared_users,
+        "access_mode": _access_mode(owner_id=agent.owner_id, viewer=viewer),
+        "updated_at": agent.updated_at.isoformat() if agent.updated_at else None,
+        "created_at": agent.created_at.isoformat() if agent.created_at else None,
+    }
+
+
+def _mcp_to_dict(mcp: MCPServerPool, viewer) -> dict:
+    can_edit = _is_admin(viewer) or mcp.owner_id == getattr(viewer, "id", None)
+    shared_users = _shared_user_payloads(mcp.shared_with.all())
+    return {
+        "id": mcp.pk,
+        "name": mcp.name,
+        "description": mcp.description,
+        "transport": mcp.transport,
+        "command": mcp.command,
+        "args": mcp.args,
+        "env": mcp.env if can_edit else {},
+        "secret_env_keys": get_mcp_secret_env_keys(mcp.id) if can_edit else [],
+        "url": mcp.url,
+        "is_shared": bool(mcp.is_shared or shared_users),
+        "shared_user_ids": [item["id"] for item in shared_users],
+        "shared_users": shared_users,
+        "owner": _owner_payload(mcp.owner),
+        "owner_username": mcp.owner.username,
+        "is_owner": mcp.owner_id == getattr(viewer, "id", None),
+        "can_edit": can_edit,
+        "can_share": _is_admin(viewer),
+        "access_mode": _access_mode(owner_id=mcp.owner_id, viewer=viewer),
+        "last_test_ok": mcp.last_test_ok,
+        "last_test_at": mcp.last_test_at.isoformat() if mcp.last_test_at else None,
+        "last_test_error": mcp.last_test_error,
+    }
+
+
 def _extract_json_object(raw_text: str) -> dict:
     text = (raw_text or "").strip()
     if not text:
@@ -309,10 +540,10 @@ def _sanitize_graph_patch(raw_graph_patch: object, *, fallback_anchor: str | Non
 # ---------------------------------------------------------------------------
 
 
-@require_feature('studio')
+@require_feature(STUDIO_FEATURE_PIPELINES)
 def api_pipelines(request):
     if request.method == "GET":
-        qs = Pipeline.objects.filter(owner=request.user).order_by("-updated_at")
+        qs = _pipeline_queryset_for_user(request.user)
         search = request.GET.get("q", "").strip()
         if search:
             qs = qs.filter(name__icontains=search)
@@ -343,7 +574,7 @@ def api_pipelines(request):
     return _err("Method not allowed", 405)
 
 
-@require_feature('studio')
+@require_feature(STUDIO_FEATURE_PIPELINES)
 def api_pipeline_detail(request, pipeline_id: int):
     pipeline = _get_pipeline(request, pipeline_id)
     if pipeline is None:
@@ -356,7 +587,7 @@ def api_pipeline_detail(request, pipeline_id: int):
         data = _json_body(request)
         next_nodes = data.get("nodes", pipeline.nodes)
         next_edges = data.get("edges", pipeline.edges)
-        errors = validate_pipeline_definition(nodes=next_nodes, edges=next_edges, owner=request.user)
+        errors = validate_pipeline_definition(nodes=next_nodes, edges=next_edges, owner=pipeline.owner)
         if errors:
             return _validation_err(errors, prefix="Pipeline validation failed")
         for field in ("name", "description", "icon", "tags", "nodes", "edges", "is_shared"):
@@ -373,7 +604,7 @@ def api_pipeline_detail(request, pipeline_id: int):
     return _err("Method not allowed", 405)
 
 
-@require_feature('studio')
+@require_feature(STUDIO_FEATURE_PIPELINES)
 @require_http_methods(["POST"])
 def api_pipeline_run(request, pipeline_id: int):
     """Trigger a manual pipeline run."""
@@ -390,7 +621,7 @@ def api_pipeline_run(request, pipeline_id: int):
     if error:
         return _err(error)
 
-    validation_errors = validate_pipeline_definition(nodes=pipeline.nodes, edges=pipeline.edges, owner=request.user)
+    validation_errors = validate_pipeline_definition(nodes=pipeline.nodes, edges=pipeline.edges, owner=pipeline.owner)
     if validation_errors:
         return _validation_err(validation_errors, prefix="Pipeline is not runnable")
 
@@ -405,7 +636,7 @@ def api_pipeline_run(request, pipeline_id: int):
     return _ok(run.to_dict(), status=202)
 
 
-@require_feature('studio')
+@require_feature(STUDIO_FEATURE_PIPELINES)
 @require_http_methods(["POST"])
 def api_pipeline_clone(request, pipeline_id: int):
     pipeline = _get_pipeline(request, pipeline_id)
@@ -425,7 +656,7 @@ def api_pipeline_clone(request, pipeline_id: int):
     return _ok(clone.to_detail_dict(), status=201)
 
 
-@require_feature('studio')
+@require_feature(STUDIO_FEATURE_PIPELINES)
 def api_pipeline_runs(request, pipeline_id: int):
     pipeline = _get_pipeline(request, pipeline_id)
     if pipeline is None:
@@ -434,7 +665,7 @@ def api_pipeline_runs(request, pipeline_id: int):
     return _ok([r.to_dict() for r in runs])
 
 
-@require_feature('studio')
+@require_feature(STUDIO_FEATURE_PIPELINES)
 @require_http_methods(["POST"])
 def api_pipeline_assistant(request):
     data = _json_body(request)
@@ -488,27 +719,31 @@ def api_pipeline_assistant(request):
         incoming_nodes = []
         outgoing_nodes = []
 
-    agents = [
-        {
-            "id": agent.pk,
-            "name": agent.name,
-            "description": agent.description,
-            "mcp_server_ids": list(agent.mcp_servers.filter(owner=request.user).values_list("id", flat=True)),
-            "skill_slugs": list(agent.skill_slugs or []),
-            "server_scope_ids": list(agent.server_scope.filter(user=request.user).values_list("id", flat=True)),
-        }
-        for agent in AgentConfig.objects.filter(owner=request.user).order_by("name")
-    ]
-    mcps = [
-        {
-            "id": mcp.pk,
-            "name": mcp.name,
-            "description": mcp.description,
-            "transport": mcp.transport,
-            "last_test_ok": mcp.last_test_ok,
-        }
-        for mcp in MCPServerPool.objects.filter(owner=request.user).order_by("name")
-    ]
+    agents = []
+    if _user_has_feature(request.user, STUDIO_FEATURE_AGENTS):
+        agents = [
+            {
+                "id": agent.pk,
+                "name": agent.name,
+                "description": agent.description,
+                "mcp_server_ids": list(agent.mcp_servers.values_list("id", flat=True)),
+                "skill_slugs": list(agent.skill_slugs or []),
+                "server_scope_ids": list(agent.server_scope.values_list("id", flat=True)),
+            }
+            for agent in _agent_read_queryset_for_user(request.user).order_by("name")
+        ]
+    mcps = []
+    if _user_has_feature(request.user, STUDIO_FEATURE_MCP):
+        mcps = [
+            {
+                "id": mcp.pk,
+                "name": mcp.name,
+                "description": mcp.description,
+                "transport": mcp.transport,
+                "last_test_ok": mcp.last_test_ok,
+            }
+            for mcp in _mcp_read_queryset_for_user(request.user)
+        ]
 
     from servers.models import Server
 
@@ -520,7 +755,15 @@ def api_pipeline_assistant(request):
         }
         for server in Server.objects.filter(user=request.user).order_by("name")
     ]
-    available_skills = [skill.to_summary_dict() for skill in list_skills()]
+    available_skills = []
+    if _user_has_feature(request.user, STUDIO_FEATURE_SKILLS):
+        all_skills = list_skills()
+        access_map = _skill_access_map([skill.slug for skill in all_skills])
+        available_skills = [
+            _skill_to_summary_dict(skill, request.user, access_map.get(skill.slug.lower()))
+            for skill in all_skills
+            if _can_read_skill(request.user, access_map.get(skill.slug.lower()))
+        ]
 
     selected_data = current_node.get("data") if current_node and isinstance(current_node.get("data"), dict) else {}
     selected_skill_slugs = normalise_skill_slugs(selected_data.get("skill_slugs"))
@@ -549,7 +792,7 @@ def api_pipeline_assistant(request):
 
     if selected_mcp_id:
         try:
-            selected_mcp = MCPServerPool.objects.get(pk=selected_mcp_id, owner=request.user)
+            selected_mcp = _mcp_read_queryset_for_user(request.user).get(pk=selected_mcp_id)
             inspection = asyncio.run(inspect_mcp_server(selected_mcp))
             selected_mcp_tools = [
                 {
@@ -676,10 +919,7 @@ def api_pipeline_assistant(request):
 
 
 def _get_pipeline(request, pipeline_id: int) -> Pipeline | None:
-    try:
-        return Pipeline.objects.get(pk=pipeline_id, owner=request.user)
-    except Pipeline.DoesNotExist:
-        return None
+    return _pipeline_queryset_for_user(request.user).filter(pk=pipeline_id).first()
 
 
 # ---------------------------------------------------------------------------
@@ -687,27 +927,25 @@ def _get_pipeline(request, pipeline_id: int) -> Pipeline | None:
 # ---------------------------------------------------------------------------
 
 
-@require_feature('studio')
+@require_feature(STUDIO_FEATURE_RUNS)
 def api_runs(request):
-    qs = PipelineRun.objects.filter(pipeline__owner=request.user).order_by("-created_at")[:100]
+    qs = _run_queryset_for_user(request.user)[:100]
     return _ok([r.to_dict() for r in qs])
 
 
-@require_feature('studio')
+@require_feature(STUDIO_FEATURE_RUNS)
 def api_run_detail(request, run_id: int):
-    try:
-        run = PipelineRun.objects.get(pk=run_id, pipeline__owner=request.user)
-    except PipelineRun.DoesNotExist:
+    run = _run_queryset_for_user(request.user).filter(pk=run_id).first()
+    if run is None:
         return _err("Run not found", 404)
     return _ok(run.to_dict())
 
 
-@require_feature('studio')
+@require_feature(STUDIO_FEATURE_RUNS)
 @require_http_methods(["POST"])
 def api_run_stop(request, run_id: int):
-    try:
-        run = PipelineRun.objects.get(pk=run_id, pipeline__owner=request.user)
-    except PipelineRun.DoesNotExist:
+    run = _run_queryset_for_user(request.user).filter(pk=run_id).first()
+    if run is None:
         return _err("Run not found", 404)
 
     executor = get_executor_for_run(run.id)
@@ -793,11 +1031,11 @@ def api_run_approve(request, run_id: int, node_id: str):
 # ---------------------------------------------------------------------------
 
 
-@require_feature('studio')
+@require_feature(STUDIO_FEATURE_AGENTS)
 def api_agents(request):
     if request.method == "GET":
-        qs = AgentConfig.objects.filter(owner=request.user).order_by("-updated_at")
-        return _ok([a.to_dict() for a in qs])
+        qs = _agent_read_queryset_for_user(request.user)
+        return _ok([_agent_to_dict(agent, request.user) for agent in qs])
 
     if request.method == "POST":
         data = _json_body(request)
@@ -816,33 +1054,40 @@ def api_agents(request):
             model=data.get("model", "gemini-2.0-flash-exp"),
             max_iterations=data.get("max_iterations", 10),
             allowed_tools=data.get("allowed_tools", []),
-            skill_slugs=_normalise_skill_payload(
-                data.get("skill_slugs") if "skill_slugs" in data else data.get("skills")
+            skill_slugs=_sanitize_accessible_skill_slugs(
+                request.user,
+                _normalise_skill_payload(data.get("skill_slugs") if "skill_slugs" in data else data.get("skills")),
             ),
             owner=request.user,
         )
-        _set_owned_mcp_servers(agent, request.user, requested_mcp_ids)
+        _set_accessible_mcp_servers(agent, request.user, requested_mcp_ids)
         _set_owned_server_scope(
             agent,
             request.user,
             _normalise_related_ids(data.get("server_scope_ids") if "server_scope_ids" in data else data.get("server_scope")),
         )
-        return _ok(agent.to_dict(), status=201)
+        if _is_admin(request.user):
+            agent.is_shared = bool(data.get("is_shared", agent.is_shared))
+            agent.save(update_fields=["is_shared"])
+            _apply_shared_users(agent, _normalise_related_ids(data.get("shared_user_ids")))
+        return _ok(_agent_to_dict(agent, request.user), status=201)
 
     return _err("Method not allowed", 405)
 
 
-@require_feature('studio')
+@require_feature(STUDIO_FEATURE_AGENTS)
 def api_agent_detail(request, agent_id: int):
-    try:
-        agent = AgentConfig.objects.get(pk=agent_id, owner=request.user)
-    except AgentConfig.DoesNotExist:
+    agent = _agent_read_queryset_for_user(request.user).filter(pk=agent_id).first()
+    if agent is None:
         return _err("Agent config not found", 404)
+    can_edit = _is_admin(request.user) or agent.owner_id == request.user.id
 
     if request.method == "GET":
-        return _ok(agent.to_dict())
+        return _ok(_agent_to_dict(agent, request.user))
 
     if request.method == "PUT":
+        if not can_edit:
+            return _err("Only the owner or admin can edit this agent", 403)
         data = _json_body(request)
         for field in (
             "name",
@@ -853,38 +1098,49 @@ def api_agent_detail(request, agent_id: int):
             "model",
             "max_iterations",
             "allowed_tools",
-            "is_shared",
         ):
             if field in data:
                 setattr(agent, field, data[field])
         if "skill_slugs" in data or "skills" in data:
-            agent.skill_slugs = _normalise_skill_payload(
-                data.get("skill_slugs") if "skill_slugs" in data else data.get("skills")
+            agent.skill_slugs = _sanitize_accessible_skill_slugs(
+                request.user,
+                _normalise_skill_payload(data.get("skill_slugs") if "skill_slugs" in data else data.get("skills")),
             )
         agent.save()
         if "mcp_server_ids" in data or "mcp_servers" in data:
             requested_mcp_ids = _normalise_related_ids(
                 data.get("mcp_server_ids") if "mcp_server_ids" in data else data.get("mcp_servers")
             )
-            _set_owned_mcp_servers(agent, request.user, requested_mcp_ids)
+            _set_accessible_mcp_servers(agent, request.user, requested_mcp_ids)
         if "server_scope_ids" in data or "server_scope" in data:
             _set_owned_server_scope(
                 agent,
                 request.user,
                 _normalise_related_ids(data.get("server_scope_ids") if "server_scope_ids" in data else data.get("server_scope")),
             )
-        return _ok(agent.to_dict())
+        if _is_admin(request.user):
+            if "is_shared" in data:
+                agent.is_shared = bool(data.get("is_shared"))
+                agent.save(update_fields=["is_shared"])
+            if "shared_user_ids" in data:
+                _apply_shared_users(agent, _normalise_related_ids(data.get("shared_user_ids")))
+        return _ok(_agent_to_dict(agent, request.user))
 
     if request.method == "DELETE":
+        if not can_edit:
+            return _err("Only the owner or admin can delete this agent", 403)
         agent.delete()
         return JsonResponse({"ok": True})
 
     return _err("Method not allowed", 405)
 
 
-def _set_owned_mcp_servers(agent: AgentConfig, owner, ids: list[int] | None):
+def _set_accessible_mcp_servers(agent: AgentConfig, user, ids: list[int] | None):
+    if not _user_has_feature(user, STUDIO_FEATURE_MCP):
+        agent.mcp_servers.set([])
+        return
     requested_ids = ids or []
-    items = list(MCPServerPool.objects.filter(pk__in=requested_ids, owner=owner))
+    items = list(_mcp_read_queryset_for_user(user).filter(pk__in=requested_ids))
     agent.mcp_servers.set(items)
 
 
@@ -912,6 +1168,24 @@ def _normalise_related_ids(raw_values) -> list[int]:
 
 def _normalise_skill_payload(raw_values) -> list[str]:
     return normalise_skill_slugs(raw_values)
+
+
+def _sanitize_accessible_skill_slugs(user, slugs: list[str]) -> list[str]:
+    if not slugs or not _user_has_feature(user, STUDIO_FEATURE_SKILLS):
+        return []
+
+    access_map = _skill_access_map(slugs)
+    sanitized: list[str] = []
+    for slug in slugs:
+        skill = None
+        with contextlib.suppress(SkillNotFoundError):
+            skill = get_skill(slug)
+        if skill is None:
+            continue
+        access = access_map.get(skill.slug.lower())
+        if _is_admin(user) or _can_read_skill(user, access):
+            sanitized.append(skill.slug)
+    return sanitized
 
 
 def _normalise_string_list(raw_values) -> list[str]:
@@ -1018,7 +1292,13 @@ def _resolve_skill_workspace_file(skill_dir: Path, raw_path: str) -> tuple[Path 
     return file_path, normalized, None
 
 
-def _skill_workspace_file_payload(skill_dir: Path, relative_path: str, *, include_content: bool = False) -> dict:
+def _skill_workspace_file_payload(
+    skill_dir: Path,
+    relative_path: str,
+    *,
+    include_content: bool = False,
+    editable: bool = True,
+) -> dict:
     file_path = (skill_dir / relative_path).resolve()
     payload = {
         "path": relative_path,
@@ -1026,7 +1306,7 @@ def _skill_workspace_file_payload(skill_dir: Path, relative_path: str, *, includ
         "kind": _skill_workspace_kind(relative_path),
         "language": _skill_workspace_language(relative_path),
         "size": file_path.stat().st_size if file_path.exists() else 0,
-        "editable": True,
+        "editable": bool(editable),
     }
     if include_content:
         try:
@@ -1036,11 +1316,11 @@ def _skill_workspace_file_payload(skill_dir: Path, relative_path: str, *, includ
     return payload
 
 
-def _list_skill_workspace_files(skill_dir: Path) -> list[dict]:
+def _list_skill_workspace_files(skill_dir: Path, *, editable: bool = True) -> list[dict]:
     files: list[dict] = []
     skill_file = skill_dir / "SKILL.md"
     if skill_file.exists():
-        files.append(_skill_workspace_file_payload(skill_dir, "SKILL.md"))
+        files.append(_skill_workspace_file_payload(skill_dir, "SKILL.md", editable=editable))
     for folder in ("references", "scripts", "assets"):
         folder_path = skill_dir / folder
         if not folder_path.exists() or not folder_path.is_dir():
@@ -1050,19 +1330,20 @@ def _list_skill_workspace_files(skill_dir: Path) -> list[dict]:
                 continue
             relative_path = file_path.relative_to(skill_dir).as_posix()
             try:
-                files.append(_skill_workspace_file_payload(skill_dir, relative_path))
+                files.append(_skill_workspace_file_payload(skill_dir, relative_path, editable=editable))
             except ValueError:
                 continue
     return files
 
 
-def _skill_workspace_response(slug: str) -> dict:
+def _skill_workspace_response(slug: str, viewer, access: StudioSkillAccess | None) -> dict:
     skill = get_skill(slug)
     skill_dir = Path(skill.path).resolve().parent
     validation = validate_skill_dir(skill_dir)
+    can_edit = _can_edit_skill(viewer, access)
     return {
-        "skill": skill.to_detail_dict(),
-        "files": _list_skill_workspace_files(skill_dir),
+        "skill": _skill_to_detail_dict(skill, viewer, access),
+        "files": _list_skill_workspace_files(skill_dir, editable=can_edit),
         "validation": validation.to_dict(),
     }
 
@@ -1072,34 +1353,57 @@ def _skill_workspace_response(slug: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-@require_feature('studio')
+@require_feature(STUDIO_FEATURE_SKILLS)
 @require_http_methods(["GET"])
-def api_skills(_request):
-    return _ok([skill.to_summary_dict() for skill in list_skills()])
+def api_skills(request):
+    skills = list_skills()
+    access_map = _skill_access_map([skill.slug for skill in skills])
+    visible = []
+    for skill in skills:
+        access = access_map.get(skill.slug.lower())
+        if not _can_read_skill(request.user, access):
+            continue
+        visible.append(_skill_to_summary_dict(skill, request.user, access))
+    return _ok(visible)
 
 
-@require_feature('studio')
-@require_http_methods(["GET"])
-def api_skill_detail(_request, slug: str):
+@require_feature(STUDIO_FEATURE_SKILLS)
+@require_http_methods(["GET", "PUT"])
+def api_skill_detail(request, slug: str):
     try:
         skill = get_skill(slug)
     except SkillNotFoundError:
         return _err("Skill not found", 404)
-    return _ok(skill.to_detail_dict())
+    access = _get_skill_access(skill.slug)
+    if not _can_read_skill(request.user, access):
+        return _err("Skill not found", 404)
+
+    if request.method == "GET":
+        return _ok(_skill_to_detail_dict(skill, request.user, access))
+
+    admin_error = _require_admin(request, message="Only admin can change skill sharing")
+    if admin_error:
+        return admin_error
+    data = _json_body(request)
+    access = _ensure_skill_access(skill.slug, owner=access.owner if access else None)
+    if "is_shared" in data:
+        access.is_shared = bool(data.get("is_shared"))
+        access.save(update_fields=["is_shared"])
+    if "shared_user_ids" in data:
+        _apply_shared_users(access, _normalise_related_ids(data.get("shared_user_ids")))
+    access = _get_skill_access(skill.slug)
+    return _ok(_skill_to_detail_dict(skill, request.user, access))
 
 
-@require_feature('studio')
+@require_feature(STUDIO_FEATURE_SKILLS)
 @require_http_methods(["GET"])
 def api_skill_templates(_request):
     return _ok([item.to_dict() for item in list_skill_templates()])
 
 
-@require_feature('studio')
+@require_feature(STUDIO_FEATURE_SKILLS)
 @require_http_methods(["POST"])
 def api_skill_scaffold(request):
-    admin_error = _require_admin(request)
-    if admin_error:
-        return admin_error
     data = _json_body(request)
     template_slug = str(data.get("template_slug") or "").strip()
     template = get_skill_template(template_slug) if template_slug else None
@@ -1121,11 +1425,22 @@ def api_skill_scaffold(request):
     runtime_policy = dict(defaults.get("runtime_policy") or {})
     runtime_policy.update(dict(raw_runtime_policy or {}))
 
+    requested_slug = str(data.get("slug") or "").strip()
+    if bool(data.get("force")) and not _is_admin(request.user):
+        if not requested_slug:
+            return _err("force requires an explicit slug for non-admin users")
+        existing_access = _get_skill_access(requested_slug)
+        existing_skill = None
+        with contextlib.suppress(SkillNotFoundError):
+            existing_skill = get_skill(requested_slug)
+        if existing_skill is not None and not _can_edit_skill(request.user, existing_access):
+            return _err("You can overwrite only your own skills", 403)
+
     try:
         skill_dir = scaffold_skill(
             name=name,
             description=description,
-            slug=str(data.get("slug") or "").strip() or None,
+            slug=requested_slug or None,
             service=str(data.get("service") or defaults.get("service") or "").strip(),
             category=str(data.get("category") or defaults.get("category") or "").strip(),
             safety_level=str(data.get("safety_level") or defaults.get("safety_level") or "standard").strip() or "standard",
@@ -1157,27 +1472,54 @@ def api_skill_scaffold(request):
         skill = get_skill(skill_dir.name)
     except SkillNotFoundError:
         return _err("Skill was created but could not be loaded", 500)
+    access = _ensure_skill_access(skill.slug, owner=request.user)
+    if _is_admin(request.user):
+        if "is_shared" in data:
+            access.is_shared = bool(data.get("is_shared"))
+            access.save(update_fields=["is_shared"])
+        if "shared_user_ids" in data:
+            _apply_shared_users(access, _normalise_related_ids(data.get("shared_user_ids")))
+        access = _get_skill_access(skill.slug)
 
     return _ok(
         {
             "ok": True,
-            "skill": skill.to_detail_dict(),
+            "skill": _skill_to_detail_dict(skill, request.user, access),
             "validation": validation.to_dict(),
         },
         status=201,
     )
 
 
-@require_feature('studio')
+@require_feature(STUDIO_FEATURE_SKILLS)
 @require_http_methods(["POST"])
 def api_skill_validate(request):
-    admin_error = _require_admin(request)
-    if admin_error:
-        return admin_error
     data = _json_body(request)
     slugs = _normalise_string_list(data.get("slugs"))
     strict = bool(data.get("strict"))
-    results = validate_skills(slugs or None)
+
+    if slugs:
+        access_map = _skill_access_map(slugs)
+        denied = []
+        allowed_slugs = []
+        for slug in slugs:
+            access = access_map.get(slug.lower())
+            if _can_read_skill(request.user, access):
+                allowed_slugs.append(slug)
+            else:
+                denied.append(slug)
+        if denied:
+            return _err(f"Skills not accessible: {', '.join(denied)}", 403)
+        results = validate_skills(allowed_slugs) if allowed_slugs else []
+    else:
+        all_skills = list_skills()
+        access_map = _skill_access_map([skill.slug for skill in all_skills])
+        visible_slugs = [
+            skill.slug
+            for skill in all_skills
+            if _can_read_skill(request.user, access_map.get(skill.slug.lower()))
+        ]
+        results = validate_skills(visible_slugs) if visible_slugs else []
 
     if slugs:
         found = {item.slug.lower() for item in results}
@@ -1201,27 +1543,30 @@ def api_skill_validate(request):
     )
 
 
-@require_feature('studio')
+@require_feature(STUDIO_FEATURE_SKILLS)
 @require_http_methods(["GET"])
 def api_skill_workspace(request, slug: str):
-    admin_error = _require_admin(request)
-    if admin_error:
-        return admin_error
     try:
-        return _ok(_skill_workspace_response(slug))
+        skill = get_skill(slug)
     except SkillNotFoundError:
         return _err("Skill not found", 404)
+    access = _get_skill_access(skill.slug)
+    if not _can_read_skill(request.user, access):
+        return _err("Skill not found", 404)
+    return _ok(_skill_workspace_response(skill.slug, request.user, access))
 
 
-@require_feature('studio')
+@require_feature(STUDIO_FEATURE_SKILLS)
 def api_skill_workspace_file(request, slug: str):
-    admin_error = _require_admin(request)
-    if admin_error:
-        return admin_error
     try:
-        skill_dir = _skill_dir_from_slug(slug)
+        skill = get_skill(slug)
     except SkillNotFoundError:
         return _err("Skill not found", 404)
+    access = _get_skill_access(skill.slug)
+    if not _can_read_skill(request.user, access):
+        return _err("Skill not found", 404)
+    can_edit = _can_edit_skill(request.user, access)
+    skill_dir = _skill_dir_from_slug(skill.slug)
 
     if request.method == "GET":
         raw_path = request.GET.get("path", "")
@@ -1231,9 +1576,12 @@ def api_skill_workspace_file(request, slug: str):
         if file_path is None or relative_path is None or not file_path.exists():
             return _err("File not found", 404)
         try:
-            return _ok(_skill_workspace_file_payload(skill_dir, relative_path, include_content=True))
+            return _ok(_skill_workspace_file_payload(skill_dir, relative_path, include_content=True, editable=can_edit))
         except ValueError as exc:
             return _err(str(exc), 400)
+
+    if not can_edit:
+        return _err("Only the owner or admin can edit this skill workspace", 403)
 
     data = _json_body(request)
     raw_path = data.get("path", "")
@@ -1254,7 +1602,7 @@ def api_skill_workspace_file(request, slug: str):
         return _ok(
             {
                 "ok": True,
-                "file": _skill_workspace_file_payload(skill_dir, relative_path, include_content=True),
+                "file": _skill_workspace_file_payload(skill_dir, relative_path, include_content=True, editable=True),
                 "validation": validate_skill_dir(skill_dir).to_dict(),
             },
             status=201,
@@ -1270,7 +1618,7 @@ def api_skill_workspace_file(request, slug: str):
         return _ok(
             {
                 "ok": True,
-                "file": _skill_workspace_file_payload(skill_dir, relative_path, include_content=True),
+                "file": _skill_workspace_file_payload(skill_dir, relative_path, include_content=True, editable=True),
                 "validation": validate_skill_dir(skill_dir).to_dict(),
             }
         )
@@ -1383,14 +1731,11 @@ MCP_TEMPLATES = [
 ]
 
 
-@require_feature('studio')
+@require_feature(STUDIO_FEATURE_MCP)
 def api_mcp_list(request):
-    admin_error = _require_admin(request)
-    if admin_error:
-        return admin_error
     if request.method == "GET":
-        qs = MCPServerPool.objects.filter(owner=request.user).order_by("name")
-        return _ok([_mcp_to_dict(m) for m in qs])
+        qs = _mcp_read_queryset_for_user(request.user)
+        return _ok([_mcp_to_dict(mcp, request.user) for mcp in qs])
 
     if request.method == "POST":
         data = _json_body(request)
@@ -1411,51 +1756,60 @@ def api_mcp_list(request):
             url=url,
             owner=request.user,
         )
-        return _ok(_mcp_to_dict(mcp), status=201)
+        if _is_admin(request.user):
+            if "is_shared" in data:
+                mcp.is_shared = bool(data.get("is_shared"))
+                mcp.save(update_fields=["is_shared"])
+            if "shared_user_ids" in data:
+                _apply_shared_users(mcp, _normalise_related_ids(data.get("shared_user_ids")))
+        return _ok(_mcp_to_dict(mcp, request.user), status=201)
 
     return _err("Method not allowed", 405)
 
 
-@require_feature('studio')
+@require_feature(STUDIO_FEATURE_MCP)
 def api_mcp_detail(request, mcp_id: int):
-    admin_error = _require_admin(request)
-    if admin_error:
-        return admin_error
-    try:
-        mcp = MCPServerPool.objects.get(pk=mcp_id, owner=request.user)
-    except MCPServerPool.DoesNotExist:
+    mcp = _mcp_read_queryset_for_user(request.user).filter(pk=mcp_id).first()
+    if mcp is None:
         return _err("MCP server not found", 404)
+    can_edit = _is_admin(request.user) or mcp.owner_id == request.user.id
 
     if request.method == "GET":
-        return _ok(_mcp_to_dict(mcp))
+        return _ok(_mcp_to_dict(mcp, request.user))
 
     if request.method == "PUT":
+        if not can_edit:
+            return _err("Only the owner or admin can edit this MCP server", 403)
         data = _json_body(request)
-        for field in ("name", "description", "transport", "command", "args", "env", "url", "is_shared"):
+        for field in ("name", "description", "transport", "command", "args", "env", "url"):
             if field in data:
                 val = data[field]
                 if field == "url" and (mcp.transport or data.get("transport")) == MCPServerPool.TRANSPORT_SSE and val:
                     val = _normalize_sse_url((val or "").strip())
                 setattr(mcp, field, val)
         mcp.save()
-        return _ok(_mcp_to_dict(mcp))
+        if _is_admin(request.user):
+            if "is_shared" in data:
+                mcp.is_shared = bool(data.get("is_shared"))
+                mcp.save(update_fields=["is_shared"])
+            if "shared_user_ids" in data:
+                _apply_shared_users(mcp, _normalise_related_ids(data.get("shared_user_ids")))
+        return _ok(_mcp_to_dict(mcp, request.user))
 
     if request.method == "DELETE":
+        if not can_edit:
+            return _err("Only the owner or admin can delete this MCP server", 403)
         mcp.delete()
         return JsonResponse({"ok": True})
 
     return _err("Method not allowed", 405)
 
 
-@require_feature('studio')
+@require_feature(STUDIO_FEATURE_MCP)
 @require_http_methods(["POST"])
 def api_mcp_test(request, mcp_id: int):
-    admin_error = _require_admin(request)
-    if admin_error:
-        return admin_error
-    try:
-        mcp = MCPServerPool.objects.get(pk=mcp_id, owner=request.user)
-    except MCPServerPool.DoesNotExist:
+    mcp = _mcp_write_queryset_for_user(request.user).filter(pk=mcp_id).first()
+    if mcp is None:
         return _err("MCP server not found", 404)
 
     ok, error = _test_mcp_connection(mcp)
@@ -1516,20 +1870,16 @@ def _test_mcp_connection(mcp: MCPServerPool) -> tuple[bool, str | None]:
         return False, str(exc)
 
 
-@require_feature('studio')
+@require_feature(STUDIO_FEATURE_MCP)
 def api_mcp_templates(request):
     return _ok(MCP_TEMPLATES)
 
 
-@require_feature('studio')
+@require_feature(STUDIO_FEATURE_MCP)
 @require_http_methods(["GET"])
 def api_mcp_tools(request, mcp_id: int):
-    admin_error = _require_admin(request)
-    if admin_error:
-        return admin_error
-    try:
-        mcp = MCPServerPool.objects.get(pk=mcp_id, owner=request.user)
-    except MCPServerPool.DoesNotExist:
+    mcp = _mcp_read_queryset_for_user(request.user).filter(pk=mcp_id).first()
+    if mcp is None:
         return _err("MCP server not found", 404)
 
     try:
@@ -1540,22 +1890,23 @@ def api_mcp_tools(request, mcp_id: int):
         return _err(f"Failed to inspect MCP server: {exc}", 500)
 
 
-def _mcp_to_dict(mcp: MCPServerPool) -> dict:
-    return {
-        "id": mcp.pk,
-        "name": mcp.name,
-        "description": mcp.description,
-        "transport": mcp.transport,
-        "command": mcp.command,
-        "args": mcp.args,
-        "env": mcp.env,
-        "secret_env_keys": get_mcp_secret_env_keys(mcp.id),
-        "url": mcp.url,
-        "is_shared": mcp.is_shared,
-        "last_test_ok": mcp.last_test_ok,
-        "last_test_at": mcp.last_test_at.isoformat() if mcp.last_test_at else None,
-        "last_test_error": mcp.last_test_error,
-    }
+@require_any_feature(STUDIO_FEATURE_SKILLS, STUDIO_FEATURE_MCP, STUDIO_FEATURE_AGENTS)
+@require_http_methods(["GET"])
+def api_share_users(request):
+    admin_error = _require_admin(request)
+    if admin_error:
+        return admin_error
+    users = User.objects.filter(is_active=True).order_by("username")
+    return _ok(
+        [
+            {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email or "",
+            }
+            for user in users
+        ]
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1563,11 +1914,11 @@ def _mcp_to_dict(mcp: MCPServerPool) -> dict:
 # ---------------------------------------------------------------------------
 
 
-@require_feature('studio')
+@require_feature(STUDIO_FEATURE_PIPELINES)
 def api_triggers(request):
     if request.method == "GET":
         pipeline_id = request.GET.get("pipeline_id")
-        qs = PipelineTrigger.objects.filter(pipeline__owner=request.user)
+        qs = PipelineTrigger.objects.filter(pipeline__in=_pipeline_queryset_for_user(request.user))
         if pipeline_id:
             qs = qs.filter(pipeline_id=pipeline_id)
         return _ok([t.to_dict() for t in qs])
@@ -1605,10 +1956,10 @@ def api_triggers(request):
     return _err("Method not allowed", 405)
 
 
-@require_feature('studio')
+@require_feature(STUDIO_FEATURE_PIPELINES)
 def api_trigger_detail(request, trigger_id: int):
     try:
-        trigger = PipelineTrigger.objects.get(pk=trigger_id, pipeline__owner=request.user)
+        trigger = PipelineTrigger.objects.get(pk=trigger_id, pipeline__in=_pipeline_queryset_for_user(request.user))
     except PipelineTrigger.DoesNotExist:
         return _err("Trigger not found", 404)
 
@@ -1711,13 +2062,13 @@ def _map_payload(payload: dict, mapping: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
-@require_feature('studio')
+@require_feature(STUDIO_FEATURE_PIPELINES)
 def api_templates(request):
     templates = PipelineTemplate.objects.all().order_by("category", "name")
     return _ok([t.to_dict() for t in templates])
 
 
-@require_feature('studio')
+@require_feature(STUDIO_FEATURE_PIPELINES)
 @require_http_methods(["POST"])
 def api_template_use(request, slug: str):
     try:
@@ -1734,7 +2085,7 @@ def api_template_use(request, slug: str):
 # ---------------------------------------------------------------------------
 
 
-@require_feature('studio')
+@require_any_feature(STUDIO_FEATURE_PIPELINES, STUDIO_FEATURE_AGENTS)
 def api_studio_servers(request):
     from servers.models import Server
 
@@ -1747,7 +2098,7 @@ def api_studio_servers(request):
 # ---------------------------------------------------------------------------
 
 
-@require_feature('studio')
+@require_feature(STUDIO_FEATURE_NOTIFICATIONS)
 def api_notification_settings(request):
     """
     GET  /api/studio/notifications/  — return current notification settings
@@ -1785,7 +2136,7 @@ def api_notification_settings(request):
     return _err("Method not allowed", 405)
 
 
-@require_feature('studio')
+@require_feature(STUDIO_FEATURE_NOTIFICATIONS)
 @require_http_methods(["POST"])
 def api_notification_test_telegram(request):
     """POST /api/studio/notifications/test-telegram/ — send a test Telegram message."""
@@ -1824,7 +2175,7 @@ def api_notification_test_telegram(request):
         return _err(f"Send failed: {exc}")
 
 
-@require_feature('studio')
+@require_feature(STUDIO_FEATURE_NOTIFICATIONS)
 @require_http_methods(["POST"])
 def api_notification_test_email(request):
     """POST /api/studio/notifications/test-email/ — send a test email."""

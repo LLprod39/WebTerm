@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+  ACCESS_FEATURE_OPTIONS,
   createAccessUser,
   deleteAccessUser,
   fetchAccessGroups,
@@ -13,6 +14,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { EmptyState, SectionCard, StatusBadge } from "@/components/ui/page-shell";
+import { SettingsWorkspace } from "@/components/settings/SettingsWorkspace";
 import { useI18n } from "@/lib/i18n";
 import {
   ACCESS_UI_TEXT,
@@ -24,16 +27,9 @@ import {
 } from "@/lib/accessUiText";
 
 type PermissionMode = "inherit" | "allow" | "deny";
+const SELECT_CLASS = "h-10 rounded-xl border border-border bg-background/80 px-3 text-sm text-foreground";
 
-const FALLBACK_FEATURES = [
-  { value: "servers", label: "Servers" },
-  { value: "dashboard", label: "Dashboard" },
-  { value: "agents", label: "Agents" },
-  { value: "studio", label: "Studio" },
-  { value: "settings", label: "Settings" },
-  { value: "orchestrator", label: "Orchestrator" },
-  { value: "knowledge_base", label: "Knowledge Base" },
-];
+const FALLBACK_FEATURES = ACCESS_FEATURE_OPTIONS;
 
 function createPermissionModes(
   features: Array<{ value: string; label: string }>,
@@ -69,11 +65,11 @@ function PermissionModeField({
   onChange: (value: PermissionMode) => void;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-background/40 p-3">
+    <div className="rounded-2xl border border-border/70 bg-background/50 p-3">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-medium text-foreground">{label}</div>
-          <div className="mt-1 text-[11px] text-muted-foreground">
+          <div className="mt-1 text-[11px] leading-5 text-muted-foreground">
             {ACCESS_UI_TEXT[lang].common.effective}:{" "}
             {effective ? ACCESS_UI_TEXT[lang].common.allowed : ACCESS_UI_TEXT[lang].common.denied}
             {source ? ` • ${ACCESS_UI_TEXT[lang].common.source.toLowerCase()}: ${getAccessSourceLabel(lang, source)}` : ""}
@@ -82,7 +78,8 @@ function PermissionModeField({
         <select
           value={mode}
           onChange={(e) => onChange(e.target.value as PermissionMode)}
-          className="rounded-md border border-border bg-secondary px-2 py-1 text-xs"
+          className={SELECT_CLASS}
+          aria-label={`${label} mode`}
         >
           <option value="inherit">{ACCESS_UI_TEXT[lang].common.inherit}</option>
           <option value="allow">{ACCESS_UI_TEXT[lang].common.allow}</option>
@@ -111,10 +108,10 @@ function GroupPicker({
             key={group.id}
             type="button"
             onClick={() => onToggle(group.id)}
-            className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+            className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${
               active
                 ? "border-primary bg-primary/10 text-primary"
-                : "border-border text-muted-foreground hover:text-foreground"
+                : "border-border bg-background/60 text-muted-foreground hover:text-foreground"
             }`}
           >
             {group.name}
@@ -129,10 +126,19 @@ function toggleId(source: number[], id: number) {
   return source.includes(id) ? source.filter((value) => value !== id) : [...source, id];
 }
 
+function FieldLabel({ htmlFor, children }: { htmlFor?: string; children: string }) {
+  return (
+    <label htmlFor={htmlFor} className="mb-1.5 block text-[11px] font-medium text-muted-foreground">
+      {children}
+    </label>
+  );
+}
+
 export default function SettingsUsersPage() {
   const { lang } = useI18n();
   const copy = ACCESS_UI_TEXT[lang].users;
   const common = ACCESS_UI_TEXT[lang].common;
+  const directoryTitle = lang === "ru" ? "Каталог пользователей" : "User directory";
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -250,92 +256,40 @@ export default function SettingsUsersPage() {
     return <div className="p-6 text-sm text-destructive">{copy.error}</div>;
   }
 
+  const activeUsers = users.filter((user) => user.is_active).length;
+  const staffUsers = users.filter((user) => user.is_staff).length;
+
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground">{copy.title}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{copy.subtitle}</p>
+    <SettingsWorkspace
+      title={copy.title}
+      description={copy.subtitle}
+      asideHint="Профиль пользователя задаёт базовый уровень доступа. Группы расширяют его, а явные правила оставляйте только для редких исключений."
+      actions={
+        <>
+          <StatusBadge label={`Users: ${users.length}`} dot={false} />
+          <StatusBadge label={`${common.active}: ${activeUsers}`} tone="success" dot={false} />
+          <StatusBadge label={`${common.staff}: ${staffUsers}`} tone="info" dot={false} />
+          <StatusBadge label={`${common.groups}: ${groups.length}`} dot={false} />
+        </>
+      }
+    >
+      <div className="workspace-subtle rounded-xl px-4 py-3 text-sm leading-6 text-muted-foreground">
+        Слева список пользователей, справа форма создания. Для правок открой карточку пользователя и меняй только то, что реально нужно.
       </div>
-
-      <section className="space-y-4 rounded-lg border border-border bg-card p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-medium text-foreground">{copy.createTitle}</h2>
-            <p className="text-xs text-muted-foreground">{copy.createHint}</p>
-          </div>
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-3">
-          <Input
-            placeholder={copy.username}
-            value={createForm.username}
-            onChange={(e) => setCreateForm((state) => ({ ...state, username: e.target.value }))}
-          />
-          <Input
-            placeholder={copy.email}
-            value={createForm.email}
-            onChange={(e) => setCreateForm((state) => ({ ...state, email: e.target.value }))}
-          />
-          <Input
-            type="password"
-            placeholder={copy.passwordPlaceholder}
-            value={createForm.password}
-            onChange={(e) => setCreateForm((state) => ({ ...state, password: e.target.value }))}
-          />
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-[1.3fr_1fr]">
-          <select
-            value={createForm.access_profile}
-            onChange={(e) => setCreateForm((state) => ({ ...state, access_profile: e.target.value }))}
-            className="rounded-md border border-border bg-secondary px-3 py-2 text-sm"
-          >
-            <option value="server_only">{getAccessProfileLabel(lang, "server_only")}</option>
-            <option value="admin_full">{getAccessProfileLabel(lang, "admin_full")}</option>
-            <option value="custom">{getAccessProfileLabel(lang, "custom")}</option>
-            <option value="reset_defaults">{getAccessProfileLabel(lang, "reset_defaults")}</option>
-          </select>
-          <div className="flex items-center gap-5">
-            <label className="flex items-center gap-2 text-sm">
-              {common.staff}
-              <Switch
-                checked={createForm.is_staff}
-                onCheckedChange={(value) => setCreateForm((state) => ({ ...state, is_staff: value }))}
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <SectionCard
+          title={directoryTitle}
+          description="Список пользователей, их итоговый доступ и точечные действия."
+        >
+          <div className="space-y-4">
+            {users.length === 0 ? (
+              <EmptyState
+                title="Пользователей пока нет"
+                description="Создайте первый аккаунт справа, затем назначьте профиль доступа и группы."
               />
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              {common.active}
-              <Switch
-                checked={createForm.is_active}
-                onCheckedChange={(value) => setCreateForm((state) => ({ ...state, is_active: value }))}
-              />
-            </label>
-          </div>
-        </div>
+            ) : null}
 
-        <div className="space-y-2">
-          <div className="text-xs text-muted-foreground">{common.groups}</div>
-          <GroupPicker
-            groups={groups}
-            selectedGroupIds={createForm.groups}
-            onToggle={(groupId) =>
-              setCreateForm((state) => ({ ...state, groups: toggleId(state.groups, groupId) }))
-            }
-          />
-        </div>
-
-        <div>
-          <Button
-            onClick={() => void createUser()}
-            disabled={saving || !createForm.username.trim() || !createForm.password.trim()}
-          >
-            {saving ? copy.creatingAction : copy.createAction}
-          </Button>
-        </div>
-      </section>
-
-      <section className="space-y-4">
-        {users.map((user) => {
+            {users.map((user) => {
           const isEditing = editingId === user.id;
           const draft = editing as {
             username?: string;
@@ -348,84 +302,98 @@ export default function SettingsUsersPage() {
           };
 
           return (
-            <div key={user.id} className="rounded-lg border border-border bg-card p-4">
+            <div key={user.id} className="rounded-2xl border border-border/80 bg-background/50 p-4">
               {!isEditing ? (
                 <div className="space-y-3">
-                  <div className="flex flex-wrap items-start gap-3">
-                    <div>
-                      <div className="text-base font-medium text-foreground">{user.username}</div>
-                      <div className="text-sm text-muted-foreground">{user.email || common.noEmail}</div>
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-base font-semibold text-foreground">{user.username}</div>
+                        <StatusBadge label={getAccessProfileLabel(lang, user.access_profile || "custom")} dot={false} />
+                        <StatusBadge label={user.is_active ? common.active : common.inactive} tone={user.is_active ? "success" : "warning"} />
+                        {user.is_staff ? <StatusBadge label={common.staff} tone="info" /> : null}
+                      </div>
+                      <div className="mt-1 text-sm text-muted-foreground">{user.email || common.noEmail}</div>
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        <div className="workspace-subtle rounded-xl px-3 py-3">
+                          <div className="text-[11px] font-medium text-muted-foreground">{common.groups}</div>
+                          <div className="mt-1 text-sm text-foreground">
+                            {(user.groups || []).length ? user.groups?.map((group) => group.name).join(", ") : common.none}
+                          </div>
+                        </div>
+                        <div className="workspace-subtle rounded-xl px-3 py-3">
+                          <div className="text-[11px] font-medium text-muted-foreground">{copy.effectiveAccess}</div>
+                          <div className="mt-1 text-sm text-foreground">
+                            {summarizeAllowedFeatures(lang, user.effective_permissions) || common.none}
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="ml-auto flex flex-wrap gap-2 text-xs">
-                      <span className="rounded-full border border-border px-2 py-1 text-muted-foreground">
-                        {common.profile.toLowerCase()}: {getAccessProfileLabel(lang, user.access_profile || "custom")}
-                      </span>
-                      <span className="rounded-full border border-border px-2 py-1 text-muted-foreground">
-                        {user.is_staff ? common.staff : common.nonStaff}
-                      </span>
-                      <span className="rounded-full border border-border px-2 py-1 text-muted-foreground">
-                        {user.is_active ? common.active : common.inactive}
-                      </span>
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" onClick={() => startEdit(user)}>
+                        {copy.editAction}
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => void resetPassword(user)}>
+                        {common.password}
+                      </Button>
+                      <Button size="sm" variant="destructive" onClick={() => void removeUser(user)}>
+                        {common.delete}
+                      </Button>
                     </div>
-                  </div>
-
-                  <div className="space-y-2 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">{common.groups}:</span>{" "}
-                      {(user.groups || []).length
-                        ? user.groups?.map((group) => group.name).join(", ")
-                        : common.none}
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">{copy.effectiveAccess}:</span>{" "}
-                      {summarizeAllowedFeatures(lang, user.effective_permissions) || common.none}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <Button size="sm" variant="outline" onClick={() => startEdit(user)}>
-                      {copy.editAction}
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => void resetPassword(user)}>
-                      {common.password}
-                    </Button>
-                    <Button size="sm" variant="destructive" onClick={() => void removeUser(user)}>
-                      {common.delete}
-                    </Button>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <Input
-                      value={draft.username || ""}
-                      onChange={(e) => setEditing((state) => ({ ...state, username: e.target.value }))}
-                    />
-                    <Input
-                      value={draft.email || ""}
-                      onChange={(e) => setEditing((state) => ({ ...state, email: e.target.value }))}
-                    />
-                    <select
-                      value={draft.access_profile || "custom"}
-                      onChange={(e) => setEditing((state) => ({ ...state, access_profile: e.target.value }))}
-                      className="rounded-md border border-border bg-secondary px-3 py-2 text-sm"
-                    >
-                      <option value="server_only">{getAccessProfileLabel(lang, "server_only")}</option>
-                      <option value="admin_full">{getAccessProfileLabel(lang, "admin_full")}</option>
-                      <option value="custom">{getAccessProfileLabel(lang, "custom")}</option>
-                      <option value="reset_defaults">{getAccessProfileLabel(lang, "reset_defaults")}</option>
-                    </select>
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div>
+                      <FieldLabel htmlFor={`user-username-${user.id}`}>{copy.username}</FieldLabel>
+                      <Input
+                        id={`user-username-${user.id}`}
+                        name="username"
+                        autoComplete="username"
+                        spellCheck={false}
+                        value={draft.username || ""}
+                        onChange={(e) => setEditing((state) => ({ ...state, username: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <FieldLabel htmlFor={`user-email-${user.id}`}>{copy.email}</FieldLabel>
+                      <Input
+                        id={`user-email-${user.id}`}
+                        name="email"
+                        type="email"
+                        autoComplete="email"
+                        spellCheck={false}
+                        value={draft.email || ""}
+                        onChange={(e) => setEditing((state) => ({ ...state, email: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <FieldLabel htmlFor={`user-profile-${user.id}`}>{common.profile}</FieldLabel>
+                      <select
+                        id={`user-profile-${user.id}`}
+                        value={draft.access_profile || "custom"}
+                        onChange={(e) => setEditing((state) => ({ ...state, access_profile: e.target.value }))}
+                        className={SELECT_CLASS}
+                        aria-label={common.profile}
+                      >
+                        <option value="server_only">{getAccessProfileLabel(lang, "server_only")}</option>
+                        <option value="admin_full">{getAccessProfileLabel(lang, "admin_full")}</option>
+                        <option value="custom">{getAccessProfileLabel(lang, "custom")}</option>
+                        <option value="reset_defaults">{getAccessProfileLabel(lang, "reset_defaults")}</option>
+                      </select>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-5">
-                    <label className="flex items-center gap-2 text-sm">
+                  <div className="flex flex-wrap items-center gap-6 rounded-2xl border border-border/70 bg-background/40 px-4 py-3">
+                    <label className="flex items-center gap-3 text-sm">
                       {common.staff}
                       <Switch
                         checked={!!draft.is_staff}
                         onCheckedChange={(value) => setEditing((state) => ({ ...state, is_staff: value }))}
                       />
                     </label>
-                    <label className="flex items-center gap-2 text-sm">
+                    <label className="flex items-center gap-3 text-sm">
                       {common.active}
                       <Switch
                         checked={!!draft.is_active}
@@ -435,7 +403,7 @@ export default function SettingsUsersPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <div className="text-xs text-muted-foreground">{common.groups}</div>
+                    <div className="text-[11px] font-medium text-muted-foreground">{common.groups}</div>
                     <GroupPicker
                       groups={groups}
                       selectedGroupIds={(draft.groups as number[]) || []}
@@ -451,7 +419,7 @@ export default function SettingsUsersPage() {
                   <div className="space-y-3">
                     <div>
                       <div className="text-sm font-medium text-foreground">{copy.explicitOverrides}</div>
-                      <div className="text-xs text-muted-foreground">{copy.explicitOverridesHint}</div>
+                      <div className="text-sm text-muted-foreground">{copy.explicitOverridesHint}</div>
                     </div>
                     <div className="grid gap-3 md:grid-cols-2">
                       {features.map((feature) => (
@@ -489,7 +457,103 @@ export default function SettingsUsersPage() {
             </div>
           );
         })}
-      </section>
-    </div>
+          </div>
+        </SectionCard>
+
+        <SectionCard
+          title={copy.createTitle}
+          description={copy.createHint}
+          className="xl:sticky xl:top-4"
+          bodyClassName="space-y-4"
+        >
+          <div className="grid gap-4">
+            <div>
+              <FieldLabel htmlFor="create-user-username">{copy.username}</FieldLabel>
+              <Input
+                id="create-user-username"
+                name="username"
+                autoComplete="username"
+                spellCheck={false}
+                placeholder={copy.username}
+                value={createForm.username}
+                onChange={(e) => setCreateForm((state) => ({ ...state, username: e.target.value }))}
+              />
+            </div>
+            <div>
+              <FieldLabel htmlFor="create-user-email">{copy.email}</FieldLabel>
+              <Input
+                id="create-user-email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                spellCheck={false}
+                placeholder={copy.email}
+                value={createForm.email}
+                onChange={(e) => setCreateForm((state) => ({ ...state, email: e.target.value }))}
+              />
+            </div>
+            <div>
+              <FieldLabel htmlFor="create-user-password">{common.password}</FieldLabel>
+              <Input
+                id="create-user-password"
+                name="new-password"
+                type="password"
+                autoComplete="new-password"
+                placeholder={copy.passwordPlaceholder}
+                value={createForm.password}
+                onChange={(e) => setCreateForm((state) => ({ ...state, password: e.target.value }))}
+              />
+            </div>
+            <div>
+              <FieldLabel htmlFor="create-user-profile">{common.profile}</FieldLabel>
+              <select
+                id="create-user-profile"
+                value={createForm.access_profile}
+                onChange={(e) => setCreateForm((state) => ({ ...state, access_profile: e.target.value }))}
+                className={SELECT_CLASS}
+                aria-label={common.profile}
+              >
+                <option value="server_only">{getAccessProfileLabel(lang, "server_only")}</option>
+                <option value="admin_full">{getAccessProfileLabel(lang, "admin_full")}</option>
+                <option value="custom">{getAccessProfileLabel(lang, "custom")}</option>
+                <option value="reset_defaults">{getAccessProfileLabel(lang, "reset_defaults")}</option>
+              </select>
+            </div>
+            <div className="flex flex-wrap items-center gap-6 rounded-2xl border border-border/70 bg-background/40 px-4 py-3">
+              <label className="flex items-center gap-3 text-sm">
+                {common.staff}
+                <Switch
+                  checked={createForm.is_staff}
+                  onCheckedChange={(value) => setCreateForm((state) => ({ ...state, is_staff: value }))}
+                />
+              </label>
+              <label className="flex items-center gap-3 text-sm">
+                {common.active}
+                <Switch
+                  checked={createForm.is_active}
+                  onCheckedChange={(value) => setCreateForm((state) => ({ ...state, is_active: value }))}
+                />
+              </label>
+            </div>
+            <div>
+              <div className="mb-1.5 text-[11px] font-medium text-muted-foreground">{common.groups}</div>
+              <GroupPicker
+                groups={groups}
+                selectedGroupIds={createForm.groups}
+                onToggle={(groupId) =>
+                  setCreateForm((state) => ({ ...state, groups: toggleId(state.groups, groupId) }))
+                }
+              />
+            </div>
+            <Button
+              onClick={() => void createUser()}
+              disabled={saving || !createForm.username.trim() || !createForm.password.trim()}
+            >
+              {saving ? copy.creatingAction : copy.createAction}
+            </Button>
+          </div>
+        </SectionCard>
+      </div>
+    </SettingsWorkspace>
   );
 }

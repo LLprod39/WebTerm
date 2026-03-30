@@ -148,6 +148,15 @@ def frontend_bootstrap(request):
     now = timezone.now()
     servers = list(_accessible_servers_queryset(request.user))
     server_ids = [s.id for s in servers]
+    accessible_groups = list(
+        ServerGroup.objects.filter(Q(user=request.user) | Q(memberships__user=request.user)).distinct().order_by("name")
+    )
+    group_ids = {group.id for group in accessible_groups}
+    group_ids.update(server.group_id for server in servers if server.group_id)
+    memberships_by_group = {
+        membership.group_id: membership.role
+        for membership in ServerGroupMember.objects.filter(group_id__in=group_ids, user=request.user)
+    }
 
     active_shares = (
         ServerShare.objects.select_related("shared_by")
@@ -161,7 +170,34 @@ def frontend_bootstrap(request):
     )
 
     servers_payload = []
-    groups_index: dict[str, dict] = {}
+
+    def serialize_group(group: ServerGroup | None) -> dict:
+        if not group:
+            return {
+                "id": None,
+                "name": "Ungrouped",
+                "description": "",
+                "color": "#6b7280",
+                "server_count": 0,
+                "role": "",
+                "can_edit": False,
+            }
+
+        role = "owner" if group.user_id == request.user.id else memberships_by_group.get(group.id, "")
+        return {
+            "id": group.id,
+            "name": group.name,
+            "description": group.description or "",
+            "color": group.color or "#3b82f6",
+            "server_count": 0,
+            "role": role,
+            "can_edit": role in {"owner", "admin"},
+        }
+
+    groups_index: dict[str, dict] = {
+        str(group.id): serialize_group(group)
+        for group in accessible_groups
+    }
     owned_count = 0
     shared_count = 0
 
@@ -198,11 +234,7 @@ def frontend_bootstrap(request):
 
         key = str(server.group_id or "ungrouped")
         if key not in groups_index:
-            groups_index[key] = {
-                "id": server.group_id,
-                "name": group_name,
-                "server_count": 0,
-            }
+            groups_index[key] = serialize_group(server.group if server.group_id else None)
         groups_index[key]["server_count"] += 1
 
     recent_activity = list(

@@ -47,6 +47,7 @@ import {
 } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { SettingsWorkspace } from "@/components/settings/SettingsWorkspace";
 
 function relativeTime(value: string): string {
   const d = new Date(value);
@@ -64,21 +65,21 @@ function SectionCard({ title, icon: Icon, children, description, actions }: {
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="bg-card border border-border rounded-lg overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-3.5 border-b border-border bg-secondary/20">
-        <div className="flex items-center gap-2.5">
-          <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Icon className="h-3.5 w-3.5 text-primary" />
+    <section className="overflow-hidden rounded-xl border border-border/70 bg-card">
+      <div className="flex flex-col gap-4 border-b border-border/60 bg-secondary/15 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-lg bg-background/80 text-muted-foreground">
+            <Icon className="h-3.5 w-3.5" />
           </div>
           <div>
-            <h2 className="text-sm font-medium text-foreground">{title}</h2>
-            {description && <p className="text-[10px] text-muted-foreground mt-0.5">{description}</p>}
+            <h2 className="text-base font-semibold text-foreground">{title}</h2>
+            {description ? <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p> : null}
           </div>
         </div>
-        {actions}
+        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
       </div>
       <div className="p-5">{children}</div>
-    </div>
+    </section>
   );
 }
 
@@ -144,12 +145,14 @@ function PurposeModelSelector({
   onRefresh: () => void; refreshing: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-border p-4 space-y-3">
+    <div className="space-y-3 rounded-xl border border-border/70 bg-background/40 p-4">
       <div className="flex items-center gap-2">
-        <Icon className="h-4 w-4 text-primary" />
+        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-background text-muted-foreground">
+          <Icon className="h-3.5 w-3.5" />
+        </div>
         <div>
           <p className="text-xs font-medium text-foreground">{label}</p>
-          <p className="text-[10px] text-muted-foreground">{description}</p>
+          <p className="text-[11px] text-muted-foreground">{description}</p>
         </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -186,7 +189,7 @@ function PurposeModelSelector({
         <span>{availableModels.length ? `${availableModels.length} моделей в каталоге` : "Ручной ввод модели"}</span>
       </div>
       {availableModels.length > 0 && (
-        <Button size="sm" variant="ghost" className="h-5 text-[9px] px-1.5 gap-1 text-muted-foreground" onClick={onRefresh} disabled={refreshing}>
+        <Button size="sm" variant="ghost" className="h-7 justify-start px-2 text-[11px] text-muted-foreground" onClick={onRefresh} disabled={refreshing}>
           <RefreshCw className={cn("h-2.5 w-2.5", refreshing && "animate-spin")} /> Обновить список
         </Button>
       )}
@@ -671,58 +674,31 @@ export default function SettingsPage() {
   const activeTabMeta = settingsTabs.find((tab) => tab.value === activeTab) || settingsTabs[0];
 
   return (
-    <div className="min-h-full w-full px-4 py-5 xl:px-6 2xl:px-8">
+    <SettingsWorkspace
+      title={t("settings.title")}
+      description="Главные системные параметры платформы: AI-маршрутизация, доступы, аудит и рабочий журнал без лишней визуальной перегрузки."
+      asideHint="Начинай с общей AI-схемы и доступов. Логирование и журнал нужны для контроля, но не должны мешать основному рабочему потоку."
+      actions={
+        <>
+          <Badge variant="outline">{activeTabMeta.label}</Badge>
+          <Badge variant="secondary">{configuredProviderCount} провайдера готово</Badge>
+          {aiDraftDirty ? <Badge>Есть AI-черновик</Badge> : <Badge variant="outline">Все сохранено</Badge>}
+        </>
+      }
+    >
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as SettingsTabValue)} className="space-y-5">
-        <div className="mx-auto w-full max-w-[1520px] space-y-5">
-          <div className="rounded-2xl border border-border bg-card px-5 py-5 shadow-sm lg:px-6">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-              <div className="space-y-1.5">
-                <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-primary/80">Settings Workspace</p>
-                <h1 className="text-2xl font-semibold text-foreground">{t("settings.title")}</h1>
-                <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-                  Более широкий и спокойный layout без узкой центральной колонки и без перегруженной боковой навигации.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="outline">{activeTabMeta.label}</Badge>
-                <Badge variant="secondary">{configuredProviderCount} настроено</Badge>
-                <Badge variant="outline">Ollama {ollamaRuntimeSummary}</Badge>
-                {aiDraftDirty ? <Badge>Есть черновик</Badge> : <Badge variant="secondary">Без несохраненных изменений</Badge>}
-              </div>
-            </div>
+        <div className="workspace-subtle rounded-xl px-4 py-3 text-sm leading-6 text-muted-foreground">
+          Держи настройки простыми: один основной провайдер, отдельные роли только там, где это действительно нужно, и минимум точечных исключений в доступах.
+        </div>
 
-            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-xl border border-border bg-background px-4 py-3">
-                <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Раздел</p>
-                <p className="mt-1 text-sm font-medium text-foreground">{activeTabMeta.label}</p>
-                <p className="mt-1 text-[11px] text-muted-foreground">{activeTabMeta.description}</p>
-              </div>
-              <div className="rounded-xl border border-border bg-background px-4 py-3">
-                <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Основная модель</p>
-                <p className="mt-1 text-sm font-medium text-foreground">{getProviderLabel(provider)}</p>
-                <p className="mt-1 text-[11px] text-muted-foreground">{model || "Модель не выбрана"}</p>
-              </div>
-              <div className="rounded-xl border border-border bg-background px-4 py-3">
-                <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Маршруты</p>
-                <p className="mt-1 text-sm font-medium text-foreground">{uniqueRouteProviders.length} провайдера</p>
-                <p className="mt-1 text-[11px] text-muted-foreground">{routeConfigs.map((route) => route.shortLabel).join(" / ")}</p>
-              </div>
-              <div className="rounded-xl border border-border bg-background px-4 py-3">
-                <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Ollama</p>
-                <p className="mt-1 text-sm font-medium text-foreground">{ollamaCatalogModels.length} моделей</p>
-                <p className="mt-1 text-[11px] text-muted-foreground">{ollamaLocalModels.length} local, {ollamaCloudModels.length} cloud</p>
-              </div>
-            </div>
-          </div>
-
-          <TabsList className="flex h-auto w-max min-w-full justify-start gap-1 overflow-x-auto rounded-xl bg-secondary/35 p-1">
+        <TabsList className="grid h-auto w-full grid-cols-1 gap-1 rounded-xl border border-border/60 bg-card p-1 md:grid-cols-2 xl:grid-cols-4">
             {settingsTabs.map((tab) => {
               const Icon = tab.icon;
               return (
                 <TabsTrigger
                   key={tab.value}
                   value={tab.value}
-                  className="gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 data-[state=active]:bg-card data-[state=active]:shadow-sm"
+                  className="gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 data-[state=active]:bg-background"
                 >
                   <Icon className="h-3.5 w-3.5" />
                   <span>{tab.label}</span>
@@ -730,11 +706,11 @@ export default function SettingsPage() {
                 </TabsTrigger>
               );
             })}
-          </TabsList>
+        </TabsList>
 
         {/* ==================== AI TAB ==================== */}
         <TabsContent value="ai" className="space-y-4">
-          <div className="flex flex-col gap-3 rounded-xl border border-border bg-card px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-secondary/20 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="space-y-1">
               <p className="text-sm font-medium text-foreground">AI модели и маршрутизация</p>
               <p className="max-w-3xl text-xs text-muted-foreground">
@@ -745,12 +721,7 @@ export default function SettingsPage() {
               <Badge variant={aiDraftDirty ? "default" : "secondary"}>
                 {aiDraftDirty ? "Есть несохраненные изменения" : "AI-конфиг синхронизирован"}
               </Badge>
-              <Badge variant="outline">
-                {uniqueRouteProviders.length > 1 ? "Раздельная маршрутизация" : "Один провайдер на все роли"}
-              </Badge>
-              <Badge variant="outline">
-                {missingModelsCount === 0 ? "Пустых моделей нет" : `${missingModelsCount} полей без модели`}
-              </Badge>
+              <Badge variant="outline">{uniqueRouteProviders.length > 1 ? "Раздельная маршрутизация" : "Один провайдер на все роли"}</Badge>
             </div>
           </div>
 
@@ -763,10 +734,10 @@ export default function SettingsPage() {
                     type="button"
                     onClick={() => handleDefaultProviderChange(providerItem.value)}
                     className={cn(
-                      "rounded-xl border p-3 text-left transition-all",
+                      "rounded-2xl border px-4 py-3 text-left transition-colors",
                       providerItem.isSelected
-                        ? "border-primary bg-primary/5 shadow-sm"
-                        : "border-border bg-card hover:border-primary/30 hover:bg-primary/5"
+                        ? "border-primary/40 bg-primary/5"
+                        : "border-border/60 bg-secondary/15 hover:border-border hover:bg-secondary/35"
                     )}
                   >
                     <div className="flex items-start justify-between gap-2">
@@ -776,17 +747,13 @@ export default function SettingsPage() {
                           {providerItem.catalogSize ? `${providerItem.catalogSize} моделей` : "Каталог пуст, доступен ручной ввод"}
                         </p>
                       </div>
-                      {providerItem.isSelected && <Badge className="shrink-0">Основной</Badge>}
+                      {providerItem.isSelected ? <Badge className="shrink-0">Основной</Badge> : null}
                     </div>
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                      <Badge variant={providerItem.configured ? "secondary" : "outline"}>
-                        {providerItem.configured ? "Готов" : "Требует настройку"}
-                      </Badge>
-                      <Badge variant={providerItem.enabled ? "secondary" : "outline"}>
-                        {providerItem.enabled ? "Активен" : "Не включен"}
-                      </Badge>
+                    <div className="mt-3 flex items-center gap-2 text-[11px] text-muted-foreground">
+                      <span className={cn("h-2 w-2 rounded-full", providerItem.configured ? "bg-emerald-400" : "bg-amber-400")} />
+                      <span>{providerItem.configured ? "Готов к использованию" : "Нужна настройка"}</span>
                     </div>
-                    <p className="mt-3 text-[11px] text-muted-foreground">
+                    <p className="mt-2 text-[11px] text-muted-foreground">
                       {providerItem.activeRoutes.length > 0
                         ? `Маршруты: ${providerItem.activeRoutes.join(", ")}`
                         : "Отдельные роли пока не используют этот провайдер"}
@@ -795,7 +762,7 @@ export default function SettingsPage() {
                 ))}
               </div>
 
-              <div className="rounded-xl border border-border bg-card/80 p-4 space-y-4">
+              <div className="space-y-4 rounded-2xl border border-border/60 bg-secondary/15 p-4">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-medium text-muted-foreground uppercase">Провайдер</label>
@@ -830,7 +797,7 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-2 rounded-lg border border-dashed border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-background/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="space-y-1">
                     <p className="text-xs font-medium">{getProviderLabel(provider)}</p>
                     <p className="text-[11px] text-muted-foreground">
@@ -841,16 +808,15 @@ export default function SettingsPage() {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Badge variant="secondary">{availableModels.length ? `${availableModels.length} вариантов` : "Ручной ввод"}</Badge>
-                    <Badge variant="outline">{getProviderEnabled(config, provider) ? "Провайдер включен" : "Провайдер еще не активирован"}</Badge>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <Button size="sm" variant="ghost" className="gap-1.5" onClick={onRefreshModels} disabled={refreshing}>
+                    <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} /> Обновить каталог
+                  </Button>
                   <Button size="sm" className="gap-1.5" onClick={onSave} disabled={saving}>
                     <Save className="h-3.5 w-3.5" /> {saving ? "Сохранение..." : "Сохранить основную"}
-                  </Button>
-                  <Button size="sm" variant="outline" className="gap-1.5" onClick={onRefreshModels} disabled={refreshing}>
-                    <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} /> Обновить каталог
                   </Button>
                 </div>
               </div>
@@ -859,7 +825,7 @@ export default function SettingsPage() {
 
           <SectionCard title="Маршруты по ролям" icon={Cpu} description="Отдельные пары провайдер/модель для чата, агентов и pipeline-оркестратора">
             <div className="space-y-4">
-              <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/20 p-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-secondary/20 p-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="space-y-1">
                   <p className="text-xs font-medium text-foreground">Быстрые действия</p>
                   <p className="text-[11px] text-muted-foreground">
@@ -867,10 +833,10 @@ export default function SettingsPage() {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button size="sm" variant="outline" className="gap-1.5" onClick={applyDefaultToAll}>
+                  <Button size="sm" variant="secondary" className="gap-1.5" onClick={applyDefaultToAll}>
                     <Bot className="h-3.5 w-3.5" /> Копировать основную
                   </Button>
-                  <Button size="sm" variant="outline" className="gap-1.5" onClick={fillMissingModels}>
+                  <Button size="sm" variant="secondary" className="gap-1.5" onClick={fillMissingModels}>
                     <Cpu className="h-3.5 w-3.5" /> Заполнить пустые
                   </Button>
                   <Button size="sm" variant="ghost" className="gap-1.5" onClick={resetAiDraft}>
@@ -1168,28 +1134,37 @@ export default function SettingsPage() {
 
         {/* ==================== ACCESS TAB ==================== */}
         <TabsContent value="access">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {[
-              { title: "Пользователи", desc: "Управление аккаунтами и ролями", icon: Users, url: "/settings/users" },
-              { title: "Группы", desc: "Группы серверов и доступ", icon: FolderOpen, url: "/settings/groups" },
-              { title: "Разрешения", desc: "Политики доступа к модулям", icon: Shield, url: "/settings/permissions" },
-            ].map((page) => (
-              <Link
-                key={page.url}
-                to={page.url}
-                className="flex items-center gap-4 bg-card border border-border rounded-lg p-5 hover:border-primary/30 hover:bg-primary/5 transition-all group"
-              >
-                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                  <page.icon className="h-5 w-5 text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium group-hover:text-primary transition-colors">{page.title}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{page.desc}</p>
-                </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-              </Link>
-            ))}
-          </div>
+          <SectionCard title="Настройки доступа" icon={Shield} description="Три понятных шага: пользователи, группы, затем точечные исключения.">
+            <div className="workspace-subtle rounded-xl px-4 py-3 text-sm leading-6 text-muted-foreground">
+              Базовую модель прав лучше собирать через профили и группы. Раздел разрешений используй только там, где действительно нужно сделать исключение.
+            </div>
+
+            <div className="mt-4 overflow-hidden rounded-xl border border-border/70">
+              {[
+                { title: "Пользователи", desc: "Аккаунты, профили доступа и группы пользователя", icon: Users, url: "/settings/users" },
+                { title: "Группы", desc: "Команды, участники и общая политика доступа", icon: FolderOpen, url: "/settings/groups" },
+                { title: "Разрешения", desc: "Точечные allow/deny правила для исключений", icon: Shield, url: "/settings/permissions" },
+              ].map((page, index, pages) => (
+                <Link
+                  key={page.url}
+                  to={page.url}
+                  className={cn(
+                    "group flex items-center gap-4 bg-card px-4 py-4 transition-colors hover:bg-secondary/30",
+                    index < pages.length - 1 && "border-b border-border/70",
+                  )}
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-background">
+                    <page.icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground">{page.title}</p>
+                    <p className="mt-0.5 text-sm text-muted-foreground">{page.desc}</p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground" aria-hidden="true" />
+                </Link>
+              ))}
+            </div>
+          </SectionCard>
         </TabsContent>
 
         {/* ==================== LOGGING TAB ==================== */}
@@ -1427,8 +1402,7 @@ export default function SettingsPage() {
             </SectionCard>
           </TabsContent>
         )}
-        </div>
       </Tabs>
-    </div>
+    </SettingsWorkspace>
   );
 }

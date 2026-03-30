@@ -187,10 +187,17 @@ function capabilityPills(capabilities: LinuxUiCapabilities | undefined) {
 }
 
 function statusClass(status: WorkspaceAppStatus) {
-  if (status === "live") return "border-emerald-500/30 bg-emerald-500/10 text-emerald-400";
-  if (status === "ready") return "border-primary/30 bg-primary/10 text-primary";
-  if (status === "next") return "border-amber-500/30 bg-amber-500/10 text-amber-400";
-  return "border-border bg-muted text-muted-foreground";
+  if (status === "live") return "border-emerald-500/20 bg-emerald-500/8 text-emerald-400";
+  if (status === "ready") return "border-primary/20 bg-primary/8 text-primary";
+  if (status === "next") return "border-amber-500/20 bg-amber-500/8 text-amber-400";
+  return "border-border bg-secondary/70 text-muted-foreground";
+}
+
+function workspaceStatusLabel(status: WorkspaceAppStatus) {
+  if (status === "live") return "Ready";
+  if (status === "ready") return "Available";
+  if (status === "next") return "Planned";
+  return "Unavailable";
 }
 
 function mobileWindowClass(appId: WorkspaceAppId) {
@@ -334,13 +341,13 @@ function DesktopIcon({
       type="button"
       onClick={onOpen}
       className={cn(
-        "group relative flex w-[5.5rem] flex-col items-center gap-2 rounded-2xl p-2.5 text-center transition-all duration-150 hover:bg-card/80",
+        "group relative flex w-[5.5rem] flex-col items-center gap-2 rounded-2xl p-2.5 text-center transition-colors duration-150 hover:bg-card/80",
         status === "unavailable" && "opacity-40 pointer-events-none",
       )}
     >
       <div
         className={cn(
-          "relative flex h-14 w-14 items-center justify-center rounded-[1.15rem] border border-border bg-card text-primary shadow-sm transition-all duration-150 group-hover:-translate-y-0.5 group-hover:border-primary/30",
+          "relative flex h-14 w-14 items-center justify-center rounded-[1.15rem] border border-border bg-card text-primary transition-colors duration-150 group-hover:border-primary/20",
           "bg-gradient-to-br",
           accentClass,
         )}
@@ -358,8 +365,8 @@ function DesktopIcon({
         <span className="block line-clamp-2 text-[11px] font-medium leading-tight text-foreground">
           {title}
         </span>
-        <span className="block text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-          {status === "live" ? "ready" : status}
+        <span className="block text-[11px] text-muted-foreground">
+          {workspaceStatusLabel(status)}
         </span>
       </div>
     </button>
@@ -382,10 +389,10 @@ function DesktopStatCard({
   const clampedProgress = progress == null || Number.isNaN(progress) ? null : Math.max(0, Math.min(progress, 100));
 
   return (
-    <div className="rounded-[1.25rem] border border-border bg-card/95 p-4 text-left shadow-sm">
+    <div className="rounded-[1.25rem] border border-border/80 bg-card/95 p-4 text-left">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">{label}</div>
+          <div className="text-[11px] font-medium text-muted-foreground">{label}</div>
           <div className="mt-2 text-xl font-semibold text-foreground">{value}</div>
         </div>
         <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary [&>svg]:h-4 [&>svg]:w-4">
@@ -435,33 +442,34 @@ function LauncherMenu({
   });
 
   return (
-    <div className="absolute bottom-[4.35rem] left-0 z-30 w-[min(29rem,calc(100vw-1.5rem))] overflow-hidden rounded-[1.5rem] border border-border bg-card/95 p-4 shadow-2xl">
-      <div className="relative z-10">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="text-[11px] uppercase tracking-[0.28em] text-muted-foreground">Application Launcher</div>
-            <div className="mt-2 truncate text-2xl font-semibold tracking-tight text-foreground">{server.name}</div>
-            <div className="mt-1 truncate font-mono text-xs text-muted-foreground">{server.username}@{server.host}</div>
+      <div className="absolute bottom-[4.35rem] left-0 z-30 w-[min(29rem,calc(100vw-1.5rem))] overflow-hidden rounded-[1.5rem] border border-border/80 bg-card/95 p-4 shadow-[0_24px_80px_-56px_rgba(15,23,42,0.9)]">
+        <div className="relative z-10">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="text-[11px] font-medium text-muted-foreground">Application Launcher</div>
+              <div className="mt-2 truncate text-2xl font-semibold tracking-tight text-foreground">{server.name}</div>
+              <div className="mt-1 truncate font-mono text-xs text-muted-foreground">{server.username}@{server.host}</div>
+            </div>
+            <div className="rounded-[1.15rem] border border-primary/20 bg-primary/10 px-3 py-2 text-right">
+              <div className="text-[11px] font-medium text-muted-foreground">Running</div>
+              <div className="text-lg font-semibold text-foreground">{openApps.length}</div>
+            </div>
           </div>
-          <div className="rounded-[1.15rem] border border-primary/20 bg-primary/10 px-3 py-2 text-right">
-            <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Running</div>
-            <div className="text-lg font-semibold text-foreground">{openApps.length}</div>
-          </div>
-        </div>
 
         <div className="relative mt-4">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={query}
-            onChange={(event) => onQueryChange(event.target.value)}
-            placeholder="Search applications, tools, settings..."
-            className="h-11 rounded-2xl border-border bg-background pl-10 text-sm text-foreground placeholder:text-muted-foreground"
-          />
-        </div>
+            <Input
+              value={query}
+              onChange={(event) => onQueryChange(event.target.value)}
+              placeholder="Search applications, tools, settings..."
+              aria-label="Search workspace applications"
+              className="h-11 rounded-2xl border-border bg-background pl-10 text-sm text-foreground placeholder:text-muted-foreground"
+            />
+          </div>
 
-        <div className="mt-5">
-          <div className="mb-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Pinned</div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="mt-5">
+            <div className="mb-2 text-[11px] font-medium text-muted-foreground">Pinned</div>
+            <div className="grid grid-cols-3 gap-2">
             {pinnedApps.map((app) => (
               <button
                 key={app.id}
@@ -473,20 +481,20 @@ function LauncherMenu({
                   "bg-background/70 hover:border-primary/25 hover:bg-secondary/70 disabled:cursor-not-allowed disabled:opacity-45",
                 )}
               >
-                <div className={cn("flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-gradient-to-br text-primary", app.accentClass)}>
-                  <div className="[&>svg]:h-4 [&>svg]:w-4">{app.icon}</div>
-                </div>
-                <div className="mt-2 truncate text-sm font-medium text-foreground">{app.title}</div>
+                  <div className={cn("flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-gradient-to-br text-primary", app.accentClass)}>
+                    <div className="[&>svg]:h-4 [&>svg]:w-4">{app.icon}</div>
+                  </div>
+                  <div className="mt-2 truncate text-sm font-medium text-foreground">{app.title}</div>
               </button>
             ))}
           </div>
         </div>
 
-        <div className="mt-5">
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">All Applications</div>
-            <div className="text-[11px] text-muted-foreground">{filteredApps.length} visible</div>
-          </div>
+          <div className="mt-5">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <div className="text-[11px] font-medium text-muted-foreground">All Applications</div>
+              <div className="text-[11px] text-muted-foreground">{filteredApps.length} visible</div>
+            </div>
           <div className="max-h-64 space-y-1 overflow-y-auto pr-1">
             {filteredApps.map((app) => (
               <button
@@ -505,8 +513,8 @@ function LauncherMenu({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate text-sm font-medium text-foreground">{app.title}</span>
-                    <span className={cn("rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide", statusClass(app.status))}>
-                      {app.status}
+                    <span className={cn("rounded-md border px-2 py-0.5 text-[11px] font-medium", statusClass(app.status))}>
+                      {workspaceStatusLabel(app.status)}
                     </span>
                   </div>
                   <div className="mt-0.5 truncate text-xs text-muted-foreground">{app.subtitle}</div>
@@ -564,9 +572,9 @@ function TaskbarButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "group relative flex h-10 min-w-[8rem] items-center gap-2 rounded-[1rem] border px-3 py-2 transition-all duration-150",
+        "group relative flex h-10 min-w-[8rem] items-center gap-2 rounded-[1rem] border px-3 py-2 transition-colors duration-150",
         active
-          ? "border-primary/25 bg-secondary text-foreground shadow-sm"
+          ? "border-primary/20 bg-secondary text-foreground"
           : minimized
             ? "border-border bg-background/70 text-muted-foreground hover:border-primary/20 hover:bg-secondary/70 hover:text-foreground"
             : "border-border bg-background/80 text-muted-foreground hover:border-primary/20 hover:bg-secondary hover:text-foreground",
@@ -634,10 +642,10 @@ function WorkspaceWindow({
         <section
           onMouseDown={onFocus}
           className={cn(
-            "relative flex min-h-0 flex-col overflow-hidden rounded-[1.35rem] border border-border bg-card shadow-xl",
+            "relative flex min-h-0 flex-col overflow-hidden rounded-[1.35rem] border border-border bg-card shadow-[0_18px_60px_-44px_rgba(15,23,42,0.9)]",
             desktopMode ? "absolute" : "relative",
             active ? "border-primary/30" : "",
-            dragging || resizing ? "shadow-2xl" : "",
+            dragging || resizing ? "shadow-[0_26px_90px_-54px_rgba(15,23,42,0.95)]" : "",
             className,
           )}
           style={style}
@@ -657,8 +665,8 @@ function WorkspaceWindow({
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="truncate text-sm font-medium text-foreground">{title}</span>
-                  <span className={cn("rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide", statusClass(status))}>
-                    {status}
+                  <span className={cn("rounded-md border px-2 py-0.5 text-[11px] font-medium", statusClass(status))}>
+                    {workspaceStatusLabel(status)}
                   </span>
                 </div>
                 <div className="truncate text-[11px] text-muted-foreground">{subtitle}</div>
@@ -669,7 +677,7 @@ function WorkspaceWindow({
                 type="button"
                 data-no-window-drag="true"
                 onClick={onMinimize}
-                className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                className="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                 aria-label={`Minimize ${title}`}
               >
                 <Minus className="h-3 w-3" />
@@ -679,9 +687,9 @@ function WorkspaceWindow({
                   type="button"
                   data-no-window-drag="true"
                   onClick={onToggleMaximize}
-                  className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                  aria-label={maximized ? `Restore ${title}` : `Maximize ${title}`}
-                >
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                    aria-label={maximized ? `Restore ${title}` : `Maximize ${title}`}
+                  >
                   {maximized ? <Copy className="h-3 w-3" /> : <Square className="h-3 w-3" />}
                 </button>
               ) : null}
@@ -689,7 +697,7 @@ function WorkspaceWindow({
                 type="button"
                 data-no-window-drag="true"
                 onClick={onClose}
-                className="flex h-7 w-7 items-center justify-center rounded-full border border-destructive/20 bg-destructive/10 text-destructive transition-colors hover:bg-destructive/20"
+                className="flex h-7 w-7 items-center justify-center rounded-lg border border-destructive/20 bg-destructive/10 text-destructive transition-colors hover:bg-destructive/20"
                 aria-label={`Close ${title}`}
               >
                 <X className="h-3 w-3" />

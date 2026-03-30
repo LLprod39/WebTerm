@@ -4,9 +4,9 @@ import { Outlet, useLocation, Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 
 const immersiveMeta: Array<{ match: RegExp; title: string; backTo: string; hideHeader?: boolean }> = [
-  { match: /^\/servers\/hub$/, title: "Terminal Hub", backTo: "/servers" },
-  { match: /^\/servers\/\d+\/terminal$/, title: "Terminal", backTo: "/servers" },
-  { match: /^\/servers\/\d+\/rdp$/, title: "RDP", backTo: "/servers" },
+  { match: /^\/servers\/hub$/, title: "Terminal Hub", backTo: "/servers", hideHeader: true },
+  { match: /^\/servers\/\d+\/terminal$/, title: "Terminal", backTo: "/servers", hideHeader: true },
+  { match: /^\/servers\/\d+\/rdp$/, title: "RDP", backTo: "/servers", hideHeader: true },
   { match: /^\/agents\/run\/\d+$/, title: "Agent Run", backTo: "/agents" },
   { match: /^\/studio\/pipeline\/(?:new|\d+)$/, title: "Pipeline Editor", backTo: "/studio", hideHeader: true },
 ];

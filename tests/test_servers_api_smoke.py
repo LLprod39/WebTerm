@@ -82,6 +82,16 @@ def test_group_server_and_context_crud_endpoints():
     assert create_group.status_code == 200
     group_id = create_group.json()["group_id"]
 
+    bootstrap_with_empty_group = client.get("/servers/api/frontend/bootstrap/")
+    assert bootstrap_with_empty_group.status_code == 200
+    bootstrap_groups = bootstrap_with_empty_group.json()["groups"]
+    created_group = next(group for group in bootstrap_groups if group["id"] == group_id)
+    assert created_group["server_count"] == 0
+    assert created_group["description"] == "production"
+    assert created_group["color"] == "#3b82f6"
+    assert created_group["role"] == "owner"
+    assert created_group["can_edit"] is True
+
     update_group = client.post(
         f"/servers/api/groups/{group_id}/update/",
         data=_json({"name": "prod-updated", "color": "#111111"}),
@@ -97,6 +107,14 @@ def test_group_server_and_context_crud_endpoints():
     )
     assert add_member.status_code == 200
     assert add_member.json()["success"] is True
+
+    teammate_client = Client()
+    teammate_client.force_login(teammate)
+    teammate_bootstrap = teammate_client.get("/servers/api/frontend/bootstrap/")
+    assert teammate_bootstrap.status_code == 200
+    teammate_group = next(group for group in teammate_bootstrap.json()["groups"] if group["id"] == group_id)
+    assert teammate_group["role"] == "member"
+    assert teammate_group["can_edit"] is False
 
     remove_member = client.post(
         f"/servers/api/groups/{group_id}/remove-member/",
