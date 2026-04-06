@@ -27,6 +27,7 @@ vi.mock("@/lib/api", () => ({
   deleteServerKnowledge: vi.fn(),
   executeServerCommand: vi.fn(),
   fetchFrontendBootstrap: vi.fn(),
+  fetchMonitoringDashboard: vi.fn(),
   fetchServerDetails: vi.fn(),
   getGlobalServerContext: vi.fn(),
   getGroupServerContext: vi.fn(),
@@ -41,6 +42,7 @@ vi.mock("@/lib/api", () => ({
   setMasterPassword: vi.fn(),
   subscribeServerGroup: vi.fn(),
   testServer: vi.fn(),
+  triggerHealthCheck: vi.fn(),
   updateServer: vi.fn(),
   updateServerGroup: vi.fn(),
   updateServerKnowledge: vi.fn(),
@@ -69,7 +71,17 @@ const bootstrapResponse = {
       last_connected: null,
     },
   ],
-  groups: [{ id: 10, name: "Web", server_count: 1 }],
+  groups: [
+    {
+      id: 10,
+      name: "Web",
+      description: "Primary web tier",
+      color: "#22c55e",
+      server_count: 1,
+      role: "owner" as const,
+      can_edit: true,
+    },
+  ],
   stats: { owned: 1, shared: 0, total: 1 },
   recent_activity: [],
 };
@@ -167,6 +179,44 @@ describe("Servers page rules and translations", () => {
     vi.spyOn(window, "prompt").mockReturnValue("updated value");
 
     vi.mocked(api.fetchFrontendBootstrap).mockResolvedValue(bootstrapResponse);
+    vi.mocked(api.fetchMonitoringDashboard).mockResolvedValue({
+      success: true,
+      servers: [
+        {
+          server_id: 1,
+          server_name: "prod-web-01",
+          host: "10.0.0.5",
+          status: "healthy",
+          cpu_percent: 12,
+          memory_percent: 34,
+          disk_percent: 56,
+          memory_used_mb: 1024,
+          memory_total_mb: 4096,
+          disk_used_gb: 100,
+          disk_total_gb: 200,
+          net_rx_bytes: 1024,
+          net_tx_bytes: 2048,
+          load_1m: 0.1,
+          uptime_seconds: 3600,
+          response_time_ms: 50,
+          checked_at: "2026-04-06T12:00:00Z",
+        },
+      ],
+      alerts: [],
+      summary: {
+        total_servers: 1,
+        healthy: 1,
+        warning: 0,
+        critical: 0,
+        unreachable: 0,
+        unknown: 0,
+        active_alerts: 0,
+        avg_cpu: 12,
+        avg_memory: 34,
+        avg_disk: 56,
+      },
+      recent_activity: [],
+    });
     vi.mocked(api.fetchServerDetails).mockResolvedValue(serverDetails);
     vi.mocked(api.getGlobalServerContext).mockResolvedValue(globalContext);
     vi.mocked(api.getGroupServerContext).mockResolvedValue(groupContext);
@@ -184,6 +234,28 @@ describe("Servers page rules and translations", () => {
     vi.mocked(api.setMasterPassword).mockResolvedValue({ success: true });
     vi.mocked(api.clearMasterPassword).mockResolvedValue({ success: true });
     vi.mocked(api.testServer).mockResolvedValue({ success: true });
+    vi.mocked(api.triggerHealthCheck).mockResolvedValue({
+      success: true,
+      check: {
+        id: 1,
+        status: "healthy",
+        cpu_percent: 12,
+        memory_percent: 34,
+        disk_percent: 56,
+        load_1m: 0.1,
+        load_5m: 0.1,
+        load_15m: 0.1,
+        memory_used_mb: 1024,
+        memory_total_mb: 4096,
+        disk_used_gb: 100,
+        disk_total_gb: 200,
+        uptime_seconds: 3600,
+        process_count: 42,
+        response_time_ms: 50,
+        is_deep: false,
+        checked_at: "2026-04-06T12:00:00Z",
+      },
+    });
     vi.mocked(api.createServerGroup).mockResolvedValue({ success: true });
     vi.mocked(api.updateServerGroup).mockResolvedValue({ success: true });
     vi.mocked(api.deleteServerGroup).mockResolvedValue({ success: true });
