@@ -872,7 +872,9 @@ def _collect_admin_dashboard_data(include_version: bool = False) -> dict:
     last_7d = now - timedelta(days=7)
 
     online_user_ids = list(
-        UserActivityLog.objects.filter(created_at__gte=last_5min).values_list("user_id", flat=True).distinct()
+        UserActivityLog.objects.filter(created_at__gte=last_5min, user_id__isnull=False)
+        .values_list("user_id", flat=True)
+        .distinct()
     )
     online_users = []
     for user in User.objects.filter(id__in=online_user_ids):
@@ -1046,7 +1048,7 @@ def _collect_admin_dashboard_data(include_version: bool = False) -> dict:
 
     data = {
         "online_users": {
-            "count": len(online_user_ids),
+            "count": len(online_users),
             "total_registered": User.objects.count(),
             "users": online_users,
         },
@@ -1170,7 +1172,9 @@ def api_admin_users_sessions(request):
     last_5min = django_timezone.now() - timedelta(minutes=5)
 
     active_user_ids = list(
-        UserActivityLog.objects.filter(created_at__gte=last_5min).values_list("user_id", flat=True).distinct()
+        UserActivityLog.objects.filter(created_at__gte=last_5min, user_id__isnull=False)
+        .values_list("user_id", flat=True)
+        .distinct()
     )
 
     sessions = []
@@ -1195,7 +1199,7 @@ def api_admin_users_sessions(request):
 
     total_registered = AuthUser.objects.count()
     total_active_today = (
-        UserActivityLog.objects.filter(created_at__date=django_timezone.now().date())
+        UserActivityLog.objects.filter(created_at__date=django_timezone.now().date(), user_id__isnull=False)
         .values("user_id")
         .distinct()
         .count()

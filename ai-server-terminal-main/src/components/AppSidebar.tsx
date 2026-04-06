@@ -1,4 +1,4 @@
-import { LayoutDashboard, Server, Settings, LogOut, Bot, Workflow, ChevronLeft } from "lucide-react";
+import { LayoutDashboard, Server, Settings, LogOut, Bot, Workflow, ChevronLeft, ChevronRight } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useNavigate } from "react-router-dom";
 import {
@@ -56,24 +56,28 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar/95">
       {/* Logo area */}
       <div className="flex h-14 items-center gap-3 border-b border-sidebar-border/80 px-4">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 transition-colors hover:bg-primary/15"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
           <span className="text-xs font-bold text-primary">W</span>
-        </div>
+        </button>
         {!collapsed && (
           <span className="text-sm font-semibold tracking-tight text-foreground">
             WebTermAI
           </span>
         )}
-        {!collapsed && (
-          <button
-            onClick={toggleSidebar}
-            className="ml-auto text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="Collapse sidebar"
-            title="Collapse sidebar"
-          >
-            <ChevronLeft className="h-3.5 w-3.5" />
-          </button>
-        )}
+        <button
+          onClick={toggleSidebar}
+          className="ml-auto text-muted-foreground hover:text-foreground transition-colors"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+        </button>
       </div>
 
       {/* Navigation */}

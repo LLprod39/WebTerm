@@ -31,11 +31,14 @@ env/
 # IDE / local tools
 .vscode/
 .idea/
+.vs/
+**/.vs/
 .cursor/
 .claude/
 .playwright-mcp/
 node_modules/
 ai-server-terminal-main/node_modules/
+**/obj/
 
 # Temporary / cache (do not commit)
 .tmp/

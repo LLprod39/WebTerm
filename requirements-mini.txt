@@ -20,8 +20,6 @@ loguru>=0.7
 pydantic>=2.8
 
 # Directory auth (LDAP/AD)
-django-auth-ldap>=5.2
-python-ldap>=3.4
 
 # LLM providers used by mini settings + terminal AI
 google-genai>=1.0
