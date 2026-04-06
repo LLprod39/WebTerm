@@ -17,6 +17,7 @@ from django.utils.dateparse import parse_datetime
 from django.contrib.auth.models import User
 from django.db import transaction
 from django.conf import settings
+from django.core.cache import cache
 from .models import (
     Server,
     ServerShare,
@@ -2564,6 +2565,28 @@ def server_knowledge_delete(request, server_id, knowledge_id):
 # ---------------------------------------------------------------------------
 
 
+def _serialize_health_check(hc: ServerHealthCheck) -> dict:
+    return {
+        "id": hc.id,
+        "status": hc.status,
+        "cpu_percent": hc.cpu_percent,
+        "memory_percent": hc.memory_percent,
+        "disk_percent": hc.disk_percent,
+        "load_1m": hc.load_1m,
+        "load_5m": hc.load_5m,
+        "load_15m": hc.load_15m,
+        "memory_used_mb": hc.memory_used_mb,
+        "memory_total_mb": hc.memory_total_mb,
+        "disk_used_gb": hc.disk_used_gb,
+        "disk_total_gb": hc.disk_total_gb,
+        "uptime_seconds": hc.uptime_seconds,
+        "process_count": hc.process_count,
+        "response_time_ms": hc.response_time_ms,
+        "is_deep": hc.is_deep,
+        "checked_at": hc.checked_at.isoformat() if hc.checked_at else None,
+    }
+
+
 @login_required
 @require_feature('servers')
 @require_http_methods(["GET"])
@@ -2746,28 +2769,7 @@ def server_health_history(request, server_id):
         "success": True,
         "server_id": server_id,
         "server_name": server.name,
-        "checks": [
-            {
-                "id": c.id,
-                "status": c.status,
-                "cpu_percent": c.cpu_percent,
-                "memory_percent": c.memory_percent,
-                "disk_percent": c.disk_percent,
-                "load_1m": c.load_1m,
-                "load_5m": c.load_5m,
-                "load_15m": c.load_15m,
-                "memory_used_mb": c.memory_used_mb,
-                "memory_total_mb": c.memory_total_mb,
-                "disk_used_gb": c.disk_used_gb,
-                "disk_total_gb": c.disk_total_gb,
-                "uptime_seconds": c.uptime_seconds,
-                "process_count": c.process_count,
-                "response_time_ms": c.response_time_ms,
-                "is_deep": c.is_deep,
-                "checked_at": c.checked_at.isoformat(),
-            }
-            for c in checks
-        ],
+        "checks": [_serialize_health_check(c) for c in checks],
     })
 
 
@@ -2792,13 +2794,53 @@ def server_health_check_now(request, server_id):
         data = {}
     deep = bool(data.get("deep", False))
 
+    cooldown_seconds = max(5, int(getattr(settings, "MONITORING_HEALTHCHECK_COOLDOWN_SECONDS", 60) or 60))
+    lock_timeout_seconds = max(10, int(getattr(settings, "MONITORING_HEALTHCHECK_LOCK_SECONDS", 45) or 45))
+    lock_key = f"monitoring:healthcheck:lock:{server.id}:deep:{int(deep)}"
+    recent_key = f"monitoring:healthcheck:recent:{server.id}:deep:{int(deep)}"
+
+    latest = ServerHealthCheck.objects.filter(server=server).order_by("-checked_at").first()
+    if cache.get(recent_key):
+        if latest:
+            return JsonResponse(
+                {
+                    "success": True,
+                    "cached": True,
+                    "server_id": server.id,
+                    "server_name": server.name,
+                    "check": _serialize_health_check(latest),
+                }
+            )
+        return JsonResponse({"success": True, "cached": True, "server_id": server.id, "server_name": server.name})
+
+    if not cache.add(lock_key, "1", timeout=lock_timeout_seconds):
+        if latest:
+            return JsonResponse(
+                {
+                    "success": True,
+                    "queued": True,
+                    "server_id": server.id,
+                    "server_name": server.name,
+                    "check": _serialize_health_check(latest),
+                }
+            )
+        return JsonResponse(
+            {"success": True, "queued": True, "server_id": server.id, "server_name": server.name},
+            status=202,
+        )
+
     try:
         hc = async_to_sync(check_server)(server, deep=deep)
     except Exception as e:
+        cache.delete(lock_key)
         return JsonResponse({"success": False, "error": str(e)}, status=500)
+    finally:
+        cache.delete(lock_key)
 
     if not hc:
         return JsonResponse({"success": False, "error": "Check returned no result"}, status=500)
+
+    cache.set(recent_key, hc.id, timeout=cooldown_seconds)
 
     log_user_activity(
         user=request.user,
@@ -2812,16 +2854,7 @@ def server_health_check_now(request, server_id):
 
     return JsonResponse({
         "success": True,
-        "check": {
-            "id": hc.id,
-            "status": hc.status,
-            "cpu_percent": hc.cpu_percent,
-            "memory_percent": hc.memory_percent,
-            "disk_percent": hc.disk_percent,
-            "load_1m": hc.load_1m,
-            "response_time_ms": hc.response_time_ms,
-            "checked_at": hc.checked_at.isoformat(),
-        },
+        "check": _serialize_health_check(hc),
     })
 
 
