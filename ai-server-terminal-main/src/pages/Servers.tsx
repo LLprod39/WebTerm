@@ -480,7 +480,7 @@ function formatMemoryMetric(usedMb: number | null | undefined, totalMb: number |
 function formatTrafficMetric(rxBytes: number | null | undefined, txBytes: number | null | undefined): string {
   if (typeof rxBytes !== "number" || typeof txBytes !== "number") return "—";
   const toGiB = (bytes: number) => (bytes / (1024 ** 3)).toFixed(1);
-  return `${toGiB(rxBytes)}↑ ${toGiB(txBytes)}↓ GiB`;
+  return `${toGiB(rxBytes)}↓ ${toGiB(txBytes)}↑ GiB`;
 }
 
 function deriveServerStatus(serverStatus: FrontendServer["status"], monitorStatus?: string | null): FrontendServer["status"] {
@@ -489,6 +489,13 @@ function deriveServerStatus(serverStatus: FrontendServer["status"], monitorStatu
   if (monitorStatus === "unreachable") return "offline";
   if (monitorStatus === "healthy" || monitorStatus === "warning" || monitorStatus === "critical") return "online";
   return "unknown";
+}
+
+async function triggerHealthChecksInBatches(serverIds: number[], batchSize = 4) {
+  for (let index = 0; index < serverIds.length; index += batchSize) {
+    const batch = serverIds.slice(index, index + batchSize);
+    await Promise.allSettled(batch.map((serverId) => triggerHealthCheck(serverId)));
+  }
 }
 
 export default function Servers() {
@@ -656,7 +663,7 @@ export default function Servers() {
     });
 
     const run = async () => {
-      await Promise.allSettled(targets.map((server) => triggerHealthCheck(server.id)));
+      await triggerHealthChecksInBatches(targets.map((server) => server.id));
       await queryClient.invalidateQueries({ queryKey: ["monitoring", "dashboard"] });
     };
     void run();
