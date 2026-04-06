@@ -15,7 +15,7 @@
   <img src="https://img.shields.io/badge/React-18-0F172A?style=flat-square&logo=react&logoColor=61DAFB" alt="React 18" />
   <img src="https://img.shields.io/badge/Channels-WebSocket-0F172A?style=flat-square" alt="Channels / WebSocket" />
   <img src="https://img.shields.io/badge/WinUI-Desktop-0F172A?style=flat-square" alt="WinUI desktop" />
-  <img src="https://img.shields.io/badge/License-MIT-0F172A?style=flat-square" alt="MIT license" />
+  <img src="https://img.shields.io/badge/License-Apache%202.0-0F172A?style=flat-square" alt="Apache 2.0 license" />
 </p>
 
 > Если по-простому: WebTerm собирает в одном месте то, что в реальной работе обычно размазано по разным вкладкам и блокнотам. Здесь рядом живут список серверов, SSH/RDP-доступ, рабочий контекст по инфраструктуре, AI-запуски, Studio для пайплайнов и MCP-интеграции. Django держит API и WebSocket, React/Vite отвечает за SPA, а WinUI-клиент закрывает desktop-сценарий.
@@ -259,4 +259,4 @@ dotnet build .\MiniProd.Desktop.sln -c Debug -p:Platform=x64 -m:1 /p:UseSharedCo
 
 ## License
 
-Проект распространяется по [MIT License](./LICENSE).
+Проект распространяется по [Apache License 2.0](./LICENSE).

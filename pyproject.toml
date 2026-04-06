@@ -3,6 +3,10 @@ name = "weu-ai-platform"
 version = "2.0.0"
 description = "WEU AI Agent Platform - DevOps/IT task automation"
 requires-python = ">=3.10"
+license = { text = "Apache License 2.0" }
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+]
 
 [tool.ruff]
 target-version = "py310"
