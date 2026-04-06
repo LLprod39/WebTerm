@@ -1314,11 +1314,11 @@ export default function Servers() {
     else setExecResult(tr("srv.execute_error", { error: resp.error || t("srv.unknown_error") }));
   };
 
-  if (isLoading) return <div className="p-6 text-sm text-muted-foreground">{t("srv.loading")}</div>;
-  if (error || !data) return <div className="p-6 text-sm text-destructive">{t("srv.error")}</div>;
+  if (isLoading) return <div className="w-full px-4 py-5 text-sm text-muted-foreground md:px-6 xl:px-8">{t("srv.loading")}</div>;
+  if (error || !data) return <div className="w-full px-4 py-5 text-sm text-destructive md:px-6 xl:px-8">{t("srv.error")}</div>;
 
   return (
-    <div className="p-5 max-w-6xl mx-auto space-y-4">
+    <div className="w-full space-y-4 px-4 py-5 md:px-6 xl:px-8">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
         <div>

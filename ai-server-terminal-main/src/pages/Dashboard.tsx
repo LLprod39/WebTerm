@@ -24,10 +24,10 @@ export default function Dashboard() {
   });
 
   if (isLoading) {
-    return <div className="p-6 text-sm text-muted-foreground">{t("dash.loading")}</div>;
+    return <div className="w-full px-4 py-5 text-sm text-muted-foreground md:px-6 xl:px-8">{t("dash.loading")}</div>;
   }
   if (error || !data) {
-    return <div className="p-6 text-sm text-destructive">{t("dash.error")}</div>;
+    return <div className="w-full px-4 py-5 text-sm text-destructive md:px-6 xl:px-8">{t("dash.error")}</div>;
   }
 
   const servers = data.servers || [];
@@ -43,7 +43,7 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="w-full space-y-6 px-4 py-5 md:px-6 xl:px-8">
       <h1 className="text-2xl font-semibold text-foreground">{t("dash.title")}</h1>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

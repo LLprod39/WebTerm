@@ -13,7 +13,7 @@ export function PageShell({
   const widthClass =
     width === "5xl" ? "max-w-5xl" : width === "6xl" ? "max-w-6xl" : width === "full" ? "max-w-none" : "max-w-7xl";
 
-  return <div className={cn("mx-auto space-y-5 px-4 py-5 sm:px-6", widthClass, className)}>{children}</div>;
+  return <div className={cn("mx-auto space-y-5 px-4 py-5 md:px-6 xl:px-8", widthClass, className)}>{children}</div>;
 }
 
 export function PageGrid({

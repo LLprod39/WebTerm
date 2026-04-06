@@ -182,11 +182,11 @@ export default function UserDashboard() {
   };
 
   if (isLoading) {
-    return <div className="p-6 text-sm text-muted-foreground">{t("dash.loading")}</div>;
+    return <div className="w-full px-4 py-5 text-sm text-muted-foreground md:px-6 xl:px-8">{t("dash.loading")}</div>;
   }
 
   if (error || !data) {
-    return <div className="p-6 text-sm text-destructive">{t("dash.error")}</div>;
+    return <div className="w-full px-4 py-5 text-sm text-destructive md:px-6 xl:px-8">{t("dash.error")}</div>;
   }
 
   const alerts = data.alerts || [];
@@ -197,7 +197,7 @@ export default function UserDashboard() {
   const problemCount = summary.critical + summary.warning + summary.unreachable;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 px-4 py-5 sm:px-6">
+    <div className="w-full space-y-5 px-4 py-5 md:px-6 xl:px-8">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-foreground">{t("udash.title")}</h1>

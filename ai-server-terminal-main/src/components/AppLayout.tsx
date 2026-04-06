@@ -14,10 +14,16 @@ const immersiveMeta: Array<{ match: RegExp; title: string; backTo: string; hideH
 export default function AppLayout() {
   const location = useLocation();
   const immersive = immersiveMeta.find(({ match }) => match.test(location.pathname));
+  const mobileSidebarTrigger = (
+    <div className="pointer-events-none fixed left-3 top-3 z-40 md:hidden">
+      <SidebarTrigger className="pointer-events-auto h-9 w-9 rounded-xl border border-border bg-card/95 text-foreground shadow-sm" />
+    </div>
+  );
 
   if (immersive) {
     return (
       <SidebarProvider>
+        {mobileSidebarTrigger}
         <div className="flex min-h-screen w-full bg-background">
           <AppSidebar />
           <div className="flex min-w-0 flex-1 flex-col">
@@ -45,6 +51,7 @@ export default function AppLayout() {
 
   return (
     <SidebarProvider>
+      {mobileSidebarTrigger}
       <div className="flex min-h-screen w-full bg-background">
         <AppSidebar />
         <div className="flex min-w-0 flex-1 flex-col">

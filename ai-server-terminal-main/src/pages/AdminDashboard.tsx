@@ -78,7 +78,7 @@ export default function AdminDashboard() {
   }, [dashData, dateFrom, dateTo]);
 
   if (isLoading || !dashData?.data) {
-    return <div className="p-6 text-sm text-muted-foreground">{t("dash.loading")}</div>;
+    return <div className="w-full px-4 py-5 text-sm text-muted-foreground md:px-6 xl:px-8">{t("dash.loading")}</div>;
   }
 
   const d: AdminDashboardData = dashData.data;
@@ -101,7 +101,7 @@ export default function AdminDashboard() {
   ];
 
   return (
-    <div className="p-5 max-w-7xl mx-auto space-y-4">
+    <div className="w-full space-y-4 px-4 py-5 md:px-6 xl:px-8">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

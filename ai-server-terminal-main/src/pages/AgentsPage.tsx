@@ -118,10 +118,10 @@ export default function AgentsPage() {
     await queryClient.invalidateQueries({ queryKey: ["agents"] });
   };
 
-  if (isLoading) return <div className="p-6 text-sm text-muted-foreground">Loading...</div>;
+  if (isLoading) return <div className="w-full px-4 py-5 text-sm text-muted-foreground md:px-6 xl:px-8">Loading...</div>;
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-5">
+    <div className="w-full space-y-5 px-4 py-5 md:px-6 xl:px-8">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">

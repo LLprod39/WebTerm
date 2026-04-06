@@ -48,7 +48,7 @@ export function SettingsWorkspace({
   className?: string;
 }) {
   return (
-    <PageShell width="full" className={cn("max-w-[1600px]", className)}>
+    <PageShell width="full" className={className}>
       <div className="grid gap-6 xl:grid-cols-[260px_minmax(0,1fr)]">
         <aside className="space-y-4 self-start xl:sticky xl:top-4">
           <section className="workspace-panel overflow-hidden">
