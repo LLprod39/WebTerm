@@ -13,6 +13,7 @@ import {
   deleteServerKnowledge,
   executeServerCommand,
   fetchFrontendBootstrap,
+  fetchMonitoringDashboard,
   fetchServerDetails,
   getGlobalServerContext,
   getGroupServerContext,
@@ -26,6 +27,7 @@ import {
   saveGroupServerContext,
   setMasterPassword,
   testServer,
+  triggerHealthCheck,
   updateServer,
   updateServerGroup,
   updateServerKnowledge,
@@ -464,6 +466,31 @@ function formatCommandOutput(output: unknown): string {
   }
 }
 
+function formatMetricPercent(value: number | null | undefined): string {
+  return typeof value === "number" ? `${Math.round(value)}%` : "—";
+}
+
+function formatMemoryMetric(usedMb: number | null | undefined, totalMb: number | null | undefined): string {
+  if (typeof usedMb === "number" && typeof totalMb === "number" && totalMb > 0) {
+    return `${(usedMb / 1024).toFixed(1)}/${(totalMb / 1024).toFixed(1)} GiB`;
+  }
+  return "—";
+}
+
+function formatTrafficMetric(rxBytes: number | null | undefined, txBytes: number | null | undefined): string {
+  if (typeof rxBytes !== "number" || typeof txBytes !== "number") return "—";
+  const toGiB = (bytes: number) => (bytes / (1024 ** 3)).toFixed(1);
+  return `${toGiB(rxBytes)}↑ ${toGiB(txBytes)}↓ GiB`;
+}
+
+function deriveServerStatus(serverStatus: FrontendServer["status"], monitorStatus?: string | null): FrontendServer["status"] {
+  if (serverStatus !== "unknown") return serverStatus;
+  if (!monitorStatus) return "unknown";
+  if (monitorStatus === "unreachable") return "offline";
+  if (monitorStatus === "healthy" || monitorStatus === "warning" || monitorStatus === "critical") return "online";
+  return "unknown";
+}
+
 export default function Servers() {
   const { t } = useI18n();
   const tr = useCallback((key: string, vars?: Record<string, string | number>) => {
@@ -550,6 +577,12 @@ export default function Servers() {
     queryFn: fetchFrontendBootstrap,
     staleTime: 20_000,
   });
+  const { data: monitoringData } = useQuery({
+    queryKey: ["monitoring", "dashboard", "servers-list"],
+    queryFn: fetchMonitoringDashboard,
+    staleTime: 20_000,
+    refetchInterval: 30_000,
+  });
 
   const servers = useMemo(() => data?.servers ?? [], [data?.servers]);
   const groups = useMemo(() => data?.groups ?? [], [data?.groups]);
@@ -561,7 +594,6 @@ export default function Servers() {
       ),
     [groups],
   );
-  const onlineCount = servers.filter((server) => server.status === "online").length;
   const sharedCount = servers.filter((server) => server.is_shared).length;
   const groupCount = manageableGroups.length;
 
@@ -578,6 +610,23 @@ export default function Servers() {
     });
     return map;
   }, [filtered]);
+  const metricsByServerId = useMemo(
+    () =>
+      new Map(
+        (monitoringData?.servers ?? []).map((item) => [item.server_id, item]),
+      ),
+    [monitoringData?.servers],
+  );
+  const onlineCount = useMemo(
+    () =>
+      servers.filter((server) => {
+        const metrics = metricsByServerId.get(server.id);
+        const displayStatus = deriveServerStatus(server.status, metrics?.status);
+        return displayStatus === "online";
+      }).length,
+    [metricsByServerId, servers],
+  );
+  const healthCheckRequestedRef = useRef<Set<number>>(new Set());
 
   const toggleGroup = (g: string) => setCollapsed((c) => ({ ...c, [g]: !c[g] }));
 
@@ -590,6 +639,28 @@ export default function Servers() {
       setSelectedServerId(filtered[0].id);
     }
   }, [filtered, selectedServerId]);
+
+  useEffect(() => {
+    if (!servers.length) return;
+
+    const targets = servers.filter((server) => {
+      if (server.server_type !== "ssh") return false;
+      if (healthCheckRequestedRef.current.has(server.id)) return false;
+      const metric = metricsByServerId.get(server.id);
+      return !metric?.checked_at;
+    });
+    if (!targets.length) return;
+
+    targets.forEach((server) => {
+      healthCheckRequestedRef.current.add(server.id);
+    });
+
+    const run = async () => {
+      await Promise.allSettled(targets.map((server) => triggerHealthCheck(server.id)));
+      await queryClient.invalidateQueries({ queryKey: ["monitoring", "dashboard"] });
+    };
+    void run();
+  }, [metricsByServerId, queryClient, servers]);
 
   const selectedRulesGroup = useMemo(
     () => manageableGroups.find((group) => group.id === rulesGroupId) ?? null,
@@ -1395,50 +1466,68 @@ export default function Servers() {
                       className="overflow-hidden"
                     >
                       <div className="border-t border-border">
-                        {inGroup.map((server, i) => (
-                          <div
-                            key={server.id}
-                            className={`flex items-center gap-4 px-4 py-3 hover:bg-secondary/30 transition-colors ${
-                              i < inGroup.length - 1 ? "border-b border-border/50" : ""
-                            }`}
-                          >
-                            <StatusIndicator status={server.status} showLabel={false} />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-foreground truncate">{server.name}</p>
-                              <p className="text-xs text-muted-foreground font-mono">
-                                {server.host}:{server.port}
-                              </p>
-                            </div>
-                            <StatusIndicator status={server.status} />
-                            <div className="flex gap-1.5 shrink-0">
-                              <Link to={`/servers/${server.id}/terminal`}>
-                                <Button size="sm" variant="outline" className="gap-1.5 text-xs h-7 border-border hover:border-primary hover:text-primary">
-                                  <Terminal className="h-3 w-3" /> SSH
-                                </Button>
-                              </Link>
-                              {server.rdp && (
-                                <Link to={`/servers/${server.id}/rdp`}>
-                                  <Button size="sm" variant="outline" className="gap-1.5 text-xs h-7 border-border hover:border-info hover:text-info">
-                                    <Monitor className="h-3 w-3" /> RDP
+                        {inGroup.map((server, i) => {
+                          const metrics = metricsByServerId.get(server.id);
+                          const displayStatus = deriveServerStatus(server.status, metrics?.status);
+                          return (
+                            <div
+                              key={server.id}
+                              className={`flex items-center gap-4 px-4 py-3 hover:bg-secondary/30 transition-colors ${
+                                i < inGroup.length - 1 ? "border-b border-border/50" : ""
+                              }`}
+                            >
+                              <StatusIndicator status={displayStatus} showLabel={false} />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-foreground truncate">{server.name}</p>
+                                <p className="text-xs text-muted-foreground font-mono">
+                                  {server.host}:{server.port}
+                                </p>
+                                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                                  <span className="rounded-md border border-border/70 bg-background/60 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                                    CPU: <span className="text-foreground">{formatMetricPercent(metrics?.cpu_percent)}</span>
+                                  </span>
+                                  <span className="rounded-md border border-border/70 bg-background/60 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                                    RAM: <span className="text-foreground">{formatMemoryMetric(metrics?.memory_used_mb, metrics?.memory_total_mb)}</span>
+                                  </span>
+                                  <span className="rounded-md border border-border/70 bg-background/60 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                                    Disk: <span className="text-foreground">{formatMetricPercent(metrics?.disk_percent)}</span>
+                                  </span>
+                                  <span className="rounded-md border border-border/70 bg-background/60 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                                    Traffic: <span className="text-foreground">{formatTrafficMetric(metrics?.net_rx_bytes, metrics?.net_tx_bytes)}</span>
+                                  </span>
+                                </div>
+                              </div>
+                              <StatusIndicator status={displayStatus} />
+                              <div className="flex gap-1.5 shrink-0">
+                                <Link to={`/servers/${server.id}/terminal`}>
+                                  <Button size="sm" variant="outline" className="gap-1.5 text-xs h-7 border-border hover:border-primary hover:text-primary">
+                                    <Terminal className="h-3 w-3" /> SSH
                                   </Button>
                                 </Link>
-                              )}
-                              <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => openAdvanced(server)}>
-                                <Sparkles className="h-3.5 w-3.5" />
-                              </Button>
-                              {server.can_edit && (
-                                <>
-                                  <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => openEdit(server)}>
-                                    <Settings className="h-3.5 w-3.5" />
-                                  </Button>
-                                  <Button size="sm" variant="destructive" className="h-7 px-2" onClick={() => requestDeleteServer(server)}>
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </Button>
-                                </>
-                              )}
+                                {server.rdp && (
+                                  <Link to={`/servers/${server.id}/rdp`}>
+                                    <Button size="sm" variant="outline" className="gap-1.5 text-xs h-7 border-border hover:border-info hover:text-info">
+                                      <Monitor className="h-3 w-3" /> RDP
+                                    </Button>
+                                  </Link>
+                                )}
+                                <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => openAdvanced(server)}>
+                                  <Sparkles className="h-3.5 w-3.5" />
+                                </Button>
+                                {server.can_edit && (
+                                  <>
+                                    <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => openEdit(server)}>
+                                      <Settings className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button size="sm" variant="destructive" className="h-7 px-2" onClick={() => requestDeleteServer(server)}>
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </motion.div>
                   )}

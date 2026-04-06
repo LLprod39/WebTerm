@@ -2569,7 +2569,30 @@ def server_knowledge_delete(request, server_id, knowledge_id):
 @require_http_methods(["GET"])
 def monitoring_dashboard(request):
     """Aggregated monitoring data for user dashboard."""
-    from django.db.models import Avg, Count, Max
+    from django.db.models import Avg, Max
+
+    def _parse_net_traffic(raw_output):
+        if not isinstance(raw_output, dict):
+            return None, None
+        quick = raw_output.get("quick")
+        if not isinstance(quick, str):
+            return None, None
+
+        rx_bytes = None
+        tx_bytes = None
+        for line in quick.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("NET_RX_BYTES="):
+                try:
+                    rx_bytes = int(stripped.split("=", 1)[1].strip())
+                except (TypeError, ValueError):
+                    rx_bytes = None
+            elif stripped.startswith("NET_TX_BYTES="):
+                try:
+                    tx_bytes = int(stripped.split("=", 1)[1].strip())
+                except (TypeError, ValueError):
+                    tx_bytes = None
+        return rx_bytes, tx_bytes
 
     user = request.user
     servers = _accessible_servers_queryset(user)
@@ -2589,6 +2612,7 @@ def monitoring_dashboard(request):
 
     server_health = []
     for hc in latest_checks:
+        net_rx_bytes, net_tx_bytes = _parse_net_traffic(hc.raw_output)
         server_health.append({
             "server_id": hc.server_id,
             "server_name": hc.server.name,
@@ -2597,6 +2621,12 @@ def monitoring_dashboard(request):
             "cpu_percent": hc.cpu_percent,
             "memory_percent": hc.memory_percent,
             "disk_percent": hc.disk_percent,
+            "memory_used_mb": hc.memory_used_mb,
+            "memory_total_mb": hc.memory_total_mb,
+            "disk_used_gb": hc.disk_used_gb,
+            "disk_total_gb": hc.disk_total_gb,
+            "net_rx_bytes": net_rx_bytes,
+            "net_tx_bytes": net_tx_bytes,
             "load_1m": hc.load_1m,
             "uptime_seconds": hc.uptime_seconds,
             "response_time_ms": hc.response_time_ms,
@@ -2614,6 +2644,12 @@ def monitoring_dashboard(request):
                 "cpu_percent": None,
                 "memory_percent": None,
                 "disk_percent": None,
+                "memory_used_mb": None,
+                "memory_total_mb": None,
+                "disk_used_gb": None,
+                "disk_total_gb": None,
+                "net_rx_bytes": None,
+                "net_tx_bytes": None,
                 "load_1m": None,
                 "uptime_seconds": None,
                 "response_time_ms": None,

@@ -34,7 +34,8 @@ QUICK_COMMANDS = (
     "free -m | grep Mem;"
     "df -h / | tail -1;"
     "cat /proc/uptime;"
-    "ps aux --no-headers 2>/dev/null | wc -l"
+    "ps aux --no-headers 2>/dev/null | wc -l;"
+    "cat /proc/net/dev 2>/dev/null | awk 'NR>2 {rx+=$2; tx+=$10} END {print \"NET_RX_BYTES=\" rx; print \"NET_TX_BYTES=\" tx}' || true"
 )
 
 DEEP_COMMANDS = (
@@ -156,6 +157,16 @@ def _parse_quick_output(raw: str) -> dict[str, Any]:
                 result["uptime_seconds"] = val
             else:
                 result["process_count"] = val
+        elif stripped.startswith("NET_RX_BYTES="):
+            try:
+                result["net_rx_bytes"] = int(stripped.split("=", 1)[1].strip())
+            except ValueError:
+                pass
+        elif stripped.startswith("NET_TX_BYTES="):
+            try:
+                result["net_tx_bytes"] = int(stripped.split("=", 1)[1].strip())
+            except ValueError:
+                pass
 
     if "load_1m" in result:
         result["cpu_percent"] = min(round(result["load_1m"] * 100 / max(_get_cpu_estimate(result), 1), 1), 100.0)

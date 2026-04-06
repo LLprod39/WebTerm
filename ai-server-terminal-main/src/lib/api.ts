@@ -2582,6 +2582,12 @@ export interface ServerHealth {
   cpu_percent: number | null;
   memory_percent: number | null;
   disk_percent: number | null;
+  memory_used_mb?: number | null;
+  memory_total_mb?: number | null;
+  disk_used_gb?: number | null;
+  disk_total_gb?: number | null;
+  net_rx_bytes?: number | null;
+  net_tx_bytes?: number | null;
   load_1m: number | null;
   uptime_seconds: number | null;
   response_time_ms: number | null;
