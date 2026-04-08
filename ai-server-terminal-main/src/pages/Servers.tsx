@@ -12,8 +12,8 @@ import {
   deleteServerGroup,
   deleteServerKnowledge,
   executeServerCommand,
+  fetchAuthSession,
   fetchFrontendBootstrap,
-  fetchMonitoringDashboard,
   fetchServerDetails,
   getGlobalServerContext,
   getGroupServerContext,
@@ -27,7 +27,6 @@ import {
   saveGroupServerContext,
   setMasterPassword,
   testServer,
-  triggerHealthCheck,
   updateServer,
   updateServerGroup,
   updateServerKnowledge,
@@ -121,8 +120,16 @@ interface KnowledgeItem {
   content: string;
   category: string;
   category_label: string;
+  source: string;
+  source_label: string;
+  confidence: number;
   updated_at: string | null;
   is_active: boolean;
+}
+
+interface KnowledgeCategoryOption {
+  value: string;
+  label: string;
 }
 
 type AdvancedTab = "access" | "knowledge" | "context" | "security" | "execute";
@@ -466,38 +473,6 @@ function formatCommandOutput(output: unknown): string {
   }
 }
 
-function formatMetricPercent(value: number | null | undefined): string {
-  return typeof value === "number" ? `${Math.round(value)}%` : "—";
-}
-
-function formatMemoryMetric(usedMb: number | null | undefined, totalMb: number | null | undefined): string {
-  if (typeof usedMb === "number" && typeof totalMb === "number" && totalMb > 0) {
-    return `${(usedMb / 1024).toFixed(1)}/${(totalMb / 1024).toFixed(1)} GiB`;
-  }
-  return "—";
-}
-
-function formatTrafficMetric(rxBytes: number | null | undefined, txBytes: number | null | undefined): string {
-  if (typeof rxBytes !== "number" || typeof txBytes !== "number") return "—";
-  const toGiB = (bytes: number) => (bytes / (1024 ** 3)).toFixed(1);
-  return `${toGiB(rxBytes)}↓ ${toGiB(txBytes)}↑ GiB`;
-}
-
-function deriveServerStatus(serverStatus: FrontendServer["status"], monitorStatus?: string | null): FrontendServer["status"] {
-  if (serverStatus !== "unknown") return serverStatus;
-  if (!monitorStatus) return "unknown";
-  if (monitorStatus === "unreachable") return "offline";
-  if (monitorStatus === "healthy" || monitorStatus === "warning" || monitorStatus === "critical") return "online";
-  return "unknown";
-}
-
-async function triggerHealthChecksInBatches(serverIds: number[], batchSize = 4) {
-  for (let index = 0; index < serverIds.length; index += batchSize) {
-    const batch = serverIds.slice(index, index + batchSize);
-    await Promise.allSettled(batch.map((serverId) => triggerHealthCheck(serverId)));
-  }
-}
-
 export default function Servers() {
   const { t } = useI18n();
   const tr = useCallback((key: string, vars?: Record<string, string | number>) => {
@@ -548,10 +523,14 @@ export default function Servers() {
   const [shareExpiresAt, setShareExpiresAt] = useState("");
 
   const [knowledge, setKnowledge] = useState<KnowledgeItem[]>([]);
+  const [knowledgeCategories, setKnowledgeCategories] = useState<KnowledgeCategoryOption[]>([]);
+  const [knowledgeDialogOpen, setKnowledgeDialogOpen] = useState(false);
+  const [knowledgeDialogSaving, setKnowledgeDialogSaving] = useState(false);
+  const [knowledgeEditingId, setKnowledgeEditingId] = useState<number | null>(null);
   const [knowledgeTitle, setKnowledgeTitle] = useState("");
   const [knowledgeContent, setKnowledgeContent] = useState("");
   const [knowledgeCategory, setKnowledgeCategory] = useState("other");
-  const [knowledgeEditingId, setKnowledgeEditingId] = useState<number | null>(null);
+  const [knowledgeActive, setKnowledgeActive] = useState(true);
 
   const [globalRules, setGlobalRules] = useState("");
   const [globalForbidden, setGlobalForbidden] = useState("");
@@ -584,13 +563,12 @@ export default function Servers() {
     queryFn: fetchFrontendBootstrap,
     staleTime: 20_000,
   });
-  const { data: monitoringData } = useQuery({
-    queryKey: ["monitoring", "dashboard", "servers-list"],
-    queryFn: fetchMonitoringDashboard,
-    staleTime: 20_000,
-    refetchInterval: 30_000,
+  const { data: authData } = useQuery({
+    queryKey: ["auth", "session"],
+    queryFn: fetchAuthSession,
+    staleTime: 60_000,
+    retry: false,
   });
-
   const servers = useMemo(() => data?.servers ?? [], [data?.servers]);
   const groups = useMemo(() => data?.groups ?? [], [data?.groups]);
   const manageableGroups = useMemo(
@@ -603,6 +581,27 @@ export default function Servers() {
   );
   const sharedCount = servers.filter((server) => server.is_shared).length;
   const groupCount = manageableGroups.length;
+  const isAdmin = authData?.user?.is_staff ?? false;
+  const manualKnowledge = useMemo(
+    () => knowledge.filter((item) => item.source === "manual"),
+    [knowledge],
+  );
+  const activeKnowledgeCategories = useMemo(() => {
+    if (knowledgeCategories.length > 0) return knowledgeCategories;
+    return [
+      { value: "system", label: t("srv.cat_system") },
+      { value: "services", label: t("srv.cat_services") },
+      { value: "network", label: t("srv.cat_network") },
+      { value: "security", label: t("srv.cat_security") },
+      { value: "performance", label: t("srv.cat_performance") },
+      { value: "storage", label: t("srv.cat_storage") },
+      { value: "packages", label: t("srv.cat_packages") },
+      { value: "config", label: t("srv.cat_config") },
+      { value: "issues", label: t("srv.cat_issues") },
+      { value: "solutions", label: t("srv.cat_solutions") },
+      { value: "other", label: t("srv.cat_other") },
+    ];
+  }, [knowledgeCategories, t]);
 
   const filtered = useMemo(() => {
     if (!search) return servers;
@@ -617,23 +616,10 @@ export default function Servers() {
     });
     return map;
   }, [filtered]);
-  const metricsByServerId = useMemo(
-    () =>
-      new Map(
-        (monitoringData?.servers ?? []).map((item) => [item.server_id, item]),
-      ),
-    [monitoringData?.servers],
-  );
   const onlineCount = useMemo(
-    () =>
-      servers.filter((server) => {
-        const metrics = metricsByServerId.get(server.id);
-        const displayStatus = deriveServerStatus(server.status, metrics?.status);
-        return displayStatus === "online";
-      }).length,
-    [metricsByServerId, servers],
+    () => servers.filter((server) => server.status === "online").length,
+    [servers],
   );
-  const healthCheckRequestedRef = useRef<Set<number>>(new Set());
 
   const toggleGroup = (g: string) => setCollapsed((c) => ({ ...c, [g]: !c[g] }));
 
@@ -646,28 +632,6 @@ export default function Servers() {
       setSelectedServerId(filtered[0].id);
     }
   }, [filtered, selectedServerId]);
-
-  useEffect(() => {
-    if (!servers.length) return;
-
-    const targets = servers.filter((server) => {
-      if (server.server_type !== "ssh") return false;
-      if (healthCheckRequestedRef.current.has(server.id)) return false;
-      const metric = metricsByServerId.get(server.id);
-      return !metric?.checked_at;
-    });
-    if (!targets.length) return;
-
-    targets.forEach((server) => {
-      healthCheckRequestedRef.current.add(server.id);
-    });
-
-    const run = async () => {
-      await triggerHealthChecksInBatches(targets.map((server) => server.id));
-      await queryClient.invalidateQueries({ queryKey: ["monitoring", "dashboard"] });
-    };
-    void run();
-  }, [metricsByServerId, queryClient, servers]);
 
   const selectedRulesGroup = useMemo(
     () => manageableGroups.find((group) => group.id === rulesGroupId) ?? null,
@@ -1180,6 +1144,7 @@ export default function Servers() {
     setExecResult("");
     setRevealedPassword("");
     setKnowledgeEditingId(null);
+    setKnowledgeDialogOpen(false);
     setGroupMemberUser("");
     setGroupRemoveUserId("");
     if (hasGroupRulesAccess && server.group_id) {
@@ -1196,6 +1161,7 @@ export default function Servers() {
       ]);
       setShares(sharesResp.success ? sharesResp.shares : []);
       setKnowledge((knowledgeResp.items || []) as KnowledgeItem[]);
+      setKnowledgeCategories((knowledgeResp.categories || []) as KnowledgeCategoryOption[]);
       setHasMasterPassword(Boolean(masterStatus.has_master_password));
 
       if (globalCtx) applyGlobalContextState(globalCtx);
@@ -1219,8 +1185,9 @@ export default function Servers() {
 
   const refreshKnowledge = async () => {
     if (!advancedServer) return;
-    const resp = await listServerKnowledge(advancedServer.id);
-    setKnowledge((resp.items || []) as KnowledgeItem[]);
+    const knowledgeResp = await listServerKnowledge(advancedServer.id);
+    setKnowledge((knowledgeResp.items || []) as KnowledgeItem[]);
+    setKnowledgeCategories((knowledgeResp.categories || []) as KnowledgeCategoryOption[]);
   };
 
   const onShareCreate = async () => {
@@ -1241,45 +1208,62 @@ export default function Servers() {
     await refreshShares();
   };
 
-  const onKnowledgeCreate = async () => {
-    if (!advancedServer || !knowledgeTitle.trim() || !knowledgeContent.trim()) return;
-    await createServerKnowledge(advancedServer.id, {
-      title: knowledgeTitle.trim(),
-      content: knowledgeContent.trim(),
-      category: knowledgeCategory,
-      is_active: true,
-    });
+  const resetKnowledgeDialog = useCallback(() => {
+    setKnowledgeEditingId(null);
     setKnowledgeTitle("");
     setKnowledgeContent("");
-    await refreshKnowledge();
+    setKnowledgeCategory("other");
+    setKnowledgeActive(true);
+  }, []);
+
+  const openKnowledgeCreateDialog = useCallback(() => {
+    resetKnowledgeDialog();
+    setKnowledgeDialogOpen(true);
+  }, [resetKnowledgeDialog]);
+
+  const openKnowledgeEditDialog = useCallback((item: KnowledgeItem) => {
+    setKnowledgeEditingId(item.id);
+    setKnowledgeTitle(item.title);
+    setKnowledgeContent(item.content);
+    setKnowledgeCategory(item.category || "other");
+    setKnowledgeActive(item.is_active);
+    setKnowledgeDialogOpen(true);
+  }, []);
+
+  const onKnowledgeSave = async () => {
+    if (!advancedServer || !knowledgeTitle.trim() || !knowledgeContent.trim()) return;
+    setKnowledgeDialogSaving(true);
+    try {
+      if (knowledgeEditingId) {
+        await updateServerKnowledge(advancedServer.id, knowledgeEditingId, {
+          title: knowledgeTitle.trim(),
+          content: knowledgeContent.trim(),
+          category: knowledgeCategory,
+          is_active: knowledgeActive,
+        });
+      } else {
+        await createServerKnowledge(advancedServer.id, {
+          title: knowledgeTitle.trim(),
+          content: knowledgeContent.trim(),
+          category: knowledgeCategory,
+          is_active: knowledgeActive,
+        });
+      }
+      setKnowledgeDialogOpen(false);
+      resetKnowledgeDialog();
+      await refreshKnowledge();
+    } finally {
+      setKnowledgeDialogSaving(false);
+    }
   };
 
   const onKnowledgeDelete = async (id: number) => {
     if (!advancedServer) return;
     await deleteServerKnowledge(advancedServer.id, id);
-    if (knowledgeEditingId === id) setKnowledgeEditingId(null);
-    await refreshKnowledge();
-  };
-
-  const onKnowledgeEdit = async (item: KnowledgeItem) => {
-    if (!advancedServer) return;
-    const title = prompt(t("srv.knowledge_title_prompt"), item.title);
-    if (!title) {
-      setKnowledgeEditingId(null);
-      return;
+    if (knowledgeEditingId === id) {
+      setKnowledgeDialogOpen(false);
+      resetKnowledgeDialog();
     }
-    const content = prompt(t("srv.knowledge_content_prompt"), item.content);
-    if (!content) {
-      setKnowledgeEditingId(null);
-      return;
-    }
-    await updateServerKnowledge(advancedServer.id, item.id, {
-      title: title.trim(),
-      content: content.trim(),
-      category: item.category,
-      is_active: item.is_active,
-    });
-    setKnowledgeEditingId(null);
     await refreshKnowledge();
   };
 
@@ -1392,11 +1376,11 @@ export default function Servers() {
     else setExecResult(tr("srv.execute_error", { error: resp.error || t("srv.unknown_error") }));
   };
 
-  if (isLoading) return <div className="w-full px-4 py-5 text-sm text-muted-foreground md:px-6 xl:px-8">{t("srv.loading")}</div>;
-  if (error || !data) return <div className="w-full px-4 py-5 text-sm text-destructive md:px-6 xl:px-8">{t("srv.error")}</div>;
+  if (isLoading) return <div className="p-6 text-sm text-muted-foreground">{t("srv.loading")}</div>;
+  if (error || !data) return <div className="p-6 text-sm text-destructive">{t("srv.error")}</div>;
 
   return (
-    <div className="w-full space-y-4 px-4 py-5 md:px-6 xl:px-8">
+    <div className="p-5 max-w-6xl mx-auto space-y-4">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
         <div>
@@ -1474,8 +1458,7 @@ export default function Servers() {
                     >
                       <div className="border-t border-border">
                         {inGroup.map((server, i) => {
-                          const metrics = metricsByServerId.get(server.id);
-                          const displayStatus = deriveServerStatus(server.status, metrics?.status);
+                          const displayStatus = server.status;
                           return (
                             <div
                               key={server.id}
@@ -1489,20 +1472,6 @@ export default function Servers() {
                                 <p className="text-xs text-muted-foreground font-mono">
                                   {server.host}:{server.port}
                                 </p>
-                                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                                  <span className="rounded-md border border-border/70 bg-background/60 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                                    CPU: <span className="text-foreground">{formatMetricPercent(metrics?.cpu_percent)}</span>
-                                  </span>
-                                  <span className="rounded-md border border-border/70 bg-background/60 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                                    RAM: <span className="text-foreground">{formatMemoryMetric(metrics?.memory_used_mb, metrics?.memory_total_mb)}</span>
-                                  </span>
-                                  <span className="rounded-md border border-border/70 bg-background/60 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                                    Disk: <span className="text-foreground">{formatMetricPercent(metrics?.disk_percent)}</span>
-                                  </span>
-                                  <span className="rounded-md border border-border/70 bg-background/60 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                                    Traffic: <span className="text-foreground">{formatTrafficMetric(metrics?.net_rx_bytes, metrics?.net_tx_bytes)}</span>
-                                  </span>
-                                </div>
                               </div>
                               <StatusIndicator status={displayStatus} />
                               <div className="flex gap-1.5 shrink-0">
@@ -2444,75 +2413,88 @@ export default function Servers() {
                 {/* KNOWLEDGE TAB */}
                 {advancedTab === "knowledge" && (
                   <div className="space-y-5">
-                    <div>
-                      <h3 className="text-sm font-semibold text-foreground mb-1">{t("srv.ai_memory")}</h3>
-                      <p className="text-xs text-muted-foreground mb-4">{t("srv.knowledge_help")}</p>
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div className="space-y-1.5">
-                            <Label className="text-xs text-muted-foreground">{t("srv.knowledge_title")}</Label>
-                            <Input placeholder={t("srv.knowledge_title_placeholder")} value={knowledgeTitle} onChange={(e) => setKnowledgeTitle(e.target.value)} className="bg-secondary/50 h-9" />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label className="text-xs text-muted-foreground">{t("srv.knowledge_category")}</Label>
-                            <select
-                              value={knowledgeCategory}
-                              onChange={(e) => setKnowledgeCategory(e.target.value)}
-                              className="flex h-9 w-full rounded-md border border-input bg-secondary/50 px-3 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                            >
-                              <option value="system">{t("srv.cat_system")}</option>
-                              <option value="services">{t("srv.cat_services")}</option>
-                              <option value="network">{t("srv.cat_network")}</option>
-                              <option value="security">{t("srv.cat_security")}</option>
-                              <option value="performance">{t("srv.cat_performance")}</option>
-                              <option value="storage">{t("srv.cat_storage")}</option>
-                              <option value="packages">{t("srv.cat_packages")}</option>
-                              <option value="config">{t("srv.cat_config")}</option>
-                              <option value="issues">{t("srv.cat_issues")}</option>
-                              <option value="solutions">{t("srv.cat_solutions")}</option>
-                              <option value="other">{t("srv.cat_other")}</option>
-                            </select>
-                          </div>
+                    <div className="rounded-xl border border-border bg-secondary/10 px-4 py-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="space-y-1">
+                          <h3 className="text-sm font-semibold text-foreground">{t("srv.knowledge_title")}</h3>
+                          <p className="text-xs text-muted-foreground">
+                            Текстовые заметки по серверу: особенности, инструкции и полезные наблюдения без системного шума.
+                          </p>
                         </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs text-muted-foreground">{t("srv.knowledge_content")}</Label>
-                          <Textarea placeholder={t("srv.knowledge_content_placeholder")} value={knowledgeContent} onChange={(e) => setKnowledgeContent(e.target.value)} className="bg-secondary/50 min-h-20 text-sm" />
-                        </div>
-                        <div className="flex justify-end">
-                          <Button size="sm" className="h-8 px-4" onClick={onKnowledgeCreate}>{t("srv.add_entry")}</Button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button size="sm" className="h-8 px-4" onClick={openKnowledgeCreateDialog}>
+                            {t("srv.add_entry")}
+                          </Button>
                         </div>
                       </div>
                     </div>
 
-                    {knowledge.length > 0 && (
-                      <div className="border-t border-border pt-4">
-                        <h4 className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wider">{tr("srv.entries_count", { count: knowledge.length })}</h4>
+                    {manualKnowledge.length > 0 ? (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                            {tr("srv.entries_count", { count: manualKnowledge.length })}
+                          </h4>
+                          <p className="text-[11px] text-muted-foreground">
+                            Здесь видны только ручные заметки. AI memory и dreams перенесены в настройки.
+                          </p>
+                        </div>
                         <div className="space-y-2">
-                          {knowledge.map((k) => (
-                            <div key={k.id} className="flex items-start gap-3 px-3 py-3 rounded-lg border border-border bg-secondary/10">
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <p className="text-sm font-medium text-foreground">{k.title}</p>
-                                  <span className={`text-[10px] px-1.5 py-0.5 rounded ${k.is_active ? "bg-primary/15 text-primary" : "bg-secondary text-muted-foreground"}`}>
-                                    {k.category_label}
-                                  </span>
+                          {manualKnowledge.map((item) => (
+                            <div key={item.id} className="rounded-lg border border-border bg-secondary/10 px-3 py-3">
+                              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <p className="text-sm font-medium text-foreground">{item.title}</p>
+                                    <span
+                                      className={`rounded px-1.5 py-0.5 text-[10px] ${
+                                        item.is_active
+                                          ? "bg-primary/15 text-primary"
+                                          : "bg-secondary text-muted-foreground"
+                                      }`}
+                                    >
+                                      {item.category_label}
+                                    </span>
+                                    {item.updated_at ? (
+                                      <span className="text-[10px] text-muted-foreground">
+                                        {new Date(item.updated_at).toLocaleString()}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
+                                    {item.content}
+                                  </p>
                                 </div>
-                                <p className="text-xs text-muted-foreground leading-relaxed">{k.content}</p>
-                              </div>
-                              <div className="flex gap-1 shrink-0">
-                                <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => onKnowledgeToggle(k)}>
-                                  {k.is_active ? t("srv.disable") : t("srv.enable")}
-                                </Button>
-                                <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => { setKnowledgeEditingId(k.id); void onKnowledgeEdit(k); }}>
-                                  {t("srv.edit")}
-                                </Button>
-                                <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => onKnowledgeDelete(k.id)}>
-                                  {t("srv.delete")}
-                                </Button>
+                                <div className="flex flex-wrap gap-2 lg:justify-end">
+                                  <Button size="sm" variant="outline" className="h-7 px-3 text-xs" onClick={() => onKnowledgeToggle(item)}>
+                                    {item.is_active ? t("srv.disable") : t("srv.enable")}
+                                  </Button>
+                                  <Button size="sm" variant="outline" className="h-7 px-3 text-xs" onClick={() => openKnowledgeEditDialog(item)}>
+                                    {t("srv.edit")}
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 px-3 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+                                    onClick={() => onKnowledgeDelete(item.id)}
+                                  >
+                                    {t("srv.delete")}
+                                  </Button>
+                                </div>
                               </div>
                             </div>
                           ))}
                         </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center">
+                        <p className="text-sm font-medium text-foreground">Пока нет ручных заметок</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Добавь короткие текстовые знания по серверу: особенности, инструкции, known issues или проверенные команды.
+                        </p>
+                        <Button size="sm" className="mt-4 h-8 px-4" onClick={openKnowledgeCreateDialog}>
+                          {t("srv.add_entry")}
+                        </Button>
                       </div>
                     )}
                   </div>
@@ -2679,6 +2661,90 @@ export default function Servers() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={knowledgeDialogOpen}
+        onOpenChange={(open) => {
+          setKnowledgeDialogOpen(open);
+          if (!open) {
+            resetKnowledgeDialog();
+          }
+        }}
+      >
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>
+              {knowledgeEditingId ? t("srv.edit") : t("srv.add_entry")}
+            </DialogTitle>
+            <DialogDescription>
+              Управляй только ручными текстовыми заметками. AI memory, dreams и learned patterns вынесены в настройки администратора.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">{t("srv.knowledge_title")}</Label>
+              <Input
+                placeholder={t("srv.knowledge_title_placeholder")}
+                value={knowledgeTitle}
+                onChange={(event) => setKnowledgeTitle(event.target.value)}
+                className="bg-secondary/50 h-9"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">{t("srv.knowledge_category")}</Label>
+              <select
+                value={knowledgeCategory}
+                onChange={(event) => setKnowledgeCategory(event.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-secondary/50 px-3 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                {activeKnowledgeCategories.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">{t("srv.knowledge_content")}</Label>
+              <Textarea
+                placeholder={t("srv.knowledge_content_placeholder")}
+                value={knowledgeContent}
+                onChange={(event) => setKnowledgeContent(event.target.value)}
+                className="bg-secondary/50 min-h-32 text-sm"
+              />
+            </div>
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={knowledgeActive}
+                onChange={(event) => setKnowledgeActive(event.target.checked)}
+              />
+              {t("srv.enable")}
+            </label>
+          </DialogBody>
+          <DialogFooter>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 px-4"
+              onClick={() => {
+                setKnowledgeDialogOpen(false);
+                resetKnowledgeDialog();
+              }}
+            >
+              {t("srv.cancel")}
+            </Button>
+            <Button
+              size="sm"
+              className="h-8 px-4"
+              onClick={() => void onKnowledgeSave()}
+              disabled={knowledgeDialogSaving || !knowledgeTitle.trim() || !knowledgeContent.trim()}
+            >
+              {knowledgeDialogSaving ? t("srv.saving") : knowledgeEditingId ? t("srv.save") : t("srv.add_entry")}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

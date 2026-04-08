@@ -27,9 +27,14 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from loguru import logger
 
+from app.agent_kernel.memory.server_cards import render_server_cards_prompt
+from app.agent_kernel.memory.store import DjangoServerMemoryStore
+
 
 class ServerKnowledgeService:
     """Service for managing server knowledge and context"""
+
+    _memory_store = DjangoServerMemoryStore()
 
     @staticmethod
     def get_full_context(server, user: User) -> str:
@@ -120,6 +125,16 @@ class ServerKnowledgeService:
         return "\n\n".join(parts) if parts else ""
 
     @staticmethod
+    def get_ops_memory_prompt(server, user: User | None = None) -> str:
+        """Get a compacted DevOps-first memory prompt for a server."""
+        try:
+            card = ServerKnowledgeService._memory_store._get_server_card_sync(server.id)
+            return render_server_cards_prompt([card], max_cards=1, max_records=4)
+        except Exception as exc:
+            logger.debug(f"Failed to build ops memory prompt: {exc}")
+            return ServerKnowledgeService.get_full_context(server, user) if user else ""
+
+    @staticmethod
     def get_forbidden_commands(server, user: User) -> List[str]:
         """
         Get list of forbidden commands for a server.
@@ -194,6 +209,7 @@ class ServerKnowledgeService:
             confidence: Confidence level (0.0-1.0)
         """
         from servers.models import ServerKnowledge
+        from app.agent_kernel.memory.store import DjangoServerMemoryStore
 
         # Check for duplicates (similar title + category)
         existing = ServerKnowledge.objects.filter(
@@ -209,6 +225,7 @@ class ServerKnowledgeService:
             existing.updated_at = timezone.now()
             existing.task_id = task_id or existing.task_id
             existing.save()
+            DjangoServerMemoryStore()._sync_manual_knowledge_snapshot_sync(existing.id)
             logger.info(f"Updated server knowledge: {server.name} - {title}")
             return existing
 
@@ -223,6 +240,7 @@ class ServerKnowledgeService:
             task_id=task_id,
             created_by=user
         )
+        DjangoServerMemoryStore()._sync_manual_knowledge_snapshot_sync(knowledge.id)
         logger.info(f"Created server knowledge: {server.name} - {title}")
         return knowledge
 

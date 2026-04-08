@@ -6,7 +6,7 @@ ENV_TEMPLATE="$ROOT_DIR/.env.production.example"
 ENV_FILE="$ROOT_DIR/.env.production"
 COMPOSE_FILE="$ROOT_DIR/docker-compose.production.yml"
 PROJECT_NAME="webtrerm-prod"
-WITH_MCP=0
+WITH_MCP=1
 DO_BUILD=1
 DO_PULL=0
 GENERATE_SECRETS=0
@@ -31,12 +31,13 @@ The script will:
   6. wait for service health checks
   7. run Django checks inside the backend container
   8. optionally create a Django superuser
+  9. start bundled MCP services (demo + keycloak) by default
 
 Options:
   --env-file PATH              Path to env file (default: .env.production)
   --compose-file PATH          Path to compose file (default: docker-compose.production.yml)
   --project-name NAME          Docker compose project name (default: webtrerm-prod)
-  --with-mcp                   Enable the "mcp" compose profile
+  --with-mcp                   Backward-compatible no-op: MCP services are already enabled by default
   --pull                       Pull newer images before startup
   --no-build                   Do not build local images during startup
   --generate-secrets           Auto-fill placeholder DJANGO_SECRET_KEY/POSTGRES_PASSWORD
@@ -50,7 +51,7 @@ Options:
 
 Examples:
   ./docker/install-production.sh --generate-secrets
-  ./docker/install-production.sh --with-mcp --pull --generate-secrets
+  ./docker/install-production.sh --pull --generate-secrets
   ./docker/install-production.sh --create-superuser \
     --superuser-username admin \
     --superuser-email admin@example.com \
@@ -139,9 +140,6 @@ compose() {
     --env-file "$ENV_FILE"
     -f "$COMPOSE_FILE"
   )
-  if [[ "$WITH_MCP" -eq 1 ]]; then
-    args+=(--profile mcp)
-  fi
   docker "${args[@]}" "$@"
 }
 
@@ -420,12 +418,11 @@ main() {
     echo "==> Waiting for service health"
     wait_for_service postgres 180
     wait_for_service redis 120
+    wait_for_service mcp-demo 120
+    wait_for_service mcp-keycloak 180
     wait_for_service backend 240
     wait_for_service frontend 180
     wait_for_service nginx 180
-    if [[ "$WITH_MCP" -eq 1 ]]; then
-      wait_for_service mcp-keycloak 180
-    fi
   fi
 
   echo "==> Running backend validation"

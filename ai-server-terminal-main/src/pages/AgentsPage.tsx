@@ -54,6 +54,24 @@ const AGENT_ICONS: Record<string, LucideIcon> = {
   multi_health: Activity,
   custom: Settings2,
 };
+const FULL_AGENT_TOOL_OPTIONS = [
+  { key: "open_connection", label: "Open connection" },
+  { key: "close_connection", label: "Close connection" },
+  { key: "ssh_execute", label: "SSH execute" },
+  { key: "read_console", label: "Read console" },
+  { key: "wait_for_output", label: "Wait for output" },
+  { key: "send_ctrl_c", label: "Send Ctrl+C" },
+  { key: "report", label: "Progress report" },
+  { key: "ask_user", label: "Ask user" },
+  { key: "analyze_output", label: "Analyze output" },
+  { key: "list_skills", label: "List skills" },
+  { key: "read_skill", label: "Read skill" },
+] as const;
+
+function buildDefaultToolsConfig() {
+  return Object.fromEntries(FULL_AGENT_TOOL_OPTIONS.map((tool) => [tool.key, true]));
+}
+
 function relativeTime(iso: string | null): string {
   if (!iso) return "—";
   const diff = Date.now() - new Date(iso).getTime();
@@ -63,6 +81,14 @@ function relativeTime(iso: string | null): string {
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours}h`;
   return `${Math.floor(hours / 24)}d`;
+}
+
+function formatRoleLabel(role: string): string {
+  return role
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 export default function AgentsPage() {
@@ -118,10 +144,10 @@ export default function AgentsPage() {
     await queryClient.invalidateQueries({ queryKey: ["agents"] });
   };
 
-  if (isLoading) return <div className="w-full px-4 py-5 text-sm text-muted-foreground md:px-6 xl:px-8">Loading...</div>;
+  if (isLoading) return <div className="p-6 text-sm text-muted-foreground">Loading...</div>;
 
   return (
-    <div className="w-full space-y-5 px-4 py-5 md:px-6 xl:px-8">
+    <div className="p-6 max-w-5xl mx-auto space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -167,7 +193,6 @@ export default function AgentsPage() {
       {result && (
         <ReportModal result={result} open={reportModalOpen} onClose={() => setReportModalOpen(false)} />
       )}
-
       {agents.length === 0 ? (
         <div className="bg-card border border-border rounded-lg p-8 text-center">
           <Bot className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
@@ -287,6 +312,10 @@ function CreateAgentDialog({
   const [systemPrompt, setSystemPrompt] = useState("");
   const [maxIter, setMaxIter] = useState(20);
   const [multiServer, setMultiServer] = useState(false);
+  const [toolsConfig, setToolsConfig] = useState<Record<string, boolean>>(() => buildDefaultToolsConfig());
+  const [stopConditionsText, setStopConditionsText] = useState("");
+  const [sessionTimeoutSeconds, setSessionTimeoutSeconds] = useState(600);
+  const [maxConnections, setMaxConnections] = useState(5);
   const [selectedServers, setSelectedServers] = useState<number[]>([]);
   const [schedule, setSchedule] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -306,6 +335,7 @@ function CreateAgentDialog({
       setGoal(tpl.goal || "");
       setSystemPrompt(tpl.system_prompt || "");
       setMultiServer(tpl.allow_multi_server || false);
+      setStopConditionsText((tpl.stop_conditions || []).join("\n"));
     }
     setStep("config");
   };
@@ -326,6 +356,10 @@ function CreateAgentDialog({
         system_prompt: systemPrompt,
         max_iterations: maxIter,
         allow_multi_server: multiServer,
+        tools_config: mode === "mini" ? {} : toolsConfig,
+        stop_conditions: stopConditionsText.split("\n").map((item) => item.trim()).filter(Boolean),
+        session_timeout_seconds: sessionTimeoutSeconds,
+        max_connections: maxConnections,
       });
       await onCreated({ id: created.id, mode });
       resetForm();
@@ -336,6 +370,7 @@ function CreateAgentDialog({
     setStep("template"); setMode("mini"); setSelectedType(""); setName("");
     setCommands(""); setAiPrompt(""); setGoal(""); setSystemPrompt("");
     setMaxIter(20); setMultiServer(false); setSelectedServers([]); setSchedule(0);
+    setToolsConfig(buildDefaultToolsConfig()); setStopConditionsText(""); setSessionTimeoutSeconds(600); setMaxConnections(5);
   };
 
   const toggleServer = (id: number) => setSelectedServers((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
@@ -381,12 +416,17 @@ function CreateAgentDialog({
                     className="text-left bg-secondary/30 border border-border rounded-lg p-3 hover:border-primary/50 transition-colors">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-transparent bg-background/30 text-muted-foreground">
-                        <Settings2 className="h-4 w-4" />
+                        {(() => {
+                          const TemplateIcon = AGENT_ICONS[tpl.type] || Settings2;
+                          return <TemplateIcon className="h-4 w-4" />;
+                        })()}
                       </span>
-                      <span className="text-sm font-medium text-foreground">Custom</span>
+                      <span className="text-sm font-medium text-foreground">{tpl.name}</span>
                     </div>
                     <p className="text-[10px] text-muted-foreground">
-                      {tpl.mode === "full" ? (tpl.goal || "").slice(0, 80) + "..." : `${tpl.command_count} commands`}
+                      {tpl.mode === "full"
+                        ? ((tpl.goal || "Autonomous ReAct agent").slice(0, 100))
+                        : `${tpl.command_count} commands`}
                     </p>
                   </button>
                 ))}
@@ -394,7 +434,9 @@ function CreateAgentDialog({
                   className="text-left bg-secondary/30 border border-border rounded-lg p-3 hover:border-primary/50 transition-colors">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-lg">🔧</span>
-                    <span className="text-sm font-medium text-foreground">Custom</span>
+                    <span className="text-sm font-medium text-foreground">
+                      {mode === "full" ? "Custom Full Agent" : mode === "multi" ? "Custom Pipeline Agent" : "Custom Mini Agent"}
+                    </span>
                   </div>
                   <p className="text-[10px] text-muted-foreground">Build from scratch</p>
                 </button>
@@ -427,10 +469,54 @@ function CreateAgentDialog({
                       <label className="text-xs font-medium text-muted-foreground">Max Iterations</label>
                       <Input type="number" min={1} max={100} value={maxIter} onChange={(e) => setMaxIter(Number(e.target.value))} className="bg-secondary/50 h-8 text-sm" />
                     </div>
+                    <div className="flex-1 space-y-1.5">
+                      <label className="text-xs font-medium text-muted-foreground">Session Timeout (sec)</label>
+                      <Input type="number" min={30} max={3600} value={sessionTimeoutSeconds} onChange={(e) => setSessionTimeoutSeconds(Number(e.target.value))} className="bg-secondary/50 h-8 text-sm" />
+                    </div>
+                    <div className="flex-1 space-y-1.5">
+                      <label className="text-xs font-medium text-muted-foreground">Max Connections</label>
+                      <Input type="number" min={1} max={10} value={maxConnections} onChange={(e) => setMaxConnections(Number(e.target.value))} className="bg-secondary/50 h-8 text-sm" />
+                    </div>
                     <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer pt-5">
                       <input type="checkbox" checked={multiServer} onChange={(e) => setMultiServer(e.target.checked)} className="rounded" />
                       Multi-server
                     </label>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">Stop Conditions</label>
+                    <Textarea
+                      value={stopConditionsText}
+                      onChange={(e) => setStopConditionsText(e.target.value)}
+                      rows={3}
+                      className="bg-secondary/50 text-xs"
+                      placeholder="One condition per line. Example: Health checks are green"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-medium text-muted-foreground">Tool Access</label>
+                      <button
+                        type="button"
+                        className="text-[10px] text-primary hover:underline"
+                        onClick={() => setToolsConfig(buildDefaultToolsConfig())}
+                      >
+                        Enable all
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 rounded-lg border border-border/70 bg-secondary/20 p-3">
+                      {FULL_AGENT_TOOL_OPTIONS.map((tool) => (
+                        <label key={tool.key} className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(toolsConfig[tool.key])}
+                            onChange={(event) =>
+                              setToolsConfig((current) => ({ ...current, [tool.key]: event.target.checked }))
+                            }
+                          />
+                          {tool.label}
+                        </label>
+                      ))}
+                    </div>
                   </div>
                 </>
               )}

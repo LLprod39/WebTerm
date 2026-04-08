@@ -19,6 +19,15 @@ from asgiref.sync import sync_to_async as _s2a
 from django.utils import timezone
 from loguru import logger
 
+from app.agent_kernel.domain.roles import get_role_spec
+from app.agent_kernel.hooks.manager import HookManager
+from app.agent_kernel.memory.compaction import build_run_summary_payload
+from app.agent_kernel.memory.server_cards import render_server_cards_prompt
+from app.agent_kernel.memory.store import DjangoServerMemoryStore
+from app.agent_kernel.permissions.engine import PermissionEngine
+from app.agent_kernel.runtime.context import build_ops_prompt_context
+from app.agent_kernel.sandbox.manager import SandboxManager
+from app.agent_kernel.tools.registry import ToolRegistry
 from app.core.llm import LLMProvider
 from app.core.model_utils import resolve_provider_and_model
 from core_ui.audit import audit_context
@@ -139,6 +148,13 @@ class AgentEngine:
             specific_model,
             default_provider="auto",
         )
+        self.role_spec = get_role_spec(agent.agent_type, agent.goal or agent.ai_prompt)
+        self.permission_engine = PermissionEngine(mode=self.role_spec.default_permission_mode)
+        self.sandbox_manager = SandboxManager()
+        self.hook_manager = HookManager()
+        self.memory_store = DjangoServerMemoryStore()
+        self.tool_registry: ToolRegistry | None = None
+        self.ops_prompt_context = ""
         if self.skills:
             for tool_name in ("list_skills", "read_skill"):
                 if tool_name not in self.enabled_tools:
@@ -187,14 +203,10 @@ class AgentEngine:
                 return
             server_ids = list(self.session.connections)
             for server_id in server_ids:
-                try:
+                with suppress(Exception):
                     await self.session.send_signal(server_id, "ctrl_c")
-                except Exception:
-                    pass
-            try:
+            with suppress(Exception):
                 await self.session.close_all()
-            except Exception:
-                pass
 
         try:
             loop.call_soon_threadsafe(lambda: asyncio.create_task(shutdown_sessions()))
@@ -317,6 +329,8 @@ class AgentEngine:
             if not self.session.connections and not self.mcp_tools and not self.skills:
                 raise RuntimeError("No servers connected, no MCP tools available, and no skills attached.")
 
+            self.tool_registry = ToolRegistry.from_sources(self.enabled_tools, self.mcp_tools)
+            self.ops_prompt_context = await self._build_ops_prompt_context()
             system_prompt = self._build_system_prompt()
             history.append({"role": "system", "content": system_prompt})
 
@@ -420,7 +434,12 @@ class AgentEngine:
                 })
 
                 history.append({"role": "assistant", "content": llm_response})
-                history.append({"role": "user", "content": f"OBSERVATION: {observation[:4000]}"})
+                history.append(
+                    {
+                        "role": "user",
+                        "content": self.hook_manager.build_observation_message(observation, limit=4000),
+                    }
+                )
 
             final_status = AgentRun.STATUS_COMPLETED
             if self._stop_requested:
@@ -435,6 +454,10 @@ class AgentEngine:
                 iteration,
             )
             final_report = await self._generate_final_report(history, iterations_log)
+            final_report = await self.hook_manager.run_finished(
+                final_report,
+                self.permission_engine.verification_summary(),
+            )
 
             run.status = final_status
             run.iterations_log = iterations_log
@@ -445,6 +468,13 @@ class AgentEngine:
             run.completed_at = timezone.now()
             run.duration_ms = int((time.monotonic() - t0) * 1000)
             await sync_to_async(run.save)()
+            await self._persist_ops_summary(
+                run=run,
+                final_status=final_status,
+                final_report=final_report,
+                iterations_log=iterations_log,
+                tool_calls_log=tool_calls_log,
+            )
             logger.info(
                 "agent_run {} saved: status={} duration_ms={} report_chars={}",
                 run.pk,
@@ -468,6 +498,13 @@ class AgentEngine:
             run.completed_at = timezone.now()
             run.duration_ms = int((time.monotonic() - t0) * 1000)
             await sync_to_async(run.save)()
+            await self._persist_ops_summary(
+                run=run,
+                final_status=run.status,
+                final_report=run.ai_analysis,
+                iterations_log=iterations_log,
+                tool_calls_log=tool_calls_log,
+            )
             await self._emit("agent_status", {"status": "failed", "error": str(exc)})
         finally:
             unregister_engine(run.id, self)
@@ -523,9 +560,8 @@ class AgentEngine:
 
         reply_nonce = int(control["reply_nonce"])
         reply_ack_nonce = int(control["reply_ack_nonce"])
-        if reply_nonce > reply_ack_nonce and control["reply_text"]:
-            if self.provide_user_reply(control["reply_text"]):
-                await sync_to_async(self._ack_runtime_reply, thread_sensitive=True)(reply_nonce)
+        if reply_nonce > reply_ack_nonce and control["reply_text"] and self.provide_user_reply(control["reply_text"]):
+            await sync_to_async(self._ack_runtime_reply, thread_sensitive=True)(reply_nonce)
 
     def _ack_runtime_reply(self, reply_nonce: int):
         if not self.run_record:
@@ -549,7 +585,7 @@ class AgentEngine:
                     prompt,
                     model=self.model_preference,
                     specific_model=self.specific_model,
-                    purpose="agent",
+                    purpose="ops",
                 ):
                     chunks.append(chunk)
         except Exception as exc:
@@ -591,6 +627,14 @@ class AgentEngine:
 
     async def _execute_tool(self, name: str, args: dict) -> str:
         logger.info("agent_run {} execute_tool start: tool={} args={}", self.run_record.pk if self.run_record else "?", name, json.dumps(args, ensure_ascii=False)[:800])
+        spec = self.tool_registry.get(name) if self.tool_registry else None
+        decision = self.permission_engine.evaluate(spec, args) if spec else None
+        if decision and not decision.allowed:
+            return decision.reason
+        if decision and spec:
+            sandbox_decision = self.sandbox_manager.validate(spec, args, decision.sandbox_profile)
+            if not sandbox_decision.allowed:
+                return sandbox_decision.reason
         if name in self.mcp_tools:
             binding = self.mcp_tools[name]
             prepared_args, policy_messages, policy_error = apply_skill_policies(
@@ -604,8 +648,13 @@ class AgentEngine:
             result = await execute_bound_mcp_tool(self.mcp_tools, name, prepared_args)
             if not result.startswith("MCP tool error"):
                 self._executed_mcp_tools.add(binding.tool_name)
+                if spec:
+                    self.permission_engine.record_success(spec, prepared_args, result)
             if policy_messages:
                 result = "\n".join([*policy_messages, result])
+            if decision and decision.notes:
+                result = "\n".join([*decision.notes, result])
+            result = await self.hook_manager.post_tool_use(name, result)
             logger.info(
                 "agent_run {} execute_tool done: tool={} result_chars={} via=mcp",
                 self.run_record.pk if self.run_record else "?",
@@ -625,20 +674,26 @@ class AgentEngine:
         fn = tool_meta["fn"]
         try:
             result = await fn(self.session, **args)
+            result_text = result.result
+            if spec and result.success:
+                self.permission_engine.record_success(spec, args, result_text)
+            if decision and decision.notes:
+                result_text = "\n".join([*decision.notes, result_text])
+            result_text = await self.hook_manager.post_tool_use(name, result_text)
             logger.info(
                 "agent_run {} execute_tool done: tool={} result_chars={} via=agent_tool",
                 self.run_record.pk if self.run_record else "?",
                 name,
-                len(result.result or ""),
+                len(result_text or ""),
             )
-            return result.result
+            return result_text
         except Exception as exc:
             logger.exception(
                 "agent_run {} execute_tool failed: tool={}",
                 self.run_record.pk if self.run_record else "?",
                 name,
             )
-            return f"Tool error ({name}): {exc}"
+            return await self.hook_manager.post_tool_use(name, f"Tool error ({name}): {exc}")
 
     # ------------------------------------------------------------------
     # Prompt building
@@ -697,6 +752,8 @@ class AgentEngine:
         return f"""Ты — DevOps / Platform AI-агент, работающий через SSH и MCP-инструменты.
 У тебя есть доступ к терминалам серверов и внешним системам, подключённым через MCP.
 Всегда отвечай, рассуждай и пиши отчёты на русском языке.
+
+{self.ops_prompt_context}
 
 {custom_system}
 
@@ -791,7 +848,7 @@ ACTION: tool_name {{"param1": "value1", "param2": "value2"}}
                 prompt,
                 model=self.model_preference,
                 specific_model=self.specific_model,
-                purpose="agent",
+                purpose="opssummary",
             ):
                 chunks.append(chunk)
             report = "".join(chunks)
@@ -804,6 +861,61 @@ ACTION: tool_name {{"param1": "value1", "param2": "value2"}}
         except Exception as exc:
             logger.error("Final report generation failed: {}", exc)
             return f"Report generation failed: {exc}\n\nRaw steps:\n{steps_summary}"
+
+    async def _build_ops_prompt_context(self) -> str:
+        cards = []
+        server_ids: list[int] = []
+        group_ids: list[int] = []
+        for server in self.servers[:3]:
+            server_ids.append(server.id)
+            if getattr(server, "group_id", None):
+                group_ids.append(server.group_id)
+            try:
+                cards.append(await self.memory_store.get_server_card(server.id))
+            except Exception as exc:
+                logger.debug("Failed to load memory card for server {}: {}", getattr(server, "id", "?"), exc)
+        server_memory_prompt = render_server_cards_prompt(cards, max_cards=3, max_records=6)
+        recipes_query = "\n".join(
+            part for part in [self.agent.goal or self.agent.ai_prompt or "", *self.role_spec.focus_areas] if part
+        )
+        operational_recipes_prompt = await self.memory_store.build_operational_recipes_prompt(
+            recipes_query,
+            server_ids=server_ids,
+            group_ids=list(dict.fromkeys(group_ids)),
+            limit=5,
+        )
+        tool_registry_prompt = self.tool_registry.build_prompt_slice(limit=10) if self.tool_registry else ""
+        return build_ops_prompt_context(
+            role_spec=self.role_spec,
+            permission_mode=self.permission_engine.mode,
+            server_memory_prompt=server_memory_prompt,
+            operational_recipes_prompt=operational_recipes_prompt,
+            tool_registry_prompt=tool_registry_prompt,
+            max_iterations=self.max_iterations,
+            session_timeout=self.session_timeout,
+        )
+
+    async def _persist_ops_summary(
+        self,
+        *,
+        run: AgentRun,
+        final_status: str,
+        final_report: str,
+        iterations_log: list[dict],
+        tool_calls_log: list[dict],
+    ):
+        if not getattr(run, "pk", None):
+            return
+        payload = build_run_summary_payload(
+            run=run,
+            role_slug=self.role_spec.slug,
+            final_status=final_status,
+            final_report=final_report,
+            iterations=iterations_log,
+            tool_calls=tool_calls_log,
+            verification_summary=self.permission_engine.verification_summary(),
+        )
+        await self.memory_store.append_run_summary(run.pk, payload)
 
     # ------------------------------------------------------------------
     # DB helpers

@@ -312,9 +312,11 @@ class ServerExecuteTool(BaseTool):
         ServerCommandHistory.objects.create(
             server=server,
             user=user,
+            actor_kind=ServerCommandHistory.ACTOR_PIPELINE,
+            source_kind=ServerCommandHistory.SOURCE_PIPELINE,
             command=command,
             output=output,
-            exit_code=exit_code
+            exit_code=exit_code,
         )
 
     @staticmethod

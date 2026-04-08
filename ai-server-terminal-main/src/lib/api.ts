@@ -13,7 +13,7 @@ import {
 const API_BASE = import.meta.env.VITE_API_BASE || "";
 const BACKEND_ORIGIN = (
   import.meta.env.VITE_BACKEND_ORIGIN ||
-  (window.location.port === "8080" ? "http://127.0.0.1:9000" : "")
+  (import.meta.env.DEV && window.location.port === "8080" ? "http://127.0.0.1:9000" : "")
 ).replace(/\/$/, "");
 let csrfTokenCache: string | null = null;
 let csrfTokenRequest: Promise<string | null> | null = null;
@@ -853,8 +853,101 @@ function demoFallback<T>(path: string, _options: RequestInit = {}): T {
 
   // Agents
   if (path.includes("/servers/api/agents/dashboard")) return { success: true, active: [], recent: [] } as T;
+  if (path.includes("/servers/api/agents/schedules/dispatch/")) {
+    return {
+      success: true,
+      summary: {
+        scanned: 1,
+        due: 1,
+        launched_agents: 1,
+        runs_created: 1,
+        background_runs: 1,
+        mini_runs: 0,
+        skipped: 0,
+        skip_reasons: {
+          not_due: 0,
+          no_servers: 0,
+          active_run: 0,
+          limit: 0,
+          launch_rejected: 0,
+          error: 0,
+        },
+        errors: [],
+      },
+      generated_at: new Date().toISOString(),
+    } as T;
+  }
+  if (path.includes("/servers/api/agents/schedules/")) {
+    return {
+      success: true,
+      summary: {
+        total_scheduled: 1,
+        enabled: 1,
+        paused: 0,
+        due_now: 1,
+        active_runs: 0,
+      },
+      generated_at: new Date().toISOString(),
+      scheduled_agents: [
+        {
+          id: 1,
+          name: "Demo Deploy Watcher",
+          mode: "full",
+          mode_display: "Full Agent (ReAct)",
+          agent_type: "deploy_watcher",
+          agent_type_display: "Deploy Watcher",
+          server_count: 1,
+          server_names: ["demo-linux"],
+          schedule_minutes: 15,
+          is_enabled: true,
+          commands: [],
+          ai_prompt: "Track deploy drift",
+          goal: "Check services after deploy and verify health.",
+          system_prompt: "",
+          max_iterations: 8,
+          allow_multi_server: false,
+          last_run_at: new Date(Date.now() - 60 * 60_000).toISOString(),
+          last_run_status: "completed",
+          last_run_id: 1,
+          active_run_id: null,
+          schedule_state: "due",
+          due_now: true,
+          next_due_at: new Date(Date.now() - 30 * 60_000).toISOString(),
+          next_due_in_seconds: 0,
+        },
+      ],
+    } as T;
+  }
   if (path.includes("/servers/api/agents/templates")) return { success: true, templates: [] } as T;
+  if (path.includes("/servers/api/agents/runs/") && path.includes("/events/")) {
+    return { success: true, events: [], total: 0 } as T;
+  }
   if (path.includes("/servers/api/agents/runs")) return { success: true, runs: [] } as T;
+  if (path.includes("/servers/api/watchers/drafts/") && path.includes("/launch/")) {
+    return {
+      success: true,
+      draft: {
+        id: 1,
+        server_id: 1,
+        server_name: "demo-linux",
+        severity: "warning",
+        recommended_role: "infra_scout",
+        objective: "Investigate service drift on demo-linux",
+        reasons: ["Demo mode watcher draft"],
+        memory_excerpt: ["Nginx was restarted during the last deploy"],
+        status: "acknowledged",
+        acknowledged_at: new Date().toISOString(),
+        acknowledged_by: "demo",
+        resolved_at: null,
+        first_seen_at: new Date().toISOString(),
+        last_seen_at: new Date().toISOString(),
+        metadata: { launch_count: 1 },
+      },
+      agent_id: 1,
+      run_id: 1,
+      status: "pending",
+    } as T;
+  }
   if (path.includes("/servers/api/agents")) return { success: true, agents: [] } as T;
   if (path.includes("/servers/api/alerts")) return { success: true, alerts: [] } as T;
   if (path.includes("/servers/api/") && path.includes("/files/")) return {
@@ -2324,6 +2417,153 @@ export async function bulkUpdateServers(payload: {
   });
 }
 
+export interface ServerMemorySnapshotHistoryRecord {
+  id: number;
+  title: string;
+  version: number;
+  is_active: boolean;
+  source_kind?: string;
+  source_ref?: string;
+  updated_at: string | null;
+  archived_at: string | null;
+  rewrite_reason?: string | null;
+  action_summary: string | null;
+  created_by_username?: string | null;
+  content_preview?: string | null;
+}
+
+export interface ServerMemorySnapshotRecord {
+  id: number;
+  memory_key: string;
+  title: string;
+  content: string;
+  source_kind: string;
+  source_ref?: string;
+  version: number;
+  is_active: boolean;
+  version_group_id: string;
+  superseded_by_id: number | null;
+  importance_score: number;
+  stability_score: number;
+  confidence: number;
+  last_verified_at: string | null;
+  updated_at: string | null;
+  archived_at: string | null;
+  rewrite_reason?: string | null;
+  prior_snapshot_id?: number | null;
+  prior_version?: number | null;
+  action_summary: string | null;
+  created_by_username?: string | null;
+  metadata: Record<string, unknown>;
+  history: ServerMemorySnapshotHistoryRecord[];
+}
+
+export interface ServerMemoryEpisodeRecord {
+  id: number;
+  episode_kind: string;
+  title: string;
+  summary: string;
+  event_count: number;
+  importance_score: number;
+  confidence: number;
+  is_active: boolean;
+  first_event_at: string | null;
+  last_event_at: string | null;
+  updated_at: string | null;
+  metadata: Record<string, unknown>;
+  kind?: string;
+}
+
+export interface ServerMemoryRevalidationRecord {
+  id: number;
+  memory_key: string;
+  title: string;
+  reason: string;
+  status: string;
+  confidence: number;
+  payload: Record<string, unknown>;
+  updated_at: string | null;
+  resolved_at: string | null;
+}
+
+export interface BackgroundWorkerStateRecord {
+  worker_kind: string;
+  worker_key: string;
+  status: string;
+  is_stale: boolean;
+  hostname: string;
+  pid: number | null;
+  command?: string;
+  heartbeat_at: string | null;
+  lease_expires_at: string | null;
+  last_started_at: string | null;
+  last_stopped_at: string | null;
+  last_cycle_started_at: string | null;
+  last_cycle_finished_at: string | null;
+  last_summary: Record<string, unknown>;
+  last_error: string;
+}
+
+export interface ServerMemoryOverviewResponse {
+  success: boolean;
+  server_id: number;
+  policy: {
+    dream_mode: string;
+    nightly_model_alias: string;
+    nearline_event_threshold: number;
+    sleep_start_hour: number;
+    sleep_end_hour: number;
+    raw_event_retention_days: number;
+    episode_retention_days: number;
+    rdp_semantic_capture_enabled: boolean;
+    human_habits_capture_enabled: boolean;
+    is_enabled: boolean;
+  };
+  daemon_state: BackgroundWorkerStateRecord;
+  worker_states?: Record<string, BackgroundWorkerStateRecord>;
+  canonical: ServerMemorySnapshotRecord[];
+  manual: ServerMemorySnapshotRecord[];
+  patterns: ServerMemorySnapshotRecord[];
+  automation_candidates: ServerMemorySnapshotRecord[];
+  skill_drafts: ServerMemorySnapshotRecord[];
+  revalidation: ServerMemoryRevalidationRecord[];
+  episodes: ServerMemoryEpisodeRecord[];
+  archive: Array<(ServerMemorySnapshotRecord | ServerMemoryEpisodeRecord) & { kind: string }>;
+  stats: {
+    canonical: number;
+    manual: number;
+    patterns: number;
+    automation_candidates: number;
+    skill_drafts: number;
+    revalidation_open: number;
+    episodes: number;
+    archive: number;
+  };
+}
+
+export interface ServerMemorySnapshotActionResponse {
+  success: boolean;
+  snapshot: ServerMemorySnapshotRecord;
+  overview: ServerMemoryOverviewResponse;
+}
+
+export interface ServerMemoryPromoteNoteResponse extends ServerMemorySnapshotActionResponse {
+  knowledge_id: number;
+  knowledge_title: string;
+}
+
+export interface ServerMemoryPromoteSkillResponse extends ServerMemorySnapshotActionResponse {
+  knowledge_id?: number;
+  skill: StudioSkillDetail;
+  validation: {
+    slug: string;
+    path: string;
+    errors: string[];
+    warnings: string[];
+    is_valid: boolean;
+  };
+}
+
 export async function listServerKnowledge(serverId: number) {
   return apiFetch<{
     success: boolean;
@@ -2366,6 +2606,67 @@ export async function updateServerKnowledge(
 
 export async function deleteServerKnowledge(serverId: number, knowledgeId: number) {
   return apiFetch<{ success: boolean; error?: string }>(`/servers/api/${serverId}/knowledge/${knowledgeId}/delete/`, {
+    method: "POST",
+  });
+}
+
+export async function fetchServerMemoryOverview(serverId: number) {
+  return apiFetch<ServerMemoryOverviewResponse>(`/servers/api/${serverId}/memory/overview/`);
+}
+
+export async function runServerMemoryDreams(
+  serverId: number,
+  payload: { job_kind?: "nearline" | "nightly" | "weekly" | "hybrid" } = {},
+) {
+  return apiFetch<{
+    success: boolean;
+    job_kind: string;
+    result: Record<string, unknown>;
+    overview: ServerMemoryOverviewResponse;
+  }>(`/servers/api/${serverId}/memory/run-dreams/`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateServerMemoryPolicy(
+  serverId: number,
+  payload: {
+    dream_mode?: "heuristic" | "nightly_llm" | "hybrid";
+    nightly_model_alias?: string;
+    nearline_event_threshold?: number;
+    sleep_start_hour?: number;
+    sleep_end_hour?: number;
+    raw_event_retention_days?: number;
+    episode_retention_days?: number;
+    rdp_semantic_capture_enabled?: boolean;
+    human_habits_capture_enabled?: boolean;
+    is_enabled?: boolean;
+  },
+) {
+  return apiFetch<{
+    success: boolean;
+    overview: ServerMemoryOverviewResponse;
+  }>(`/servers/api/${serverId}/memory/policy/`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function archiveServerMemorySnapshot(serverId: number, snapshotId: number) {
+  return apiFetch<ServerMemorySnapshotActionResponse>(`/servers/api/${serverId}/memory/snapshots/${snapshotId}/archive/`, {
+    method: "POST",
+  });
+}
+
+export async function promoteServerMemorySnapshotToNote(serverId: number, snapshotId: number) {
+  return apiFetch<ServerMemoryPromoteNoteResponse>(`/servers/api/${serverId}/memory/snapshots/${snapshotId}/promote-note/`, {
+    method: "POST",
+  });
+}
+
+export async function promoteServerMemorySnapshotToSkill(serverId: number, snapshotId: number) {
+  return apiFetch<ServerMemoryPromoteSkillResponse>(`/servers/api/${serverId}/memory/snapshots/${snapshotId}/promote-skill/`, {
     method: "POST",
   });
 }
@@ -2820,6 +3121,48 @@ export interface AgentItem {
   last_run_status: string | null;
   last_run_id: number | null;
   active_run_id: number | null;
+  schedule_state?: "manual" | "paused" | "due" | "scheduled";
+  due_now?: boolean;
+  next_due_at?: string | null;
+  next_due_in_seconds?: number | null;
+}
+
+export interface AgentScheduleOverviewSummary {
+  total_scheduled: number;
+  enabled: number;
+  paused: number;
+  due_now: number;
+  active_runs: number;
+}
+
+export interface AgentScheduleDispatchSummary {
+  scanned: number;
+  due: number;
+  launched_agents: number;
+  runs_created: number;
+  background_runs: number;
+  mini_runs: number;
+  skipped: number;
+  skip_reasons: Record<string, number>;
+  errors: Array<{ agent_id: number; agent_name: string; error: string }>;
+}
+
+export interface AgentRunDispatchRecord {
+  id: number;
+  run_id: number;
+  dispatch_kind: string;
+  status: string;
+  server_ids: number[];
+  plan_only: boolean;
+  queued_at: string | null;
+  claimed_at: string | null;
+  heartbeat_at: string | null;
+  lease_expires_at: string | null;
+  completed_at: string | null;
+  claimed_by: string;
+  attempt_count: number;
+  error: string;
+  metadata: Record<string, unknown>;
 }
 
 export interface AgentTemplate {
@@ -2844,6 +3187,7 @@ export interface AgentRunResult {
   commands_output: Array<{ cmd: string; stdout: string; stderr: string; exit_code: number; duration_ms: number }>;
   total_iterations?: number;
   final_report?: string;
+  dispatch?: AgentRunDispatchRecord | null;
 }
 
 export interface AgentRunDetail {
@@ -2899,11 +3243,43 @@ export interface AgentRunDetail {
     completed_at: string | null;
   }>;
   orchestrator_log: Array<{ role: string; content: string; timestamp: string }>;
+  dispatch?: AgentRunDispatchRecord | null;
+}
+
+export interface AgentRunEventItem {
+  id: number;
+  run_id: number;
+  event_type: string;
+  task_id: number | null;
+  message: string;
+  payload: Record<string, unknown>;
+  created_at: string | null;
 }
 
 export async function fetchAgents(mode?: string) {
   const url = mode ? `/servers/api/agents/?mode=${mode}` : "/servers/api/agents/";
   return apiFetch<{ success: boolean; agents: AgentItem[] }>(url);
+}
+
+export async function fetchAgentScheduleOverview(limit = 40) {
+  return apiFetch<{
+    success: boolean;
+    summary: AgentScheduleOverviewSummary;
+    scheduled_agents: AgentItem[];
+    execution_plane: BackgroundWorkerStateRecord;
+    generated_at: string;
+  }>(`/servers/api/agents/schedules/?limit=${limit}`);
+}
+
+export async function dispatchAgentSchedules(payload?: { limit?: number; agent_ids?: number[] }) {
+  return apiFetch<{
+    success: boolean;
+    summary: AgentScheduleDispatchSummary;
+    generated_at: string;
+  }>("/servers/api/agents/schedules/dispatch/", {
+    method: "POST",
+    body: JSON.stringify(payload || {}),
+  });
 }
 
 export async function fetchAgentTemplates() {
@@ -2976,6 +3352,19 @@ export async function fetchAgentRunLog(runId: number) {
     pending_question: string;
     plan_tasks: AgentRunDetail["plan_tasks"];
   }>(`/servers/api/agents/runs/${runId}/log/`);
+}
+
+export async function fetchAgentRunEvents(runId: number, limit = 200, eventTypes?: string[]) {
+  const params = new URLSearchParams();
+  params.set("limit", String(limit));
+  for (const eventType of eventTypes || []) {
+    params.append("event_type", eventType);
+  }
+  return apiFetch<{
+    success: boolean;
+    events: AgentRunEventItem[];
+    total: number;
+  }>(`/servers/api/agents/runs/${runId}/events/?${params.toString()}`);
 }
 
 export async function replyToAgent(runId: number, answer: string) {
@@ -3053,6 +3442,124 @@ export interface DashboardRunItem {
 
 export async function fetchAgentDashboardRuns() {
   return apiFetch<{ success: boolean; active: DashboardRunItem[]; recent: DashboardRunItem[] }>("/servers/api/agents/dashboard/");
+}
+
+export type WatcherDraftSeverity = "info" | "warning" | "critical";
+export type WatcherDraftStatus = "open" | "acknowledged" | "resolved" | "suppressed";
+
+export interface WatcherDraftItem {
+  id: number;
+  server_id: number;
+  server_name: string;
+  severity: WatcherDraftSeverity;
+  recommended_role: string;
+  objective: string;
+  reasons: string[];
+  memory_excerpt: string[];
+  status: WatcherDraftStatus;
+  acknowledged_at: string | null;
+  acknowledged_by: string;
+  resolved_at: string | null;
+  first_seen_at: string | null;
+  last_seen_at: string | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface WatcherDraftSummary {
+  open: number;
+  acknowledged: number;
+  resolved: number;
+  suppressed: number;
+  total: number;
+}
+
+export interface WatcherScanSummary {
+  scanned_servers: number;
+  critical: number;
+  warning: number;
+  drafts: number;
+}
+
+export interface WatcherPersistedStats {
+  created: number;
+  updated: number;
+  reopened: number;
+  resolved: number;
+}
+
+export interface WatcherScanDraft {
+  server_id: number;
+  server_name: string;
+  severity: WatcherDraftSeverity;
+  recommended_role: string;
+  objective: string;
+  reasons: string[];
+  memory_excerpt: string[];
+}
+
+export interface WatcherDraftsResponse {
+  success: boolean;
+  summary: WatcherDraftSummary;
+  drafts: WatcherDraftItem[];
+}
+
+export interface WatcherScanResponse {
+  success: boolean;
+  generated_at: string;
+  summary: WatcherScanSummary;
+  scanned_server_ids: number[];
+  requested_server_ids: number[];
+  persisted_scan: boolean;
+  persisted?: WatcherPersistedStats;
+  drafts: WatcherScanDraft[];
+}
+
+export async function fetchWatcherDrafts(options?: {
+  statuses?: WatcherDraftStatus[];
+  serverId?: number;
+  limit?: number;
+}) {
+  const params = new URLSearchParams();
+  for (const status of options?.statuses || []) {
+    params.append("status", status);
+  }
+  if (options?.serverId) {
+    params.set("server_id", String(options.serverId));
+  }
+  if (options?.limit) {
+    params.set("limit", String(options.limit));
+  }
+  const query = params.toString();
+  return apiFetch<WatcherDraftsResponse>(`/servers/api/watchers/drafts/${query ? `?${query}` : ""}`);
+}
+
+export async function scanWatcherDrafts(payload?: {
+  persist?: boolean;
+  server_ids?: number[];
+  limit?: number;
+}) {
+  return apiFetch<WatcherScanResponse>("/servers/api/watchers/scan/", {
+    method: "POST",
+    body: JSON.stringify(payload || { persist: true }),
+  });
+}
+
+export async function acknowledgeWatcherDraft(draftId: number) {
+  return apiFetch<{ success: boolean; draft: WatcherDraftItem }>(`/servers/api/watchers/drafts/${draftId}/ack/`, {
+    method: "POST",
+  });
+}
+
+export async function launchWatcherDraft(draftId: number) {
+  return apiFetch<{
+    success: boolean;
+    draft: WatcherDraftItem;
+    agent_id: number;
+    run_id: number;
+    status: string;
+  }>(`/servers/api/watchers/drafts/${draftId}/launch/`, {
+    method: "POST",
+  });
 }
 
 // =============================================================================

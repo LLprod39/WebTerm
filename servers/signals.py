@@ -1,0 +1,142 @@
+from __future__ import annotations
+
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
+from app.agent_kernel.memory.store import DjangoServerMemoryStore
+from servers.memory_heuristics import should_capture_command_history_memory
+from servers.models import AgentRunEvent, ServerAlert, ServerCommandHistory, ServerHealthCheck, ServerWatcherDraft
+
+memory_store = DjangoServerMemoryStore()
+
+
+@receiver(post_save, sender=ServerCommandHistory)
+def ingest_command_history(sender, instance: ServerCommandHistory, created: bool, **kwargs):
+    if not created:
+        return
+    output = str(instance.output or "")
+    output_tail = output[-1200:] if output else ""
+    if not should_capture_command_history_memory(
+        command=instance.command,
+        output=output_tail,
+        exit_code=instance.exit_code,
+        actor_kind=instance.actor_kind or "human",
+        source_kind=instance.source_kind or "terminal",
+    ):
+        return
+    memory_store._ingest_event_sync(
+        instance.server_id,
+        source_kind=instance.source_kind or "terminal",
+        actor_kind=instance.actor_kind or "human",
+        source_ref=instance.session_id or f"command-history:{instance.pk}",
+        session_id=instance.session_id or "",
+        event_type="command_executed",
+        raw_text=f"$ {instance.command}\n{output_tail}".strip(),
+        structured_payload={
+            "command": instance.command,
+            "cwd": instance.cwd,
+            "exit_code": instance.exit_code,
+            "history_id": instance.pk,
+        },
+        importance_hint=0.72 if instance.exit_code not in (0, None) else 0.58,
+        actor_user_id=instance.user_id,
+    )
+
+
+@receiver(post_save, sender=ServerHealthCheck)
+def ingest_health_check(sender, instance: ServerHealthCheck, created: bool, **kwargs):
+    if not created:
+        return
+    raw_output = instance.raw_output or {}
+    memory_store._ingest_event_sync(
+        instance.server_id,
+        source_kind="monitoring",
+        actor_kind="system",
+        source_ref=f"health:{instance.pk}",
+        event_type=f"health_{instance.status}",
+        raw_text=(
+            f"Health check status={instance.status}, cpu={instance.cpu_percent}, mem={instance.memory_percent}, "
+            f"disk={instance.disk_percent}, load={instance.load_1m}"
+        ),
+        structured_payload={
+            "health_id": instance.pk,
+            "status": instance.status,
+            "cpu_percent": instance.cpu_percent,
+            "memory_percent": instance.memory_percent,
+            "disk_percent": instance.disk_percent,
+            "load_1m": instance.load_1m,
+            "response_time_ms": instance.response_time_ms,
+            "raw_output": raw_output,
+        },
+        importance_hint=0.9 if instance.status != ServerHealthCheck.STATUS_HEALTHY else 0.45,
+    )
+
+
+@receiver(post_save, sender=ServerAlert)
+def ingest_alert(sender, instance: ServerAlert, created: bool, **kwargs):
+    event_type = "alert_resolved" if instance.is_resolved else "alert_opened"
+    importance = 0.95 if instance.severity == ServerAlert.SEVERITY_CRITICAL else 0.82
+    memory_store._ingest_event_sync(
+        instance.server_id,
+        source_kind="monitoring",
+        actor_kind="watcher" if created else "system",
+        source_ref=f"alert:{instance.pk}",
+        event_type=event_type,
+        raw_text=f"{instance.title}\n{instance.message}".strip(),
+        structured_payload={
+            "alert_id": instance.pk,
+            "alert_type": instance.alert_type,
+            "severity": instance.severity,
+            "is_resolved": instance.is_resolved,
+            "metadata": instance.metadata,
+        },
+        importance_hint=importance,
+        actor_user_id=instance.resolved_by_id,
+        force_compact=not instance.is_resolved,
+    )
+
+
+@receiver(post_save, sender=AgentRunEvent)
+def ingest_agent_run_event(sender, instance: AgentRunEvent, created: bool, **kwargs):
+    if not created or not instance.run_id or not instance.run.server_id:
+        return
+    memory_store._ingest_event_sync(
+        instance.run.server_id,
+        source_kind="agent_event",
+        actor_kind="agent",
+        source_ref=f"agent-run:{instance.run_id}",
+        session_id=f"agent-run:{instance.run_id}",
+        event_type=instance.event_type or "agent_event",
+        raw_text=instance.message or "",
+        structured_payload={
+            "run_id": instance.run_id,
+            "task_id": instance.task_id,
+            "payload": instance.payload,
+        },
+        importance_hint=0.72,
+        actor_user_id=instance.run.user_id,
+    )
+
+
+@receiver(post_save, sender=ServerWatcherDraft)
+def ingest_watcher_draft(sender, instance: ServerWatcherDraft, created: bool, **kwargs):
+    memory_store._ingest_event_sync(
+        instance.server_id,
+        source_kind="watcher",
+        actor_kind="watcher",
+        source_ref=f"watcher-draft:{instance.pk}",
+        event_type="watcher_draft_opened" if created else f"watcher_draft_{instance.status}",
+        raw_text=instance.objective,
+        structured_payload={
+            "draft_id": instance.pk,
+            "severity": instance.severity,
+            "status": instance.status,
+            "recommended_role": instance.recommended_role,
+            "reasons": instance.reasons,
+            "memory_excerpt": instance.memory_excerpt,
+            "metadata": instance.metadata,
+        },
+        importance_hint=0.88 if instance.status == ServerWatcherDraft.STATUS_OPEN else 0.65,
+        actor_user_id=instance.acknowledged_by_id,
+        force_compact=created,
+    )

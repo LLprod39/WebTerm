@@ -324,8 +324,36 @@ class ServerConnection(models.Model):
 class ServerCommandHistory(models.Model):
     """History of commands executed on servers"""
 
+    ACTOR_HUMAN = "human"
+    ACTOR_AGENT = "agent"
+    ACTOR_PIPELINE = "pipeline"
+    ACTOR_SYSTEM = "system"
+    ACTOR_CHOICES = [
+        (ACTOR_HUMAN, "Human"),
+        (ACTOR_AGENT, "Agent"),
+        (ACTOR_PIPELINE, "Pipeline"),
+        (ACTOR_SYSTEM, "System"),
+    ]
+
+    SOURCE_TERMINAL = "terminal"
+    SOURCE_AGENT = "agent"
+    SOURCE_PIPELINE = "pipeline"
+    SOURCE_API = "api"
+    SOURCE_SYSTEM = "system"
+    SOURCE_CHOICES = [
+        (SOURCE_TERMINAL, "Terminal"),
+        (SOURCE_AGENT, "Agent"),
+        (SOURCE_PIPELINE, "Pipeline"),
+        (SOURCE_API, "API"),
+        (SOURCE_SYSTEM, "System"),
+    ]
+
     server = models.ForeignKey(Server, on_delete=models.CASCADE, related_name="command_history")
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    actor_kind = models.CharField(max_length=20, choices=ACTOR_CHOICES, default=ACTOR_HUMAN)
+    source_kind = models.CharField(max_length=20, choices=SOURCE_CHOICES, default=SOURCE_TERMINAL)
+    session_id = models.CharField(max_length=120, blank=True)
+    cwd = models.CharField(max_length=500, blank=True)
     command = models.TextField()
     output = models.TextField(blank=True)
     exit_code = models.IntegerField(null=True, blank=True)
@@ -538,6 +566,358 @@ class ServerAlert(models.Model):
         return f"[{self.severity}] {self.server.name}: {self.title}"
 
 
+class ServerWatcherDraft(models.Model):
+    """Persisted watcher suggestion for operator review."""
+
+    STATUS_OPEN = "open"
+    STATUS_ACKNOWLEDGED = "acknowledged"
+    STATUS_RESOLVED = "resolved"
+    STATUS_SUPPRESSED = "suppressed"
+    STATUS_CHOICES = [
+        (STATUS_OPEN, "Open"),
+        (STATUS_ACKNOWLEDGED, "Acknowledged"),
+        (STATUS_RESOLVED, "Resolved"),
+        (STATUS_SUPPRESSED, "Suppressed"),
+    ]
+
+    server = models.ForeignKey(Server, on_delete=models.CASCADE, related_name="watcher_drafts")
+    fingerprint = models.CharField(max_length=64)
+    severity = models.CharField(max_length=20, choices=ServerAlert.SEVERITY_CHOICES, default=ServerAlert.SEVERITY_WARNING)
+    recommended_role = models.CharField(max_length=50, default="infra_scout")
+    objective = models.TextField()
+    reasons = models.JSONField(default=list, blank=True)
+    memory_excerpt = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_OPEN)
+    first_seen_at = models.DateTimeField(auto_now_add=True)
+    last_seen_at = models.DateTimeField(default=timezone.now)
+    acknowledged_at = models.DateTimeField(null=True, blank=True)
+    acknowledged_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="acknowledged_server_watcher_drafts",
+    )
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-last_seen_at"]
+        unique_together = ["server", "fingerprint"]
+        indexes = [
+            models.Index(fields=["server", "status", "-last_seen_at"]),
+            models.Index(fields=["status", "-last_seen_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.server.name}: {self.objective[:80]}"
+
+
+class ServerMemoryPolicy(models.Model):
+    """User-level policy controlling layered server memory and dream jobs."""
+
+    DREAM_HEURISTIC = "heuristic"
+    DREAM_NIGHTLY_LLM = "nightly_llm"
+    DREAM_HYBRID = "hybrid"
+    DREAM_MODE_CHOICES = [
+        (DREAM_HEURISTIC, "Heuristic"),
+        (DREAM_NIGHTLY_LLM, "Nightly LLM"),
+        (DREAM_HYBRID, "Hybrid"),
+    ]
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="server_memory_policy")
+    dream_mode = models.CharField(max_length=20, choices=DREAM_MODE_CHOICES, default=DREAM_HYBRID)
+    nightly_model_alias = models.CharField(max_length=50, default="opssummary")
+    nearline_event_threshold = models.IntegerField(default=6)
+    sleep_start_hour = models.IntegerField(default=1)
+    sleep_end_hour = models.IntegerField(default=5)
+    raw_event_retention_days = models.IntegerField(default=30)
+    episode_retention_days = models.IntegerField(default=90)
+    allow_sensitive_raw = models.BooleanField(default=False)
+    rdp_semantic_capture_enabled = models.BooleanField(default=False)
+    human_habits_capture_enabled = models.BooleanField(default=True)
+    is_enabled = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["user_id"]
+
+    def __str__(self):
+        return f"Memory policy for {self.user.username}"
+
+
+class BackgroundWorkerState(models.Model):
+    """Lease and heartbeat state for long-running background workers."""
+
+    KIND_MEMORY_DREAMS = "memory_dreams"
+    KIND_AGENT_EXECUTION = "agent_execution"
+    KIND_WATCHERS = "watchers"
+    KIND_CHOICES = [
+        (KIND_MEMORY_DREAMS, "Memory Dreams"),
+        (KIND_AGENT_EXECUTION, "Agent Execution"),
+        (KIND_WATCHERS, "Watchers"),
+    ]
+
+    STATUS_IDLE = "idle"
+    STATUS_RUNNING = "running"
+    STATUS_ERROR = "error"
+    STATUS_STOPPED = "stopped"
+    STATUS_CHOICES = [
+        (STATUS_IDLE, "Idle"),
+        (STATUS_RUNNING, "Running"),
+        (STATUS_ERROR, "Error"),
+        (STATUS_STOPPED, "Stopped"),
+    ]
+
+    worker_kind = models.CharField(max_length=40, choices=KIND_CHOICES)
+    worker_key = models.CharField(max_length=80, default="default")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_IDLE)
+    hostname = models.CharField(max_length=255, blank=True)
+    pid = models.IntegerField(null=True, blank=True)
+    command = models.CharField(max_length=255, blank=True)
+    heartbeat_at = models.DateTimeField(null=True, blank=True)
+    lease_expires_at = models.DateTimeField(null=True, blank=True)
+    last_started_at = models.DateTimeField(null=True, blank=True)
+    last_stopped_at = models.DateTimeField(null=True, blank=True)
+    last_cycle_started_at = models.DateTimeField(null=True, blank=True)
+    last_cycle_finished_at = models.DateTimeField(null=True, blank=True)
+    last_summary = models.JSONField(default=dict, blank=True)
+    last_error = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["worker_kind", "worker_key"]
+        unique_together = ["worker_kind", "worker_key"]
+        indexes = [
+            models.Index(fields=["worker_kind", "worker_key"]),
+            models.Index(fields=["worker_kind", "status", "-heartbeat_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.worker_kind}:{self.worker_key} ({self.status})"
+
+
+class ServerMemoryEvent(models.Model):
+    """L0 inbox event for any interaction or signal related to a server."""
+
+    SOURCE_TERMINAL = "terminal"
+    SOURCE_AGENT_RUN = "agent_run"
+    SOURCE_AGENT_EVENT = "agent_event"
+    SOURCE_MONITORING = "monitoring"
+    SOURCE_WATCHER = "watcher"
+    SOURCE_PIPELINE = "pipeline"
+    SOURCE_RDP = "rdp"
+    SOURCE_MANUAL = "manual_knowledge"
+    SOURCE_SYSTEM = "system"
+    SOURCE_CHOICES = [
+        (SOURCE_TERMINAL, "Terminal"),
+        (SOURCE_AGENT_RUN, "Agent Run"),
+        (SOURCE_AGENT_EVENT, "Agent Event"),
+        (SOURCE_MONITORING, "Monitoring"),
+        (SOURCE_WATCHER, "Watcher"),
+        (SOURCE_PIPELINE, "Pipeline"),
+        (SOURCE_RDP, "RDP"),
+        (SOURCE_MANUAL, "Manual Knowledge"),
+        (SOURCE_SYSTEM, "System"),
+    ]
+
+    ACTOR_HUMAN = "human"
+    ACTOR_AGENT = "agent"
+    ACTOR_WATCHER = "watcher"
+    ACTOR_SYSTEM = "system"
+    ACTOR_CHOICES = [
+        (ACTOR_HUMAN, "Human"),
+        (ACTOR_AGENT, "Agent"),
+        (ACTOR_WATCHER, "Watcher"),
+        (ACTOR_SYSTEM, "System"),
+    ]
+
+    server = models.ForeignKey(Server, on_delete=models.CASCADE, related_name="memory_events")
+    actor_user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="server_memory_events",
+    )
+    source_kind = models.CharField(max_length=30, choices=SOURCE_CHOICES)
+    actor_kind = models.CharField(max_length=20, choices=ACTOR_CHOICES, default=ACTOR_SYSTEM)
+    source_ref = models.CharField(max_length=255, blank=True)
+    session_id = models.CharField(max_length=120, blank=True)
+    event_type = models.CharField(max_length=80)
+    raw_text_redacted = models.TextField(blank=True)
+    structured_payload = models.JSONField(default=dict, blank=True)
+    importance_hint = models.FloatField(default=0.5)
+    redaction_report = models.JSONField(default=dict, blank=True)
+    redaction_hashes = models.JSONField(default=list, blank=True)
+    is_archived = models.BooleanField(default=False)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["server", "-created_at"]),
+            models.Index(fields=["server", "source_kind", "-created_at"]),
+            models.Index(fields=["server", "session_id", "-created_at"]),
+            models.Index(fields=["server", "source_ref", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.server.name}: {self.source_kind}/{self.event_type}"
+
+
+class ServerMemoryEpisode(models.Model):
+    """L1 summary built from multiple memory events."""
+
+    KIND_TERMINAL = "terminal_session"
+    KIND_AGENT = "agent_investigation"
+    KIND_DEPLOY = "deploy_operation"
+    KIND_INCIDENT = "incident"
+    KIND_MONITORING = "monitoring_window"
+    KIND_RDP = "rdp_session"
+    KIND_PIPELINE = "pipeline_operation"
+    KIND_MISC = "misc"
+    KIND_CHOICES = [
+        (KIND_TERMINAL, "Terminal Session"),
+        (KIND_AGENT, "Agent Investigation"),
+        (KIND_DEPLOY, "Deploy Operation"),
+        (KIND_INCIDENT, "Incident"),
+        (KIND_MONITORING, "Monitoring Window"),
+        (KIND_RDP, "RDP Session"),
+        (KIND_PIPELINE, "Pipeline Operation"),
+        (KIND_MISC, "Misc"),
+    ]
+
+    server = models.ForeignKey(Server, on_delete=models.CASCADE, related_name="memory_episodes")
+    episode_kind = models.CharField(max_length=40, choices=KIND_CHOICES, default=KIND_MISC)
+    source_kind = models.CharField(max_length=30, blank=True)
+    source_ref = models.CharField(max_length=255, blank=True)
+    session_id = models.CharField(max_length=120, blank=True)
+    title = models.CharField(max_length=255)
+    summary = models.TextField()
+    event_count = models.IntegerField(default=0)
+    importance_score = models.FloatField(default=0.5)
+    confidence = models.FloatField(default=0.7)
+    metadata = models.JSONField(default=dict, blank=True)
+    is_active = models.BooleanField(default=True)
+    first_event_at = models.DateTimeField(null=True, blank=True)
+    last_event_at = models.DateTimeField(null=True, blank=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-last_event_at", "-updated_at"]
+        indexes = [
+            models.Index(fields=["server", "is_active", "-last_event_at"]),
+            models.Index(fields=["server", "episode_kind", "is_active", "-last_event_at"]),
+            models.Index(fields=["server", "session_id", "-last_event_at"]),
+            models.Index(fields=["server", "source_ref", "-last_event_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.server.name}: {self.title}"
+
+
+class ServerMemorySnapshot(models.Model):
+    """L2 canonical or archived memory snapshot used by prompts."""
+
+    LAYER_CANONICAL = "canonical"
+    LAYER_ARCHIVE = "archive"
+    LAYER_CHOICES = [
+        (LAYER_CANONICAL, "Canonical"),
+        (LAYER_ARCHIVE, "Archive"),
+    ]
+
+    server = models.ForeignKey(Server, on_delete=models.CASCADE, related_name="memory_snapshots")
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="server_memory_snapshots",
+    )
+    memory_key = models.CharField(max_length=80)
+    layer = models.CharField(max_length=20, choices=LAYER_CHOICES, default=LAYER_CANONICAL)
+    title = models.CharField(max_length=200)
+    content = models.TextField()
+    source_kind = models.CharField(max_length=30, blank=True)
+    source_ref = models.CharField(max_length=255, blank=True)
+    version_group_id = models.CharField(max_length=64)
+    version = models.IntegerField(default=1)
+    is_active = models.BooleanField(default=True)
+    superseded_by = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="superseded_snapshots",
+    )
+    importance_score = models.FloatField(default=0.5)
+    stability_score = models.FloatField(default=0.5)
+    confidence = models.FloatField(default=0.7)
+    last_verified_at = models.DateTimeField(null=True, blank=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["memory_key", "-version", "-updated_at"]
+        indexes = [
+            models.Index(fields=["server", "memory_key", "is_active", "-updated_at"]),
+            models.Index(fields=["server", "layer", "-updated_at"]),
+            models.Index(fields=["server", "version_group_id", "-version"]),
+        ]
+
+    def __str__(self):
+        return f"{self.server.name}: {self.memory_key} v{self.version}"
+
+
+class ServerMemoryRevalidation(models.Model):
+    """Queue of memory items that need validation after staleness or conflicts."""
+
+    STATUS_OPEN = "open"
+    STATUS_RESOLVED = "resolved"
+    STATUS_SUPERSEDED = "superseded"
+    STATUS_CHOICES = [
+        (STATUS_OPEN, "Open"),
+        (STATUS_RESOLVED, "Resolved"),
+        (STATUS_SUPERSEDED, "Superseded"),
+    ]
+
+    server = models.ForeignKey(Server, on_delete=models.CASCADE, related_name="memory_revalidations")
+    source_snapshot = models.ForeignKey(
+        ServerMemorySnapshot,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="revalidation_items",
+    )
+    memory_key = models.CharField(max_length=80)
+    title = models.CharField(max_length=200)
+    reason = models.TextField()
+    payload = models.JSONField(default=dict, blank=True)
+    confidence = models.FloatField(default=0.4)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_OPEN)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["status", "-updated_at"]
+        indexes = [
+            models.Index(fields=["server", "status", "-updated_at"]),
+            models.Index(fields=["server", "memory_key", "status"]),
+        ]
+
+    def __str__(self):
+        return f"{self.server.name}: {self.title}"
+
+
 class ServerGroupKnowledge(models.Model):
     """Knowledge applicable to a group of servers"""
 
@@ -748,3 +1128,76 @@ class AgentRun(models.Model):
         agent_name = self.agent.name if self.agent_id and self.agent else "Agent"
         server_name = self.server.name if self.server_id and self.server else "no-server"
         return f"{agent_name} on {server_name} [{self.status}]"
+
+
+class AgentRunDispatch(models.Model):
+    """Queue item for the dedicated agent execution plane."""
+
+    KIND_LAUNCH = "launch"
+    KIND_PLAN_EXECUTION = "plan_execution"
+    KIND_CHOICES = [
+        (KIND_LAUNCH, "Initial Launch"),
+        (KIND_PLAN_EXECUTION, "Plan Execution"),
+    ]
+
+    STATUS_QUEUED = "queued"
+    STATUS_CLAIMED = "claimed"
+    STATUS_COMPLETED = "completed"
+    STATUS_FAILED = "failed"
+    STATUS_CANCELED = "canceled"
+    STATUS_CHOICES = [
+        (STATUS_QUEUED, "Queued"),
+        (STATUS_CLAIMED, "Claimed"),
+        (STATUS_COMPLETED, "Completed"),
+        (STATUS_FAILED, "Failed"),
+        (STATUS_CANCELED, "Canceled"),
+    ]
+
+    run = models.ForeignKey(AgentRun, on_delete=models.CASCADE, related_name="dispatches")
+    agent = models.ForeignKey(ServerAgent, on_delete=models.CASCADE, related_name="dispatches")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="agent_dispatches")
+    dispatch_kind = models.CharField(max_length=30, choices=KIND_CHOICES, default=KIND_LAUNCH)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_QUEUED)
+    server_ids = models.JSONField(default=list, blank=True)
+    plan_only = models.BooleanField(default=False)
+    metadata = models.JSONField(default=dict, blank=True)
+    queued_at = models.DateTimeField(auto_now_add=True)
+    claimed_at = models.DateTimeField(null=True, blank=True)
+    heartbeat_at = models.DateTimeField(null=True, blank=True)
+    lease_expires_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    claimed_by = models.CharField(max_length=120, blank=True)
+    attempt_count = models.IntegerField(default=0)
+    error = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["queued_at", "id"]
+        indexes = [
+            models.Index(fields=["status", "queued_at"]),
+            models.Index(fields=["run", "status", "-queued_at"]),
+            models.Index(fields=["agent", "status", "-queued_at"]),
+        ]
+
+    def __str__(self):
+        return f"run={self.run_id} {self.dispatch_kind} [{self.status}]"
+
+
+class AgentRunEvent(models.Model):
+    """Persistent event log for long-running agent runs."""
+
+    run = models.ForeignKey(AgentRun, on_delete=models.CASCADE, related_name="events")
+    event_type = models.CharField(max_length=80)
+    task_id = models.IntegerField(null=True, blank=True)
+    message = models.TextField(blank=True)
+    payload = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+        indexes = [
+            models.Index(fields=["run", "created_at"]),
+            models.Index(fields=["event_type", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"run={self.run_id} {self.event_type}"

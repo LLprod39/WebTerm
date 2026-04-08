@@ -26,6 +26,16 @@ from asgiref.sync import sync_to_async as _s2a
 from django.utils import timezone
 from loguru import logger
 
+from app.agent_kernel.domain.roles import ROLE_SPECS, get_role_spec
+from app.agent_kernel.hooks.manager import HookManager
+from app.agent_kernel.memory.compaction import build_run_summary_payload
+from app.agent_kernel.memory.server_cards import render_server_cards_prompt
+from app.agent_kernel.memory.store import DjangoServerMemoryStore
+from app.agent_kernel.permissions.engine import PermissionEngine
+from app.agent_kernel.runtime.context import build_ops_prompt_context
+from app.agent_kernel.runtime.subagents import build_task_subagent_spec
+from app.agent_kernel.sandbox.manager import SandboxManager
+from app.agent_kernel.tools.registry import ToolRegistry
 from app.core.llm import LLMProvider
 from app.core.model_utils import resolve_provider_and_model
 from core_ui.audit import audit_context
@@ -93,17 +103,32 @@ CONTROL_POLL_INTERVAL = 0.5
 # Data helpers
 # ---------------------------------------------------------------------------
 
-def _make_task(task_id: int, name: str, description: str) -> dict:
+def _make_task(
+    task_id: int,
+    name: str,
+    description: str,
+    *,
+    role: str = "custom",
+    permission_mode: str = "SAFE",
+    max_iterations: int = MAX_TASK_ITERATIONS,
+    tool_names: list[str] | None = None,
+) -> dict:
     return {
         "id": task_id,
         "name": name,
         "description": description,
+        "role": role,
+        "permission_mode": permission_mode,
+        "max_iterations": max_iterations,
+        "tool_names": list(tool_names or []),
         "status": "pending",
         "thought": "",
         "iterations": [],
         "result": "",
         "error": "",
         "orchestrator_decision": None,
+        "verification_summary": "",
+        "subagent": {},
         "started_at": None,
         "completed_at": None,
     }
@@ -170,6 +195,15 @@ class MultiAgentEngine:
             specific_model,
             default_provider="auto",
         )
+        self.role_spec = get_role_spec(agent.agent_type, agent.goal or agent.ai_prompt)
+        self.permission_engine = PermissionEngine(mode=self.role_spec.default_permission_mode)
+        self.sandbox_manager = SandboxManager()
+        self.hook_manager = HookManager()
+        self.memory_store = DjangoServerMemoryStore()
+        self.tool_registry: ToolRegistry | None = None
+        self.ops_prompt_context = ""
+        self.server_memory_prompt = ""
+        self.operational_recipes_prompt = ""
         if self.skills:
             for tool_name in ("list_skills", "read_skill"):
                 if tool_name not in self.enabled_tools:
@@ -218,14 +252,10 @@ class MultiAgentEngine:
                 return
             server_ids = list(self.session.connections)
             for server_id in server_ids:
-                try:
+                with suppress(Exception):
                     await self.session.send_signal(server_id, "ctrl_c")
-                except Exception:
-                    pass
-            try:
+            with suppress(Exception):
                 await self.session.close_all()
-            except Exception:
-                pass
 
         try:
             loop.call_soon_threadsafe(lambda: asyncio.create_task(shutdown_sessions()))
@@ -337,6 +367,8 @@ class MultiAgentEngine:
                     name: binding for name, binding in loaded_mcp_tools.items() if name in self.allowed_tool_names
                 }
                 self.disabled_mcp_tools = set(loaded_mcp_tools) - set(self.mcp_tools)
+            self.tool_registry = ToolRegistry.from_sources(self.enabled_tools, self.mcp_tools)
+            self.ops_prompt_context = await self._build_ops_prompt_context()
 
             connected = self.session.get_connected_info()
             await sync_to_async(self._update_run)(run, connected_servers=[
@@ -488,6 +520,10 @@ class MultiAgentEngine:
             # ----------------------------------------------------------------
             await self._emit("agent_pipeline_phase", {"phase": "synthesizing", "message": "Generating final report…"})
             final_report = await self._synthesize(goal, plan_tasks, orchestrator_log)
+            final_report = await self.hook_manager.run_finished(
+                final_report,
+                self.permission_engine.verification_summary(),
+            )
 
             final_status = AgentRun.STATUS_COMPLETED
             if self._stop_requested:
@@ -504,6 +540,12 @@ class MultiAgentEngine:
             run.completed_at = timezone.now()
             run.duration_ms = int((time.monotonic() - t0) * 1000)
             await sync_to_async(run.save)()
+            await self._persist_ops_summary(
+                run=run,
+                final_status=final_status,
+                final_report=final_report,
+                plan_tasks=plan_tasks,
+            )
 
             await sync_to_async(self._touch_agent_last_run)()
             await self._emit("agent_status", {"status": final_status})
@@ -518,6 +560,12 @@ class MultiAgentEngine:
             run.completed_at = timezone.now()
             run.duration_ms = int((time.monotonic() - t0) * 1000)
             await sync_to_async(run.save)()
+            await self._persist_ops_summary(
+                run=run,
+                final_status=run.status,
+                final_report=run.ai_analysis,
+                plan_tasks=plan_tasks,
+            )
             await self._emit("agent_status", {"status": "failed", "error": str(exc)})
         finally:
             unregister_engine(run.id, self)
@@ -579,6 +627,8 @@ class MultiAgentEngine:
             if not self.session.connections:
                 raise RuntimeError("No servers connected.")
 
+            self.tool_registry = ToolRegistry.from_sources(self.enabled_tools, self.mcp_tools)
+            self.ops_prompt_context = await self._build_ops_prompt_context()
             # Mark as running
             await sync_to_async(self._update_run)(run, status=AgentRun.STATUS_RUNNING)
             await self._emit("agent_status", {"status": "running"})
@@ -702,6 +752,10 @@ class MultiAgentEngine:
             # ----------------------------------------------------------------
             await self._emit("agent_pipeline_phase", {"phase": "synthesizing", "message": "Generating final report…"})
             final_report = await self._synthesize(goal, plan_tasks, orchestrator_log)
+            final_report = await self.hook_manager.run_finished(
+                final_report,
+                self.permission_engine.verification_summary(),
+            )
 
             final_status = AgentRun.STATUS_COMPLETED
             if self._stop_requested:
@@ -718,6 +772,12 @@ class MultiAgentEngine:
             run.completed_at = timezone.now()
             run.duration_ms = int((run.duration_ms or 0) + (time.monotonic() - t0) * 1000)
             await sync_to_async(run.save)()
+            await self._persist_ops_summary(
+                run=run,
+                final_status=final_status,
+                final_report=final_report,
+                plan_tasks=plan_tasks,
+            )
 
             await sync_to_async(self._touch_agent_last_run)()
             await self._emit("agent_status", {"status": final_status})
@@ -732,6 +792,12 @@ class MultiAgentEngine:
             run.completed_at = timezone.now()
             run.duration_ms = int((run.duration_ms or 0) + (time.monotonic() - t0) * 1000)
             await sync_to_async(run.save)()
+            await self._persist_ops_summary(
+                run=run,
+                final_status=run.status,
+                final_report=run.ai_analysis,
+                plan_tasks=plan_tasks,
+            )
             await self._emit("agent_status", {"status": "failed", "error": str(exc)})
         finally:
             unregister_engine(run.id, self)
@@ -756,6 +822,11 @@ class MultiAgentEngine:
         servers_desc = "\n".join(f"- {c['server_name']} (id: {c['server_id']})" for c in connected)
         custom_system = self.agent.system_prompt or ""
         skills_desc = build_skill_catalog_description(self.skills)
+        role_options = "\n".join(
+            f"- {slug}: {spec.title}; фокус: {', '.join(spec.focus_areas)}"
+            for slug, spec in ROLE_SPECS.items()
+            if slug != "custom"
+        )
         skill_errors = ""
         if self.skill_errors:
             skill_errors = "\nSkills с ошибками:\n" + "\n".join(f"- {item}" for item in self.skill_errors)
@@ -763,6 +834,7 @@ class MultiAgentEngine:
         system_prompt = f"""Ты — мастер-оркестратор DevOps-агентов. Твоя задача — разбить цель на конкретные задачи для исполнительных агентов.
 Каждый агент умеет: выполнять SSH-команды, читать файлы, проверять сервисы, анализировать логи.
 Отвечай ТОЛЬКО валидным JSON-массивом. Без пояснений до или после JSON.
+{self.ops_prompt_context}
 {custom_system}
 
 Подключённые серверы:
@@ -778,7 +850,10 @@ Attached skills:
 - Используй русский язык для имён и описаний
 - Порядок задач важен — они выполняются последовательно
 - Каждая задача должна быть выполнима за 5-7 SSH-команд максимум
-- Если attached skills содержат runtime guardrails, учитывай их как обязательные ограничения"""
+- Если attached skills содержат runtime guardrails, учитывай их как обязательные ограничения
+
+Доступные subagent roles:
+{role_options}"""
 
         user_msg = f"""Цель: {goal}
 
@@ -786,7 +861,8 @@ Attached skills:
 [
   {{
     "name": "Краткое название задачи",
-    "description": "Что именно нужно сделать, какие команды запустить, что проверить"
+    "description": "Что именно нужно сделать, какие команды запустить, что проверить",
+    "role": "incident_commander|deploy_operator|infra_scout|log_investigator|security_patrol|post_change_verifier|watcher_daemon|custom"
   }},
   ...
 ]"""
@@ -798,7 +874,44 @@ Attached skills:
         orchestrator_log.append({"role": "assistant", "content": response, "timestamp": timezone.now().isoformat()})
 
         tasks = self._parse_plan(response)
-        return [_make_task(i + 1, t["name"], t["description"]) for i, t in enumerate(tasks)]
+        return self._prepare_plan_tasks(tasks)
+
+    def _prepare_plan_tasks(self, tasks: list[dict]) -> list[dict]:
+        prepared_tasks: list[dict] = []
+        if self.tool_registry is None:
+            return [_make_task(i + 1, t["name"], t["description"]) for i, t in enumerate(tasks)]
+
+        for index, item in enumerate(tasks, start=1):
+            subagent = build_task_subagent_spec(
+                task_name=item["name"],
+                task_description=item["description"],
+                parent_agent_type=self.agent.agent_type,
+                parent_goal=self.agent.goal or self.agent.ai_prompt,
+                tool_registry=self.tool_registry,
+                requested_role=item.get("role"),
+                requested_tool_names=item.get("tool_names"),
+                requested_max_iterations=item.get("max_iterations"),
+            )
+            task = _make_task(
+                index,
+                item["name"],
+                item["description"],
+                role=subagent.role,
+                permission_mode=subagent.permission_mode,
+                max_iterations=subagent.max_iterations,
+                tool_names=list(subagent.tool_names),
+            )
+            task["subagent"] = {
+                "role": subagent.role,
+                "title": subagent.title,
+                "permission_mode": subagent.permission_mode,
+                "tool_names": list(subagent.tool_names),
+                "allowed_categories": list(subagent.allowed_categories),
+                "max_iterations": subagent.max_iterations,
+                "metadata": dict(subagent.metadata),
+            }
+            prepared_tasks.append(task)
+        return prepared_tasks
 
     def _parse_plan(self, response: str) -> list[dict]:
         """Extract JSON task list from orchestrator response."""
@@ -822,11 +935,62 @@ Attached skills:
             valid = []
             for item in data:
                 if isinstance(item, dict) and "name" in item and "description" in item:
-                    valid.append({"name": str(item["name"])[:200], "description": str(item["description"])[:500]})
+                    valid.append({
+                        "name": str(item["name"])[:200],
+                        "description": str(item["description"])[:500],
+                        "role": str(item.get("role") or "").strip(),
+                    })
             return valid[:MAX_PLAN_TASKS]
         except Exception as exc:
             logger.warning("Failed to parse orchestrator plan: {}. Response: {!r}", exc, response[:500])
-            return [{"name": "Выполнить цель", "description": f"Выполни следующую задачу: {self.agent.goal or self.agent.ai_prompt}"}]
+            return [{"name": "Выполнить цель", "description": f"Выполни следующую задачу: {self.agent.goal or self.agent.ai_prompt}", "role": ""}]
+
+    def _build_task_subagent(self, task: dict) -> dict:
+        if self.tool_registry is None:
+            return {
+                "role_spec": self.role_spec,
+                "permission_engine": PermissionEngine(mode=self.role_spec.default_permission_mode),
+                "tool_registry": ToolRegistry({}),
+                "tool_names": [],
+                "max_iterations": MAX_TASK_ITERATIONS,
+                "title": self.role_spec.title,
+                "task": task,
+            }
+
+        spec = build_task_subagent_spec(
+            task_name=task.get("name", ""),
+            task_description=task.get("description", ""),
+            parent_agent_type=self.agent.agent_type,
+            parent_goal=self.agent.goal or self.agent.ai_prompt,
+            tool_registry=self.tool_registry,
+            requested_role=task.get("role"),
+            requested_tool_names=task.get("tool_names"),
+            requested_max_iterations=task.get("max_iterations"),
+        )
+        role_spec = ROLE_SPECS.get(spec.role, self.role_spec)
+        local_registry = self.tool_registry.subset(allowed_names=spec.tool_names)
+        return {
+            "role_spec": role_spec,
+            "permission_engine": PermissionEngine(mode=spec.permission_mode),
+            "tool_registry": local_registry,
+            "tool_names": list(spec.tool_names),
+            "max_iterations": spec.max_iterations,
+            "title": spec.title,
+            "task": task,
+        }
+
+    def _build_subagent_prompt_context(self, task_subagent: dict) -> str:
+        local_registry = task_subagent["tool_registry"]
+        task = task_subagent.get("task") or {}
+        return build_ops_prompt_context(
+            role_spec=task_subagent["role_spec"],
+            permission_mode=task_subagent["permission_engine"].mode,
+            server_memory_prompt=self.server_memory_prompt or "- Память по серверам не загружена",
+            operational_recipes_prompt=task.get("operational_recipes_prompt") or self.operational_recipes_prompt,
+            tool_registry_prompt=local_registry.build_prompt_slice(limit=8),
+            max_iterations=task_subagent["max_iterations"],
+            session_timeout=self.session_timeout,
+        )
 
     # ------------------------------------------------------------------
     # Phase 2: Task execution (mini ReAct)
@@ -834,10 +998,41 @@ Attached skills:
 
     async def _run_task(self, task: dict, context_summary: str, deadline: float) -> tuple[str, list]:
         """Run a single task with a mini ReAct loop. Returns (result_summary, iterations_list)."""
+        task_subagent = self._build_task_subagent(task)
+        task_role_spec = task_subagent["role_spec"]
+        task_permission_engine: PermissionEngine = task_subagent["permission_engine"]
+        task_tool_registry: ToolRegistry = task_subagent["tool_registry"]
+        task_tool_names = task_subagent["tool_names"]
+        task_max_iterations = task_subagent["max_iterations"]
+        task["role"] = task_role_spec.slug
+        task["permission_mode"] = task_permission_engine.mode
+        task["max_iterations"] = task_max_iterations
+        task["tool_names"] = list(task_tool_names)
+        if not task.get("operational_recipes_prompt"):
+            recipes_query = "\n".join(
+                part for part in [task.get("name") or "", task.get("description") or "", *task_role_spec.focus_areas] if part
+            )
+            group_ids = list(dict.fromkeys([server.group_id for server in self.servers[:3] if getattr(server, "group_id", None)]))
+            task["operational_recipes_prompt"] = await self.memory_store.build_operational_recipes_prompt(
+                recipes_query,
+                server_ids=[server.id for server in self.servers[:3]],
+                group_ids=group_ids,
+                limit=4,
+            )
+        task["subagent"] = {
+            **(task.get("subagent") or {}),
+            "role": task_role_spec.slug,
+            "title": task_subagent["title"],
+            "permission_mode": task_permission_engine.mode,
+            "tool_names": list(task_tool_names),
+            "max_iterations": task_max_iterations,
+        }
+
         connected = self.session.get_connected_info()
         servers_desc = "\n".join(f"- {c['server_name']} (id: {c['server_id']})" for c in connected) or "- Нет активных SSH подключений"
-        tools_desc = get_tools_description(self.enabled_tools)
-        mcp_tools_desc = build_mcp_tools_description(self.mcp_tools)
+        tools_desc = get_tools_description(task_tool_names)
+        local_mcp_tools = {name: binding for name, binding in self.mcp_tools.items() if name in task_tool_names}
+        mcp_tools_desc = build_mcp_tools_description(local_mcp_tools)
         skills_desc = build_skill_catalog_description(self.skills)
         if mcp_tools_desc:
             tools_desc = f"{tools_desc}\n\n{mcp_tools_desc}" if tools_desc else mcp_tools_desc
@@ -848,8 +1043,10 @@ Attached skills:
         if self.skill_errors:
             skill_errors = "\nНедоступные skills:\n" + "\n".join(f"- {item}" for item in self.skill_errors)
 
-        system_prompt = f"""Ты — DevOps / Platform агент, выполняющий одну конкретную задачу.
-Используй доступные SSH и MCP инструменты для выполнения задачи. Отвечай на русском языке.
+        system_prompt = f"""Ты — subagent роли {task_role_spec.title}, выполняющий одну конкретную задачу внутри orchestrated DevOps pipeline.
+Работай только в пределах своей роли, permission mode и выданного tool slice. Отвечай на русском языке.
+
+{self._build_subagent_prompt_context(task_subagent)}
 
 Подключённые серверы:
 {servers_desc}
@@ -868,9 +1065,11 @@ ACTION: tool_name {{"param1": "val1"}}
 
 Если attached skills релевантны задаче, сначала открой нужный skill через read_skill перед сервис-специфичными изменениями.
 Если attached skills содержат runtime guardrails, соблюдай их как обязательные ограничения.
+Нельзя вызывать инструменты вне выданного tool slice.
 
 Когда задача выполнена — напиши итоговый вывод БЕЗ строки ACTION.
-Максимум {MAX_TASK_ITERATIONS} итераций."""
+Если перед этим были изменения, но verification markers не закрыты, ты ОБЯЗАН продолжить выполнение и провести post-change verification.
+Максимум {task_max_iterations} итераций."""
 
         context_block = f"\n\nКонтекст предыдущих задач:\n{context_summary}" if context_summary.strip() else ""
         user_msg = f"Задача: {task['name']}\n{task['description']}{context_block}"
@@ -882,8 +1081,16 @@ ACTION: tool_name {{"param1": "val1"}}
 
         iterations: list[dict] = []
         final_answer = ""
+        await self._emit("agent_subagent_start", {
+            "task_id": task["id"],
+            "role": task_role_spec.slug,
+            "title": task_subagent["title"],
+            "permission_mode": task_permission_engine.mode,
+            "tool_names": list(task_tool_names),
+            "max_iterations": task_max_iterations,
+        })
 
-        for iteration in range(1, MAX_TASK_ITERATIONS + 1):
+        for iteration in range(1, task_max_iterations + 1):
             if self._stop_requested:
                 raise RuntimeError("Stopped by user")
             if time.monotonic() > deadline:
@@ -918,10 +1125,31 @@ ACTION: tool_name {{"param1": "val1"}}
             })
 
             if action_name is None:
-                # Final answer — no action
+                verification_summary = task_permission_engine.verification_summary()
+                if task_permission_engine.pending_verifications:
+                    iter_entry["observation"] = verification_summary
+                    iterations.append(iter_entry)
+                    task["verification_summary"] = verification_summary
+                    await self._emit("agent_task_iteration", {
+                        "task_id": task["id"],
+                        "iteration": iteration,
+                        "observation": verification_summary[:500],
+                    })
+                    history.append({"role": "assistant", "content": llm_response})
+                    history.append({
+                        "role": "user",
+                        "content": self.hook_manager.build_observation_message(
+                            verification_summary
+                            + " Ты не можешь завершить задачу, пока не выполнишь обязательную post-change verification.",
+                            limit=4000,
+                        ),
+                    })
+                    continue
+
                 final_answer = thought or llm_response
                 iter_entry["observation"] = "(final answer)"
                 iterations.append(iter_entry)
+                task["verification_summary"] = verification_summary
                 history.append({"role": "assistant", "content": llm_response})
                 break
 
@@ -941,7 +1169,13 @@ ACTION: tool_name {{"param1": "val1"}}
                     )
                 observation = f"Пользователь ответил: {answer}"
             else:
-                observation = await self._execute_tool(action_name, action_args)
+                observation = await self._execute_tool(
+                    action_name,
+                    action_args,
+                    permission_engine=task_permission_engine,
+                    tool_registry=task_tool_registry,
+                    allowed_tool_names=task_tool_names,
+                )
 
             iter_entry["observation"] = observation[:3000]
             iterations.append(iter_entry)
@@ -953,7 +1187,12 @@ ACTION: tool_name {{"param1": "val1"}}
             })
 
             history.append({"role": "assistant", "content": llm_response})
-            history.append({"role": "user", "content": f"OBSERVATION: {observation[:4000]}"})
+            history.append(
+                {
+                    "role": "user",
+                    "content": self.hook_manager.build_observation_message(observation, limit=4000),
+                }
+            )
 
             # Save live iterations to DB
             task["iterations"] = iterations
@@ -966,9 +1205,18 @@ ACTION: tool_name {{"param1": "val1"}}
                 await sync_to_async(self._update_run)(self.run_record, plan_tasks=plan_tasks_copy)
 
         if not final_answer:
+            if task_permission_engine.pending_verifications:
+                raise RuntimeError(task_permission_engine.verification_summary())
             # Synthesize from iterations if no explicit final answer
             final_answer = await self._summarize_task(task, iterations)
 
+        task["verification_summary"] = task_permission_engine.verification_summary()
+        await self._emit("agent_subagent_done", {
+            "task_id": task["id"],
+            "role": task_role_spec.slug,
+            "verification_summary": task["verification_summary"],
+            "pending_verifications": sorted(task_permission_engine.pending_verifications),
+        })
         return final_answer, iterations
 
     async def _summarize_task(self, task: dict, iterations: list[dict]) -> str:
@@ -992,7 +1240,7 @@ ACTION: tool_name {{"param1": "val1"}}
                 prompt,
                 model=self.model_preference,
                 specific_model=self.specific_model,
-                purpose="agent",
+                purpose="opssummary",
             ):
                 chunks.append(chunk)
         return "".join(chunks)
@@ -1106,7 +1354,7 @@ ACTION: tool_name {{"param1": "val1"}}
         orchestrator_log.append({"role": "assistant", "content": response, "timestamp": timezone.now().isoformat()})
 
         tasks = self._parse_plan(response)
-        return [_make_task(i + 1, t["name"], t["description"]) for i, t in enumerate(tasks[:MAX_PLAN_TASKS])]
+        return self._prepare_plan_tasks(tasks[:MAX_PLAN_TASKS])
 
     # ------------------------------------------------------------------
     # Phase 3: Final synthesis
@@ -1216,7 +1464,7 @@ ACTION: tool_name {{"param1": "val1"}}
                     f"[SYSTEM]\n{system_prompt}\n\n[USER]\n{user_msg}",
                     model=self.model_preference,
                     specific_model=self.specific_model,
-                    purpose="orchestrator",
+                    purpose="opssummary",
                 ):
                     chunks.append(chunk)
                     if chunks and len(chunks) % 20 == 0:
@@ -1246,7 +1494,7 @@ ACTION: tool_name {{"param1": "val1"}}
                     prompt,
                     model=self.model_preference,
                     specific_model=self.specific_model,
-                    purpose="orchestrator",
+                    purpose="opsplan",
                 ):
                     chunks.append(chunk)
         except Exception as exc:
@@ -1269,7 +1517,7 @@ ACTION: tool_name {{"param1": "val1"}}
                     prompt,
                     model=self.model_preference,
                     specific_model=self.specific_model,
-                    purpose="orchestrator",
+                    purpose="ops",
                 ):
                     chunks.append(chunk)
         except Exception as exc:
@@ -1300,7 +1548,29 @@ ACTION: tool_name {{"param1": "val1"}}
     # Tool execution
     # ------------------------------------------------------------------
 
-    async def _execute_tool(self, name: str, args: dict) -> str:
+    async def _execute_tool(
+        self,
+        name: str,
+        args: dict,
+        *,
+        permission_engine: PermissionEngine | None = None,
+        tool_registry: ToolRegistry | None = None,
+        allowed_tool_names: list[str] | None = None,
+    ) -> str:
+        active_registry = tool_registry or self.tool_registry
+        active_permission_engine = permission_engine or self.permission_engine
+        if allowed_tool_names is not None and name not in allowed_tool_names:
+            return f"Tool '{name}' is not available to this subagent."
+        spec = active_registry.get(name) if active_registry else None
+        if active_registry is not None and spec is None:
+            return f"Tool '{name}' is not available in the current tool slice."
+        decision = active_permission_engine.evaluate(spec, args) if spec else None
+        if decision and not decision.allowed:
+            return decision.reason
+        if decision and spec:
+            sandbox_decision = self.sandbox_manager.validate(spec, args, decision.sandbox_profile)
+            if not sandbox_decision.allowed:
+                return sandbox_decision.reason
         if name in self.mcp_tools:
             binding = self.mcp_tools[name]
             prepared_args, policy_messages, policy_error = apply_skill_policies(
@@ -1314,9 +1584,13 @@ ACTION: tool_name {{"param1": "val1"}}
             result = await execute_bound_mcp_tool(self.mcp_tools, name, prepared_args)
             if not result.startswith("MCP tool error"):
                 self._executed_mcp_tools.add(binding.tool_name)
+                if spec:
+                    active_permission_engine.record_success(spec, prepared_args, result)
             if policy_messages:
-                return "\n".join([*policy_messages, result])
-            return result
+                result = "\n".join([*policy_messages, result])
+            if decision and decision.notes:
+                result = "\n".join([*decision.notes, result])
+            return await self.hook_manager.post_tool_use(name, result)
         if name in self.disabled_mcp_tools:
             return f"Tool '{name}' is disabled for this agent."
 
@@ -1329,9 +1603,78 @@ ACTION: tool_name {{"param1": "val1"}}
         fn = tool_meta["fn"]
         try:
             result = await fn(self.session, **args)
-            return result.result
+            result_text = result.result
+            if spec and result.success:
+                active_permission_engine.record_success(spec, args, result_text)
+            if decision and decision.notes:
+                result_text = "\n".join([*decision.notes, result_text])
+            return await self.hook_manager.post_tool_use(name, result_text)
         except Exception as exc:
-            return f"Tool error ({name}): {exc}"
+            return await self.hook_manager.post_tool_use(name, f"Tool error ({name}): {exc}")
+
+    async def _build_ops_prompt_context(self) -> str:
+        cards = []
+        server_ids: list[int] = []
+        group_ids: list[int] = []
+        for server in self.servers[:3]:
+            server_ids.append(server.id)
+            if getattr(server, "group_id", None):
+                group_ids.append(server.group_id)
+            try:
+                cards.append(await self.memory_store.get_server_card(server.id))
+            except Exception as exc:
+                logger.debug("Failed to load memory card for server {}: {}", getattr(server, "id", "?"), exc)
+        server_memory_prompt = render_server_cards_prompt(cards, max_cards=3, max_records=6)
+        self.server_memory_prompt = server_memory_prompt
+        recipes_query = "\n".join(
+            part for part in [self.agent.goal or self.agent.ai_prompt or "", *self.role_spec.focus_areas] if part
+        )
+        self.operational_recipes_prompt = await self.memory_store.build_operational_recipes_prompt(
+            recipes_query,
+            server_ids=server_ids,
+            group_ids=list(dict.fromkeys(group_ids)),
+            limit=5,
+        )
+        tool_registry_prompt = self.tool_registry.build_prompt_slice(limit=10) if self.tool_registry else ""
+        return build_ops_prompt_context(
+            role_spec=self.role_spec,
+            permission_mode=self.permission_engine.mode,
+            server_memory_prompt=server_memory_prompt,
+            operational_recipes_prompt=self.operational_recipes_prompt,
+            tool_registry_prompt=tool_registry_prompt,
+            max_iterations=MAX_TASK_ITERATIONS,
+            session_timeout=self.session_timeout,
+        )
+
+    async def _persist_ops_summary(
+        self,
+        *,
+        run: AgentRun,
+        final_status: str,
+        final_report: str,
+        plan_tasks: list[dict],
+    ):
+        if not getattr(run, "pk", None):
+            return
+        flat_iterations = []
+        for task in plan_tasks:
+            for item in task.get("iterations", [])[-2:]:
+                flat_iterations.append(item)
+        tool_calls = [
+            {"tool": item.get("action"), "result": item.get("observation", "")}
+            for item in flat_iterations
+            if item.get("action")
+        ]
+        payload = build_run_summary_payload(
+            run=run,
+            role_slug=self.role_spec.slug,
+            final_status=final_status,
+            final_report=final_report,
+            iterations=flat_iterations,
+            tool_calls=tool_calls,
+            verification_summary=self.permission_engine.verification_summary(),
+        )
+        await self.memory_store.append_run_summary(run.pk, payload)
 
     # ------------------------------------------------------------------
     # Runtime control
@@ -1363,9 +1706,8 @@ ACTION: tool_name {{"param1": "val1"}}
 
         reply_nonce = int(control["reply_nonce"])
         reply_ack_nonce = int(control["reply_ack_nonce"])
-        if reply_nonce > reply_ack_nonce and control["reply_text"]:
-            if self.provide_user_reply(control["reply_text"]):
-                await sync_to_async(self._ack_runtime_reply, thread_sensitive=True)(reply_nonce)
+        if reply_nonce > reply_ack_nonce and control["reply_text"] and self.provide_user_reply(control["reply_text"]):
+            await sync_to_async(self._ack_runtime_reply, thread_sensitive=True)(reply_nonce)
 
     def _ack_runtime_reply(self, reply_nonce: int):
         if not self.run_record:

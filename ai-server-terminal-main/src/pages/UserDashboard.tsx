@@ -1,22 +1,17 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  aiAnalyzeServer,
   deleteAgent,
   fetchAgentDashboardRuns,
   fetchAgents,
-  fetchMonitoringDashboard,
-  resolveAlert,
+  fetchFrontendBootstrap,
   runAgent,
   stopAgent,
   type AgentItem,
   type DashboardRunItem,
-  type ServerAlertItem,
 } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import {
   Activity,
-  AlertTriangle,
-  Bell,
   Bot,
   CheckCircle2,
   Clock,
@@ -87,27 +82,19 @@ function statusColor(status: string): string {
   return "text-muted-foreground";
 }
 
-function severityBadgeClass(severity: string): string {
-  if (severity === "critical" || severity === "failed") return "border-red-400/20 bg-red-400/10 text-red-400";
-  if (severity === "warning" || severity === "paused" || severity === "waiting") return "border-yellow-400/20 bg-yellow-400/10 text-yellow-400";
-  if (severity === "completed" || severity === "healthy" || severity === "running") return "border-green-400/20 bg-green-400/10 text-green-400";
-  return "border-border bg-secondary/60 text-muted-foreground";
-}
-
 export default function UserDashboard() {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [analyzingServerId, setAnalyzingServerId] = useState<number | null>(null);
   const [analysisResult, setAnalysisResult] = useState<{ name: string; text: string } | null>(null);
   const [runningAgentId, setRunningAgentId] = useState<number | null>(null);
   const [stoppingAgentId, setStoppingAgentId] = useState<number | null>(null);
   const [reportOpen, setReportOpen] = useState<DashboardRunItem | null>(null);
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["monitoring", "dashboard"],
-    queryFn: fetchMonitoringDashboard,
-    refetchInterval: 30_000,
+  const { data: bootstrapData, isLoading, error } = useQuery({
+    queryKey: ["frontend", "bootstrap", "dashboard"],
+    queryFn: fetchFrontendBootstrap,
+    staleTime: 20_000,
   });
 
   const { data: agentsData } = useQuery({
@@ -123,26 +110,9 @@ export default function UserDashboard() {
   });
 
   const refresh = async () => {
-    await queryClient.invalidateQueries({ queryKey: ["monitoring"] });
+    await queryClient.invalidateQueries({ queryKey: ["frontend", "bootstrap"] });
     await queryClient.invalidateQueries({ queryKey: ["agents"] });
     await queryClient.invalidateQueries({ queryKey: ["agents", "dashboard-runs"] });
-  };
-
-  const onResolve = async (alertId: number) => {
-    await resolveAlert(alertId);
-    await refresh();
-  };
-
-  const onAnalyze = async (serverId: number) => {
-    setAnalyzingServerId(serverId);
-    try {
-      const result = await aiAnalyzeServer(serverId);
-      setAnalysisResult({ name: result.server_name, text: result.analysis });
-    } catch {
-      setAnalysisResult({ name: "Error", text: "AI analysis failed." });
-    } finally {
-      setAnalyzingServerId(null);
-    }
   };
 
   const onRunAgent = async (agent: AgentItem) => {
@@ -182,27 +152,27 @@ export default function UserDashboard() {
   };
 
   if (isLoading) {
-    return <div className="w-full px-4 py-5 text-sm text-muted-foreground md:px-6 xl:px-8">{t("dash.loading")}</div>;
+    return <div className="p-6 text-sm text-muted-foreground">{t("dash.loading")}</div>;
   }
 
-  if (error || !data) {
-    return <div className="w-full px-4 py-5 text-sm text-destructive md:px-6 xl:px-8">{t("dash.error")}</div>;
+  if (error || !bootstrapData) {
+    return <div className="p-6 text-sm text-destructive">{t("dash.error")}</div>;
   }
 
-  const alerts = data.alerts || [];
-  const summary = data.summary;
+  const servers = bootstrapData.servers || [];
   const agents = agentsData?.agents || [];
   const activeRuns = runsData?.active || [];
   const recentRuns = runsData?.recent || [];
-  const problemCount = summary.critical + summary.warning + summary.unreachable;
+  const onlineServers = servers.filter((server) => server.status === "online").length;
+  const configuredServers = servers.length;
 
   return (
-    <div className="w-full space-y-5 px-4 py-5 md:px-6 xl:px-8">
+    <div className="mx-auto max-w-6xl space-y-5 px-4 py-5 sm:px-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-foreground">{t("udash.title")}</h1>
           <p className="text-sm text-muted-foreground">
-            {summary.total_servers} servers · {agents.length} agents · {activeRuns.length} active
+            {configuredServers} servers · {agents.length} agents · {activeRuns.length} active
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -225,88 +195,37 @@ export default function UserDashboard() {
             <span className="text-[11px] font-medium text-muted-foreground">Servers</span>
             <Server className="h-4 w-4 text-primary" />
           </div>
-          <div className="text-2xl font-semibold text-foreground">{summary.total_servers}</div>
-          <div className="text-sm text-muted-foreground">{summary.healthy} healthy</div>
+          <div className="text-2xl font-semibold text-foreground">{configuredServers}</div>
+          <div className="text-sm text-muted-foreground">Configured servers</div>
         </div>
 
         <div className="rounded-2xl border border-border/80 bg-card/95 p-4">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-[11px] font-medium text-muted-foreground">Problems</span>
-            <AlertTriangle className={`h-4 w-4 ${problemCount > 0 ? "text-red-400" : "text-green-400"}`} />
+            <span className="text-[11px] font-medium text-muted-foreground">Online</span>
+            <CheckCircle2 className="h-4 w-4 text-green-400" />
           </div>
-          <div className={`text-2xl font-semibold ${problemCount > 0 ? "text-red-400" : "text-green-400"}`}>{problemCount}</div>
-          <div className="text-sm text-muted-foreground">
-            {summary.critical} critical, {summary.warning} warning, {summary.unreachable} down
-          </div>
+          <div className="text-2xl font-semibold text-foreground">{onlineServers}</div>
+          <div className="text-sm text-muted-foreground">From saved server status</div>
         </div>
 
         <div className="rounded-2xl border border-border/80 bg-card/95 p-4">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-[11px] font-medium text-muted-foreground">Alerts</span>
-            <Bell className={`h-4 w-4 ${alerts.length > 0 ? "text-yellow-400" : "text-muted-foreground"}`} />
+            <span className="text-[11px] font-medium text-muted-foreground">Agents</span>
+            <Bot className="h-4 w-4 text-primary" />
           </div>
-          <div className="text-2xl font-semibold text-foreground">{alerts.length}</div>
-          <div className="text-sm text-muted-foreground">Open monitoring alerts</div>
+          <div className="text-2xl font-semibold text-foreground">{agents.length}</div>
+          <div className="text-sm text-muted-foreground">Configured agents</div>
         </div>
 
         <div className="rounded-2xl border border-border/80 bg-card/95 p-4">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-[11px] font-medium text-muted-foreground">Fleet Load</span>
+            <span className="text-[11px] font-medium text-muted-foreground">Active Runs</span>
             <Activity className="h-4 w-4 text-blue-400" />
           </div>
-          <div className="text-2xl font-semibold text-foreground">{Math.round(summary.avg_cpu || 0)}%</div>
-          <div className="text-sm text-muted-foreground">
-            RAM {Math.round(summary.avg_memory || 0)}%, disk {Math.round(summary.avg_disk || 0)}%
-          </div>
+          <div className="text-2xl font-semibold text-foreground">{activeRuns.length}</div>
+          <div className="text-sm text-muted-foreground">Running right now</div>
         </div>
       </div>
-
-      {alerts.length > 0 && (
-        <section className="overflow-hidden rounded-2xl border border-border/80 bg-card/95">
-          <div className="flex items-center gap-2 border-b border-border bg-secondary/20 px-4 py-3">
-            <Shield className="h-4 w-4 text-red-400" />
-            <span className="text-sm font-medium text-foreground">Open Alerts</span>
-          </div>
-          <div className="divide-y divide-border/50">
-            {alerts.slice(0, 8).map((alert: ServerAlertItem) => (
-              <div key={alert.id} className="flex flex-col gap-3 px-4 py-3 md:flex-row md:items-center">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className={`rounded-md border px-2 py-1 text-[11px] font-medium ${severityBadgeClass(alert.severity)}`}>
-                      {alert.severity}
-                    </span>
-                    <span className="truncate text-sm font-medium text-foreground">{alert.title}</span>
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    {alert.server_name} · {relativeTime(alert.created_at)}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="gap-1 text-xs"
-                    disabled={analyzingServerId === alert.server_id}
-                    onClick={() => void onAnalyze(alert.server_id)}
-                  >
-                    <Bot className={`h-3 w-3 ${analyzingServerId === alert.server_id ? "animate-spin" : ""}`} />
-                    Analyze
-                  </Button>
-                  <Link to={`/servers/${alert.server_id}/terminal`}>
-                    <Button size="sm" variant="outline" className="gap-1 text-xs">
-                      <Terminal className="h-3 w-3" />
-                      Open
-                    </Button>
-                  </Link>
-                  <Button size="sm" variant="ghost" className="text-xs text-destructive" onClick={() => void onResolve(alert.id)}>
-                    Resolve
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
 
       {analysisResult && (
         <section className="overflow-hidden rounded-2xl border border-primary/20 bg-card/95">
@@ -484,28 +403,6 @@ export default function UserDashboard() {
           </div>
         )}
       </section>
-
-      {data.servers.length > 0 ? (
-        <section className="rounded-2xl border border-border/80 bg-card/95 p-4">
-          <div className="mb-3 flex items-center gap-2">
-            <Server className="h-4 w-4 text-primary" />
-            <span className="text-sm font-medium text-foreground">Server Status</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {data.servers.map((server) => (
-              <div
-                key={server.server_id}
-                className="flex items-center gap-2 rounded-xl border border-border/70 bg-background/40 px-3 py-1.5 text-sm"
-                title={`CPU ${server.cpu_percent ?? "—"}% · RAM ${server.memory_percent ?? "—"}% · Disk ${server.disk_percent ?? "—"}%`}
-              >
-                <span className={`h-2 w-2 rounded-full ${statusColor(server.status).replace("text-", "bg-")}`} />
-                <span className="text-foreground">{server.server_name}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
       <Dialog open={!!reportOpen} onOpenChange={() => setReportOpen(null)}>
         <DialogContent className="w-[95vw] max-w-3xl">
           <DialogHeader>

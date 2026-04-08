@@ -1,7 +1,8 @@
 from django.urls import path
+
 from . import views
 
-app_name = 'servers'
+app_name = "servers"
 
 urlpatterns = [
     path('', views.server_list, name='server_list'),
@@ -59,6 +60,12 @@ urlpatterns = [
     path('api/<int:server_id>/knowledge/create/', views.server_knowledge_create, name='server_knowledge_create'),
     path('api/<int:server_id>/knowledge/<int:knowledge_id>/update/', views.server_knowledge_update, name='server_knowledge_update'),
     path('api/<int:server_id>/knowledge/<int:knowledge_id>/delete/', views.server_knowledge_delete, name='server_knowledge_delete'),
+    path('api/<int:server_id>/memory/overview/', views.server_memory_overview, name='server_memory_overview'),
+    path('api/<int:server_id>/memory/run-dreams/', views.server_memory_run_dreams, name='server_memory_run_dreams'),
+    path('api/<int:server_id>/memory/policy/', views.server_memory_policy_update, name='server_memory_policy_update'),
+    path('api/<int:server_id>/memory/snapshots/<int:snapshot_id>/archive/', views.server_memory_snapshot_archive, name='server_memory_snapshot_archive'),
+    path('api/<int:server_id>/memory/snapshots/<int:snapshot_id>/promote-note/', views.server_memory_snapshot_promote_note, name='server_memory_snapshot_promote_note'),
+    path('api/<int:server_id>/memory/snapshots/<int:snapshot_id>/promote-skill/', views.server_memory_snapshot_promote_skill, name='server_memory_snapshot_promote_skill'),
     path('api/master-password/set/', views.set_master_password, name='set_master_password'),
     path('api/master-password/check/', views.get_master_password, name='get_master_password'),
     path('api/master-password/clear/', views.clear_master_password, name='clear_master_password'),
@@ -68,12 +75,18 @@ urlpatterns = [
     path('api/<int:server_id>/health/', views.server_health_history, name='server_health_history'),
     path('api/<int:server_id>/health/check/', views.server_health_check_now, name='server_health_check_now'),
     path('api/alerts/', views.server_alerts_list, name='server_alerts_list'),
+    path('api/watchers/scan/', views.server_watcher_scan, name='server_watcher_scan'),
+    path('api/watchers/drafts/', views.server_watcher_drafts, name='server_watcher_drafts'),
+    path('api/watchers/drafts/<int:draft_id>/ack/', views.server_watcher_draft_ack, name='server_watcher_draft_ack'),
+    path('api/watchers/drafts/<int:draft_id>/launch/', views.server_watcher_draft_launch, name='server_watcher_draft_launch'),
     path('api/alerts/<int:alert_id>/resolve/', views.server_alert_resolve, name='server_alert_resolve'),
     path('api/monitoring/config/', views.monitoring_config, name='monitoring_config'),
     path('api/<int:server_id>/ai-analyze/', views.ai_analyze_server, name='ai_analyze_server'),
 
     # Agents (mini + full)
     path('api/agents/', views.agent_list, name='agent_list'),
+    path('api/agents/schedules/', views.agent_schedule_overview, name='agent_schedule_overview'),
+    path('api/agents/schedules/dispatch/', views.agent_schedule_dispatch, name='agent_schedule_dispatch'),
     path('api/agents/templates/', views.agent_templates, name='agent_templates'),
     path('api/agents/create/', views.agent_create, name='agent_create'),
     path('api/agents/<int:agent_id>/update/', views.agent_update, name='agent_update'),
@@ -83,6 +96,7 @@ urlpatterns = [
     path('api/agents/<int:agent_id>/runs/', views.agent_runs, name='agent_runs'),
     path('api/agents/runs/<int:run_id>/', views.agent_run_detail, name='agent_run_detail'),
     path('api/agents/runs/<int:run_id>/log/', views.agent_run_log, name='agent_run_log'),
+    path('api/agents/runs/<int:run_id>/events/', views.agent_run_events, name='agent_run_events'),
     path('api/agents/runs/<int:run_id>/reply/', views.agent_run_reply, name='agent_run_reply'),
     path('api/agents/dashboard/', views.agent_dashboard_runs, name='agent_dashboard_runs'),
     # Pipeline task editing

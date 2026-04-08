@@ -32,14 +32,28 @@ from .models import (
     ServerAlert,
     ServerAgent,
     AgentRun,
+    AgentRunEvent,
+    ServerWatcherDraft,
 )
 from app.runtime_limits import get_active_terminal_connections_queryset, get_agent_run_limit_error
 from app.tools.ssh_tools import ssh_manager
 from core_ui.activity import log_user_activity
+from core_ui.access import feature_allowed_for_user
 from core_ui.models import UserActivityLog
 from core_ui.decorators import require_feature
 from passwords.encryption import PasswordEncryption
-from .agent_background import launch_agent_run_background, launch_plan_execution_background
+from .agent_background import launch_plan_execution_background
+from .agent_launch import launch_full_agent_run
+from .agent_service import (
+    approve_agent_plan_for_user,
+    dispatch_scheduled_agents_for_user,
+    launch_watcher_draft_for_user,
+    list_agents_for_user,
+    list_scheduled_agents_for_user,
+    reply_to_agent_run_for_user,
+    start_agent_run_for_user,
+    stop_agent_run_for_user,
+)
 from .agent_runtime import get_engine_for_agent, get_engine_for_run, update_runtime_control
 from .linux_ui import (
     get_linux_ui_capabilities,
@@ -72,6 +86,10 @@ from .sftp import (
 )
 from .secret_utils import clear_server_auth_secret, get_server_auth_secret, has_saved_server_secret, store_server_auth_secret
 from .ssh_host_keys import clear_server_trusted_host_keys, get_server_trusted_host_keys
+from .run_events import record_run_event, serialize_run_event
+from .agent_dispatch import serialize_agent_dispatch
+from .watcher_service import WatcherService
+from .watcher_actions import ensure_watcher_agent, mark_watcher_draft_launched
 
 PASSWORD_ENCRYPTION_COMPAT = PasswordEncryption
 
@@ -987,9 +1005,11 @@ def server_execute_command(request, server_id):
                 ServerCommandHistory.objects.create(
                     server=server,
                     user=request.user,
+                    actor_kind=ServerCommandHistory.ACTOR_HUMAN,
+                    source_kind=ServerCommandHistory.SOURCE_API,
                     command=command,
                     output=out_str or str(result),
-                    exit_code=result.get('exit_code', 0)
+                    exit_code=result.get('exit_code', 0),
                 )
                 
                 # Disconnect
@@ -2439,10 +2459,11 @@ def server_reveal_password(request, server_id):
 def server_knowledge_list(request, server_id):
     """List AI/manual knowledge items for server edit modal."""
     server = get_object_or_404(Server, id=server_id, user=request.user)
-    rows = (
-        ServerKnowledge.objects.filter(server=server)
-        .order_by("-updated_at")[:100]
-    )
+    include_inactive = str(request.GET.get("include_inactive", "") or "").strip().lower() in {"1", "true", "yes"}
+    rows_qs = ServerKnowledge.objects.filter(server=server)
+    if not include_inactive:
+        rows_qs = rows_qs.filter(is_active=True)
+    rows = rows_qs.order_by("-updated_at")[:100]
     return JsonResponse(
         {
             "success": True,
@@ -2462,6 +2483,7 @@ def server_knowledge_list(request, server_id):
                 for k in rows
             ],
             "categories": [{"value": c[0], "label": c[1]} for c in ServerKnowledge.CATEGORY_CHOICES],
+            "include_inactive": include_inactive,
         }
     )
 
@@ -2472,6 +2494,8 @@ def server_knowledge_list(request, server_id):
 def server_knowledge_create(request, server_id):
     """Create knowledge entry in edit modal."""
     try:
+        from app.agent_kernel.memory.store import DjangoServerMemoryStore
+
         server = get_object_or_404(Server, id=server_id, user=request.user)
         data = json.loads(request.body or "{}")
         title = str(data.get("title") or "").strip()
@@ -2497,6 +2521,7 @@ def server_knowledge_create(request, server_id):
             is_active=is_active,
             created_by=request.user,
         )
+        DjangoServerMemoryStore()._sync_manual_knowledge_snapshot_sync(knowledge.id)
         return JsonResponse({"success": True, "id": knowledge.id})
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=500)
@@ -2508,6 +2533,8 @@ def server_knowledge_create(request, server_id):
 def server_knowledge_update(request, server_id, knowledge_id):
     """Update title/content/category/flags for knowledge entry."""
     try:
+        from app.agent_kernel.memory.store import DjangoServerMemoryStore
+
         server = get_object_or_404(Server, id=server_id, user=request.user)
         knowledge = get_object_or_404(ServerKnowledge, id=knowledge_id, server=server)
         data = json.loads(request.body or "{}")
@@ -2541,6 +2568,7 @@ def server_knowledge_update(request, server_id, knowledge_id):
                 pass
 
         knowledge.save()
+        DjangoServerMemoryStore()._sync_manual_knowledge_snapshot_sync(knowledge.id)
         return JsonResponse({"success": True})
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=500)
@@ -2552,12 +2580,156 @@ def server_knowledge_update(request, server_id, knowledge_id):
 def server_knowledge_delete(request, server_id, knowledge_id):
     """Delete knowledge entry."""
     try:
+        from app.agent_kernel.memory.store import DjangoServerMemoryStore
+
         server = get_object_or_404(Server, id=server_id, user=request.user)
         knowledge = get_object_or_404(ServerKnowledge, id=knowledge_id, server=server)
+        DjangoServerMemoryStore()._archive_manual_knowledge_snapshot_sync(knowledge.id)
         knowledge.delete()
         return JsonResponse({"success": True})
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=500)
+
+
+@login_required
+@require_feature('servers')
+@require_http_methods(["GET"])
+def server_memory_overview(request, server_id):
+    from app.agent_kernel.memory.store import DjangoServerMemoryStore
+
+    if not request.user.is_staff:
+        return JsonResponse({"success": False, "error": "Forbidden"}, status=403)
+
+    server = get_object_or_404(Server, id=server_id, user=request.user)
+    overview = DjangoServerMemoryStore()._get_memory_overview_sync(server.id)
+    return JsonResponse({"success": True, **overview})
+
+
+@login_required
+@require_feature('servers')
+@require_http_methods(["POST"])
+def server_memory_run_dreams(request, server_id):
+    from app.agent_kernel.memory.store import DjangoServerMemoryStore
+
+    if not request.user.is_staff:
+        return JsonResponse({"success": False, "error": "Forbidden"}, status=403)
+
+    server = get_object_or_404(Server, id=server_id, user=request.user)
+    data = json.loads(request.body or "{}")
+    job_kind = str(data.get("job_kind") or "hybrid").strip().lower()
+    if job_kind not in {"nearline", "nightly", "weekly", "hybrid"}:
+        job_kind = "hybrid"
+    result = DjangoServerMemoryStore()._run_dream_cycle_sync(server.id, job_kind=job_kind, force=True)
+    overview = DjangoServerMemoryStore()._get_memory_overview_sync(server.id)
+    return JsonResponse({"success": True, "job_kind": job_kind, "result": result, "overview": {"success": True, **overview}})
+
+
+@login_required
+@require_feature('servers')
+@require_http_methods(["POST"])
+def server_memory_policy_update(request, server_id):
+    from app.agent_kernel.memory.store import DjangoServerMemoryStore
+
+    if not request.user.is_staff:
+        return JsonResponse({"success": False, "error": "Forbidden"}, status=403)
+
+    server = get_object_or_404(Server, id=server_id, user=request.user)
+    store = DjangoServerMemoryStore()
+    policy = store._get_or_create_policy_sync(user_id=request.user.id)
+    data = json.loads(request.body or "{}")
+
+    dream_mode = str(data.get("dream_mode") or policy.dream_mode).strip().lower()
+    allowed_modes = {
+        policy.DREAM_HEURISTIC,
+        policy.DREAM_NIGHTLY_LLM,
+        policy.DREAM_HYBRID,
+    }
+    if dream_mode not in allowed_modes:
+        dream_mode = policy.dream_mode
+
+    policy.dream_mode = dream_mode
+    policy.nightly_model_alias = str(data.get("nightly_model_alias") or policy.nightly_model_alias or "opssummary").strip() or "opssummary"
+    policy.nearline_event_threshold = max(2, min(int(data.get("nearline_event_threshold") or policy.nearline_event_threshold or 6), 50))
+    policy.sleep_start_hour = max(0, min(int(data.get("sleep_start_hour") if data.get("sleep_start_hour") is not None else policy.sleep_start_hour), 23))
+    policy.sleep_end_hour = max(0, min(int(data.get("sleep_end_hour") if data.get("sleep_end_hour") is not None else policy.sleep_end_hour), 23))
+    policy.raw_event_retention_days = max(7, min(int(data.get("raw_event_retention_days") or policy.raw_event_retention_days or 30), 365))
+    policy.episode_retention_days = max(14, min(int(data.get("episode_retention_days") or policy.episode_retention_days or 90), 365))
+    if "rdp_semantic_capture_enabled" in data:
+        policy.rdp_semantic_capture_enabled = bool(data.get("rdp_semantic_capture_enabled"))
+    if "human_habits_capture_enabled" in data:
+        policy.human_habits_capture_enabled = bool(data.get("human_habits_capture_enabled"))
+    if "is_enabled" in data:
+        policy.is_enabled = bool(data.get("is_enabled"))
+    policy.save()
+
+    overview = store._get_memory_overview_sync(server.id)
+    return JsonResponse({"success": True, "overview": {"success": True, **overview}})
+
+
+@login_required
+@require_feature('servers')
+@require_http_methods(["POST"])
+def server_memory_snapshot_archive(request, server_id, snapshot_id):
+    from app.agent_kernel.memory.store import DjangoServerMemoryStore
+
+    if not request.user.is_staff:
+        return JsonResponse({"success": False, "error": "Forbidden"}, status=403)
+
+    server = get_object_or_404(Server, id=server_id, user=request.user)
+    store = DjangoServerMemoryStore()
+    try:
+        snapshot = store._archive_snapshot_sync(server.id, snapshot_id, actor_user_id=request.user.id)
+    except ValueError as exc:
+        return JsonResponse({"success": False, "error": str(exc)}, status=404)
+    overview = store._get_memory_overview_sync(server.id)
+    return JsonResponse({"success": True, "snapshot": snapshot, "overview": {"success": True, **overview}})
+
+
+@login_required
+@require_feature('servers')
+@require_http_methods(["POST"])
+def server_memory_snapshot_promote_note(request, server_id, snapshot_id):
+    from app.agent_kernel.memory.store import DjangoServerMemoryStore
+
+    if not request.user.is_staff:
+        return JsonResponse({"success": False, "error": "Forbidden"}, status=403)
+
+    server = get_object_or_404(Server, id=server_id, user=request.user)
+    store = DjangoServerMemoryStore()
+    try:
+        result = store._promote_snapshot_to_manual_knowledge_sync(
+            server.id,
+            snapshot_id,
+            actor_user_id=request.user.id,
+        )
+    except ValueError as exc:
+        return JsonResponse({"success": False, "error": str(exc)}, status=400)
+    return JsonResponse({"success": True, **result})
+
+
+@login_required
+@require_feature('servers')
+@require_http_methods(["POST"])
+def server_memory_snapshot_promote_skill(request, server_id, snapshot_id):
+    from app.agent_kernel.memory.store import DjangoServerMemoryStore
+
+    if not request.user.is_staff:
+        return JsonResponse({"success": False, "error": "Forbidden"}, status=403)
+
+    if not feature_allowed_for_user(request.user, "studio_skills"):
+        return JsonResponse({"success": False, "error": "Studio skills feature is required"}, status=403)
+
+    server = get_object_or_404(Server, id=server_id, user=request.user)
+    store = DjangoServerMemoryStore()
+    try:
+        result = store._promote_skill_draft_to_skill_sync(
+            server.id,
+            snapshot_id,
+            actor_user_id=request.user.id,
+        )
+    except ValueError as exc:
+        return JsonResponse({"success": False, "error": str(exc)}, status=400)
+    return JsonResponse({"success": True, **result})
 
 
 # ---------------------------------------------------------------------------
@@ -2906,6 +3078,143 @@ def server_alerts_list(request):
 
 @login_required
 @require_feature('servers')
+@require_http_methods(["GET", "POST"])
+def server_watcher_scan(request):
+    """Build watcher drafts for the user's accessible servers."""
+    payload = {}
+    if request.method == "POST":
+        try:
+            payload = json.loads(request.body) if request.body else {}
+        except Exception:
+            payload = {}
+
+    raw_server_ids = payload.get("server_ids")
+    if raw_server_ids is None:
+        raw_server_ids = request.GET.getlist("server_ids") or request.GET.get("server_ids")
+
+    requested_server_ids: list[int] = []
+    if isinstance(raw_server_ids, str):
+        raw_server_ids = [part.strip() for part in raw_server_ids.split(",")]
+    for value in raw_server_ids or []:
+        with contextlib.suppress(TypeError, ValueError):
+            requested_server_ids.append(int(value))
+
+    limit_raw = payload.get("limit", request.GET.get("limit", 25))
+    try:
+        limit = max(1, min(int(limit_raw), 100))
+    except (TypeError, ValueError):
+        limit = 25
+
+    qs = _accessible_servers_queryset(request.user).order_by("name")
+    if requested_server_ids:
+        qs = qs.filter(id__in=requested_server_ids)
+
+    persist_raw = payload.get("persist", request.GET.get("persist", "false"))
+    persist = str(persist_raw).lower() in {"1", "true", "yes", "on"}
+    watcher_service = WatcherService()
+    watcher_payload = (
+        watcher_service.persist_queryset(qs, limit=limit)
+        if persist
+        else watcher_service.scan_queryset(qs, limit=limit)
+    )
+    watcher_payload["requested_server_ids"] = requested_server_ids
+    watcher_payload["persisted_scan"] = persist
+
+    log_user_activity(
+        user=request.user,
+        request=request,
+        category="monitoring",
+        action="watcher_scan",
+        entity_type="fleet",
+        entity_id="watchers",
+        entity_name="Watcher scan",
+    )
+
+    return JsonResponse({
+        "success": True,
+        **watcher_payload,
+    })
+
+
+@login_required
+@require_feature('servers')
+@require_http_methods(["GET"])
+def server_watcher_drafts(request):
+    """List persisted watcher drafts for accessible servers."""
+    qs = _accessible_servers_queryset(request.user).order_by("name")
+
+    server_id = request.GET.get("server_id")
+    if server_id:
+        with contextlib.suppress(TypeError, ValueError):
+            qs = qs.filter(id=int(server_id))
+
+    status_values = request.GET.getlist("status") or request.GET.get("status", "")
+    if isinstance(status_values, str):
+        statuses = [item.strip() for item in status_values.split(",") if item.strip()]
+    else:
+        statuses = [str(item).strip() for item in status_values if str(item).strip()]
+
+    try:
+        limit = max(1, min(int(request.GET.get("limit", 100)), 200))
+    except (TypeError, ValueError):
+        limit = 100
+
+    watcher_payload = WatcherService().list_persisted_queryset(qs, statuses=statuses or None, limit=limit)
+    return JsonResponse({"success": True, **watcher_payload})
+
+
+@login_required
+@require_feature('servers')
+@require_http_methods(["POST"])
+def server_watcher_draft_ack(request, draft_id):
+    """Acknowledge a persisted watcher draft."""
+    qs = _accessible_servers_queryset(request.user).order_by("name")
+    draft = WatcherService().acknowledge_draft(draft_id, user=request.user, servers_qs=qs)
+    if draft is None:
+        return JsonResponse({"success": False, "error": "Watcher draft not found"}, status=404)
+
+    log_user_activity(
+        user=request.user,
+        request=request,
+        category="monitoring",
+        action="watcher_acknowledge",
+        entity_type="watcher_draft",
+        entity_id=str(draft_id),
+        entity_name=draft["objective"][:120],
+    )
+    return JsonResponse({"success": True, "draft": draft})
+
+
+@login_required
+@require_feature('servers')
+@require_http_methods(["POST"])
+def server_watcher_draft_launch(request, draft_id):
+    """Launch a suggested agent run from a persisted watcher draft."""
+    result = launch_watcher_draft_for_user(
+        draft_id=draft_id,
+        user=request.user,
+        accessible_servers_queryset=_accessible_servers_queryset(request.user).order_by("name"),
+    )
+    if not result["ok"]:
+        return JsonResponse(result["payload"], status=int(result["status"]))
+
+    payload = dict(result["payload"] or {})
+    draft_payload = payload.get("draft") or {}
+
+    log_user_activity(
+        user=request.user,
+        request=request,
+        category="monitoring",
+        action="watcher_launch",
+        entity_type="watcher_draft",
+        entity_id=str(draft_id),
+        entity_name=str(draft_payload.get("objective") or "")[:120],
+    )
+    return JsonResponse(payload)
+
+
+@login_required
+@require_feature('servers')
 @require_http_methods(["POST"])
 def server_alert_resolve(request, alert_id):
     """Mark an alert as resolved."""
@@ -3110,46 +3419,61 @@ def ai_analyze_server(request, server_id):
 @require_http_methods(["GET"])
 def agent_list(request):
     """List agents for the current user."""
-    agents = ServerAgent.objects.filter(user=request.user).prefetch_related("servers")
     mode_filter = request.GET.get("mode")
-    if mode_filter in ("mini", "full"):
-        agents = agents.filter(mode=mode_filter)
-    data = []
-    for a in agents:
-        last_run = AgentRun.objects.filter(agent=a).first()
-        active_run = AgentRun.objects.filter(
-            agent=a,
-            status__in=[
-                AgentRun.STATUS_PENDING,
-                AgentRun.STATUS_RUNNING,
-                AgentRun.STATUS_PAUSED,
-                AgentRun.STATUS_WAITING,
-                AgentRun.STATUS_PLAN_REVIEW,
-            ],
-        ).first()
-        data.append({
-            "id": a.id,
-            "name": a.name,
-            "mode": a.mode,
-            "mode_display": a.get_mode_display(),
-            "agent_type": a.agent_type,
-            "agent_type_display": a.get_agent_type_display(),
-            "server_count": a.servers.count(),
-            "server_names": list(a.servers.values_list("name", flat=True)),
-            "schedule_minutes": a.schedule_minutes,
-            "is_enabled": a.is_enabled,
-            "commands": a.commands,
-            "ai_prompt": a.ai_prompt,
-            "goal": a.goal,
-            "system_prompt": a.system_prompt,
-            "max_iterations": a.max_iterations,
-            "allow_multi_server": a.allow_multi_server,
-            "last_run_at": a.last_run_at.isoformat() if a.last_run_at else None,
-            "last_run_status": last_run.status if last_run else None,
-            "last_run_id": last_run.id if last_run else None,
-            "active_run_id": active_run.id if active_run else None,
-        })
+    data = list_agents_for_user(request.user, mode_filter=mode_filter)
     return JsonResponse({"success": True, "agents": data})
+
+
+@login_required
+@require_feature('agents')
+@require_http_methods(["GET"])
+def agent_schedule_overview(request):
+    """List scheduled agents and their due state for the current user."""
+    try:
+        limit = max(1, min(int(request.GET.get("limit", 50)), 200))
+    except (TypeError, ValueError):
+        limit = 50
+
+    payload = list_scheduled_agents_for_user(request.user, limit=limit)
+    return JsonResponse({"success": True, **payload})
+
+
+@login_required
+@require_feature('agents')
+@require_http_methods(["POST"])
+def agent_schedule_dispatch(request):
+    """Dispatch due scheduled agents for the current user."""
+    try:
+        data = json.loads(request.body) if request.body else {}
+    except Exception:
+        data = {}
+
+    raw_agent_ids = data.get("agent_ids") or []
+    agent_ids = []
+    for value in raw_agent_ids:
+        with contextlib.suppress(TypeError, ValueError):
+            agent_ids.append(int(value))
+
+    try:
+        limit = max(1, min(int(data.get("limit", 100)), 500))
+    except (TypeError, ValueError):
+        limit = 100
+
+    payload = dispatch_scheduled_agents_for_user(
+        request.user,
+        limit=limit,
+        agent_ids=agent_ids or None,
+    )
+    log_user_activity(
+        user=request.user,
+        request=request,
+        category="agent",
+        action="schedule_dispatch",
+        entity_type="agent_schedule",
+        entity_id=str(request.user.id),
+        entity_name=f"user:{request.user.username}",
+    )
+    return JsonResponse({"success": True, **payload})
 
 
 @login_required
@@ -3302,9 +3626,6 @@ def agent_delete(request, agent_id):
 @require_http_methods(["POST"])
 def agent_run(request, agent_id):
     """Run agent on its configured servers (or a specific one)."""
-    from asgiref.sync import async_to_sync
-    from servers.agents import run_agent, run_agent_on_all_servers
-
     agent = ServerAgent.objects.filter(id=agent_id, user=request.user).prefetch_related("servers").first()
     if not agent:
         return JsonResponse({"success": False, "error": "Agent not found"}, status=404)
@@ -3314,93 +3635,14 @@ def agent_run(request, agent_id):
     except Exception:
         data = {}
 
-    if agent.is_full or agent.is_multi:
-        return _start_full_agent(request, agent, data)
-
-    server_id = data.get("server_id")
-
-    if server_id:
-        server = _accessible_servers_queryset(request.user).filter(id=server_id).first()
-        if not server:
-            return JsonResponse({"success": False, "error": "Server not found"}, status=404)
-        run_result = async_to_sync(run_agent)(agent, server, request.user)
-        runs = [run_result]
-    else:
-        runs = async_to_sync(run_agent_on_all_servers)(agent, request.user)
-
-    results = []
-    for r in runs:
-        results.append({
-            "run_id": r.id,
-            "server_name": r.server.name if r.server_id else "?",
-            "status": r.status,
-            "ai_analysis": r.ai_analysis,
-            "duration_ms": r.duration_ms,
-            "commands_output": r.commands_output,
-        })
-
-    return JsonResponse({"success": True, "runs": results})
-
-
-def _start_full_agent(request, agent: ServerAgent, data: dict):
-    """Start a full ReAct or multi-agent pipeline in a background worker."""
-
-    server_ids = list(agent.servers.values_list("id", flat=True))
-    if not server_ids:
-        return JsonResponse({"success": False, "error": "No servers assigned to agent"}, status=400)
-
-    servers = list(_accessible_servers_queryset(request.user).filter(id__in=server_ids))
-    if not servers:
-        return JsonResponse({"success": False, "error": "No accessible servers"}, status=400)
-
-    already_running = AgentRun.objects.filter(
+    launch_result = start_agent_run_for_user(
         agent=agent,
-        status__in=[
-            AgentRun.STATUS_PENDING,
-            AgentRun.STATUS_RUNNING,
-            AgentRun.STATUS_PAUSED,
-            AgentRun.STATUS_WAITING,
-            AgentRun.STATUS_PLAN_REVIEW,
-        ],
-    ).exists()
-    if already_running:
-        return JsonResponse({"success": False, "error": "Agent is already running"}, status=409)
-
-    limit_error = get_agent_run_limit_error(request.user)
-    if limit_error:
-        return JsonResponse(limit_error, status=429)
-
-    primary_server = servers[0] if servers else None
-    run_result = AgentRun.objects.create(
-        agent=agent,
-        server=primary_server,
         user=request.user,
-        status=AgentRun.STATUS_PENDING,
+        accessible_servers_queryset=_accessible_servers_queryset(request.user),
+        server_id=data.get("server_id"),
+        source="http",
     )
-
-    launch_agent_run_background(
-        run_id=run_result.id,
-        agent_id=agent.id,
-        server_ids=[server.id for server in servers],
-        user_id=request.user.id,
-        plan_only=bool(agent.is_multi),
-    )
-
-    return JsonResponse({
-        "success": True,
-        "run_id": run_result.id,
-        "status": run_result.status,
-        "runs": [{
-            "run_id": run_result.id,
-            "server_name": run_result.server.name if run_result.server_id else "?",
-            "status": run_result.status,
-            "ai_analysis": run_result.ai_analysis,
-            "duration_ms": run_result.duration_ms,
-            "commands_output": run_result.commands_output,
-            "total_iterations": run_result.total_iterations,
-            "final_report": run_result.final_report,
-        }],
-    })
+    return JsonResponse(launch_result["payload"], status=200 if launch_result["ok"] else int(launch_result["status"]))
 
 
 @login_required
@@ -3465,6 +3707,7 @@ def agent_run_detail(request, run_id):
         "pending_question": run.pending_question,
         "plan_tasks": run.plan_tasks or [],
         "orchestrator_log": run.orchestrator_log or [],
+        "dispatch": serialize_agent_dispatch(run.dispatches.order_by("-queued_at", "-id").first()),
     }
 
     return JsonResponse({"success": True, "run": data})
@@ -3480,36 +3723,13 @@ def agent_stop(request, agent_id):
     except Exception:
         data = {}
 
-    active_statuses = [
-        AgentRun.STATUS_PENDING,
-        AgentRun.STATUS_RUNNING,
-        AgentRun.STATUS_PAUSED,
-        AgentRun.STATUS_WAITING,
-        AgentRun.STATUS_PLAN_REVIEW,
-    ]
-    run_id = data.get("run_id")
-    run_query = AgentRun.objects.filter(
+    result = stop_agent_run_for_user(
         agent_id=agent_id,
-        agent__user=request.user,
-        status__in=active_statuses,
+        user=request.user,
+        run_id=data.get("run_id"),
+        source="http",
     )
-    if run_id is not None:
-        run_query = run_query.filter(id=run_id)
-    run = run_query.first()
-    if not run:
-        return JsonResponse({"success": False, "error": "No active run found"}, status=404)
-
-    live_engine = get_engine_for_run(run.id) or get_engine_for_agent(agent_id)
-    update_runtime_control(run, live_engine=live_engine, stop_requested=True, pause_requested=False)
-
-    run.status = AgentRun.STATUS_STOPPED
-    run.completed_at = timezone.now()
-    run.save(update_fields=["status", "completed_at"])
-    return JsonResponse({
-        "success": True,
-        "run_id": run.id,
-        "stop_signal_sent": bool(live_engine),
-    })
+    return JsonResponse(result["payload"], status=200 if result["ok"] else int(result["status"]))
 
 
 @login_required
@@ -3517,29 +3737,18 @@ def agent_stop(request, agent_id):
 @require_http_methods(["POST"])
 def agent_run_reply(request, run_id):
     """Reply to a question asked by a running agent."""
-    run = AgentRun.objects.filter(
-        id=run_id, agent__user=request.user, status=AgentRun.STATUS_WAITING,
-    ).first()
-    if not run:
-        return JsonResponse({"success": False, "error": "Run not found or not waiting"}, status=404)
-
     try:
         data = json.loads(request.body)
     except Exception:
         return JsonResponse({"success": False, "error": "Invalid JSON"}, status=400)
 
-    answer = data.get("answer", "")
-    if not answer:
-        return JsonResponse({"success": False, "error": "Answer required"}, status=400)
-
-    live_engine = get_engine_for_run(run.id)
-    update_runtime_control(run, live_engine=live_engine, reply_text=answer, pause_requested=False)
-
-    run.pending_question = ""
-    run.status = AgentRun.STATUS_RUNNING
-    run.save(update_fields=["pending_question", "status"])
-
-    return JsonResponse({"success": True})
+    result = reply_to_agent_run_for_user(
+        run_id=run_id,
+        user=request.user,
+        answer=data.get("answer", ""),
+        source="http",
+    )
+    return JsonResponse(result["payload"], status=200 if result["ok"] else int(result["status"]))
 
 
 @login_required
@@ -3566,6 +3775,38 @@ def agent_run_log(request, run_id):
 
 @login_required
 @require_feature('agents')
+@require_http_methods(["GET"])
+def agent_run_events(request, run_id):
+    """Get the persistent event timeline for a run."""
+    run = AgentRun.objects.filter(id=run_id, agent__user=request.user).first()
+    if not run:
+        run = AgentRun.objects.filter(id=run_id, user=request.user).first()
+    if not run:
+        return JsonResponse({"success": False, "error": "Run not found"}, status=404)
+
+    try:
+        limit = max(1, min(int(request.GET.get("limit", 200)), 500))
+    except (TypeError, ValueError):
+        limit = 200
+    event_types = [item.strip() for item in request.GET.getlist("event_type") if item.strip()]
+    if not event_types:
+        event_type_raw = str(request.GET.get("event_type", "") or "").strip()
+        if event_type_raw:
+            event_types = [item.strip() for item in event_type_raw.split(",") if item.strip()]
+    qs = AgentRunEvent.objects.filter(run=run).order_by("created_at", "id")
+    if event_types:
+        qs = qs.filter(event_type__in=event_types)
+    total = qs.count()
+    events = [serialize_run_event(item) for item in qs[:limit]]
+    return JsonResponse({
+        "success": True,
+        "events": events,
+        "total": total,
+    })
+
+
+@login_required
+@require_feature('agents')
 @require_http_methods(["POST"])
 def agent_run_approve_plan(request, run_id):
     """Approve the plan and start executing the multi-agent pipeline.
@@ -3574,47 +3815,13 @@ def agent_run_approve_plan(request, run_id):
     runs execute_existing_plan() which re-opens SSH connections and runs
     Phase 2 + 3 from the saved plan_tasks.
     """
-    run = AgentRun.objects.filter(
-        id=run_id,
-        agent__user=request.user,
-        status=AgentRun.STATUS_PLAN_REVIEW,
-    ).select_related("agent", "server").first()
-
-    if not run:
-        return JsonResponse({"success": False, "error": "Run not found or not awaiting plan approval"}, status=404)
-
-    agent = run.agent
-    server_ids = list(agent.servers.values_list("id", flat=True))
-    servers = list(_accessible_servers_queryset(request.user).filter(id__in=server_ids))
-    if not servers:
-        return JsonResponse({"success": False, "error": "No accessible servers"}, status=400)
-
-    run.status = AgentRun.STATUS_PENDING
-    run.pending_question = ""
-    run.completed_at = None
-    run.save(update_fields=["status", "pending_question", "completed_at"])
-
-    launch_plan_execution_background(
-        run_id=run.id,
-        agent_id=agent.id,
-        server_ids=[server.id for server in servers],
-        user_id=request.user.id,
+    result = approve_agent_plan_for_user(
+        run_id=run_id,
+        user=request.user,
+        accessible_servers_queryset=_accessible_servers_queryset(request.user),
+        source="http",
     )
-
-    return JsonResponse({
-        "success": True,
-        "run_id": run.id,
-        "status": run.status,
-        "runs": [{
-            "run_id": run.id,
-            "server_name": run.server.name if run.server_id else "?",
-            "status": run.status,
-            "ai_analysis": run.ai_analysis,
-            "duration_ms": run.duration_ms,
-            "total_iterations": run.total_iterations,
-            "final_report": run.final_report,
-        }],
-    })
+    return JsonResponse(result["payload"], status=200 if result["ok"] else int(result["status"]))
 
 
 @login_required
