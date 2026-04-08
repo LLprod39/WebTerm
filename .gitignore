@@ -53,6 +53,7 @@ tmp_*_check.js
 .env
 .env.*
 !.env.example
+!.env.production.example
 !.env.template
 .env.local
 .env.*.local
@@ -100,6 +101,9 @@ Thumbs.db
 tmp/
 temp/
 *.tmp
+production-upload-bundle-*/
+production-upload-bundle-*.zip
+production-upload-bundle-*.rar
 
 # Large binaries (GitHub 100 MB limit)
 *.exe

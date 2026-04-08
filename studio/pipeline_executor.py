@@ -38,6 +38,16 @@ from asgiref.sync import sync_to_async as _s2a
 from channels.layers import get_channel_layer
 from django.utils import timezone
 
+from app.agent_kernel.domain.roles import ROLE_SPECS
+from app.agent_kernel.domain.specs import ToolSpec
+from app.agent_kernel.hooks.manager import HookManager
+from app.agent_kernel.memory.compaction import compact_text
+from app.agent_kernel.memory.redaction import sanitize_observation_text
+from app.agent_kernel.memory.server_cards import render_server_cards_prompt
+from app.agent_kernel.memory.store import DjangoServerMemoryStore
+from app.agent_kernel.permissions.engine import PermissionEngine
+from app.agent_kernel.runtime.context import build_ops_prompt_context
+from app.agent_kernel.sandbox.manager import SandboxManager
 from app.core.model_utils import resolve_provider_and_model
 from core_ui.activity import log_user_activity_async
 from core_ui.audit import audit_context
@@ -52,6 +62,7 @@ from .skill_registry import normalise_skill_slugs, resolve_skills
 
 logger = logging.getLogger(__name__)
 _SIMPLE_TEMPLATE_PATTERN = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
+_PIPELINE_MEMORY_STORE = DjangoServerMemoryStore()
 
 
 def _s2a_fn(func, thread_sensitive=False):
@@ -220,6 +231,164 @@ async def _load_agent_scope_ids(agent_conf) -> set[int]:
         return set()
     owner = getattr(agent_conf, "owner", None)
     return set(await _s2a_fn(lambda: list(agent_conf.server_scope.filter(user=owner).values_list("id", flat=True)))())
+
+
+def _pipeline_permission_mode(config: dict[str, Any]) -> str:
+    mode = str(config.get("permission_mode") or "").strip().upper()
+    if mode in {"PLAN", "SAFE", "ASSISTED", "AUTONOMOUS", "AUTO_GUARDED"}:
+        return mode
+    return "SAFE"
+
+
+def _pipeline_role_slug(config: dict[str, Any]) -> str:
+    role = str(config.get("role") or "").strip()
+    if role in ROLE_SPECS:
+        return role
+    if config.get("watcher"):
+        return "watcher_daemon"
+    return "custom"
+
+
+async def _load_pipeline_server_memory(owner, config: dict[str, Any], context: dict[str, Any]) -> str:
+    raw_server_ids = config.get("server_ids") or []
+    if config.get("server_id") and not raw_server_ids:
+        raw_server_ids = [config.get("server_id")]
+
+    server_ids: list[int] = []
+    for value in raw_server_ids[:3]:
+        try:
+            server_ids.append(int(value))
+        except (TypeError, ValueError):
+            continue
+    if not server_ids and context.get("target_server_id"):
+        with contextlib.suppress(TypeError, ValueError):
+            server_ids.append(int(context.get("target_server_id")))
+
+    if not server_ids:
+        return "Память по серверам для этого pipeline node не выбрана."
+
+    cards = []
+    servers = await _load_owned_servers(owner, server_ids)
+    for server in servers[:3]:
+        try:
+            cards.append(await _PIPELINE_MEMORY_STORE.get_server_card(server.id))
+        except Exception as exc:
+            logger.debug("Failed to load pipeline server memory for %s: %s", server.id, exc)
+    return render_server_cards_prompt(cards, max_cards=3, max_records=5)
+
+
+async def _load_pipeline_operational_recipes(
+    owner,
+    config: dict[str, Any],
+    context: dict[str, Any],
+    *,
+    role_slug: str,
+    query: str,
+) -> str:
+    raw_server_ids = config.get("server_ids") or []
+    if config.get("server_id") and not raw_server_ids:
+        raw_server_ids = [config.get("server_id")]
+
+    server_ids: list[int] = []
+    for value in raw_server_ids[:3]:
+        try:
+            server_ids.append(int(value))
+        except (TypeError, ValueError):
+            continue
+    if not server_ids and context.get("target_server_id"):
+        with contextlib.suppress(TypeError, ValueError):
+            server_ids.append(int(context.get("target_server_id")))
+
+    group_ids: list[int] = []
+    if server_ids:
+        for server in await _load_owned_servers(owner, server_ids):
+            if getattr(server, "group_id", None):
+                group_ids.append(server.group_id)
+
+    recipe_query = "\n".join(part for part in [query, role_slug] if part).strip()
+    return await _PIPELINE_MEMORY_STORE.build_operational_recipes_prompt(
+        recipe_query,
+        server_ids=server_ids,
+        group_ids=list(dict.fromkeys(group_ids)),
+        limit=4,
+    )
+
+
+def _compact_node_outputs_context(node_outputs: dict[str, dict], *, max_nodes: int = 6, max_chars: int = 1200) -> str:
+    lines: list[str] = []
+    for nid, out in list(node_outputs.items())[-max_nodes:]:
+        sanitized_output = sanitize_observation_text(str(out.get("output") or "").strip()).text
+        output_text = compact_text(sanitized_output, limit=max_chars)
+        if output_text:
+            lines.append(f"=== Output of node [{nid}] ===\n{output_text}")
+    return "\n\n".join(lines)
+
+
+def _build_pipeline_tool_spec(tool_name: str, *, command: str = "") -> ToolSpec:
+    lowered_name = (tool_name or "").lower()
+    lowered_command = (command or "").lower()
+    category = "general"
+    risk = "read"
+    mutates_state = False
+    requires_verification = False
+
+    if lowered_name in {"ssh_execute", "agent/ssh_cmd", "ssh_cmd"} or command:
+        category = "ssh"
+        risk = "exec"
+        requires_verification = True
+    elif "keycloak" in lowered_name:
+        category = "keycloak"
+        risk = "admin"
+        mutates_state = True
+        requires_verification = True
+    elif "docker" in lowered_name or "docker" in lowered_command:
+        category = "docker"
+        risk = "exec"
+        requires_verification = True
+    elif "nginx" in lowered_name or "nginx" in lowered_command:
+        category = "nginx"
+        risk = "exec"
+        requires_verification = True
+    elif "service" in lowered_name or "systemctl" in lowered_command:
+        category = "service"
+        risk = "exec"
+        requires_verification = True
+    elif lowered_name.startswith("mcp"):
+        category = "mcp"
+        risk = "network"
+
+    return ToolSpec(
+        name=tool_name or "pipeline_tool",
+        category=category,
+        risk=risk,
+        description=f"Pipeline node tool: {tool_name}",
+        input_schema={},
+        mutates_state=mutates_state,
+        requires_verification=requires_verification,
+        output_compactor="tail",
+        runner="pipeline",
+    )
+
+
+def _build_pipeline_ops_context(
+    *,
+    role_slug: str,
+    permission_mode: str,
+    server_memory_prompt: str,
+    operational_recipes_prompt: str,
+    tool_spec_lines: str,
+    max_iterations: int,
+) -> str:
+    role_spec = ROLE_SPECS.get(role_slug, ROLE_SPECS["custom"])
+    return build_ops_prompt_context(
+        role_spec=role_spec,
+        permission_mode=permission_mode,
+        server_memory_prompt=server_memory_prompt,
+        operational_recipes_prompt=operational_recipes_prompt,
+        tool_registry_prompt=tool_spec_lines,
+        max_iterations=max_iterations,
+        session_timeout=0,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -497,6 +666,8 @@ async def _execute_agent_ssh_cmd(node: dict, context: dict, run: PipelineRun) ->
     config = node.get("data", {})
     server_id = config.get("server_id")
     command = config.get("command", "")
+    preflight_commands = list(config.get("preflight_commands") or [])
+    verification_commands = list(config.get("verification_commands") or [])
 
     with contextlib.suppress(KeyError, ValueError):
         command = command.format(**context)
@@ -528,6 +699,18 @@ async def _execute_agent_ssh_cmd(node: dict, context: dict, run: PipelineRun) ->
     except Server.DoesNotExist:
         return {"status": "failed", "error": f"Server not found: {server_id}"}
 
+    permission_engine = PermissionEngine(mode=_pipeline_permission_mode(config))
+    sandbox_manager = SandboxManager()
+    hook_manager = HookManager()
+    spec = _build_pipeline_tool_spec("ssh_execute", command=command)
+    decision = permission_engine.evaluate(spec, {"command": command})
+    if not decision.allowed and not preflight_commands:
+        return {
+            "status": "failed",
+            "error": decision.reason,
+            "output": "",
+        }
+
     try:
         from servers.monitor import _build_connect_kwargs
 
@@ -535,20 +718,64 @@ async def _execute_agent_ssh_cmd(node: dict, context: dict, run: PipelineRun) ->
         connect_kwargs["connect_timeout"] = 30
 
         async with asyncssh.connect(**connect_kwargs) as conn:
-            result = await conn.run(command, timeout=120)
-            output = result.stdout + (("\n" + result.stderr) if result.stderr else "")
-            await _log_pipeline_ssh_command(
-                run=run,
-                server=server,
-                node_id=str(node.get("id") or ""),
-                command=command,
-                exit_code=result.exit_status,
-                output=output,
-            )
+            combined_outputs: list[str] = []
+
+            async def _run_remote_command(command_text: str, *, stage: str) -> tuple[int, str]:
+                stage_profile = decision.sandbox_profile if stage == "command" else "ops_read"
+                sandbox_decision = sandbox_manager.validate(spec, {"command": command_text}, stage_profile)
+                if not sandbox_decision.allowed:
+                    raise RuntimeError(sandbox_decision.reason)
+                remote_result = await conn.run(command_text, timeout=120)
+                remote_output = remote_result.stdout + (("\n" + remote_result.stderr) if remote_result.stderr else "")
+                compacted_output = await hook_manager.post_tool_use("ssh_execute", remote_output)
+                permission_engine.record_success(spec, {"command": command_text}, compacted_output)
+                await _log_pipeline_ssh_command(
+                    run=run,
+                    server=server,
+                    node_id=str(node.get("id") or ""),
+                    command=f"[{stage}] {command_text}",
+                    exit_code=remote_result.exit_status,
+                    output=compacted_output,
+                )
+                combined_outputs.append(f"## {stage}\n{compacted_output}")
+                return remote_result.exit_status, compacted_output
+
+            for preflight_command in preflight_commands:
+                rendered = _render_template_value(preflight_command, context)
+                exit_code, _ = await _run_remote_command(str(rendered), stage="preflight")
+                if exit_code != 0:
+                    return {
+                        "status": "failed",
+                        "error": f"Preflight command failed: {rendered}",
+                        "output": "\n\n".join(combined_outputs),
+                    }
+
+            decision = permission_engine.evaluate(spec, {"command": command})
+            if not decision.allowed:
+                return {"status": "failed", "error": decision.reason, "output": "\n\n".join(combined_outputs)}
+
+            exit_code, output = await _run_remote_command(command, stage="command")
+            verification_summary = permission_engine.verification_summary()
+            if verification_commands:
+                for verify_command in verification_commands:
+                    rendered = _render_template_value(verify_command, context)
+                    verify_exit_code, _ = await _run_remote_command(str(rendered), stage="verification")
+                    if verify_exit_code != 0:
+                        return {
+                            "status": "failed",
+                            "error": f"Verification command failed: {rendered}",
+                            "output": "\n\n".join(combined_outputs),
+                        }
+                verification_summary = permission_engine.verification_summary()
+                combined_outputs.append(f"## verification_summary\n{verification_summary}")
+
+            full_output = "\n\n".join(combined_outputs) if combined_outputs else output
             return {
-                "status": "completed",
-                "output": output,
-                "exit_code": result.exit_status,
+                "status": "completed" if exit_code == 0 else "failed",
+                "output": full_output,
+                "exit_code": exit_code,
+                "verification_summary": verification_summary,
+                "error": "" if exit_code == 0 else output,
             }
     except Exception as exc:
         error_text = f"{exc} (server: {server.name} [{server.username}@{server.host}])"
@@ -587,28 +814,50 @@ async def _execute_agent_llm_query(node: dict, context: dict, node_outputs: dict
     prompt_template = config.get("prompt", "")
     system_prompt = config.get("system_prompt", "You are a helpful DevOps assistant.")
     include_all_outputs = config.get("include_all_outputs", True)
+    purpose = str(config.get("purpose") or "opssummary").strip() or "opssummary"
+    permission_mode = _pipeline_permission_mode(config)
+    role_slug = _pipeline_role_slug(config)
+    max_context_nodes = max(1, min(int(config.get("max_context_nodes", 6) or 6), 12))
+    max_output_context_chars = max(200, min(int(config.get("max_output_chars", 1200) or 1200), 4000))
     provider, specific_model = _resolve_llm_provider_and_model(config)
 
     if not prompt_template:
         return {"status": "failed", "error": "No prompt configured for llm_query node"}
 
     # Build rich context string from all previous node outputs
-    context_lines: list[str] = []
-    if include_all_outputs:
-        for nid, out in node_outputs.items():
-            output_text = out.get("output", "").strip()
-            if output_text:
-                context_lines.append(f"=== Output of node [{nid}] ===\n{output_text[:4000]}")
-
-    outputs_context = "\n\n".join(context_lines)
+    outputs_context = (
+        _compact_node_outputs_context(node_outputs, max_nodes=max_context_nodes, max_chars=max_output_context_chars)
+        if include_all_outputs
+        else ""
+    )
 
     substitutions = dict(context)
     substitutions["all_outputs"] = outputs_context
     prompt = _render_template_value(prompt_template, substitutions)
 
+    owner = await _s2a_fn(lambda: run.pipeline.owner)()
+    server_memory_prompt = await _load_pipeline_server_memory(owner, config, context)
+    operational_recipes_prompt = await _load_pipeline_operational_recipes(
+        owner,
+        config,
+        context,
+        role_slug=role_slug,
+        query=prompt,
+    )
+    ops_context = _build_pipeline_ops_context(
+        role_slug=role_slug,
+        permission_mode=permission_mode,
+        server_memory_prompt=server_memory_prompt,
+        operational_recipes_prompt=operational_recipes_prompt,
+        tool_spec_lines="- llm_query: reasoning / summarization / planning [general / read]",
+        max_iterations=1,
+    )
+
     full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
     if outputs_context and "{all_outputs}" not in prompt_template and include_all_outputs:
-        full_prompt = f"{system_prompt}\n\n## Context from previous pipeline steps:\n{outputs_context}\n\n## Your task:\n{prompt}"
+        full_prompt = f"{system_prompt}\n\n{ops_context}\n\n## Context from previous pipeline steps:\n{outputs_context}\n\n## Your task:\n{prompt}"
+    else:
+        full_prompt = f"{system_prompt}\n\n{ops_context}\n\n{prompt}" if system_prompt else f"{ops_context}\n\n{prompt}"
 
     try:
         from app.core.llm import LLMProvider
@@ -620,10 +869,10 @@ async def _execute_agent_llm_query(node: dict, context: dict, node_outputs: dict
             full_prompt,
             model=provider,
             specific_model=specific_model or None,
-            purpose="chat",
+            purpose=purpose,
         ):
             output_chunks.append(chunk)
-        output_text = "".join(output_chunks)
+        output_text = compact_text("".join(output_chunks), limit=6000)
         elapsed = int((time.time() - t0) * 1000)
         logger.info("llm_query node %s: %s/%s %.1fs, %d chars", node.get("id"), provider, specific_model, elapsed / 1000, len(output_text))
 
@@ -682,6 +931,13 @@ async def _execute_agent_mcp_call(
         description=f"Pipeline MCP call for {tool_name}",
         input_schema=None,
     )
+    permission_engine = PermissionEngine(mode=_pipeline_permission_mode(config))
+    sandbox_manager = SandboxManager()
+    hook_manager = HookManager()
+    spec = _build_pipeline_tool_spec(f"mcp_{tool_name}")
+    decision = permission_engine.evaluate(spec, arguments)
+    if not decision.allowed:
+        return {"status": "failed", "error": decision.reason}
     prepared_args, policy_messages, policy_error = apply_skill_policies(
         skill_policies,
         binding,
@@ -693,6 +949,9 @@ async def _execute_agent_mcp_call(
             "status": "failed",
             "error": policy_error,
         }
+    sandbox_decision = sandbox_manager.validate(spec, prepared_args, decision.sandbox_profile)
+    if not sandbox_decision.allowed:
+        return {"status": "failed", "error": sandbox_decision.reason}
 
     try:
         logger.info(
@@ -705,8 +964,11 @@ async def _execute_agent_mcp_call(
         )
         result = await call_mcp_tool(mcp_server, tool_name, prepared_args)
         output = _mcp_result_to_text(result)
+        if decision.notes:
+            output = "\n".join([*decision.notes, output]) if output else "\n".join(decision.notes)
         if policy_messages:
             output = "\n".join([*policy_messages, output]) if output else "\n".join(policy_messages)
+        output = await hook_manager.post_tool_use(tool_name, output)
         logger.info(
             "pipeline run %s node %s mcp_call done: server=%s tool=%s is_error=%s output_chars=%s",
             run.pk,
@@ -737,6 +999,8 @@ async def _execute_agent_mcp_call(
                 "output_excerpt": output[:4000],
             },
         )
+        if not result.get("isError"):
+            permission_engine.record_success(spec, prepared_args, output)
         if result.get("isError"):
             return {
                 "status": "failed",

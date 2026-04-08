@@ -24,6 +24,7 @@ import {
   FileText,
   Clock,
   CalendarIcon,
+  Sparkles,
 } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { Button } from "@/components/ui/button";
@@ -37,12 +38,22 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  fetchFrontendBootstrap,
   fetchModels,
+  fetchServerMemoryOverview,
   fetchSettings,
   fetchSettingsActivity,
+  promoteServerMemorySnapshotToNote,
+  promoteServerMemorySnapshotToSkill,
   refreshModels,
+  runServerMemoryDreams,
   saveSettings,
+  archiveServerMemorySnapshot,
   fetchAuthSession,
+  updateServerMemoryPolicy,
+  type FrontendServer,
+  type ServerMemoryOverviewResponse,
+  type ServerMemorySnapshotRecord,
   type SettingsConfig,
 } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
@@ -231,7 +242,7 @@ const DEFAULT_LOGGING_CONFIG = {
   export_format: "json",
 };
 const LOGGING_KEYS = Object.keys(DEFAULT_LOGGING_CONFIG);
-type SettingsTabValue = "ai" | "access" | "logging" | "activity";
+type SettingsTabValue = "ai" | "access" | "memory" | "logging" | "activity";
 
 export default function SettingsPage() {
   const { t } = useI18n();
@@ -279,6 +290,44 @@ export default function SettingsPage() {
     enabled: isAdmin,
     staleTime: 20_000,
   });
+
+  const { data: frontendBootstrap } = useQuery({
+    queryKey: ["settings", "memory", "servers"],
+    queryFn: fetchFrontendBootstrap,
+    enabled: isAdmin,
+    staleTime: 60_000,
+  });
+  const memoryServers = frontendBootstrap?.servers || [];
+  const [selectedMemoryServerId, setSelectedMemoryServerId] = useState<number | null>(null);
+  const [memoryDreamRunning, setMemoryDreamRunning] = useState(false);
+  const [memoryPolicySaving, setMemoryPolicySaving] = useState(false);
+  const [memoryActionKey, setMemoryActionKey] = useState<string | null>(null);
+  const [memoryPolicyDraft, setMemoryPolicyDraft] = useState<ServerMemoryOverviewResponse["policy"] | null>(null);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    if (selectedMemoryServerId) return;
+    const firstServer = memoryServers[0];
+    if (firstServer) {
+      setSelectedMemoryServerId(firstServer.id);
+    }
+  }, [isAdmin, memoryServers, selectedMemoryServerId]);
+
+  const {
+    data: memoryOverview,
+    isLoading: memoryLoading,
+    refetch: refetchMemoryOverview,
+  } = useQuery({
+    queryKey: ["settings", "memory", "overview", selectedMemoryServerId],
+    queryFn: () => fetchServerMemoryOverview(selectedMemoryServerId as number),
+    enabled: isAdmin && Boolean(selectedMemoryServerId),
+    staleTime: 20_000,
+  });
+
+  useEffect(() => {
+    if (!memoryOverview) return;
+    setMemoryPolicyDraft(memoryOverview.policy);
+  }, [memoryOverview]);
 
   // AI model state
   const [provider, setProvider] = useState<string>("grok");
@@ -498,6 +547,186 @@ export default function SettingsPage() {
     }
   };
 
+  const selectedMemoryServer = useMemo(
+    () => memoryServers.find((server) => server.id === selectedMemoryServerId) || null,
+    [memoryServers, selectedMemoryServerId],
+  );
+
+  const refreshMemoryOverview = useCallback(async () => {
+    if (!selectedMemoryServerId) return;
+    await queryClient.invalidateQueries({ queryKey: ["settings", "memory", "overview", selectedMemoryServerId] });
+    await refetchMemoryOverview();
+  }, [queryClient, refetchMemoryOverview, selectedMemoryServerId]);
+
+  const onRunMemoryDreams = useCallback(async () => {
+    if (!selectedMemoryServerId) return;
+    setMemoryDreamRunning(true);
+    try {
+      await runServerMemoryDreams(selectedMemoryServerId, { job_kind: "hybrid" });
+      await refreshMemoryOverview();
+    } finally {
+      setMemoryDreamRunning(false);
+    }
+  }, [refreshMemoryOverview, selectedMemoryServerId]);
+
+  const onSaveMemoryPolicy = useCallback(async () => {
+    if (!selectedMemoryServerId || !memoryPolicyDraft) return;
+    setMemoryPolicySaving(true);
+    try {
+      await updateServerMemoryPolicy(selectedMemoryServerId, memoryPolicyDraft);
+      await refreshMemoryOverview();
+    } finally {
+      setMemoryPolicySaving(false);
+    }
+  }, [memoryPolicyDraft, refreshMemoryOverview, selectedMemoryServerId]);
+
+  const onArchiveMemorySnapshot = useCallback(async (snapshotId: number) => {
+    if (!selectedMemoryServerId) return;
+    setMemoryActionKey(`archive:${snapshotId}`);
+    try {
+      await archiveServerMemorySnapshot(selectedMemoryServerId, snapshotId);
+      await refreshMemoryOverview();
+    } finally {
+      setMemoryActionKey(null);
+    }
+  }, [refreshMemoryOverview, selectedMemoryServerId]);
+
+  const onPromoteMemorySnapshotToNote = useCallback(async (snapshotId: number) => {
+    if (!selectedMemoryServerId) return;
+    setMemoryActionKey(`note:${snapshotId}`);
+    try {
+      await promoteServerMemorySnapshotToNote(selectedMemoryServerId, snapshotId);
+      await refreshMemoryOverview();
+    } finally {
+      setMemoryActionKey(null);
+    }
+  }, [refreshMemoryOverview, selectedMemoryServerId]);
+
+  const onPromoteMemorySnapshotToSkill = useCallback(async (snapshotId: number) => {
+    if (!selectedMemoryServerId) return;
+    setMemoryActionKey(`skill:${snapshotId}`);
+    try {
+      await promoteServerMemorySnapshotToSkill(selectedMemoryServerId, snapshotId);
+      await refreshMemoryOverview();
+    } finally {
+      setMemoryActionKey(null);
+    }
+  }, [refreshMemoryOverview, selectedMemoryServerId]);
+
+  const renderMemorySnapshotAudit = useCallback((item: ServerMemorySnapshotRecord) => (
+    <div className="mt-3 space-y-2 text-[10px] text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded bg-secondary px-1.5 py-0.5">{item.source_kind}</span>
+        {item.source_ref ? <span className="rounded bg-secondary/60 px-1.5 py-0.5">{item.source_ref}</span> : null}
+        <span>confidence {Math.round((item.confidence || 0) * 100)}%</span>
+        <span>importance {item.importance_score}</span>
+        <span>stability {item.stability_score}</span>
+        {item.created_by_username ? <span>by {item.created_by_username}</span> : null}
+        {item.updated_at ? <span>{new Date(item.updated_at).toLocaleString()}</span> : null}
+      </div>
+      {item.action_summary ? <p className="text-[11px] text-foreground/80">{item.action_summary}</p> : null}
+      {item.rewrite_reason ? <p>Reason: {item.rewrite_reason}</p> : null}
+      {item.prior_version ? <p>Prior version: v{item.prior_version}</p> : null}
+      {item.history.length > 1 ? (
+        <details className="rounded-md border border-border/60 bg-background/30 px-3 py-2">
+          <summary className="cursor-pointer text-[11px] font-medium text-foreground">
+            Version history ({item.history.length})
+          </summary>
+          <div className="mt-2 space-y-2">
+            {item.history.map((historyItem) => (
+              <div key={historyItem.id} className="rounded border border-border/50 bg-secondary/10 px-2 py-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={historyItem.is_active ? "secondary" : "outline"}>v{historyItem.version}</Badge>
+                  {historyItem.source_kind ? <span>{historyItem.source_kind}</span> : null}
+                  {historyItem.source_ref ? <span>{historyItem.source_ref}</span> : null}
+                  {historyItem.created_by_username ? <span>by {historyItem.created_by_username}</span> : null}
+                  {historyItem.updated_at ? <span>{new Date(historyItem.updated_at).toLocaleString()}</span> : null}
+                </div>
+                {historyItem.action_summary ? <p className="mt-1 text-[11px] text-foreground/80">{historyItem.action_summary}</p> : null}
+                {historyItem.rewrite_reason ? <p className="mt-1">Reason: {historyItem.rewrite_reason}</p> : null}
+                {historyItem.content_preview ? (
+                  <p className="mt-1 whitespace-pre-wrap text-[11px] leading-relaxed">{historyItem.content_preview}</p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </details>
+      ) : null}
+    </div>
+  ), []);
+
+  const renderWorkerStateCard = useCallback((label: string, state: ServerMemoryOverviewResponse["daemon_state"] | undefined) => {
+    if (!state) return null;
+    const statusTone =
+      state.status === "running"
+        ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+        : state.status === "error"
+          ? "bg-destructive/10 text-destructive border-destructive/30"
+          : "bg-secondary text-muted-foreground border-border";
+    return (
+      <div key={`${label}-${state.worker_key}`} className="rounded-lg border border-border bg-secondary/10 px-3 py-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm font-medium text-foreground">{label}</p>
+          <span className={cn("rounded border px-1.5 py-0.5 text-[10px] uppercase tracking-wide", statusTone)}>
+            {state.status}
+          </span>
+          {state.is_stale ? <Badge variant="destructive">stale</Badge> : null}
+        </div>
+        <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+          {state.command ? <p className="truncate">cmd: {state.command}</p> : null}
+          <p>worker: {state.worker_key}</p>
+          {state.hostname ? <p>host: {state.hostname}</p> : null}
+          {state.pid ? <p>pid: {state.pid}</p> : null}
+          {state.heartbeat_at ? <p>heartbeat: {new Date(state.heartbeat_at).toLocaleString()}</p> : null}
+          {state.last_cycle_finished_at ? <p>last cycle: {new Date(state.last_cycle_finished_at).toLocaleString()}</p> : null}
+          {state.last_error ? <p className="text-destructive">error: {state.last_error}</p> : null}
+          {Object.keys(state.last_summary || {}).length ? (
+            <details className="rounded border border-border/50 bg-background/30 px-2 py-2">
+              <summary className="cursor-pointer text-[11px] font-medium text-foreground">Last summary</summary>
+              <pre className="mt-2 whitespace-pre-wrap text-[10px] leading-relaxed text-muted-foreground">
+                {JSON.stringify(state.last_summary, null, 2)}
+              </pre>
+            </details>
+          ) : null}
+        </div>
+      </div>
+    );
+  }, []);
+
+  const renderMemoryCandidateActions = useCallback((item: ServerMemorySnapshotRecord) => (
+    <div className="mt-3 flex flex-wrap gap-2">
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-7 px-3 text-xs"
+        disabled={memoryActionKey === `note:${item.id}`}
+        onClick={() => void onPromoteMemorySnapshotToNote(item.id)}
+      >
+        {memoryActionKey === `note:${item.id}` ? "Promoting..." : "Promote Note"}
+      </Button>
+      {item.memory_key.startsWith("skill_draft:") ? (
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 px-3 text-xs"
+          disabled={memoryActionKey === `skill:${item.id}`}
+          onClick={() => void onPromoteMemorySnapshotToSkill(item.id)}
+        >
+          {memoryActionKey === `skill:${item.id}` ? "Promoting..." : "Promote Skill"}
+        </Button>
+      ) : null}
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-7 px-3 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+        disabled={memoryActionKey === `archive:${item.id}`}
+        onClick={() => void onArchiveMemorySnapshot(item.id)}
+      >
+        {memoryActionKey === `archive:${item.id}` ? "Archiving..." : "Archive"}
+      </Button>
+    </div>
+  ), [memoryActionKey, onArchiveMemorySnapshot, onPromoteMemorySnapshotToNote, onPromoteMemorySnapshotToSkill]);
+
   const filteredActivity = useMemo(() => {
     const events = activityData?.events || [];
     let filtered = events;
@@ -525,7 +754,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (isAdmin) return;
-    if (activeTab === "logging" || activeTab === "activity") {
+    if (activeTab === "logging" || activeTab === "activity" || activeTab === "memory") {
       setActiveTab("ai");
     }
   }, [activeTab, isAdmin]);
@@ -656,6 +885,13 @@ export default function SettingsPage() {
     ...(isAdmin
       ? [
           {
+            value: "memory" as const,
+            label: "AI Memory",
+            description: "Dreams, snapshots и learned operational patterns",
+            icon: ScrollText,
+            badge: memoryOverview ? String(memoryOverview.stats.canonical + memoryOverview.stats.patterns) : undefined,
+          },
+          {
             value: "logging" as const,
             label: "Логирование",
             description: "Аудит, retention и экспорт",
@@ -691,7 +927,10 @@ export default function SettingsPage() {
           Держи настройки простыми: один основной провайдер, отдельные роли только там, где это действительно нужно, и минимум точечных исключений в доступах.
         </div>
 
-        <TabsList className="grid h-auto w-full grid-cols-1 gap-1 rounded-xl border border-border/60 bg-card p-1 md:grid-cols-2 xl:grid-cols-4">
+        <TabsList className={cn(
+          "grid h-auto w-full grid-cols-1 gap-1 rounded-xl border border-border/60 bg-card p-1 md:grid-cols-2",
+          isAdmin ? "xl:grid-cols-5" : "xl:grid-cols-2",
+        )}>
             {settingsTabs.map((tab) => {
               const Icon = tab.icon;
               return (
@@ -1166,6 +1405,401 @@ export default function SettingsPage() {
             </div>
           </SectionCard>
         </TabsContent>
+
+        {/* ==================== MEMORY TAB ==================== */}
+        {isAdmin && (
+          <TabsContent value="memory" className="space-y-4">
+            <SectionCard
+              title="AI Memory и Dreams"
+              icon={ScrollText}
+              description="Админская зона для настройки снов, canonical snapshots и learned operational patterns."
+              actions={
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 h-7"
+                    onClick={() => void refreshMemoryOverview()}
+                    disabled={!selectedMemoryServerId || memoryLoading}
+                  >
+                    <RefreshCw className={cn("h-3 w-3", memoryLoading && "animate-spin")} />
+                    Обновить
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="gap-1.5 h-7"
+                    onClick={() => void onRunMemoryDreams()}
+                    disabled={!selectedMemoryServerId || memoryDreamRunning}
+                  >
+                    <Sparkles className={cn("h-3 w-3", memoryDreamRunning && "animate-spin")} />
+                    {memoryDreamRunning ? "Dreaming..." : "Run Dreams Now"}
+                  </Button>
+                </div>
+              }
+            >
+              <div className="space-y-4">
+                <div className="grid gap-3 lg:grid-cols-[minmax(0,240px)_minmax(0,1fr)]">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Сервер</Label>
+                    <Select
+                      value={selectedMemoryServerId ? String(selectedMemoryServerId) : ""}
+                      onValueChange={(value) => setSelectedMemoryServerId(Number(value))}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Выбери сервер" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {memoryServers.map((server: FrontendServer) => (
+                          <SelectItem key={server.id} value={String(server.id)}>
+                            {server.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="rounded-xl border border-border/60 bg-secondary/15 px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline">{selectedMemoryServer?.name || "Сервер не выбран"}</Badge>
+                      <Badge
+                        variant={memoryOverview?.daemon_state?.status === "running" ? "default" : "secondary"}
+                      >
+                        Dreams daemon: {memoryOverview?.daemon_state?.status || "unknown"}
+                      </Badge>
+                      {memoryOverview?.daemon_state?.is_stale ? (
+                        <Badge variant="outline">Lease stale</Badge>
+                      ) : null}
+                    </div>
+                    <p className="mt-2 text-[11px] text-muted-foreground">
+                      Здесь живут только системные AI memory controls. Пользовательские текстовые заметки остаются в карточке сервера.
+                    </p>
+                    {memoryOverview?.daemon_state?.heartbeat_at ? (
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Heartbeat: {new Date(memoryOverview.daemon_state.heartbeat_at).toLocaleString()}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+
+                {memoryPolicyDraft ? (
+                  <div className="rounded-xl border border-border/60 bg-background/40 p-4 space-y-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">Dream Policy</p>
+                        <p className="text-xs text-muted-foreground">
+                          Управляет nearline compaction, nightly distillation и тем, что реально попадает в server brain.
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        className="h-8 px-4"
+                        onClick={() => void onSaveMemoryPolicy()}
+                        disabled={memoryPolicySaving || !selectedMemoryServerId}
+                      >
+                        <Save className="mr-1 h-3 w-3" />
+                        {memoryPolicySaving ? "Saving..." : "Save Memory Policy"}
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Dream mode</Label>
+                        <Select
+                          value={memoryPolicyDraft.dream_mode}
+                          onValueChange={(value) =>
+                            setMemoryPolicyDraft((current) => current ? { ...current, dream_mode: value } : current)
+                          }
+                        >
+                          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="heuristic">Heuristic</SelectItem>
+                            <SelectItem value="nightly_llm">Nightly LLM</SelectItem>
+                            <SelectItem value="hybrid">Hybrid</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Nightly model</Label>
+                        <Input
+                          value={memoryPolicyDraft.nightly_model_alias}
+                          onChange={(event) =>
+                            setMemoryPolicyDraft((current) =>
+                              current ? { ...current, nightly_model_alias: event.target.value } : current,
+                            )
+                          }
+                          className="h-9"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Nearline threshold</Label>
+                        <Input
+                          type="number"
+                          min={2}
+                          max={50}
+                          value={memoryPolicyDraft.nearline_event_threshold}
+                          onChange={(event) =>
+                            setMemoryPolicyDraft((current) =>
+                              current
+                                ? { ...current, nearline_event_threshold: Number(event.target.value || 2) }
+                                : current,
+                            )
+                          }
+                          className="h-9"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Sleep start</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={23}
+                          value={memoryPolicyDraft.sleep_start_hour}
+                          onChange={(event) =>
+                            setMemoryPolicyDraft((current) =>
+                              current ? { ...current, sleep_start_hour: Number(event.target.value || 0) } : current,
+                            )
+                          }
+                          className="h-9"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Sleep end</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={23}
+                          value={memoryPolicyDraft.sleep_end_hour}
+                          onChange={(event) =>
+                            setMemoryPolicyDraft((current) =>
+                              current ? { ...current, sleep_end_hour: Number(event.target.value || 0) } : current,
+                            )
+                          }
+                          className="h-9"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Raw retention</Label>
+                        <Input
+                          type="number"
+                          min={7}
+                          max={365}
+                          value={memoryPolicyDraft.raw_event_retention_days}
+                          onChange={(event) =>
+                            setMemoryPolicyDraft((current) =>
+                              current
+                                ? { ...current, raw_event_retention_days: Number(event.target.value || 7) }
+                                : current,
+                            )
+                          }
+                          className="h-9"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Episode retention</Label>
+                        <Input
+                          type="number"
+                          min={14}
+                          max={365}
+                          value={memoryPolicyDraft.episode_retention_days}
+                          onChange={(event) =>
+                            setMemoryPolicyDraft((current) =>
+                              current
+                                ? { ...current, episode_retention_days: Number(event.target.value || 14) }
+                                : current,
+                            )
+                          }
+                          className="h-9"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          checked={memoryPolicyDraft.is_enabled}
+                          onChange={(event) =>
+                            setMemoryPolicyDraft((current) =>
+                              current ? { ...current, is_enabled: event.target.checked } : current,
+                            )
+                          }
+                        />
+                        AI memory enabled
+                      </label>
+                      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          checked={memoryPolicyDraft.human_habits_capture_enabled}
+                          onChange={(event) =>
+                            setMemoryPolicyDraft((current) =>
+                              current ? { ...current, human_habits_capture_enabled: event.target.checked } : current,
+                            )
+                          }
+                        />
+                        Human habits capture
+                      </label>
+                      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          checked={memoryPolicyDraft.rdp_semantic_capture_enabled}
+                          onChange={(event) =>
+                            setMemoryPolicyDraft((current) =>
+                              current ? { ...current, rdp_semantic_capture_enabled: event.target.checked } : current,
+                            )
+                          }
+                        />
+                        RDP semantic capture
+                      </label>
+                    </div>
+                    <p className="mt-2 text-[11px] text-muted-foreground">
+                      Если выключить AI memory, новый layered memory pipeline и dreams перестанут
+                      собирать события. Останется старый формат: очень короткая автоматическая
+                      выжимка после рабочей сессии.
+                    </p>
+                  </div>
+                ) : null}
+
+                {memoryOverview ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
+                      <div className="rounded-lg border border-border bg-secondary/10 px-3 py-2">
+                        <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Canonical</p>
+                        <p className="mt-1 text-lg font-semibold text-foreground">{memoryOverview.stats.canonical}</p>
+                      </div>
+                      <div className="rounded-lg border border-border bg-secondary/10 px-3 py-2">
+                        <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Patterns</p>
+                        <p className="mt-1 text-lg font-semibold text-foreground">{memoryOverview.stats.patterns}</p>
+                      </div>
+                      <div className="rounded-lg border border-border bg-secondary/10 px-3 py-2">
+                        <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Automation</p>
+                        <p className="mt-1 text-lg font-semibold text-foreground">{memoryOverview.stats.automation_candidates}</p>
+                      </div>
+                      <div className="rounded-lg border border-border bg-secondary/10 px-3 py-2">
+                        <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Skill Drafts</p>
+                        <p className="mt-1 text-lg font-semibold text-foreground">{memoryOverview.stats.skill_drafts}</p>
+                      </div>
+                      <div className="rounded-lg border border-border bg-secondary/10 px-3 py-2">
+                        <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Revalidation</p>
+                        <p className="mt-1 text-lg font-semibold text-foreground">{memoryOverview.stats.revalidation_open}</p>
+                      </div>
+                      <div className="rounded-lg border border-border bg-secondary/10 px-3 py-2">
+                        <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Episodes</p>
+                        <p className="mt-1 text-lg font-semibold text-foreground">{memoryOverview.stats.episodes}</p>
+                      </div>
+                      <div className="rounded-lg border border-border bg-secondary/10 px-3 py-2">
+                        <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Archive</p>
+                        <p className="mt-1 text-lg font-semibold text-foreground">{memoryOverview.stats.archive}</p>
+                      </div>
+                    </div>
+
+                    <SectionCard
+                      title="Worker status"
+                      icon={Activity}
+                      description="Состояние фоновых workers, которые крутят dreams, execution plane и watcher scans."
+                    >
+                      <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
+                        {renderWorkerStateCard("Memory dreams", memoryOverview.worker_states?.memory_dreams || memoryOverview.daemon_state)}
+                        {renderWorkerStateCard("Agent execution", memoryOverview.worker_states?.agent_execution)}
+                        {renderWorkerStateCard("Watchers", memoryOverview.worker_states?.watchers)}
+                      </div>
+                    </SectionCard>
+
+                    {memoryOverview.canonical.length > 0 ? (
+                      <SectionCard title="Canonical snapshots" icon={Database} description="Активная память сервера, которая реально уходит в prompt.">
+                        <div className="space-y-2">
+                          {memoryOverview.canonical.map((item) => (
+                            <div key={item.id} className="rounded-lg border border-border bg-secondary/10 px-3 py-3">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-sm font-medium text-foreground">{item.title}</p>
+                                <Badge variant="secondary">{item.memory_key}</Badge>
+                                <Badge variant="outline">v{item.version}</Badge>
+                              </div>
+                              <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">{item.content}</p>
+                              {renderMemorySnapshotAudit(item)}
+                            </div>
+                          ))}
+                        </div>
+                      </SectionCard>
+                    ) : null}
+
+                    {memoryOverview.patterns.length > 0 || memoryOverview.automation_candidates.length > 0 || memoryOverview.skill_drafts.length > 0 ? (
+                      <SectionCard title="Learned candidates" icon={Bot} description="То, что dreams и pattern learning предлагают поднять в operational knowledge.">
+                        <div className="space-y-3">
+                          {[...memoryOverview.patterns, ...memoryOverview.automation_candidates, ...memoryOverview.skill_drafts].map((item) => (
+                            <div key={item.id} className="rounded-lg border border-border bg-secondary/10 px-3 py-3">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-sm font-medium text-foreground">{item.title}</p>
+                                <Badge variant="secondary">{item.memory_key}</Badge>
+                                <Badge variant="outline">v{item.version}</Badge>
+                              </div>
+                              <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">{item.content}</p>
+                              {renderMemorySnapshotAudit(item)}
+                              {renderMemoryCandidateActions(item)}
+                            </div>
+                          ))}
+                        </div>
+                      </SectionCard>
+                    ) : null}
+
+                    {memoryOverview.revalidation.length > 0 ? (
+                      <SectionCard title="Revalidation queue" icon={RefreshCw} description="Факты, которые снам нужно перепроверить или уточнить.">
+                        <div className="space-y-2">
+                          {memoryOverview.revalidation.map((item) => (
+                            <div key={item.id} className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-3">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-sm font-medium text-foreground">{item.title}</p>
+                                <Badge variant="outline">{item.memory_key}</Badge>
+                              </div>
+                              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{item.reason}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </SectionCard>
+                    ) : null}
+
+                    {memoryOverview.episodes.length > 0 ? (
+                      <SectionCard title="Recent episodes" icon={Clock} description="Последние схлопнутые эпизоды из raw event inbox.">
+                        <div className="space-y-2">
+                          {memoryOverview.episodes.slice(0, 6).map((item) => (
+                            <div key={item.id} className="rounded-lg border border-border bg-secondary/10 px-3 py-3">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-sm font-medium text-foreground">{item.title}</p>
+                                <Badge variant="secondary">{item.episode_kind}</Badge>
+                                <Badge variant="outline">{item.event_count} events</Badge>
+                              </div>
+                              <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">{item.summary}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </SectionCard>
+                    ) : null}
+
+                    {memoryOverview.archive.length > 0 ? (
+                      <SectionCard title="Archive" icon={FolderOpen} description="Старые и superseded memory artefacts, исключенные из prompt.">
+                        <div className="space-y-2">
+                          {memoryOverview.archive.slice(0, 6).map((item) => (
+                            <div key={`${item.kind}-${item.id}`} className="rounded-lg border border-border/60 bg-secondary/5 px-3 py-3">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-sm font-medium text-foreground">{item.title}</p>
+                                <Badge variant="outline">{item.kind}</Badge>
+                              </div>
+                              <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
+                                {"content" in item ? item.content : item.summary}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </SectionCard>
+                    ) : null}
+                  </>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+                    {selectedMemoryServerId ? "Загрузка memory overview..." : "Выбери сервер, чтобы увидеть AI memory настройки."}
+                  </div>
+                )}
+              </div>
+            </SectionCard>
+          </TabsContent>
+        )}
 
         {/* ==================== LOGGING TAB ==================== */}
         {isAdmin && (

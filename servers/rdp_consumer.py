@@ -170,6 +170,18 @@ class RDPTerminalConsumer(AsyncWebsocketConsumer):
                 "RDP guacd handshake success: server_id={} host={} port={} user={} domain={}",
                 self.server_id, self.server.host, port, self.server.username, domain or "",
             )
+            await self._ingest_memory_event(
+                event_type="rdp_session_opened",
+                raw_text="RDP session opened",
+                payload={
+                    "host": self.server.host,
+                    "port": port,
+                    "username": self.server.username,
+                    "domain": domain or "",
+                },
+                importance_hint=0.52,
+                force_compact=True,
+            )
             await log_user_activity_async(
                 user_id=getattr(self.user, "id", None),
                 category='servers',
@@ -297,6 +309,13 @@ class RDPTerminalConsumer(AsyncWebsocketConsumer):
         self._pipe_task = None
         await self._close_guacd()
         if was_connected and self.server:
+            await self._ingest_memory_event(
+                event_type="rdp_session_closed",
+                raw_text=self._guac_text_tail[-1200:] if self._guac_text_tail else "RDP session closed",
+                payload={"close_code": close_code},
+                importance_hint=0.48,
+                force_compact=True,
+            )
             await log_user_activity_async(
                 user_id=getattr(self.user, "id", None),
                 category='servers',
@@ -307,3 +326,32 @@ class RDPTerminalConsumer(AsyncWebsocketConsumer):
                 entity_id=self.server.id,
                 entity_name=self.server.name,
             )
+
+    @database_sync_to_async
+    def _ingest_memory_event(
+        self,
+        *,
+        event_type: str,
+        raw_text: str,
+        payload: dict,
+        importance_hint: float,
+        force_compact: bool = False,
+    ) -> None:
+        from app.agent_kernel.memory.store import DjangoServerMemoryStore
+
+        if not self.server:
+            return
+        session_key = f"rdp:{self.server.id}:{getattr(self.user, 'id', 'anon')}"
+        DjangoServerMemoryStore()._ingest_event_sync(
+            self.server.id,
+            source_kind="rdp",
+            actor_kind="human",
+            source_ref=session_key,
+            session_id=session_key,
+            event_type=event_type,
+            raw_text=raw_text,
+            structured_payload=payload,
+            importance_hint=importance_hint,
+            actor_user_id=getattr(self.user, "id", None),
+            force_compact=force_compact,
+        )

@@ -13,8 +13,13 @@ from __future__ import annotations
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
+from django.contrib.auth.models import User
+from django.utils import timezone
 
+from core_ui.context_processors import user_can_feature
 from servers.agent_runtime import get_engine_for_run, update_runtime_control
+from servers.models import AgentRun
+from servers.run_events import record_run_event
 
 
 class AgentLiveConsumer(AsyncJsonWebsocketConsumer):
@@ -122,6 +127,13 @@ class AgentLiveConsumer(AsyncJsonWebsocketConsumer):
     async def _handle_stop(self):
         await self._issue_runtime_control(stop_requested=True, pause_requested=False)
         await self._mark_run_stopped()
+        await self._record_event(
+            "agent_control_stop_requested",
+            {
+                "source": "websocket",
+                "message": "Run stopped from live session",
+            },
+        )
         await self.channel_layer.group_send(self.group_name, {
             "type": "agent_status",
             "status": "stopped",
@@ -132,6 +144,13 @@ class AgentLiveConsumer(AsyncJsonWebsocketConsumer):
         from servers.models import AgentRun
         await self._issue_runtime_control(pause_requested=True)
         await self._update_run_status(AgentRun.STATUS_PAUSED)
+        await self._record_event(
+            "agent_control_paused",
+            {
+                "source": "websocket",
+                "message": "Run paused from live session",
+            },
+        )
         await self.channel_layer.group_send(self.group_name, {
             "type": "agent_status",
             "status": "paused",
@@ -141,6 +160,13 @@ class AgentLiveConsumer(AsyncJsonWebsocketConsumer):
         from servers.models import AgentRun
         await self._issue_runtime_control(pause_requested=False)
         await self._update_run_status(AgentRun.STATUS_RUNNING)
+        await self._record_event(
+            "agent_control_resumed",
+            {
+                "source": "websocket",
+                "message": "Run resumed from live session",
+            },
+        )
         await self.channel_layer.group_send(self.group_name, {
             "type": "agent_status",
             "status": "running",
@@ -161,6 +187,14 @@ class AgentLiveConsumer(AsyncJsonWebsocketConsumer):
                 run.save(update_fields=["pending_question", "status"])
 
         await save_reply()
+        await self._record_event(
+            "agent_user_reply",
+            {
+                "source": "websocket",
+                "answer": answer,
+                "message": "Operator replied from live session",
+            },
+        )
         await self.channel_layer.group_send(self.group_name, {
             "type": "agent_status",
             "status": "running",
@@ -173,10 +207,6 @@ class AgentLiveConsumer(AsyncJsonWebsocketConsumer):
 
     @database_sync_to_async
     def _check_access(self) -> bool:
-        from django.contrib.auth.models import User
-        from core_ui.context_processors import user_can_feature
-        from servers.models import AgentRun
-
         user = User.objects.filter(id=self._user_id).first()
         if not user or not user_can_feature(user, "agents"):
             return False
@@ -187,7 +217,6 @@ class AgentLiveConsumer(AsyncJsonWebsocketConsumer):
 
     @database_sync_to_async
     def _get_run_snapshot(self) -> dict:
-        from servers.models import AgentRun
         run = AgentRun.objects.filter(id=self.run_id).select_related("agent", "server").first()
         if not run:
             return {"error": "Run not found"}
@@ -204,14 +233,10 @@ class AgentLiveConsumer(AsyncJsonWebsocketConsumer):
 
     @database_sync_to_async
     def _update_run_status(self, status: str):
-        from servers.models import AgentRun
         AgentRun.objects.filter(id=self.run_id, agent__user_id=self._user_id).update(status=status)
 
     @database_sync_to_async
     def _mark_run_stopped(self):
-        from django.utils import timezone
-        from servers.models import AgentRun
-
         AgentRun.objects.filter(id=self.run_id, agent__user_id=self._user_id).update(
             status=AgentRun.STATUS_STOPPED,
             completed_at=timezone.now(),
@@ -225,8 +250,6 @@ class AgentLiveConsumer(AsyncJsonWebsocketConsumer):
         pause_requested: bool | None = None,
         reply_text: str | None = None,
     ):
-        from servers.models import AgentRun
-
         run = AgentRun.objects.filter(id=self.run_id, agent__user_id=self._user_id).first()
         if not run:
             return
@@ -238,3 +261,9 @@ class AgentLiveConsumer(AsyncJsonWebsocketConsumer):
             pause_requested=pause_requested,
             reply_text=reply_text,
         )
+
+    @database_sync_to_async
+    def _record_event(self, event_type: str, payload: dict):
+        if not self.run_id:
+            return None
+        return record_run_event(self.run_id, event_type, payload)

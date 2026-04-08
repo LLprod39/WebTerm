@@ -1,5 +1,6 @@
 import json
 from concurrent.futures import Future
+from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -13,11 +14,16 @@ from core_ui.models import UserAppPermission
 from servers.agent_engine import AgentEngine
 from servers.models import (
     AgentRun,
+    AgentRunDispatch,
+    AgentRunEvent,
     Server,
     ServerAgent,
     ServerAlert,
     ServerConnection,
     ServerHealthCheck,
+    ServerKnowledge,
+    ServerMemorySnapshot,
+    ServerWatcherDraft,
 )
 
 
@@ -217,6 +223,8 @@ def test_group_server_and_context_crud_endpoints():
 @pytest.mark.django_db
 def test_share_master_password_and_knowledge_endpoints(monkeypatch):
     owner = User.objects.create_user(username="owner", password="x")
+    owner.is_staff = True
+    owner.save(update_fields=["is_staff"])
     teammate = User.objects.create_user(username="shared-user", password="x")
     client = Client()
     client.force_login(owner)
@@ -268,6 +276,21 @@ def test_share_master_password_and_knowledge_endpoints(monkeypatch):
     assert list_knowledge.json()["success"] is True
     assert len(list_knowledge.json()["items"]) == 1
 
+    memory_overview = client.get(f"/servers/api/{server.id}/memory/overview/")
+    assert memory_overview.status_code == 200
+    assert memory_overview.json()["success"] is True
+    assert "daemon_state" in memory_overview.json()
+    assert "worker_states" in memory_overview.json()
+    assert memory_overview.json()["manual"]
+    assert "patterns" in memory_overview.json()
+    assert "automation_candidates" in memory_overview.json()
+    assert "skill_drafts" in memory_overview.json()
+    manual_snapshot = memory_overview.json()["manual"][0]
+    assert "history" in manual_snapshot
+    assert "action_summary" in manual_snapshot
+    assert manual_snapshot["version_group_id"]
+    assert "created_by_username" in manual_snapshot
+
     update_knowledge = client.post(
         f"/servers/api/{server.id}/knowledge/{knowledge_id}/update/",
         data=_json({"title": "Nginx main config", "is_active": False, "confidence": 0.6}),
@@ -275,6 +298,57 @@ def test_share_master_password_and_knowledge_endpoints(monkeypatch):
     )
     assert update_knowledge.status_code == 200
     assert update_knowledge.json()["success"] is True
+
+    run_dreams = client.post(
+        f"/servers/api/{server.id}/memory/run-dreams/",
+        data=_json({"job_kind": "hybrid"}),
+        content_type="application/json",
+    )
+    assert run_dreams.status_code == 200
+    assert run_dreams.json()["success"] is True
+    assert run_dreams.json()["overview"]["success"] is True
+    assert "patterns" in run_dreams.json()["overview"]
+    assert "automation_candidates" in run_dreams.json()["overview"]
+    assert "skill_drafts" in run_dreams.json()["overview"]
+
+    update_memory_policy = client.post(
+        f"/servers/api/{server.id}/memory/policy/",
+        data=_json(
+            {
+                "dream_mode": "nightly_llm",
+                "nightly_model_alias": "opssummary",
+                "nearline_event_threshold": 9,
+                "sleep_start_hour": 2,
+                "sleep_end_hour": 6,
+                "human_habits_capture_enabled": False,
+            }
+        ),
+        content_type="application/json",
+    )
+    assert update_memory_policy.status_code == 200
+    assert update_memory_policy.json()["success"] is True
+    assert update_memory_policy.json()["overview"]["policy"]["dream_mode"] == "nightly_llm"
+    assert update_memory_policy.json()["overview"]["policy"]["nearline_event_threshold"] == 9
+    assert update_memory_policy.json()["overview"]["policy"]["human_habits_capture_enabled"] is False
+    assert update_memory_policy.json()["overview"]["policy"]["is_enabled"] is True
+
+    disable_memory_policy = client.post(
+        f"/servers/api/{server.id}/memory/policy/",
+        data=_json({"is_enabled": False}),
+        content_type="application/json",
+    )
+    assert disable_memory_policy.status_code == 200
+    assert disable_memory_policy.json()["success"] is True
+    assert disable_memory_policy.json()["overview"]["policy"]["is_enabled"] is False
+
+    forced_run_dreams = client.post(
+        f"/servers/api/{server.id}/memory/run-dreams/",
+        data=_json({"job_kind": "nearline"}),
+        content_type="application/json",
+    )
+    assert forced_run_dreams.status_code == 200
+    assert forced_run_dreams.json()["success"] is True
+    assert forced_run_dreams.json()["result"]["skipped"] is False
 
     delete_knowledge = client.post(
         f"/servers/api/{server.id}/knowledge/{knowledge_id}/delete/",
@@ -300,6 +374,165 @@ def test_share_master_password_and_knowledge_endpoints(monkeypatch):
     assert reveal.status_code == 200
     assert reveal.json()["success"] is True
     assert reveal.json()["password"] == "plain-password"
+
+
+@pytest.mark.django_db
+def test_server_memory_snapshot_actions_promote_archive_and_skill_scaffold(tmp_path):
+    from studio.models import StudioSkillAccess
+    from studio.skill_registry import get_skill
+
+    owner = User.objects.create_user(username="memory-owner", password="x")
+    owner.is_staff = True
+    owner.save(update_fields=["is_staff"])
+    _grant_feature(owner, "servers", "studio_skills")
+    client = Client()
+    client.force_login(owner)
+    server = _create_server(owner, name="memory-srv", server_type="ssh", port=22)
+
+    pattern_snapshot = ServerMemorySnapshot.objects.create(
+        server=server,
+        created_by=owner,
+        memory_key="pattern_candidate:demo1234",
+        layer=ServerMemorySnapshot.LAYER_CANONICAL,
+        title="Learned Pattern: diagnostics :: uptime && free -h",
+        content="- Команда: uptime && free -h\n- Intent: diagnostics\n- Повторяемость: 4 запусков\n- Успех: 4/4 (100%)",
+        source_kind="dream",
+        source_ref="episode:1",
+        version_group_id="pattern-demo1234",
+        version=1,
+        is_active=True,
+        importance_score=0.64,
+        stability_score=0.72,
+        confidence=0.91,
+        metadata={
+            "intent": "diagnostics",
+            "display_command": "uptime && free -h",
+            "occurrences": 4,
+            "successful_runs": 4,
+            "measured_runs": 4,
+            "success_rate": 1.0,
+            "actor_kinds": ["human"],
+            "source_kinds": ["terminal"],
+        },
+    )
+    automation_snapshot = ServerMemorySnapshot.objects.create(
+        server=server,
+        created_by=owner,
+        memory_key="automation_candidate:demo5678",
+        layer=ServerMemorySnapshot.LAYER_CANONICAL,
+        title="Automation Candidate: service :: systemctl restart nginx",
+        content="- Базовая команда: systemctl restart nginx\n- Intent: service\n- Шаг 2: проверить `systemctl is-active nginx`.",
+        source_kind="dream",
+        source_ref="episode:2",
+        version_group_id="automation-demo5678",
+        version=1,
+        is_active=True,
+        importance_score=0.72,
+        stability_score=0.8,
+        confidence=0.94,
+        metadata={
+            "intent": "service",
+            "display_command": "systemctl restart nginx",
+            "occurrences": 5,
+            "successful_runs": 5,
+            "measured_runs": 5,
+            "success_rate": 1.0,
+            "actor_kinds": ["human"],
+            "source_kinds": ["terminal"],
+        },
+    )
+    skill_snapshot = ServerMemorySnapshot.objects.create(
+        server=server,
+        created_by=owner,
+        memory_key="skill_draft:demo9012",
+        layer=ServerMemorySnapshot.LAYER_CANONICAL,
+        title="Skill Draft: service :: systemctl restart nginx -> systemctl is-active nginx",
+        content=(
+            "# Skill Draft: service\n"
+            "- Trigger: задачи, где нужен workflow `systemctl restart nginx -> systemctl is-active nginx`.\n"
+            "- Reuse signal: 4 повторений, успех 100%.\n"
+            "- Workflow:\n"
+            "  - Step 1: systemctl restart nginx\n"
+            "  - Step 2: systemctl is-active nginx\n"
+            "- Verification: последний шаг workflow уже выступает как verification; нужно проверить его exit code и сигнал результата.\n"
+            "- Success signals: active (running) | nginx.service active\n"
+        ),
+        source_kind="dream",
+        source_ref="episode:3",
+        version_group_id="skill-demo9012",
+        version=1,
+        is_active=True,
+        importance_score=0.76,
+        stability_score=0.84,
+        confidence=0.96,
+        metadata={
+            "intent": "service",
+            "display_command": "systemctl restart nginx -> systemctl is-active nginx",
+            "pattern_kind": "sequence",
+            "commands": ["systemctl restart nginx", "systemctl is-active nginx"],
+            "occurrences": 4,
+            "successful_runs": 4,
+            "measured_runs": 4,
+            "success_rate": 1.0,
+            "has_verification_step": True,
+            "verification_rate": 1.0,
+            "sample_outputs": ["active (running)", "nginx.service active"],
+            "common_cwds": ["/etc/nginx", "/srv/app"],
+            "actor_kinds": ["human"],
+            "source_kinds": ["terminal"],
+        },
+    )
+
+    promote_note = client.post(
+        f"/servers/api/{server.id}/memory/snapshots/{pattern_snapshot.id}/promote-note/",
+        data=_json({}),
+        content_type="application/json",
+    )
+    assert promote_note.status_code == 200
+    promote_note_payload = promote_note.json()
+    assert promote_note_payload["success"] is True
+    assert promote_note_payload["knowledge_id"] > 0
+    assert "manual" in promote_note_payload["overview"]
+    assert "worker_states" in promote_note_payload["overview"]
+    pattern_snapshot.refresh_from_db()
+    assert pattern_snapshot.is_active is False
+    assert pattern_snapshot.layer == ServerMemorySnapshot.LAYER_ARCHIVE
+
+    archive_response = client.post(
+        f"/servers/api/{server.id}/memory/snapshots/{automation_snapshot.id}/archive/",
+        data=_json({}),
+        content_type="application/json",
+    )
+    assert archive_response.status_code == 200
+    assert archive_response.json()["success"] is True
+    assert "worker_states" in archive_response.json()["overview"]
+    automation_snapshot.refresh_from_db()
+    assert automation_snapshot.is_active is False
+    assert automation_snapshot.layer == ServerMemorySnapshot.LAYER_ARCHIVE
+
+    with override_settings(STUDIO_SKILLS_DIRS=[str(tmp_path)]):
+        promote_skill = client.post(
+            f"/servers/api/{server.id}/memory/snapshots/{skill_snapshot.id}/promote-skill/",
+            data=_json({}),
+            content_type="application/json",
+        )
+        assert promote_skill.status_code == 200
+        promote_skill_payload = promote_skill.json()
+        assert promote_skill_payload["success"] is True
+        skill_slug = promote_skill_payload["skill"]["slug"]
+        skill = get_skill(skill_slug)
+        assert skill.slug == skill_slug
+        assert "Derived Draft" in skill.content
+        assert "Derived Workflow" in skill.content
+        assert "Success Signals" in skill.content
+        assert promote_skill_payload["knowledge_id"] > 0
+        assert "worker_states" in promote_skill_payload["overview"]
+        assert ServerKnowledge.objects.filter(server=server, id=promote_skill_payload["knowledge_id"], is_active=True).exists()
+        assert StudioSkillAccess.objects.filter(slug=skill_slug, owner=owner).exists()
+
+    skill_snapshot.refresh_from_db()
+    assert skill_snapshot.is_active is False
+    assert skill_snapshot.layer == ServerMemorySnapshot.LAYER_ARCHIVE
 
 
 @pytest.mark.django_db
@@ -437,6 +670,212 @@ def test_monitoring_alerts_and_ai_analyze_endpoints(monkeypatch):
 
 
 @pytest.mark.django_db
+def test_watcher_scan_endpoint_returns_drafts_for_health_alerts_and_failed_runs():
+    user = User.objects.create_user(username="watcher-user", password="x")
+    _grant_feature(user, "servers")
+    client = Client()
+    client.force_login(user)
+
+    critical_server = _create_server(user, name="critical-node", server_type="ssh")
+    failed_run_server = _create_server(user, name="failed-run-node", host="10.0.0.77", server_type="ssh")
+
+    ServerHealthCheck.objects.create(
+        server=critical_server,
+        status=ServerHealthCheck.STATUS_CRITICAL,
+        cpu_percent=96.0,
+        disk_percent=97.0,
+    )
+    ServerAlert.objects.create(
+        server=critical_server,
+        alert_type=ServerAlert.TYPE_SERVICE,
+        severity=ServerAlert.SEVERITY_CRITICAL,
+        title="nginx is down",
+        message="Service health check failed",
+    )
+    agent = ServerAgent.objects.create(
+        user=user,
+        name="Deploy Operator",
+        mode=ServerAgent.MODE_FULL,
+        agent_type=ServerAgent.TYPE_DEPLOY_WATCHER,
+        commands=[],
+    )
+    AgentRun.objects.create(
+        agent=agent,
+        server=failed_run_server,
+        user=user,
+        status=AgentRun.STATUS_FAILED,
+        ai_analysis="Rollout failed after restart",
+    )
+
+    response = client.get("/servers/api/watchers/scan/")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["summary"]["critical"] == 1
+    assert payload["summary"]["warning"] == 1
+    assert payload["summary"]["drafts"] == 2
+    assert [draft["server_name"] for draft in payload["drafts"]] == ["critical-node", "failed-run-node"]
+
+    critical_draft = payload["drafts"][0]
+    assert critical_draft["severity"] == "critical"
+    assert critical_draft["recommended_role"] == "incident_commander"
+    assert any("nginx is down" in reason for reason in critical_draft["reasons"])
+
+    filtered = client.post(
+        "/servers/api/watchers/scan/",
+        data=_json({"server_ids": [failed_run_server.id], "limit": 5}),
+        content_type="application/json",
+    )
+    assert filtered.status_code == 200
+    filtered_payload = filtered.json()
+    assert filtered_payload["summary"]["drafts"] == 1
+    assert filtered_payload["requested_server_ids"] == [failed_run_server.id]
+    assert filtered_payload["drafts"][0]["server_id"] == failed_run_server.id
+    assert filtered_payload["drafts"][0]["recommended_role"] == "post_change_verifier"
+
+    persisted = client.post(
+        "/servers/api/watchers/scan/",
+        data=_json({"persist": True}),
+        content_type="application/json",
+    )
+    assert persisted.status_code == 200
+    persisted_payload = persisted.json()
+    assert persisted_payload["persisted_scan"] is True
+    assert persisted_payload["persisted"]["created"] == 2
+    assert ServerWatcherDraft.objects.count() == 2
+
+    drafts = client.get("/servers/api/watchers/drafts/")
+    assert drafts.status_code == 200
+    drafts_payload = drafts.json()
+    assert drafts_payload["success"] is True
+    assert drafts_payload["summary"]["open"] == 2
+    draft_id = drafts_payload["drafts"][0]["id"]
+
+    ack = client.post(f"/servers/api/watchers/drafts/{draft_id}/ack/")
+    assert ack.status_code == 200
+    assert ack.json()["success"] is True
+    assert ack.json()["draft"]["status"] == "acknowledged"
+
+    acknowledged = client.get("/servers/api/watchers/drafts/?status=acknowledged")
+    assert acknowledged.status_code == 200
+    assert acknowledged.json()["summary"]["acknowledged"] == 1
+    assert acknowledged.json()["drafts"][0]["id"] == draft_id
+
+
+@pytest.mark.django_db
+def test_watcher_launch_endpoint_creates_run_and_updates_draft(monkeypatch):
+    user = User.objects.create_user(username="watcher-launch-user", password="x")
+    _grant_feature(user, "servers", "agents")
+    client = Client()
+    client.force_login(user)
+
+    server = _create_server(user, name="ops-node")
+    draft = ServerWatcherDraft.objects.create(
+        server=server,
+        fingerprint="watcher-launch-001",
+        severity=ServerAlert.SEVERITY_WARNING,
+        recommended_role="incident_commander",
+        objective="Investigate nginx downtime and recent deploy drift",
+        reasons=["nginx alert", "deploy failed"],
+        memory_excerpt=["Last deploy restarted nginx 3 minutes ago"],
+    )
+
+    captured: dict[str, object] = {}
+
+    def fake_launch(run_id: int, agent_id: int, server_ids: list[int], user_id: int, *, plan_only: bool = False):
+        captured.update(
+            {
+                "run_id": run_id,
+                "agent_id": agent_id,
+                "server_ids": server_ids,
+                "user_id": user_id,
+                "plan_only": plan_only,
+            }
+        )
+
+    monkeypatch.setattr("servers.agent_launch.launch_agent_run_background", fake_launch)
+
+    response = client.post(f"/servers/api/watchers/drafts/{draft.id}/launch/")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["status"] == AgentRun.STATUS_PENDING
+    assert payload["draft"]["status"] == ServerWatcherDraft.STATUS_ACKNOWLEDGED
+
+    run = AgentRun.objects.get(pk=payload["run_id"])
+    agent = ServerAgent.objects.get(pk=payload["agent_id"])
+    draft.refresh_from_db()
+
+    assert run.agent_id == agent.id
+    assert run.server_id == server.id
+    assert run.status == AgentRun.STATUS_PENDING
+    assert agent.user_id == user.id
+    assert agent.mode == ServerAgent.MODE_FULL
+    assert agent.name.startswith("Watcher · ops-node")
+    assert "[ROLE=incident_commander]" in agent.goal
+    assert draft.status == ServerWatcherDraft.STATUS_ACKNOWLEDGED
+    assert draft.acknowledged_by_id == user.id
+    assert draft.metadata["last_launch_run_id"] == run.id
+    assert draft.metadata["last_launch_agent_id"] == agent.id
+    assert draft.metadata["launch_count"] == 1
+    assert captured == {
+        "run_id": run.id,
+        "agent_id": agent.id,
+        "server_ids": [server.id],
+        "user_id": user.id,
+        "plan_only": False,
+    }
+
+
+@pytest.mark.django_db
+def test_agent_run_events_endpoint_returns_persisted_events():
+    user = User.objects.create_user(username="events-user", password="x")
+    _grant_feature(user, "agents")
+    client = Client()
+    client.force_login(user)
+
+    server = _create_server(user, name="events-node")
+    agent = ServerAgent.objects.create(
+        user=user,
+        name="Eventful Agent",
+        mode=ServerAgent.MODE_FULL,
+        goal="Inspect the server",
+    )
+    agent.servers.set([server])
+    run = AgentRun.objects.create(
+        agent=agent,
+        server=server,
+        user=user,
+        status=AgentRun.STATUS_RUNNING,
+    )
+    AgentRunEvent.objects.create(
+        run=run,
+        event_type="agent_background_started",
+        message="Background worker started",
+        payload={"server_ids": [server.id]},
+    )
+    AgentRunEvent.objects.create(
+        run=run,
+        event_type="agent_task_start",
+        task_id=7,
+        message="Check nginx",
+        payload={"task_id": 7, "name": "Check nginx"},
+    )
+
+    response = client.get(f"/servers/api/agents/runs/{run.id}/events/?limit=10")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["total"] == 2
+    assert [item["event_type"] for item in payload["events"]] == [
+        "agent_background_started",
+        "agent_task_start",
+    ]
+    assert payload["events"][1]["task_id"] == 7
+    assert payload["events"][1]["message"] == "Check nginx"
+
+
+@pytest.mark.django_db
 def test_servers_mutation_endpoints_require_csrf_when_enforced():
     user = User.objects.create_user(username="servers-csrf-user", password="x")
     _grant_feature(user, "servers")
@@ -490,7 +929,7 @@ def test_full_agent_run_launches_in_background(monkeypatch):
             "plan_only": plan_only,
         })
 
-    monkeypatch.setattr("servers.views.launch_agent_run_background", fake_launch)
+    monkeypatch.setattr("servers.agent_launch.launch_agent_run_background", fake_launch)
 
     response = client.post(
         f"/servers/api/agents/{agent.id}/run/",
@@ -555,7 +994,7 @@ def test_full_agent_run_enforces_user_active_run_limit(monkeypatch):
     )
 
     monkeypatch.setattr(
-        "servers.views.launch_agent_run_background",
+        "servers.agent_launch.launch_agent_run_background",
         lambda **_kwargs: pytest.fail("launch_agent_run_background should not run when the active-run limit is hit"),
     )
 
@@ -571,6 +1010,45 @@ def test_full_agent_run_enforces_user_active_run_limit(monkeypatch):
     assert payload["code"] == "agent_user_limit_reached"
     assert payload["limit"] == 1
     assert payload["active"] == 1
+
+
+@pytest.mark.django_db
+def test_multi_agent_run_launches_without_plan_only(monkeypatch):
+    user = User.objects.create_user(username="multi-launch-user", password="x")
+    _grant_feature(user, "agents")
+    client = Client()
+    client.force_login(user)
+
+    server = _create_server(user)
+    agent = ServerAgent.objects.create(
+        user=user,
+        name="Cluster Health",
+        mode=ServerAgent.MODE_MULTI,
+        agent_type=ServerAgent.TYPE_MULTI_HEALTH,
+        goal="Inspect the cluster",
+        ai_prompt="Run cluster-wide checks",
+        allow_multi_server=True,
+    )
+    agent.servers.set([server])
+
+    captured: dict[str, object] = {}
+
+    def fake_launch(**kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr("servers.agent_launch.launch_agent_run_background", fake_launch)
+
+    response = client.post(
+        f"/servers/api/agents/{agent.id}/run/",
+        data=_json({}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["status"] == AgentRun.STATUS_PENDING
+    assert captured["plan_only"] is False
 
 
 @pytest.mark.django_db
@@ -630,7 +1108,7 @@ def test_multi_agent_approve_plan_launches_in_background(monkeypatch):
             "user_id": user_id,
         })
 
-    monkeypatch.setattr("servers.views.launch_plan_execution_background", fake_launch)
+    monkeypatch.setattr("servers.agent_service.launch_plan_execution_background", fake_launch)
 
     response = client.post(f"/servers/api/agents/runs/{run.id}/approve-plan/")
 
@@ -642,6 +1120,7 @@ def test_multi_agent_approve_plan_launches_in_background(monkeypatch):
 
     run.refresh_from_db()
     assert run.status == AgentRun.STATUS_PENDING
+    assert AgentRunEvent.objects.filter(run=run, event_type="agent_plan_approved").exists()
     assert captured == {
         "run_id": run.id,
         "agent_id": agent.id,
@@ -682,7 +1161,8 @@ def test_agent_endpoints_crud_run_and_control_flow(monkeypatch):
     list_agents = client.get("/servers/api/agents/")
     assert list_agents.status_code == 200
     assert list_agents.json()["success"] is True
-    assert any(item["id"] == agent_id for item in list_agents.json()["agents"])
+    listed_agent = next(item for item in list_agents.json()["agents"] if item["id"] == agent_id)
+    assert listed_agent["schedule_state"] == "manual"
 
     update_agent = client.post(
         f"/servers/api/agents/{agent_id}/update/",
@@ -707,7 +1187,7 @@ def test_agent_endpoints_crud_run_and_control_flow(monkeypatch):
     async def fake_run_agent_on_all_servers(_agent, _user):
         return [completed_run]
 
-    monkeypatch.setattr("servers.agents.run_agent_on_all_servers", fake_run_agent_on_all_servers)
+    monkeypatch.setattr("servers.agent_service.run_agent_on_all_servers", fake_run_agent_on_all_servers)
 
     run_agent = client.post(
         f"/servers/api/agents/{agent_id}/run/",
@@ -717,6 +1197,7 @@ def test_agent_endpoints_crud_run_and_control_flow(monkeypatch):
     assert run_agent.status_code == 200
     assert run_agent.json()["success"] is True
     run_id = run_agent.json()["runs"][0]["run_id"]
+    assert AgentRunEvent.objects.filter(run=completed_run, event_type="agent_manual_dispatch").exists()
 
     runs = client.get(f"/servers/api/agents/{agent_id}/runs/")
     assert runs.status_code == 200
@@ -747,6 +1228,7 @@ def test_agent_endpoints_crud_run_and_control_flow(monkeypatch):
     assert waiting_run.runtime_control["reply_text"] == "Proceed"
     assert waiting_run.status == AgentRun.STATUS_RUNNING
     assert waiting_run.pending_question == ""
+    assert AgentRunEvent.objects.filter(run=waiting_run, event_type="agent_user_reply").exists()
 
     running_run = _build_run(AgentRun.STATUS_RUNNING)
     stop = client.post(f"/servers/api/agents/{agent_id}/stop/")
@@ -756,6 +1238,7 @@ def test_agent_endpoints_crud_run_and_control_flow(monkeypatch):
     assert running_run.status == AgentRun.STATUS_STOPPED
     assert running_run.runtime_control["stop_requested"] is True
     assert running_run.runtime_control["pause_requested"] is False
+    assert AgentRunEvent.objects.filter(run=running_run, event_type="agent_control_stop_requested").exists()
 
     editable_run = _build_run(AgentRun.STATUS_PLAN_REVIEW)
     editable_run.plan_tasks = [
@@ -934,8 +1417,128 @@ def test_agent_stop_can_target_specific_run():
     other_run.refresh_from_db()
     assert target_run.status == AgentRun.STATUS_STOPPED
     assert target_run.runtime_control["stop_requested"] is True
+    assert AgentRunEvent.objects.filter(run=target_run, event_type="agent_control_stop_requested").exists()
     assert other_run.status == AgentRun.STATUS_WAITING
     assert other_run.runtime_control.get("stop_requested", False) is False
+
+
+@pytest.mark.django_db
+def test_agent_stop_cancels_queued_dispatch():
+    user = User.objects.create_user(username="agent-stop-queued-user", password="x")
+    _grant_feature(user, "agents")
+    client = Client()
+    client.force_login(user)
+
+    server = _create_server(user, name="agent-stop-queued-srv", server_type="ssh")
+    agent = ServerAgent.objects.create(
+        user=user,
+        name="Queued Stop Agent",
+        mode=ServerAgent.MODE_FULL,
+        goal="Queued execution",
+    )
+    agent.servers.set([server])
+
+    run = AgentRun.objects.create(
+        agent=agent,
+        server=server,
+        user=user,
+        status=AgentRun.STATUS_PENDING,
+    )
+    dispatch = AgentRunDispatch.objects.create(
+        run=run,
+        agent=agent,
+        user=user,
+        dispatch_kind=AgentRunDispatch.KIND_LAUNCH,
+        status=AgentRunDispatch.STATUS_QUEUED,
+        server_ids=[server.id],
+        plan_only=False,
+    )
+
+    response = client.post(
+        f"/servers/api/agents/{agent.id}/stop/",
+        data=_json({"run_id": run.id}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["success"] is True
+    assert response.json()["canceled_dispatches"] == 1
+    run.refresh_from_db()
+    dispatch.refresh_from_db()
+    assert run.status == AgentRun.STATUS_STOPPED
+    assert dispatch.status == AgentRunDispatch.STATUS_CANCELED
+    assert AgentRunEvent.objects.filter(run=run, event_type="agent_dispatch_canceled").exists()
+
+
+@pytest.mark.django_db
+def test_agent_schedule_overview_and_dispatch_api(monkeypatch):
+    user = User.objects.create_user(username="agent-schedule-user", password="x")
+    _grant_feature(user, "agents")
+    client = Client()
+    client.force_login(user)
+
+    server = _create_server(user, name="agent-schedule-srv", server_type="ssh")
+    agent = ServerAgent.objects.create(
+        user=user,
+        name="Scheduled Deploy Operator",
+        mode=ServerAgent.MODE_FULL,
+        agent_type=ServerAgent.TYPE_DEPLOY_WATCHER,
+        goal="Verify deploy health",
+        schedule_minutes=15,
+        is_enabled=True,
+        last_run_at=timezone.now() - timedelta(minutes=20),
+    )
+    agent.servers.set([server])
+
+    captured: dict[str, object] = {}
+
+    def fake_launch(run_id: int, agent_id: int, server_ids: list[int], user_id: int, *, plan_only: bool = False):
+        captured.update(
+            {
+                "run_id": run_id,
+                "agent_id": agent_id,
+                "server_ids": server_ids,
+                "user_id": user_id,
+                "plan_only": plan_only,
+            }
+        )
+
+    monkeypatch.setattr("servers.agent_launch.launch_agent_run_background", fake_launch)
+
+    overview = client.get("/servers/api/agents/schedules/")
+    assert overview.status_code == 200
+    overview_payload = overview.json()
+    assert overview_payload["success"] is True
+    assert "execution_plane" in overview_payload
+    assert overview_payload["summary"]["total_scheduled"] == 1
+    assert overview_payload["summary"]["due_now"] == 1
+    scheduled_agent = overview_payload["scheduled_agents"][0]
+    assert scheduled_agent["id"] == agent.id
+    assert scheduled_agent["schedule_state"] == "due"
+    assert scheduled_agent["due_now"] is True
+    assert scheduled_agent["next_due_at"] is not None
+
+    dispatch = client.post(
+        "/servers/api/agents/schedules/dispatch/",
+        data=_json({"limit": 10}),
+        content_type="application/json",
+    )
+    assert dispatch.status_code == 200
+    dispatch_payload = dispatch.json()
+    assert dispatch_payload["success"] is True
+    assert dispatch_payload["summary"]["launched_agents"] == 1
+    assert dispatch_payload["summary"]["runs_created"] == 1
+
+    run = AgentRun.objects.get(agent=agent)
+    assert run.status == AgentRun.STATUS_PENDING
+    assert AgentRunEvent.objects.filter(run=run, event_type="agent_scheduled_dispatch").exists()
+    assert captured == {
+        "run_id": run.id,
+        "agent_id": agent.id,
+        "server_ids": [server.id],
+        "user_id": user.id,
+        "plan_only": False,
+    }
 
 
 @pytest.mark.django_db

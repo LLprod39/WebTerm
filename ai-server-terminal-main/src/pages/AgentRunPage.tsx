@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
 import {
   fetchAgentRunDetail,
+  fetchAgentRunEvents,
   fetchAgentRunLog,
   replyToAgent,
   stopAgent,
@@ -10,6 +11,7 @@ import {
   aiRefinePipelineTask,
   approvePipelinePlan,
   type AgentRunDetail,
+  type AgentRunEventItem,
 } from "@/lib/api";
 import {
   Bot, ArrowLeft, Square, Send, Brain, Terminal,
@@ -80,6 +82,19 @@ function statusClasses(status: string): string {
   }
 }
 
+function eventTypeClasses(eventType: string): string {
+  if (eventType.includes("failed") || eventType.includes("error")) {
+    return "border-red-500/30 bg-red-500/10 text-red-300";
+  }
+  if (eventType.includes("done") || eventType.includes("completed")) {
+    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-300";
+  }
+  if (eventType.includes("start") || eventType.includes("running")) {
+    return "border-sky-500/30 bg-sky-500/10 text-sky-300";
+  }
+  return "border-border/70 bg-card/60 text-muted-foreground";
+}
+
 export default function AgentRunPage() {
   const { runId } = useParams<{ runId: string }>();
   const { t } = useI18n();
@@ -89,7 +104,7 @@ export default function AgentRunPage() {
   const [stopping, setStopping] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
-  const [activeTab, setActiveTab] = useState<"pipeline" | "report">("pipeline");
+  const [activeTab, setActiveTab] = useState<"pipeline" | "report" | "timeline">("pipeline");
   const [localPlanTasks, setLocalPlanTasks] = useState<AgentRunDetail["plan_tasks"] | null>(null);
   const [approving, setApproving] = useState(false);
   const [approveError, setApproveError] = useState<string | null>(null);
@@ -104,24 +119,33 @@ export default function AgentRunPage() {
     refetchInterval: 3000,
   });
 
+  const run = runData?.run;
+  const isMulti = run?.agent_mode === "multi";
+  const isPlanReview = run?.status === "plan_review";
+  const isActive = Boolean(run && ["running", "paused", "waiting", "pending"].includes(run.status));
+  const hasReport = Boolean(run && (run.final_report || run.ai_analysis));
+
   const { data: logData } = useQuery({
     queryKey: ["agent-run-log", rid],
     queryFn: () => fetchAgentRunLog(rid),
-    enabled: rid > 0 && Boolean(runData?.run),
+    enabled: rid > 0 && Boolean(run),
     retry: false,
     refetchInterval: 2000,
   });
+  const { data: eventsData } = useQuery({
+    queryKey: ["agent-run-events", rid],
+    queryFn: () => fetchAgentRunEvents(rid, 200),
+    enabled: rid > 0 && Boolean(run),
+    retry: false,
+    refetchInterval: isActive ? 2000 : 5000,
+  });
 
-  const run = runData?.run;
+  const events = eventsData?.events || [];
   const serverPlanTasks = logData?.plan_tasks || run?.plan_tasks || [];
   const serverPlanTasksSnapshot = JSON.stringify(serverPlanTasks);
   const localPlanTasksSnapshot = localPlanTasks ? JSON.stringify(localPlanTasks) : "";
   // localPlanTasks overrides server data only until fresh server state diverges.
   const planTasks = localPlanTasks ?? serverPlanTasks;
-  const isMulti = run?.agent_mode === "multi";
-  const isPlanReview = run?.status === "plan_review";
-  const isActive = run && ["running", "paused", "waiting", "pending"].includes(run.status);
-  const hasReport = run && (run.final_report || run.ai_analysis);
 
   useEffect(() => {
     if (run && !isActive && !isPlanReview && hasReport) {
@@ -151,6 +175,7 @@ export default function AgentRunPage() {
       await approvePipelinePlan(run.id);
       await queryClient.invalidateQueries({ queryKey: ["agent-run", rid] });
       await queryClient.invalidateQueries({ queryKey: ["agent-run-log", rid] });
+      await queryClient.invalidateQueries({ queryKey: ["agent-run-events", rid] });
     } catch (err: unknown) {
       setApproveError(err instanceof Error ? err.message : "Ошибка запуска выполнения");
     } finally {
@@ -171,6 +196,7 @@ export default function AgentRunPage() {
       await stopAgent(run.agent_id, run.id);
       await queryClient.invalidateQueries({ queryKey: ["agent-run", rid] });
       await queryClient.invalidateQueries({ queryKey: ["agent-run-log", rid] });
+      await queryClient.invalidateQueries({ queryKey: ["agent-run-events", rid] });
     } finally {
       setStopping(false);
     }
@@ -183,6 +209,7 @@ export default function AgentRunPage() {
       await replyToAgent(rid, replyText.trim());
       setReplyText("");
       await queryClient.invalidateQueries({ queryKey: ["agent-run", rid] });
+      await queryClient.invalidateQueries({ queryKey: ["agent-run-events", rid] });
     } finally {
       setSending(false);
     }
@@ -280,6 +307,18 @@ export default function AgentRunPage() {
                     </span>
                   </button>
                 ) : null}
+                <button
+                  onClick={() => setActiveTab("timeline")}
+                  className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                    activeTab === "timeline" ? "bg-background text-foreground" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <Activity className="h-3.5 w-3.5" />
+                    Timeline
+                    {events.length > 0 ? <span className="h-1.5 w-1.5 rounded-full bg-sky-400" /> : null}
+                  </span>
+                </button>
                 <button
                   onClick={() => setActiveTab("report")}
                   className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
@@ -431,6 +470,10 @@ export default function AgentRunPage() {
               />
               <div ref={logEndRef} />
             </div>
+          </div>
+        ) : activeTab === "timeline" ? (
+          <div className="h-full overflow-y-auto">
+            <TimelineView run={run} events={events} />
           </div>
         ) : (
           <div className="h-full overflow-y-auto">
@@ -1084,6 +1127,73 @@ function StatusBadge({ status }: { status: string }) {
     <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusClasses(status)}`}>
       {statusLabel(status)}
     </span>
+  );
+}
+
+function TimelineView({ run, events }: { run: AgentRunDetail; events: AgentRunEventItem[] }) {
+  return (
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-5 sm:px-6">
+      <div className="rounded-[28px] border border-border/70 bg-card/55 px-5 py-5 shadow-[0_22px_64px_rgba(0,0,0,0.18)]">
+        <div className="flex flex-col gap-3 border-b border-border/70 pb-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/60 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              <Activity className="h-3 w-3" />
+              Run timeline
+            </div>
+            <h2 className="mt-4 text-2xl font-semibold tracking-[-0.03em] text-foreground">{run.agent_name}</h2>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              Persistent event stream for planning, subagents, tool work, approvals, and failures.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <StatusBadge status={run.status} />
+            <span className="rounded-full border border-border/70 bg-background/60 px-3 py-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+              {events.length} events
+            </span>
+          </div>
+        </div>
+
+        {events.length === 0 ? (
+          <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
+            <Activity className="mb-4 h-10 w-10 text-muted-foreground/35" />
+            <p className="text-sm text-foreground">Timeline is still empty.</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Events will appear as soon as the background runtime starts emitting activity.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3 pt-5">
+            {events.map((event) => (
+              <div key={event.id} className="rounded-[22px] border border-border/70 bg-background/45 px-4 py-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${eventTypeClasses(event.event_type)}`}>
+                        {event.event_type.replaceAll("_", " ")}
+                      </span>
+                      {event.task_id !== null ? (
+                        <span className="rounded-full border border-border/70 bg-card/60 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                          task #{event.task_id}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-3 text-sm font-medium leading-6 text-foreground">{event.message || event.event_type}</p>
+                    {Object.keys(event.payload || {}).length > 0 ? (
+                      <pre className="mt-3 overflow-x-auto rounded-2xl border border-border/70 bg-card/65 px-3 py-3 font-mono text-[11px] whitespace-pre-wrap text-muted-foreground">
+                        {JSON.stringify(event.payload, null, 2)}
+                      </pre>
+                    ) : null}
+                  </div>
+                  <div className="shrink-0 text-[11px] text-muted-foreground">
+                    {formatCompactDateTime(event.created_at)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

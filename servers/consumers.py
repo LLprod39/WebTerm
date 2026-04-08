@@ -28,6 +28,12 @@ from app.tools.safety import is_dangerous_command
 from core_ui.activity import log_user_activity_async
 from core_ui.audit import audit_context
 from core_ui.context_processors import user_can_feature
+from servers.memory_heuristics import (
+    is_trivial_memory_command,
+    normalize_memory_command_text,
+    should_capture_command_history_memory,
+    should_persist_ai_memory,
+)
 from servers.models import Server, ServerConnection, ServerShare
 from servers.secret_utils import get_server_auth_secret, has_saved_server_secret
 from servers.ssh_host_keys import build_server_connect_kwargs, ensure_server_known_hosts
@@ -732,16 +738,20 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         await database_sync_to_async(self._persist_manual_terminal_command, thread_sensitive=True)(
             user_id=self._user_id,
             server_id=self.server.id,
+            session_id=self._server_connection_id or "",
             command=command,
         )
 
     @staticmethod
-    def _persist_manual_terminal_command(*, user_id: int, server_id: int, command: str) -> None:
+    def _persist_manual_terminal_command(*, user_id: int, server_id: int, session_id: str, command: str) -> None:
         from servers.models import ServerCommandHistory
 
         ServerCommandHistory.objects.create(
             server_id=server_id,
             user_id=user_id,
+            actor_kind=ServerCommandHistory.ACTOR_HUMAN,
+            source_kind=ServerCommandHistory.SOURCE_TERMINAL,
+            session_id=session_id,
             command=command,
             output="",
             exit_code=None,
@@ -1271,14 +1281,9 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
 
     @staticmethod
     def _normalize_command_text(cmd: str) -> str:
-        clean_cmd = (cmd or "").strip()
+        clean_cmd = normalize_memory_command_text(cmd)
         if not clean_cmd:
             return ""
-        if "\x00" in clean_cmd:
-            raise ValueError("Команда содержит недопустимый нулевой байт")
-        # Allow multiline heredoc/script commands from planner.
-        if len(clean_cmd) > 12000:
-            raise ValueError("Команда слишком длинная (лимит 12000 символов)")
         return clean_cmd
 
     async def _ai_process_queue(self):
@@ -1698,37 +1703,26 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                         if report:
                             self._add_to_history("assistant", f"[Отчёт]\n{report[:400]}")
 
-                    # Save concise server memory snapshot for future AI context.
-                    if done_with_output and self.server and self._user_id and bool(self._ai_settings.get("memory_enabled", True)):
+                    # Save concise server memory snapshot only for durable operational signals.
+                    memory_candidates = self._select_memory_candidate_commands(done_with_output)
+                    if memory_candidates and self.server and self._user_id and bool(self._ai_settings.get("memory_enabled", True)):
                         try:
                             memory_obj = await self._ai_extract_server_memory(
                                 user_message=user_msg,
-                                commands_with_output=done_with_output,
+                                commands_with_output=memory_candidates,
                                 report=report,
                             )
                             mem_summary = str(memory_obj.get("summary") or "").strip()
                             mem_facts = memory_obj.get("facts") or []
                             mem_issues = memory_obj.get("issues") or []
                             if mem_summary or mem_facts or mem_issues:
-                                save_info = await self._save_ai_server_profile(
+                                await self._save_ai_server_profile(
                                     user_id=self._user_id,
                                     server_id=self.server.id,
                                     summary=mem_summary,
                                     facts=mem_facts,
                                     issues=mem_issues,
                                 )
-                                if int(save_info.get("saved") or 0) > 0:
-                                    short_msg = mem_summary or "Обновил профиль сервера и важные факты для следующих задач."
-                                    await self._send_ai_event(
-                                        {
-                                            "type": "ai_response",
-                                            "mode": "answer",
-                                            "assistant_text": f"🧠 Память сервера обновлена: {short_msg}",
-                                            "commands": [],
-                                            "execution_mode": str(getattr(self, "_ai_execution_mode", "step")),
-                                        }
-                                    )
-                                    self._add_to_history("assistant", f"[Память сервера] {short_msg[:300]}")
                         except Exception as e:
                             logger.warning("Server memory snapshot save failed: %s", e)
 
@@ -1853,6 +1847,29 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
     def _is_install_command(cmd: str) -> bool:
         """Return True if cmd is a package/dependency install (potentially long-running)."""
         return bool(_INSTALL_CMD_RE.search(cmd or ""))
+
+    @staticmethod
+    def _is_trivial_memory_command(cmd: str) -> bool:
+        return is_trivial_memory_command(cmd)
+
+    def _select_memory_candidate_commands(self, commands_with_output: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        candidates: list[dict[str, Any]] = []
+        for row in commands_with_output or []:
+            command = self._normalize_command_text(str(row.get("cmd") or ""))
+            if not command:
+                continue
+            output = str(row.get("output") or "").strip()
+            exit_code = row.get("exit_code")
+            if not should_capture_command_history_memory(
+                command=command,
+                output=output,
+                exit_code=exit_code,
+                actor_kind="agent",
+                source_kind="agent",
+            ):
+                continue
+            candidates.append({**row, "cmd": command, "output": output})
+        return candidates
 
     @staticmethod
     def _detect_install_error(output: str) -> bool:
@@ -2456,6 +2473,10 @@ EXIT_CODE: {exit_code}
         cleaned_issues = [self._sanitize_memory_line(x) for x in (issues or [])]
         cleaned_issues = [x for x in cleaned_issues if x]
 
+        # Do not persist ephemeral chat summaries without durable facts/issues.
+        if not should_persist_ai_memory(facts=cleaned_facts, issues=cleaned_issues):
+            return {"saved": 0, "titles": []}
+
         saved = 0
         titles: list[str] = []
         now_str = timezone.now().strftime("%Y-%m-%d %H:%M")
@@ -2834,6 +2855,8 @@ EXIT_CODE: {exit_code}
 
     @database_sync_to_async
     def _register_server_connection(self, user_id: int, server_id: int, connection_id: str) -> None:
+        from app.agent_kernel.memory.store import DjangoServerMemoryStore
+
         now = timezone.now()
         ServerConnection.objects.update_or_create(
             connection_id=connection_id,
@@ -2844,6 +2867,19 @@ EXIT_CODE: {exit_code}
                 "last_seen_at": now,
                 "disconnected_at": None,
             },
+        )
+        DjangoServerMemoryStore()._ingest_event_sync(
+            server_id,
+            source_kind="terminal",
+            actor_kind="human",
+            source_ref=connection_id,
+            session_id=connection_id,
+            event_type="session_opened",
+            raw_text="SSH terminal session opened",
+            structured_payload={"connection_id": connection_id, "user_id": user_id},
+            importance_hint=0.55,
+            actor_user_id=user_id,
+            force_compact=True,
         )
 
     @database_sync_to_async
@@ -2856,11 +2892,29 @@ EXIT_CODE: {exit_code}
 
     @database_sync_to_async
     def _mark_server_connection_closed(self, connection_id: str) -> None:
+        from app.agent_kernel.memory.store import DjangoServerMemoryStore
+
         now = timezone.now()
+        connection = ServerConnection.objects.filter(connection_id=connection_id).first()
+        if connection is None:
+            return
         ServerConnection.objects.filter(connection_id=connection_id).update(
             status="disconnected",
             last_seen_at=now,
             disconnected_at=now,
+        )
+        DjangoServerMemoryStore()._ingest_event_sync(
+            connection.server_id,
+            source_kind="terminal",
+            actor_kind="human",
+            source_ref=connection_id,
+            session_id=connection_id,
+            event_type="session_closed",
+            raw_text="SSH terminal session closed",
+            structured_payload={"connection_id": connection_id, "user_id": connection.user_id},
+            importance_hint=0.52,
+            actor_user_id=connection.user_id,
+            force_compact=True,
         )
 
     @database_sync_to_async
@@ -3086,6 +3140,8 @@ EXIT_CODE: {exit_code}
         ServerCommandHistory.objects.create(
             server_id=server_id,
             user_id=user_id,
+            actor_kind=ServerCommandHistory.ACTOR_AGENT,
+            source_kind=ServerCommandHistory.SOURCE_AGENT,
             command=command,
             output=output_snippet or "",
             exit_code=exit_code,

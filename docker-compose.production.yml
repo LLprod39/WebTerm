@@ -1,9 +1,24 @@
-# Production-oriented stack for mini_prod.
-# Usage:
-#   copy .env.production.example to .env.production and edit secrets/hosts
-#   docker compose --env-file .env.production -f docker-compose.production.yml up -d --build
-# Stop:
-#   docker compose --env-file .env.production -f docker-compose.production.yml down
+# Production stack for WebTrerm / mini_prod.
+# Quick start:
+#   1. Copy .env.production.example to .env.production
+#   2. Fill real hostnames if you expose the app outside localhost
+#   3. Run: docker compose --env-file .env.production -f docker-compose.production.yml up -d --build
+
+x-proxy-env: &proxy-env
+  http_proxy: ${http_proxy:-}
+  https_proxy: ${https_proxy:-}
+  ftp_proxy: ${ftp_proxy:-}
+  no_proxy: ${no_proxy:-localhost,127.0.0.1,::1,postgres,redis,backend,frontend,nginx,mcp-demo,mcp-keycloak}
+  HTTP_PROXY: ${HTTP_PROXY:-}
+  HTTPS_PROXY: ${HTTPS_PROXY:-}
+  FTP_PROXY: ${FTP_PROXY:-}
+  NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1,postgres,redis,backend,frontend,nginx,mcp-demo,mcp-keycloak}
+
+x-json-logging: &json-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
 
 services:
   postgres:
@@ -13,8 +28,9 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TZ: ${TZ:-UTC}
     ports:
-      - "${POSTGRES_HOST_PORT:-5432}:5432"
+      - "${POSTGRES_BIND_HOST:-127.0.0.1}:${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - mini_prod_postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -29,17 +45,13 @@ services:
       - "max_connections=200"
       - "-c"
       - "shared_buffers=256MB"
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "5"
+    logging: *json-logging
 
   redis:
     image: redis:7-alpine
     container_name: mini-prod-redis
     ports:
-      - "${REDIS_HOST_PORT:-6379}:6379"
+      - "${REDIS_BIND_HOST:-127.0.0.1}:${REDIS_HOST_PORT:-6379}:6379"
     command: ["redis-server", "--appendonly", "yes", "--save", "60", "1000"]
     volumes:
       - mini_prod_redis_data:/data
@@ -49,11 +61,7 @@ services:
       interval: 10s
       timeout: 3s
       retries: 10
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "5"
+    logging: *json-logging
 
   backend:
     build:
@@ -71,20 +79,22 @@ services:
     container_name: mini-prod-backend
     command: ["sh", "-lc", "./docker/render-backend-start.sh"]
     environment:
+      <<: *proxy-env
+      WEU_BUILD: ${WEU_BUILD:-prod}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-false}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DJANGO_PORT: "9000"
+      PORT: "9000"
       POSTGRES_HOST: postgres
-      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_PORT: "5432"
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
-      DJANGO_DEBUG: ${DJANGO_DEBUG:-false}
-      DJANGO_PORT: 9000
-      PORT: 9000
+      CHANNEL_REDIS_URL: ${CHANNEL_REDIS_URL:-redis://redis:6379/1}
       SITE_URL: ${SITE_URL}
       FRONTEND_APP_URL: ${FRONTEND_APP_URL}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS}
       CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS}
-      CHANNEL_REDIS_URL: ${CHANNEL_REDIS_URL:-redis://redis:6379/1}
       APP_LOG_FILE: ${APP_LOG_FILE:-/workspace/logs/webtrerm.log}
       APP_LOG_LEVEL: ${APP_LOG_LEVEL:-INFO}
       APP_LOG_ROTATION: ${APP_LOG_ROTATION:-50 MB}
@@ -99,29 +109,53 @@ services:
       SECURE_HSTS_SECONDS: ${SECURE_HSTS_SECONDS:-31536000}
       SECURE_HSTS_INCLUDE_SUBDOMAINS: ${SECURE_HSTS_INCLUDE_SUBDOMAINS:-true}
       SECURE_HSTS_PRELOAD: ${SECURE_HSTS_PRELOAD:-false}
-      http_proxy: ${http_proxy:-}
-      https_proxy: ${https_proxy:-}
-      ftp_proxy: ${ftp_proxy:-}
-      no_proxy: ${no_proxy:-localhost,127.0.0.1,::1,postgres,redis,backend,frontend,nginx}
-      HTTP_PROXY: ${HTTP_PROXY:-}
-      HTTPS_PROXY: ${HTTPS_PROXY:-}
-      FTP_PROXY: ${FTP_PROXY:-}
-      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1,postgres,redis,backend,frontend,nginx}
+      MASTER_PASSWORD: ${MASTER_PASSWORD:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      CODEX_API_KEY: ${CODEX_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       GROK_API_KEY: ${GROK_API_KEY:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
+      OLLAMA_API_KEY: ${OLLAMA_API_KEY:-}
+      OLLAMA_CLOUD_BASE_URL: ${OLLAMA_CLOUD_BASE_URL:-}
+      CURSOR_API_KEY: ${CURSOR_API_KEY:-}
+      CURSOR_CLI_HTTP_1: ${CURSOR_CLI_HTTP_1:-1}
+      CURSOR_CLI_EXTRA_ENV: ${CURSOR_CLI_EXTRA_ENV:-}
+      CLI_RUNTIME_TIMEOUT_SECONDS: ${CLI_RUNTIME_TIMEOUT_SECONDS:-600}
+      CLI_FIRST_OUTPUT_TIMEOUT_SECONDS: ${CLI_FIRST_OUTPUT_TIMEOUT_SECONDS:-120}
+      DOMAIN_AUTH_ENABLED: ${DOMAIN_AUTH_ENABLED:-false}
+      DOMAIN_AUTH_HEADER: ${DOMAIN_AUTH_HEADER:-REMOTE_USER}
+      DOMAIN_AUTH_HEADER_ALIASES: ${DOMAIN_AUTH_HEADER_ALIASES:-}
+      DOMAIN_AUTH_AUTO_CREATE: ${DOMAIN_AUTH_AUTO_CREATE:-true}
+      DOMAIN_AUTH_LOWERCASE_USERNAMES: ${DOMAIN_AUTH_LOWERCASE_USERNAMES:-true}
+      DOMAIN_AUTH_DEFAULT_PROFILE: ${DOMAIN_AUTH_DEFAULT_PROFILE:-server_only}
+      LDAP_ENABLED: ${LDAP_ENABLED:-false}
+      LDAP_SERVER: ${LDAP_SERVER:-}
+      LDAP_PORT: ${LDAP_PORT:-}
+      LDAP_BIND_DN: ${LDAP_BIND_DN:-}
+      LDAP_BIND_PASSWORD: ${LDAP_BIND_PASSWORD:-}
+      LDAP_SEARCH_BASE: ${LDAP_SEARCH_BASE:-}
+      LDAP_FILTER: ${LDAP_FILTER:-(objectClass=user)}
+      LDAP_USERNAME_ATTRIBUTE: ${LDAP_USERNAME_ATTRIBUTE:-sAMAccountName}
+      LDAP_EMAIL_ATTRIBUTE: ${LDAP_EMAIL_ATTRIBUTE:-mail}
+      LDAP_FULL_NAME_ATTRIBUTE: ${LDAP_FULL_NAME_ATTRIBUTE:-cn}
+      LDAP_START_TLS: ${LDAP_START_TLS:-false}
+      LDAP_IGNORE_CERT: ${LDAP_IGNORE_CERT:-false}
+      LDAP_NETWORK_TIMEOUT_SECONDS: ${LDAP_NETWORK_TIMEOUT_SECONDS:-3}
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
       EMAIL_HOST: ${EMAIL_HOST:-}
       EMAIL_PORT: ${EMAIL_PORT:-}
-      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-true}
       EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
       EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
       DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-}
       PIPELINE_NOTIFY_EMAIL: ${PIPELINE_NOTIFY_EMAIL:-}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      STUDIO_MCP_DEMO_URL: ${STUDIO_MCP_DEMO_URL:-http://mcp-demo:8765/mcp}
+      STUDIO_KEYCLOAK_MCP_URL: ${STUDIO_KEYCLOAK_MCP_URL:-http://mcp-keycloak:8766/mcp}
     ports:
-      - "${DJANGO_HOST_PORT:-9000}:9000"
+      - "${DJANGO_BIND_HOST:-127.0.0.1}:${DJANGO_HOST_PORT:-9000}:9000"
     volumes:
       - mini_prod_media:/workspace/media
       - mini_prod_staticfiles:/workspace/staticfiles
@@ -130,6 +164,10 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      mcp-demo:
+        condition: service_healthy
+      mcp-keycloak:
         condition: service_healthy
     restart: unless-stopped
     stop_grace_period: 45s
@@ -144,11 +182,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 10
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "5"
+    logging: *json-logging
 
   frontend:
     build:
@@ -165,7 +199,6 @@ services:
         NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1}
     container_name: mini-prod-frontend
     environment:
-      VITE_DJANGO_URL: http://backend:9000
       NODE_ENV: production
     expose:
       - "8080"
@@ -184,17 +217,13 @@ services:
       interval: 15s
       timeout: 5s
       retries: 10
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "5"
+    logging: *json-logging
 
   nginx:
     image: nginx:1.27-alpine
     container_name: mini-prod-nginx
     ports:
-      - "${FRONTEND_PORT:-8080}:8080"
+      - "${PUBLIC_BIND_HOST:-0.0.0.0}:${FRONTEND_PORT:-8080}:8080"
     volumes:
       - ./docker/nginx/production.conf:/etc/nginx/conf.d/default.conf:ro
       - mini_prod_staticfiles:/srv/static:ro
@@ -210,14 +239,39 @@ services:
       interval: 15s
       timeout: 5s
       retries: 10
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "5"
+    logging: *json-logging
+
+  mcp-demo:
+    build:
+      context: .
+      dockerfile: docker/demo-mcp.Dockerfile
+      args:
+        http_proxy: ${http_proxy:-}
+        https_proxy: ${https_proxy:-}
+        ftp_proxy: ${ftp_proxy:-}
+        no_proxy: ${no_proxy:-localhost,127.0.0.1,::1}
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        FTP_PROXY: ${FTP_PROXY:-}
+        NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1}
+    container_name: mini-prod-mcp-demo
+    ports:
+      - "${MCP_BIND_HOST:-127.0.0.1}:${STUDIO_MCP_DEMO_PORT:-8765}:8765"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/health', timeout=5).read()",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *json-logging
 
   mcp-keycloak:
-    profiles: ["mcp"]
     build:
       context: .
       dockerfile: docker/keycloak-mcp.Dockerfile
@@ -231,9 +285,8 @@ services:
         FTP_PROXY: ${FTP_PROXY:-}
         NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1}
     container_name: mini-prod-mcp-keycloak
-    working_dir: /workspace
-    command: ["python", "key_mcp.py", "--http", "--host", "0.0.0.0", "--port", "8766"]
     environment:
+      <<: *proxy-env
       KEYCLOAK_URL: ${KEYCLOAK_URL:-}
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-}
       KEYCLOAK_TOKEN_REALM: ${KEYCLOAK_TOKEN_REALM:-}
@@ -245,8 +298,30 @@ services:
       KEYCLOAK_PROFILES_FILE: ${KEYCLOAK_PROFILES_FILE:-keycloak_profiles.json}
       KEYCLOAK_VERIFY_SSL: ${KEYCLOAK_VERIFY_SSL:-true}
       KEYCLOAK_ALLOW_INSECURE_HTTP: ${KEYCLOAK_ALLOW_INSECURE_HTTP:-false}
+      KEYCLOAK_PROD_URL: ${KEYCLOAK_PROD_URL:-}
+      KEYCLOAK_PROD_REALM: ${KEYCLOAK_PROD_REALM:-}
+      KEYCLOAK_PROD_TOKEN_REALM: ${KEYCLOAK_PROD_TOKEN_REALM:-}
+      KEYCLOAK_PROD_CLIENT_ID: ${KEYCLOAK_PROD_CLIENT_ID:-admin-cli}
+      KEYCLOAK_PROD_ADMIN_USER: ${KEYCLOAK_PROD_ADMIN_USER:-}
+      KEYCLOAK_PROD_ADMIN_PASSWORD: ${KEYCLOAK_PROD_ADMIN_PASSWORD:-}
+      KEYCLOAK_PROD_CLIENT_SECRET: ${KEYCLOAK_PROD_CLIENT_SECRET:-}
+      KEYCLOAK_PROD_VERIFY_SSL: ${KEYCLOAK_PROD_VERIFY_SSL:-true}
+      KEYCLOAK_TEST_URL: ${KEYCLOAK_TEST_URL:-}
+      KEYCLOAK_TEST_REALM: ${KEYCLOAK_TEST_REALM:-}
+      KEYCLOAK_TEST_TOKEN_REALM: ${KEYCLOAK_TEST_TOKEN_REALM:-}
+      KEYCLOAK_TEST_CLIENT_ID: ${KEYCLOAK_TEST_CLIENT_ID:-admin-cli}
+      KEYCLOAK_TEST_ADMIN_USER: ${KEYCLOAK_TEST_ADMIN_USER:-}
+      KEYCLOAK_TEST_ADMIN_PASSWORD: ${KEYCLOAK_TEST_ADMIN_PASSWORD:-}
+      KEYCLOAK_TEST_CLIENT_SECRET: ${KEYCLOAK_TEST_CLIENT_SECRET:-}
+      KEYCLOAK_TEST_VERIFY_SSL: ${KEYCLOAK_TEST_VERIFY_SSL:-true}
+      KEYCLOAK_EMAIL_DOMAINS: ${KEYCLOAK_EMAIL_DOMAINS:-erg.kz,corp.erg.kz,mail.erg.kz}
+      KEYCLOAK_MAX_RETRIES: ${KEYCLOAK_MAX_RETRIES:-3}
+      KEYCLOAK_RETRY_DELAY: ${KEYCLOAK_RETRY_DELAY:-1.5}
+      KEYCLOAK_REQUEST_TIMEOUT: ${KEYCLOAK_REQUEST_TIMEOUT:-30}
+      KEYCLOAK_MAX_SEARCH_RESULTS: ${KEYCLOAK_MAX_SEARCH_RESULTS:-50}
+      KEYCLOAK_GROUP_PAGE_SIZE: ${KEYCLOAK_GROUP_PAGE_SIZE:-200}
     ports:
-      - "${STUDIO_KEYCLOAK_MCP_PORT:-8766}:8766"
+      - "${MCP_BIND_HOST:-127.0.0.1}:${STUDIO_KEYCLOAK_MCP_PORT:-8766}:8766"
     restart: unless-stopped
     healthcheck:
       test:
@@ -259,11 +334,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "5"
+    logging: *json-logging
 
 volumes:
   mini_prod_postgres_data:

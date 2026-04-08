@@ -657,8 +657,19 @@ class ModelManager:
         3. Hard fallback to grok
         """
         c = self.config
-        provider_field = f"{purpose}_llm_provider"
-        model_field = f"{purpose}_llm_model"
+        purpose_aliases = {
+            "ops": "agent",
+            "opsexecutor": "agent",
+            "opsplan": "orchestrator",
+            "opsreplan": "orchestrator",
+            "opssummary": "chat",
+            "opsguard": "chat",
+            "opsmemory": "chat",
+        }
+        normalized_purpose = purpose_aliases.get(purpose, purpose)
+
+        provider_field = f"{normalized_purpose}_llm_provider"
+        model_field = f"{normalized_purpose}_llm_model"
         purpose_provider = (getattr(c, provider_field, "") or "").strip()
         purpose_model = (getattr(c, model_field, "") or "").strip()
 
@@ -671,7 +682,7 @@ class ModelManager:
             model_str = purpose_model
         else:
             # Fall back to the per-provider model for this purpose
-            if purpose == "agent":
+            if normalized_purpose == "agent":
                 model_str = self.get_agent_model(provider)
             else:
                 model_str = self.get_chat_model(provider)
