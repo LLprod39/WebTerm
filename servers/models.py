@@ -1010,6 +1010,19 @@ class ServerAgent(models.Model):
     session_timeout_seconds = models.IntegerField(default=600, help_text="Max session duration in seconds")
     max_connections = models.IntegerField(default=5, help_text="Max simultaneous SSH connections")
 
+    # GAP 7: per-agent memory policy overrides
+    memory_policy_override = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            "Per-agent memory policy overrides. Supported keys: "
+            "nearline_event_threshold (int), dream_mode (str: heuristic|nightly_llm|hybrid), "
+            "raw_event_retention_days (int), episode_retention_days (int), "
+            "rdp_semantic_capture_enabled (bool), human_habits_capture_enabled (bool), "
+            "is_enabled (bool). Empty dict = use user-level policy."
+        ),
+    )
+
     schedule_minutes = models.IntegerField(default=0, help_text="0 = manual only")
     is_enabled = models.BooleanField(default=True)
     last_run_at = models.DateTimeField(null=True, blank=True)

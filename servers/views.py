@@ -2594,6 +2594,82 @@ def server_knowledge_delete(request, server_id, knowledge_id):
 @login_required
 @require_feature('servers')
 @require_http_methods(["GET"])
+def server_memory_snapshots_user(request, server_id):
+    """User-facing endpoint: returns canonical + candidate snapshots for the Knowledge tab.
+
+    Unlike server_memory_overview, this does NOT require admin rights.
+    """
+    from servers.models import ServerMemorySnapshot
+
+    server = get_object_or_404(Server, id=server_id, user=request.user)
+    snapshots = (
+        ServerMemorySnapshot.objects
+        .filter(server_id=server.id, status="active")
+        .order_by("memory_key")
+    )
+    items = []
+    for s in snapshots:
+        kind = "canonical"
+        mk = s.memory_key or ""
+        if mk.startswith("pattern_candidate:"):
+            kind = "pattern"
+        elif mk.startswith("automation_candidate:"):
+            kind = "automation"
+        elif mk.startswith("skill_draft:"):
+            kind = "skill_draft"
+        elif mk.startswith("manual_note:") or mk.startswith("knowledge_note:"):
+            kind = "manual_note"
+        items.append({
+            "id": s.id,
+            "title": s.title or mk,
+            "content": s.content or "",
+            "memory_key": mk,
+            "kind": kind,
+            "version": s.version,
+            "confidence": float(s.confidence or 0),
+            "freshness": float(s.freshness_score or 0),
+            "updated_at": s.updated_at.isoformat() if s.updated_at else None,
+            "created_at": s.created_at.isoformat() if s.created_at else None,
+            "rewrite_reason": s.rewrite_reason or "",
+        })
+    return JsonResponse({"success": True, "items": items})
+
+
+@login_required
+@require_feature('servers')
+@require_http_methods(["POST"])
+def server_memory_snapshot_update(request, server_id, snapshot_id):
+    """User-facing: edit content/title of a snapshot (canonical or candidate)."""
+    from servers.models import ServerMemorySnapshot
+
+    server = get_object_or_404(Server, id=server_id, user=request.user)
+    snapshot = get_object_or_404(
+        ServerMemorySnapshot, id=snapshot_id, server_id=server.id, status="active"
+    )
+    data = json.loads(request.body or "{}")
+    changed = False
+    new_title = data.get("title")
+    if new_title is not None:
+        snapshot.title = str(new_title).strip()[:200]
+        changed = True
+    new_content = data.get("content")
+    if new_content is not None:
+        snapshot.content = str(new_content).strip()[:8000]
+        changed = True
+    if changed:
+        snapshot.save(update_fields=["title", "content", "updated_at"])
+    return JsonResponse({
+        "success": True,
+        "id": snapshot.id,
+        "title": snapshot.title,
+        "content": snapshot.content,
+        "updated_at": snapshot.updated_at.isoformat() if snapshot.updated_at else None,
+    })
+
+
+@login_required
+@require_feature('servers')
+@require_http_methods(["GET"])
 def server_memory_overview(request, server_id):
     from app.agent_kernel.memory.store import DjangoServerMemoryStore
 

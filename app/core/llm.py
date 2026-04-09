@@ -177,6 +177,26 @@ async def with_retry(coro, max_attempts: int = 3):
     if last_err is not None:
         raise last_err
 
+
+# ---------------------------------------------------------------------------
+# Singleton accessor (P1-7).
+# ---------------------------------------------------------------------------
+_provider_instance: "LLMProvider | None" = None
+
+
+def get_provider() -> "LLMProvider":
+    """Return a module-level cached LLMProvider.
+
+    Avoids re-reading env variables and re-initializing model_manager keys
+    on every call.  Safe across async tasks (GIL protects simple attribute
+    assignment; LLMProvider already lazy-inits API clients).
+    """
+    global _provider_instance
+    if _provider_instance is None:
+        _provider_instance = LLMProvider()
+    return _provider_instance
+
+
 class LLMProvider:
     def __init__(self):
         self.gemini_api_key = os.getenv("GEMINI_API_KEY")

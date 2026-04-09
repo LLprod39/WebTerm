@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from django.db import transaction
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
@@ -10,9 +11,10 @@ from servers.models import AgentRunEvent, ServerAlert, ServerCommandHistory, Ser
 memory_store = DjangoServerMemoryStore()
 
 
-@receiver(post_save, sender=ServerCommandHistory)
-def ingest_command_history(sender, instance: ServerCommandHistory, created: bool, **kwargs):
-    if not created:
+def _deferred_ingest_command_history(pk: int):
+    """Run after the transaction commits so the row is guaranteed to exist."""
+    instance = ServerCommandHistory.objects.filter(pk=pk).first()
+    if not instance:
         return
     output = str(instance.output or "")
     output_tail = output[-1200:] if output else ""
@@ -43,9 +45,35 @@ def ingest_command_history(sender, instance: ServerCommandHistory, created: bool
     )
 
 
-@receiver(post_save, sender=ServerHealthCheck)
-def ingest_health_check(sender, instance: ServerHealthCheck, created: bool, **kwargs):
+@receiver(post_save, sender=ServerCommandHistory)
+def ingest_command_history(sender, instance: ServerCommandHistory, created: bool, **kwargs):
     if not created:
+        return
+    transaction.on_commit(lambda: _deferred_ingest_command_history(instance.pk))
+
+
+def _should_capture_health_check(instance: ServerHealthCheck) -> bool:
+    """Only capture health checks that represent a state transition or non-OK status."""
+    if instance.status != ServerHealthCheck.STATUS_HEALTHY:
+        return True
+    # OK status → only if previous was not OK (recovery signal)
+    previous = (
+        ServerHealthCheck.objects
+        .filter(server_id=instance.server_id, checked_at__lt=instance.checked_at)
+        .order_by("-checked_at")
+        .first()
+    )
+    if previous and previous.status != ServerHealthCheck.STATUS_HEALTHY:
+        return True  # Transition to OK — recovery signal worth capturing
+    return False
+
+
+def _deferred_ingest_health_check(pk: int):
+    """Run after the transaction commits."""
+    instance = ServerHealthCheck.objects.filter(pk=pk).first()
+    if not instance:
+        return
+    if not _should_capture_health_check(instance):
         return
     raw_output = instance.raw_output or {}
     memory_store._ingest_event_sync(
@@ -70,6 +98,13 @@ def ingest_health_check(sender, instance: ServerHealthCheck, created: bool, **kw
         },
         importance_hint=0.9 if instance.status != ServerHealthCheck.STATUS_HEALTHY else 0.45,
     )
+
+
+@receiver(post_save, sender=ServerHealthCheck)
+def ingest_health_check(sender, instance: ServerHealthCheck, created: bool, **kwargs):
+    if not created:
+        return
+    transaction.on_commit(lambda: _deferred_ingest_health_check(instance.pk))
 
 
 @receiver(post_save, sender=ServerAlert)

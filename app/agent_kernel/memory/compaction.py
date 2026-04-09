@@ -255,6 +255,44 @@ def build_run_summary_payload(
             }
         )
 
+    # GAP 6: skill_draft_hint — если run успешен + verified + использовал SSH из 3+ шагов
+    has_ssh_steps = any(
+        str(item.get("tool") or "").lower() in {"ssh_execute", "read_console"}
+        for item in tool_calls
+    )
+    ssh_tool_count = sum(
+        1 for item in tool_calls
+        if str(item.get("tool") or "").lower() in {"ssh_execute", "read_console"}
+    )
+    if (
+        verified
+        and final_status == "completed"
+        and has_ssh_steps
+        and ssh_tool_count >= 3
+        and runbook_lines
+    ):
+        skill_summary_lines = unique_preserving_order(runbook_lines[:4], limit=4)
+        workflow_steps = unique_preserving_order(
+            [str(item.get("tool") or "") for item in tool_calls if item.get("tool")],
+            limit=6,
+        )
+        canonical_notes.append(
+            {
+                "title": f"Skill Draft Hint: {getattr(run.agent, 'name', 'Agent')} run #{run.pk}",
+                "category": "solutions",
+                "content": build_canonical_note_content(
+                    ["Автоматически детектированный skill draft из успешного run."]
+                    + skill_summary_lines,
+                ),
+                "confidence": 0.82,
+                "source": "ai_run_summary",
+                "is_skill_draft_hint": True,
+                "workflow_steps": workflow_steps,
+                "verification_summary": compact_text(verification_summary, limit=200),
+                "verified": True,
+            }
+        )
+
     persist_run_digest = bool(risk_lines or final_status in {"failed", "stopped"})
 
     return {

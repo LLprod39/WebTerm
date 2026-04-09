@@ -8,16 +8,19 @@ from datetime import timedelta
 from typing import Any, Protocol
 
 from asgiref.sync import async_to_sync, sync_to_async
+from django.db import transaction
 from django.utils import timezone
 
 from app.agent_kernel.domain.specs import ServerMemoryCard
 from app.agent_kernel.memory.compaction import compact_text, extract_signal_lines, unique_preserving_order
 from app.agent_kernel.memory.redaction import payload_preview, redact_for_storage
 from app.agent_kernel.memory.repair import (
+    auto_resolve_stale_revalidations,
     compute_freshness_score,
     decay_confidence,
     detect_fact_conflicts,
     needs_revalidation,
+    resolve_winning_fact,
 )
 from app.agent_kernel.memory.server_cards import build_server_memory_card
 
@@ -223,10 +226,16 @@ class DjangoServerMemoryStore:
             actor_user_id=actor_user_id,
         )
 
-    def _get_or_create_policy_sync(self, *, user_id: int):
+    def _get_or_create_policy_sync(self, *, user_id: int, agent=None):
         from servers.models import ServerMemoryPolicy
 
         policy, _created = ServerMemoryPolicy.objects.get_or_create(user_id=user_id)
+        # Apply per-agent overrides when available (P1-6)
+        if agent is not None:
+            overrides = getattr(agent, "memory_policy_override", None) or {}
+            for key, value in overrides.items():
+                if hasattr(policy, key) and key not in ("id", "pk", "user", "user_id"):
+                    setattr(policy, key, value)
         return policy
 
     def _get_server_card_sync(self, server_id: int) -> ServerMemoryCard:
@@ -276,6 +285,103 @@ class DjangoServerMemoryStore:
             recent_runs=recent_runs,
             legacy_knowledge=legacy_knowledge,
         )
+
+    def _get_server_cards_batch_sync(self, server_ids: list[int]) -> list[ServerMemoryCard]:
+        """Load multiple server cards with batched queries (P2-7).
+
+        Instead of N separate _get_server_card_sync calls (each doing ~10
+        queries), this prefetches all data in one pass, then partitions it
+        by server_id for card building.
+        """
+        if not server_ids:
+            return []
+        from servers.models import (
+            AgentRun,
+            GlobalServerRules,
+            Server,
+            ServerAlert,
+            ServerGroupKnowledge,
+            ServerHealthCheck,
+            ServerKnowledge,
+            ServerMemoryEpisode,
+            ServerMemoryRevalidation,
+            ServerMemorySnapshot,
+        )
+
+        servers = {s.id: s for s in Server.objects.select_related("group", "user").filter(pk__in=server_ids)}
+        if not servers:
+            return []
+
+        # Shared lookups
+        user_ids = {s.user_id for s in servers.values() if s.user_id}
+        group_ids = {s.group_id for s in servers.values() if s.group_id}
+
+        # One query per model, filtered on all server_ids at once
+        global_rules_by_user = {}
+        for gr in GlobalServerRules.objects.filter(user_id__in=user_ids):
+            global_rules_by_user[gr.user_id] = gr
+
+        group_knowledge_by_group: dict[int, list] = {}
+        if group_ids:
+            for gk in ServerGroupKnowledge.objects.filter(group_id__in=group_ids, is_active=True).order_by("-updated_at"):
+                group_knowledge_by_group.setdefault(gk.group_id, []).append(gk)
+
+        snapshots_by_server: dict[int, list] = {}
+        for s in ServerMemorySnapshot.objects.filter(
+            server_id__in=server_ids, is_active=True, layer=ServerMemorySnapshot.LAYER_CANONICAL
+        ).order_by("memory_key", "-version", "-updated_at"):
+            snapshots_by_server.setdefault(s.server_id, []).append(s)
+
+        episodes_by_server: dict[int, list] = {}
+        for e in ServerMemoryEpisode.objects.filter(
+            server_id__in=server_ids, is_active=True
+        ).order_by("-last_event_at", "-updated_at")[:len(server_ids) * 8]:
+            episodes_by_server.setdefault(e.server_id, []).append(e)
+
+        revalidations_by_server: dict[int, list] = {}
+        for r in ServerMemoryRevalidation.objects.filter(
+            server_id__in=server_ids, status=ServerMemoryRevalidation.STATUS_OPEN
+        ).order_by("-updated_at")[:len(server_ids) * 6]:
+            revalidations_by_server.setdefault(r.server_id, []).append(r)
+
+        latest_health_by_server: dict[int, ServerHealthCheck | None] = {}
+        for hc in ServerHealthCheck.objects.filter(server_id__in=server_ids).order_by("server_id", "-checked_at"):
+            if hc.server_id not in latest_health_by_server:
+                latest_health_by_server[hc.server_id] = hc
+
+        alerts_by_server: dict[int, list] = {}
+        for a in ServerAlert.objects.filter(server_id__in=server_ids, is_resolved=False).order_by("-created_at"):
+            alerts_by_server.setdefault(a.server_id, []).append(a)
+
+        runs_by_server: dict[int, list] = {}
+        for r in AgentRun.objects.filter(server_id__in=server_ids).select_related("agent").order_by("-started_at")[:len(server_ids) * 4]:
+            runs_by_server.setdefault(r.server_id, []).append(r)
+
+        knowledge_by_server: dict[int, list] = {}
+        for k in ServerKnowledge.objects.filter(server_id__in=server_ids, is_active=True).order_by("-updated_at"):
+            knowledge_by_server.setdefault(k.server_id, []).append(k)
+
+        # Build cards
+        cards = []
+        for sid in server_ids:
+            server = servers.get(sid)
+            if not server:
+                continue
+            cards.append(
+                build_server_memory_card(
+                    server,
+                    global_rules=global_rules_by_user.get(server.user_id),
+                    group_knowledge=group_knowledge_by_group.get(server.group_id, [])[:6],
+                    snapshots=snapshots_by_server.get(sid, []),
+                    episodes=episodes_by_server.get(sid, [])[:8],
+                    revalidations=revalidations_by_server.get(sid, [])[:6],
+                    latest_health=latest_health_by_server.get(sid),
+                    active_alerts=alerts_by_server.get(sid, [])[:5],
+                    recent_runs=runs_by_server.get(sid, [])[:4],
+                    legacy_knowledge=knowledge_by_server.get(sid, [])[:8],
+                )
+            )
+        return cards
 
     def _search_runbooks_sync(self, query: str, *, server_id: int | None = None, group_id: int | None = None) -> list[dict]:
         from django.db.models import Q
@@ -584,13 +690,37 @@ class DjangoServerMemoryStore:
             new_fact_variants,
         )
         if conflicts:
-            self._ensure_revalidation_sync(
-                server_id,
-                memory_key=memory_key,
-                title=title,
-                reason="Новый факт противоречит активной памяти сервера.",
-                payload=conflicts[0],
+            # P2-5: use resolve_winning_fact to decide disposition
+            from app.agent_kernel.memory.repair import resolve_winning_fact
+            from servers.models import ServerMemorySnapshot
+
+            conflict_info = conflicts[0]
+            # Try to find metadata about the existing snapshot
+            existing_snapshot = (
+                ServerMemorySnapshot.objects
+                .filter(server_id=server_id, title=conflict_info.get("title", ""), is_active=True)
+                .order_by("-updated_at")
+                .first()
             )
+            verdict = resolve_winning_fact(
+                existing_updated_at=getattr(existing_snapshot, "updated_at", None),
+                existing_confidence=float(getattr(existing_snapshot, "confidence", 0.7) or 0.7),
+                incoming_updated_at=timezone.now(),
+                incoming_confidence=float(fact.get("confidence") or 0.78),
+            )
+            if verdict == "existing":
+                # Existing fact is still more trustworthy — skip ingestion
+                logger.info("fact conflict: existing wins for '{}' on server {}", title, server_id)
+                return ""
+            if verdict == "revalidate":
+                self._ensure_revalidation_sync(
+                    server_id,
+                    memory_key=memory_key,
+                    title=title,
+                    reason="Новый факт противоречит активной памяти сервера (требуется ручная проверка).",
+                    payload=conflict_info,
+                )
+            # verdict == "incoming" → proceed with ingestion (fact wins)
         return self._ingest_event_sync(
             server_id,
             source_kind="agent_run",
@@ -856,72 +986,79 @@ class DjangoServerMemoryStore:
             filters["source_ref"] = source_ref
         else:
             filters["created_at__gte"] = timezone.now() - timedelta(hours=6)
-        events = list(ServerMemoryEvent.objects.filter(**filters).order_by("created_at", "id")[:120])
-        if not events:
-            return 0
-        if len(events) < 2 and not force:
-            return 0
 
-        episode_kind = self._episode_kind_for_source(source_kind, events)
-        title = self._episode_title(source_kind, episode_kind, events)
-        summary = self._build_episode_summary(events)
-        metadata = {
-            "source_kind": source_kind,
-            "event_types": list(dict.fromkeys(event.event_type for event in events))[:12],
-            "commands": self._extract_commands(events)[:12],
-        }
-        episode = (
-            ServerMemoryEpisode.objects.filter(
-                server_id=server_id,
-                source_kind=source_kind,
-                source_ref=source_ref,
-                session_id=session_id,
-                episode_kind=episode_kind,
-                is_active=True,
+        with transaction.atomic():
+            events = list(
+                ServerMemoryEvent.objects.select_for_update()
+                .filter(**filters)
+                .order_by("created_at", "id")[:120]
             )
-            .order_by("-updated_at")
-            .first()
-        )
-        if episode is None:
-            ServerMemoryEpisode.objects.create(
-                server_id=server_id,
-                episode_kind=episode_kind,
-                source_kind=source_kind,
-                source_ref=source_ref,
-                session_id=session_id,
-                title=title,
-                summary=summary,
-                event_count=len(events),
-                importance_score=max(float(event.importance_hint or 0.5) for event in events),
-                confidence=min(0.95, 0.55 + min(len(events), 12) * 0.03),
-                metadata=metadata,
-                first_event_at=events[0].created_at,
-                last_event_at=events[-1].created_at,
+            if not events:
+                return 0
+            if len(events) < 2 and not force:
+                return 0
+
+            episode_kind = self._episode_kind_for_source(source_kind, events)
+            title = self._episode_title(source_kind, episode_kind, events)
+            summary = self._build_episode_summary(events)
+            metadata = {
+                "source_kind": source_kind,
+                "event_types": list(dict.fromkeys(event.event_type for event in events))[:12],
+                "commands": self._extract_commands(events)[:12],
+            }
+            episode = (
+                ServerMemoryEpisode.objects.select_for_update()
+                .filter(
+                    server_id=server_id,
+                    source_kind=source_kind,
+                    source_ref=source_ref,
+                    session_id=session_id,
+                    episode_kind=episode_kind,
+                    is_active=True,
+                )
+                .order_by("-updated_at")
+                .first()
             )
-        else:
-            episode.title = title
-            episode.summary = summary
-            episode.event_count = len(events)
-            episode.importance_score = max(float(event.importance_hint or 0.5) for event in events)
-            episode.confidence = min(0.95, 0.55 + min(len(events), 12) * 0.03)
-            episode.metadata = metadata
-            episode.first_event_at = events[0].created_at
-            episode.last_event_at = events[-1].created_at
-            episode.is_active = True
-            episode.save(
-                update_fields=[
-                    "title",
-                    "summary",
-                    "event_count",
-                    "importance_score",
-                    "confidence",
-                    "metadata",
-                    "first_event_at",
-                    "last_event_at",
-                    "is_active",
-                    "updated_at",
-                ]
-            )
+            if episode is None:
+                ServerMemoryEpisode.objects.create(
+                    server_id=server_id,
+                    episode_kind=episode_kind,
+                    source_kind=source_kind,
+                    source_ref=source_ref,
+                    session_id=session_id,
+                    title=title,
+                    summary=summary,
+                    event_count=len(events),
+                    importance_score=max(float(event.importance_hint or 0.5) for event in events),
+                    confidence=min(0.95, 0.55 + min(len(events), 12) * 0.03),
+                    metadata=metadata,
+                    first_event_at=events[0].created_at,
+                    last_event_at=events[-1].created_at,
+                )
+            else:
+                episode.title = title
+                episode.summary = summary
+                episode.event_count = len(events)
+                episode.importance_score = max(float(event.importance_hint or 0.5) for event in events)
+                episode.confidence = min(0.95, 0.55 + min(len(events), 12) * 0.03)
+                episode.metadata = metadata
+                episode.first_event_at = events[0].created_at
+                episode.last_event_at = events[-1].created_at
+                episode.is_active = True
+                episode.save(
+                    update_fields=[
+                        "title",
+                        "summary",
+                        "event_count",
+                        "importance_score",
+                        "confidence",
+                        "metadata",
+                        "first_event_at",
+                        "last_event_at",
+                        "is_active",
+                        "updated_at",
+                    ]
+                )
         return 1
 
     def _episode_kind_for_source(self, source_kind: str, events: list[Any]) -> str:
@@ -1026,10 +1163,11 @@ class DjangoServerMemoryStore:
         )
 
         llm_sections: dict[str, str] = {}
-        if job_kind in {"nightly", "hybrid"} and policy.dream_mode in {
-            policy.DREAM_HYBRID,
-            policy.DREAM_NIGHTLY_LLM,
-        }:
+        if (
+            job_kind in {"nightly", "hybrid"}
+            and policy.dream_mode in {policy.DREAM_HYBRID, policy.DREAM_NIGHTLY_LLM}
+            and self._should_distill_with_llm(candidates, snapshots)
+        ):
             llm_sections = self._distill_with_llm_sync(server=server, candidates=candidates, model_alias=policy.nightly_model_alias)
 
         updated = 0
@@ -1273,11 +1411,12 @@ class DjangoServerMemoryStore:
     def _derive_operational_patterns(self, server_id: int) -> list[_OperationalPattern]:
         from servers.models import ServerMemoryEvent
 
+        now = timezone.now()
         recent = list(
             ServerMemoryEvent.objects.filter(
                 server_id=server_id,
                 event_type="command_executed",
-                created_at__gte=timezone.now() - timedelta(days=30),
+                created_at__gte=now - timedelta(days=30),
             ).order_by("created_at", "id")[:220]
         )
         buckets: dict[str, dict[str, Any]] = {}
@@ -1303,7 +1442,11 @@ class DjangoServerMemoryStore:
                         "intent": self._classify_command_intent(command),
                     },
                 )
+                # Temporal decay: недавние события имеют больший вес
+                age_days = (now - event.created_at).days if event.created_at else 15
+                temporal_weight = max(0.1, 1.0 - age_days / 30.0)
                 bucket["occurrences"] += 1
+                bucket["weighted_occurrences"] = bucket.get("weighted_occurrences", 0.0) + temporal_weight
                 bucket["actor_kinds"].add(str(event.actor_kind or "system"))
                 bucket["source_kinds"].add(str(event.source_kind or "system"))
                 if self._is_verification_command(command):
@@ -1328,10 +1471,12 @@ class DjangoServerMemoryStore:
         patterns: list[_OperationalPattern] = []
         for normalized, bucket in buckets.items():
             occurrences = int(bucket["occurrences"])
+            weighted_occurrences = float(bucket.get("weighted_occurrences", occurrences))
             measured_runs = int(bucket["measured_runs"])
             successful_runs = int(bucket["successful_runs"])
             success_rate = (successful_runs / measured_runs) if measured_runs else 1.0
-            if occurrences < 2 and successful_runs < 2:
+            # Используем взвешенное число вхождений для отсечки (temporal decay)
+            if weighted_occurrences < 1.2 and occurrences < 2 and successful_runs < 2:
                 continue
             patterns.append(
                 _OperationalPattern(
@@ -1919,6 +2064,70 @@ class DjangoServerMemoryStore:
             content=str(getattr(snapshot, "content", "") or ""),
         )
 
+    def _should_distill_with_llm(
+        self,
+        candidates: list[_SnapshotCandidate],
+        existing_snapshots: list[Any],
+    ) -> bool:
+        """
+        GAP 2: delta-based LLM distillation trigger.
+
+        Возвращает True только если суммарная разница между кандидатами
+        и существующими снапшотами превышает порог 0.15.
+        Это позволяет пропускать LLM-вызов когда данные существенно не менялись.
+        """
+        if not existing_snapshots:
+            # Первый раз — всегда дистиллируем
+            return True
+        snapshot_map = {s.memory_key: s for s in existing_snapshots}
+        total_delta = 0.0
+        compared = 0
+        for candidate in candidates:
+            existing = snapshot_map.get(candidate.memory_key)
+            if existing is None:
+                total_delta += 1.0
+                compared += 1
+                continue
+            delta = self._content_delta(
+                str(getattr(existing, "content", "") or ""),
+                candidate.content,
+            )
+            total_delta += delta
+            compared += 1
+        if compared == 0:
+            return False
+        avg_delta = total_delta / compared
+        return avg_delta > 0.15
+
+    def _build_memory_warmup_prompt(self, server_id: int, *, last_n: int = 3) -> str:
+        """
+        GAP 5: memory warmup prompt.
+
+        Строит компактный блок из последних N AgentRun для вставки в prompt context.
+        Помогает агенту учитывать историю предыдущих запусков без перегрузки
+        полным memory card.
+        """
+        from servers.models import AgentRun
+
+        recent_runs = list(
+            AgentRun.objects.filter(server_id=server_id)
+            .select_related("agent")
+            .order_by("-started_at")[:max(1, min(int(last_n), 6))]
+        )
+        if not recent_runs:
+            return ""
+        lines = []
+        for run in recent_runs:
+            label = getattr(run.agent, "name", "Agent") if run.agent_id else "Agent"
+            snippet_src = run.final_report or run.ai_analysis or ""
+            snippet = compact_text(
+                " ".join(line for line in snippet_src.splitlines() if line.strip()),
+                limit=160,
+            )
+            ts = run.started_at.strftime("%Y-%m-%d %H:%M") if run.started_at else "?"
+            lines.append(f"- [{run.status}] {label} @ {ts}: {snippet}")
+        return "\n".join(lines)
+
     def _distill_with_llm_sync(
         self,
         *,
@@ -2074,100 +2283,103 @@ class DjangoServerMemoryStore:
 
         clean_content = compact_text(content, limit=3200)
         metadata = metadata or {}
-        existing = (
-            ServerMemorySnapshot.objects.filter(server_id=server_id, memory_key=memory_key, is_active=True)
-            .order_by("-version", "-updated_at")
-            .first()
-        )
-        if existing:
-            delta = self._content_delta(existing.content, clean_content)
-            confidence_shift = float(confidence or 0.0) - float(existing.confidence or 0.0)
-            significant = force_version or delta >= 0.2 or abs(confidence_shift) >= 0.15
-            if not significant:
-                dirty_fields: list[str] = []
-                if clean_content and clean_content != existing.content:
-                    existing.content = clean_content
-                    dirty_fields.append("content")
-                if abs(float(existing.confidence or 0.0) - float(confidence or 0.0)) >= 0.03:
-                    existing.confidence = confidence
-                    dirty_fields.append("confidence")
-                if abs(float(existing.importance_score or 0.0) - float(importance_score or 0.0)) >= 0.03:
-                    existing.importance_score = importance_score
-                    dirty_fields.append("importance_score")
-                if abs(float(existing.stability_score or 0.0) - float(stability_score or 0.0)) >= 0.03:
-                    existing.stability_score = stability_score
-                    dirty_fields.append("stability_score")
-                if verified_at and verified_at != existing.last_verified_at:
-                    existing.last_verified_at = verified_at
-                    dirty_fields.append("last_verified_at")
-                if metadata and metadata != (existing.metadata or {}):
-                    existing.metadata = metadata
-                    dirty_fields.append("metadata")
-                if title and title != existing.title:
-                    existing.title = title[:200]
-                    dirty_fields.append("title")
-                if source_kind and source_kind != existing.source_kind:
-                    existing.source_kind = source_kind
-                    dirty_fields.append("source_kind")
-                if source_ref and source_ref != existing.source_ref:
-                    existing.source_ref = source_ref[:255]
-                    dirty_fields.append("source_ref")
-                if dirty_fields:
-                    dirty_fields.append("updated_at")
-                    existing.save(update_fields=dirty_fields)
-                return existing, False
 
-        version_group = version_group_id or getattr(existing, "version_group_id", "") or uuid.uuid4().hex
-        version = (int(existing.version) + 1) if existing else 1
-        next_metadata = dict(metadata)
-        rewrite_reason = ""
-        if existing:
-            rewrite_reason = self._describe_snapshot_rewrite(
+        with transaction.atomic():
+            existing = (
+                ServerMemorySnapshot.objects.select_for_update()
+                .filter(server_id=server_id, memory_key=memory_key, is_active=True)
+                .order_by("-version", "-updated_at")
+                .first()
+            )
+            if existing:
+                delta = self._content_delta(existing.content, clean_content)
+                confidence_shift = float(confidence or 0.0) - float(existing.confidence or 0.0)
+                significant = force_version or delta >= 0.2 or abs(confidence_shift) >= 0.15
+                if not significant:
+                    dirty_fields: list[str] = []
+                    if clean_content and clean_content != existing.content:
+                        existing.content = clean_content
+                        dirty_fields.append("content")
+                    if abs(float(existing.confidence or 0.0) - float(confidence or 0.0)) >= 0.03:
+                        existing.confidence = confidence
+                        dirty_fields.append("confidence")
+                    if abs(float(existing.importance_score or 0.0) - float(importance_score or 0.0)) >= 0.03:
+                        existing.importance_score = importance_score
+                        dirty_fields.append("importance_score")
+                    if abs(float(existing.stability_score or 0.0) - float(stability_score or 0.0)) >= 0.03:
+                        existing.stability_score = stability_score
+                        dirty_fields.append("stability_score")
+                    if verified_at and verified_at != existing.last_verified_at:
+                        existing.last_verified_at = verified_at
+                        dirty_fields.append("last_verified_at")
+                    if metadata and metadata != (existing.metadata or {}):
+                        existing.metadata = metadata
+                        dirty_fields.append("metadata")
+                    if title and title != existing.title:
+                        existing.title = title[:200]
+                        dirty_fields.append("title")
+                    if source_kind and source_kind != existing.source_kind:
+                        existing.source_kind = source_kind
+                        dirty_fields.append("source_kind")
+                    if source_ref and source_ref != existing.source_ref:
+                        existing.source_ref = source_ref[:255]
+                        dirty_fields.append("source_ref")
+                    if dirty_fields:
+                        dirty_fields.append("updated_at")
+                        existing.save(update_fields=dirty_fields)
+                    return existing, False
+
+            version_group = version_group_id or getattr(existing, "version_group_id", "") or uuid.uuid4().hex
+            version = (int(existing.version) + 1) if existing else 1
+            next_metadata = dict(metadata)
+            rewrite_reason = ""
+            if existing:
+                rewrite_reason = self._describe_snapshot_rewrite(
+                    memory_key=memory_key,
+                    delta=delta,
+                    confidence_shift=confidence_shift,
+                    force_version=force_version,
+                )
+                next_metadata.update(
+                    {
+                        "rewrite_reason": rewrite_reason,
+                        "rewrite_delta": round(delta, 3),
+                        "prior_snapshot_id": existing.id,
+                        "prior_version": int(existing.version or 0),
+                    }
+                )
+                if abs(confidence_shift) >= 0.01:
+                    next_metadata["confidence_shift"] = round(confidence_shift, 3)
+            snapshot = ServerMemorySnapshot.objects.create(
+                server_id=server_id,
+                created_by_id=created_by_id,
                 memory_key=memory_key,
-                delta=delta,
-                confidence_shift=confidence_shift,
-                force_version=force_version,
+                layer=ServerMemorySnapshot.LAYER_CANONICAL,
+                title=title[:200],
+                content=clean_content,
+                source_kind=source_kind[:30],
+                source_ref=source_ref[:255],
+                version_group_id=version_group,
+                version=version,
+                is_active=True,
+                importance_score=importance_score,
+                stability_score=stability_score,
+                confidence=confidence,
+                last_verified_at=verified_at,
+                metadata=next_metadata,
             )
-            next_metadata.update(
-                {
-                    "rewrite_reason": rewrite_reason,
-                    "rewrite_delta": round(delta, 3),
-                    "prior_snapshot_id": existing.id,
-                    "prior_version": int(existing.version or 0),
-                }
-            )
-            if abs(confidence_shift) >= 0.01:
-                next_metadata["confidence_shift"] = round(confidence_shift, 3)
-        snapshot = ServerMemorySnapshot.objects.create(
-            server_id=server_id,
-            created_by_id=created_by_id,
-            memory_key=memory_key,
-            layer=ServerMemorySnapshot.LAYER_CANONICAL,
-            title=title[:200],
-            content=clean_content,
-            source_kind=source_kind[:30],
-            source_ref=source_ref[:255],
-            version_group_id=version_group,
-            version=version,
-            is_active=True,
-            importance_score=importance_score,
-            stability_score=stability_score,
-            confidence=confidence,
-            last_verified_at=verified_at,
-            metadata=next_metadata,
-        )
-        if existing:
-            existing_metadata = dict(existing.metadata or {})
-            if rewrite_reason:
-                existing_metadata["superseded_reason"] = rewrite_reason
-            existing.is_active = False
-            existing.layer = ServerMemorySnapshot.LAYER_ARCHIVE
-            existing.archived_at = timezone.now()
-            existing.superseded_by = snapshot
-            existing.metadata = existing_metadata
-            existing.save(
-                update_fields=["is_active", "layer", "archived_at", "superseded_by", "metadata", "updated_at"]
-            )
+            if existing:
+                existing_metadata = dict(existing.metadata or {})
+                if rewrite_reason:
+                    existing_metadata["superseded_reason"] = rewrite_reason
+                existing.is_active = False
+                existing.layer = ServerMemorySnapshot.LAYER_ARCHIVE
+                existing.archived_at = timezone.now()
+                existing.superseded_by = snapshot
+                existing.metadata = existing_metadata
+                existing.save(
+                    update_fields=["is_active", "layer", "archived_at", "superseded_by", "metadata", "updated_at"]
+                )
         return snapshot, True
 
     def _ensure_revalidation_sync(
@@ -2291,6 +2503,8 @@ class DjangoServerMemoryStore:
         compacted = self._compact_open_groups_sync(server_id, force=job_kind in {"nearline", "nightly", "hybrid"})
         dream = self._dream_server_memory_sync(server_id, deactivate_noise=job_kind in {"weekly", "hybrid", "nightly"}, job_kind=job_kind)
         repair = self._repair_server_memory_sync(server_id, stale_after_days=30, create_notes=job_kind in {"weekly", "hybrid", "nightly"})
+        # Автоматически закрываем устаревшие revalidations после dream
+        auto_resolved = auto_resolve_stale_revalidations(server_id, max_age_days=60)
         return {
             "server_id": server_id,
             "skipped": False,
@@ -2298,6 +2512,7 @@ class DjangoServerMemoryStore:
             "compacted_groups": compacted,
             "dream": dream,
             "repair": repair,
+            "auto_resolved_revalidations": auto_resolved,
         }
 
     def _get_memory_overview_sync(self, server_id: int) -> dict[str, Any]:

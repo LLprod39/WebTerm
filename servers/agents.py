@@ -377,6 +377,41 @@ async def run_agent(agent: ServerAgent, server: Server, user) -> AgentRun:
     )
 
     logger.info("Agent '{}' on {} -> {} ({}ms)", agent.name, server.name, run.status, run.duration_ms)
+
+    # P3-4: Ingest mini-agent run into memory system
+    try:
+        from app.agent_kernel.memory.store import DjangoServerMemoryStore
+        _mem_store = DjangoServerMemoryStore()
+        summary_parts = [f"Mini-agent '{agent.name}' ({agent.agent_type}) -> {run.status}"]
+        for out in outputs[:5]:
+            status_icon = "ok" if out.get("exit_code") == 0 else "FAIL"
+            summary_parts.append(f"  [{status_icon}] `{out['cmd']}` (exit={out.get('exit_code')})")
+        if ai_analysis:
+            summary_parts.append(f"AI: {ai_analysis[:300]}")
+        await sync_to_async(_mem_store._ingest_event_sync)(
+            server.id,
+            source_kind="agent_run",
+            actor_kind="agent",
+            source_ref=f"mini-agent-run:{run.id}",
+            session_id=f"mini-agent-run:{run.id}",
+            event_type="run_completed" if run.status == AgentRun.STATUS_COMPLETED else "run_failed",
+            raw_text="\n".join(summary_parts),
+            structured_payload={
+                "run_id": run.id,
+                "agent_id": agent.id,
+                "agent_name": agent.name,
+                "agent_type": agent.agent_type,
+                "status": run.status,
+                "duration_ms": run.duration_ms,
+                "command_count": len(outputs),
+            },
+            importance_hint=0.75 if run.status == AgentRun.STATUS_COMPLETED else 0.88,
+            actor_user_id=getattr(user, "id", None),
+            force_compact=True,
+        )
+    except Exception as mem_exc:
+        logger.warning("Mini-agent memory ingestion failed: {}", mem_exc)
+
     return run
 
 

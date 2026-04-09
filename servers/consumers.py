@@ -1968,7 +1968,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         llm = LLMProvider()
         out = ""
         async with _TERMINAL_AI_LLM_SEMAPHORE:
-            async for chunk in llm.stream_chat(prompt, model="auto", purpose="chat"):
+            async for chunk in llm.stream_chat(prompt, model="auto", purpose="ops"):
                 out += chunk
                 if len(out) > 3000:
                     break
@@ -2045,7 +2045,7 @@ EXIT_CODE: {exit_code}
         llm = LLMProvider()
         out = ""
         async with _TERMINAL_AI_LLM_SEMAPHORE:
-            async for chunk in llm.stream_chat(prompt, model="auto", purpose="chat"):
+            async for chunk in llm.stream_chat(prompt, model="auto", purpose="ops"):
                 out += chunk
                 if len(out) > 5000:
                     break
@@ -2087,62 +2087,23 @@ EXIT_CODE: {exit_code}
           mode=execute → run commands on the server
         """
         from app.core.llm import LLMProvider
+        from servers.terminal_ai import (
+            build_chat_mode_block,
+            build_execution_mode_block,
+            build_history_text,
+            build_unavailable_tools_block,
+        )
 
         logger.debug(
             "Terminal AI plan_commands: server_id=%s run_id=%s",
             getattr(self.server, "id", None),
             getattr(self, "_ai_run_id", ""),
         )
-        # Build history context (exclude last entry = current user message)
-        history_lines: list[str] = []
-        for h in (history or [])[:-1]:
-            role = str(h.get("role") or "user")
-            text = str(h.get("text") or "")[:600]
-            prefix = "Пользователь" if role == "user" else "Ассистент"
-            history_lines.append(f"[{prefix}]: {text}")
-        history_text = "\n".join(history_lines) if history_lines else "(начало диалога)"
+        history_text = build_history_text(history)
+        unavail_block = build_unavailable_tools_block(unavailable_cmds)
+        mode_selector_block = build_execution_mode_block(execution_mode)
 
-        # Build unavailable tools warning
-        unavail = sorted(unavailable_cmds or set())
-        unavail_block = ""
-        if unavail:
-            tools_list = ", ".join(f"`{t}`" for t in unavail)
-            unavail_block = f"""
-═══ НЕДОСТУПНЫЕ ИНСТРУМЕНТЫ (НЕ ИСПОЛЬЗОВАТЬ) ═══
-На этом сервере НЕ установлены (exit=127 при попытке): {tools_list}
-→ Используй ТОЛЬКО доступные альтернативы:
-   • вместо `netstat` → `ss`
-   • вместо `ufw` → `iptables` (если есть права) или просто сообщи что не установлен
-   • вместо `ifconfig` → `ip addr`
-   • вместо `service` → `systemctl`
-"""
-
-        mode_selector_block = ""
-        if execution_mode == "auto":
-            mode_selector_block = """
-- execution_mode=auto: выбери execution_mode самостоятельно:
-  • step — если задача рискованная/неоднозначная/требует проверки после каждого шага
-  • fast — если задача линейная и предсказуемая
-"""
-        else:
-            mode_selector_block = f"""
-- execution_mode фиксирован пользователем: используй {execution_mode} (не меняй).
-"""
-
-        chat_mode_block = ""
-        if chat_mode == "ask":
-            chat_mode_block = """
-РЕЖИМ ЧАТА: ASK
-- Пользователь не хочет автозапуск команд.
-- Если для задачи нужны команды на сервере, всё равно используй mode=execute, но сформируй это как предложения/шаги для пользователя.
-- assistant_text должен коротко объяснить, что команды ниже предложены для ручного запуска.
-"""
-        else:
-            chat_mode_block = """
-РЕЖИМ ЧАТА: AGENT
-- Если задача требует действий на сервере, предпочитай mode=execute.
-- Команды будут выполняться автоматически, кроме опасных действий, которые потребуют подтверждения.
-"""
+        chat_mode_block = build_chat_mode_block(chat_mode)
 
         prompt = f"""Ты умный DevOps/SSH ассистент в составе платформы управления серверами.
 Ты ведёшь диалог с пользователем и имеешь доступ к SSH-терминалу сервера.
@@ -2208,7 +2169,7 @@ EXIT_CODE: {exit_code}
         llm = LLMProvider()
         out = ""
         async with _TERMINAL_AI_LLM_SEMAPHORE:
-            async for chunk in llm.stream_chat(prompt, model="auto", purpose="chat"):
+            async for chunk in llm.stream_chat(prompt, model="auto", purpose="terminal_planning"):
                 out += chunk
                 if len(out) > 20000:
                     break
@@ -2220,29 +2181,13 @@ EXIT_CODE: {exit_code}
 
     @staticmethod
     def _compute_report_status(done_items: list[dict[str, Any]]) -> str:
-        codes = [item.get("exit_code") for item in done_items]
-        non_captured = [c for c in codes if c != 130]
-        if non_captured and all(c == 0 for c in non_captured if c is not None):
-            return "ok"
-        if any(c not in (None, 0, 130) for c in codes):
-            ok_count = sum(1 for c in codes if c in (0, 130))
-            return "error" if ok_count < len(codes) / 2 else "warning"
-        return "warning"
+        from servers.terminal_ai import compute_report_status
+        return compute_report_status(done_items)
 
     @staticmethod
     def _build_fallback_report(done_items: list[dict[str, Any]]) -> str:
-        codes = [item.get("exit_code") for item in done_items]
-        all_ok = all(code == 0 for code in codes if code is not None)
-        if all_ok:
-            return (
-                "Команды выполнены успешно (код выхода 0). Вывод смотрите в консоли слева. "
-                "Краткий анализ по выводу сформировать не удалось — попробуйте запрос ещё раз или проверьте логи вручную."
-            )
-        return (
-            "Команды выполнены. Коды выхода: "
-            + ", ".join(str(code) for code in codes)
-            + ". Вывод в консоли слева. Для анализа проверьте вывод вручную."
-        )
+        from servers.terminal_ai import build_fallback_report
+        return build_fallback_report(done_items)
 
     async def _generate_ai_report_text(self, user_message: str, done_items: list[dict[str, Any]]) -> str:
         done_with_output = [item for item in done_items if (item.get("output") or "").strip()]
@@ -2329,7 +2274,7 @@ EXIT_CODE: {exit_code}
         llm = LLMProvider()
         out = ""
         async with _TERMINAL_AI_LLM_SEMAPHORE:
-            async for chunk in llm.stream_chat(prompt, model="auto", purpose="chat"):
+            async for chunk in llm.stream_chat(prompt, model="auto", purpose="opssummary"):
                 out += chunk
                 if len(out) > 12000:
                     break
@@ -2337,22 +2282,8 @@ EXIT_CODE: {exit_code}
 
     @staticmethod
     def _sanitize_memory_line(text: str) -> str:
-        line = str(text or "").replace("\n", " ").replace("\r", " ").strip()
-        if not line:
-            return ""
-        # Never persist obvious secrets in long-term server memory.
-        if re.search(r"-----BEGIN [A-Z ]*PRIVATE KEY-----", line, flags=re.IGNORECASE):
-            return ""
-        line = re.sub(
-            r"(?i)\b([a-z0-9_.-]*(?:password|passwd|token|secret|api[_-]?key|authorization)[a-z0-9_.-]*)\b\s*[:=]\s*([^\s,;]+)",
-            r"\1=[REDACTED]",
-            line,
-        )
-        line = re.sub(r"(?i)\bbearer\s+[A-Za-z0-9._\-]{10,}\b", "Bearer [REDACTED]", line)
-        line = re.sub(r"\s+", " ", line).strip(" -")
-        if len(line) > 260:
-            line = line[:257].rstrip() + "..."
-        return line
+        from servers.terminal_ai import sanitize_memory_line
+        return sanitize_memory_line(text)
 
     async def _ai_extract_server_memory(
         self,
@@ -2410,7 +2341,7 @@ EXIT_CODE: {exit_code}
         llm = LLMProvider()
         out = ""
         async with _TERMINAL_AI_LLM_SEMAPHORE:
-            async for chunk in llm.stream_chat(prompt, model="auto", purpose="chat"):
+            async for chunk in llm.stream_chat(prompt, model="auto", purpose="memory_extraction"):
                 out += chunk
                 if len(out) > 7000:
                     break

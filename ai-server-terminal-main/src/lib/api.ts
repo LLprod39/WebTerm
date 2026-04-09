@@ -2610,6 +2610,40 @@ export async function deleteServerKnowledge(serverId: number, knowledgeId: numbe
   });
 }
 
+export interface MemorySnapshotItem {
+  id: number;
+  title: string;
+  content: string;
+  memory_key: string;
+  kind: "canonical" | "pattern" | "automation" | "skill_draft" | "manual_note";
+  version: number;
+  confidence: number;
+  freshness: number;
+  updated_at: string | null;
+  created_at: string | null;
+  rewrite_reason: string;
+}
+
+export async function listServerMemorySnapshots(serverId: number) {
+  return apiFetch<{ success: boolean; items: MemorySnapshotItem[] }>(
+    `/servers/api/${serverId}/memory/snapshots/`,
+  );
+}
+
+export async function updateServerMemorySnapshot(
+  serverId: number,
+  snapshotId: number,
+  payload: { title?: string; content?: string },
+) {
+  return apiFetch<{ success: boolean; id: number; title: string; content: string; updated_at: string | null }>(
+    `/servers/api/${serverId}/memory/snapshots/${snapshotId}/update/`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
 export async function fetchServerMemoryOverview(serverId: number) {
   return apiFetch<ServerMemoryOverviewResponse>(`/servers/api/${serverId}/memory/overview/`);
 }
