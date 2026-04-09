@@ -39,6 +39,31 @@ _TEXT_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         "private_key_inline",
         re.compile(r"(?i)\b(?:ssh-rsa|ssh-ed25519)\s+[A-Za-z0-9+/=]{40,}(?:\s+[^\s]+)?"),
     ),
+    # Cloud provider credentials
+    (
+        "aws_access_key",
+        re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
+    ),
+    (
+        "github_pat",
+        re.compile(r"\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36,}\b"),
+    ),
+    (
+        "openai_api_key",
+        re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b"),
+    ),
+    (
+        "gitlab_pat",
+        re.compile(r"\bglpat-[A-Za-z0-9_-]{20,}\b"),
+    ),
+    (
+        "slack_token",
+        re.compile(r"\bxox[bpsar]-[0-9A-Za-z-]{10,}\b"),
+    ),
+    (
+        "azure_sas_token",
+        re.compile(r"(?i)\b(?:sv|sig|se|sp|spr|st)=[A-Za-z0-9%+/=]{10,}(?:&(?:sv|sig|se|sp|spr|st)=[A-Za-z0-9%+/=]+)+\b"),
+    ),
 )
 
 _KEY_HINT_RE = re.compile(

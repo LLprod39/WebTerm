@@ -26,6 +26,7 @@ vi.mock("@/lib/api", () => ({
   deleteServerGroup: vi.fn(),
   deleteServerKnowledge: vi.fn(),
   executeServerCommand: vi.fn(),
+  fetchAuthSession: vi.fn(),
   fetchFrontendBootstrap: vi.fn(),
   fetchMonitoringDashboard: vi.fn(),
   fetchServerDetails: vi.fn(),
@@ -178,6 +179,16 @@ describe("Servers page rules and translations", () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     vi.spyOn(window, "prompt").mockReturnValue("updated value");
 
+    vi.mocked(api.fetchAuthSession).mockResolvedValue({
+      authenticated: true,
+      user: {
+        id: 1,
+        username: "admin",
+        email: "admin@example.com",
+        is_staff: true,
+        features: {},
+      },
+    });
     vi.mocked(api.fetchFrontendBootstrap).mockResolvedValue(bootstrapResponse);
     vi.mocked(api.fetchMonitoringDashboard).mockResolvedValue({
       success: true,

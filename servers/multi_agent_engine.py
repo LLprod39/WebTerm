@@ -59,39 +59,7 @@ def sync_to_async(func, thread_sensitive=False):
     return _s2a(func, thread_sensitive=thread_sensitive)
 
 
-_ACTION_NAME_RE = re.compile(r"ACTION:\s*([\w_]+)\s*", re.DOTALL)
-_THOUGHT_RE = re.compile(r"THOUGHT:\s*(.+?)(?=ACTION:|$)", re.DOTALL)
-
-
-def _parse_action(response: str) -> tuple[str | None, dict]:
-    """Надёжный парсинг ACTION: tool_name {...}.
-
-    Использует json.JSONDecoder.raw_decode вместо regex {.*?},
-    чтобы корректно обрабатывать многострочные JSON-объекты с отступами.
-    """
-    name_match = _ACTION_NAME_RE.search(response)
-    if not name_match:
-        return None, {}
-
-    action_name = name_match.group(1).strip()
-    json_start = name_match.end()
-
-    # Пропускаем пробелы до '{'
-    while json_start < len(response) and response[json_start] in " \t\n\r":
-        json_start += 1
-
-    if json_start >= len(response) or response[json_start] != "{":
-        return action_name, {}
-
-    try:
-        decoder = json.JSONDecoder()
-        action_args, _ = decoder.raw_decode(response, json_start)
-        if isinstance(action_args, dict):
-            return action_name, action_args
-    except json.JSONDecodeError:
-        pass
-
-    return action_name, {}
+from app.agent_kernel.runtime.parsing import parse_action as _parse_action, parse_response  # noqa: F401
 
 MAX_PLAN_TASKS = 15
 MAX_TASK_ITERATIONS = 7
@@ -1484,7 +1452,7 @@ ACTION: tool_name {{"param1": "val1"}}
     # ------------------------------------------------------------------
 
     async def _call_llm_raw(self, system_prompt: str, user_msg: str) -> str:
-        """Call LLM with explicit system/user messages."""
+        """Call LLM with explicit system/user messages. Raises on failure."""
         prompt = f"[SYSTEM]\n{system_prompt}\n\n[USER]\n{user_msg}"
         provider = LLMProvider()
         chunks = []
@@ -1499,11 +1467,11 @@ ACTION: tool_name {{"param1": "val1"}}
                     chunks.append(chunk)
         except Exception as exc:
             logger.error("Orchestrator LLM call failed: {}", exc)
-            return ""
+            raise
         return "".join(chunks)
 
     async def _call_llm_history(self, history: list[dict]) -> str:
-        """Call LLM with a history list."""
+        """Call LLM with a history list. Raises on failure."""
         parts = []
         for msg in history:
             role = msg["role"].upper()
@@ -1522,7 +1490,7 @@ ACTION: tool_name {{"param1": "val1"}}
                     chunks.append(chunk)
         except Exception as exc:
             logger.error("Task LLM call failed: {}", exc)
-            return ""
+            raise
         return "".join(chunks)
 
     # ------------------------------------------------------------------
@@ -1531,18 +1499,7 @@ ACTION: tool_name {{"param1": "val1"}}
 
     @staticmethod
     def _parse_response(response: str) -> tuple[str, str | None, dict]:
-        thought = ""
-        thought_match = _THOUGHT_RE.search(response)
-        if thought_match:
-            thought = thought_match.group(1).strip()
-        else:
-            thought = response.split("ACTION:")[0].strip() if "ACTION:" in response else response.strip()
-
-        action_name, action_args = _parse_action(response)
-        if action_name is not None:
-            return thought, action_name, action_args
-
-        return thought, None, {}
+        return parse_response(response)
 
     # ------------------------------------------------------------------
     # Tool execution

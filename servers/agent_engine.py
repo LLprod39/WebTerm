@@ -51,39 +51,7 @@ def sync_to_async(func, thread_sensitive=False):
     return _s2a(func, thread_sensitive=thread_sensitive)
 
 
-_ACTION_NAME_RE = re.compile(r"ACTION:\s*([A-Za-z0-9_]+)\s*", re.DOTALL)
-_THOUGHT_RE = re.compile(r"THOUGHT:\s*(.+?)(?=ACTION:|$)", re.DOTALL)
-
-
-def _parse_action(response: str) -> tuple[str | None, dict]:
-    """Надёжный парсинг ACTION: tool_name {...}.
-
-    Использует json.JSONDecoder.raw_decode вместо regex {.*?},
-    чтобы корректно обрабатывать многострочные JSON-объекты с отступами.
-    """
-    name_match = _ACTION_NAME_RE.search(response)
-    if not name_match:
-        return None, {}
-
-    action_name = name_match.group(1).strip()
-    json_start = name_match.end()
-
-    # Пропускаем пробелы до '{'
-    while json_start < len(response) and response[json_start] in " \t\n\r":
-        json_start += 1
-
-    if json_start >= len(response) or response[json_start] != "{":
-        return action_name, {}
-
-    try:
-        decoder = json.JSONDecoder()
-        action_args, _ = decoder.raw_decode(response, json_start)
-        if isinstance(action_args, dict):
-            return action_name, action_args
-    except json.JSONDecodeError:
-        pass
-
-    return action_name, {}
+from app.agent_kernel.runtime.parsing import parse_action as _parse_action, parse_response  # noqa: F401
 
 SESSION_TIMEOUT_DEFAULT = 600
 MAX_ITERATIONS_CAP = 100
@@ -334,6 +302,15 @@ class AgentEngine:
             system_prompt = self._build_system_prompt()
             history.append({"role": "system", "content": system_prompt})
 
+            # GAP 4: on_agent_start hook
+            await self.hook_manager.on_agent_start(
+                run_id=str(run.pk),
+                server_id=primary_server.id if primary_server else None,
+                goal=self.agent.goal or self.agent.ai_prompt or "",
+                role=self.role_spec.slug,
+                permission_mode=str(self.permission_engine.mode),
+            )
+
             goal = self.agent.goal or self.agent.ai_prompt or "Analyze the servers."
             history.append({"role": "user", "content": f"Goal: {goal}"})
 
@@ -357,7 +334,12 @@ class AgentEngine:
                 logger.info("agent_run {} iteration {} start", run.pk, iteration)
                 await self._emit("agent_status", {"status": "thinking", "iteration": iteration})
 
-                llm_response = await self._call_llm(history)
+                try:
+                    llm_response = await self._call_llm(history)
+                except Exception as llm_exc:
+                    logger.error("agent_run {} iteration {} LLM call error: {}", run.pk, iteration, llm_exc)
+                    await self._emit("agent_status", {"status": "llm_error", "error": str(llm_exc)})
+                    break
                 if not llm_response:
                     logger.warning("agent_run {} iteration {} got empty llm response", run.pk, iteration)
                     break
@@ -426,6 +408,23 @@ class AgentEngine:
 
                 iter_entry["observation"] = observation[:3000]
                 iterations_log.append(iter_entry)
+
+                # GAP 4: on_iteration_complete hook
+                await self.hook_manager.on_iteration_complete(
+                    iteration=iteration,
+                    thought=thought or "",
+                    action=action_name or "",
+                    tool=action_name or "",
+                    observation=observation[:400],
+                )
+
+                # GAP 4: budget warning at 75%
+                if iteration == max(1, int(self.max_iterations * 0.75)):
+                    await self.hook_manager.on_run_budget_warning(
+                        iterations_used=iteration,
+                        iterations_max=self.max_iterations,
+                        remaining_fraction=1.0 - iteration / self.max_iterations,
+                    )
 
                 await self._emit("agent_observation", {
                     "iteration": iteration,
@@ -576,6 +575,7 @@ class AgentEngine:
     # ------------------------------------------------------------------
 
     async def _call_llm(self, history: list[dict]) -> str:
+        """Call LLM with conversation history. Raises on failure."""
         prompt = self._history_to_prompt(history)
         provider = LLMProvider()
         chunks = []
@@ -590,7 +590,7 @@ class AgentEngine:
                     chunks.append(chunk)
         except Exception as exc:
             logger.error("LLM call failed: {}", exc)
-            return ""
+            raise
         return "".join(chunks)
 
     @staticmethod
@@ -608,18 +608,7 @@ class AgentEngine:
     @staticmethod
     def _parse_response(response: str) -> tuple[str, str | None, dict]:
         """Extract THOUGHT and ACTION from LLM response."""
-        thought = ""
-        thought_match = _THOUGHT_RE.search(response)
-        if thought_match:
-            thought = thought_match.group(1).strip()
-        else:
-            thought = response.split("ACTION:")[0].strip() if "ACTION:" in response else response.strip()
-
-        action_name, action_args = _parse_action(response)
-        if action_name is not None:
-            return thought, action_name, action_args
-
-        return thought, None, {}
+        return parse_response(response)
 
     # ------------------------------------------------------------------
     # Tool execution
@@ -630,7 +619,24 @@ class AgentEngine:
         spec = self.tool_registry.get(name) if self.tool_registry else None
         decision = self.permission_engine.evaluate(spec, args) if spec else None
         if decision and not decision.allowed:
+            # GAP 8: audit trail persistence
+            try:
+                from core_ui.activity import log_user_activity
+                await sync_to_async(log_user_activity)(
+                    user=self.user,
+                    category="agent_security",
+                    action="tool_denied",
+                    status="error",
+                    description=decision.reason,
+                    entity_type="agent_run",
+                    entity_id=self.run_record.pk if self.run_record else "",
+                    entity_name=self.agent.name,
+                    metadata={"tool": name, "args": args, "mode": decision.mode},
+                )
+            except Exception as exc:
+                logger.warning("Failed to persist audit trail for tool denial: {}", exc)
             return decision.reason
+
         if decision and spec:
             sandbox_decision = self.sandbox_manager.validate(spec, args, decision.sandbox_profile)
             if not sandbox_decision.allowed:
@@ -870,10 +876,31 @@ ACTION: tool_name {{"param1": "value1", "param2": "value2"}}
             server_ids.append(server.id)
             if getattr(server, "group_id", None):
                 group_ids.append(server.group_id)
-            try:
-                cards.append(await self.memory_store.get_server_card(server.id))
-            except Exception as exc:
-                logger.debug("Failed to load memory card for server {}: {}", getattr(server, "id", "?"), exc)
+        # P2-7: batch-load all server cards in one pass
+        try:
+            cards = await sync_to_async(self.memory_store._get_server_cards_batch_sync)(server_ids)
+        except Exception as exc:
+            logger.debug("Batch card loading failed, falling back to sequential: {}", exc)
+            for server in self.servers[:3]:
+                try:
+                    cards.append(await self.memory_store.get_server_card(server.id))
+                except Exception as card_exc:
+                    logger.debug("Failed to load memory card for server {}: {}", server.id, card_exc)
+
+        # GAP 4: on_memory_loaded hook
+        if cards:
+            primary_card = cards[0]
+            has_patterns = any(
+                k.startswith(("pattern_candidate:", "automation_candidate:", "skill_draft:"))
+                for k in getattr(primary_card, "extra_snapshots", {})
+            )
+            await self.hook_manager.on_memory_loaded(
+                server_id=server_ids[0] if server_ids else 0,
+                card_confidence=getattr(primary_card, "confidence", 0.0) or 0.0,
+                has_patterns=has_patterns,
+                has_skill_drafts=has_patterns,
+            )
+
         server_memory_prompt = render_server_cards_prompt(cards, max_cards=3, max_records=6)
         recipes_query = "\n".join(
             part for part in [self.agent.goal or self.agent.ai_prompt or "", *self.role_spec.focus_areas] if part
@@ -885,6 +912,17 @@ ACTION: tool_name {{"param1": "value1", "param2": "value2"}}
             limit=5,
         )
         tool_registry_prompt = self.tool_registry.build_prompt_slice(limit=10) if self.tool_registry else ""
+
+        # GAP 5: memory warmup prompt — recent agent run history
+        warmup = ""
+        if server_ids:
+            try:
+                warmup = await sync_to_async(
+                    self.memory_store._build_memory_warmup_prompt, thread_sensitive=False
+                )(server_ids[0], last_n=3)
+            except Exception:
+                warmup = ""
+
         return build_ops_prompt_context(
             role_spec=self.role_spec,
             permission_mode=self.permission_engine.mode,
@@ -893,6 +931,7 @@ ACTION: tool_name {{"param1": "value1", "param2": "value2"}}
             tool_registry_prompt=tool_registry_prompt,
             max_iterations=self.max_iterations,
             session_timeout=self.session_timeout,
+            memory_warmup_prompt=warmup,
         )
 
     async def _persist_ops_summary(
