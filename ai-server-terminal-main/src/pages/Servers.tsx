@@ -283,15 +283,15 @@ function memorySnapshotAudienceLabel(item: MemorySnapshotItem) {
 function memorySnapshotAudienceBadgeClass(item: MemorySnapshotItem) {
   switch (memorySnapshotAudienceKind(item)) {
     case "access":
-      return "bg-cyan-500/10 text-cyan-300";
+      return "bg-secondary text-foreground";
     case "risks":
-      return "bg-rose-500/10 text-rose-300";
+      return "bg-destructive/15 text-destructive";
     case "changes":
-      return "bg-amber-500/10 text-amber-300";
+      return "bg-secondary text-foreground";
     case "instructions":
-      return "bg-sky-500/10 text-sky-300";
+      return "bg-primary/15 text-primary";
     default:
-      return "bg-primary/10 text-primary";
+      return "bg-secondary text-foreground";
   }
 }
 

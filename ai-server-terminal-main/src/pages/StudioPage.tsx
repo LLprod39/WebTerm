@@ -512,22 +512,17 @@ export default function StudioPage() {
       <div className="flex-1 overflow-auto">
         <div className="w-full px-4 py-5 md:px-6 xl:px-8">
           <div className="w-full space-y-6">
-            <section className="rounded-[28px] border border-border/80 bg-card/95 p-5 md:p-6">
+            <section className="rounded-lg border border-border bg-card p-6">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-                <div className="max-w-3xl space-y-2">
-                  <Badge variant="secondary" className="px-3">
-                    Studio workspace
-                  </Badge>
-                  <div>
-                    <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-                      {canPipelines ? "Pipeline Workspace" : "Studio Access"}
-                    </h1>
-                    <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                      {canPipelines
-                        ? "Build, run, and monitor automations from one place with a layout that stays stable on large screens."
-                        : "Your Studio rights are now section-based. Open only the areas granted to this account."}
-                    </p>
-                  </div>
+                <div className="max-w-3xl space-y-1">
+                  <h1 className="text-2xl font-semibold text-foreground">
+                    {canPipelines ? "Pipelines" : "Studio"}
+                  </h1>
+                  <p className="text-sm text-muted-foreground">
+                    {canPipelines
+                      ? "Build, run, and monitor automations"
+                      : "Access your Studio sections"}
+                  </p>
                 </div>
 
                 <div className="flex w-full flex-col gap-2 sm:flex-row xl:w-auto">
@@ -540,16 +535,16 @@ export default function StudioPage() {
                           onChange={(e) => setSearch(e.target.value)}
                           placeholder="Search pipelines..."
                           aria-label="Search pipelines"
-                          className="h-10 rounded-xl border-border bg-background/75 pl-9 text-sm"
+                          className="h-10 rounded-lg border-border bg-background pl-9"
                         />
                       </div>
-                      <Button size="sm" className="h-10 gap-1.5 px-4 text-sm" onClick={() => setShowCreate(true)}>
+                      <Button className="h-10 gap-1.5 px-4" onClick={() => setShowCreate(true)}>
                         <Plus className="h-4 w-4" /> New Pipeline
                       </Button>
                     </>
                   ) : (
                     sectionLinks.slice(0, 2).map((item) => (
-                      <Button key={item.path} size="sm" variant="outline" className="h-10 gap-1.5 px-4 text-sm" onClick={() => navigate(item.path)}>
+                      <Button key={item.path} variant="outline" className="h-10 gap-1.5 px-4" onClick={() => navigate(item.path)}>
                         <item.icon className="h-4 w-4" />
                         {item.label}
                       </Button>
@@ -571,12 +566,10 @@ export default function StudioPage() {
               <div className="min-w-0 space-y-6">
                 {canPipelines ? (
                   <>
-                    <section className="rounded-[24px] border border-border bg-card/85 p-4 md:p-5">
-                      <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-                        <div>
-                          <p className="text-[11px] font-medium text-muted-foreground">Pipelines</p>
-                          <h2 className="mt-1 text-lg font-semibold text-foreground">
-                            {search ? `Results for "${search}"` : "All automations"}
+                    <section className="rounded-lg border border-border bg-card p-5">
+                      <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                        <h2 className="text-lg font-semibold text-foreground">
+                          {search ? `Results for "${search}"` : "All Pipelines"}
                           </h2>
                         </div>
                         <p className="text-xs text-muted-foreground">

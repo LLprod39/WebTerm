@@ -385,83 +385,82 @@ function CreateAgentDialog({
           {step === "template" ? (
             <div className="space-y-4">
               {/* Mode selector */}
-              <div className="flex gap-2 flex-wrap">
-                <button onClick={() => setMode("mini")} className={`flex-1 min-w-[140px] text-left border rounded-lg p-3 transition-colors ${mode === "mini" ? "border-primary bg-primary/5" : "border-border hover:border-primary/30"}`}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <Zap className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">Mini Agent</span>
+              <div className="flex gap-3 flex-wrap">
+                <button onClick={() => setMode("mini")} className={`flex-1 min-w-[140px] text-left border rounded-lg p-4 transition-colors ${mode === "mini" ? "border-primary bg-primary/10" : "border-border hover:border-primary/40"}`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Zap className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-semibold">Mini Agent</span>
                   </div>
-                  <p className="text-[10px] text-muted-foreground">Run a list of commands and get AI analysis. Simple and fast.</p>
+                  <p className="text-xs text-muted-foreground">Run commands and get AI analysis</p>
                 </button>
-                <button onClick={() => setMode("full")} className={`flex-1 min-w-[140px] text-left border rounded-lg p-3 transition-colors ${mode === "full" ? "border-primary bg-primary/5" : "border-border hover:border-primary/30"}`}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <Brain className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">Full Agent (ReAct)</span>
+                <button onClick={() => setMode("full")} className={`flex-1 min-w-[140px] text-left border rounded-lg p-4 transition-colors ${mode === "full" ? "border-primary bg-primary/10" : "border-border hover:border-primary/40"}`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Brain className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-semibold">Full Agent</span>
                   </div>
-                  <p className="text-[10px] text-muted-foreground">Autonomous agent with goal, reasoning loop, and multi-server support.</p>
+                  <p className="text-xs text-muted-foreground">Autonomous with goal and reasoning</p>
                 </button>
-                <button onClick={() => setMode("multi")} className={`flex-1 min-w-[140px] text-left border rounded-lg p-3 transition-colors ${mode === "multi" ? "border-violet-500 bg-violet-500/5" : "border-border hover:border-violet-500/30"}`}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <Layers className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">Multi-Agent Pipeline</span>
+                <button onClick={() => setMode("multi")} className={`flex-1 min-w-[140px] text-left border rounded-lg p-4 transition-colors ${mode === "multi" ? "border-primary bg-primary/10" : "border-border hover:border-primary/40"}`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Layers className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-semibold">Pipeline</span>
                   </div>
-                  <p className="text-[10px] text-muted-foreground">Orchestrator breaks goal into tasks. Each task runs a separate AI agent. Best for complex goals.</p>
+                  <p className="text-xs text-muted-foreground">Multi-agent orchestration</p>
                 </button>
-                </div>
+              </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 {templates.map((tpl) => (
                   <button key={tpl.type} onClick={() => onSelectTemplate(tpl)}
-                    className="text-left bg-secondary/30 border border-border rounded-lg p-3 hover:border-primary/50 transition-colors">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-transparent bg-background/30 text-muted-foreground">
+                    className="text-left bg-secondary/40 border border-border rounded-lg p-4 hover:border-primary/50 transition-colors">
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-background text-muted-foreground">
                         {(() => {
                           const TemplateIcon = AGENT_ICONS[tpl.type] || Settings2;
                           return <TemplateIcon className="h-4 w-4" />;
                         })()}
                       </span>
-                      <span className="text-sm font-medium text-foreground">{tpl.name}</span>
+                      <span className="text-sm font-semibold text-foreground">{tpl.name}</span>
                     </div>
-                    <p className="text-[10px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       {tpl.mode === "full"
-                        ? ((tpl.goal || "Autonomous ReAct agent").slice(0, 100))
+                        ? ((tpl.goal || "Autonomous agent").slice(0, 80))
                         : `${tpl.command_count} commands`}
                     </p>
                   </button>
                 ))}
                 <button onClick={() => { setSelectedType("custom"); setStep("config"); }}
-                  className="text-left bg-secondary/30 border border-border rounded-lg p-3 hover:border-primary/50 transition-colors">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-lg">🔧</span>
-                    <span className="text-sm font-medium text-foreground">
-                      {mode === "full" ? "Custom Full Agent" : mode === "multi" ? "Custom Pipeline Agent" : "Custom Mini Agent"}
+                  className="text-left bg-secondary/40 border border-dashed border-border rounded-lg p-4 hover:border-primary/50 transition-colors">
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-background text-muted-foreground">
+                      <Settings2 className="h-4 w-4" />
                     </span>
+                    <span className="text-sm font-semibold text-foreground">Custom Agent</span>
                   </div>
-                  <p className="text-[10px] text-muted-foreground">Build from scratch</p>
+                  <p className="text-xs text-muted-foreground">Build from scratch</p>
                 </button>
               </div>
             </div>
           ) : (
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Name</label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="My Agent" className="bg-secondary/50 h-8 text-sm" />
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Name</label>
+                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="My Agent" className="bg-secondary/30 h-10" />
               </div>
 
               {(mode === "full" || mode === "multi") && (
                 <>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                      <Target className="h-3 w-3" /> Goal
-                      {mode === "multi" && <span className="text-[9px] text-violet-400 bg-violet-500/10 px-1 rounded">Orchestrator will decompose this into tasks</span>}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                      <Target className="h-4 w-4 text-primary" /> Goal
                     </label>
-                    <Textarea value={goal} onChange={(e) => setGoal(e.target.value)} rows={3} className="bg-secondary/50 text-xs"
-                      placeholder={mode === "multi" ? "Describe the complex goal. E.g.: 'Perform a full security audit: check users, open ports, failed logins, suspicious processes and provide recommendations.'" : "What should this agent achieve? Be specific about the end result."} />
+                    <Textarea value={goal} onChange={(e) => setGoal(e.target.value)} rows={3} className="bg-secondary/30 text-sm"
+                      placeholder={mode === "multi" ? "Describe your goal. The orchestrator will break it into tasks." : "What should this agent achieve?"} />
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-muted-foreground flex items-center gap-1"><Settings2 className="h-3 w-3" /> System Prompt (optional)</label>
-                    <Textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} rows={2} className="bg-secondary/50 text-xs"
-                      placeholder="Custom role/personality for the agent" />
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground flex items-center gap-2"><Settings2 className="h-4 w-4 text-muted-foreground" /> System Prompt</label>
+                    <Textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} rows={2} className="bg-secondary/30 text-sm"
+                      placeholder="Custom role or personality (optional)" />
                   </div>
                   <div className="flex gap-4">
                     <div className="flex-1 space-y-1.5">

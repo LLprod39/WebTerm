@@ -59,48 +59,47 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <div className="w-full max-w-[340px]">
+      <div className="w-full max-w-sm">
         {/* Logo */}
-        <div className="mb-8">
-          <div className="flex items-center gap-2 mb-6">
-            <div className="h-8 w-8 rounded bg-primary/10 flex items-center justify-center">
-              <span className="text-sm font-bold text-primary">W</span>
+        <div className="mb-10 text-center">
+          <div className="flex items-center justify-center gap-2 mb-6">
+            <div className="h-10 w-10 rounded-lg bg-primary/15 flex items-center justify-center">
+              <span className="text-base font-bold text-primary">W</span>
             </div>
-            <span className="text-base font-semibold text-foreground">WebTermAI</span>
           </div>
-          <h1 className="text-lg font-semibold text-foreground">
+          <h1 className="text-xl font-semibold text-foreground">
             {t("login.title")}
           </h1>
-          <p className="text-xs text-muted-foreground mt-1">{t("login.subtitle")}</p>
+          <p className="text-sm text-muted-foreground mt-2">{t("login.subtitle")}</p>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="username" className="text-xs text-muted-foreground">{t("login.username")}</Label>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="username" className="text-sm text-muted-foreground">{t("login.username")}</Label>
             <Input
               id="username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="admin"
-              className="h-9 bg-card border-border text-sm"
+              className="h-10 bg-card border-border"
               autoComplete="username"
             />
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="password" className="text-xs text-muted-foreground">{t("login.password")}</Label>
+          <div className="space-y-2">
+            <Label htmlFor="password" className="text-sm text-muted-foreground">{t("login.password")}</Label>
             <Input
               id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="h-9 bg-card border-border text-sm"
+              className="h-10 bg-card border-border"
               autoComplete="current-password"
             />
           </div>
 
-          <label className="flex cursor-pointer items-center gap-2 py-1 text-xs text-muted-foreground">
+          <label className="flex cursor-pointer items-center gap-2 py-1 text-sm text-muted-foreground">
             <Checkbox
               checked={localOnly}
               onCheckedChange={(checked) => setLocalOnly(checked === true)}
@@ -109,32 +108,32 @@ export default function Login() {
           </label>
 
           {error && (
-            <p className="text-xs text-destructive">{error}</p>
+            <p className="text-sm text-destructive">{error}</p>
           )}
 
-          <Button type="submit" className="w-full h-9 text-sm" disabled={loading}>
-            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
+          <Button type="submit" className="w-full h-10" disabled={loading}>
+            {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
             {t("login.submit")}
           </Button>
         </form>
 
         {/* Footer */}
-        <div className="flex items-center justify-between mt-6">
-          <p className="text-[10px] text-muted-foreground">
+        <div className="flex items-center justify-between mt-8">
+          <p className="text-xs text-muted-foreground">
             {t("login.footer")}
           </p>
-          <div className="inline-flex rounded border border-border overflow-hidden text-[10px] font-medium">
+          <div className="inline-flex rounded-lg border border-border overflow-hidden text-xs font-medium">
             <button
               type="button"
               onClick={() => setLang("en")}
-              className={`px-2 py-0.5 transition-colors ${lang === "en" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}
+              className={`px-3 py-1 transition-colors ${lang === "en" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}
             >
               EN
             </button>
             <button
               type="button"
               onClick={() => setLang("ru")}
-              className={`px-2 py-0.5 transition-colors ${lang === "ru" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}
+              className={`px-3 py-1 transition-colors ${lang === "ru" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}
             >
               RU
             </button>

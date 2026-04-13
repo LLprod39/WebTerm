@@ -76,15 +76,15 @@ function SectionCard({ title, icon: Icon, children, description, actions }: {
   actions?: React.ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-xl border border-border/70 bg-card">
-      <div className="flex flex-col gap-4 border-b border-border/60 bg-secondary/15 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+    <section className="overflow-hidden rounded-lg border border-border bg-card">
+      <div className="flex flex-col gap-4 border-b border-border bg-secondary/20 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
-          <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-lg bg-background/80 text-muted-foreground">
-            <Icon className="h-3.5 w-3.5" />
+          <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg bg-background text-primary">
+            <Icon className="h-4 w-4" />
           </div>
           <div>
             <h2 className="text-base font-semibold text-foreground">{title}</h2>
-            {description ? <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p> : null}
+            {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
           </div>
         </div>
         {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
@@ -156,14 +156,14 @@ function PurposeModelSelector({
   onRefresh: () => void; refreshing: boolean;
 }) {
   return (
-    <div className="space-y-3 rounded-xl border border-border/70 bg-background/40 p-4">
-      <div className="flex items-center gap-2">
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-background text-muted-foreground">
-          <Icon className="h-3.5 w-3.5" />
+    <div className="space-y-3 rounded-lg border border-border bg-secondary/20 p-4">
+      <div className="flex items-center gap-3">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-background text-primary">
+          <Icon className="h-4 w-4" />
         </div>
         <div>
-          <p className="text-xs font-medium text-foreground">{label}</p>
-          <p className="text-[11px] text-muted-foreground">{description}</p>
+          <p className="text-sm font-medium text-foreground">{label}</p>
+          <p className="text-xs text-muted-foreground">{description}</p>
         </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
