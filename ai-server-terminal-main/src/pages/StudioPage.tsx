@@ -156,13 +156,13 @@ function StatCard({
   sub?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-border/80 bg-card/95 p-4">
-      <div className="mb-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+    <div className="rounded-lg border border-border bg-card p-4">
+      <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
         <Icon className="h-3.5 w-3.5" />
         {label}
       </div>
-      <div className="text-xl font-semibold text-foreground">{value}</div>
-      {sub && <div className="mt-1 text-[11px] text-muted-foreground">{sub}</div>}
+      <div className="text-2xl font-semibold text-foreground">{value}</div>
+      {sub && <div className="mt-1 text-xs text-muted-foreground">{sub}</div>}
     </div>
   );
 }
@@ -190,14 +190,7 @@ function PipelineCard({
     triggerSummary: pipeline.trigger_summary,
     graphVersion: pipeline.graph_version,
   });
-  const activityToneClass =
-    activityState.tone === "primary"
-      ? "border-primary/25 bg-primary/10 text-primary"
-      : activityState.tone === "success"
-        ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
-        : activityState.tone === "info"
-          ? "border-sky-500/25 bg-sky-500/10 text-sky-300"
-          : "border-amber-500/25 bg-amber-500/10 text-amber-300";
+  const activityToneClass = "border-border bg-secondary/30 text-foreground";
   const ActivityIcon =
     activityState.icon === "running"
       ? Loader2
@@ -213,36 +206,24 @@ function PipelineCard({
 
   return (
     <article
-      className="group cursor-pointer rounded-2xl border border-border/80 bg-card/95 p-4 transition-colors hover:border-primary/20 hover:bg-secondary/20"
+      className="group cursor-pointer rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary/50 hover:bg-secondary/20"
       onClick={onOpen}
     >
       <div className="flex items-start gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-border bg-secondary text-base text-foreground">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-secondary text-sm font-semibold text-foreground">
           {pipeline.icon || "W"}
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-start gap-3">
+          <div className="flex items-start justify-between">
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2">
                 <h3 className="text-sm font-semibold text-foreground">{pipeline.name}</h3>
-                <Badge variant="secondary" className="px-2 py-0.5">
-                  {pipeline.node_count} nodes
-                </Badge>
                 {pipeline.last_run && <RunStatusBadge status={pipeline.last_run.status} />}
               </div>
-              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                {pipeline.description || "Pipeline without description. Open the editor to configure the workflow."}
+              <p className="mt-1 text-xs text-muted-foreground">
+                {pipeline.description || "No description"}
               </p>
-              <div className={`mt-3 flex items-start gap-2 rounded-xl border px-3 py-2 ${activityToneClass}`}>
-                <ActivityIcon
-                  className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${activityState.icon === "running" ? "animate-spin" : ""}`}
-                />
-                <div className="min-w-0">
-                  <p className="text-[11px] font-medium">{activityState.label}</p>
-                  <p className="mt-0.5 text-[11px] opacity-90">{activityState.detail}</p>
-                </div>
-              </div>
             </div>
 
             <div onClick={(e) => e.stopPropagation()}>
@@ -265,25 +246,12 @@ function PipelineCard({
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-              <span className="rounded-xl border border-border bg-background/60 px-2.5 py-1">
-                Updated {formatRelativeTime(pipeline.updated_at)}
-              </span>
-              {tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="rounded-xl border border-border/70 px-2.5 py-1 text-[11px]"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <span className="text-xs text-muted-foreground">
+              Updated {formatRelativeTime(pipeline.updated_at)}
+            </span>
 
             <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-              <Button size="sm" variant="outline" className="h-8 px-3 text-xs" onClick={onOpen}>
-                Open
-              </Button>
               <Button size="sm" className="h-8 gap-1.5 px-3 text-xs" onClick={onRun} disabled={running}>
                 {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
                 Run
@@ -291,7 +259,7 @@ function PipelineCard({
             </div>
           </div>
 
-          {cloning && <p className="mt-2 text-[11px] text-primary">Creating a copy...</p>}
+          {cloning && <p className="mt-2 text-xs text-primary">Creating a copy...</p>}
         </div>
       </div>
     </article>

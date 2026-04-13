@@ -173,19 +173,19 @@ export default function AgentsPage() {
       </div>
 
       {result && !reportModalOpen && (
-        <div className="bg-card border border-primary/20 rounded-lg px-4 py-2.5 flex items-center gap-3">
-          <div className={`h-6 w-6 rounded-full flex items-center justify-center shrink-0 ${result.status === "completed" ? "bg-green-500/15" : "bg-red-500/15"}`}>
-            {result.status === "completed" ? <CheckCircle2 className="h-3.5 w-3.5 text-green-400" /> : <AlertTriangle className="h-3.5 w-3.5 text-red-400" />}
+        <div className="bg-card border border-border rounded-lg px-4 py-3 flex items-center gap-3">
+          <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${result.status === "completed" ? "bg-primary/20 text-primary" : "bg-destructive/20 text-destructive"}`}>
+            {result.status === "completed" ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-sm text-foreground">{result.server_name}</div>
-            <div className="text-[11px] text-muted-foreground">{result.status} · {formatDuration(result.duration_ms)}</div>
+            <div className="text-sm font-medium text-foreground">{result.server_name}</div>
+            <div className="text-xs text-muted-foreground">{result.status} · {formatDuration(result.duration_ms)}</div>
           </div>
-          <Button size="sm" variant="outline" className="h-8 gap-1.5 shrink-0" onClick={() => setReportModalOpen(true)}>
-            <FileText className="h-3 w-3" /> Report
+          <Button size="sm" className="h-8 gap-1.5 shrink-0 text-xs" onClick={() => setReportModalOpen(true)}>
+            <FileText className="h-3.5 w-3.5" /> Report
           </Button>
-          <Button size="sm" variant="ghost" className="h-7 px-1.5 shrink-0 text-muted-foreground" onClick={() => setResult(null)}>
-            <X className="h-3 w-3" />
+          <Button size="sm" variant="ghost" className="h-8 px-1.5 shrink-0 text-muted-foreground" onClick={() => setResult(null)}>
+            <X className="h-3.5 w-3.5" />
           </Button>
         </div>
       )}
@@ -223,12 +223,11 @@ export default function AgentsPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-sm font-medium text-foreground">{ag.name}</span>
-                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${ag.mode === "full" ? "bg-purple-500/20 text-purple-400" : ag.mode === "multi" ? "bg-violet-500/20 text-violet-400" : "bg-blue-500/20 text-blue-400"}`}>
-                        <ModeIcon className="inline h-2.5 w-2.5 mr-0.5" />{ag.mode === "multi" ? "Pipeline" : ag.mode}
+                      <span className={`text-xs px-2 py-0.5 rounded font-semibold bg-secondary text-foreground`}>
+                        {ag.mode === "multi" ? "Pipeline" : ag.mode}
                       </span>
-                      <span className="text-[9px] px-1 py-0.5 rounded bg-secondary text-muted-foreground">{ag.agent_type_display}</span>
                       {ag.active_run_id && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-400 font-bold animate-pulse">RUNNING</span>
+                        <span className="text-xs px-2 py-0.5 rounded bg-primary text-primary-foreground font-semibold">RUNNING</span>
                       )}
                     </div>
                     <div className="flex items-center gap-3 text-[10px] text-muted-foreground mt-0.5">

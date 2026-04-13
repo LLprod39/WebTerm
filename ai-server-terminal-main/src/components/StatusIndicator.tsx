@@ -12,7 +12,7 @@ export function StatusIndicator({ status, showLabel = true }: { status: ServerSt
   return (
     <span className="inline-flex items-center gap-1.5">
       <span className={cn("shrink-0", dotClass)} />
-      {showLabel && <span className="text-[11px] text-muted-foreground">{label}</span>}
+      {showLabel && <span className="text-xs text-muted-foreground">{label}</span>}
     </span>
   );
 }

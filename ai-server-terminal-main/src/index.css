@@ -6,53 +6,53 @@
 
 @layer base {
   :root {
-    /* Neutral gray corporate theme with teal accent */
-    --background: 220 9% 12%;
-    --foreground: 220 9% 88%;
+    /* Minimalist dark theme with subtle teal accent */
+    --background: 0 0% 8%;
+    --foreground: 0 0% 95%;
 
-    --card: 220 9% 14%;
-    --card-foreground: 220 9% 88%;
+    --card: 0 0% 10%;
+    --card-foreground: 0 0% 92%;
 
-    --popover: 220 9% 14%;
-    --popover-foreground: 220 9% 88%;
+    --popover: 0 0% 10%;
+    --popover-foreground: 0 0% 92%;
 
-    --primary: 174 60% 46%;
-    --primary-foreground: 220 15% 8%;
+    --primary: 170 50% 48%;
+    --primary-foreground: 0 0% 8%;
 
-    --secondary: 220 8% 17%;
-    --secondary-foreground: 220 8% 78%;
+    --secondary: 0 0% 14%;
+    --secondary-foreground: 0 0% 85%;
 
-    --muted: 220 8% 16%;
-    --muted-foreground: 220 8% 68%;
+    --muted: 0 0% 13%;
+    --muted-foreground: 0 0% 70%;
 
-    --accent: 174 60% 46%;
-    --accent-foreground: 220 15% 8%;
+    --accent: 170 50% 48%;
+    --accent-foreground: 0 0% 8%;
 
     --destructive: 0 62% 50%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 8% 20%;
-    --input: 220 8% 20%;
-    --ring: 174 60% 46%;
+    --border: 0 0% 16%;
+    --input: 0 0% 16%;
+    --ring: 170 50% 48%;
 
-    --radius: 0.375rem;
+    --radius: 0.5rem;
 
     --success: 152 56% 42%;
     --warning: 38 80% 52%;
     --info: 210 60% 52%;
 
-    --terminal-bg: 220 12% 8%;
-    --terminal-fg: 152 40% 72%;
-    --terminal-cursor: 174 60% 46%;
+    --terminal-bg: 0 0% 6%;
+    --terminal-fg: 170 30% 75%;
+    --terminal-cursor: 170 50% 48%;
 
-    --sidebar-background: 220 10% 10%;
-    --sidebar-foreground: 220 8% 72%;
-    --sidebar-primary: 174 60% 46%;
-    --sidebar-primary-foreground: 220 15% 8%;
-    --sidebar-accent: 220 8% 16%;
-    --sidebar-accent-foreground: 220 9% 88%;
-    --sidebar-border: 220 8% 17%;
-    --sidebar-ring: 174 60% 46%;
+    --sidebar-background: 0 0% 8%;
+    --sidebar-foreground: 0 0% 80%;
+    --sidebar-primary: 170 50% 48%;
+    --sidebar-primary-foreground: 0 0% 8%;
+    --sidebar-accent: 0 0% 15%;
+    --sidebar-accent-foreground: 0 0% 92%;
+    --sidebar-border: 0 0% 15%;
+    --sidebar-ring: 170 50% 48%;
 
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   }
@@ -107,50 +107,50 @@
 }
 
 @layer components {
+  /* Panel styles */
   .enterprise-panel {
-    @apply rounded-2xl border border-border/70 bg-card/80 shadow-sm backdrop-blur-sm;
+    @apply rounded-lg border border-border bg-card shadow-sm;
   }
 
   .workspace-panel {
-    @apply rounded-2xl border border-border/70 bg-card/75 shadow-sm backdrop-blur-sm;
+    @apply rounded-lg border border-border bg-card shadow-sm;
   }
 
   .workspace-subtle {
-    @apply border border-border/60 bg-secondary/30;
+    @apply border border-border bg-secondary/30;
   }
 
   .workspace-empty {
-    @apply flex flex-col gap-4 rounded-2xl border border-dashed border-border/70 bg-secondary/20 px-6 py-8;
+    @apply flex flex-col gap-4 rounded-lg border border-dashed border-border bg-secondary/20 px-6 py-8;
   }
 
   .enterprise-kicker {
-    @apply text-[11px] font-medium uppercase tracking-[0.18em] text-primary/75;
+    @apply text-xs font-semibold uppercase tracking-wider text-primary;
   }
 
-  /* Corporate card style */
+  /* Card styles */
   .corp-card {
-    @apply bg-card border border-border rounded-md;
+    @apply bg-card border border-border rounded-lg;
   }
 
-  /* Subtle hover surface */
   .corp-surface {
-    @apply transition-colors hover:bg-secondary/60;
+    @apply transition-colors hover:bg-secondary/40;
   }
 
-  /* Status dot */
+  /* Status indicators */
   .status-dot {
-    @apply h-1.5 w-1.5 rounded-full;
+    @apply h-2 w-2 rounded-full;
   }
 
   .status-dot-online {
-    @apply status-dot bg-emerald-400;
+    @apply status-dot bg-primary;
   }
 
   .status-dot-offline {
-    @apply status-dot bg-red-400/70;
+    @apply status-dot bg-destructive;
   }
 
   .status-dot-unknown {
-    @apply status-dot bg-muted-foreground/40;
+    @apply status-dot bg-muted;
   }
 }
