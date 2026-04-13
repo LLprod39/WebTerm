@@ -1,10 +1,13 @@
+import * as React from 'react';
+import { Settings, Play, Link2, Clock, Bell, Bot, Users, Terminal, BrainCircuit, Puzzle, GitBranch, Zap, Merge, Timer, UserCheck, MessageCircle, FileText, Send, Mail } from 'lucide-react';
+
 export type PipelineEditorLang = "en" | "ru";
 
 type LocalizedText = Record<PipelineEditorLang, string>;
 type LocalizedList = Record<PipelineEditorLang, string[]>;
 
 type NodeTypeMeta = {
-  icon: string;
+  icon: React.ReactNode;
   label: LocalizedText;
   paletteDescription: LocalizedText;
 };
@@ -34,6 +37,11 @@ export const NODE_TYPE_META: Record<string, NodeTypeMeta> = {
     icon: "⏰",
     label: { ru: "Расписание", en: "Schedule Trigger" },
     paletteDescription: { ru: "Автозапуск по cron", en: "Run the pipeline on a cron schedule" },
+  },
+  "trigger/monitoring": {
+    icon: "🚨",
+    label: { ru: "Мониторинг", en: "Monitoring Trigger" },
+    paletteDescription: { ru: "Запуск по alert из server monitoring", en: "Start from a server monitoring alert" },
   },
   "agent/react": {
     icon: "🤖",
@@ -70,6 +78,11 @@ export const NODE_TYPE_META: Record<string, NodeTypeMeta> = {
     label: { ru: "Параллель", en: "Parallel" },
     paletteDescription: { ru: "Запуск нескольких веток параллельно", en: "Fan out into parallel branches" },
   },
+  "logic/merge": {
+    icon: "🪢",
+    label: { ru: "Слияние", en: "Merge" },
+    paletteDescription: { ru: "Явное объединение веток all / any", en: "Explicitly join branches with all / any semantics" },
+  },
   "logic/wait": {
     icon: "⏱️",
     label: { ru: "Пауза", en: "Wait" },
@@ -79,6 +92,11 @@ export const NODE_TYPE_META: Record<string, NodeTypeMeta> = {
     icon: "👤",
     label: { ru: "Подтверждение", en: "Human Approval" },
     paletteDescription: { ru: "Ожидание решения оператора", en: "Pause and wait for operator approval" },
+  },
+  "logic/telegram_input": {
+    icon: "💬",
+    label: { ru: "Ответ в Telegram", en: "Telegram Input" },
+    paletteDescription: { ru: "Ожидание обычного текстового ответа оператора", en: "Wait for a plain-text operator reply in Telegram" },
   },
   "output/report": {
     icon: "📋",
@@ -134,6 +152,17 @@ export const NODE_TYPE_GUIDANCE_META: Record<string, NodeGuidanceMeta> = {
     checklist: {
       ru: ["Выберите или вставьте cron из 5 полей", "Оставьте триггер активным", "Проверьте окно запуска и частоту"],
       en: ["Choose or paste a 5-field cron expression", "Keep the trigger enabled", "Verify the schedule fits the operational window"],
+    },
+  },
+  "trigger/monitoring": {
+    category: { ru: "Триггер", en: "Trigger" },
+    summary: {
+      ru: "Monitoring-триггер запускает пайплайн, когда мониторинг сервера открывает подходящий alert.",
+      en: "Monitoring triggers start the pipeline when server monitoring opens a matching alert.",
+    },
+    checklist: {
+      ru: ["Выберите серверы или оставьте все", "Отфильтруйте severity / alert type", "При необходимости укажите имена Docker-контейнеров"],
+      en: ["Select servers or leave all", "Filter by severity or alert type", "Optionally narrow to Docker container names"],
     },
   },
   "agent/react": {
@@ -213,6 +242,17 @@ export const NODE_TYPE_GUIDANCE_META: Record<string, NodeGuidanceMeta> = {
       en: ["Connect the branches you want to run in parallel"],
     },
   },
+  "logic/merge": {
+    category: { ru: "Логика", en: "Logic" },
+    summary: {
+      ru: "Merge объединяет несколько активированных веток обратно в одну управляемую точку.",
+      en: "Merge nodes join multiple activated branches back into one controlled continuation point.",
+    },
+    checklist: {
+      ru: ["Выберите режим all или any", "Подведите одну или несколько входящих веток"],
+      en: ["Choose the all or any mode", "Connect one or more incoming branches"],
+    },
+  },
   "logic/wait": {
     category: { ru: "Логика", en: "Logic" },
     summary: {
@@ -233,6 +273,17 @@ export const NODE_TYPE_GUIDANCE_META: Record<string, NodeGuidanceMeta> = {
     checklist: {
       ru: ["Настройте доставку через email или Telegram", "Задайте timeout", "Укажите base URL для approval-ссылок"],
       en: ["Set email or Telegram delivery", "Set the timeout window", "Provide a reachable base URL for approval links"],
+    },
+  },
+  "logic/telegram_input": {
+    category: { ru: "Логика", en: "Logic" },
+    summary: {
+      ru: "Этот узел отправляет сообщение в Telegram и ждёт обычный текстовый ответ оператора.",
+      en: "This node sends a Telegram prompt and waits for a plain-text operator reply.",
+    },
+    checklist: {
+      ru: ["Укажите bot token и chat id", "Опишите, какой ответ ждёте", "Используйте ветку timeout для эскалации"],
+      en: ["Set the bot token and chat id", "Describe the reply you expect", "Use the timeout branch for escalation"],
     },
   },
   "output/report": {

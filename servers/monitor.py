@@ -43,6 +43,7 @@ DEEP_COMMANDS = (
     "journalctl -p 3 --since '10 minutes ago' --no-pager -q 2>/dev/null | tail -30 || true;"
     "dmesg --level=err,crit -T 2>/dev/null | tail -20 || true"
 )
+DOCKER_MONITOR_COMMAND = "docker ps -a --format '{{.Names}}|{{.State}}|{{.Status}}' 2>/dev/null || true"
 
 # Thresholds
 CPU_WARN = 80.0
@@ -215,31 +216,99 @@ def _parse_deep_output(raw: str) -> dict[str, Any]:
     return result
 
 
+def _parse_docker_output(raw: str) -> dict[str, Any]:
+    containers: list[dict[str, str]] = []
+    problem_containers: list[dict[str, str]] = []
+    for line in raw.strip().splitlines():
+        stripped = line.strip()
+        if not stripped or "|" not in stripped:
+            continue
+        name, state, status = (part.strip() for part in stripped.split("|", 2))
+        if not name:
+            continue
+        row = {
+            "name": name,
+            "state": state.lower(),
+            "status": status,
+        }
+        containers.append(row)
+        lowered_status = status.lower()
+        if row["state"] != "running" or "unhealthy" in lowered_status:
+            problem_containers.append(row)
+    return {
+        "containers": containers,
+        "problem_containers": problem_containers,
+    }
+
+
 async def _create_alerts(server: Server, metrics: dict, deep_data: dict | None = None) -> None:
     now = timezone.now()
     recent_window = now - timedelta(minutes=15)
 
-    async def _alert_exists(alert_type: str) -> bool:
-        return await sync_to_async(
-            lambda: ServerAlert.objects.filter(
+    async def _alert_exists(alert_type: str, fingerprint: str = "") -> bool:
+        def _exists() -> bool:
+            rows = ServerAlert.objects.filter(
                 server=server,
                 alert_type=alert_type,
                 is_resolved=False,
                 created_at__gte=recent_window,
-            ).exists()
-        )()
+            ).only("metadata")
+            if not fingerprint:
+                return rows.exists()
+            for row in rows:
+                metadata = row.metadata if isinstance(row.metadata, dict) else {}
+                if str(metadata.get("fingerprint") or "") == fingerprint:
+                    return True
+            return False
 
-    async def _create(alert_type: str, severity: str, title: str, message: str = "", meta: dict | None = None):
-        if await _alert_exists(alert_type):
+        return await sync_to_async(_exists)()
+
+    async def _create(
+        alert_type: str,
+        severity: str,
+        title: str,
+        message: str = "",
+        meta: dict | None = None,
+        *,
+        fingerprint: str = "",
+    ):
+        if await _alert_exists(alert_type, fingerprint):
             return
+        payload = dict(meta or {})
+        if fingerprint:
+            payload["fingerprint"] = fingerprint
         await sync_to_async(ServerAlert.objects.create)(
             server=server,
             alert_type=alert_type,
             severity=severity,
             title=title,
             message=message,
-            metadata=meta or {},
+            metadata=payload,
         )
+
+    async def _resolve_stale_docker_alerts(active_fingerprints: set[str]) -> None:
+        def _resolve() -> None:
+            rows = list(
+                ServerAlert.objects.filter(
+                    server=server,
+                    alert_type=ServerAlert.TYPE_SERVICE,
+                    is_resolved=False,
+                ).only("id", "metadata", "is_resolved", "resolved_at")
+            )
+            for row in rows:
+                metadata = row.metadata if isinstance(row.metadata, dict) else {}
+                if str(metadata.get("service_kind") or "") != "docker_container":
+                    continue
+                fingerprint = str(metadata.get("fingerprint") or "").strip()
+                if not fingerprint.startswith("docker-down:"):
+                    continue
+                if fingerprint in active_fingerprints:
+                    continue
+                row.is_resolved = True
+                row.resolved_at = now
+                row.save(update_fields=["is_resolved", "resolved_at"])
+
+        await sync_to_async(_resolve)()
 
     cpu = metrics.get("cpu_percent", 0)
     mem = metrics.get("memory_percent", 0)
@@ -266,9 +335,13 @@ async def _create_alerts(server: Server, metrics: dict, deep_data: dict | None =
             await _create(
                 ServerAlert.TYPE_SERVICE,
                 ServerAlert.SEVERITY_CRITICAL,
-                f"{len(failed)} failed service(s)",
+                f"Обнаружены упавшие systemd-сервисы: {len(failed)}",
                 "\n".join(failed[:10]),
-                {"services": failed[:20]},
+                {
+                    "services": failed[:20],
+                    "service_kind": "systemd",
+                },
+                fingerprint="systemd-failed-services",
             )
 
         log_errors = deep_data.get("log_errors", [])
@@ -278,10 +351,35 @@ async def _create_alerts(server: Server, metrics: dict, deep_data: dict | None =
             await _create(
                 ServerAlert.TYPE_LOG_ERROR,
                 ServerAlert.SEVERITY_WARNING,
-                f"{len(all_errors)} log error(s)",
+                f"Найдены ошибки в логах: {len(all_errors)}",
                 "\n".join(all_errors[:10]),
                 {"errors": all_errors[:30]},
+                fingerprint="monitor-log-errors",
             )
+
+        docker_data = deep_data.get("docker") if isinstance(deep_data.get("docker"), dict) else {}
+        problem_containers = docker_data.get("problem_containers", []) if isinstance(docker_data, dict) else []
+        active_docker_fingerprints: set[str] = set()
+        if problem_containers:
+            container_names = [str(item.get("name") or "").strip() for item in problem_containers if str(item.get("name") or "").strip()]
+            fingerprint = "docker-down:" + ",".join(sorted(container_names))
+            active_docker_fingerprints.add(fingerprint)
+            await _create(
+                ServerAlert.TYPE_SERVICE,
+                ServerAlert.SEVERITY_CRITICAL,
+                f"Docker-контейнер недоступен: {', '.join(container_names[:3])}",
+                "\n".join(
+                    f"{item.get('name')}: {item.get('status') or item.get('state')}"
+                    for item in problem_containers[:10]
+                ),
+                {
+                    "service_kind": "docker_container",
+                    "containers": problem_containers,
+                    "container_name": container_names[0] if container_names else "",
+                },
+                fingerprint=fingerprint,
+            )
+        await _resolve_stale_docker_alerts(active_docker_fingerprints)
 
 
 async def check_server(server: Server, deep: bool = False) -> ServerHealthCheck | None:
@@ -304,6 +402,10 @@ async def check_server(server: Server, deep: bool = False) -> ServerHealthCheck 
         async with asyncssh.connect(**kwargs) as conn:
             result = await asyncio.wait_for(conn.run(cmd, check=False), timeout=30)
             raw = result.stdout or ""
+            docker_raw = ""
+            if deep:
+                docker_result = await asyncio.wait_for(conn.run(DOCKER_MONITOR_COMMAND, check=False), timeout=20)
+                docker_raw = docker_result.stdout or ""
     except Exception as exc:
         elapsed = int((time.monotonic() - t0) * 1000)
         logger.debug("Monitor: SSH failed for {}: {}", server.name, exc)
@@ -313,6 +415,11 @@ async def check_server(server: Server, deep: bool = False) -> ServerHealthCheck 
 
     metrics = _parse_quick_output(raw)
     deep_data = _parse_deep_output(raw) if deep else None
+    if deep:
+        docker_data = _parse_docker_output(docker_raw)
+        if deep_data is None:
+            deep_data = {}
+        deep_data["docker"] = docker_data
 
     status = _determine_status(metrics)
     raw_output = {"quick": raw}
@@ -379,11 +486,21 @@ async def _save_unreachable(server: Server, error_msg: str, elapsed_ms: int = 0)
     return health
 
 
-async def check_all_servers(deep: bool = False, concurrency: int = 5) -> list[ServerHealthCheck]:
+async def check_all_servers(
+    deep: bool = False,
+    concurrency: int = 5,
+    server_ids: list[int] | None = None,
+) -> list[ServerHealthCheck]:
     """Check all active SSH servers with limited concurrency."""
-    servers = await sync_to_async(
-        lambda: list(Server.objects.filter(is_active=True, server_type="ssh"))
-    )()
+    normalized_ids = sorted({int(item) for item in (server_ids or []) if str(item).strip().isdigit()})
+
+    def _load_servers() -> list[Server]:
+        qs = Server.objects.filter(is_active=True, server_type="ssh")
+        if normalized_ids:
+            qs = qs.filter(id__in=normalized_ids)
+        return list(qs.order_by("id"))
+
+    servers = await sync_to_async(_load_servers)()
 
     if not servers:
         logger.info("Monitor: no active SSH servers to check")

@@ -17,11 +17,13 @@ vi.mock("framer-motion", () => ({
 
 vi.mock("@/lib/api", () => ({
   addServerGroupMember: vi.fn(),
+  bulkDeleteServerMemorySnapshots: vi.fn(),
   clearMasterPassword: vi.fn(),
   createServer: vi.fn(),
   createServerGroup: vi.fn(),
   createServerKnowledge: vi.fn(),
   createServerShare: vi.fn(),
+  deleteServerMemorySnapshot: vi.fn(),
   deleteServer: vi.fn(),
   deleteServerGroup: vi.fn(),
   deleteServerKnowledge: vi.fn(),
@@ -34,7 +36,9 @@ vi.mock("@/lib/api", () => ({
   getGroupServerContext: vi.fn(),
   getMasterPasswordStatus: vi.fn(),
   listServerKnowledge: vi.fn(),
+  listServerMemorySnapshots: vi.fn(),
   listServerShares: vi.fn(),
+  purgeServerAiMemory: vi.fn(),
   removeServerGroupMember: vi.fn(),
   revealServerPassword: vi.fn(),
   revokeServerShare: vi.fn(),
@@ -47,6 +51,7 @@ vi.mock("@/lib/api", () => ({
   updateServer: vi.fn(),
   updateServerGroup: vi.fn(),
   updateServerKnowledge: vi.fn(),
+  updateServerMemorySnapshot: vi.fn(),
 }));
 
 const bootstrapResponse = {
@@ -233,11 +238,18 @@ describe("Servers page rules and translations", () => {
     vi.mocked(api.getGroupServerContext).mockResolvedValue(groupContext);
     vi.mocked(api.getMasterPasswordStatus).mockResolvedValue({ has_master_password: false });
     vi.mocked(api.listServerKnowledge).mockResolvedValue({ success: true, items: [], categories: [] });
+    vi.mocked(api.listServerMemorySnapshots).mockResolvedValue({ success: true, items: [] });
     vi.mocked(api.listServerShares).mockResolvedValue({ success: true, shares: [] });
     vi.mocked(api.saveGlobalServerContext).mockResolvedValue({ success: true });
     vi.mocked(api.saveGroupServerContext).mockResolvedValue({ success: true });
     vi.mocked(api.updateServer).mockResolvedValue({ success: true, message: "ok" });
     vi.mocked(api.addServerGroupMember).mockResolvedValue({ success: true });
+    vi.mocked(api.bulkDeleteServerMemorySnapshots).mockResolvedValue({ success: true, deleted_count: 0, snapshot_ids: [] });
+    vi.mocked(api.deleteServerMemorySnapshot).mockResolvedValue({ success: true });
+    vi.mocked(api.purgeServerAiMemory).mockResolvedValue({
+      success: true,
+      deleted: { snapshots: 0, revalidations: 0, episodes: 0, events: 0, knowledge: 0 },
+    });
     vi.mocked(api.removeServerGroupMember).mockResolvedValue({ success: true });
     vi.mocked(api.subscribeServerGroup).mockResolvedValue({ success: true });
     vi.mocked(api.executeServerCommand).mockResolvedValue({ success: true, output: { stdout: "ok" } });
@@ -359,6 +371,66 @@ describe("Servers page rules and translations", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open inherited rules" }));
     expect(await screen.findByText("Group override")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Rules" })).toBeInTheDocument();
+  });
+
+  it("shows ai_auto knowledge snapshots in the server knowledge modal", async () => {
+    vi.mocked(api.listServerMemorySnapshots).mockResolvedValue({
+      success: true,
+      items: [
+        {
+          id: 501,
+          title: "Canonical Profile",
+          content: "Host: 172.25.173.251:22 user=lunix\nDocker контейнеры: nginx-web (порт 80)",
+          memory_key: "knowledge_note:501",
+          kind: "ai_note",
+          version: 1,
+          confidence: 0.91,
+          freshness: 0.98,
+          updated_at: "2026-04-09T12:03:14Z",
+          created_at: "2026-04-09T12:03:14Z",
+          rewrite_reason: "",
+        },
+        {
+          id: 502,
+          title: "Canonical Access/Network",
+          content: "Host: 172.25.173.251:22 user=lunix\nCommand used: `systemctl status ssh --no-pager`",
+          memory_key: "access",
+          kind: "canonical",
+          version: 1,
+          confidence: 0.88,
+          freshness: 0.97,
+          updated_at: "2026-04-09T12:03:14Z",
+          created_at: "2026-04-09T12:03:14Z",
+          rewrite_reason: "",
+        },
+        {
+          id: 503,
+          title: "Canonical Human Habits",
+          content: "- Повторяющиеся ручные привычки пока не выделены.",
+          memory_key: "human_habits",
+          kind: "canonical",
+          version: 1,
+          confidence: 0.55,
+          freshness: 0.97,
+          updated_at: "2026-04-09T12:03:14Z",
+          created_at: "2026-04-09T12:03:14Z",
+          rewrite_reason: "",
+        },
+      ],
+    });
+
+    renderServers("en");
+
+    await screen.findByText("prod-web-01");
+    fireEvent.click(getSparklesButton(getActionsContainer()));
+    fireEvent.click(await screen.findByRole("button", { name: "Knowledge" }));
+
+    expect(screen.getByText("Canonical Profile")).toBeInTheDocument();
+    expect(screen.getByText(/Docker контейнеры: nginx-web/)).toBeInTheDocument();
+    expect(screen.getByText("Повторяющиеся ручные привычки пока не выделены.")).toBeInTheDocument();
+    expect(screen.queryByText(/Command used:/)).not.toBeInTheDocument();
+    expect(screen.getAllByText("Сводка").length).toBeGreaterThan(0);
+    expect(screen.queryByText("knowledge_note:501")).not.toBeInTheDocument();
   });
 
   it("switches new servers UI strings between Russian and English", async () => {

@@ -5,7 +5,7 @@ Provides the building blocks for a DevOps n8n-like agent automation platform:
 - MCPServerPool: reusable MCP server definitions (stdio/sse)
 - AgentConfig: standalone agent configuration (system prompt, tools, MCP, servers)
 - Pipeline: visual pipeline definition (nodes + edges as JSON)
-- PipelineTrigger: webhook/cron/manual triggers for pipelines
+- PipelineTrigger: webhook/cron/manual/monitoring triggers for pipelines
 - PipelineRun: execution record for a pipeline run
 - PipelineTemplate: bundled pipeline templates for quick start
 """
@@ -14,6 +14,8 @@ import secrets
 
 from django.contrib.auth.models import User
 from django.db import models
+
+CURRENT_PIPELINE_GRAPH_VERSION = 2
 
 
 class MCPServerPool(models.Model):
@@ -81,6 +83,30 @@ class MCPServerPool(models.Model):
         if self.env:
             config["env"] = self.env
         return config
+
+
+def _collect_monitoring_filters(data: dict | None) -> dict:
+    raw_data = data if isinstance(data, dict) else {}
+    nested = raw_data.get("monitoring_filters") if isinstance(raw_data.get("monitoring_filters"), dict) else {}
+    filters: dict[str, object] = dict(nested)
+
+    if isinstance(raw_data.get("server_ids"), list):
+        server_ids = [int(item) for item in raw_data.get("server_ids", []) if str(item).strip().isdigit()]
+        if server_ids:
+            filters["server_ids"] = server_ids
+
+    for key in ("severities", "alert_types", "container_names"):
+        raw_values = raw_data.get(key)
+        if isinstance(raw_values, list):
+            values = [str(item or "").strip() for item in raw_values if str(item or "").strip()]
+            if values:
+                filters[key] = values
+
+    match_text = str(raw_data.get("match_text") or "").strip()
+    if match_text:
+        filters["match_text"] = match_text
+
+    return filters
 
 
 class AgentConfig(models.Model):
@@ -205,6 +231,10 @@ class Pipeline(models.Model):
         default=list,
         help_text="List of React Flow edges: [{id, source, target, ...}]",
     )
+    graph_version = models.PositiveSmallIntegerField(
+        default=CURRENT_PIPELINE_GRAPH_VERSION,
+        help_text="Pipeline graph contract version.",
+    )
 
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="pipelines")
     is_shared = models.BooleanField(default=False)
@@ -227,7 +257,33 @@ class Pipeline(models.Model):
         return self.name
 
     def get_last_run(self):
-        return self.runs.order_by("-started_at").first()
+        live_run = self.runs.filter(
+            status__in=[
+                PipelineRun.STATUS_PENDING,
+                PipelineRun.STATUS_RUNNING,
+            ]
+        ).order_by("-created_at", "-id").first()
+        if live_run:
+            return live_run
+        return self.runs.order_by("-created_at", "-id").first()
+
+    def get_trigger_summary(self) -> dict:
+        triggers = list(self.triggers.all())
+        active_triggers = [trigger for trigger in triggers if trigger.is_active]
+        last_triggered_at = None
+        for trigger in active_triggers:
+            if trigger.last_triggered_at and (last_triggered_at is None or trigger.last_triggered_at > last_triggered_at):
+                last_triggered_at = trigger.last_triggered_at
+        return {
+            "active_total": len(active_triggers),
+            "active_manual": sum(1 for trigger in active_triggers if trigger.trigger_type == PipelineTrigger.TYPE_MANUAL),
+            "active_webhook": sum(1 for trigger in active_triggers if trigger.trigger_type == PipelineTrigger.TYPE_WEBHOOK),
+            "active_schedule": sum(1 for trigger in active_triggers if trigger.trigger_type == PipelineTrigger.TYPE_SCHEDULE),
+            "active_monitoring": sum(
+                1 for trigger in active_triggers if trigger.trigger_type == PipelineTrigger.TYPE_MONITORING
+            ),
+            "last_triggered_at": last_triggered_at.isoformat() if last_triggered_at else None,
+        }
 
     def to_list_dict(self) -> dict:
         last_run = self.get_last_run()
@@ -239,9 +295,11 @@ class Pipeline(models.Model):
             "tags": self.tags,
             "is_shared": self.is_shared,
             "is_template": self.is_template,
+            "graph_version": self.graph_version,
             "node_count": len(self.nodes) if self.nodes else 0,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
+            "trigger_summary": self.get_trigger_summary(),
             "last_run": {
                 "id": last_run.pk,
                 "status": last_run.status,
@@ -264,6 +322,7 @@ class Pipeline(models.Model):
             "trigger/manual": PipelineTrigger.TYPE_MANUAL,
             "trigger/webhook": PipelineTrigger.TYPE_WEBHOOK,
             "trigger/schedule": PipelineTrigger.TYPE_SCHEDULE,
+            "trigger/monitoring": PipelineTrigger.TYPE_MONITORING,
         }
         keep_node_ids: set[str] = set()
 
@@ -278,6 +337,7 @@ class Pipeline(models.Model):
             payload_map = data.get("webhook_payload_map")
             if not isinstance(payload_map, dict):
                 payload_map = {}
+            monitoring_filters = _collect_monitoring_filters(data)
 
             defaults = {
                 "name": (str(data.get("label") or "").strip() or node_id),
@@ -285,6 +345,7 @@ class Pipeline(models.Model):
                 "is_active": bool(data.get("is_active", True)),
                 "cron_expression": str(data.get("cron_expression") or "").strip(),
                 "webhook_payload_map": payload_map,
+                "monitoring_filters": monitoring_filters,
             }
             existing = list(self.triggers.filter(node_id=node_id).order_by("id"))
             if existing:
@@ -319,16 +380,18 @@ class Pipeline(models.Model):
 
 class PipelineTrigger(models.Model):
     """
-    Trigger configuration for a pipeline — webhook, cron, or manual.
+    Trigger configuration for a pipeline — webhook, cron, monitoring alert, or manual.
     """
 
     TYPE_MANUAL = "manual"
     TYPE_WEBHOOK = "webhook"
     TYPE_SCHEDULE = "schedule"
+    TYPE_MONITORING = "monitoring"
     TYPE_CHOICES = [
         (TYPE_MANUAL, "Manual"),
         (TYPE_WEBHOOK, "Webhook"),
         (TYPE_SCHEDULE, "Schedule (cron)"),
+        (TYPE_MONITORING, "Monitoring alert"),
     ]
 
     pipeline = models.ForeignKey(Pipeline, on_delete=models.CASCADE, related_name="triggers")
@@ -350,6 +413,14 @@ class PipelineTrigger(models.Model):
         max_length=100,
         blank=True,
         help_text='Standard cron: "*/5 * * * *"',
+    )
+    monitoring_filters = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            "Alert filter for monitoring triggers: "
+            "{server_ids, severities, alert_types, container_names, match_text}"
+        ),
     )
     last_triggered_at = models.DateTimeField(null=True, blank=True)
 
@@ -380,6 +451,7 @@ class PipelineTrigger(models.Model):
             "webhook_url": f"/api/studio/triggers/{self.webhook_token}/receive/",
             "cron_expression": self.cron_expression,
             "webhook_payload_map": self.webhook_payload_map,
+            "monitoring_filters": self.monitoring_filters,
             "last_triggered_at": self.last_triggered_at.isoformat() if self.last_triggered_at else None,
         }
 
@@ -424,6 +496,12 @@ class PipelineRun(models.Model):
     # Snapshot of pipeline graph at run time
     nodes_snapshot = models.JSONField(default=list)
     edges_snapshot = models.JSONField(default=list)
+    entry_node_id = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        help_text="Selected trigger node id used as the run entry point.",
+    )
 
     # Per-node execution state
     # {node_id: {status, output, error, agent_run_id, started_at, finished_at}}
@@ -436,6 +514,14 @@ class PipelineRun(models.Model):
         default=dict,
         blank=True,
         help_text="Runtime control mailbox for cross-process pipeline control: {stop_requested}",
+    )
+    routing_state = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            "Ephemeral in-process routing state for V2 pipeline runs: "
+            "{activated_nodes, completed_nodes, pending_merges, queued_nodes, entry_node_id}"
+        ),
     )
 
     # Final summary output
@@ -461,6 +547,7 @@ class PipelineRun(models.Model):
         return None
 
     def to_dict(self) -> dict:
+        trigger = getattr(self, "trigger", None)
         return {
             "id": self.pk,
             "pipeline_id": self.pipeline_id,
@@ -476,6 +563,11 @@ class PipelineRun(models.Model):
             "finished_at": self.finished_at.isoformat() if self.finished_at else None,
             "created_at": self.created_at.isoformat(),
             "triggered_by": self.triggered_by.username if self.triggered_by else None,
+            "trigger_id": trigger.pk if trigger else None,
+            "entry_node_id": self.entry_node_id,
+            "trigger_type": trigger.trigger_type if trigger else "manual",
+            "trigger_name": trigger.name if trigger else "",
+            "trigger_node_id": trigger.node_id if trigger else self.entry_node_id,
         }
 
 
@@ -495,6 +587,10 @@ class PipelineTemplate(models.Model):
     # Full pipeline definition (same structure as Pipeline.nodes/edges)
     nodes = models.JSONField(default=list)
     edges = models.JSONField(default=list)
+    graph_version = models.PositiveSmallIntegerField(
+        default=CURRENT_PIPELINE_GRAPH_VERSION,
+        help_text="Template graph contract version.",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -515,6 +611,7 @@ class PipelineTemplate(models.Model):
             "category": self.category,
             "tags": self.tags,
             "node_count": len(self.nodes),
+            "graph_version": self.graph_version,
         }
 
     def instantiate_for_user(self, user: User) -> "Pipeline":
@@ -548,6 +645,7 @@ class PipelineTemplate(models.Model):
             tags=self.tags,
             nodes=nodes,
             edges=edges,
+            graph_version=self.graph_version or CURRENT_PIPELINE_GRAPH_VERSION,
             owner=user,
         )
         pipeline.sync_triggers_from_nodes()

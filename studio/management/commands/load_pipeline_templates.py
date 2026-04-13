@@ -10,7 +10,7 @@ Usage:
 
 from django.core.management.base import BaseCommand
 
-from studio.models import PipelineTemplate
+from studio.models import CURRENT_PIPELINE_GRAPH_VERSION, PipelineTemplate
 from studio.templates_data import PIPELINE_TEMPLATES
 
 
@@ -33,6 +33,7 @@ class Command(BaseCommand):
                 continue
 
             defaults = {k: v for k, v in tpl.items() if k != "slug"}
+            defaults.setdefault("graph_version", CURRENT_PIPELINE_GRAPH_VERSION)
             _, was_created = PipelineTemplate.objects.update_or_create(slug=slug, defaults=defaults)
 
             if was_created:

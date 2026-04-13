@@ -2599,26 +2599,34 @@ def server_memory_snapshots_user(request, server_id):
 
     Unlike server_memory_overview, this does NOT require admin rights.
     """
+    from app.agent_kernel.memory.repair import compute_freshness_score
     from servers.models import ServerMemorySnapshot
 
     server = get_object_or_404(Server, id=server_id, user=request.user)
     snapshots = (
         ServerMemorySnapshot.objects
-        .filter(server_id=server.id, status="active")
+        .filter(server_id=server.id, is_active=True, archived_at__isnull=True)
         .order_by("memory_key")
     )
     items = []
     for s in snapshots:
         kind = "canonical"
         mk = s.memory_key or ""
+        metadata = dict(s.metadata or {})
+        freshness = compute_freshness_score(s.updated_at, s.last_verified_at)
+        rewrite_reason = str(
+            metadata.get("rewrite_reason") or metadata.get("superseded_reason") or ""
+        ).strip()
         if mk.startswith("pattern_candidate:"):
             kind = "pattern"
         elif mk.startswith("automation_candidate:"):
             kind = "automation"
         elif mk.startswith("skill_draft:"):
             kind = "skill_draft"
-        elif mk.startswith("manual_note:") or mk.startswith("knowledge_note:"):
+        elif mk.startswith("manual_note:"):
             kind = "manual_note"
+        elif mk.startswith("knowledge_note:"):
+            kind = "ai_note"
         items.append({
             "id": s.id,
             "title": s.title or mk,
@@ -2627,10 +2635,10 @@ def server_memory_snapshots_user(request, server_id):
             "kind": kind,
             "version": s.version,
             "confidence": float(s.confidence or 0),
-            "freshness": float(s.freshness_score or 0),
+            "freshness": float(freshness or 0),
             "updated_at": s.updated_at.isoformat() if s.updated_at else None,
             "created_at": s.created_at.isoformat() if s.created_at else None,
-            "rewrite_reason": s.rewrite_reason or "",
+            "rewrite_reason": rewrite_reason,
         })
     return JsonResponse({"success": True, "items": items})
 
@@ -2644,7 +2652,11 @@ def server_memory_snapshot_update(request, server_id, snapshot_id):
 
     server = get_object_or_404(Server, id=server_id, user=request.user)
     snapshot = get_object_or_404(
-        ServerMemorySnapshot, id=snapshot_id, server_id=server.id, status="active"
+        ServerMemorySnapshot,
+        id=snapshot_id,
+        server_id=server.id,
+        is_active=True,
+        archived_at__isnull=True,
     )
     data = json.loads(request.body or "{}")
     changed = False
@@ -2665,6 +2677,110 @@ def server_memory_snapshot_update(request, server_id, snapshot_id):
         "content": snapshot.content,
         "updated_at": snapshot.updated_at.isoformat() if snapshot.updated_at else None,
     })
+
+
+@login_required
+@require_feature('servers')
+@require_http_methods(["POST"])
+def server_memory_snapshot_delete_user(request, server_id, snapshot_id):
+    from app.agent_kernel.memory.store import DjangoServerMemoryStore
+
+    server = get_object_or_404(Server, id=server_id, user=request.user)
+    store = DjangoServerMemoryStore()
+    try:
+        deleted = store._hard_delete_snapshot_sync(
+            server.id,
+            snapshot_id,
+            actor_user_id=request.user.id,
+        )
+    except ValueError as exc:
+        return JsonResponse({"success": False, "error": str(exc)}, status=404)
+
+    purged_all_ai_memory = False
+    if not store._has_active_user_ai_snapshots_sync(server.id):
+        store._purge_server_ai_memory_sync(server.id, actor_user_id=request.user.id)
+        purged_all_ai_memory = True
+
+    return JsonResponse({"success": True, "deleted": deleted, "purged_all_ai_memory": purged_all_ai_memory})
+
+
+@login_required
+@require_feature('servers')
+@require_http_methods(["POST"])
+def server_memory_snapshots_bulk_delete_user(request, server_id):
+    from app.agent_kernel.memory.store import DjangoServerMemoryStore
+    from servers.models import ServerMemorySnapshot
+
+    server = get_object_or_404(Server, id=server_id, user=request.user)
+    data = json.loads(request.body or "{}")
+    raw_ids = data.get("snapshot_ids") or []
+    snapshot_ids: list[int] = []
+    for value in raw_ids:
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            continue
+        if parsed > 0 and parsed not in snapshot_ids:
+            snapshot_ids.append(parsed)
+
+    if not snapshot_ids:
+        return JsonResponse(
+            {"success": False, "error": "No snapshots selected"},
+            status=400,
+        )
+
+    active_snapshot_ids = list(
+        ServerMemorySnapshot.objects.filter(
+            server_id=server.id,
+            id__in=snapshot_ids,
+            is_active=True,
+            archived_at__isnull=True,
+        ).values_list("id", flat=True)
+    )
+
+    if not active_snapshot_ids:
+        return JsonResponse(
+            {"success": False, "error": "No active snapshots found"},
+            status=404,
+        )
+
+    store = DjangoServerMemoryStore()
+    deleted_ids: list[int] = []
+    purged_all_ai_memory = False
+    for current_id in active_snapshot_ids:
+        try:
+            store._hard_delete_snapshot_sync(
+                server.id,
+                current_id,
+                actor_user_id=request.user.id,
+            )
+        except ValueError:
+            continue
+        deleted_ids.append(current_id)
+
+    if deleted_ids and not store._has_active_user_ai_snapshots_sync(server.id):
+        store._purge_server_ai_memory_sync(server.id, actor_user_id=request.user.id)
+        purged_all_ai_memory = True
+
+    return JsonResponse(
+        {
+            "success": True,
+            "deleted_count": len(deleted_ids),
+            "snapshot_ids": deleted_ids,
+            "purged_all_ai_memory": purged_all_ai_memory,
+        }
+    )
+
+
+@login_required
+@require_feature('servers')
+@require_http_methods(["POST"])
+def server_memory_purge_user(request, server_id):
+    from app.agent_kernel.memory.store import DjangoServerMemoryStore
+
+    server = get_object_or_404(Server, id=server_id, user=request.user)
+    result = DjangoServerMemoryStore()._purge_server_ai_memory_sync(server.id, actor_user_id=request.user.id)
+    return JsonResponse({"success": True, **result})
 
 
 @login_required

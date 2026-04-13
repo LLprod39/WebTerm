@@ -36,7 +36,7 @@ def _grant_feature(user: User, *features: str) -> None:
 @pytest.mark.django_db
 def test_studio_pipeline_trigger_template_and_servers_endpoints(monkeypatch):
     user = User.objects.create_user(username="studio-user", password="x")
-    _grant_feature(user, "agents")
+    _grant_feature(user, "studio", "studio_pipelines", "studio_runs", "agents")
     server = Server.objects.create(user=user, name="studio-srv", host="10.0.0.55", username="root")
     client = Client()
     client.force_login(user)
@@ -56,11 +56,12 @@ def test_studio_pipeline_trigger_template_and_servers_endpoints(monkeypatch):
                         "position": {"x": 0, "y": 100},
                         "data": {"label": "Webhook", "webhook_payload_map": {"branch": "git.ref"}},
                     },
-                    _llm_node("n1"),
+                    _llm_node("manual_task"),
+                    _llm_node("webhook_task"),
                 ],
                 "edges": [
-                    {"id": "e1", "source": "manual", "target": "n1"},
-                    {"id": "e2", "source": "webhook", "target": "n1"},
+                    {"id": "e1", "source": "manual", "target": "manual_task"},
+                    {"id": "e2", "source": "webhook", "target": "webhook_task"},
                 ],
             }
         ),
@@ -92,6 +93,7 @@ def test_studio_pipeline_trigger_template_and_servers_endpoints(monkeypatch):
     )
     assert run.status_code == 202
     run_id = run.json()["id"]
+    assert run.json()["entry_node_id"] == "manual"
 
     pipeline_runs = client.get(f"/api/studio/pipelines/{pipeline_id}/runs/")
     assert pipeline_runs.status_code == 200
@@ -126,6 +128,9 @@ def test_studio_pipeline_trigger_template_and_servers_endpoints(monkeypatch):
     )
     assert receive.status_code == 200
     assert receive.json()["ok"] is True
+    webhook_run = PipelineRun.objects.get(pk=receive.json()["run_id"])
+    assert webhook_run.entry_node_id == "webhook"
+    assert webhook_run.context["branch"] == "refs/heads/release"
 
     template = PipelineTemplate.objects.create(
         slug="unit-template",
@@ -153,10 +158,88 @@ def test_studio_pipeline_trigger_template_and_servers_endpoints(monkeypatch):
 
 
 @pytest.mark.django_db
+def test_pipeline_assistant_accepts_history_and_graph_edit_patch(monkeypatch):
+    user = User.objects.create_user(username="studio-assistant-user", password="x")
+    _grant_feature(user, "studio", "studio_pipelines")
+    client = Client()
+    client.force_login(user)
+
+    captured: dict[str, str] = {}
+
+    async def fake_stream_chat(self, prompt: str, model: str = "auto", purpose: str = "chat"):
+        captured["prompt"] = prompt
+        yield json.dumps(
+            {
+                "reply": "Обновил граф.",
+                "target_node_id": None,
+                "node_patch": {},
+                "graph_patch": {
+                    "anchor_node_id": "manual_start",
+                    "nodes": [],
+                    "edges": [],
+                    "update_nodes": [
+                        {
+                            "node_id": "notify",
+                            "data": {"message": "Краткий отчет в Telegram"},
+                        }
+                    ],
+                    "remove_node_ids": ["old_wait"],
+                    "remove_edge_ids": ["edge_old_wait_notify"],
+                },
+                "warnings": ["Проверьте токен Telegram."],
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("app.core.llm.LLMProvider.stream_chat", fake_stream_chat, raising=False)
+
+    response = client.post(
+        "/api/studio/pipelines/assistant/",
+        data=_json(
+            {
+                "pipeline_name": "Assistant Flow",
+                "nodes": [
+                    {"id": "manual_start", "type": "trigger/manual", "position": {"x": 0, "y": 0}, "data": {"label": "Manual Start"}},
+                    {"id": "notify", "type": "output/telegram", "position": {"x": 240, "y": 0}, "data": {"label": "Notify"}},
+                    {"id": "old_wait", "type": "logic/wait", "position": {"x": 120, "y": 120}, "data": {"label": "Old Wait"}},
+                ],
+                "edges": [
+                    {"id": "edge_manual_notify", "source": "manual_start", "target": "notify"},
+                    {"id": "edge_old_wait_notify", "source": "old_wait", "target": "notify"},
+                ],
+                "selected_node": {
+                    "id": "notify",
+                    "type": "output/telegram",
+                    "position": {"x": 240, "y": 0},
+                    "data": {"label": "Notify"},
+                },
+                "history": [
+                    {"role": "user", "content": "Собери пайплайн для уведомлений."},
+                    {"role": "assistant", "content": "Готов помочь."},
+                ],
+                "user_message": "Сделай уведомление короче и убери лишний wait.",
+            }
+        ),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["reply"] == "Обновил граф."
+    assert payload["graph_patch"]["update_nodes"] == [
+        {"node_id": "notify", "data": {"message": "Краткий отчет в Telegram"}}
+    ]
+    assert payload["graph_patch"]["remove_node_ids"] == ["old_wait"]
+    assert payload["graph_patch"]["remove_edge_ids"] == ["edge_old_wait_notify"]
+    assert "Собери пайплайн для уведомлений." in captured["prompt"]
+    assert "Сделай уведомление короче и убери лишний wait." in captured["prompt"]
+
+
+@pytest.mark.django_db
 @override_settings(PIPELINE_ACTIVE_RUNS_PER_USER_LIMIT=1, PIPELINE_ACTIVE_RUNS_GLOBAL_LIMIT=0)
 def test_pipeline_run_enforces_user_active_run_limit(monkeypatch):
     user = User.objects.create_user(username="studio-limit-user", password="x")
-    _grant_feature(user, "studio", "agents")
+    _grant_feature(user, "studio", "studio_pipelines", "studio_runs", "agents")
     client = Client()
     client.force_login(user)
 

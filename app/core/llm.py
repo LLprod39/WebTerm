@@ -1,5 +1,6 @@
 import os
 import asyncio
+import contextlib
 import time
 from google import genai
 from loguru import logger
@@ -82,37 +83,46 @@ def _log_llm_usage(
 
     Safe to call from both sync and async contexts.
     """
-    from asgiref.sync import sync_to_async
+    try:
+        from core_ui.audit import get_audit_context
+
+        captured_audit_ctx = get_audit_context()
+    except Exception:
+        captured_audit_ctx = {}
 
     def _do_log():
-        from core_ui.activity import log_llm_activity
-        from core_ui.audit import get_audit_context, maybe_apply_log_retention, should_log_llm
-        from core_ui.models import LLMUsageLog
+        try:
+            from core_ui.activity import log_llm_activity
+            from core_ui.audit import audit_context, get_audit_context, maybe_apply_log_retention, should_log_llm
+            from core_ui.models import LLMUsageLog
 
-        if not should_log_llm():
-            return
+            with audit_context(**captured_audit_ctx):
+                if not should_log_llm():
+                    return
 
-        maybe_apply_log_retention()
-        audit_ctx = get_audit_context()
-        LLMUsageLog.objects.create(
-            provider=provider,
-            model_name=model_name,
-            user_id=audit_ctx.get("user_id"),
-            input_tokens=len(input_text) // 4,
-            output_tokens=len(output_text) // 4,
-            duration_ms=duration_ms,
-            status=status,
-        )
-        log_llm_activity(
-            provider=provider,
-            model_name=model_name,
-            prompt=input_text,
-            response=output_text,
-            duration_ms=duration_ms,
-            status=status,
-            purpose=purpose,
-            metadata=metadata,
-        )
+                maybe_apply_log_retention()
+                audit_ctx = get_audit_context()
+                LLMUsageLog.objects.create(
+                    provider=provider,
+                    model_name=model_name,
+                    user_id=audit_ctx.get("user_id"),
+                    input_tokens=len(input_text) // 4,
+                    output_tokens=len(output_text) // 4,
+                    duration_ms=duration_ms,
+                    status=status,
+                )
+                log_llm_activity(
+                    provider=provider,
+                    model_name=model_name,
+                    prompt=input_text,
+                    response=output_text,
+                    duration_ms=duration_ms,
+                    status=status,
+                    purpose=purpose,
+                    metadata=metadata,
+                )
+        except Exception as e:
+            logger.debug(f"Failed to log LLM usage: {e}")
 
     try:
         loop = asyncio.get_running_loop()
@@ -120,12 +130,13 @@ def _log_llm_usage(
         loop = None
 
     if loop and loop.is_running():
-        asyncio.ensure_future(sync_to_async(_do_log, thread_sensitive=False)())
-    else:
-        try:
-            _do_log()
-        except Exception as e:
-            logger.debug(f"Failed to log LLM usage: {e}")
+        # Detached background logging must not inherit asgiref's thread-sensitive
+        # executor context, otherwise later ASGI requests can fail with a broken
+        # CurrentThreadExecutor after this task outlives the originating request.
+        loop.run_in_executor(None, _do_log)
+        return
+
+    _do_log()
 
 
 def _is_retryable_error(e: Exception) -> bool:
@@ -192,6 +203,8 @@ def get_provider() -> "LLMProvider":
     assignment; LLMProvider already lazy-inits API clients).
     """
     global _provider_instance
+    with contextlib.suppress(Exception):
+        model_manager.load_config()
     if _provider_instance is None:
         _provider_instance = LLMProvider()
     return _provider_instance

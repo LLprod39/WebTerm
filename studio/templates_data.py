@@ -7,7 +7,10 @@ Node types: trigger/manual, agent/react, agent/multi, agent/ssh_cmd,
             output/report, output/webhook, output/email, output/telegram
 """
 
+from .webhook_smoke import WEBHOOK_SMOKE_TEMPLATE
+
 PIPELINE_TEMPLATES = [
+    WEBHOOK_SMOKE_TEMPLATE,
     # ------------------------------------------------------------------
     # 1. Healthcheck Sweep
     # ------------------------------------------------------------------
@@ -456,16 +459,19 @@ PIPELINE_TEMPLATES = [
                 },
             },
 
-            # ── Condition: was it approved? ────────────────────────────────────
+            # ── Timeout branch → report ────────────────────────────────────────
             {
                 "id": "n4_check",
-                "type": "logic/condition",
+                "type": "output/report",
                 "position": {"x": 400, "y": 620},
                 "data": {
-                    "label": "Approved?",
-                    "source_node_id": "n4",
-                    "check_type": "contains",
-                    "check_value": "APPROVED",
+                    "label": "⏳ Approval Timed Out",
+                    "template": (
+                        "# Approval Timed Out\n\n"
+                        "The operator did not answer within the configured approval window.\n\n"
+                        "**Approval node status:**\n{n4_error}\n\n"
+                        "**Proposed update plan:**\n{n3_output}"
+                    ),
                 },
             },
 
@@ -563,6 +569,15 @@ PIPELINE_TEMPLATES = [
                 "data": {
                     "label": "⏱️ Wait 1 Minute",
                     "wait_minutes": 1,
+                },
+            },
+            {
+                "id": "n6_merge",
+                "type": "logic/merge",
+                "position": {"x": 150, "y": 980},
+                "data": {
+                    "label": "📎 Notification Join",
+                    "mode": "all",
                 },
             },
 
@@ -664,6 +679,15 @@ PIPELINE_TEMPLATES = [
                     "server_ids": [],
                 },
             },
+            {
+                "id": "n9_merge",
+                "type": "logic/merge",
+                "position": {"x": 150, "y": 1460},
+                "data": {
+                    "label": "📎 Verification Join",
+                    "mode": "all",
+                },
+            },
 
             # ── Step 10: Final report (шаблон редактируется в Studio) ─────────
             {
@@ -727,25 +751,27 @@ PIPELINE_TEMPLATES = [
             # Analysis → Human Approval
             {"id": "e3-4", "source": "n3", "target": "n4", "animated": True},
             # Human Approval → Condition
-            {"id": "e4-check", "source": "n4", "target": "n4_check", "animated": True},
+            {"id": "e4-timeout", "source": "n4", "target": "n4_check", "sourceHandle": "timeout", "animated": True},
             # Condition → Rejected branch
-            {"id": "e_check_rej", "source": "n4_check", "target": "n4_rejected", "sourceHandle": "false", "label": "rejected"},
+            {"id": "e_check_rej", "source": "n4", "target": "n4_rejected", "sourceHandle": "rejected", "label": "rejected"},
             # Condition → Finalise plan (approved branch)
-            {"id": "e_check_ok", "source": "n4_check", "target": "n5", "sourceHandle": "true", "label": "approved"},
+            {"id": "e_check_ok", "source": "n4", "target": "n5", "sourceHandle": "approved", "label": "approved"},
             # Finalise plan → Schedule notifications (parallel)
             {"id": "e5-6a", "source": "n5", "target": "n6a", "animated": True},
             {"id": "e5-6b", "source": "n5", "target": "n6b", "animated": True},
             # Both notifications → Wait
-            {"id": "e6a-7", "source": "n6a", "target": "n7", "animated": True},
-            {"id": "e6b-7", "source": "n6b", "target": "n7", "animated": True},
+            {"id": "e6a-merge", "source": "n6a", "target": "n6_merge", "sourceHandle": "success", "animated": True},
+            {"id": "e6b-merge", "source": "n6b", "target": "n6_merge", "sourceHandle": "success", "animated": True},
+            {"id": "e6merge-7", "source": "n6_merge", "target": "n7", "sourceHandle": "out", "animated": True},
             # Wait → Execute updates
-            {"id": "e7-8", "source": "n7", "target": "n8", "animated": True},
+            {"id": "e7-8", "source": "n7", "target": "n8", "sourceHandle": "done", "animated": True},
             # Execute → Done notifications (parallel)
             {"id": "e8-9a", "source": "n8", "target": "n9a", "animated": True},
             {"id": "e8-9b", "source": "n8", "target": "n9b", "animated": True},
             # Both notifications → Service verification
-            {"id": "e9a-10", "source": "n9a", "target": "n10", "animated": True},
-            {"id": "e9b-10", "source": "n9b", "target": "n10", "animated": True},
+            {"id": "e9a-merge", "source": "n9a", "target": "n9_merge", "sourceHandle": "success", "animated": True},
+            {"id": "e9b-merge", "source": "n9b", "target": "n9_merge", "sourceHandle": "success", "animated": True},
+            {"id": "e9merge-10", "source": "n9_merge", "target": "n10", "sourceHandle": "out", "animated": True},
             # Verification → Final report
             {"id": "e10-11", "source": "n10", "target": "n11", "animated": True},
             # Final report → Final notifications (parallel)

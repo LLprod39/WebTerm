@@ -168,6 +168,10 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
     _ai_run_id: str
     _ai_marker_token: str
     _ai_stop_requested: bool
+    _manual_next_cmd_id: int
+    _manual_pending_commands: list[dict[str, Any]]
+    _manual_active_cmd_id: Optional[int]
+    _manual_active_output: str
 
     _marker_suppress: dict[str, bool]
     _marker_line_buf: dict[str, str]
@@ -361,6 +365,10 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         self._marker_line_buf = {"stdout": "", "stderr": ""}
         self._manual_input_buffer = ""
         self._input_capture_suppress = 0
+        self._manual_next_cmd_id = 1_000_000
+        self._manual_pending_commands: list[dict[str, Any]] = []
+        self._manual_active_cmd_id = None
+        self._manual_active_output = ""
         self._ai_audit_context: dict[str, Any] = {}
         self._server_connection_id: str | None = None
         self._connection_heartbeat_task = None
@@ -673,10 +681,64 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         if not self._ssh_proc:
             return
         try:
-            await self._capture_terminal_input(data)
-            self._ssh_proc.stdin.write(data)
+            completed_commands = await self._capture_terminal_input(data)
+            if not completed_commands:
+                self._ssh_proc.stdin.write(data)
+                return
+
+            newline_count = len(re.findall(r"\r\n|\r|\n", data))
+            can_capture_result = (
+                len(completed_commands) == 1
+                and newline_count == 1
+                and self._should_use_manual_command_marker(completed_commands[0])
+            )
+            if not can_capture_result:
+                self._ssh_proc.stdin.write(data)
+                for command in completed_commands:
+                    await self._log_manual_terminal_command(command)
+                    await database_sync_to_async(self._persist_manual_terminal_command_result, thread_sensitive=True)(
+                        user_id=self._user_id or 0,
+                        server_id=self.server.id if self.server else 0,
+                        session_id=self._server_connection_id or "",
+                        command=command,
+                        output="",
+                        exit_code=None,
+                    )
+                return
+
+            command_index = 0
+            for chunk in re.split(r"(\r\n|\r|\n)", data):
+                if not chunk:
+                    continue
+                self._ssh_proc.stdin.write(chunk)
+                if chunk in ("\r\n", "\r", "\n") and command_index < len(completed_commands):
+                    await self._enqueue_manual_terminal_command_capture(completed_commands[command_index])
+                    command_index += 1
         except Exception as e:
             await self._safe_send_json({"type": "error", "message": f"stdin write failed: {e}"})
+
+    @staticmethod
+    def _should_use_manual_command_marker(command: str) -> bool:
+        normalized = normalize_memory_command_text(command)
+        if not normalized:
+            return False
+        stripped = normalized.strip()
+        lowered = stripped.lower()
+        if not stripped:
+            return False
+        if "<<" in stripped:
+            return False
+        if stripped.endswith("\\"):
+            return False
+        if re.search(r"(?:&&|\|\||\|)\s*$", stripped):
+            return False
+        if re.match(r"^\s*(if|for|while|until|case|select|function)\b", lowered):
+            return False
+        if re.search(r"\b(?:then|do|else|elif|in)\s*$", lowered):
+            return False
+        if stripped.count("'") % 2 or stripped.count('"') % 2 or stripped.count("`") % 2:
+            return False
+        return True
 
     @staticmethod
     def _strip_terminal_input_sequences(data: str) -> str:
@@ -692,20 +754,21 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         finally:
             self._input_capture_suppress = max(0, int(getattr(self, "_input_capture_suppress", 1) or 1) - 1)
 
-    async def _capture_terminal_input(self, data: str) -> None:
+    async def _capture_terminal_input(self, data: str) -> list[str]:
         if int(getattr(self, "_input_capture_suppress", 0) or 0) > 0:
-            return
+            return []
 
         cleaned = self._strip_terminal_input_sequences(data)
         if not cleaned:
-            return
+            return []
 
+        completed_commands: list[str] = []
         for char in cleaned:
             if char in ("\r", "\n"):
                 command = str(getattr(self, "_manual_input_buffer", "") or "").strip()
                 self._manual_input_buffer = ""
                 if command:
-                    await self._log_manual_terminal_command(command)
+                    completed_commands.append(command)
                 continue
             if char in ("\x7f", "\b"):
                 self._manual_input_buffer = str(getattr(self, "_manual_input_buffer", "") or "")[:-1]
@@ -716,6 +779,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             if ord(char) < 32 and char != "\t":
                 continue
             self._manual_input_buffer = (str(getattr(self, "_manual_input_buffer", "") or "") + char)[-8000:]
+        return completed_commands
 
     async def _log_manual_terminal_command(self, command: str) -> None:
         if not command or not self.server or not self._user_id:
@@ -735,15 +799,43 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                 "command_length": len(command),
             },
         )
-        await database_sync_to_async(self._persist_manual_terminal_command, thread_sensitive=True)(
-            user_id=self._user_id,
-            server_id=self.server.id,
-            session_id=self._server_connection_id or "",
-            command=command,
+
+    async def _enqueue_manual_terminal_command_capture(self, command: str) -> None:
+        if not command or not self.server or not self._user_id or not self._ssh_proc:
+            return
+
+        await self._log_manual_terminal_command(command)
+
+        cmd_id = int(getattr(self, "_manual_next_cmd_id", 1_000_000) or 1_000_000)
+        self._manual_next_cmd_id = cmd_id + 1
+        self._manual_pending_commands.append(
+            {
+                "id": cmd_id,
+                "command": command,
+                "session_id": self._server_connection_id or "",
+                "user_id": self._user_id,
+                "server_id": self.server.id,
+            }
         )
+        if self._manual_active_cmd_id is None:
+            self._manual_active_cmd_id = cmd_id
+            self._manual_active_output = ""
+
+        marker_prefix = self._marker_prefix()
+        marker_var = f"{marker_prefix}{cmd_id}"
+        marker_cmd = f"{marker_var}=$?; echo \"{marker_prefix}{cmd_id}:${{{marker_var}}}__\""
+        self._ssh_proc.stdin.write(marker_cmd + "\n")
 
     @staticmethod
-    def _persist_manual_terminal_command(*, user_id: int, server_id: int, session_id: str, command: str) -> None:
+    def _persist_manual_terminal_command_result(
+        *,
+        user_id: int,
+        server_id: int,
+        session_id: str,
+        command: str,
+        output: str,
+        exit_code: int | None,
+    ) -> None:
         from servers.models import ServerCommandHistory
 
         ServerCommandHistory.objects.create(
@@ -753,8 +845,8 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             source_kind=ServerCommandHistory.SOURCE_TERMINAL,
             session_id=session_id,
             command=command,
-            output="",
-            exit_code=None,
+            output=output or "",
+            exit_code=exit_code,
         )
 
     async def _handle_resize(self, content: dict[str, Any]):
@@ -2424,7 +2516,7 @@ EXIT_CODE: {exit_code}
                 server=server,
                 title="Профиль сервера (авто)",
                 content=profile_content,
-                category="config",
+                category="system",
                 user=user,
                 confidence=0.88,
             )
@@ -2569,6 +2661,10 @@ EXIT_CODE: {exit_code}
         if self._server_connection_id:
             await self._mark_server_connection_closed(self._server_connection_id)
             self._server_connection_id = None
+        self._manual_pending_commands = []
+        self._manual_active_cmd_id = None
+        self._manual_active_output = ""
+        self._manual_input_buffer = ""
 
     async def _stream_reader(self, reader: asyncssh.SSHReader[str], stream: str):
         try:
@@ -2584,7 +2680,11 @@ EXIT_CODE: {exit_code}
                 if filtered:
                     self._append_terminal_tail(filtered)
                     self._append_ai_output(filtered)
+                    self._append_manual_output(filtered)
                     await self._safe_send_json({"type": "output", "stream": stream, "data": filtered})
+                if markers:
+                    for cmd_id, exit_code in markers:
+                        await self._finalize_manual_terminal_command(cmd_id, exit_code)
         except asyncio.CancelledError:
             raise
         except Exception as e:
@@ -2681,6 +2781,59 @@ EXIT_CODE: {exit_code}
         self._ai_active_output = (self._ai_active_output or "") + clean
         if len(self._ai_active_output) > 6000:
             self._ai_active_output = self._ai_active_output[-6000:]
+
+    def _append_manual_output(self, text: str):
+        if not text:
+            return
+        if getattr(self, "_manual_active_cmd_id", None) is None:
+            return
+        clean = self._strip_ansi_and_controls(text)
+        if not clean:
+            return
+        self._manual_active_output = (self._manual_active_output or "") + clean
+        if len(self._manual_active_output) > 12000:
+            self._manual_active_output = self._manual_active_output[-12000:]
+
+    async def _finalize_manual_terminal_command(self, cmd_id: int, exit_code: int) -> None:
+        pending = list(getattr(self, "_manual_pending_commands", []) or [])
+        if not pending:
+            return
+
+        item = next((entry for entry in pending if int(entry.get("id") or 0) == int(cmd_id)), None)
+        if item is None:
+            return
+
+        raw_output = self._manual_active_output if int(getattr(self, "_manual_active_cmd_id", 0) or 0) == int(cmd_id) else ""
+        clean_output = self._normalize_manual_command_output(str(item.get("command") or ""), raw_output)
+        await database_sync_to_async(self._persist_manual_terminal_command_result, thread_sensitive=True)(
+            user_id=int(item.get("user_id") or 0),
+            server_id=int(item.get("server_id") or 0),
+            session_id=str(item.get("session_id") or ""),
+            command=str(item.get("command") or ""),
+            output=clean_output,
+            exit_code=int(exit_code),
+        )
+
+        self._manual_pending_commands = [entry for entry in pending if int(entry.get("id") or 0) != int(cmd_id)]
+        if int(getattr(self, "_manual_active_cmd_id", 0) or 0) == int(cmd_id):
+            self._manual_active_cmd_id = None
+            self._manual_active_output = ""
+        if self._manual_active_cmd_id is None and self._manual_pending_commands:
+            self._manual_active_cmd_id = int(self._manual_pending_commands[0].get("id") or 0) or None
+            self._manual_active_output = ""
+
+    @staticmethod
+    def _normalize_manual_command_output(command: str, output: str) -> str:
+        clean = SSHTerminalConsumer._strip_ansi_and_controls(output or "").replace("\r", "")
+        lines = clean.splitlines()
+        while lines and not lines[0].strip():
+            lines.pop(0)
+        if lines:
+            first = lines[0].strip()
+            if first == command.strip():
+                lines.pop(0)
+        normalized = "\n".join(lines).strip()
+        return normalized[-12000:]
 
     @staticmethod
     def _strip_ansi_and_controls(text: str) -> str:

@@ -5,7 +5,7 @@ import os
 
 from django.conf import settings
 
-from .models import MCPServerPool, Pipeline
+from .models import CURRENT_PIPELINE_GRAPH_VERSION, MCPServerPool, Pipeline
 
 KEYCLOAK_MCP_NAME = "Keycloak Admin"
 KEYCLOAK_MCP_URL = os.getenv("STUDIO_KEYCLOAK_MCP_URL", "http://127.0.0.1:8766/mcp")
@@ -536,6 +536,15 @@ def build_keycloak_nodes(mcp_server_id: int) -> list[dict]:
             },
         },
         {
+            "id": "entry_join",
+            "type": "logic/merge",
+            "position": {"x": 580, "y": 120},
+            "data": {
+                "label": "Selected Trigger Entry",
+                "mode": "any",
+            },
+        },
+        {
             "id": "environment_preflight",
             "type": "agent/mcp_call",
             "position": {"x": 190, "y": 210},
@@ -557,6 +566,15 @@ def build_keycloak_nodes(mcp_server_id: int) -> list[dict]:
                 "tool_name": "keycloak_find_user",
                 "arguments_text": _json_payload({"login": "{username}", "profile": "{profile}"}),
                 "on_failure": "continue",
+            },
+        },
+        {
+            "id": "preflight_merge",
+            "type": "logic/merge",
+            "position": {"x": 430, "y": 320},
+            "data": {
+                "label": "Preflight Ready",
+                "mode": "all",
             },
         },
         {
@@ -701,6 +719,15 @@ def build_keycloak_nodes(mcp_server_id: int) -> list[dict]:
             },
         },
         {
+            "id": "report_gate",
+            "type": "logic/merge",
+            "position": {"x": 430, "y": 1030},
+            "data": {
+                "label": "Report Gate",
+                "mode": "any",
+            },
+        },
+        {
             "id": "final_report",
             "type": "output/report",
             "position": {"x": 430, "y": 1150},
@@ -738,22 +765,22 @@ def build_keycloak_nodes(mcp_server_id: int) -> list[dict]:
 
 def build_keycloak_edges() -> list[dict]:
     return [
-        {"id": "e1", "source": "start_manual", "target": "environment_preflight", "animated": True},
-        {"id": "e2", "source": "start_manual", "target": "existing_user_lookup", "animated": True},
-        {"id": "e3", "source": "start_webhook", "target": "environment_preflight", "animated": True},
-        {"id": "e4", "source": "start_webhook", "target": "existing_user_lookup", "animated": True},
-        {"id": "e5", "source": "environment_preflight", "target": "normalize_request", "animated": True},
-        {"id": "e6", "source": "existing_user_lookup", "target": "normalize_request", "animated": True},
-        {"id": "e7", "source": "normalize_request", "target": "await_approval", "animated": True},
-        {"id": "e8", "source": "normalize_request", "target": "execute_keycloak_plan", "animated": True},
-        {"id": "e9", "source": "await_approval", "target": "execute_keycloak_plan", "animated": True},
-        {"id": "e10", "source": "existing_user_lookup", "target": "execute_keycloak_plan", "animated": True},
-        {"id": "e11", "source": "environment_preflight", "target": "execute_keycloak_plan", "animated": True},
-        {"id": "e12", "source": "environment_preflight", "target": "final_report", "animated": True},
-        {"id": "e13", "source": "existing_user_lookup", "target": "final_report", "animated": True},
-        {"id": "e14", "source": "normalize_request", "target": "final_report", "animated": True},
-        {"id": "e15", "source": "await_approval", "target": "final_report", "animated": True},
-        {"id": "e16", "source": "execute_keycloak_plan", "target": "final_report", "animated": True},
+        {"id": "e1", "source": "start_manual", "target": "entry_join", "sourceHandle": "out", "animated": True},
+        {"id": "e2", "source": "start_webhook", "target": "entry_join", "sourceHandle": "out", "animated": True},
+        {"id": "e3", "source": "entry_join", "target": "environment_preflight", "sourceHandle": "out", "animated": True},
+        {"id": "e4", "source": "entry_join", "target": "existing_user_lookup", "sourceHandle": "out", "animated": True},
+        {"id": "e5", "source": "environment_preflight", "target": "preflight_merge", "sourceHandle": "success", "animated": True},
+        {"id": "e6", "source": "environment_preflight", "target": "preflight_merge", "sourceHandle": "error", "animated": True},
+        {"id": "e7", "source": "existing_user_lookup", "target": "preflight_merge", "sourceHandle": "success", "animated": True},
+        {"id": "e8", "source": "existing_user_lookup", "target": "preflight_merge", "sourceHandle": "error", "animated": True},
+        {"id": "e9", "source": "preflight_merge", "target": "normalize_request", "sourceHandle": "out", "animated": True},
+        {"id": "e10", "source": "normalize_request", "target": "await_approval", "sourceHandle": "success", "animated": True},
+        {"id": "e11", "source": "await_approval", "target": "execute_keycloak_plan", "sourceHandle": "approved", "animated": True},
+        {"id": "e12", "source": "await_approval", "target": "report_gate", "sourceHandle": "rejected", "animated": True},
+        {"id": "e13", "source": "await_approval", "target": "report_gate", "sourceHandle": "timeout", "animated": True},
+        {"id": "e14", "source": "execute_keycloak_plan", "target": "report_gate", "sourceHandle": "success", "animated": True},
+        {"id": "e15", "source": "execute_keycloak_plan", "target": "report_gate", "sourceHandle": "error", "animated": True},
+        {"id": "e16", "source": "report_gate", "target": "final_report", "sourceHandle": "out", "animated": True},
     ]
 
 
@@ -767,6 +794,7 @@ def ensure_keycloak_pipeline(user, mcp_server: MCPServerPool) -> Pipeline:
             "tags": ["mcp", "keycloak", "iam", "approval", "provisioning", "studio"],
             "nodes": build_keycloak_nodes(mcp_server.id),
             "edges": build_keycloak_edges(),
+            "graph_version": CURRENT_PIPELINE_GRAPH_VERSION,
             "is_shared": False,
         },
     )
@@ -800,6 +828,15 @@ def build_keycloak_ops_nodes(mcp_server_id: int, *, fixed_profile: str, environm
             },
         },
         {
+            "id": "entry_join",
+            "type": "logic/merge",
+            "position": {"x": 580, "y": 110},
+            "data": {
+                "label": "Selected Trigger Entry",
+                "mode": "any",
+            },
+        },
+        {
             "id": "environment_preflight",
             "type": "agent/mcp_call",
             "position": {"x": 480, "y": 180},
@@ -826,6 +863,14 @@ def build_keycloak_ops_nodes(mcp_server_id: int, *, fixed_profile: str, environm
                 "prompt": _normalize_prompt(fixed_profile, environment_label),
                 "include_all_outputs": False,
                 "on_failure": "abort",
+            },
+        },
+        {
+            "id": "discovery_split",
+            "type": "logic/parallel",
+            "position": {"x": 480, "y": 470},
+            "data": {
+                "label": "Discovery Fan-Out",
             },
         },
         {
@@ -905,6 +950,15 @@ def build_keycloak_ops_nodes(mcp_server_id: int, *, fixed_profile: str, environm
             },
         },
         {
+            "id": "discoveries_ready",
+            "type": "logic/merge",
+            "position": {"x": 480, "y": 720},
+            "data": {
+                "label": "Discoveries Ready",
+                "mode": "all",
+            },
+        },
+        {
             "id": "build_execution_plan",
             "type": "agent/llm_query",
             "position": {"x": 480, "y": 840},
@@ -919,6 +973,14 @@ def build_keycloak_ops_nodes(mcp_server_id: int, *, fixed_profile: str, environm
                 "prompt": _plan_prompt(fixed_profile, environment_label),
                 "include_all_outputs": False,
                 "on_failure": "abort",
+            },
+        },
+        {
+            "id": "execution_split",
+            "type": "logic/parallel",
+            "position": {"x": 480, "y": 960},
+            "data": {
+                "label": "Execution Fan-Out",
             },
         },
         {
@@ -998,6 +1060,15 @@ def build_keycloak_ops_nodes(mcp_server_id: int, *, fixed_profile: str, environm
             },
         },
         {
+            "id": "verification_merge",
+            "type": "logic/merge",
+            "position": {"x": 480, "y": 1460},
+            "data": {
+                "label": "Verification Ready",
+                "mode": "all",
+            },
+        },
+        {
             "id": "final_report",
             "type": "output/report",
             "position": {"x": 480, "y": 1580},
@@ -1055,51 +1126,34 @@ def build_keycloak_ops_nodes(mcp_server_id: int, *, fixed_profile: str, environm
 
 def build_keycloak_ops_edges() -> list[dict]:
     return [
-        {"id": "e1", "source": "start_manual", "target": "environment_preflight", "animated": True},
-        {"id": "e2w", "source": "start_webhook", "target": "environment_preflight", "animated": True},
-        {"id": "e2", "source": "environment_preflight", "target": "normalize_request", "animated": True},
-        {"id": "e3", "source": "normalize_request", "target": "discover_clients_roles", "animated": True},
-        {"id": "e4", "source": "normalize_request", "target": "discover_users", "animated": True},
-        {"id": "e5", "source": "normalize_request", "target": "discover_groups_roles", "animated": True},
-        {"id": "e6", "source": "normalize_request", "target": "discover_protocol_mappers", "animated": True},
-        {"id": "e7", "source": "environment_preflight", "target": "discover_clients_roles", "animated": True},
-        {"id": "e8", "source": "environment_preflight", "target": "discover_users", "animated": True},
-        {"id": "e9", "source": "environment_preflight", "target": "discover_groups_roles", "animated": True},
-        {"id": "e10", "source": "environment_preflight", "target": "discover_protocol_mappers", "animated": True},
-        {"id": "e11", "source": "discover_clients_roles", "target": "discover_protocol_mappers", "animated": True},
-        {"id": "e12", "source": "normalize_request", "target": "build_execution_plan", "animated": True},
-        {"id": "e13", "source": "discover_clients_roles", "target": "build_execution_plan", "animated": True},
-        {"id": "e14", "source": "discover_users", "target": "build_execution_plan", "animated": True},
-        {"id": "e15", "source": "discover_groups_roles", "target": "build_execution_plan", "animated": True},
-        {"id": "e16", "source": "discover_protocol_mappers", "target": "build_execution_plan", "animated": True},
-        {"id": "e17", "source": "environment_preflight", "target": "build_execution_plan", "animated": True},
-        {"id": "e18", "source": "build_execution_plan", "target": "execute_identity_actions", "animated": True},
-        {"id": "e19", "source": "discover_users", "target": "execute_identity_actions", "animated": True},
-        {"id": "e20", "source": "discover_clients_roles", "target": "execute_identity_actions", "animated": True},
-        {"id": "e21", "source": "discover_groups_roles", "target": "execute_identity_actions", "animated": True},
-        {"id": "e22", "source": "environment_preflight", "target": "execute_identity_actions", "animated": True},
-        {"id": "e23", "source": "build_execution_plan", "target": "execute_platform_actions", "animated": True},
-        {"id": "e24", "source": "discover_clients_roles", "target": "execute_platform_actions", "animated": True},
-        {"id": "e25", "source": "discover_groups_roles", "target": "execute_platform_actions", "animated": True},
-        {"id": "e26", "source": "discover_protocol_mappers", "target": "execute_platform_actions", "animated": True},
-        {"id": "e27", "source": "environment_preflight", "target": "execute_platform_actions", "animated": True},
-        {"id": "e28", "source": "execute_identity_actions", "target": "verify_identity_state", "animated": True},
-        {"id": "e29", "source": "build_execution_plan", "target": "verify_identity_state", "animated": True},
-        {"id": "e30", "source": "environment_preflight", "target": "verify_identity_state", "animated": True},
-        {"id": "e31", "source": "execute_platform_actions", "target": "verify_platform_state", "animated": True},
-        {"id": "e32", "source": "build_execution_plan", "target": "verify_platform_state", "animated": True},
-        {"id": "e33", "source": "environment_preflight", "target": "verify_platform_state", "animated": True},
-        {"id": "e34", "source": "environment_preflight", "target": "final_report", "animated": True},
-        {"id": "e35", "source": "normalize_request", "target": "final_report", "animated": True},
-        {"id": "e36", "source": "discover_clients_roles", "target": "final_report", "animated": True},
-        {"id": "e37", "source": "discover_users", "target": "final_report", "animated": True},
-        {"id": "e38", "source": "discover_groups_roles", "target": "final_report", "animated": True},
-        {"id": "e39", "source": "discover_protocol_mappers", "target": "final_report", "animated": True},
-        {"id": "e40", "source": "build_execution_plan", "target": "final_report", "animated": True},
-        {"id": "e41", "source": "execute_identity_actions", "target": "final_report", "animated": True},
-        {"id": "e42", "source": "execute_platform_actions", "target": "final_report", "animated": True},
-        {"id": "e43", "source": "verify_identity_state", "target": "final_report", "animated": True},
-        {"id": "e44", "source": "verify_platform_state", "target": "final_report", "animated": True},
+        {"id": "e1", "source": "start_manual", "target": "entry_join", "sourceHandle": "out", "animated": True},
+        {"id": "e2", "source": "start_webhook", "target": "entry_join", "sourceHandle": "out", "animated": True},
+        {"id": "e3", "source": "entry_join", "target": "environment_preflight", "sourceHandle": "out", "animated": True},
+        {"id": "e4", "source": "environment_preflight", "target": "normalize_request", "sourceHandle": "success", "animated": True},
+        {"id": "e5", "source": "normalize_request", "target": "discovery_split", "sourceHandle": "success", "animated": True},
+        {"id": "e6", "source": "discovery_split", "target": "discover_clients_roles", "sourceHandle": "out", "animated": True},
+        {"id": "e7", "source": "discovery_split", "target": "discover_users", "sourceHandle": "out", "animated": True},
+        {"id": "e8", "source": "discovery_split", "target": "discover_groups_roles", "sourceHandle": "out", "animated": True},
+        {"id": "e9", "source": "discover_clients_roles", "target": "discover_protocol_mappers", "sourceHandle": "success", "animated": True},
+        {"id": "e10", "source": "discover_clients_roles", "target": "discoveries_ready", "sourceHandle": "success", "animated": True},
+        {"id": "e11", "source": "discover_clients_roles", "target": "discoveries_ready", "sourceHandle": "error", "animated": True},
+        {"id": "e12", "source": "discover_users", "target": "discoveries_ready", "sourceHandle": "success", "animated": True},
+        {"id": "e13", "source": "discover_users", "target": "discoveries_ready", "sourceHandle": "error", "animated": True},
+        {"id": "e14", "source": "discover_groups_roles", "target": "discoveries_ready", "sourceHandle": "success", "animated": True},
+        {"id": "e15", "source": "discover_groups_roles", "target": "discoveries_ready", "sourceHandle": "error", "animated": True},
+        {"id": "e16", "source": "discover_protocol_mappers", "target": "discoveries_ready", "sourceHandle": "success", "animated": True},
+        {"id": "e17", "source": "discover_protocol_mappers", "target": "discoveries_ready", "sourceHandle": "error", "animated": True},
+        {"id": "e18", "source": "discoveries_ready", "target": "build_execution_plan", "sourceHandle": "out", "animated": True},
+        {"id": "e19", "source": "build_execution_plan", "target": "execution_split", "sourceHandle": "success", "animated": True},
+        {"id": "e20", "source": "execution_split", "target": "execute_identity_actions", "sourceHandle": "out", "animated": True},
+        {"id": "e21", "source": "execution_split", "target": "execute_platform_actions", "sourceHandle": "out", "animated": True},
+        {"id": "e22", "source": "execute_identity_actions", "target": "verify_identity_state", "sourceHandle": "success", "animated": True},
+        {"id": "e23", "source": "execute_platform_actions", "target": "verify_platform_state", "sourceHandle": "success", "animated": True},
+        {"id": "e24", "source": "verify_identity_state", "target": "verification_merge", "sourceHandle": "success", "animated": True},
+        {"id": "e25", "source": "verify_identity_state", "target": "verification_merge", "sourceHandle": "error", "animated": True},
+        {"id": "e26", "source": "verify_platform_state", "target": "verification_merge", "sourceHandle": "success", "animated": True},
+        {"id": "e27", "source": "verify_platform_state", "target": "verification_merge", "sourceHandle": "error", "animated": True},
+        {"id": "e28", "source": "verification_merge", "target": "final_report", "sourceHandle": "out", "animated": True},
     ]
 
 
@@ -1118,6 +1172,7 @@ def ensure_keycloak_ops_pipeline(user, mcp_server: MCPServerPool, *, profile_nam
                 environment_label=spec["label"],
             ),
             "edges": build_keycloak_ops_edges(),
+            "graph_version": CURRENT_PIPELINE_GRAPH_VERSION,
             "is_shared": False,
         },
     )

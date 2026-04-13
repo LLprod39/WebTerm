@@ -2,6 +2,7 @@ export { TriggerNode } from "./TriggerNode";
 export { AgentNode } from "./AgentNode";
 export { ConditionNode } from "./ConditionNode";
 export { ParallelNode } from "./ParallelNode";
+export { MergeNode } from "./MergeNode";
 export { OutputNode } from "./OutputNode";
 export { SSHCommandNode } from "./SSHCommandNode";
 export { LLMQueryNode } from "./LLMQueryNode";
@@ -10,11 +11,13 @@ export { EmailNode } from "./EmailNode";
 export { WaitNode } from "./WaitNode";
 export { HumanApprovalNode } from "./HumanApprovalNode";
 export { TelegramNode } from "./TelegramNode";
+export { TelegramInputNode } from "./TelegramInputNode";
 
 export const NODE_TYPES = {
   "trigger/manual": "TriggerNode",
   "trigger/webhook": "TriggerNode",
   "trigger/schedule": "TriggerNode",
+  "trigger/monitoring": "TriggerNode",
   "agent/react": "AgentNode",
   "agent/multi": "AgentNode",
   "agent/ssh_cmd": "SSHCommandNode",
@@ -22,8 +25,10 @@ export const NODE_TYPES = {
   "agent/mcp_call": "MCPCallNode",
   "logic/condition": "ConditionNode",
   "logic/parallel": "ParallelNode",
+  "logic/merge": "MergeNode",
   "logic/wait": "WaitNode",
   "logic/human_approval": "HumanApprovalNode",
+  "logic/telegram_input": "TelegramInputNode",
   "output/report": "OutputNode",
   "output/webhook": "OutputNode",
   "output/email": "EmailNode",
@@ -39,6 +44,7 @@ export const NODE_PALETTE = [
       { type: "trigger/manual" as NodeType, label: "Manual Trigger", icon: "▶️", description: "Start pipeline manually" },
       { type: "trigger/webhook" as NodeType, label: "Webhook", icon: "🔗", description: "Start via HTTP POST" },
       { type: "trigger/schedule" as NodeType, label: "Schedule", icon: "⏰", description: "Start on cron schedule" },
+      { type: "trigger/monitoring" as NodeType, label: "Monitoring Alert", icon: "🚨", description: "Start when monitoring opens an alert" },
     ],
   },
   {
@@ -56,8 +62,10 @@ export const NODE_PALETTE = [
     nodes: [
       { type: "logic/condition" as NodeType, label: "Condition", icon: "🔀", description: "Branch if/else" },
       { type: "logic/parallel" as NodeType, label: "Parallel", icon: "⚡", description: "Run nodes in parallel" },
+      { type: "logic/merge" as NodeType, label: "Merge", icon: "🪢", description: "Join active branches back together" },
       { type: "logic/wait" as NodeType, label: "Wait", icon: "⏱️", description: "Pause execution for N minutes" },
       { type: "logic/human_approval" as NodeType, label: "Human Approval", icon: "👤", description: "Pause and wait for human approve/reject via email & Telegram" },
+      { type: "logic/telegram_input" as NodeType, label: "Telegram Input", icon: "💬", description: "Wait for a plain-text operator reply in Telegram" },
     ],
   },
   {

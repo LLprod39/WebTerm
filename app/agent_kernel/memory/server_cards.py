@@ -18,6 +18,34 @@ def _snapshot_lines(content: str, *, limit: int = 180) -> list[str]:
     return [compact_text(line.lstrip("- ").strip(), limit=limit) for line in content.splitlines() if line.strip()]
 
 
+def _is_session_noise_line(line: str) -> bool:
+    normalized = compact_text(str(line or ""), limit=220).lower()
+    if not normalized:
+        return True
+    if normalized.startswith(("session_opened:", "session_closed:", "rdp_session_opened:", "rdp_session_closed:")):
+        return True
+    if normalized in {
+        "ssh terminal session opened",
+        "ssh terminal session closed",
+        "rdp terminal session opened",
+        "rdp terminal session closed",
+    }:
+        return True
+    if (
+        any(marker in normalized for marker in ("connection_id", "user_id"))
+        and any(term in normalized for term in ("session_opened", "session_closed", "session opened", "session closed"))
+    ):
+        return True
+    return False
+
+
+def _clean_episode_summary(summary: str, *, limit: int = 3) -> str:
+    lines = [line for line in _snapshot_lines(summary, limit=180) if not _is_session_noise_line(line)]
+    if not lines:
+        return ""
+    return "; ".join(lines[:limit])
+
+
 def _summarize_operational_playbook(title: str, content: str, *, metadata: dict | None = None) -> str | None:
     metadata = metadata or {}
     normalized_title = compact_text(str(title or ""), limit=90)
@@ -160,7 +188,9 @@ def build_server_memory_card(
         incidents.append(f"Требует перепроверки: {item.title} — {compact_text(item.reason, limit=180)}")
 
     for item in list(episodes or [])[:6]:
-        summary = compact_text(str(getattr(item, "summary", "") or ""), limit=220)
+        summary = _clean_episode_summary(str(getattr(item, "summary", "") or ""), limit=3)
+        if not summary:
+            continue
         if item.episode_kind == "incident":
             incidents.append(f"{item.title}: {summary}")
         elif item.episode_kind in {"deploy_operation", "pipeline_operation"}:

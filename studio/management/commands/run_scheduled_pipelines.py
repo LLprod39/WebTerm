@@ -24,7 +24,7 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from app.runtime_limits import get_pipeline_run_limit_error
-from studio.models import PipelineRun, PipelineTrigger
+from studio.models import PipelineTrigger
 
 
 class Command(BaseCommand):
@@ -93,7 +93,7 @@ class Command(BaseCommand):
                 self.stderr.write(f"Error evaluating trigger #{trigger.pk}: {exc}")
 
     def _fire_trigger(self, trigger: PipelineTrigger):
-        from studio.views import _launch_pipeline_run_async
+        from studio.trigger_dispatch import create_pipeline_run, launch_pipeline_run_async
 
         limit_error = get_pipeline_run_limit_error(trigger.pipeline.owner)
         if limit_error:
@@ -102,13 +102,13 @@ class Command(BaseCommand):
             )
             return
 
-        run = PipelineRun.objects.create(
+        run = create_pipeline_run(
             pipeline=trigger.pipeline,
             trigger=trigger,
-            status=PipelineRun.STATUS_PENDING,
             trigger_data={"source": "schedule", "cron": trigger.cron_expression},
+            entry_node_id=trigger.node_id,
         )
         trigger.last_triggered_at = timezone.now()
         trigger.save(update_fields=["last_triggered_at"])
-        _launch_pipeline_run_async(run)
+        launch_pipeline_run_async(run)
         self.stdout.write(f"Fired trigger #{trigger.pk} ({trigger.pipeline.name}) → run #{run.pk}")

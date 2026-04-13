@@ -11,13 +11,17 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency in local m
 
 from servers.models import Server
 
-from .models import AgentConfig, MCPServerPool
+from .models import AgentConfig, MCPServerPool, CURRENT_PIPELINE_GRAPH_VERSION
 from .skill_registry import normalise_skill_slugs, resolve_skills
 
-KNOWN_NODE_TYPES = {
+TRIGGER_NODE_TYPES = {
     "trigger/manual",
     "trigger/webhook",
     "trigger/schedule",
+    "trigger/monitoring",
+}
+KNOWN_NODE_TYPES = {
+    *TRIGGER_NODE_TYPES,
     "agent/react",
     "agent/multi",
     "agent/ssh_cmd",
@@ -25,8 +29,10 @@ KNOWN_NODE_TYPES = {
     "agent/mcp_call",
     "logic/condition",
     "logic/parallel",
+    "logic/merge",
     "logic/wait",
     "logic/human_approval",
+    "logic/telegram_input",
     "output/report",
     "output/webhook",
     "output/email",
@@ -123,6 +129,33 @@ def _validate_node_references(node: dict[str, Any], owner, errors: list[str]) ->
                 except Exception as exc:
                     errors.append(f"Node '{node_id}' has an invalid cron expression: {exc}.")
 
+    if node_type == "trigger/monitoring":
+        monitoring_filters = data.get("monitoring_filters")
+        if not isinstance(monitoring_filters, dict):
+            monitoring_filters = {}
+
+        def _monitoring_value(field_name: str):
+            return monitoring_filters.get(field_name, data.get(field_name))
+
+        server_ids = _collect_int_ids(
+            _monitoring_value("server_ids"),
+            field_name="server_ids",
+            errors=errors,
+            node_id=node_id,
+        )
+        if server_ids:
+            accessible = set(Server.objects.filter(user=owner, id__in=server_ids).values_list("id", flat=True))
+            missing = [sid for sid in server_ids if sid not in accessible]
+            if missing:
+                errors.append(f"Node '{node_id}' references inaccessible servers: {missing}.")
+
+        for field_name in ("severities", "alert_types", "container_names"):
+            raw = _monitoring_value(field_name)
+            if raw in (None, ""):
+                continue
+            if not isinstance(raw, list) or any(not str(item or "").strip() for item in raw):
+                errors.append(f"Node '{node_id}' field '{field_name}' must be a list of non-empty strings.")
+
     skill_slugs = normalise_skill_slugs(data.get("skill_slugs"))
     if skill_slugs:
         _skills, skill_errors = resolve_skills(skill_slugs)
@@ -183,7 +216,40 @@ def _validate_node_references(node: dict[str, Any], owner, errors: list[str]) ->
                 errors.append(f"Node '{node_id}' references an inaccessible MCP server: {mcp_server_id}.")
 
 
-def _validate_graph_structure(nodes: list[dict[str, Any]], edges: list[dict[str, Any]]) -> list[str]:
+def _normalized_handle(raw: Any) -> str:
+    value = str(raw or "").strip()
+    return value or "out"
+
+
+def _allowed_outgoing_handles(node_type: str) -> set[str]:
+    if node_type == "logic/condition":
+        return {"true", "false"}
+    if node_type == "logic/human_approval":
+        return {"approved", "rejected", "timeout"}
+    if node_type == "logic/telegram_input":
+        return {"received", "timeout"}
+    if node_type == "logic/wait":
+        return {"done", "out"}
+    if node_type in {"logic/parallel", "logic/merge"} or node_type in TRIGGER_NODE_TYPES:
+        return {"out"}
+    if node_type.startswith("agent/") or node_type.startswith("output/"):
+        return {"success", "error", "out"}
+    return {"out"}
+
+
+def _is_active_manual_trigger(node: dict[str, Any]) -> bool:
+    if str(node.get("type") or "") != "trigger/manual":
+        return False
+    data = node.get("data")
+    if not isinstance(data, dict):
+        return True
+    return bool(data.get("is_active", True))
+
+
+def _validate_graph_structure(
+    nodes: list[dict[str, Any]],
+    edges: list[dict[str, Any]],
+) -> tuple[list[str], dict[str, dict[str, Any]], dict[str, list[dict[str, Any]]], dict[str, list[dict[str, Any]]]]:
     errors: list[str] = []
     node_ids: list[str] = []
     id_to_node: dict[str, dict[str, Any]] = {}
@@ -214,11 +280,13 @@ def _validate_graph_structure(nodes: list[dict[str, Any]], edges: list[dict[str,
         id_to_node[node_id] = node
 
     if not isinstance(edges, list):
-        return [*errors, "Pipeline edges must be a list."]
+        return [*errors, "Pipeline edges must be a list."], {}, {}, {}
 
+    outgoing_edges: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    incoming_edges: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    edge_ids: set[str] = set()
     children: dict[str, list[str]] = defaultdict(list)
     in_degree: dict[str, int] = defaultdict(int)
-    edge_ids: set[str] = set()
 
     for index, edge in enumerate(edges):
         if not isinstance(edge, dict):
@@ -243,11 +311,13 @@ def _validate_graph_structure(nodes: list[dict[str, Any]], edges: list[dict[str,
             errors.append(f"Edge #{index + 1} references missing target node '{target}'.")
             continue
 
+        outgoing_edges[source].append(edge)
+        incoming_edges[target].append(edge)
         children[source].append(target)
         in_degree[target] += 1
 
     if errors:
-        return errors
+        return errors, id_to_node, outgoing_edges, incoming_edges
 
     queue: deque[str] = deque(node_id for node_id in node_ids if in_degree[node_id] == 0)
     processed: list[str] = []
@@ -264,19 +334,113 @@ def _validate_graph_structure(nodes: list[dict[str, Any]], edges: list[dict[str,
         preview = ", ".join(blocked[:5])
         errors.append(f"Pipeline graph contains a cycle or unreachable loop involving: {preview}.")
 
+    return errors, id_to_node, outgoing_edges, incoming_edges
+
+
+def _validate_graph_contract(
+    *,
+    nodes: list[dict[str, Any]],
+    id_to_node: dict[str, dict[str, Any]],
+    outgoing_edges: dict[str, list[dict[str, Any]]],
+    incoming_edges: dict[str, list[dict[str, Any]]],
+    require_manual_trigger: bool,
+) -> list[str]:
+    errors: list[str] = []
+    trigger_nodes = [node for node in nodes if str(node.get("type") or "") in TRIGGER_NODE_TYPES]
+    if not trigger_nodes:
+        errors.append("Pipeline must include at least one trigger node.")
+        return errors
+
+    if require_manual_trigger and not any(_is_active_manual_trigger(node) for node in trigger_nodes):
+        errors.append("Manual runs require at least one active manual trigger node.")
+
+    for node_id, node in id_to_node.items():
+        node_type = str(node.get("type") or "")
+        incoming = incoming_edges.get(node_id, [])
+        outgoing = outgoing_edges.get(node_id, [])
+
+        if node_type in TRIGGER_NODE_TYPES and incoming:
+            errors.append(f"Trigger node '{node_id}' must be a graph entry point and cannot have incoming edges.")
+
+        if node_type == "logic/merge":
+            if len(incoming) < 1:
+                errors.append(f"Merge node '{node_id}' requires at least one incoming edge.")
+        elif len(incoming) > 1:
+            errors.append(
+                f"Node '{node_id}' has {len(incoming)} incoming edges. Use an explicit merge node for branch joins."
+            )
+
+        allowed_handles = _allowed_outgoing_handles(node_type)
+        for edge in outgoing:
+            edge_handle = _normalized_handle(edge.get("sourceHandle"))
+            if edge_handle not in allowed_handles:
+                edge_label = str(edge.get("id") or "") or f"{node_id}->{str(edge.get('target') or '')}"
+                errors.append(
+                    f"Edge '{edge_label}' uses sourceHandle "
+                    f"'{edge_handle}' which is invalid for node '{node_id}' ({node_type}). "
+                    f"Allowed: {', '.join(sorted(allowed_handles))}."
+                )
+
+    reachable: set[str] = set()
+    queue: deque[str] = deque(str(node.get("id") or "") for node in trigger_nodes)
+    while queue:
+        node_id = queue.popleft()
+        if not node_id or node_id in reachable:
+            continue
+        reachable.add(node_id)
+        for edge in outgoing_edges.get(node_id, []):
+            target = str(edge.get("target") or "")
+            if target and target not in reachable:
+                queue.append(target)
+
+    unreachable = sorted(node_id for node_id in id_to_node if node_id not in reachable)
+    if unreachable:
+        preview = ", ".join(unreachable[:5])
+        errors.append(f"Nodes are unreachable from every trigger: {preview}.")
+
     return errors
 
 
-def validate_pipeline_definition(*, nodes: Any, edges: Any, owner) -> list[str]:
+def validate_pipeline_definition(
+    *,
+    nodes: Any,
+    edges: Any,
+    owner,
+    graph_version: Any = CURRENT_PIPELINE_GRAPH_VERSION,
+    require_manual_trigger: bool = False,
+) -> list[str]:
     errors: list[str] = []
     if not isinstance(nodes, list):
         return ["Pipeline nodes must be a list."]
     if not isinstance(edges, list):
         return ["Pipeline edges must be a list."]
 
-    errors.extend(_validate_graph_structure(nodes, edges))
+    try:
+        normalized_graph_version = int(graph_version)
+    except (TypeError, ValueError):
+        return ["Pipeline graph_version must be an integer."]
+    if normalized_graph_version != CURRENT_PIPELINE_GRAPH_VERSION:
+        return [
+            (
+                f"Pipeline graph_version={normalized_graph_version} is not supported. "
+                f"Resave or recreate the pipeline as V{CURRENT_PIPELINE_GRAPH_VERSION}."
+            )
+        ]
+
+    structure_errors, id_to_node, outgoing_edges, incoming_edges = _validate_graph_structure(nodes, edges)
+    errors.extend(structure_errors)
     if errors:
         return errors
+
+    errors.extend(
+        _validate_graph_contract(
+            nodes=nodes,
+            id_to_node=id_to_node,
+            outgoing_edges=outgoing_edges,
+            incoming_edges=incoming_edges,
+            require_manual_trigger=require_manual_trigger,
+        )
+    )
 
     for node in nodes:
         if isinstance(node, dict):

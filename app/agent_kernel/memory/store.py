@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import ast
 import json
 import re
+import shlex
 import uuid
 from dataclasses import dataclass
 from datetime import timedelta
@@ -43,6 +45,14 @@ SNAPSHOT_TITLES = {
     "recent_changes": "Canonical Recent Changes",
     "human_habits": "Canonical Human Habits",
 }
+SNAPSHOT_FALLBACKS = {
+    "profile": "Базовый профиль сервера ещё собирается.",
+    "access": "Сетевой и access-профиль пока не заполнен.",
+    "risks": "Критичные активные риски не зафиксированы.",
+    "runbook": "Runbook пополнится после новых успешных операций.",
+    "recent_changes": "Значимых недавних изменений не зафиксировано.",
+    "human_habits": "Повторяющиеся ручные привычки пока не выделены.",
+}
 
 
 class MemoryStore(Protocol):
@@ -64,6 +74,8 @@ class MemoryStore(Protocol):
     async def repair_server_memory(self, server_id: int, *, stale_after_days: int = 30, create_notes: bool = True) -> dict: ...
     async def dream_server_memory(self, server_id: int, *, deactivate_noise: bool = True, job_kind: str = "hybrid") -> dict: ...
     async def archive_snapshot(self, server_id: int, snapshot_id: int, *, actor_user_id: int | None = None) -> dict[str, Any]: ...
+    async def hard_delete_snapshot(self, server_id: int, snapshot_id: int, *, actor_user_id: int | None = None) -> dict[str, Any]: ...
+    async def purge_server_ai_memory(self, server_id: int, *, actor_user_id: int | None = None) -> dict[str, Any]: ...
     async def promote_snapshot_to_manual_knowledge(
         self,
         server_id: int,
@@ -112,6 +124,7 @@ class _OperationalPattern:
     has_verification_step: bool = False
     sample_outputs: tuple[str, ...] = ()
     common_cwds: tuple[str, ...] = ()
+    distinct_sessions: int = 0
     last_seen: Any | None = None
 
 
@@ -197,6 +210,19 @@ class DjangoServerMemoryStore:
         return await sync_to_async(self._archive_snapshot_sync, thread_sensitive=True)(
             server_id,
             snapshot_id,
+            actor_user_id=actor_user_id,
+        )
+
+    async def hard_delete_snapshot(self, server_id: int, snapshot_id: int, *, actor_user_id: int | None = None) -> dict[str, Any]:
+        return await sync_to_async(self._hard_delete_snapshot_sync, thread_sensitive=True)(
+            server_id,
+            snapshot_id,
+            actor_user_id=actor_user_id,
+        )
+
+    async def purge_server_ai_memory(self, server_id: int, *, actor_user_id: int | None = None) -> dict[str, Any]:
+        return await sync_to_async(self._purge_server_ai_memory_sync, thread_sensitive=True)(
+            server_id,
             actor_user_id=actor_user_id,
         )
 
@@ -999,12 +1025,16 @@ class DjangoServerMemoryStore:
                 return 0
 
             episode_kind = self._episode_kind_for_source(source_kind, events)
+            summary_lines = self._episode_summary_lines(events)
+            commands = self._extract_commands(events)[:12]
+            if episode_kind in {"terminal_session", "rdp_session"} and not summary_lines and not commands:
+                return 0
             title = self._episode_title(source_kind, episode_kind, events)
-            summary = self._build_episode_summary(events)
+            summary = self._build_episode_summary(events, summary_lines=summary_lines)
             metadata = {
                 "source_kind": source_kind,
                 "event_types": list(dict.fromkeys(event.event_type for event in events))[:12],
-                "commands": self._extract_commands(events)[:12],
+                "commands": commands,
             }
             episode = (
                 ServerMemoryEpisode.objects.select_for_update()
@@ -1095,20 +1125,134 @@ class DjangoServerMemoryStore:
             return f"Pipeline server activity ({first.created_at:%Y-%m-%d %H:%M})"
         return f"{source_kind} activity ({first.created_at:%Y-%m-%d %H:%M})"
 
-    def _build_episode_summary(self, events: list[Any]) -> str:
+    @staticmethod
+    def _is_transport_event_type(event_type: str) -> bool:
+        return event_type in {"session_opened", "session_closed", "rdp_session_opened", "rdp_session_closed"}
+
+    @staticmethod
+    def _looks_like_access_signal(line: str) -> bool:
+        normalized = compact_text(str(line or ""), limit=220).lower()
+        if not normalized:
+            return False
+        return (
+            any(
+                term in normalized
+                for term in (
+                    "vpn",
+                    "bastion",
+                    "jump host",
+                    "gateway",
+                    "host:",
+                    "user=",
+                    "published port",
+                    "published ports",
+                    "publish",
+                    "доступ",
+                    "listen ",
+                    "порт",
+                )
+            )
+            or bool(re.search(r"\bssh:\s*\d{1,3}(?:\.\d{1,3}){3}:\d+\b", normalized))
+            or bool(re.search(r"\b\d+(?::\d+)?->\d+/(?:tcp|udp)\b", normalized))
+            or bool(re.search(r"\b\d+\.\d+\.\d+\.\d+:\d+\b", normalized))
+        )
+
+    @classmethod
+    def _is_command_like_line(cls, line: str) -> bool:
+        normalized = compact_text(str(line or ""), limit=220).lower().strip()
+        if not normalized:
+            return False
+        if normalized.startswith(("command used:", "команда:", "workflow:", "$ ", "`")):
+            return True
+        return any(
+            normalized.startswith(prefix)
+            for prefix in (
+                "docker ",
+                "systemctl ",
+                "journalctl ",
+                "ss ",
+                "curl ",
+                "mkdir ",
+                "ps ",
+                "top ",
+                "uptime",
+                "df ",
+                "free ",
+                "ip ",
+                "cat ",
+                "grep ",
+                "find ",
+                "tail ",
+                "less ",
+                "sudo ",
+            )
+        )
+
+    @classmethod
+    def _is_runbook_safe_line(cls, line: str) -> bool:
+        normalized = compact_text(str(line or ""), limit=220)
+        if not normalized:
+            return False
+        if cls._is_destructive_command(normalized):
+            return False
+        if cls._looks_mutating_command(normalized):
+            return False
+        return True
+
+    @classmethod
+    def _is_session_noise_line(cls, line: str) -> bool:
+        normalized = compact_text(str(line or ""), limit=220).lower()
+        if not normalized:
+            return True
+        if normalized.startswith(("session_opened:", "session_closed:", "rdp_session_opened:", "rdp_session_closed:")):
+            return True
+        if normalized in {
+            "ssh terminal session opened",
+            "ssh terminal session closed",
+            "rdp terminal session opened",
+            "rdp terminal session closed",
+        }:
+            return True
+        if (
+            any(marker in normalized for marker in ("connection_id", "user_id"))
+            and any(term in normalized for term in ("session_opened", "session_closed", "session opened", "session closed"))
+        ):
+            return True
+        return False
+
+    @classmethod
+    def _filter_memory_lines(cls, value: Any, *, limit: int = 6) -> list[str]:
+        normalized = cls._normalize_snapshot_lines(value, limit=max(limit * 2, 8))
+        meaningful = [line for line in normalized if not cls._is_session_noise_line(line)]
+        return unique_preserving_order(meaningful, limit=limit)
+
+    @classmethod
+    def _sanitize_canonical_content(cls, memory_key: str, content: str, *, fallback: str) -> str:
+        lines = cls._normalize_snapshot_lines(content, limit=8)
+        if memory_key == "access":
+            lines = [line for line in lines if cls._looks_like_access_signal(line) and not cls._is_command_like_line(line)]
+        elif memory_key == "human_habits":
+            lines = [line for line in lines if line != "Повторяющиеся ручные привычки пока не выделены."]
+        if not lines:
+            return cls._render_snapshot_lines([], fallback=fallback)
+        return cls._render_snapshot_lines(lines, fallback=fallback)
+
+    @classmethod
+    def _episode_summary_lines(cls, events: list[Any]) -> list[str]:
         lines: list[str] = []
         for event in events:
-            if event.event_type in {"session_opened", "session_closed", "rdp_session_opened", "rdp_session_closed"}:
-                lines.append(f"{event.event_type}: {payload_preview(event.structured_payload, limit=120)}")
+            event_type = str(getattr(event, "event_type", "") or "")
+            if cls._is_transport_event_type(event_type):
+                continue
             if event.raw_text_redacted:
                 lines.extend(extract_signal_lines(event.raw_text_redacted, max_items=2))
             preview = payload_preview(event.structured_payload, limit=180)
             if preview:
-                lines.append(f"{event.event_type}: {preview}")
-        normalized = unique_preserving_order(
-            [compact_text(line, limit=180) for line in lines if str(line or "").strip()],
-            limit=10,
-        )
+                lines.append(f"{event_type}: {preview}")
+        return cls._filter_memory_lines(lines, limit=10)
+
+    def _build_episode_summary(self, events: list[Any], *, summary_lines: list[str] | None = None) -> str:
+        normalized = summary_lines if summary_lines is not None else self._episode_summary_lines(events)
         if not normalized:
             normalized = ["Содержательная выжимка пока недоступна."]
         return "\n".join(f"- {line}" for line in normalized[:10])
@@ -1127,6 +1271,7 @@ class DjangoServerMemoryStore:
             Server,
             ServerAlert,
             ServerHealthCheck,
+            ServerMemoryEvent,
             ServerMemoryEpisode,
             ServerMemoryRevalidation,
             ServerMemorySnapshot,
@@ -1148,6 +1293,10 @@ class DjangoServerMemoryStore:
         revalidation_items = list(
             ServerMemoryRevalidation.objects.filter(server_id=server_id, status=ServerMemoryRevalidation.STATUS_OPEN).order_by("-updated_at")[:6]
         )
+        recent_events = list(
+            ServerMemoryEvent.objects.filter(server_id=server_id, is_archived=False)
+            .order_by("-created_at")[:24]
+        )
         policy = self._get_or_create_policy_sync(user_id=server.user_id)
         patterns = self._derive_operational_patterns(server.id)
 
@@ -1155,6 +1304,7 @@ class DjangoServerMemoryStore:
             server=server,
             episodes=episodes,
             snapshots=snapshots,
+            recent_events=recent_events,
             latest_health=latest_health,
             active_alerts=active_alerts,
             revalidation_items=revalidation_items,
@@ -1173,11 +1323,17 @@ class DjangoServerMemoryStore:
         updated = 0
         created_versions = 0
         for candidate in candidates:
+            raw_content = llm_sections.get(candidate.memory_key) or candidate.content
+            safe_content = self._sanitize_canonical_content(
+                candidate.memory_key,
+                raw_content,
+                fallback=SNAPSHOT_FALLBACKS.get(candidate.memory_key, candidate.content),
+            )
             snapshot, created = self._upsert_snapshot_sync(
                 server_id=server_id,
                 memory_key=candidate.memory_key,
                 title=candidate.title,
-                content=llm_sections.get(candidate.memory_key) or candidate.content,
+                content=safe_content,
                 source_kind=candidate.source_kind,
                 source_ref=candidate.source_ref,
                 importance_score=candidate.importance_score,
@@ -1226,6 +1382,7 @@ class DjangoServerMemoryStore:
         server,
         episodes: list[Any],
         snapshots: list[Any],
+        recent_events: list[Any],
         latest_health,
         active_alerts: list[Any],
         revalidation_items: list[Any],
@@ -1249,6 +1406,9 @@ class DjangoServerMemoryStore:
             access_points.append(network_summary)
         access_points.append(f"Host: {server.host}:{server.port} user={server.username}")
         profile_points.append(f"Server type: {server.server_type}")
+        recent_signal_points = self._derive_recent_event_points(recent_events)
+        access_points.extend(recent_signal_points["access"][:4])
+        change_points.extend(recent_signal_points["recent_changes"][:4])
 
         if latest_health:
             profile_points.append(
@@ -1260,11 +1420,7 @@ class DjangoServerMemoryStore:
             if not memory_key.startswith(("manual_note:", "knowledge_note:")):
                 continue
             target_key = self._canonical_key_for_snapshot(snapshot)
-            lines = [
-                line.lstrip("- ").strip()
-                for line in str(getattr(snapshot, "content", "") or "").splitlines()
-                if line.strip()
-            ]
+            lines = self._filter_memory_lines(getattr(snapshot, "content", "") or "", limit=6)
             if not lines:
                 lines = [compact_text(str(getattr(snapshot, "content", "") or ""), limit=180)]
             manual_points[target_key].extend(lines[:4])
@@ -1281,18 +1437,20 @@ class DjangoServerMemoryStore:
             risk_points.append(f"Требует перепроверки: {item.title} — {compact_text(item.reason, limit=180)}")
 
         for item in episodes:
-            lines = [line.lstrip("- ").strip() for line in str(item.summary or "").splitlines() if line.strip()]
+            lines = self._filter_memory_lines(str(item.summary or ""), limit=4)
+            if not lines:
+                continue
             if item.episode_kind in {"terminal_session", "rdp_session"}:
-                access_points.extend(lines[:1])
-                runbook_points.extend(lines[:2])
+                access_points.extend([line for line in lines if self._looks_like_access_signal(line)][:2])
+                runbook_points.extend([line for line in lines if self._is_runbook_safe_line(line)][:2])
             elif item.episode_kind == "deploy_operation":
                 change_points.extend(lines[:3])
-                runbook_points.extend(lines[:2])
+                runbook_points.extend([line for line in lines if self._is_runbook_safe_line(line)][:2])
             elif item.episode_kind == "incident":
                 risk_points.extend(lines[:3])
             elif item.episode_kind == "agent_investigation":
                 profile_points.extend(lines[:2])
-                runbook_points.extend(lines[:2])
+                runbook_points.extend([line for line in lines if self._is_runbook_safe_line(line)][:2])
             elif item.episode_kind == "pipeline_operation":
                 change_points.extend(lines[:3])
 
@@ -1301,8 +1459,6 @@ class DjangoServerMemoryStore:
         if runbook_pattern_points:
             runbook_points.extend(runbook_pattern_points[:4])
         human_habits_points = self._derive_human_habits(server.id, patterns=patterns) if allow_human_habits else []
-        if human_habits_points:
-            runbook_points.extend(human_habits_points[:3])
 
         return [
             _SnapshotCandidate(
@@ -1375,17 +1531,29 @@ class DjangoServerMemoryStore:
         for pattern in patterns:
             if "human" not in pattern.actor_kinds:
                 continue
-            if pattern.occurrences < 2:
+            minimum_occurrences = 3 if pattern.pattern_kind == "sequence" else 4
+            if pattern.occurrences < minimum_occurrences:
+                continue
+            if pattern.distinct_sessions < 3:
+                continue
+            if pattern.measured_runs and pattern.success_rate < 0.8:
+                continue
+            if (
+                self._pattern_has_mutating_step(pattern)
+                or self._pattern_has_destructive_step(pattern)
+                or self._pattern_has_setup_step(pattern)
+            ):
                 continue
             if pattern.pattern_kind == "sequence":
                 habit_lines.append(
-                    f"Оператор регулярно повторяет workflow [{pattern.intent}]: "
-                    f"{' -> '.join(pattern.commands[:3])} ({pattern.occurrences}x, успех {pattern.success_rate:.0%})"
+                    f"Повторяется ручной workflow [{pattern.intent}]: "
+                    f"{' -> '.join(pattern.commands[:3])} "
+                    f"({pattern.occurrences} запусков в {pattern.distinct_sessions} сессиях)"
                 )
             else:
                 habit_lines.append(
-                    f"Оператор регулярно использует [{pattern.intent}]: {pattern.display_command} "
-                    f"({pattern.occurrences}x, успех {pattern.success_rate:.0%})"
+                    f"Повторяется ручной паттерн [{pattern.intent}]: {pattern.display_command} "
+                    f"({pattern.occurrences} запусков в {pattern.distinct_sessions} сессиях)"
                 )
         return habit_lines[:5]
 
@@ -1396,15 +1564,23 @@ class DjangoServerMemoryStore:
                 continue
             if pattern.measured_runs and pattern.success_rate < 0.6:
                 continue
+            if self._pattern_has_destructive_step(pattern) and not (
+                pattern.pattern_kind == "sequence" and (pattern.has_verification_step or pattern.verification_rate >= 0.5)
+            ):
+                continue
+            if self._pattern_has_mutating_step(pattern) and not (
+                pattern.pattern_kind == "sequence" and (pattern.has_verification_step or pattern.verification_rate >= 0.5)
+            ):
+                continue
             if pattern.pattern_kind == "sequence":
                 lines.append(
                     f"Проверенный workflow [{pattern.intent}]: {' -> '.join(pattern.commands[:3])} "
-                    f"({pattern.successful_runs}/{max(pattern.measured_runs, pattern.occurrences)} успешных прогонов)"
+                    f"({self._pattern_success_summary(pattern, noun='прогонов')})"
                 )
             else:
                 lines.append(
                     f"Проверенный паттерн [{pattern.intent}]: {pattern.display_command} "
-                    f"({pattern.successful_runs}/{max(pattern.measured_runs, pattern.occurrences)} успешных запусков)"
+                    f"({self._pattern_success_summary(pattern)})"
                 )
         return lines[:6]
 
@@ -1438,6 +1614,7 @@ class DjangoServerMemoryStore:
                         "verification_hits": 0,
                         "sample_outputs": [],
                         "common_cwds": [],
+                        "session_keys": set(),
                         "last_seen": event.created_at,
                         "intent": self._classify_command_intent(command),
                     },
@@ -1466,6 +1643,7 @@ class DjangoServerMemoryStore:
                         bucket["successful_runs"] += 1
                 session_key = str(event.session_id or event.source_ref or "").strip()
                 if session_key:
+                    bucket["session_keys"].add(session_key)
                     session_events.setdefault(session_key, []).append(event)
 
         patterns: list[_OperationalPattern] = []
@@ -1500,6 +1678,7 @@ class DjangoServerMemoryStore:
                     has_verification_step=bool(bucket["verification_hits"]),
                     sample_outputs=tuple(unique_preserving_order(bucket["sample_outputs"], limit=3)),
                     common_cwds=tuple(unique_preserving_order(bucket["common_cwds"], limit=3)),
+                    distinct_sessions=max(1, len(bucket["session_keys"])) if bucket["session_keys"] else 0,
                     last_seen=bucket["last_seen"],
                 )
             )
@@ -1519,7 +1698,7 @@ class DjangoServerMemoryStore:
 
     def _derive_sequence_patterns(self, session_events: dict[str, list[Any]]) -> list[_OperationalPattern]:
         buckets: dict[str, dict[str, Any]] = {}
-        for events in session_events.values():
+        for session_key, events in session_events.items():
             ordered = [item for item in sorted(events, key=lambda event: (event.created_at, event.id)) if item is not None]
             if len(ordered) < 2:
                 continue
@@ -1570,12 +1749,14 @@ class DjangoServerMemoryStore:
                             "source_kinds": set(),
                             "sample_outputs": [],
                             "common_cwds": [],
+                            "session_keys": set(),
                             "last_seen": window[-1].created_at,
                         },
                     )
                     bucket["occurrences"] += 1
                     bucket["actor_kinds"].update(actor_kinds)
                     bucket["source_kinds"].update(source_kinds)
+                    bucket["session_keys"].add(session_key)
                     bucket["verification_hits"] += 1 if verification_hits else 0
                     if len(exit_codes) == size:
                         bucket["measured_runs"] += 1
@@ -1621,6 +1802,7 @@ class DjangoServerMemoryStore:
                     ),
                     sample_outputs=tuple(unique_preserving_order(bucket["sample_outputs"], limit=4)),
                     common_cwds=tuple(unique_preserving_order(bucket["common_cwds"], limit=3)),
+                    distinct_sessions=max(1, len(bucket["session_keys"])) if bucket["session_keys"] else 0,
                     last_seen=bucket["last_seen"],
                 )
             )
@@ -1849,7 +2031,7 @@ class DjangoServerMemoryStore:
         lines = [
             f"Intent: {pattern.intent_label}",
             f"Повторяемость: {pattern.occurrences} запусков",
-            f"Успех: {pattern.successful_runs}/{max(pattern.measured_runs, pattern.occurrences)} ({pattern.success_rate:.0%})",
+            f"Успех: {self._pattern_success_summary(pattern)}",
             f"Источники: {', '.join(pattern.source_kinds)}; акторы: {', '.join(pattern.actor_kinds)}",
         ]
         if pattern.pattern_kind == "sequence":
@@ -1872,6 +2054,12 @@ class DjangoServerMemoryStore:
             lines.append("Риск: " + compact_text(str(enhancement["risk_level"]), limit=80))
         lines.append("Паттерн годится как reusable operational шаблон после ручной проверки.")
         return lines
+
+    @staticmethod
+    def _pattern_success_summary(pattern: _OperationalPattern, *, noun: str = "запусков") -> str:
+        if pattern.measured_runs:
+            return f"{pattern.successful_runs}/{pattern.measured_runs} измеренных {noun} ({pattern.success_rate:.0%})"
+        return f"exit code не сохранён; {pattern.occurrences} наблюдений"
 
     def _automation_candidate_lines(self, pattern: _OperationalPattern, *, enhancement: dict[str, Any] | None = None) -> list[str]:
         enhancement = enhancement or {}
@@ -1975,6 +2163,58 @@ class DjangoServerMemoryStore:
         )
 
     @staticmethod
+    def _is_destructive_command(command: str) -> bool:
+        blob = str(command or "").lower()
+        return any(
+            term in blob
+            for term in (
+                "docker rm ",
+                "docker rm -f",
+                "docker system prune",
+                "docker volume rm",
+                "docker network rm",
+                "kubectl delete",
+                "helm uninstall",
+                "rm -rf",
+                "rm -f",
+                "drop database",
+                "systemctl stop",
+                "systemctl disable",
+            )
+        )
+
+    @staticmethod
+    def _is_setup_command(command: str) -> bool:
+        blob = str(command or "").lower().strip()
+        return any(
+            blob.startswith(prefix)
+            for prefix in (
+                "mkdir ",
+                "install -d",
+                "cp ",
+                "mv ",
+                "chmod ",
+                "chown ",
+                "tee ",
+            )
+        )
+
+    @classmethod
+    def _pattern_has_mutating_step(cls, pattern: _OperationalPattern) -> bool:
+        commands = pattern.commands if pattern.pattern_kind == "sequence" else (pattern.display_command,)
+        return any(cls._looks_mutating_command(command) for command in commands)
+
+    @classmethod
+    def _pattern_has_destructive_step(cls, pattern: _OperationalPattern) -> bool:
+        commands = pattern.commands if pattern.pattern_kind == "sequence" else (pattern.display_command,)
+        return any(cls._is_destructive_command(command) for command in commands)
+
+    @classmethod
+    def _pattern_has_setup_step(cls, pattern: _OperationalPattern) -> bool:
+        commands = pattern.commands if pattern.pattern_kind == "sequence" else (pattern.display_command,)
+        return any(cls._is_setup_command(command) for command in commands)
+
+    @staticmethod
     def _automation_verification_hint(pattern: _OperationalPattern) -> str:
         if pattern.pattern_kind == "sequence" and pattern.has_verification_step:
             return "последний шаг workflow уже выступает как verification; нужно проверить его exit code и сигнал результата."
@@ -1998,6 +2238,14 @@ class DjangoServerMemoryStore:
             return False
         if pattern.measured_runs and pattern.success_rate < success_threshold:
             return False
+        if DjangoServerMemoryStore._pattern_has_destructive_step(pattern):
+            return pattern.pattern_kind == "sequence" and (
+                pattern.has_verification_step or pattern.verification_rate >= 0.5
+            )
+        if DjangoServerMemoryStore._pattern_has_mutating_step(pattern) and not (
+            pattern.pattern_kind == "sequence" and (pattern.has_verification_step or pattern.verification_rate >= 0.5)
+        ):
+            return False
         return pattern.intent in {"docker", "service", "web", "diagnostics", "kubernetes", "inspection", "ops"}
 
     @staticmethod
@@ -2007,6 +2255,12 @@ class DjangoServerMemoryStore:
         if pattern.occurrences < minimum_occurrences:
             return False
         if pattern.measured_runs and pattern.success_rate < success_threshold:
+            return False
+        if DjangoServerMemoryStore._pattern_has_destructive_step(pattern):
+            return False
+        if DjangoServerMemoryStore._pattern_has_mutating_step(pattern) and not (
+            pattern.pattern_kind == "sequence" and (pattern.has_verification_step or pattern.verification_rate >= 0.5)
+        ):
             return False
         if pattern.pattern_kind == "sequence" and not (pattern.has_verification_step or pattern.verification_rate >= 0.5):
             return False
@@ -2055,13 +2309,54 @@ class DjangoServerMemoryStore:
             return "inspection"
         return "ops"
 
+    @classmethod
+    def _preferred_memory_key_for_note(cls, *, title: str, category: str | None, content: str) -> str | None:
+        normalized_title = str(title or "").strip().lower()
+        normalized_category = str(category or "").strip().lower()
+        normalized_content = str(content or "").strip().lower()
+
+        if any(term in normalized_title for term in ("профиль", "summary", "сводка", "overview")):
+            return "profile"
+        if any(term in normalized_title for term in ("риск", "risk", "issue", "incident", "alert", "замечан")):
+            return "risks"
+        if any(term in normalized_title for term in ("доступ", "access", "network", "ssh", "vpn", "порт")):
+            return "access"
+        if any(term in normalized_title for term in ("runbook", "playbook", "инструк", "workflow", "skill", "checklist", "чеклист")):
+            return "runbook"
+        if any(term in normalized_title for term in ("изменен", "change", "deploy", "release", "migration", "rollout", "обновл")):
+            return "recent_changes"
+
+        if normalized_category in {"issues", "performance", "storage"}:
+            return "risks"
+        if normalized_category in {"network", "security"}:
+            return "access"
+        if normalized_category == "solutions":
+            return "runbook"
+        if normalized_category in {"system", "config", "services", "packages", "other"}:
+            return "profile"
+
+        if normalized_content.startswith("обновлено:") and "факты:" in normalized_content:
+            return "profile"
+        if normalized_content.startswith("риски/замечания:"):
+            return "risks"
+        return None
+
     def _canonical_key_for_snapshot(self, snapshot) -> str:
         metadata = getattr(snapshot, "metadata", None) or {}
         category = metadata.get("category")
-        return self._guess_memory_key(
-            title=str(getattr(snapshot, "title", "") or ""),
+        title = str(getattr(snapshot, "title", "") or "")
+        content = str(getattr(snapshot, "content", "") or "")
+        preferred = self._preferred_memory_key_for_note(
+            title=title,
             category=str(category or ""),
-            content=str(getattr(snapshot, "content", "") or ""),
+            content=content,
+        )
+        if preferred:
+            return preferred
+        return self._guess_memory_key(
+            title=title,
+            category=str(category or ""),
+            content=content,
         )
 
     def _should_distill_with_llm(
@@ -2142,6 +2437,15 @@ class DjangoServerMemoryStore:
             "Ты перерабатываешь память DevOps-агента о сервере.\n"
             "Нельзя добавлять секреты, токены, пароли, приватные ключи или сырые логи.\n"
             "Приоритизируй повторяющиеся подтвержденные workflow, успешные команды людей и агентов, и короткие runbook-выжимки.\n"
+            "Не делай поведенческих выводов по одному-двум эпизодам и не используй формулировки вроде "
+            "'предпочитает', 'сразу', 'регулярно', 'игнорирует' без явного многосессионного доказательства.\n"
+            "Не превращай destructive/mutating команды вроде `docker rm -f`, `delete`, `stop`, `disable` в рекомендуемый runbook, "
+            "если нет явной verify/recreate последовательности.\n"
+            "Никогда не утверждай, что контейнер автоматически пересоздаётся после `docker rm`, если в данных нет прямого evidence "
+            "про orchestrator, compose-up или явный recreate.\n"
+            "Для рисков не используй слова chronic/permanent/always без подтверждения во времени.\n"
+            "Раздел human_habits заполняй только если read-only или verification workflow повторялся минимум в 3 отдельных сессиях; "
+            "не относись к setup-командам вроде mkdir/cp/chmod и к разовым prepare-steps как к привычкам.\n"
             "Верни JSON-объект только с ключами profile, access, risks, runbook, recent_changes, human_habits.\n"
             "Значение каждого ключа — короткий Markdown bullet list, максимум 6 bullet lines.\n\n"
             f"Сервер: {server.name} ({server.host})\n"
@@ -2167,7 +2471,7 @@ class DjangoServerMemoryStore:
             cleaned: dict[str, str] = {}
             for key, value in parsed.items():
                 if key in sections:
-                    cleaned[key] = self._render_snapshot_lines(str(value).splitlines(), fallback=sections[key])
+                    cleaned[key] = self._render_snapshot_lines(value, fallback=sections[key])
             return cleaned
         except Exception:
             return {}
@@ -2661,6 +2965,189 @@ class DjangoServerMemoryStore:
             layer=ServerMemorySnapshot.LAYER_ARCHIVE,
             archived_at=timezone.now(),
         )
+
+    @staticmethod
+    def _is_manual_bridge_memory_key(memory_key: str) -> bool:
+        return str(memory_key or "").startswith(("manual_note:", "knowledge_note:"))
+
+    @staticmethod
+    def _parse_trailing_int(value: Any, *, prefix: str | None = None) -> int | None:
+        text = str(value or "").strip()
+        if not text:
+            return None
+        if prefix:
+            if not text.startswith(prefix):
+                return None
+            text = text[len(prefix) :]
+        try:
+            parsed = int(text)
+        except (TypeError, ValueError):
+            return None
+        return parsed if parsed > 0 else None
+
+    def _snapshot_linked_knowledge_id(self, snapshot) -> int | None:
+        metadata = getattr(snapshot, "metadata", None) or {}
+        for key in ("knowledge_id", "promoted_knowledge_id"):
+            parsed = self._parse_trailing_int(metadata.get(key))
+            if parsed:
+                return parsed
+
+        source_ref = str(getattr(snapshot, "source_ref", "") or "").strip()
+        parsed = self._parse_trailing_int(source_ref, prefix="knowledge:")
+        if parsed:
+            return parsed
+
+        memory_key = str(getattr(snapshot, "memory_key", "") or "")
+        for prefix in ("manual_note:", "knowledge_note:"):
+            parsed = self._parse_trailing_int(memory_key, prefix=prefix)
+            if parsed:
+                return parsed
+        return None
+
+    def _has_active_user_ai_snapshots_sync(self, server_id: int) -> bool:
+        from servers.models import ServerMemorySnapshot
+
+        return (
+            ServerMemorySnapshot.objects.filter(server_id=server_id, is_active=True, archived_at__isnull=True)
+            .exclude(memory_key__startswith="manual_note:")
+            .exclude(memory_key__startswith="knowledge_note:")
+            .exists()
+        )
+
+    def _hard_delete_snapshot_sync(
+        self,
+        server_id: int,
+        snapshot_id: int,
+        *,
+        actor_user_id: int | None = None,
+    ) -> dict[str, Any]:
+        from servers.models import ServerKnowledge, ServerMemoryRevalidation, ServerMemorySnapshot
+
+        snapshot = (
+            ServerMemorySnapshot.objects.select_related("server")
+            .filter(pk=snapshot_id, server_id=server_id)
+            .first()
+        )
+        if snapshot is None:
+            raise ValueError("Memory snapshot not found")
+
+        version_group_id = str(snapshot.version_group_id or "").strip()
+        snapshot_group_qs = ServerMemorySnapshot.objects.filter(server_id=server_id)
+        if version_group_id:
+            snapshot_group_qs = snapshot_group_qs.filter(version_group_id=version_group_id)
+        else:
+            snapshot_group_qs = snapshot_group_qs.filter(pk=snapshot.pk)
+
+        snapshot_ids = list(snapshot_group_qs.values_list("id", flat=True))
+        memory_keys = list(snapshot_group_qs.values_list("memory_key", flat=True).distinct())
+        linked_knowledge_id = self._snapshot_linked_knowledge_id(snapshot)
+        linked_bridge_keys: list[str] = []
+        if linked_knowledge_id:
+            linked_bridge_keys = [
+                f"manual_note:{linked_knowledge_id}",
+                f"knowledge_note:{linked_knowledge_id}",
+            ]
+
+        deleted_revalidations = 0
+        deleted_snapshots = 0
+        deleted_knowledge = 0
+
+        with transaction.atomic():
+            if snapshot_ids:
+                deleted_revalidations += ServerMemoryRevalidation.objects.filter(
+                    server_id=server_id,
+                    source_snapshot_id__in=snapshot_ids,
+                ).delete()[0]
+            if memory_keys:
+                deleted_revalidations += ServerMemoryRevalidation.objects.filter(
+                    server_id=server_id,
+                    memory_key__in=memory_keys,
+                ).delete()[0]
+            if linked_bridge_keys:
+                deleted_revalidations += ServerMemoryRevalidation.objects.filter(
+                    server_id=server_id,
+                    memory_key__in=linked_bridge_keys,
+                ).delete()[0]
+                deleted_snapshots += ServerMemorySnapshot.objects.filter(
+                    server_id=server_id,
+                    memory_key__in=linked_bridge_keys,
+                ).exclude(id__in=snapshot_ids).delete()[0]
+            deleted_snapshots += snapshot_group_qs.delete()[0]
+
+            if linked_knowledge_id:
+                knowledge = ServerKnowledge.objects.filter(pk=linked_knowledge_id, server_id=server_id).first()
+                if knowledge and knowledge.source in {"ai_auto", "ai_task"}:
+                    deleted_knowledge = knowledge.delete()[0]
+
+        return {
+            "snapshot_id": snapshot_id,
+            "version_group_id": version_group_id,
+            "deleted": {
+                "snapshots": deleted_snapshots,
+                "revalidations": deleted_revalidations,
+                "knowledge": deleted_knowledge,
+            },
+            "actor_user_id": actor_user_id,
+        }
+
+    def _purge_server_ai_memory_sync(
+        self,
+        server_id: int,
+        *,
+        actor_user_id: int | None = None,
+    ) -> dict[str, Any]:
+        from servers.models import (
+            ServerKnowledge,
+            ServerMemoryEpisode,
+            ServerMemoryEvent,
+            ServerMemoryRevalidation,
+            ServerMemorySnapshot,
+        )
+
+        ai_knowledge_ids = list(
+            ServerKnowledge.objects.filter(server_id=server_id, source__in=["ai_auto", "ai_task"]).values_list("id", flat=True)
+        )
+        ai_bridge_keys: list[str] = []
+        for knowledge_id in ai_knowledge_ids:
+            ai_bridge_keys.append(f"manual_note:{knowledge_id}")
+            ai_bridge_keys.append(f"knowledge_note:{knowledge_id}")
+
+        deleted_bridge_snapshots = 0
+        deleted_snapshots = 0
+        deleted_revalidations = 0
+        deleted_episodes = 0
+        deleted_events = 0
+        deleted_knowledge = 0
+
+        with transaction.atomic():
+            deleted_revalidations = ServerMemoryRevalidation.objects.filter(server_id=server_id).delete()[0]
+            if ai_bridge_keys:
+                deleted_bridge_snapshots = ServerMemorySnapshot.objects.filter(
+                    server_id=server_id,
+                    memory_key__in=ai_bridge_keys,
+                ).delete()[0]
+            deleted_snapshots = (
+                ServerMemorySnapshot.objects.filter(server_id=server_id)
+                .exclude(memory_key__startswith="manual_note:")
+                .exclude(memory_key__startswith="knowledge_note:")
+                .delete()[0]
+            )
+            deleted_episodes = ServerMemoryEpisode.objects.filter(server_id=server_id).delete()[0]
+            deleted_events = ServerMemoryEvent.objects.filter(server_id=server_id).delete()[0]
+            if ai_knowledge_ids:
+                deleted_knowledge = ServerKnowledge.objects.filter(pk__in=ai_knowledge_ids, server_id=server_id).delete()[0]
+
+        return {
+            "deleted": {
+                "snapshots": deleted_snapshots + deleted_bridge_snapshots,
+                "revalidations": deleted_revalidations,
+                "episodes": deleted_episodes,
+                "events": deleted_events,
+                "knowledge": deleted_knowledge,
+            },
+            "actor_user_id": actor_user_id,
+            "overview": self._get_memory_overview_sync(server_id),
+        }
 
     def _archive_snapshot_sync(
         self,
@@ -3183,14 +3670,156 @@ class DjangoServerMemoryStore:
         return "\n".join(f"- {line}" for line in lines[:6])
 
     @staticmethod
-    def _render_snapshot_lines(lines: list[str] | tuple[str, ...], *, fallback: str) -> str:
-        normalized = unique_preserving_order(
-            [compact_text(str(line).lstrip("- ").strip(), limit=220) for line in lines if str(line or "").strip()],
-            limit=6,
-        )
+    def _try_parse_list_literal(raw: str) -> list[str] | None:
+        text = str(raw or "").strip()
+        if not text or not (text.startswith("[") and text.endswith("]")):
+            return None
+        for loader in (json.loads, ast.literal_eval):
+            try:
+                parsed = loader(text)
+            except Exception:
+                continue
+            if isinstance(parsed, (list, tuple)):
+                return [str(item) for item in parsed if str(item or "").strip()]
+        return None
+
+    @classmethod
+    def _normalize_snapshot_lines(cls, value: Any, *, limit: int = 6) -> list[str]:
+        pending = list(value) if isinstance(value, (list, tuple, set)) else [value]
+        normalized: list[str] = []
+        while pending:
+            current = pending.pop(0)
+            if isinstance(current, (list, tuple, set)):
+                pending = list(current) + pending
+                continue
+            raw = str(current or "").strip()
+            if not raw:
+                continue
+            parsed_lines = cls._try_parse_list_literal(raw)
+            if parsed_lines is not None:
+                pending = parsed_lines + pending
+                continue
+            for line in raw.splitlines():
+                cleaned = compact_text(str(line).lstrip("- ").strip(), limit=220)
+                if cleaned:
+                    normalized.append(cleaned)
+        return unique_preserving_order(normalized, limit=limit)
+
+    @classmethod
+    def _render_snapshot_lines(cls, lines: Any, *, fallback: str) -> str:
+        normalized = cls._normalize_snapshot_lines(lines, limit=6)
         if not normalized:
             normalized = [fallback]
         return "\n".join(f"- {line}" for line in normalized[:6])
+
+    @staticmethod
+    def _tokenize_shell_command(command: str) -> list[str]:
+        try:
+            return shlex.split(str(command or ""))
+        except Exception:
+            return str(command or "").split()
+
+    @classmethod
+    def _docker_run_summary(cls, command: str) -> dict[str, Any]:
+        tokens = cls._tokenize_shell_command(command)
+        if len(tokens) < 2 or tokens[0] != "docker" or tokens[1] != "run":
+            return {}
+        name = ""
+        image = ""
+        published_ports: list[str] = []
+        skip_next = False
+        for index in range(2, len(tokens)):
+            token = tokens[index]
+            if skip_next:
+                skip_next = False
+                continue
+            if token in {"--name", "-p", "--publish", "-v", "--volume", "-e", "--env", "--network", "--restart", "-w", "--workdir"}:
+                if index + 1 < len(tokens):
+                    value = tokens[index + 1]
+                    if token == "--name":
+                        name = value
+                    if token in {"-p", "--publish"}:
+                        published_ports.append(value)
+                skip_next = True
+                continue
+            if token.startswith("--name="):
+                name = token.split("=", 1)[1]
+                continue
+            if token.startswith("--publish="):
+                published_ports.append(token.split("=", 1)[1])
+                continue
+            if token.startswith("-p") and token != "-p":
+                published_ports.append(token[2:])
+                continue
+            if token.startswith("-"):
+                continue
+            image = token
+            break
+        return {
+            "name": compact_text(name, limit=80),
+            "image": compact_text(image, limit=80),
+            "ports": [compact_text(item, limit=80) for item in published_ports if str(item or "").strip()],
+        }
+
+    @staticmethod
+    def _extract_published_ports(blob: str) -> list[str]:
+        matches = re.findall(r"(?:[\[\]0-9a-fA-F\.:]*:)?(\d+)->(\d+)\/([a-z]+)", str(blob or ""))
+        return unique_preserving_order([f"{host}->{container}/{proto}" for host, container, proto in matches], limit=4)
+
+    @classmethod
+    def _derive_recent_event_points(cls, events: list[Any]) -> dict[str, list[str]]:
+        access_points: list[str] = []
+        change_points: list[str] = []
+        for event in events:
+            payload = getattr(event, "structured_payload", None) or {}
+            command = str(payload.get("command") or "").strip()
+            if not command:
+                continue
+            command_lower = command.lower()
+            output_markers = cls._event_output_markers(event)
+            published_ports = cls._extract_published_ports("\n".join(output_markers))
+
+            if command_lower.startswith("docker run "):
+                summary = cls._docker_run_summary(command)
+                image = summary.get("image") or "unknown image"
+                container_label = summary.get("name") or image
+                ports = summary.get("ports") or published_ports
+                port_text = ""
+                if ports:
+                    normalized_ports = [item.replace("/tcp", "") for item in ports]
+                    port_text = "; опубликованы порты " + ", ".join(normalized_ports[:2])
+                    access_points.append(
+                        f"Docker publish: {container_label} доступен через {', '.join(normalized_ports[:2])}"
+                    )
+                change_points.append(f"Запущен контейнер {container_label} из {image}{port_text}")
+                continue
+
+            if "docker compose up" in command_lower:
+                change_points.append(f"Выполнен rollout через `{compact_text(command, limit=120)}`")
+                if published_ports:
+                    access_points.append("После compose подтверждены опубликованные порты: " + ", ".join(published_ports[:2]))
+                continue
+
+            if command_lower.startswith("docker rm ") or command_lower.startswith("docker rm -f"):
+                target = cls._tokenize_shell_command(command)[-1] if cls._tokenize_shell_command(command) else "container"
+                change_points.append(f"Удалён контейнер {compact_text(target, limit=80)}")
+                continue
+
+            if "systemctl restart nginx" in command_lower:
+                change_points.append("Выполнен restart nginx")
+                continue
+
+            if "systemctl reload nginx" in command_lower:
+                change_points.append("Выполнен reload nginx")
+                continue
+
+            if command_lower.startswith("docker ps") and published_ports:
+                access_points.append("docker ps подтверждает опубликованные порты: " + ", ".join(published_ports[:2]))
+
+        return {
+            "access": unique_preserving_order(access_points, limit=4),
+            "recent_changes": unique_preserving_order(change_points, limit=6),
+        }
 
     @staticmethod
     def _content_delta(old_content: str, new_content: str) -> float:

@@ -1,9 +1,10 @@
 import asyncio
 
 import pytest
+from core_ui.audit import audit_context
 from django.test import override_settings
 
-from app.core.llm import LLMProvider, _is_timeout_error, _provider_timeout_seconds
+from app.core.llm import LLMProvider, _is_timeout_error, _log_llm_usage, _provider_timeout_seconds
 from app.core.model_config import ModelManager, model_manager
 
 
@@ -22,6 +23,59 @@ def test_provider_timeout_seconds_uses_django_settings():
     assert _provider_timeout_seconds("grok") == 77
     assert _provider_timeout_seconds("openai", endpoint_name="responses") == 222
     assert _provider_timeout_seconds("ollama") == 333
+
+
+@pytest.mark.asyncio
+async def test_log_llm_usage_background_path_avoids_asgiref_executor_leak(monkeypatch):
+    created_payload = {}
+    activity_payload = {}
+    scheduled = {}
+
+    monkeypatch.setattr(
+        "app.core.llm.asyncio.ensure_future",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("ensure_future should not be used here")),
+    )
+    monkeypatch.setattr("core_ui.audit.should_log_llm", lambda: True)
+    monkeypatch.setattr("core_ui.audit.maybe_apply_log_retention", lambda: None)
+    monkeypatch.setattr(
+        "core_ui.models.LLMUsageLog.objects.create",
+        lambda **kwargs: created_payload.update(kwargs),
+    )
+    monkeypatch.setattr(
+        "core_ui.activity.log_llm_activity",
+        lambda **kwargs: activity_payload.update(kwargs),
+    )
+
+    loop = asyncio.get_running_loop()
+
+    def fake_run_in_executor(executor, func, *args):
+        scheduled["callback"] = lambda: func(*args)
+        future = loop.create_future()
+        future.set_result(None)
+        return future
+
+    monkeypatch.setattr(loop, "run_in_executor", fake_run_in_executor)
+
+    with audit_context(user_id=77, username_snapshot="alice", channel="http", path="/api/studio/agents/"):
+        _log_llm_usage(
+            "openai",
+            "gpt-test",
+            "hello",
+            "world",
+            123,
+            purpose="unit-test",
+            metadata={"source": "test"},
+        )
+
+    assert "callback" in scheduled
+
+    scheduled["callback"]()
+
+    assert created_payload["provider"] == "openai"
+    assert created_payload["model_name"] == "gpt-test"
+    assert created_payload["user_id"] == 77
+    assert activity_payload["provider"] == "openai"
+    assert activity_payload["purpose"] == "unit-test"
 
 
 @pytest.mark.asyncio

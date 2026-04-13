@@ -38,8 +38,13 @@ import {
   Bot,
   Wand2,
   MoreHorizontal,
+  Copy,
   Info,
   Search,
+  RotateCcw,
+  ArrowUp,
+  PanelRightClose,
+  PanelRightOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,6 +71,7 @@ import {
   studioSkills,
   fetchModels,
   refreshModels,
+  getStudioPipelineRunWsUrl,
   type MCPServerInspection,
   type ModelsResponse,
   type PipelineNode,
@@ -75,12 +81,15 @@ import {
   type StudioPipelineGraphPatch,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { getPipelineActivityState } from "@/components/pipeline/pipelineActivity";
+import { buildPipelineRunGraphState } from "@/components/pipeline/pipelineRunGraph";
 import {
   TriggerNode,
   AgentNode,
   SSHCommandNode,
   ConditionNode,
   ParallelNode,
+  MergeNode,
   OutputNode,
   LLMQueryNode,
   MCPCallNode,
@@ -88,6 +97,7 @@ import {
   WaitNode,
   HumanApprovalNode,
   TelegramNode,
+  TelegramInputNode,
   NODE_PALETTE,
   type NodeType,
 } from "@/components/pipeline/nodes";
@@ -100,6 +110,7 @@ const nodeTypes = {
   "trigger/manual": TriggerNode,
   "trigger/webhook": TriggerNode,
   "trigger/schedule": TriggerNode,
+  "trigger/monitoring": TriggerNode,
   "agent/react": AgentNode,
   "agent/multi": AgentNode,
   "agent/ssh_cmd": SSHCommandNode,
@@ -107,8 +118,10 @@ const nodeTypes = {
   "agent/mcp_call": MCPCallNode,
   "logic/condition": ConditionNode,
   "logic/parallel": ParallelNode,
+  "logic/merge": MergeNode,
   "logic/wait": WaitNode,
   "logic/human_approval": HumanApprovalNode,
+  "logic/telegram_input": TelegramInputNode,
   "output/report": OutputNode,
   "output/webhook": OutputNode,
   "output/email": EmailNode,
@@ -122,6 +135,7 @@ const NODE_TYPE_LABELS: Record<string, { label: string; icon: string }> = {
   "trigger/manual":        { label: "Manual Trigger",   icon: "▶️" },
   "trigger/webhook":       { label: "Webhook Trigger",  icon: "🔗" },
   "trigger/schedule":      { label: "Schedule Trigger", icon: "⏰" },
+  "trigger/monitoring":    { label: "Monitoring Trigger", icon: "🚨" },
   "agent/react":           { label: "ReAct Agent",      icon: "🤖" },
   "agent/multi":           { label: "Multi-Agent",      icon: "🦾" },
   "agent/ssh_cmd":         { label: "SSH Command",      icon: "💻" },
@@ -129,8 +143,10 @@ const NODE_TYPE_LABELS: Record<string, { label: string; icon: string }> = {
   "agent/mcp_call":        { label: "MCP Call",         icon: "🧩" },
   "logic/condition":       { label: "Condition",        icon: "🔀" },
   "logic/parallel":        { label: "Parallel",         icon: "⚡" },
+  "logic/merge":           { label: "Merge",            icon: "🪢" },
   "logic/wait":            { label: "Wait",             icon: "⏱️" },
   "logic/human_approval":  { label: "Human Approval",  icon: "👤" },
+  "logic/telegram_input":  { label: "Telegram Input",  icon: "💬" },
   "output/report":         { label: "Report",           icon: "📋" },
   "output/webhook":        { label: "Send Webhook",     icon: "📤" },
   "output/email":          { label: "Send Email",       icon: "✉️" },
@@ -147,6 +163,7 @@ function localize(lang: string, ru: string, en: string) {
 const NODE_STATUS_ICON: Record<string, React.ReactNode> = {
   running:            <Loader2      className="h-3 w-3 animate-spin text-blue-400" />,
   awaiting_approval:  <Clock        className="h-3 w-3 text-yellow-400 animate-pulse" />,
+  awaiting_operator_reply: <Clock   className="h-3 w-3 text-cyan-400 animate-pulse" />,
   completed:          <CheckCircle2 className="h-3 w-3 text-green-400" />,
   failed:             <XCircle      className="h-3 w-3 text-red-400" />,
   pending:            <Clock        className="h-3 w-3 text-muted-foreground" />,
@@ -393,6 +410,7 @@ type AssistantMessage = {
   nodePatch?: Record<string, unknown>;
   graphPatch?: StudioPipelineGraphPatch | null;
   warnings?: string[];
+  omitFromHistory?: boolean;
 };
 
 function getNodeDisplayLabel(node: PipelineNode | { id: string; type: string; label?: string }) {
@@ -402,6 +420,111 @@ function getNodeDisplayLabel(node: PipelineNode | { id: string; type: string; la
   }
   if ("label" in node && typeof node.label === "string" && node.label.trim()) return node.label.trim();
   return NODE_TYPE_LABELS[node.type]?.label || node.id;
+}
+
+function getActiveManualTriggerOptions(nodes: PipelineNode[]) {
+  return nodes
+    .filter((node) => node.type === "trigger/manual" && node.data?.is_active !== false)
+    .map((node) => ({
+      node_id: node.id,
+      label: getNodeDisplayLabel(node),
+    }));
+}
+
+function getActiveTriggerNodes(nodes: PipelineNode[], type: PipelineNode["type"]) {
+  return nodes.filter((node) => node.type === type && node.data?.is_active !== false);
+}
+
+export function buildPipelineSavePayload({
+  pipelineId,
+  pipeline,
+  pipelineName,
+  nodes,
+  edges,
+  hasLocalChanges,
+}: {
+  pipelineId: number | null;
+  pipeline:
+    | {
+        name?: string;
+        nodes?: PipelineNode[];
+        edges?: PipelineEdge[];
+      }
+    | null
+    | undefined;
+  pipelineName: string;
+  nodes: PipelineNode[];
+  edges: PipelineEdge[];
+  hasLocalChanges: boolean;
+}) {
+  if (pipelineId && pipeline && !hasLocalChanges) {
+    return {
+      name: pipeline.name || pipelineName || "Untitled",
+      nodes: pipeline.nodes || [],
+      edges: pipeline.edges || [],
+    };
+  }
+
+  return {
+    name: pipelineName || pipeline?.name || "Untitled",
+    nodes,
+    edges,
+  };
+}
+
+function getActiveStoredTriggers(
+  pipelineTriggers: PipelineTrigger[] | undefined,
+  type: PipelineTrigger["trigger_type"],
+) {
+  if (!Array.isArray(pipelineTriggers)) {
+    return [];
+  }
+  return pipelineTriggers.filter((trigger) => trigger.trigger_type === type && trigger.is_active);
+}
+
+function toAbsoluteWebhookUrl(webhookUrl: string): string {
+  return new URL(webhookUrl, window.location.origin).toString();
+}
+
+function getPipelineNodeStatusLabel(
+  status: string | undefined,
+  lang: string,
+  state?: Record<string, unknown> | null,
+) {
+  if (!status) return undefined;
+  if (status === "awaiting_approval") {
+    return localize(lang, "Ждет approve", "Waiting approval");
+  }
+  if (status === "awaiting_operator_reply") {
+    return localize(lang, "Ждет ответ", "Waiting reply");
+  }
+  if (status === "running") {
+    return localize(lang, "Выполняется", "Running");
+  }
+  if (status === "pending") {
+    return localize(lang, "В очереди", "Queued");
+  }
+  if (status === "completed") {
+    const decision = typeof state?.decision === "string" ? state.decision : "";
+    if (decision === "approved") return localize(lang, "Одобрено", "Approved");
+    if (decision === "rejected") return localize(lang, "Отклонено", "Rejected");
+    if (decision === "received") return localize(lang, "Ответ получен", "Reply received");
+    return localize(lang, "Выполнено", "Completed");
+  }
+  if (status === "failed") {
+    return localize(lang, "Ошибка", "Failed");
+  }
+  if (status === "skipped") {
+    return localize(lang, "Пропущен", "Skipped");
+  }
+  if (status === "stopped") {
+    return localize(lang, "Остановлен", "Stopped");
+  }
+  return status;
+}
+
+function isLivePipelineRunStatus(status: string | null | undefined) {
+  return status === "running" || status === "pending";
 }
 
 type ModelProvider = Exclude<keyof ModelsResponse, "current">;
@@ -425,6 +548,19 @@ function buildDefaultNodeData(type: NodeType): Record<string, unknown> {
       return { is_active: true, webhook_payload_map: {}, webhook_payload_map_text: "{}" };
     case "trigger/schedule":
       return { is_active: true, cron_expression: "*/5 * * * *" };
+    case "trigger/monitoring":
+      return {
+        is_active: true,
+        server_ids: [],
+        severities: ["critical"],
+        alert_types: ["service", "unreachable"],
+        container_names: [],
+        match_text: "",
+        monitoring_filters: {
+          severities: ["critical"],
+          alert_types: ["service", "unreachable"],
+        },
+      };
     case "agent/react":
     case "agent/multi":
       return { max_iterations: 6, on_failure: "abort" };
@@ -434,9 +570,13 @@ function buildDefaultNodeData(type: NodeType): Record<string, unknown> {
       return { arguments: {}, arguments_text: "{}", on_failure: "abort" };
     case "logic/condition":
       return { check_type: "contains" };
+    case "logic/merge":
+      return { mode: "all" };
     case "logic/wait":
       return { wait_minutes: 20 };
     case "logic/human_approval":
+      return { timeout_minutes: 120 };
+    case "logic/telegram_input":
       return { timeout_minutes: 120 };
     case "output/email":
       return { subject: "Pipeline Report: {pipeline_name}" };
@@ -484,6 +624,10 @@ function buildConnectionAutofillPatch(target: PipelineNode, source: PipelineNode
     }
   }
 
+  if (target.type === "logic/telegram_input" && !String(data.message || "").trim()) {
+    patch.message = `Operator input required after ${sourceLabel}\n\n${outputToken}\n\nReply to this Telegram message with the next instruction for the agent.`;
+  }
+
   return patch;
 }
 
@@ -494,6 +638,28 @@ function normaliseAssistantPatch(
   },
 ) {
   const next: Record<string, unknown> = { ...patch };
+  const rawMonitoringFilters =
+    next.monitoring_filters && typeof next.monitoring_filters === "object" && !Array.isArray(next.monitoring_filters)
+      ? (next.monitoring_filters as Record<string, unknown>)
+      : null;
+
+  if (rawMonitoringFilters) {
+    if (!Array.isArray(next.server_ids) && Array.isArray(rawMonitoringFilters.server_ids)) {
+      next.server_ids = rawMonitoringFilters.server_ids;
+    }
+    if (!Array.isArray(next.severities) && Array.isArray(rawMonitoringFilters.severities)) {
+      next.severities = rawMonitoringFilters.severities;
+    }
+    if (!Array.isArray(next.alert_types) && Array.isArray(rawMonitoringFilters.alert_types)) {
+      next.alert_types = rawMonitoringFilters.alert_types;
+    }
+    if (!Array.isArray(next.container_names) && Array.isArray(rawMonitoringFilters.container_names)) {
+      next.container_names = rawMonitoringFilters.container_names;
+    }
+    if (!String(next.match_text || "").trim() && typeof rawMonitoringFilters.match_text === "string") {
+      next.match_text = rawMonitoringFilters.match_text;
+    }
+  }
 
   if (typeof next.mcp_server_id === "string" && next.mcp_server_id.trim()) {
     const parsed = Number(next.mcp_server_id);
@@ -512,6 +678,14 @@ function normaliseAssistantPatch(
 
   if (Array.isArray(next.server_ids)) {
     next.server_ids = next.server_ids.map((item) => Number(item)).filter((item) => Number.isInteger(item));
+  }
+
+  for (const fieldName of ["severities", "alert_types", "container_names"] as const) {
+    if (Array.isArray(next[fieldName])) {
+      next[fieldName] = next[fieldName]
+        .map((item) => String(item || "").trim())
+        .filter(Boolean);
+    }
   }
 
   if (Array.isArray(next.mcp_server_ids)) {
@@ -545,17 +719,58 @@ function normaliseAssistantPatch(
   return next;
 }
 
+function normalisePipelineGraph(nodes: PipelineNode[], edges: PipelineEdge[]) {
+  return {
+    nodes: nodes.map((node) => ({
+      ...node,
+      data: normaliseAssistantPatch((node.data || {}) as Record<string, unknown>, { mcpList: [] }),
+    })),
+    edges,
+  };
+}
+
 function isNodeType(value: string): value is NodeType {
   return value in nodeTypes;
 }
 
 function describeGraphPatch(graphPatch: StudioPipelineGraphPatch | null | undefined) {
-  if (!graphPatch || (!graphPatch.nodes.length && !graphPatch.edges.length)) return null;
+  if (
+    !graphPatch ||
+    (!graphPatch.nodes.length &&
+      !graphPatch.edges.length &&
+      !(graphPatch.update_nodes || []).length &&
+      !(graphPatch.remove_node_ids || []).length &&
+      !(graphPatch.remove_edge_ids || []).length)
+  ) {
+    return null;
+  }
   return {
-    nodeCount: graphPatch.nodes.length,
-    edgeCount: graphPatch.edges.length,
+    addNodeCount: graphPatch.nodes.length,
+    addEdgeCount: graphPatch.edges.length,
+    updateNodeCount: (graphPatch.update_nodes || []).length,
+    removeNodeCount: (graphPatch.remove_node_ids || []).length,
+    removeEdgeCount: (graphPatch.remove_edge_ids || []).length,
     nodeLabels: graphPatch.nodes.map((item) => item.label || NODE_TYPE_LABELS[item.type]?.label || item.type),
     edgeLabels: graphPatch.edges.map((item) => `${item.source} -> ${item.target}${item.label ? ` (${item.label})` : ""}`),
+    updatedNodeIds: (graphPatch.update_nodes || []).map((item) => item.node_id),
+    removedNodeIds: graphPatch.remove_node_ids || [],
+  };
+}
+
+function buildAssistantIntroMessage(
+  pipelineId: number | null,
+  pipelineName: string,
+  lang: string,
+): AssistantMessage {
+  return {
+    id: `pipeline-assistant-intro-${pipelineId ?? "new"}`,
+    role: "assistant",
+    omitFromHistory: true,
+    content: localize(
+      lang,
+      `Опишите задачу обычным языком, и я соберу или доработаю пайплайн${pipelineName ? ` **${pipelineName}**` : ""}.\n\nЯ умею строить основу автоматизации, менять существующие шаги, добавлять safety/approval и возвращать конкретные правки для канваса.`,
+      `Describe the task in plain language and I will build or refine the pipeline${pipelineName ? ` **${pipelineName}**` : ""}.\n\nI can create the automation structure, edit existing steps, add safety or approval, and return concrete graph changes for the canvas.`,
+    ),
   };
 }
 
@@ -567,6 +782,9 @@ function PipelineAssistantDialog({
   nodes,
   edges,
   selectedNode,
+  hasLocalChanges,
+  activityLabel,
+  lang,
   onApplyPatch,
   onApplyGraphPatch,
 }: {
@@ -577,36 +795,47 @@ function PipelineAssistantDialog({
   nodes: PipelineNode[];
   edges: PipelineEdge[];
   selectedNode: PipelineNode | null;
+  hasLocalChanges: boolean;
+  activityLabel: string;
+  lang: string;
   onApplyPatch: (targetNodeId: string, patch: Record<string, unknown>) => void;
   onApplyGraphPatch: (graphPatch: StudioPipelineGraphPatch) => void;
 }) {
   const { toast } = useToast();
   const [draft, setDraft] = useState("");
-  const [messages, setMessages] = useState<AssistantMessage[]>([]);
+  const [messages, setMessages] = useState<AssistantMessage[]>(() => [
+    buildAssistantIntroMessage(pipelineId, pipelineName, lang),
+  ]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (!open) return;
     setDraft("");
-    setMessages([
-      {
-        id: `pipeline-assistant-intro-${pipelineId ?? "new"}`,
-        role: "assistant",
-        content: `Привет! Я помогу с пайплайном${pipelineName ? ` **${pipelineName}**` : ""}.\n\nМогу проанализировать текущий граф, предложить улучшения, добавить ноды или настроить существующие.`,
-      },
-    ]);
+    setMessages([buildAssistantIntroMessage(pipelineId, pipelineName, lang)]);
+  }, [pipelineId, lang]);
+
+  useEffect(() => {
+    if (!open) return;
     setTimeout(() => inputRef.current?.focus(), 100);
-  }, [open, pipelineId, pipelineName]);
+  }, [open]);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, open]);
+
+  const history = useMemo(
+    () =>
+      messages
+        .filter((message) => !message.omitFromHistory)
+        .map((message) => ({ role: message.role, content: message.content }))
+        .slice(-10),
+    [messages],
+  );
 
   const assistantMutation = useMutation({
-    mutationFn: (message: string) =>
+    mutationFn: ({ message, history }: { message: string; history: Array<{ role: "user" | "assistant"; content: string }> }) =>
       studioPipelines.assistant({
         pipeline_id: pipelineId,
         pipeline_name: pipelineName || "Untitled",
@@ -614,6 +843,7 @@ function PipelineAssistantDialog({
         edges,
         selected_node: selectedNode,
         user_message: message,
+        history,
       }),
     onSuccess: (result) => {
       setMessages((prev) => [
@@ -632,7 +862,10 @@ function PipelineAssistantDialog({
     onError: (error) => {
       toast({
         variant: "destructive",
-        description: error instanceof Error ? error.message : "Pipeline assistant failed.",
+        description:
+          error instanceof Error
+            ? error.message
+            : localize(lang, "AI помощник пайплайна не ответил.", "Pipeline assistant failed."),
       });
     },
   });
@@ -640,65 +873,146 @@ function PipelineAssistantDialog({
   const submitPrompt = async (value: string) => {
     const trimmed = value.trim();
     if (!trimmed || assistantMutation.isPending) return;
+    const nextHistory = [...history, { role: "user" as const, content: trimmed }].slice(-10);
     setMessages((prev) => [
       ...prev,
       { id: `pipeline-user-${Date.now()}`, role: "user", content: trimmed },
     ]);
     setDraft("");
-    await assistantMutation.mutateAsync(trimmed);
+    await assistantMutation.mutateAsync({ message: trimmed, history: nextHistory });
   };
 
   const quickPrompts = [
-    { icon: "🔍", text: "Объясни что делает пайплайн", full: "Explain what this pipeline currently does." },
-    { icon: "⚠️", text: "Найди проблемы", full: "What looks weak or incomplete before production?" },
-    { icon: "➕", text: "Предложи ноды", full: "Suggest the next nodes to add." },
-    { icon: "✨", text: "Сгенерируй граф", full: "Generate a starter graph patch for the next stage." },
+    {
+      key: "build",
+      icon: "🧩",
+      title: localize(lang, "Собери автоматизацию по описанию", "Build automation from a task"),
+      prompt: localize(
+        lang,
+        "Построй качественный стартовый пайплайн под эту задачу. Добавь подходящий trigger, основные шаги, safety или approval там где это нужно, и финальный отчет.",
+        "Build a solid starter pipeline for this task. Add the right trigger, main steps, safety or approval where needed, and a final report.",
+      ),
+    },
+    {
+      key: "improve",
+      icon: "⚙️",
+      title: localize(lang, "Улучши текущий граф", "Improve the current graph"),
+      prompt: localize(
+        lang,
+        "Проанализируй текущий пайплайн как production automation. Найди слабые места и верни конкретные правки графа и конфигов, а не только общие советы.",
+        "Review this pipeline as a production automation. Find weak spots and return concrete graph and config changes, not just general advice.",
+      ),
+    },
+    {
+      key: "selected",
+      icon: "🎯",
+      title: selectedNode
+        ? localize(lang, `Доработай шаг: ${getNodeDisplayLabel(selectedNode)}`, `Refine step: ${getNodeDisplayLabel(selectedNode)}`)
+        : localize(lang, "Предложи следующий шаг", "Suggest the next step"),
+      prompt: selectedNode
+        ? localize(
+            lang,
+            `Сфокусируйся на ноде ${getNodeDisplayLabel(selectedNode)}. Улучши ее настройки и при необходимости добавь недостающие шаги до или после нее.`,
+            `Focus on the node ${getNodeDisplayLabel(selectedNode)}. Improve its configuration and add missing steps before or after it if needed.`,
+          )
+        : localize(
+            lang,
+            "Предложи следующий полезный шаг в текущем пайплайне и верни конкретные изменения графа.",
+            "Suggest the next useful step in the current pipeline and return concrete graph changes.",
+          ),
+    },
+    {
+      key: "safety",
+      icon: "🛡️",
+      title: localize(lang, "Добавь safety и оператора", "Add safety and operator control"),
+      prompt: localize(
+        lang,
+        "Добавь в этот пайплайн операционные guardrails: approval, fallback, операторский ответ через Telegram и финальный отчет там, где это уместно.",
+        "Add operational guardrails to this pipeline: approval, fallback, operator reply via Telegram, and a final report where appropriate.",
+      ),
+    },
   ];
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
+    <div className="border-t border-border bg-background/95 backdrop-blur">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
           <div className="flex items-center gap-3">
             <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center">
               <Bot className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold">Pipeline Assistant</h3>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-sm font-semibold">{localize(lang, "AI Builder для Studio", "Studio AI Builder")}</h3>
+                <Badge variant="secondary" className="text-[10px]">
+                  {nodes.length} {localize(lang, "нод", "nodes")}
+                </Badge>
+                <Badge variant="outline" className="text-[10px]">
+                  {edges.length} {localize(lang, "связей", "edges")}
+                </Badge>
+                {selectedNode ? (
+                  <Badge variant="outline" className="text-[10px]">
+                    {localize(lang, "Фокус", "Focus")}: {getNodeDisplayLabel(selectedNode)}
+                  </Badge>
+                ) : null}
+                {hasLocalChanges ? (
+                  <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-[10px] text-amber-300">
+                    {localize(lang, "Есть несохраненные правки", "Unsaved changes")}
+                  </Badge>
+                ) : null}
+              </div>
               <p className="text-[10px] text-muted-foreground">
-                {nodes.length} nodes • {edges.length} connections
-                {selectedNode ? ` • Focus: ${getNodeDisplayLabel(selectedNode)}` : ""}
+                {localize(lang, "Опишите задачу или попросите изменить текущий граф. Статус пайплайна", "Describe the task or ask to change the current graph. Pipeline status")}:
+                {" "}
+                {activityLabel}
               </p>
             </div>
           </div>
-          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onOpenChange(false)}>
-            <X className="h-3.5 w-3.5" />
-          </Button>
-        </div>
+          <div className="flex items-center gap-2">
+            {messages.length > 1 ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 text-xs"
+                onClick={() => {
+                  setDraft("");
+                  setMessages([buildAssistantIntroMessage(pipelineId, pipelineName, lang)]);
+                }}
+              >
+                {localize(lang, "Сбросить диалог", "Reset chat")}
+              </Button>
+            ) : null}
+            <Button size="sm" variant={open ? "secondary" : "outline"} className="h-8 gap-1.5 text-xs" onClick={() => onOpenChange(!open)}>
+              <Bot className="h-3.5 w-3.5" />
+              {open ? localize(lang, "Свернуть чат", "Collapse chat") : localize(lang, "Открыть чат", "Open chat")}
+            </Button>
+          </div>
+      </div>
 
-        {/* Quick prompts */}
-        {messages.length <= 1 && (
-          <div className="px-5 py-3 border-b border-border bg-muted/20">
-            <p className="text-[10px] text-muted-foreground mb-2 uppercase font-medium tracking-wide">Быстрые действия</p>
-            <div className="grid grid-cols-2 gap-2">
+      {open ? (
+        <>
+          {messages.length <= 1 && (
+            <div className="px-5 pt-2 pb-3 border-t border-border bg-muted/10">
+              <p className="text-[9px] text-muted-foreground mb-2 uppercase font-medium tracking-wider">
+                {localize(lang, "Быстрые сценарии", "Quick actions")}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
               {quickPrompts.map((qp) => (
                 <button
-                  key={qp.text}
-                  onClick={() => void submitPrompt(qp.full)}
+                  key={qp.key}
+                  onClick={() => void submitPrompt(qp.prompt)}
                   disabled={assistantMutation.isPending}
-                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-border bg-card hover:bg-primary/5 hover:border-primary/30 transition-all text-left group"
+                  title={qp.prompt}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card hover:bg-primary/8 hover:border-primary/40 transition-all text-xs font-medium text-foreground/80 hover:text-foreground"
                 >
-                  <span className="text-base">{qp.icon}</span>
-                  <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">{qp.text}</span>
+                  <span className="text-sm">{qp.icon}</span>
+                  {qp.title}
                 </button>
               ))}
-            </div>
+              </div>
           </div>
-        )}
+          )}
 
-        {/* Chat messages */}
-        <div ref={scrollRef} className="flex-1 overflow-auto px-5 py-4 space-y-4 min-h-[200px] max-h-[50vh]">
+          <div ref={scrollRef} className="overflow-auto px-5 py-4 space-y-4 min-h-[220px] max-h-[360px] border-t border-border">
           {messages.map((message) => {
             const isAI = message.role === "assistant";
             const hasPatch = Boolean(message.nodePatch && Object.keys(message.nodePatch).length && message.targetNodeId);
@@ -708,10 +1022,10 @@ function PipelineAssistantDialog({
               <div key={message.id} className={cn("flex gap-3", !isAI && "flex-row-reverse")}>
                 {/* Avatar */}
                 <div className={cn(
-                  "h-7 w-7 rounded-lg flex items-center justify-center shrink-0 text-xs",
-                  isAI ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                  "h-7 w-7 rounded-full flex items-center justify-center shrink-0 text-xs",
+                  isAI ? "bg-primary/10 text-primary" : "bg-muted/60 text-muted-foreground"
                 )}>
-                  {isAI ? "🤖" : "👤"}
+                  {isAI ? <Bot className="h-3.5 w-3.5" /> : "U"}
                 </div>
 
                 {/* Bubble */}
@@ -723,7 +1037,7 @@ function PipelineAssistantDialog({
                     "rounded-xl px-3.5 py-2.5 text-sm leading-relaxed",
                     isAI
                       ? "bg-card border border-border text-foreground"
-                      : "bg-primary text-primary-foreground"
+                      : "bg-muted/50 border border-border/50 text-foreground"
                   )}>
                     <div className="whitespace-pre-wrap">{message.content}</div>
                   </div>
@@ -744,7 +1058,9 @@ function PipelineAssistantDialog({
                     <div className="rounded-xl border border-border bg-card overflow-hidden">
                       <div className="px-3 py-2 border-b border-border bg-muted/30 flex items-center gap-2">
                         <Wand2 className="h-3 w-3 text-primary" />
-                        <span className="text-[11px] font-medium">Изменение ноды: {message.targetNodeId}</span>
+                        <span className="text-[11px] font-medium">
+                          {localize(lang, "Правка ноды", "Node patch")}: {message.targetNodeId}
+                        </span>
                       </div>
                       <pre className="px-3 py-2 text-[10px] leading-4 text-muted-foreground max-h-32 overflow-auto font-mono">
                         {JSON.stringify(message.nodePatch, null, 2)}
@@ -756,7 +1072,7 @@ function PipelineAssistantDialog({
                           onClick={() => onApplyPatch(message.targetNodeId || "", message.nodePatch || {})}
                         >
                           <Wand2 className="h-3 w-3" />
-                          Применить
+                          {localize(lang, "Применить правку", "Apply patch")}
                         </Button>
                       </div>
                     </div>
@@ -767,19 +1083,50 @@ function PipelineAssistantDialog({
                     <div className="rounded-xl border border-border bg-card overflow-hidden">
                       <div className="px-3 py-2 border-b border-border bg-muted/30 flex items-center gap-2">
                         <Sparkles className="h-3 w-3 text-primary" />
-                        <span className="text-[11px] font-medium">Изменение графа</span>
+                        <span className="text-[11px] font-medium">
+                          {localize(lang, "Изменение графа", "Graph change")}
+                        </span>
                       </div>
-                      <div className="px-3 py-2 space-y-1 text-[11px] text-muted-foreground">
-                        <div className="flex items-center gap-3">
-                          <span className="bg-primary/10 text-primary rounded px-1.5 py-0.5 font-medium">
-                            +{graphPatchSummary.nodeCount} nodes
-                          </span>
-                          <span className="bg-muted rounded px-1.5 py-0.5">
-                            +{graphPatchSummary.edgeCount} edges
-                          </span>
+                      <div className="px-3 py-2 space-y-2 text-[11px] text-muted-foreground">
+                        <div className="flex flex-wrap gap-2">
+                          {graphPatchSummary.addNodeCount ? (
+                            <span className="bg-primary/10 text-primary rounded px-1.5 py-0.5 font-medium">
+                              +{graphPatchSummary.addNodeCount} {localize(lang, "нод", "nodes")}
+                            </span>
+                          ) : null}
+                          {graphPatchSummary.addEdgeCount ? (
+                            <span className="bg-muted rounded px-1.5 py-0.5">
+                              +{graphPatchSummary.addEdgeCount} {localize(lang, "связей", "edges")}
+                            </span>
+                          ) : null}
+                          {graphPatchSummary.updateNodeCount ? (
+                            <span className="rounded px-1.5 py-0.5 bg-cyan-500/10 text-cyan-300">
+                              {localize(lang, "обновить", "update")} {graphPatchSummary.updateNodeCount}
+                            </span>
+                          ) : null}
+                          {graphPatchSummary.removeNodeCount ? (
+                            <span className="rounded px-1.5 py-0.5 bg-red-500/10 text-red-300">
+                              {localize(lang, "удалить ноды", "remove nodes")} {graphPatchSummary.removeNodeCount}
+                            </span>
+                          ) : null}
+                          {graphPatchSummary.removeEdgeCount ? (
+                            <span className="rounded px-1.5 py-0.5 bg-red-500/10 text-red-300">
+                              {localize(lang, "удалить связи", "remove edges")} {graphPatchSummary.removeEdgeCount}
+                            </span>
+                          ) : null}
                         </div>
                         {graphPatchSummary.nodeLabels.length > 0 && (
                           <p className="text-[10px]">{graphPatchSummary.nodeLabels.join(" → ")}</p>
+                        )}
+                        {graphPatchSummary.updatedNodeIds.length > 0 && (
+                          <p className="text-[10px]">
+                            {localize(lang, "Обновит", "Updates")}: {graphPatchSummary.updatedNodeIds.join(", ")}
+                          </p>
+                        )}
+                        {graphPatchSummary.removedNodeIds.length > 0 && (
+                          <p className="text-[10px]">
+                            {localize(lang, "Удалит", "Removes")}: {graphPatchSummary.removedNodeIds.join(", ")}
+                          </p>
                         )}
                       </div>
                       <div className="px-3 py-2 border-t border-border">
@@ -787,10 +1134,21 @@ function PipelineAssistantDialog({
                           size="sm"
                           variant="outline"
                           className="h-7 gap-1.5 text-xs w-full"
-                          onClick={() => onApplyGraphPatch(message.graphPatch || { anchor_node_id: null, nodes: [], edges: [] })}
+                          onClick={() =>
+                            onApplyGraphPatch(
+                              message.graphPatch || {
+                                anchor_node_id: null,
+                                nodes: [],
+                                edges: [],
+                                update_nodes: [],
+                                remove_node_ids: [],
+                                remove_edge_ids: [],
+                              },
+                            )
+                          }
                         >
                           <Sparkles className="h-3 w-3" />
-                          Добавить на канвас
+                          {localize(lang, "Применить изменения графа", "Apply graph changes")}
                         </Button>
                       </div>
                     </div>
@@ -813,8 +1171,7 @@ function PipelineAssistantDialog({
           )}
         </div>
 
-        {/* Input area */}
-        <div className="border-t border-border px-4 py-3 bg-card/50">
+          <div className="border-t border-border px-4 py-3 bg-card/50">
           <div className="flex items-end gap-2">
             <Textarea
               ref={inputRef}
@@ -826,27 +1183,54 @@ function PipelineAssistantDialog({
                   void submitPrompt(draft);
                 }
               }}
-              rows={1}
-              placeholder="Спросите об улучшениях, проблемах, или попросите добавить ноды..."
-              className="text-sm resize-none min-h-[38px] max-h-[120px] flex-1"
+              rows={2}
+              placeholder={localize(
+                lang,
+                "Опишите задачу или попросите изменить текущий пайплайн…",
+                "Describe the task or ask to change the current pipeline…",
+              )}
+              className="text-sm resize-none min-h-[48px] max-h-[120px] flex-1"
             />
             <Button
               size="icon"
-              className="h-[38px] w-[38px] shrink-0"
+              className="h-10 w-10 shrink-0 rounded-xl"
               disabled={!draft.trim() || assistantMutation.isPending}
               onClick={() => void submitPrompt(draft)}
             >
               {assistantMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <Sparkles className="h-4 w-4" />
+                <ArrowUp className="h-4 w-4" />
               )}
             </Button>
           </div>
-          <p className="text-[9px] text-muted-foreground mt-1.5 text-center">Enter — отправить, Shift+Enter — новая строка</p>
+            <div className="mt-1.5 flex items-center justify-between gap-4 text-[9px] text-muted-foreground">
+              <span>{localize(lang, "Enter — отправить, Shift+Enter — новая строка", "Enter — send, Shift+Enter — new line")}</span>
+              <span>{localize(lang, "Чат учитывает текущий граф и выбранную ноду", "The chat uses the current graph and focused node")}</span>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium">
+              {localize(lang, "Попросите AI собрать или доработать автоматизацию", "Ask AI to build or refine the automation")}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {localize(
+                lang,
+                "Например: «Собери мониторинг Docker-сервиса с Telegram approval и восстановлением»",
+                `For example: "Build Docker service monitoring with Telegram approval and recovery"`,
+              )}
+            </p>
+          </div>
+          <Button size="sm" className="gap-1.5" onClick={() => onOpenChange(true)}>
+            <Bot className="h-3.5 w-3.5" />
+            {localize(lang, "Открыть AI Builder", "Open AI Builder")}
+          </Button>
         </div>
-      </DialogContent>
-    </Dialog>
+      )}
+    </div>
   );
 }
 
@@ -873,6 +1257,7 @@ function NodeConfigPanel({
   const queryClient = useQueryClient();
   const { data: modelsData } = useQuery({ queryKey: ["api", "models"], queryFn: fetchModels });
   const [d, setD] = useState<Record<string, unknown>>(node.data || {});
+  const [guidanceOpen, setGuidanceOpen] = useState(false);
   const [loadingModelsFor, setLoadingModelsFor] = useState<string | null>(null);
   const [webhookMapText, setWebhookMapText] = useState(() => toJsonEditorText(node.data?.webhook_payload_map));
   const [mcpArgsText, setMcpArgsText] = useState(
@@ -890,6 +1275,23 @@ function NodeConfigPanel({
   const setMany = useCallback((patch: Record<string, unknown>) => {
     setD((prev) => {
       const next = { ...prev, ...patch };
+      onUpdate(node.id, next);
+      return next;
+    });
+  }, [node.id, onUpdate]);
+
+  const setMonitoringFilters = useCallback((patch: Record<string, unknown>) => {
+    setD((prev) => {
+      const next = { ...prev, ...patch } as Record<string, unknown>;
+      const monitoringFilters: Record<string, unknown> = {};
+
+      if (Array.isArray(next.server_ids) && next.server_ids.length) monitoringFilters.server_ids = next.server_ids;
+      if (Array.isArray(next.severities) && next.severities.length) monitoringFilters.severities = next.severities;
+      if (Array.isArray(next.alert_types) && next.alert_types.length) monitoringFilters.alert_types = next.alert_types;
+      if (Array.isArray(next.container_names) && next.container_names.length) monitoringFilters.container_names = next.container_names;
+      if (String(next.match_text || "").trim()) monitoringFilters.match_text = String(next.match_text || "").trim();
+
+      next.monitoring_filters = monitoringFilters;
       onUpdate(node.id, next);
       return next;
     });
@@ -990,23 +1392,36 @@ function NodeConfigPanel({
       </div>
 
       <div className="flex-1 overflow-auto p-4 space-y-4">
-        {/* Guidance */}
+        {/* Guidance — collapsible */}
         {(() => {
           const guidance = getNodeTypeGuidance(type, "en");
           return (
-            <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 space-y-1.5">
-              <div className="flex items-center gap-1.5 text-[11px] font-medium text-primary">
-                <Info className="h-3 w-3" />
-                {guidance.category} — {typeInfo.label}
-              </div>
-              <p className="text-[10px] text-muted-foreground leading-relaxed">{guidance.summary}</p>
-              <ul className="space-y-0.5">
-                {guidance.checklist.map((item, i) => (
-                  <li key={i} className="text-[10px] text-muted-foreground flex items-start gap-1">
-                    <span className="text-primary/60 mt-px">•</span> {item}
-                  </li>
-                ))}
-              </ul>
+            <div className="rounded-lg border border-border/50 overflow-hidden">
+              <button
+                type="button"
+                className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-muted/30 transition-colors"
+                onClick={() => setGuidanceOpen((v) => !v)}
+              >
+                <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+                  <Info className="h-3 w-3" />
+                  {guidance.category} · {typeInfo.label}
+                </div>
+                {guidanceOpen
+                  ? <ChevronUp className="h-3 w-3 text-muted-foreground" />
+                  : <ChevronDown className="h-3 w-3 text-muted-foreground" />}
+              </button>
+              {guidanceOpen && (
+                <div className="px-3 pb-2.5 space-y-1.5 border-t border-border/40 bg-muted/10">
+                  <p className="text-[10px] text-muted-foreground leading-relaxed pt-2">{guidance.summary}</p>
+                  <ul className="space-y-0.5">
+                    {guidance.checklist.map((item, i) => (
+                      <li key={i} className="text-[10px] text-muted-foreground flex items-start gap-1.5">
+                        <span className="text-primary shrink-0 mt-px">✓</span> {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           );
         })()}
@@ -1017,10 +1432,10 @@ function NodeConfigPanel({
           <Input value={(d.label as string) || ""} onChange={(e) => set("label", e.target.value)} placeholder="Node label" className="h-7 text-xs" />
         </div>
 
-        {(type === "trigger/manual" || type === "trigger/webhook" || type === "trigger/schedule") && (
+        {(type === "trigger/manual" || type === "trigger/webhook" || type === "trigger/schedule" || type === "trigger/monitoring") && (
           <>
             <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground">
-              Trigger settings are created from this node when you click <strong>Save</strong>.
+              Trigger settings are created from this node when you click <strong>Save</strong>. Each trigger launches only its own branch of the graph.
             </div>
             <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
               <div>
@@ -1036,8 +1451,11 @@ function NodeConfigPanel({
           <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 space-y-1">
             <p className="text-xs font-medium">Manual start</p>
             <p className="text-[11px] text-muted-foreground">
-              Start this pipeline from the Studio <strong>Run</strong> button
+              Start this pipeline from the Studio <strong>Run</strong> dialog
               {pipelineId ? ` or POST /api/studio/pipelines/${pipelineId}/run/.` : "."}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              If the graph has multiple manual triggers, the operator chooses which trigger node starts the run.
             </p>
           </div>
         )}
@@ -1454,6 +1872,166 @@ function NodeConfigPanel({
           </>
         )}
 
+        {type === "trigger/monitoring" && (
+          <>
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-100">
+              Monitoring trigger waits for a server alert. It does not start from the Run dialog. Save the pipeline and let the monitor open a matching alert.
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Target Servers</Label>
+              <div className="space-y-1">
+                {((d.server_ids as number[]) || []).map((sid) => {
+                  const srv = servers.find((s) => s.id === sid);
+                  return (
+                    <div key={sid} className="flex items-center justify-between rounded bg-muted/30 px-2 py-1 text-xs">
+                      <span>{srv ? `${srv.name} (${srv.host})` : `Server #${sid}`}</span>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-5 w-5"
+                        onClick={() => setMonitoringFilters({ server_ids: ((d.server_ids as number[]) || []).filter((id) => id !== sid) })}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  );
+                })}
+                <Select
+                  onValueChange={(value) => {
+                    const ids = ((d.server_ids as number[]) || []);
+                    const nextId = parseInt(value, 10);
+                    if (!ids.includes(nextId)) setMonitoringFilters({ server_ids: [...ids, nextId] });
+                  }}
+                >
+                  <SelectTrigger className="h-7 text-xs">
+                    <SelectValue placeholder="Add server..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {servers.map((s) => (
+                      <SelectItem key={s.id} value={String(s.id)}>
+                        {s.name} ({s.host})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground">Leave empty to react to alerts from any accessible server.</p>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Severity filters</Label>
+              <div className="grid grid-cols-1 gap-2">
+                {[
+                  { value: "info", label: "info" },
+                  { value: "warning", label: "warning" },
+                  { value: "critical", label: "critical" },
+                ].map((item) => {
+                  const selected = ((d.severities as string[]) || []).includes(item.value);
+                  return (
+                    <label key={item.value} className="flex items-center gap-2 rounded border border-border px-2 py-2 text-xs">
+                      <input
+                        type="checkbox"
+                        className="h-3.5 w-3.5"
+                        checked={selected}
+                        onChange={() => {
+                          const current = ((d.severities as string[]) || []).filter(Boolean);
+                          setMonitoringFilters({
+                            severities: selected ? current.filter((value) => value !== item.value) : [...current, item.value],
+                          });
+                        }}
+                      />
+                      <span>{item.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Alert types</Label>
+              <div className="grid grid-cols-1 gap-2">
+                {[
+                  "service",
+                  "unreachable",
+                  "cpu",
+                  "memory",
+                  "disk",
+                  "log_error",
+                ].map((value) => {
+                  const selected = ((d.alert_types as string[]) || []).includes(value);
+                  return (
+                    <label key={value} className="flex items-center gap-2 rounded border border-border px-2 py-2 text-xs">
+                      <input
+                        type="checkbox"
+                        className="h-3.5 w-3.5"
+                        checked={selected}
+                        onChange={() => {
+                          const current = ((d.alert_types as string[]) || []).filter(Boolean);
+                          setMonitoringFilters({
+                            alert_types: selected ? current.filter((item) => item !== value) : [...current, value],
+                          });
+                        }}
+                      />
+                      <span>{value}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Docker container names</Label>
+              <Textarea
+                value={((d.container_names as string[]) || []).join("\n")}
+                onChange={(e) =>
+                  setMonitoringFilters({
+                    container_names: e.target.value
+                      .split(/\r?\n/)
+                      .map((value) => value.trim())
+                      .filter(Boolean),
+                  })
+                }
+                placeholder={"mini-prod-mcp-demo"}
+                className="text-xs font-mono resize-none"
+                rows={3}
+              />
+              <p className="text-[10px] text-muted-foreground">Optional. One container name per line.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Text match</Label>
+              <Input
+                value={(d.match_text as string) || ""}
+                onChange={(e) => setMonitoringFilters({ match_text: e.target.value })}
+                placeholder="Optional substring to match in title/message/metadata"
+                className="h-7 text-xs"
+              />
+            </div>
+            {trigger ? (
+              <p className="text-[10px] text-muted-foreground">
+                Last monitoring-triggered run: {formatStudioDateTime(trigger.last_triggered_at)}
+              </p>
+            ) : null}
+          </>
+        )}
+
+        {type === "logic/merge" && (
+          <>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Merge Mode</Label>
+              <Select value={(d.mode as string) || "all"} onValueChange={(value) => set("mode", value)}>
+                <SelectTrigger className="h-7 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">all: wait for every activated branch</SelectItem>
+                  <SelectItem value="any">any: continue after the first completed branch</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Use merge nodes instead of wiring multiple incoming edges directly into an action or output node.
+            </p>
+          </>
+        )}
+
         {/* Output/Webhook */}
         {type === "output/webhook" && (
           <div className="space-y-1.5">
@@ -1860,6 +2438,56 @@ function NodeConfigPanel({
           </>
         )}
 
+        {type === "logic/telegram_input" && (
+          <>
+            <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-[11px] text-cyan-100">
+              Этот узел отправляет сообщение в Telegram и ждёт обычный текстовый reply от оператора.
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Bot Token</Label>
+              <Input
+                value={(d.tg_bot_token as string) || ""}
+                onChange={(e) => set("tg_bot_token", e.target.value)}
+                placeholder="или глобально в Studio → Notifications"
+                className="h-7 text-xs font-mono"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Chat ID</Label>
+              <Input
+                value={(d.tg_chat_id as string) || ""}
+                onChange={(e) => set("tg_chat_id", e.target.value)}
+                placeholder="-100123456789"
+                className="h-7 text-xs font-mono"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Message Template</Label>
+              <Textarea
+                value={(d.message as string) || ""}
+                onChange={(e) => set("message", e.target.value)}
+                placeholder="Опишите, какой ответ вы ждёте от оператора"
+                className="text-xs resize-none"
+                rows={6}
+              />
+              <p className="text-[10px] text-muted-foreground">
+                Переменные: {"{pipeline_name}"}, {"{run_id}"}, {"{all_outputs}"}
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Timeout (minutes)</Label>
+              <Input
+                type="number"
+                value={(d.timeout_minutes as number) ?? 120}
+                onChange={(e) => set("timeout_minutes", parseFloat(e.target.value) || 120)}
+                className="h-7 text-xs"
+                min={1}
+                max={10080}
+              />
+            </div>
+          </>
+        )}
+
         {/* Telegram Output */}
         {type === "output/telegram" && (
           <>
@@ -2016,19 +2644,22 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       ? "ru"
       : "en";
 
-  const { data: pipeline, isLoading } = useQuery({
+  const { data: pipeline, isLoading, isFetchedAfterMount } = useQuery({
     queryKey: ["studio", "pipeline", pipelineId],
     queryFn: () => (pipelineId ? studioPipelines.get(pipelineId) : null),
     enabled: !!pipelineId,
+    refetchOnMount: "always",
   });
   const { data: pipelineCopilotMcpList = [] } = useQuery({ queryKey: ["studio", "mcp"], queryFn: studioMCP.list });
 
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [nodes, setNodes, onNodesChangeRaw] = useNodesState([]);
+  const [edges, setEdges, onEdgesChangeRaw] = useEdgesState([]);
   const [selectedNode, setSelectedNode] = useState<PipelineNode | null>(null);
   const [pipelineName, setPipelineName] = useState("");
   const [lastRun, setLastRun] = useState<PipelineRun | null>(null);
   const [activeRunId, setActiveRunId] = useState<number | null>(null);
+  const [graphRunId, setGraphRunId] = useState<number | null>(null);
+  const [graphRunLive, setGraphRunLive] = useState<PipelineRun | null>(null);
   const [runDialogOpen, setRunDialogOpen] = useState(false);
   const [pipelineCopilotOpen, setPipelineCopilotOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(true);
@@ -2038,25 +2669,233 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
   const [runAdvancedOpen, setRunAdvancedOpen] = useState(false);
   const [runContextText, setRunContextText] = useState("{}");
   const [runContextError, setRunContextError] = useState<string | null>(null);
+  const [runEntryNodeId, setRunEntryNodeId] = useState("");
+  const [runTriggerError, setRunTriggerError] = useState<string | null>(null);
+  const [hasHydratedPipeline, setHasHydratedPipeline] = useState(!pipelineId);
+  const [hasLocalChanges, setHasLocalChanges] = useState(false);
   const nodeIdCounter = useRef(1);
+  const manualTriggerOptions = useMemo(
+    () => getActiveManualTriggerOptions(nodes as unknown as PipelineNode[]),
+    [nodes],
+  );
+  const webhookTriggerNodes = useMemo(
+    () => getActiveTriggerNodes(nodes as unknown as PipelineNode[], "trigger/webhook"),
+    [nodes],
+  );
+  const scheduleTriggerNodes = useMemo(
+    () => getActiveTriggerNodes(nodes as unknown as PipelineNode[], "trigger/schedule"),
+    [nodes],
+  );
+  const monitoringTriggerNodes = useMemo(
+    () => getActiveTriggerNodes(nodes as unknown as PipelineNode[], "trigger/monitoring"),
+    [nodes],
+  );
+  const activeWebhookTriggers = useMemo(
+    () => getActiveStoredTriggers(pipeline?.triggers, "webhook"),
+    [pipeline?.triggers],
+  );
+  const activeScheduleTriggers = useMemo(
+    () => getActiveStoredTriggers(pipeline?.triggers, "schedule"),
+    [pipeline?.triggers],
+  );
+  const activeMonitoringTriggers = useMemo(
+    () => getActiveStoredTriggers(pipeline?.triggers, "monitoring"),
+    [pipeline?.triggers],
+  );
+  const resolvedLastRun = lastRun ?? pipeline?.last_run ?? null;
+  const pipelineActivityState = useMemo(
+    () =>
+      getPipelineActivityState({
+        lastRun: resolvedLastRun,
+        triggers: pipeline?.triggers,
+        graphVersion: pipeline?.graph_version,
+      }),
+    [resolvedLastRun, pipeline?.graph_version, pipeline?.triggers],
+  );
+  const runDialogMode = manualTriggerOptions.length
+    ? "manual"
+    : webhookTriggerNodes.length
+      ? "webhook"
+      : scheduleTriggerNodes.length
+        ? "schedule"
+        : monitoringTriggerNodes.length
+          ? "monitoring"
+          : "manual";
+  const { data: graphRunData } = useQuery({
+    queryKey: ["studio", "run", graphRunId],
+    queryFn: () => (graphRunId ? studioRuns.get(graphRunId) : null),
+    enabled: !!graphRunId,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status || graphRunLive?.status;
+      return isLivePipelineRunStatus(status) ? 2000 : false;
+    },
+    refetchIntervalInBackground: true,
+  });
 
-  // Load pipeline data
+  const clearGraphOverlay = useCallback(() => {
+    setGraphRunId(null);
+    setGraphRunLive(null);
+  }, []);
+
   useEffect(() => {
-    if (pipeline) {
-      setPipelineName(pipeline.name);
-      setNodes((pipeline.nodes || []) as never[]);
-      setEdges((pipeline.edges || []) as never[]);
-      if (pipeline.nodes?.length) {
-        const maxId = pipeline.nodes.reduce((max, n) => {
-          const num = parseInt(n.id.replace(/\D/g, "") || "0");
-          return Math.max(max, num);
-        }, 0);
-        nodeIdCounter.current = maxId + 1;
-        // Fit view after nodes load
-        setTimeout(() => fitView({ padding: 0.15, duration: 300 }), 100);
+    setHasHydratedPipeline(!pipelineId);
+    setHasLocalChanges(false);
+    setLastRun(null);
+    clearGraphOverlay();
+    if (pipelineId) {
+      setSelectedNode(null);
+      setActiveRunId(null);
+    }
+  }, [pipelineId, clearGraphOverlay]);
+
+  // Load pipeline data only after the editor has fetched the latest server copy
+  useEffect(() => {
+    if (!pipeline) {
+      return;
+    }
+    if (pipelineId && !isFetchedAfterMount) {
+      return;
+    }
+    setPipelineName(pipeline.name);
+    const normalisedGraph = normalisePipelineGraph(
+      (pipeline.nodes || []) as PipelineNode[],
+      (pipeline.edges || []) as PipelineEdge[],
+    );
+    setNodes(normalisedGraph.nodes as never[]);
+    setEdges(normalisedGraph.edges as never[]);
+    setHasHydratedPipeline(true);
+    setHasLocalChanges(false);
+    if (pipeline.nodes?.length) {
+      const maxId = pipeline.nodes.reduce((max, n) => {
+        const num = parseInt(n.id.replace(/\D/g, "") || "0");
+        return Math.max(max, num);
+      }, 0);
+      nodeIdCounter.current = maxId + 1;
+      // Fit view after nodes load
+      setTimeout(() => fitView({ padding: 0.15, duration: 300 }), 100);
+    }
+  }, [pipeline, pipelineId, isFetchedAfterMount, setNodes, setEdges, fitView]);
+
+  useEffect(() => {
+    setGraphRunLive((current) => (current && current.id === graphRunId ? current : null));
+  }, [graphRunId]);
+
+  useEffect(() => {
+    if (!graphRunId) {
+      setGraphRunLive(null);
+      return;
+    }
+    if (graphRunData) {
+      setGraphRunLive(graphRunData);
+      if (lastRun?.id === graphRunData.id) {
+        setLastRun(graphRunData);
       }
     }
-  }, [pipeline, setNodes, setEdges, fitView]);
+  }, [graphRunData, graphRunId, lastRun?.id]);
+
+  useEffect(() => {
+    if (hasLocalChanges || graphRunId) {
+      return;
+    }
+    if (!pipeline?.last_run?.id || !isLivePipelineRunStatus(pipeline.last_run.status)) {
+      return;
+    }
+    setGraphRunId(pipeline.last_run.id);
+  }, [graphRunId, hasLocalChanges, pipeline?.last_run?.id, pipeline?.last_run?.status]);
+
+  useEffect(() => {
+    if (!graphRunId || !isLivePipelineRunStatus(graphRunLive?.status || graphRunData?.status)) {
+      return;
+    }
+
+    let cancelled = false;
+    let reconnectTimer: number | null = null;
+    let attempts = 0;
+    let ws: WebSocket | null = null;
+
+    const connect = () => {
+      if (cancelled) {
+        return;
+      }
+      ws = new WebSocket(getStudioPipelineRunWsUrl(graphRunId));
+
+      ws.onopen = () => {
+        attempts = 0;
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === "node_state" && msg.node_id && msg.state) {
+            setGraphRunLive((current) => {
+              if (!current || current.id !== graphRunId) {
+                return current;
+              }
+              return {
+                ...current,
+                node_states: {
+                  ...(current.node_states || {}),
+                  [msg.node_id]: msg.state,
+                },
+              };
+            });
+            return;
+          }
+          if (msg.type === "run_status" && msg.status) {
+            setGraphRunLive((current) => {
+              if (!current || current.id !== graphRunId) {
+                return current;
+              }
+              return {
+                ...current,
+                status: typeof msg.status === "string" ? msg.status : current.status,
+                error: typeof msg.error === "string" ? msg.error : current.error,
+                summary: typeof msg.summary === "string" ? msg.summary : current.summary,
+                finished_at: typeof msg.finished_at === "string" ? msg.finished_at : current.finished_at,
+                started_at: typeof msg.started_at === "string" ? msg.started_at : current.started_at,
+              };
+            });
+          }
+        } catch {
+          // ignore malformed live messages
+        }
+      };
+
+      ws.onclose = () => {
+        if (cancelled || !isLivePipelineRunStatus(graphRunLive?.status || graphRunData?.status)) {
+          return;
+        }
+        attempts += 1;
+        const delay = Math.min(5000, attempts <= 1 ? 1000 : attempts <= 2 ? 2000 : 4000);
+        reconnectTimer = window.setTimeout(() => {
+          reconnectTimer = null;
+          connect();
+        }, delay);
+      };
+    };
+
+    connect();
+
+    return () => {
+      cancelled = true;
+      if (reconnectTimer !== null) {
+        window.clearTimeout(reconnectTimer);
+      }
+      ws?.close();
+    };
+  }, [graphRunData?.status, graphRunId, graphRunLive?.status]);
+
+  useEffect(() => {
+    if (manualTriggerOptions.length === 1) {
+      setRunEntryNodeId((current) => current || manualTriggerOptions[0].node_id);
+      setRunTriggerError(null);
+      return;
+    }
+    if (runEntryNodeId && manualTriggerOptions.some((item) => item.node_id === runEntryNodeId)) {
+      return;
+    }
+    setRunEntryNodeId("");
+  }, [manualTriggerOptions, runEntryNodeId]);
 
   const saveMutation = useMutation({
     mutationFn: (data: { nodes: PipelineNode[]; edges: PipelineEdge[]; name: string }) =>
@@ -2067,6 +2906,15 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       queryClient.setQueryData(["studio", "pipeline", p.id], p);
       queryClient.invalidateQueries({ queryKey: ["studio", "pipelines"] });
       queryClient.invalidateQueries({ queryKey: ["studio", "pipeline", p.id] });
+      setPipelineName(p.name);
+      const normalisedGraph = normalisePipelineGraph(
+        (p.nodes || []) as PipelineNode[],
+        (p.edges || []) as PipelineEdge[],
+      );
+      setNodes(normalisedGraph.nodes as never[]);
+      setEdges(normalisedGraph.edges as never[]);
+      setHasHydratedPipeline(true);
+      setHasLocalChanges(false);
       toast({ description: "Pipeline saved" });
       if (!pipelineId) navigate(`/studio/pipeline/${p.id}`, { replace: true });
     },
@@ -2074,10 +2922,19 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
   });
 
   const runMutation = useMutation({
-    mutationFn: ({ targetPipelineId, context }: { targetPipelineId: number; context: Record<string, unknown> }) =>
-      studioPipelines.run(targetPipelineId, context),
+    mutationFn: ({
+      targetPipelineId,
+      context,
+      entryNodeId,
+    }: {
+      targetPipelineId: number;
+      context: Record<string, unknown>;
+      entryNodeId?: string;
+    }) => studioPipelines.run(targetPipelineId, context, entryNodeId),
     onSuccess: (run) => {
       setLastRun(run);
+      setGraphRunId(run.id);
+      setGraphRunLive(run);
       setActiveRunId(run.id);
       setSelectedNode(null);
       setRunDialogOpen(false);
@@ -2087,20 +2944,99 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       setRunAdvancedOpen(false);
       setRunContextText("{}");
       setRunContextError(null);
+      setRunEntryNodeId("");
+      setRunTriggerError(null);
       toast({ description: `Pipeline started — run #${run.id}` });
     },
     onError: (err: Error) => toast({ variant: "destructive", description: err.message }),
   });
 
   const handleSave = () => {
-    saveMutation.mutate({
-      name: pipelineName || "Untitled",
-      nodes: nodes as unknown as PipelineNode[],
-      edges: edges as unknown as PipelineEdge[],
-    });
+    if (pipelineId && !hasHydratedPipeline) {
+      toast({
+        variant: "destructive",
+        description: localize(
+          lang,
+          "Редактор еще загружает актуальную версию графа. Подождите секунду и попробуйте снова.",
+          "The editor is still loading the latest graph from the server. Wait a moment and try again.",
+        ),
+      });
+      return;
+    }
+    saveMutation.mutate(
+      buildPipelineSavePayload({
+        pipelineId,
+        pipeline,
+        pipelineName,
+        nodes: nodes as unknown as PipelineNode[],
+        edges: edges as unknown as PipelineEdge[],
+        hasLocalChanges,
+      }),
+    );
+  };
+
+  const handleNodesChange = useCallback(
+    (changes: Parameters<typeof onNodesChangeRaw>[0]) => {
+      if (changes?.length) {
+        setHasLocalChanges(true);
+        if (
+          changes.some(
+            (change) =>
+              change.type !== "position" &&
+              change.type !== "dimensions" &&
+              change.type !== "select",
+          )
+        ) {
+          clearGraphOverlay();
+        }
+      }
+      onNodesChangeRaw(changes);
+    },
+    [clearGraphOverlay, onNodesChangeRaw],
+  );
+
+  const handleEdgesChange = useCallback(
+    (changes: Parameters<typeof onEdgesChangeRaw>[0]) => {
+      if (changes?.length) {
+        setHasLocalChanges(true);
+        clearGraphOverlay();
+      }
+      onEdgesChangeRaw(changes);
+    },
+    [clearGraphOverlay, onEdgesChangeRaw],
+  );
+
+  const handleOpenRunDialog = () => {
+    setRunTriggerError(null);
+    if (manualTriggerOptions.length === 1) {
+      setRunEntryNodeId(manualTriggerOptions[0].node_id);
+    }
+    setRunDialogOpen(true);
+  };
+
+  const handleCopyWebhookUrl = async (webhookUrl: string) => {
+    try {
+      await navigator.clipboard.writeText(toAbsoluteWebhookUrl(webhookUrl));
+      toast({ description: localize(lang, "Webhook URL скопирован.", "Webhook URL copied.") });
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : localize(lang, "Не удалось скопировать webhook URL.", "Failed to copy webhook URL.");
+      toast({ variant: "destructive", description: message });
+    }
   };
 
   const handleRunSubmit = async () => {
+    if (!manualTriggerOptions.length) {
+      setRunTriggerError(
+        localize(
+          lang,
+          "У этого пайплайна нет ручного trigger. Используйте webhook или schedule trigger.",
+          "This pipeline has no manual trigger. Use its webhook or schedule trigger instead.",
+        ),
+      );
+      return;
+    }
     const parsedContext = parseJsonObjectText(runContextText);
     if (parsedContext.error) {
       setRunContextError(parsedContext.error);
@@ -2114,6 +3050,15 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     if (runTaskText.trim()) context.task = runTaskText.trim();
     if (runRequester.trim()) context.requester = runRequester.trim();
     if (runTicketId.trim()) context.ticket_id = runTicketId.trim();
+    const selectedEntryNodeId =
+      manualTriggerOptions.length === 1
+        ? manualTriggerOptions[0].node_id
+        : runEntryNodeId.trim();
+    if (!selectedEntryNodeId) {
+      setRunTriggerError(localize(lang, "Выберите ручной trigger для запуска.", "Select the manual trigger that should start this run."));
+      return;
+    }
+    setRunTriggerError(null);
 
     try {
       const saved = await saveMutation.mutateAsync({
@@ -2121,7 +3066,11 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         nodes: nodes as unknown as PipelineNode[],
         edges: edges as unknown as PipelineEdge[],
       });
-      await runMutation.mutateAsync({ targetPipelineId: pipelineId ?? saved.id, context });
+      await runMutation.mutateAsync({
+        targetPipelineId: pipelineId ?? saved.id,
+        context,
+        entryNodeId: selectedEntryNodeId,
+      });
     } catch {
       // Error notifications are handled in mutation callbacks.
     }
@@ -2130,12 +3079,14 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
   const onConnect = useCallback(
     (connection: Connection) => {
       if (!connection.source || !connection.target) return;
+      setHasLocalChanges(true);
       setEdges((eds) => addEdge(connection, eds));
 
       const sourceNode = (nodes as unknown as PipelineNode[]).find((item) => item.id === connection.source);
       const targetNode = (nodes as unknown as PipelineNode[]).find((item) => item.id === connection.target);
       if (!targetNode) return;
 
+      clearGraphOverlay();
       setActiveRunId(null);
       if (!sourceNode) {
         setSelectedNode(targetNode);
@@ -2153,15 +3104,18 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       setSelectedNode(nextTarget);
       toast({ description: `${getNodeDisplayLabel(nextTarget)} picked up starter settings from the connection.` });
     },
-    [nodes, pipelineName, setEdges, setNodes, toast],
+    [clearGraphOverlay, nodes, pipelineName, setEdges, setNodes, toast],
   );
 
   const onNodeClick: NodeMouseHandler = useCallback(
     (_, node) => {
       setActiveRunId(null);
-      setSelectedNode(node as unknown as PipelineNode);
+      const rawNode =
+        (nodes as unknown as PipelineNode[]).find((item) => item.id === node.id) ||
+        (node as unknown as PipelineNode);
+      setSelectedNode(rawNode);
     },
-    [],
+    [nodes],
   );
 
   const handleAddNode = useCallback(
@@ -2176,11 +3130,13 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
           : screenToFlowPosition({ x: 300, y: 200 + nodeIdCounter.current * 80 }),
         data: buildDefaultNodeData(type),
       };
+      setHasLocalChanges(true);
       setNodes((nds) => [...nds, newNode as never]);
+      clearGraphOverlay();
       setActiveRunId(null);
       setSelectedNode(newNode as PipelineNode);
     },
-    [nodes, selectedNode, setNodes, screenToFlowPosition],
+    [clearGraphOverlay, nodes, selectedNode, setNodes, screenToFlowPosition],
   );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -2196,15 +3152,18 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
       const id = `node_${nodeIdCounter.current++}`;
       const newNode = { id, type, position, data: buildDefaultNodeData(type as NodeType) };
+      setHasLocalChanges(true);
       setNodes((nds) => [...nds, newNode as never]);
+      clearGraphOverlay();
       setActiveRunId(null);
       setSelectedNode(newNode as PipelineNode);
     },
-    [screenToFlowPosition, setNodes],
+    [clearGraphOverlay, screenToFlowPosition, setNodes],
   );
 
   const handleUpdateNodeData = useCallback(
     (nodeId: string, data: Record<string, unknown>) => {
+      setHasLocalChanges(true);
       setNodes((nds) =>
         nds.map((n) => (n.id === nodeId ? { ...n, data } : n)),
       );
@@ -2215,12 +3174,14 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
 
   const handleDeleteNode = useCallback(
     (nodeId: string) => {
+      setHasLocalChanges(true);
       setNodes((nds) => nds.filter((n) => n.id !== nodeId));
       setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
+      clearGraphOverlay();
       setActiveRunId(null);
       setSelectedNode(null);
     },
-    [setNodes, setEdges],
+    [clearGraphOverlay, setNodes, setEdges],
   );
 
   const handleApplyPipelineAssistantPatch = useCallback(
@@ -2236,6 +3197,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       }
 
       const merged = { ...(targetNode.data || {}), ...normalized };
+      setHasLocalChanges(true);
       setNodes((nds) => nds.map((item) => (item.id === targetNodeId ? ({ ...item, data: merged } as never) : item)));
       setActiveRunId(null);
       setSelectedNode({ ...targetNode, data: merged });
@@ -2246,12 +3208,18 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
 
   const handleApplyPipelineAssistantGraphPatch = useCallback(
     (graphPatch: StudioPipelineGraphPatch) => {
-      if (!graphPatch.nodes.length && !graphPatch.edges.length) {
-        toast({ description: "This suggestion does not include graph changes." });
+      const updateSpecs = (graphPatch.update_nodes || []).filter(
+        (item) => item && typeof item.node_id === "string" && item.data && typeof item.data === "object",
+      );
+      const removeNodeIds = new Set((graphPatch.remove_node_ids || []).filter((item): item is string => Boolean(item)));
+      const removeEdgeIds = new Set((graphPatch.remove_edge_ids || []).filter((item): item is string => Boolean(item)));
+      if (!graphPatch.nodes.length && !graphPatch.edges.length && !updateSpecs.length && !removeNodeIds.size && !removeEdgeIds.size) {
+        toast({ description: localize(lang, "В этом ответе нет изменений графа.", "This suggestion does not include graph changes.") });
         return;
       }
 
       const existingNodes = nodes as unknown as PipelineNode[];
+      const existingEdges = edges as unknown as PipelineEdge[];
       const existingNodeIds = new Set(existingNodes.map((item) => item.id));
       const anchorNode =
         existingNodes.find((item) => item.id === graphPatch.anchor_node_id) ||
@@ -2289,7 +3257,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         return null;
       };
 
-      const existingEdgeKeys = new Set((edges as unknown as PipelineEdge[]).map((edge) => `${edge.source}:${edge.target}:${edge.label || ""}`));
+      const existingEdgeKeys = new Set(existingEdges.map((edge) => `${edge.source}:${edge.target}:${edge.label || ""}`));
       const createdEdges: PipelineEdge[] = [];
       graphPatch.edges.forEach((spec, index) => {
         const source = resolveNodeId(spec.source);
@@ -2308,26 +3276,129 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         });
       });
 
-      if (!createdNodes.length && !createdEdges.length) {
-        toast({ description: "No valid graph changes were found in this AI suggestion." });
+      const updateMap = new Map(
+        updateSpecs.map((item) => [
+          item.node_id,
+          normaliseAssistantPatch(item.data as Record<string, unknown>, {
+            mcpList: pipelineCopilotMcpList.map((entry) => ({ id: entry.id, name: entry.name })),
+          }),
+        ]),
+      );
+      const updatedNodes = existingNodes
+        .filter((node) => updateMap.has(node.id))
+        .map((node) => ({
+          ...node,
+          data: { ...(node.data || {}), ...(updateMap.get(node.id) || {}) },
+        }));
+      const updatedNodeMap = new Map(updatedNodes.map((node) => [node.id, node]));
+
+      const nextNodes = existingNodes
+        .filter((node) => !removeNodeIds.has(node.id))
+        .map((node) => updatedNodeMap.get(node.id) || node);
+      if (createdNodes.length) {
+        nextNodes.push(...createdNodes);
+      }
+
+      const nextEdges = existingEdges
+        .filter((edge) => !removeEdgeIds.has(edge.id))
+        .filter((edge) => !removeNodeIds.has(edge.source) && !removeNodeIds.has(edge.target));
+      if (createdEdges.length) {
+        nextEdges.push(...createdEdges);
+      }
+
+      if (
+        !createdNodes.length &&
+        !createdEdges.length &&
+        !updatedNodes.length &&
+        !removeNodeIds.size &&
+        !removeEdgeIds.size
+      ) {
+        toast({ description: localize(lang, "Не удалось извлечь валидные изменения графа.", "No valid graph changes were found in this AI suggestion.") });
         return;
       }
 
-      if (createdNodes.length) {
-        setNodes((nds) => [...nds, ...(createdNodes as never[])]);
-        setSelectedNode(createdNodes[0]);
-      }
-      if (createdEdges.length) {
-        setEdges((eds) => [...eds, ...(createdEdges as never[])]);
-      }
+      setHasLocalChanges(true);
+      setNodes(nextNodes as never[]);
+      setEdges(nextEdges as never[]);
+      setSelectedNode(createdNodes[0] || updatedNodes[0] || null);
+      clearGraphOverlay();
       setActiveRunId(null);
-      toast({ description: `Applied ${createdNodes.length} node(s) and ${createdEdges.length} edge(s) from the AI suggestion.` });
+      toast({
+        description: localize(
+          lang,
+          `Применено: +${createdNodes.length} нод, +${createdEdges.length} связей, обновлено ${updatedNodes.length}, удалено ${removeNodeIds.size} нод и ${removeEdgeIds.size} связей.`,
+          `Applied: +${createdNodes.length} nodes, +${createdEdges.length} edges, updated ${updatedNodes.length}, removed ${removeNodeIds.size} nodes and ${removeEdgeIds.size} edges.`,
+        ),
+      });
       setTimeout(() => fitView({ padding: 0.18, duration: 300 }), 60);
     },
-    [edges, fitView, nodes, screenToFlowPosition, selectedNode, setEdges, setNodes, toast],
+    [clearGraphOverlay, edges, fitView, lang, nodes, pipelineCopilotMcpList, screenToFlowPosition, selectedNode, setEdges, setNodes, toast],
   );
 
   const onPaneClick = useCallback(() => setSelectedNode(null), []);
+  const pipelineNodes = nodes as unknown as PipelineNode[];
+  const pipelineEdges = edges as unknown as PipelineEdge[];
+  const graphState = useMemo(
+    () => buildPipelineRunGraphState(pipelineNodes, pipelineEdges, graphRunLive),
+    [graphRunLive, pipelineEdges, pipelineNodes],
+  );
+  const highlightedNodeId = graphState.currentNodeId || graphRunLive?.entry_node_id || null;
+  const highlightedNode = highlightedNodeId
+    ? pipelineNodes.find((node) => node.id === highlightedNodeId) || null
+    : null;
+  const displayNodes = useMemo(
+    () =>
+      nodes.map((node) => {
+        const nodeState = graphRunLive?.node_states?.[node.id] as Record<string, unknown> | undefined;
+        const status = typeof nodeState?.status === "string" ? nodeState.status : undefined;
+        return {
+          ...node,
+          data: {
+            ...(node.data || {}),
+            status,
+            status_label: getPipelineNodeStatusLabel(status, lang, nodeState),
+            is_current_step: node.id === graphState.currentNodeId,
+            is_in_active_path: graphState.traversedNodeIds.has(node.id),
+            is_queued_step: graphState.queuedNodeIds.has(node.id),
+            is_entry_point: graphRunLive?.entry_node_id === node.id,
+          },
+        };
+      }),
+    [graphRunLive?.entry_node_id, graphRunLive?.node_states, graphState.activeEdgeIds, graphState.currentNodeId, graphState.queuedNodeIds, graphState.traversedNodeIds, lang, nodes],
+  );
+  const displayEdges = useMemo(
+    () =>
+      edges.map((edge) => {
+        const isCurrent = graphState.currentEdgeIds.has(edge.id);
+        const isActivePath = graphState.activeEdgeIds.has(edge.id);
+        return {
+          ...edge,
+          animated: isCurrent || (isActivePath && isLivePipelineRunStatus(graphRunLive?.status)),
+          style: {
+            ...(edge.style || {}),
+            strokeWidth: isCurrent ? 3.6 : isActivePath ? 2.8 : 2,
+            stroke: isCurrent
+              ? "rgb(59 130 246)"
+              : isActivePath
+                ? "rgb(45 212 191)"
+                : "hsl(var(--muted-foreground) / 0.3)",
+            opacity: isActivePath ? 1 : 0.42,
+          },
+          labelStyle: {
+            ...(edge.labelStyle || {}),
+            fontSize: 10,
+            fill: isActivePath ? "rgb(125 211 252)" : "hsl(var(--muted-foreground))",
+          },
+          labelBgStyle: {
+            ...(edge.labelBgStyle || {}),
+            fill: "hsl(var(--background))",
+            fillOpacity: isActivePath ? 0.92 : 0.78,
+          },
+          zIndex: isActivePath ? 20 : 1,
+        };
+      }),
+    [edges, graphRunLive?.status, graphState.activeEdgeIds, graphState.currentEdgeIds],
+  );
 
   if (pipelineId && isLoading) {
     return (
@@ -2337,8 +3408,27 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       </div>
     );
   }
-
   const showMiniMap = nodes.length >= 6;
+  const toolbarActivityToneClass =
+    pipelineActivityState.tone === "primary"
+      ? "border-primary/25 bg-primary/10 text-primary"
+      : pipelineActivityState.tone === "success"
+        ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
+        : pipelineActivityState.tone === "info"
+          ? "border-sky-500/25 bg-sky-500/10 text-sky-300"
+          : "border-amber-500/25 bg-amber-500/10 text-amber-300";
+  const ToolbarActivityIcon =
+    pipelineActivityState.icon === "running"
+      ? Loader2
+      : pipelineActivityState.icon === "pending"
+        ? Clock
+        : pipelineActivityState.icon === "manual"
+          ? Play
+          : pipelineActivityState.icon === "schedule"
+            ? Clock
+            : pipelineActivityState.icon === "warning"
+              ? XCircle
+              : Zap;
 
   return (
     <div className="flex flex-col h-full">
@@ -2350,65 +3440,71 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
         <Input
           value={pipelineName}
-          onChange={(e) => setPipelineName(e.target.value)}
+          onChange={(e) => {
+            setPipelineName(e.target.value);
+            setHasLocalChanges(true);
+          }}
           className="h-7 text-sm font-medium w-64 border-0 shadow-none focus-visible:ring-0 px-0"
           placeholder="Pipeline name..."
         />
         <div className="ml-auto flex items-center gap-2">
-          {lastRun && (
+          {resolvedLastRun && (
             <button
               type="button"
-              onClick={() => setActiveRunId(lastRun.id)}
+              onClick={() => {
+                setGraphRunId(resolvedLastRun.id);
+                setActiveRunId(resolvedLastRun.id);
+              }}
               className="hidden items-center gap-2 rounded-md border border-border/70 bg-background/35 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-border hover:bg-background/50 hover:text-foreground sm:flex"
             >
-              {lastRun.status === "running" && <Loader2 className="h-2.5 w-2.5 animate-spin mr-1" />}
-              Run #{lastRun.id}: {lastRun.status}
+              {resolvedLastRun.status === "running" && <Loader2 className="h-2.5 w-2.5 animate-spin mr-1" />}
+              Run #{resolvedLastRun.id}: {resolvedLastRun.status}
             </button>
           )}
           <Button
             size="sm"
-            variant="outline"
-            onClick={() => setPipelineCopilotOpen(true)}
-            className="h-7 gap-1.5"
-          >
-            <Bot className="h-3.5 w-3.5" />
-            Assistant
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
             onClick={handleSave}
-            disabled={saveMutation.isPending}
+            disabled={saveMutation.isPending || (Boolean(pipelineId) && !hasHydratedPipeline)}
             className="h-7 gap-1.5"
           >
             {saveMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
-            Save
+            {localize(lang, "���������", "Save")}
           </Button>
           <Button
             size="sm"
-            onClick={() => setRunDialogOpen(true)}
-            disabled={runMutation.isPending || saveMutation.isPending}
+            variant="secondary"
+            onClick={handleOpenRunDialog}
+            disabled={runMutation.isPending || saveMutation.isPending || (Boolean(pipelineId) && !hasHydratedPipeline)}
             className="h-7 gap-1.5"
           >
             {runMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
-            Run
+            {localize(lang, "������", "Run")}
           </Button>
+
+          <div className="w-px h-4 bg-border mx-1" />
+
+          <Button
+            size="icon"
+            variant={pipelineCopilotOpen ? "secondary" : "ghost"}
+            onClick={() => setPipelineCopilotOpen((prev) => !prev)}
+            className={cn("h-7 w-7", pipelineCopilotOpen && "bg-primary/10 text-primary")}
+            aria-label="AI Builder"
+            title={localize(lang, "AI ���������", "AI Assistant")}
+          >
+            {pipelineCopilotOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
+          </Button>
+          
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="ghost" className="h-8 gap-1.5 rounded-md px-3 text-muted-foreground">
+              <Button size="sm" variant="ghost" className="h-7 gap-1.5 rounded-md px-2 text-muted-foreground">
                 <MoreHorizontal className="h-3.5 w-3.5" />
-                {localize(lang, "Ещё", "More")}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuItem onClick={() => setPipelineCopilotOpen(true)}>
-                <Bot className="mr-2 h-3.5 w-3.5" />
-                {localize(lang, "AI помощник пайплайна", "Pipeline AI Assistant")}
-              </DropdownMenuItem>
-              {lastRun && (
-                <DropdownMenuItem onClick={() => setActiveRunId(lastRun.id)}>
+              {resolvedLastRun && (
+                <DropdownMenuItem onClick={() => setActiveRunId(resolvedLastRun.id)}>
                   <Clock className="mr-2 h-3.5 w-3.5" />
-                  {localize(lang, `Открыть запуск #${lastRun.id}`, `Open run #${lastRun.id}`)}
+                  {localize(lang, "������� ������ #", "Open run #")}
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>
@@ -2421,12 +3517,39 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         onOpenChange={setPipelineCopilotOpen}
         pipelineId={pipelineId}
         pipelineName={pipelineName}
-        nodes={nodes as unknown as PipelineNode[]}
-        edges={edges as unknown as PipelineEdge[]}
+        nodes={pipelineNodes}
+        edges={pipelineEdges}
         selectedNode={selectedNode}
+        hasLocalChanges={hasLocalChanges}
+        activityLabel={pipelineActivityState.label}
+        lang={lang}
         onApplyPatch={handleApplyPipelineAssistantPatch}
         onApplyGraphPatch={handleApplyPipelineAssistantGraphPatch}
       />
+
+      <div className="flex items-center gap-3 border-b border-border bg-muted/20 px-4 py-2 text-xs">
+        <div className={`flex items-center gap-2 rounded-full border px-2.5 py-1 ${toolbarActivityToneClass}`}>
+          <ToolbarActivityIcon
+            className={`h-3.5 w-3.5 ${pipelineActivityState.icon === "running" ? "animate-spin" : ""}`}
+          />
+          <span className="font-medium">{pipelineActivityState.label}</span>
+        </div>
+        <p className="text-muted-foreground">{pipelineActivityState.detail}</p>
+        {graphRunId && highlightedNode ? (
+          <div className="inline-flex items-center gap-2 rounded-full border border-sky-500/25 bg-sky-500/10 px-2.5 py-1 text-sky-200">
+            {isLivePipelineRunStatus(graphRunLive?.status) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Info className="h-3.5 w-3.5" />}
+            <span>
+              {localize(lang, "Текущий шаг", "Current step")}: {getNodeDisplayLabel(highlightedNode)}
+            </span>
+          </div>
+        ) : null}
+        {pipelineId && !hasHydratedPipeline ? (
+          <div className="ml-auto inline-flex items-center gap-2 rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-amber-200">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <span>{localize(lang, "Обновляем свежую версию графа…", "Refreshing the latest graph…")}</span>
+          </div>
+        ) : null}
+      </div>
 
       {/* Flow summary bar */}
       {nodes.length > 0 && (
@@ -2434,8 +3557,8 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
           <span className="text-[10px] text-muted-foreground shrink-0 mr-1">Flow:</span>
           {(() => {
             // Build a simple chain from triggers -> connected nodes
-            const pNodes = nodes as unknown as PipelineNode[];
-            const pEdges = edges as unknown as PipelineEdge[];
+            const pNodes = pipelineNodes;
+            const pEdges = pipelineEdges;
             const visited = new Set<string>();
             const chain: PipelineNode[] = [];
             const triggers = pNodes.filter((n) => n.type?.startsWith("trigger/"));
@@ -2457,12 +3580,21 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
               <span key={n.id} className="flex items-center gap-1 shrink-0">
                 {i > 0 && <ChevronRight className="h-2.5 w-2.5 text-muted-foreground/40" />}
                 <button
-                  onClick={() => { setSelectedNode(n); setActiveRunId(null); }}
+                  onClick={() => {
+                    setSelectedNode(n);
+                    setActiveRunId(null);
+                  }}
                   className={cn(
                     "text-[10px] px-1.5 py-0.5 rounded-md border transition-colors",
-                    selectedNode?.id === n.id
-                      ? "border-primary/40 bg-primary/10 text-primary"
-                      : "border-transparent hover:bg-muted/50 text-muted-foreground hover:text-foreground"
+                    graphState.currentNodeId === n.id
+                      ? "border-blue-500/40 bg-blue-500/10 text-blue-200 shadow-[0_0_16px_rgba(59,130,246,0.18)]"
+                      : graphState.traversedNodeIds.has(n.id)
+                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+                        : graphState.queuedNodeIds.has(n.id)
+                          ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-200"
+                          : selectedNode?.id === n.id
+                            ? "border-primary/40 bg-primary/10 text-primary"
+                            : "border-transparent hover:bg-muted/50 text-muted-foreground hover:text-foreground"
                   )}
                 >
                   {NODE_TYPE_LABELS[n.type || ""]?.icon || "🔧"} {getNodeDisplayLabel(n)}
@@ -2481,12 +3613,13 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         </div>
 
         {/* Center: Canvas */}
-        <div className="flex-1">
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
+        <div className="flex flex-1 min-w-0 flex-col">
+          <div className="flex-1">
+            <ReactFlow
+            nodes={displayNodes}
+            edges={displayEdges}
+            onNodesChange={handleNodesChange}
+            onEdgesChange={handleEdgesChange}
             onConnect={onConnect}
             onNodeClick={onNodeClick}
             onPaneClick={onPaneClick}
@@ -2510,15 +3643,14 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                 maskColor="hsl(var(--background) / 0.82)"
                 nodeColor={(node) => {
                   const type = node.type || "";
-                  if (type.startsWith("trigger/")) return "hsl(var(--muted-foreground))";
-                  if (type.startsWith("agent/")) return "hsl(var(--primary))";
-                  if (type.startsWith("logic/")) return "hsl(var(--accent-foreground))";
-                  if (type.startsWith("output/")) return "hsl(var(--secondary-foreground))";
+                  if (type.startsWith("trigger/")) return "rgb(251 191 36 / 0.8)";
+                  if (type.startsWith("agent/"))   return "rgb(167 139 250 / 0.8)";
+                  if (type.startsWith("logic/"))   return "rgb(192 132 252 / 0.8)";
+                  if (type.startsWith("output/"))  return "rgb(52 211 153 / 0.8)";
                   return "hsl(var(--muted-foreground))";
                 }}
               />
             )}
-            {/* Empty state hint inside React Flow */}
             {nodes.length === 0 && (
               <Panel position="top-center" style={{ pointerEvents: "none", marginTop: "25%" }}>
                 <div className="text-center select-none space-y-3">
@@ -2530,7 +3662,8 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                 </div>
               </Panel>
             )}
-          </ReactFlow>
+            </ReactFlow>
+          </div>
         </div>
 
         {/* Right: Run monitor OR Node config panel */}
@@ -2559,88 +3692,265 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       <Dialog open={runDialogOpen} onOpenChange={setRunDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Run Pipeline</DialogTitle>
+            <DialogTitle>
+              {runDialogMode === "manual"
+                ? "Run Pipeline"
+                : runDialogMode === "webhook"
+                  ? "Webhook Trigger"
+                  : runDialogMode === "schedule"
+                    ? "Scheduled Trigger"
+                    : "Monitoring Trigger"}
+            </DialogTitle>
             <DialogDescription>
-              Add optional task text and JSON context for this run.
+              {runDialogMode === "manual"
+                ? "Choose the manual trigger that should start this run, then add optional task text and JSON context."
+                : runDialogMode === "webhook"
+                  ? "Webhook pipelines do not start from Run. Save the graph, then send an HTTP POST request to the webhook URL."
+                  : runDialogMode === "schedule"
+                    ? "Scheduled pipelines do not start from Run. Save the graph and let the scheduler create runs from the cron trigger."
+                    : "Monitoring pipelines do not start from Run. Save the graph and let server monitoring open a matching alert."}
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="run-task">Task</Label>
-              <Textarea
-                id="run-task"
-                value={runTaskText}
-                onChange={(event) => setRunTaskText(event.target.value)}
-                placeholder="e.g. Check staging, apply updates, and report blockers"
-                rows={4}
-              />
-            </div>
-
-            <div className="rounded-md border border-border">
-              <button
-                type="button"
-                className="flex w-full items-center justify-between px-3 py-2 text-left"
-                onClick={() => setRunAdvancedOpen((open) => !open)}
-              >
-                <div>
-                  <p className="text-xs font-medium">Advanced context</p>
-                  <p className="text-[11px] text-muted-foreground">Optional requester metadata and extra JSON fields.</p>
+            {runDialogMode === "manual" ? (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="run-entry-trigger">Manual trigger</Label>
+                  <Select
+                    value={runEntryNodeId}
+                    onValueChange={(value) => {
+                      setRunEntryNodeId(value);
+                      if (runTriggerError) setRunTriggerError(null);
+                    }}
+                    disabled={manualTriggerOptions.length <= 1}
+                  >
+                    <SelectTrigger id="run-entry-trigger">
+                      <SelectValue
+                        placeholder={
+                          manualTriggerOptions.length === 0
+                            ? localize(lang, "Нет активных manual trigger нод", "No active manual trigger nodes")
+                            : manualTriggerOptions.length === 1
+                              ? manualTriggerOptions[0].label
+                              : localize(lang, "Выберите trigger", "Select a trigger")
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {manualTriggerOptions.map((trigger) => (
+                        <SelectItem key={trigger.node_id} value={trigger.node_id}>
+                          {trigger.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground">
+                    {manualTriggerOptions.length <= 1
+                      ? localize(lang, "Если ручной trigger один, он будет выбран автоматически.", "When there is only one manual trigger, it is selected automatically.")
+                      : localize(lang, "Этот trigger запустит только свою ветку графа.", "This trigger starts only its own branch of the graph.")}
+                  </p>
+                  {runTriggerError ? <p className="text-xs text-red-400">{runTriggerError}</p> : null}
                 </div>
-                {runAdvancedOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-              </button>
-              {runAdvancedOpen ? (
-                <div className="space-y-4 border-t border-border px-3 py-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="run-requester">Requester</Label>
-                      <Input
-                        id="run-requester"
-                        value={runRequester}
-                        onChange={(event) => setRunRequester(event.target.value)}
-                        placeholder="Service Desk, CI job, operator"
-                      />
+
+                <div className="space-y-2">
+                  <Label htmlFor="run-task">Task</Label>
+                  <Textarea
+                    id="run-task"
+                    value={runTaskText}
+                    onChange={(event) => setRunTaskText(event.target.value)}
+                    placeholder="e.g. Check staging, apply updates, and report blockers"
+                    rows={4}
+                  />
+                </div>
+
+                <div className="rounded-md border border-border">
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between px-3 py-2 text-left"
+                    onClick={() => setRunAdvancedOpen((open) => !open)}
+                  >
+                    <div>
+                      <p className="text-xs font-medium">Advanced context</p>
+                      <p className="text-[11px] text-muted-foreground">Optional requester metadata and extra JSON fields.</p>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="run-ticket-id">Ticket or reference ID</Label>
-                      <Input
-                        id="run-ticket-id"
-                        value={runTicketId}
-                        onChange={(event) => setRunTicketId(event.target.value)}
-                        placeholder="INC-1428"
-                      />
+                    {runAdvancedOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                  </button>
+                  {runAdvancedOpen ? (
+                    <div className="space-y-4 border-t border-border px-3 py-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <Label htmlFor="run-requester">Requester</Label>
+                          <Input
+                            id="run-requester"
+                            value={runRequester}
+                            onChange={(event) => setRunRequester(event.target.value)}
+                            placeholder="Service Desk, CI job, operator"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="run-ticket-id">Ticket or reference ID</Label>
+                          <Input
+                            id="run-ticket-id"
+                            value={runTicketId}
+                            onChange={(event) => setRunTicketId(event.target.value)}
+                            placeholder="INC-1428"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="run-context">Run context (JSON object)</Label>
+                        <Textarea
+                          id="run-context"
+                          value={runContextText}
+                          onChange={(event) => {
+                            setRunContextText(event.target.value);
+                            if (runContextError) setRunContextError(null);
+                          }}
+                          placeholder='{"env":"staging","priority":"high"}'
+                          rows={8}
+                          className="font-mono text-xs"
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                          These fields are merged with the task text before the run starts.
+                        </p>
+                        {runContextError ? <p className="text-xs text-red-400">{runContextError}</p> : null}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            ) : runDialogMode === "webhook" ? (
+              <div className="space-y-4">
+                {activeWebhookTriggers.length ? (
+                  <div className="rounded-xl border border-sky-500/25 bg-sky-500/10 px-3 py-2 text-xs text-sky-200">
+                    {localize(
+                      lang,
+                      "Trigger уже armed и ждёт входящий POST запрос. Новый run появится только когда webhook реально придёт.",
+                      "This trigger is already armed and waiting for an incoming POST request. A new run will appear only when the webhook actually arrives.",
+                    )}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                    {localize(
+                      lang,
+                      "Сначала сохраните граф, чтобы arm webhook trigger и получить URL.",
+                      "Save the graph first to arm the webhook trigger and generate its URL.",
+                    )}
+                  </div>
+                )}
+                {activeWebhookTriggers.length ? (
+                  activeWebhookTriggers.map((trigger) => (
+                    <div key={trigger.id} className="space-y-2 rounded-xl border border-border bg-background/60 p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-medium text-foreground">{trigger.name || "Webhook trigger"}</div>
+                          <div className="text-[11px] text-muted-foreground">Node `{trigger.node_id}`</div>
+                        </div>
+                        <Button size="sm" variant="outline" onClick={() => void handleCopyWebhookUrl(trigger.webhook_url)}>
+                          <Copy className="mr-1.5 h-3.5 w-3.5" />
+                          {localize(lang, "Скопировать URL", "Copy URL")}
+                        </Button>
+                      </div>
+                      <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground break-all">
+                        {toAbsoluteWebhookUrl(trigger.webhook_url)}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        {trigger.last_triggered_at
+                          ? localize(lang, `Последний trigger: ${formatStudioDateTime(trigger.last_triggered_at)}`, `Last trigger: ${formatStudioDateTime(trigger.last_triggered_at)}`)
+                          : localize(lang, "Ещё не вызывался.", "Has not been triggered yet.")}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-xl border border-dashed border-border px-3 py-3 text-xs text-muted-foreground">
+                    {localize(
+                      lang,
+                      "Сначала сохраните pipeline, чтобы сгенерировать webhook URL для этой trigger ноды.",
+                      "Save the pipeline first to generate a webhook URL for this trigger node.",
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : runDialogMode === "schedule" ? (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                  {localize(
+                    lang,
+                    "Schedule trigger запускается планировщиком. Ручной Run для него не нужен.",
+                    "Schedule triggers are started by the scheduler. They do not need a manual Run.",
+                  )}
+                </div>
+                {(activeScheduleTriggers.length
+                  ? activeScheduleTriggers.map((trigger) => ({
+                      id: String(trigger.id),
+                      label: trigger.name || trigger.node_id,
+                      cron: trigger.cron_expression || "not set",
+                    }))
+                  : scheduleTriggerNodes.map((node) => ({
+                      id: node.id,
+                      label: getNodeDisplayLabel(node),
+                      cron:
+                        typeof node.data?.cron_expression === "string" && node.data.cron_expression.trim()
+                          ? node.data.cron_expression
+                          : "not set",
+                    }))).map((trigger) => (
+                  <div key={trigger.id} className="rounded-xl border border-border bg-background/60 p-3">
+                    <div className="text-sm font-medium text-foreground">{trigger.label}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">Cron: {trigger.cron}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                  {localize(
+                    lang,
+                    "Monitoring trigger уже armed после сохранения и ждёт alert от server monitoring. Run появится только при реальной проблеме.",
+                    "The monitoring trigger is armed after save and waits for a server monitoring alert. A run appears only when a real issue is detected.",
+                  )}
+                </div>
+                {(activeMonitoringTriggers.length
+                  ? activeMonitoringTriggers.map((trigger) => ({
+                      id: String(trigger.id),
+                      label: trigger.name || trigger.node_id,
+                      filters: trigger.monitoring_filters || {},
+                      lastTriggeredAt: trigger.last_triggered_at,
+                    }))
+                  : monitoringTriggerNodes.map((node) => ({
+                      id: node.id,
+                      label: getNodeDisplayLabel(node),
+                      filters: node.data?.monitoring_filters || {},
+                      lastTriggeredAt: null,
+                    }))).map((trigger) => (
+                  <div key={trigger.id} className="rounded-xl border border-border bg-background/60 p-3">
+                    <div className="text-sm font-medium text-foreground">{trigger.label}</div>
+                    <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                      <div>Servers: {Array.isArray((trigger.filters as Record<string, unknown>).server_ids) && ((trigger.filters as Record<string, unknown>).server_ids as unknown[]).length ? (((trigger.filters as Record<string, unknown>).server_ids as unknown[]).join(", ")) : "any"}</div>
+                      <div>Severity: {Array.isArray((trigger.filters as Record<string, unknown>).severities) && ((trigger.filters as Record<string, unknown>).severities as unknown[]).length ? (((trigger.filters as Record<string, unknown>).severities as unknown[]).join(", ")) : "any"}</div>
+                      <div>Alert type: {Array.isArray((trigger.filters as Record<string, unknown>).alert_types) && ((trigger.filters as Record<string, unknown>).alert_types as unknown[]).length ? (((trigger.filters as Record<string, unknown>).alert_types as unknown[]).join(", ")) : "any"}</div>
+                      <div>Containers: {Array.isArray((trigger.filters as Record<string, unknown>).container_names) && ((trigger.filters as Record<string, unknown>).container_names as unknown[]).length ? (((trigger.filters as Record<string, unknown>).container_names as unknown[]).join(", ")) : "any"}</div>
+                      {trigger.lastTriggeredAt ? <div>{localize(lang, `Последний trigger: ${formatStudioDateTime(trigger.lastTriggeredAt)}`, `Last trigger: ${formatStudioDateTime(trigger.lastTriggeredAt)}`)}</div> : null}
                     </div>
                   </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="run-context">Run context (JSON object)</Label>
-                    <Textarea
-                      id="run-context"
-                      value={runContextText}
-                      onChange={(event) => {
-                        setRunContextText(event.target.value);
-                        if (runContextError) setRunContextError(null);
-                      }}
-                      placeholder='{"env":"staging","priority":"high"}'
-                      rows={8}
-                      className="font-mono text-xs"
-                    />
-                    <p className="text-[11px] text-muted-foreground">
-                      These fields are merged with the task text before the run starts.
-                    </p>
-                    {runContextError ? <p className="text-xs text-red-400">{runContextError}</p> : null}
-                  </div>
-                </div>
-              ) : null}
-            </div>
+                ))}
+              </div>
+            )}
           </DialogBody>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRunDialogOpen(false)}>
-              Cancel
+              {runDialogMode === "manual" ? "Cancel" : "Close"}
             </Button>
-            <Button onClick={handleRunSubmit} disabled={runMutation.isPending || saveMutation.isPending}>
-              {runMutation.isPending || saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-              Run
-            </Button>
+            {runDialogMode === "manual" ? (
+              <Button onClick={handleRunSubmit} disabled={runMutation.isPending || saveMutation.isPending}>
+                {runMutation.isPending || saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                Run
+              </Button>
+            ) : (
+              <Button onClick={handleSave} disabled={saveMutation.isPending || (Boolean(pipelineId) && !hasHydratedPipeline)}>
+                {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {localize(lang, "Сохранить trigger", "Save Trigger")}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

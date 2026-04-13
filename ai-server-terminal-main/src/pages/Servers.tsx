@@ -3,11 +3,13 @@ import yaml from "js-yaml";
 import { Link } from "react-router-dom";
 import {
   addServerGroupMember,
+  bulkDeleteServerMemorySnapshots,
   clearMasterPassword,
   createServer,
   createServerGroup,
   createServerKnowledge,
   createServerShare,
+  deleteServerMemorySnapshot,
   deleteServer,
   deleteServerGroup,
   deleteServerKnowledge,
@@ -21,6 +23,7 @@ import {
   listServerKnowledge,
   listServerShares,
   listServerMemorySnapshots,
+  purgeServerAiMemory,
   updateServerMemorySnapshot,
   type MemorySnapshotItem,
   revealServerPassword,
@@ -184,6 +187,112 @@ function newTaskId() {
 
 function newPlaybookId() {
   return `pb_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function matchesKnowledgeQuery(parts: Array<string | null | undefined>, query: string) {
+  if (!query) return true;
+  return parts.some((part) => String(part || "").toLowerCase().includes(query));
+}
+
+type UserKnowledgeFilter = "all" | "summary" | "access" | "risks" | "changes" | "instructions";
+
+function renderMemorySnapshotContent(item: MemorySnapshotItem) {
+  const lines = String(item.content || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (String(item.memory_key || "").toLowerCase() === "human_habits") {
+    const normalized = lines.map((line) => line.replace(/^-+\s*/, "").trim());
+    if (
+      normalized.length === 1 &&
+      normalized[0].toLowerCase() === "повторяющиеся ручные привычки пока не выделены."
+    ) {
+      return normalized[0];
+    }
+  }
+
+  if (String(item.memory_key || "").toLowerCase() === "access") {
+    const filtered = lines.filter((line) => {
+      const normalized = line.replace(/^-+\s*/, "").trim().toLowerCase();
+      if (normalized.startsWith("command used:") || normalized.startsWith("команда:")) {
+        return false;
+      }
+      return !/^(systemctl|journalctl|ss|curl|docker|uptime|df|free|ip)\b/.test(normalized);
+    });
+    return filtered.join("\n") || String(item.content || "");
+  }
+
+  return String(item.content || "");
+}
+
+function memorySnapshotAudienceKind(item: MemorySnapshotItem): Exclude<UserKnowledgeFilter, "all"> {
+  const memoryKey = String(item.memory_key || "").toLowerCase();
+  const title = String(item.title || "").toLowerCase();
+  const blob = `${item.title || ""}\n${item.content || ""}`.toLowerCase();
+  if (/профиль|profile|summary|сводка|overview/.test(title)) {
+    return "summary";
+  }
+  if (/риск|risk|issue|incident|alert|замечан/.test(title)) {
+    return "risks";
+  }
+  if (/доступ|access|network|ssh|vpn|порт/.test(title)) {
+    return "access";
+  }
+  if (/инструк|runbook|playbook|workflow|skill|checklist|чеклист/.test(title)) {
+    return "instructions";
+  }
+  if (/изменен|change|deploy|release|migration|rollout|обновл/.test(title)) {
+    return "changes";
+  }
+  if (memoryKey === "access" || /доступ|ssh|порт|network|host:|docker publish/.test(blob)) {
+    return "access";
+  }
+  if (memoryKey === "risks" || /риск|warning|critical|incident|проблем|ошиб/.test(blob)) {
+    return "risks";
+  }
+  if (memoryKey === "recent_changes" || /измен|обновл|запущен контейнер|reload|restart|rollout/.test(blob)) {
+    return "changes";
+  }
+  if (
+    memoryKey === "runbook" ||
+    item.kind === "pattern" ||
+    item.kind === "automation" ||
+    item.kind === "skill_draft"
+  ) {
+    return "instructions";
+  }
+  return "summary";
+}
+
+function memorySnapshotAudienceLabel(item: MemorySnapshotItem) {
+  switch (memorySnapshotAudienceKind(item)) {
+    case "access":
+      return "Доступ";
+    case "risks":
+      return "Риск";
+    case "changes":
+      return "Изменение";
+    case "instructions":
+      return "Инструкция";
+    default:
+      return "Сводка";
+  }
+}
+
+function memorySnapshotAudienceBadgeClass(item: MemorySnapshotItem) {
+  switch (memorySnapshotAudienceKind(item)) {
+    case "access":
+      return "bg-cyan-500/10 text-cyan-300";
+    case "risks":
+      return "bg-rose-500/10 text-rose-300";
+    case "changes":
+      return "bg-amber-500/10 text-amber-300";
+    case "instructions":
+      return "bg-sky-500/10 text-sky-300";
+    default:
+      return "bg-primary/10 text-primary";
+  }
 }
 
 /** Parse Ansible playbook (YAML or JSON) into our Playbook format */
@@ -526,6 +635,7 @@ export default function Servers() {
   const [shareExpiresAt, setShareExpiresAt] = useState("");
 
   const [knowledge, setKnowledge] = useState<KnowledgeItem[]>([]);
+  const [aiKnowledge, setAiKnowledge] = useState<MemorySnapshotItem[]>([]);
   const [knowledgeCategories, setKnowledgeCategories] = useState<KnowledgeCategoryOption[]>([]);
   const [knowledgeDialogOpen, setKnowledgeDialogOpen] = useState(false);
   const [knowledgeDialogSaving, setKnowledgeDialogSaving] = useState(false);
@@ -534,6 +644,19 @@ export default function Servers() {
   const [knowledgeContent, setKnowledgeContent] = useState("");
   const [knowledgeCategory, setKnowledgeCategory] = useState("other");
   const [knowledgeActive, setKnowledgeActive] = useState(true);
+  const [knowledgeSearch, setKnowledgeSearch] = useState("");
+  const [aiKnowledgeKindFilter, setAiKnowledgeKindFilter] = useState<UserKnowledgeFilter>("all");
+  const [knowledgeDeletingId, setKnowledgeDeletingId] = useState<number | null>(null);
+  const [knowledgeBulkDeleting, setKnowledgeBulkDeleting] = useState(false);
+
+  const [aiKnowledgeDialogOpen, setAiKnowledgeDialogOpen] = useState(false);
+  const [aiKnowledgeDialogSaving, setAiKnowledgeDialogSaving] = useState(false);
+  const [aiKnowledgeEditingId, setAiKnowledgeEditingId] = useState<number | null>(null);
+  const [aiKnowledgeTitle, setAiKnowledgeTitle] = useState("");
+  const [aiKnowledgeContent, setAiKnowledgeContent] = useState("");
+  const [aiKnowledgeDeletingId, setAiKnowledgeDeletingId] = useState<number | null>(null);
+  const [aiKnowledgeBulkDeleting, setAiKnowledgeBulkDeleting] = useState(false);
+  const [aiMemoryPurging, setAiMemoryPurging] = useState(false);
 
   const [globalRules, setGlobalRules] = useState("");
   const [globalForbidden, setGlobalForbidden] = useState("");
@@ -588,6 +711,37 @@ export default function Servers() {
   const manualKnowledge = useMemo(
     () => knowledge.filter((item) => item.source === "manual"),
     [knowledge],
+  );
+  const autoKnowledge = useMemo(
+    () => aiKnowledge.filter((item) => item.kind !== "manual_note"),
+    [aiKnowledge],
+  );
+  const normalizedKnowledgeSearch = useMemo(
+    () => knowledgeSearch.trim().toLowerCase(),
+    [knowledgeSearch],
+  );
+  const filteredManualKnowledge = useMemo(
+    () =>
+      manualKnowledge.filter((item) =>
+        matchesKnowledgeQuery(
+          [item.title, item.content, item.category_label, item.source_label],
+          normalizedKnowledgeSearch,
+        ),
+      ),
+    [manualKnowledge, normalizedKnowledgeSearch],
+  );
+  const filteredAiKnowledge = useMemo(
+    () =>
+      autoKnowledge.filter((item) => {
+        if (aiKnowledgeKindFilter !== "all" && memorySnapshotAudienceKind(item) !== aiKnowledgeKindFilter) {
+          return false;
+        }
+        return matchesKnowledgeQuery(
+          [item.title, item.content, memorySnapshotAudienceLabel(item)],
+          normalizedKnowledgeSearch,
+        );
+      }),
+    [aiKnowledgeKindFilter, autoKnowledge, normalizedKnowledgeSearch],
   );
   const activeKnowledgeCategories = useMemo(() => {
     if (knowledgeCategories.length > 0) return knowledgeCategories;
@@ -1146,17 +1300,22 @@ export default function Servers() {
     setAdvancedTab("access");
     setExecResult("");
     setRevealedPassword("");
+    setKnowledgeSearch("");
+    setAiKnowledgeKindFilter("all");
     setKnowledgeEditingId(null);
     setKnowledgeDialogOpen(false);
+    setAiKnowledgeEditingId(null);
+    setAiKnowledgeDialogOpen(false);
     setGroupMemberUser("");
     setGroupRemoveUserId("");
     if (hasGroupRulesAccess && server.group_id) {
       setRulesGroupId(server.group_id);
     }
     try {
-      const [sharesResp, knowledgeResp, globalCtx, groupCtx, masterStatus, details] = await Promise.all([
+      const [sharesResp, knowledgeResp, memoryResp, globalCtx, groupCtx, masterStatus, details] = await Promise.all([
         listServerShares(server.id).catch(() => ({ success: false, shares: [] })),
         listServerKnowledge(server.id).catch(() => ({ success: false, items: [], categories: [] })),
+        listServerMemorySnapshots(server.id).catch(() => ({ success: false, items: [] })),
         getGlobalServerContext().catch(() => null),
         hasGroupRulesAccess && server.group_id ? getGroupServerContext(server.group_id).catch(() => null) : Promise.resolve(null),
         getMasterPasswordStatus().catch(() => ({ has_master_password: false })),
@@ -1164,6 +1323,7 @@ export default function Servers() {
       ]);
       setShares(sharesResp.success ? sharesResp.shares : []);
       setKnowledge((knowledgeResp.items || []) as KnowledgeItem[]);
+      setAiKnowledge(memoryResp.success ? memoryResp.items : []);
       setKnowledgeCategories((knowledgeResp.categories || []) as KnowledgeCategoryOption[]);
       setHasMasterPassword(Boolean(masterStatus.has_master_password));
 
@@ -1188,8 +1348,12 @@ export default function Servers() {
 
   const refreshKnowledge = async () => {
     if (!advancedServer) return;
-    const knowledgeResp = await listServerKnowledge(advancedServer.id);
+    const [knowledgeResp, memoryResp] = await Promise.all([
+      listServerKnowledge(advancedServer.id),
+      listServerMemorySnapshots(advancedServer.id)
+    ]);
     setKnowledge((knowledgeResp.items || []) as KnowledgeItem[]);
+    setAiKnowledge((memoryResp.success ? memoryResp.items : []) as MemorySnapshotItem[]);
     setKnowledgeCategories((knowledgeResp.categories || []) as KnowledgeCategoryOption[]);
   };
 
@@ -1262,18 +1426,145 @@ export default function Servers() {
 
   const onKnowledgeDelete = async (id: number) => {
     if (!advancedServer) return;
-    await deleteServerKnowledge(advancedServer.id, id);
-    if (knowledgeEditingId === id) {
-      setKnowledgeDialogOpen(false);
-      resetKnowledgeDialog();
+    const target = manualKnowledge.find((item) => item.id === id);
+    const label = target?.title?.trim() || "эту запись";
+    if (!confirm(`Удалить ${label}?`)) return;
+    setKnowledgeDeletingId(id);
+    try {
+      await deleteServerKnowledge(advancedServer.id, id);
+      if (knowledgeEditingId === id) {
+        setKnowledgeDialogOpen(false);
+        resetKnowledgeDialog();
+      }
+      await refreshKnowledge();
+    } finally {
+      setKnowledgeDeletingId(null);
     }
-    await refreshKnowledge();
   };
 
   const onKnowledgeToggle = async (item: KnowledgeItem) => {
     if (!advancedServer) return;
     await updateServerKnowledge(advancedServer.id, item.id, { is_active: !item.is_active });
     await refreshKnowledge();
+  };
+
+  const onDeleteFilteredManualKnowledge = async () => {
+    if (!advancedServer || filteredManualKnowledge.length === 0) return;
+    const isAllManual = filteredManualKnowledge.length === manualKnowledge.length;
+    const confirmed = confirm(
+      isAllManual
+        ? `Удалить все ручные записи (${filteredManualKnowledge.length})?`
+        : `Удалить все ручные записи по текущему фильтру (${filteredManualKnowledge.length})?`,
+    );
+    if (!confirmed) return;
+
+    setKnowledgeBulkDeleting(true);
+    try {
+      for (const item of filteredManualKnowledge) {
+        await deleteServerKnowledge(advancedServer.id, item.id);
+      }
+      if (
+        knowledgeEditingId &&
+        filteredManualKnowledge.some((item) => item.id === knowledgeEditingId)
+      ) {
+        setKnowledgeDialogOpen(false);
+        resetKnowledgeDialog();
+      }
+      await refreshKnowledge();
+    } finally {
+      setKnowledgeBulkDeleting(false);
+    }
+  };
+
+  const resetAiKnowledgeDialog = useCallback(() => {
+    setAiKnowledgeEditingId(null);
+    setAiKnowledgeTitle("");
+    setAiKnowledgeContent("");
+  }, []);
+
+  const openAiKnowledgeEditDialog = (item: MemorySnapshotItem) => {
+    setAiKnowledgeEditingId(item.id);
+    setAiKnowledgeTitle(item.title);
+    setAiKnowledgeContent(item.content);
+    setAiKnowledgeDialogOpen(true);
+  };
+
+  const onAiKnowledgeSave = async () => {
+    if (!advancedServer || !aiKnowledgeEditingId || (!aiKnowledgeTitle.trim() && !aiKnowledgeContent.trim())) return;
+    setAiKnowledgeDialogSaving(true);
+    try {
+      await updateServerMemorySnapshot(advancedServer.id, aiKnowledgeEditingId, {
+        title: aiKnowledgeTitle.trim(),
+        content: aiKnowledgeContent.trim(),
+      });
+      setAiKnowledgeDialogOpen(false);
+      resetAiKnowledgeDialog();
+      await refreshKnowledge();
+    } finally {
+      setAiKnowledgeDialogSaving(false);
+    }
+  };
+
+  const onAiKnowledgeDelete = async (item: MemorySnapshotItem) => {
+    if (!advancedServer) return;
+    const label = item.title?.trim() || item.memory_key;
+    if (!confirm(`Удалить авто-заметку "${label}"?`)) return;
+
+    setAiKnowledgeDeletingId(item.id);
+    try {
+      await deleteServerMemorySnapshot(advancedServer.id, item.id);
+      if (aiKnowledgeEditingId === item.id) {
+        setAiKnowledgeDialogOpen(false);
+        resetAiKnowledgeDialog();
+      }
+      await refreshKnowledge();
+    } finally {
+      setAiKnowledgeDeletingId(null);
+    }
+  };
+
+  const onDeleteFilteredAiKnowledge = async () => {
+    if (!advancedServer || filteredAiKnowledge.length === 0) return;
+    const isAllAi = filteredAiKnowledge.length === autoKnowledge.length;
+    const confirmed = confirm(
+      isAllAi
+        ? `Удалить все авто-заметки (${filteredAiKnowledge.length})?`
+        : `Удалить авто-заметки по текущему фильтру (${filteredAiKnowledge.length})?`,
+    );
+    if (!confirmed) return;
+
+    const snapshotIds = filteredAiKnowledge.map((item) => item.id);
+    setAiKnowledgeBulkDeleting(true);
+    try {
+      await bulkDeleteServerMemorySnapshots(advancedServer.id, { snapshot_ids: snapshotIds });
+      if (aiKnowledgeEditingId && snapshotIds.includes(aiKnowledgeEditingId)) {
+        setAiKnowledgeDialogOpen(false);
+        resetAiKnowledgeDialog();
+      }
+      await refreshKnowledge();
+    } finally {
+      setAiKnowledgeBulkDeleting(false);
+    }
+  };
+
+  const onPurgeAiMemory = async () => {
+    if (!advancedServer) return;
+    const confirmed = confirm(
+      "Полностью очистить всю автоматически собранную историю и авто-заметки по серверу?",
+    );
+    if (!confirmed) return;
+
+    setAiMemoryPurging(true);
+    try {
+      await purgeServerAiMemory(advancedServer.id);
+      if (aiKnowledgeEditingId) {
+        setAiKnowledgeDialogOpen(false);
+        resetAiKnowledgeDialog();
+      }
+      await refreshKnowledge();
+    } finally {
+      setAiMemoryPurging(false);
+    }
   };
 
   const onSaveGlobalContext = async () => {
@@ -2432,62 +2723,152 @@ export default function Servers() {
                       </div>
                     </div>
 
+                    <div className="rounded-xl border border-border bg-card/40 px-4 py-4">
+                      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_auto]">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-muted-foreground">Фильтр знаний</Label>
+                          <div className="relative">
+                            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                              value={knowledgeSearch}
+                              onChange={(event) => setKnowledgeSearch(event.target.value)}
+                              placeholder="Поиск по заголовку и содержимому"
+                              className="h-9 bg-secondary/50 pl-9"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-muted-foreground">Что показать</Label>
+                          <select
+                            value={aiKnowledgeKindFilter}
+                            onChange={(event) =>
+                              setAiKnowledgeKindFilter(
+                                event.target.value as UserKnowledgeFilter,
+                              )
+                            }
+                            className="flex h-9 w-full rounded-md border border-input bg-secondary/50 px-3 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                          >
+                            <option value="all">Все записи</option>
+                            <option value="summary">Сводка</option>
+                            <option value="access">Доступ</option>
+                            <option value="risks">Риски</option>
+                            <option value="changes">Изменения</option>
+                            <option value="instructions">Инструкции</option>
+                          </select>
+                        </div>
+                        <div className="flex items-end">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-9 w-full"
+                            onClick={() => {
+                              setKnowledgeSearch("");
+                              setAiKnowledgeKindFilter("all");
+                            }}
+                          >
+                            Сбросить фильтры
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                        <span className="rounded-full border border-border px-2.5 py-1">
+                          Ручные: {filteredManualKnowledge.length}/{manualKnowledge.length}
+                        </span>
+                        <span className="rounded-full border border-border px-2.5 py-1">
+                          AI: {filteredAiKnowledge.length}/{autoKnowledge.length}
+                        </span>
+                        {normalizedKnowledgeSearch ? (
+                          <span className="rounded-full border border-border px-2.5 py-1">
+                            Поиск: "{knowledgeSearch.trim()}"
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+
                     {manualKnowledge.length > 0 ? (
                       <div className="space-y-3">
                         <div className="flex items-center justify-between gap-3">
+                        <div>
                           <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                            {tr("srv.entries_count", { count: manualKnowledge.length })}
+                            Ручные записи: {filteredManualKnowledge.length}/{manualKnowledge.length}
                           </h4>
-                          <p className="text-[11px] text-muted-foreground">
-                            Здесь видны только ручные заметки. AI memory и dreams перенесены в настройки.
+                          <p className="mt-1 text-[11px] text-muted-foreground">
+                              Здесь видны только ручные заметки. Авто-заметки показаны отдельным блоком ниже.
                           </p>
                         </div>
-                        <div className="space-y-2">
-                          {manualKnowledge.map((item) => (
-                            <div key={item.id} className="rounded-lg border border-border bg-secondary/10 px-3 py-3">
-                              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <p className="text-sm font-medium text-foreground">{item.title}</p>
-                                    <span
-                                      className={`rounded px-1.5 py-0.5 text-[10px] ${
-                                        item.is_active
-                                          ? "bg-primary/15 text-primary"
-                                          : "bg-secondary text-muted-foreground"
-                                      }`}
-                                    >
-                                      {item.category_label}
-                                    </span>
-                                    {item.updated_at ? (
-                                      <span className="text-[10px] text-muted-foreground">
-                                        {new Date(item.updated_at).toLocaleString()}
+                          {filteredManualKnowledge.length > 0 ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-3 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+                              onClick={() => void onDeleteFilteredManualKnowledge()}
+                              disabled={knowledgeBulkDeleting}
+                            >
+                              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                              {knowledgeBulkDeleting
+                                ? t("srv.saving")
+                                : filteredManualKnowledge.length === manualKnowledge.length
+                                  ? "Удалить все"
+                                  : "Удалить по фильтру"}
+                            </Button>
+                          ) : null}
+                        </div>
+                        {filteredManualKnowledge.length > 0 ? (
+                          <div className="space-y-2">
+                            {filteredManualKnowledge.map((item) => (
+                              <div key={item.id} className="rounded-lg border border-border bg-secondary/10 px-3 py-3">
+                                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <p className="text-sm font-medium text-foreground">{item.title}</p>
+                                      <span
+                                        className={`rounded px-1.5 py-0.5 text-[10px] ${
+                                          item.is_active
+                                            ? "bg-primary/15 text-primary"
+                                            : "bg-secondary text-muted-foreground"
+                                        }`}
+                                      >
+                                        {item.category_label}
                                       </span>
-                                    ) : null}
+                                      {item.updated_at ? (
+                                        <span className="text-[10px] text-muted-foreground">
+                                          {new Date(item.updated_at).toLocaleString()}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                    <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
+                                      {item.content}
+                                    </p>
                                   </div>
-                                  <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
-                                    {item.content}
-                                  </p>
-                                </div>
-                                <div className="flex flex-wrap gap-2 lg:justify-end">
-                                  <Button size="sm" variant="outline" className="h-7 px-3 text-xs" onClick={() => onKnowledgeToggle(item)}>
-                                    {item.is_active ? t("srv.disable") : t("srv.enable")}
-                                  </Button>
-                                  <Button size="sm" variant="outline" className="h-7 px-3 text-xs" onClick={() => openKnowledgeEditDialog(item)}>
-                                    {t("srv.edit")}
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-7 px-3 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
-                                    onClick={() => onKnowledgeDelete(item.id)}
-                                  >
-                                    {t("srv.delete")}
-                                  </Button>
+                                  <div className="flex flex-wrap gap-2 lg:justify-end">
+                                    <Button size="sm" variant="outline" className="h-7 px-3 text-xs" onClick={() => onKnowledgeToggle(item)}>
+                                      {item.is_active ? t("srv.disable") : t("srv.enable")}
+                                    </Button>
+                                    <Button size="sm" variant="outline" className="h-7 px-3 text-xs" onClick={() => openKnowledgeEditDialog(item)}>
+                                      {t("srv.edit")}
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 px-3 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+                                      onClick={() => void onKnowledgeDelete(item.id)}
+                                      disabled={knowledgeDeletingId === item.id || knowledgeBulkDeleting}
+                                    >
+                                      {knowledgeDeletingId === item.id ? t("srv.saving") : t("srv.delete")}
+                                    </Button>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          ))}
-                        </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="rounded-xl border border-dashed border-border px-4 py-6 text-center">
+                            <p className="text-sm font-medium text-foreground">По текущему фильтру ручные записи не найдены</p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Уточни поиск или сбрось фильтр, чтобы снова увидеть все ручные заметки.
+                            </p>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center">
@@ -2500,6 +2881,101 @@ export default function Servers() {
                         </Button>
                       </div>
                     )}
+
+                    {/* AI KNOWLEDGE SECTION */}
+                    <div className="space-y-3 mt-6 border-t border-border pt-6">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                            Авто-заметки: {filteredAiKnowledge.length}/{autoKnowledge.length}
+                          </h4>
+                          <p className="mt-1 text-[11px] text-muted-foreground">
+                            Короткие полезные заметки по серверу: сводка, доступ, риски, изменения и инструкции.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          {filteredAiKnowledge.length > 0 ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-3 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+                              onClick={() => void onDeleteFilteredAiKnowledge()}
+                              disabled={aiKnowledgeBulkDeleting || aiMemoryPurging}
+                            >
+                              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                              {aiKnowledgeBulkDeleting
+                                ? t("srv.saving")
+                                : filteredAiKnowledge.length === autoKnowledge.length
+                                  ? "Удалить все"
+                                  : "Удалить по фильтру"}
+                            </Button>
+                          ) : null}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-3 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+                            onClick={() => void onPurgeAiMemory()}
+                            disabled={aiKnowledgeBulkDeleting || aiMemoryPurging}
+                          >
+                            <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                            {aiMemoryPurging ? t("srv.saving") : "Очистить всё"}
+                          </Button>
+                        </div>
+                      </div>
+                      {filteredAiKnowledge.length > 0 ? (
+                        <div className="space-y-2">
+                          {filteredAiKnowledge.map((item) => (
+                            <div key={item.id} className="rounded-lg border border-border bg-card px-3 py-3 shadow-sm">
+                              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <p className="text-sm font-medium text-foreground">{item.title}</p>
+                                    <span
+                                      className={`rounded px-1.5 py-0.5 text-[10px] uppercase ${memorySnapshotAudienceBadgeClass(item)}`}
+                                    >
+                                      {memorySnapshotAudienceLabel(item)}
+                                    </span>
+                                    {item.updated_at ? (
+                                      <span className="text-[10px] text-muted-foreground">
+                                        {new Date(item.updated_at).toLocaleString()}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  <p className="mt-2 text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap max-h-[180px] overflow-y-auto custom-scrollbar">
+                                    {renderMemorySnapshotContent(item)}
+                                  </p>
+                                </div>
+                                <div className="flex flex-wrap gap-2 lg:justify-end">
+                                  <Button size="sm" variant="outline" className="h-7 px-3 text-xs flex-shrink-0" onClick={() => openAiKnowledgeEditDialog(item)}>
+                                    {t("srv.edit")}
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 px-3 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+                                    onClick={() => void onAiKnowledgeDelete(item)}
+                                    disabled={aiKnowledgeDeletingId === item.id || aiKnowledgeBulkDeleting || aiMemoryPurging}
+                                  >
+                                    {aiKnowledgeDeletingId === item.id ? t("srv.saving") : t("srv.delete")}
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="rounded-xl border border-dashed border-border px-4 py-6 text-center">
+                          <p className="text-sm font-medium text-foreground">
+                            {autoKnowledge.length > 0 ? "По текущему фильтру записи не найдены" : "Пока нет авто-заметок"}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {autoKnowledge.length > 0
+                              ? "Попробуй изменить поиск или выбрать другой тип полезных записей."
+                              : "Когда по серверу накопится достаточно полезной истории, здесь появятся короткие авто-заметки."}
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -2682,7 +3158,7 @@ export default function Servers() {
               {knowledgeEditingId ? t("srv.edit") : t("srv.add_entry")}
             </DialogTitle>
             <DialogDescription>
-              Управляй только ручными текстовыми заметками. AI memory, dreams и learned patterns вынесены в настройки администратора.
+              Управляй только ручными текстовыми заметками. Автоматические подсказки по серверу показаны отдельно в упрощённом виде.
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="space-y-4">
@@ -2746,6 +3222,68 @@ export default function Servers() {
               disabled={knowledgeDialogSaving || !knowledgeTitle.trim() || !knowledgeContent.trim()}
             >
               {knowledgeDialogSaving ? t("srv.saving") : knowledgeEditingId ? t("srv.save") : t("srv.add_entry")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={aiKnowledgeDialogOpen}
+        onOpenChange={(open) => {
+          setAiKnowledgeDialogOpen(open);
+          if (!open) {
+            resetAiKnowledgeDialog();
+          }
+        }}
+      >
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>
+              Редактирование AI-Записи
+            </DialogTitle>
+            <DialogDescription>
+              Эта память была извлечена автоматически. Вы можете отредактировать заголовок или содержимое, если ИИ ошибся или добавил лишнюю информацию.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">{t("srv.knowledge_title")}</Label>
+              <Input
+                placeholder={t("srv.knowledge_title_placeholder")}
+                value={aiKnowledgeTitle}
+                onChange={(event) => setAiKnowledgeTitle(event.target.value)}
+                className="bg-secondary/50 h-9"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">{t("srv.knowledge_content")}</Label>
+              <Textarea
+                placeholder={t("srv.knowledge_content_placeholder")}
+                value={aiKnowledgeContent}
+                onChange={(event) => setAiKnowledgeContent(event.target.value)}
+                className="bg-secondary/50 min-h-64 text-sm font-mono custom-scrollbar"
+              />
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 px-4"
+              onClick={() => {
+                setAiKnowledgeDialogOpen(false);
+                resetAiKnowledgeDialog();
+              }}
+            >
+              {t("srv.cancel")}
+            </Button>
+            <Button
+              size="sm"
+              className="h-8 px-4"
+              onClick={() => void onAiKnowledgeSave()}
+              disabled={aiKnowledgeDialogSaving || (!aiKnowledgeTitle.trim() && !aiKnowledgeContent.trim())}
+            >
+              {aiKnowledgeDialogSaving ? t("srv.saving") : t("srv.save")}
             </Button>
           </DialogFooter>
         </DialogContent>

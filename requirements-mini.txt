@@ -28,8 +28,8 @@ google-genai>=1.0
 httpx>=0.27
 aiohttp>=3.10
 
-# Optional: only if you enable Claude provider in settings
-# anthropic>=0.40.0
+# Claude provider
+anthropic>=0.40.0
 
 # Studio: scheduler for cron-based pipeline triggers
 croniter>=3.0

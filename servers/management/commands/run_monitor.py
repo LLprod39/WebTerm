@@ -28,6 +28,7 @@ class Command(BaseCommand):
         parser.add_argument("--deep-interval", type=int, default=600, help="Deep check interval in seconds (default 600)")
         parser.add_argument("--cleanup-interval", type=int, default=86400, help="Old data cleanup interval in seconds (default 86400)")
         parser.add_argument("--concurrency", type=int, default=5, help="Max concurrent SSH connections (default 5)")
+        parser.add_argument("--server-id", dest="server_ids", action="append", type=int, help="Restrict checks to one or more server IDs (repeatable)")
         parser.add_argument("--once", action="store_true", help="Run a single check and exit")
         parser.add_argument("--deep", action="store_true", help="Force deep check (with --once)")
 
@@ -36,25 +37,34 @@ class Command(BaseCommand):
         deep_interval = options["deep_interval"]
         cleanup_interval = options["cleanup_interval"]
         concurrency = options["concurrency"]
+        server_ids = options["server_ids"] or []
         once = options["once"]
         deep = options["deep"]
+        scope_text = f"servers={','.join(str(item) for item in server_ids)}" if server_ids else "all active SSH servers"
 
         if once:
-            self.stdout.write(f"Running {'deep' if deep else 'quick'} check...")
-            results = asyncio.run(check_all_servers(deep=deep, concurrency=concurrency))
+            self.stdout.write(f"Running {'deep' if deep else 'quick'} check for {scope_text}...")
+            results = asyncio.run(check_all_servers(deep=deep, concurrency=concurrency, server_ids=server_ids))
             self.stdout.write(self.style.SUCCESS(f"Checked {len(results)} servers"))
             return
 
         self.stdout.write(self.style.SUCCESS(
-            f"Starting server monitor (quick={quick_interval}s, deep={deep_interval}s, concurrency={concurrency})"
+            f"Starting server monitor (quick={quick_interval}s, deep={deep_interval}s, concurrency={concurrency}, scope={scope_text})"
         ))
 
         try:
-            asyncio.run(self._run_loop(quick_interval, deep_interval, cleanup_interval, concurrency))
+            asyncio.run(self._run_loop(quick_interval, deep_interval, cleanup_interval, concurrency, server_ids))
         except KeyboardInterrupt:
             self.stdout.write(self.style.WARNING("\nMonitor stopped by user"))
 
-    async def _run_loop(self, quick_interval: int, deep_interval: int, cleanup_interval: int, concurrency: int):
+    async def _run_loop(
+        self,
+        quick_interval: int,
+        deep_interval: int,
+        cleanup_interval: int,
+        concurrency: int,
+        server_ids: list[int] | None = None,
+    ):
         stop = asyncio.Event()
 
         loop = asyncio.get_running_loop()
@@ -76,7 +86,7 @@ class Command(BaseCommand):
             try:
                 check_type = "deep" if is_deep else "quick"
                 logger.info("Monitor: starting {} check (cycle {})", check_type, quick_counter)
-                results = await check_all_servers(deep=is_deep, concurrency=concurrency)
+                results = await check_all_servers(deep=is_deep, concurrency=concurrency, server_ids=server_ids)
                 logger.info("Monitor: {} check done, {} servers checked", check_type, len(results))
             except Exception as exc:
                 logger.error("Monitor: check cycle failed: {}", exc)

@@ -2615,7 +2615,7 @@ export interface MemorySnapshotItem {
   title: string;
   content: string;
   memory_key: string;
-  kind: "canonical" | "pattern" | "automation" | "skill_draft" | "manual_note";
+  kind: "canonical" | "pattern" | "automation" | "skill_draft" | "manual_note" | "ai_note";
   version: number;
   confidence: number;
   freshness: number;
@@ -2642,6 +2642,45 @@ export async function updateServerMemorySnapshot(
       body: JSON.stringify(payload),
     },
   );
+}
+
+export async function deleteServerMemorySnapshot(serverId: number, snapshotId: number) {
+  return apiFetch<{ success: boolean; deleted?: Record<string, unknown>; purged_all_ai_memory?: boolean; error?: string }>(
+    `/servers/api/${serverId}/memory/snapshots/${snapshotId}/delete/`,
+    {
+      method: "POST",
+    },
+  );
+}
+
+export async function bulkDeleteServerMemorySnapshots(
+  serverId: number,
+  payload: { snapshot_ids: number[] },
+) {
+  return apiFetch<{ success: boolean; deleted_count: number; snapshot_ids: number[]; purged_all_ai_memory?: boolean; error?: string }>(
+    `/servers/api/${serverId}/memory/snapshots/bulk-delete/`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function purgeServerAiMemory(serverId: number) {
+  return apiFetch<{
+    success: boolean;
+    deleted: {
+      snapshots: number;
+      revalidations: number;
+      episodes: number;
+      events: number;
+      knowledge: number;
+    };
+    overview?: ServerMemoryOverviewResponse;
+    error?: string;
+  }>(`/servers/api/${serverId}/memory/purge/`, {
+    method: "POST",
+  });
 }
 
 export async function fetchServerMemoryOverview(serverId: number) {
@@ -3607,6 +3646,15 @@ export interface PipelineLastRun {
   finished_at: string | null;
 }
 
+export interface PipelineTriggerSummary {
+  active_total: number;
+  active_manual: number;
+  active_webhook: number;
+  active_schedule: number;
+  active_monitoring?: number;
+  last_triggered_at: string | null;
+}
+
 export interface PipelineListItem {
   id: number;
   name: string;
@@ -3615,9 +3663,11 @@ export interface PipelineListItem {
   tags: string[];
   is_shared: boolean;
   is_template: boolean;
+  graph_version: number;
   node_count: number;
   created_at: string;
   updated_at: string;
+  trigger_summary?: PipelineTriggerSummary;
   last_run: PipelineLastRun | null;
   owner?: StudioSharedUser | null;
   owner_username?: string;
@@ -3656,6 +3706,8 @@ export interface NodeState {
   started_at?: string;
   finished_at?: string;
   passed?: boolean;
+  routing_ports?: string[];
+  decision?: string;
 }
 
 export interface PipelineRun {
@@ -3673,6 +3725,11 @@ export interface PipelineRun {
   finished_at: string | null;
   created_at: string;
   triggered_by: string | null;
+  trigger_id: number | null;
+  entry_node_id: string;
+  trigger_type: string;
+  trigger_name: string;
+  trigger_node_id: string;
 }
 
 export type StudioAccessMode = "owner" | "shared" | "admin";
@@ -3875,12 +3932,13 @@ export interface PipelineTrigger {
   pipeline_id: number;
   node_id: string;
   name: string;
-  trigger_type: "manual" | "webhook" | "schedule";
+  trigger_type: "manual" | "webhook" | "schedule" | "monitoring";
   is_active: boolean;
   webhook_token: string;
   webhook_url: string;
   cron_expression: string;
   webhook_payload_map: Record<string, unknown>;
+  monitoring_filters?: Record<string, unknown>;
   last_triggered_at: string | null;
 }
 
@@ -3891,6 +3949,10 @@ export interface StudioPipelineAssistantPayload {
   edges: PipelineEdge[];
   selected_node?: PipelineNode | null;
   user_message: string;
+  history?: Array<{
+    role: "user" | "assistant";
+    content: string;
+  }>;
 }
 
 export interface StudioPipelineGraphPatchNode {
@@ -3914,6 +3976,12 @@ export interface StudioPipelineGraphPatch {
   anchor_node_id: string | null;
   nodes: StudioPipelineGraphPatchNode[];
   edges: StudioPipelineGraphPatchEdge[];
+  update_nodes?: Array<{
+    node_id: string;
+    data: Record<string, unknown>;
+  }>;
+  remove_node_ids?: string[];
+  remove_edge_ids?: string[];
 }
 
 export interface StudioPipelineAssistantResponse {
@@ -3931,7 +3999,14 @@ export const studioPipelines = {
   create: (data: Partial<PipelineDetail>) => apiFetch<PipelineDetail>("/api/studio/pipelines/", { method: "POST", body: JSON.stringify(data) }),
   update: (id: number, data: Partial<PipelineDetail>) => apiFetch<PipelineDetail>(`/api/studio/pipelines/${id}/`, { method: "PUT", body: JSON.stringify(data) }),
   delete: (id: number) => apiFetch<{ ok: boolean }>(`/api/studio/pipelines/${id}/`, { method: "DELETE" }),
-  run: (id: number, context?: Record<string, unknown>) => apiFetch<PipelineRun>(`/api/studio/pipelines/${id}/run/`, { method: "POST", body: JSON.stringify({ context: context || {} }) }),
+  run: (id: number, context?: Record<string, unknown>, entryNodeId?: string) =>
+    apiFetch<PipelineRun>(`/api/studio/pipelines/${id}/run/`, {
+      method: "POST",
+      body: JSON.stringify({
+        context: context || {},
+        entry_node_id: entryNodeId || undefined,
+      }),
+    }),
   clone: (id: number) => apiFetch<PipelineDetail>(`/api/studio/pipelines/${id}/clone/`, { method: "POST" }),
   runs: (id: number) => apiFetch<PipelineRun[]>(`/api/studio/pipelines/${id}/runs/`),
   assistant: (data: StudioPipelineAssistantPayload) =>

@@ -54,16 +54,18 @@ import asyncio
 import contextlib
 import json
 import os
+import re
 import shutil
 import threading
 from pathlib import Path, PurePosixPath
 
+import httpx
 from django.contrib.auth.models import User
 from django.conf import settings as django_settings
 from django.db.models import Q
 from core_ui.access import feature_allowed_for_user
 from core_ui.decorators import require_any_feature, require_feature
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
@@ -73,6 +75,7 @@ from core_ui.managed_secrets import get_mcp_secret_env, get_mcp_secret_env_keys
 from .mcp_client import MCPClientError, inspect_mcp_server
 from .models import (
     AgentConfig,
+    CURRENT_PIPELINE_GRAPH_VERSION,
     MCPServerPool,
     Pipeline,
     PipelineRun,
@@ -82,6 +85,8 @@ from .models import (
 )
 from .pipeline_runtime import get_executor_for_run, update_runtime_control
 from .pipeline_validation import ensure_json_object, validate_pipeline_definition
+from .trigger_dispatch import create_pipeline_run as _dispatch_create_pipeline_run
+from .trigger_dispatch import launch_pipeline_run_async as _dispatch_launch_pipeline_run_async
 from .skill_authoring import parse_csv_items, scaffold_skill, validate_skill_dir, validate_skills
 from .skill_policy import compile_skill_policies
 from .skill_registry import SkillNotFoundError, get_skill, list_skills, normalise_skill_slugs, resolve_skills
@@ -203,6 +208,70 @@ def _validation_err(errors: list[str], *, prefix: str = "Validation failed") -> 
     return JsonResponse({"error": message, "details": errors}, status=400)
 
 
+def _normalize_node_lookup_key(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
+
+
+def _resolve_run_node_id(node_states: dict, requested_node_id: str) -> str | None:
+    if requested_node_id in node_states:
+        return requested_node_id
+
+    normalized_requested = _normalize_node_lookup_key(requested_node_id)
+    if not normalized_requested:
+        return None
+
+    matches = [
+        str(node_id)
+        for node_id in node_states.keys()
+        if _normalize_node_lookup_key(str(node_id)) == normalized_requested
+    ]
+    if len(matches) == 1:
+        return matches[0]
+    return None
+
+
+def _lookup_run_node_snapshot(run: PipelineRun, node_id: str) -> dict | None:
+    for node in run.nodes_snapshot or []:
+        if str(node.get("id") or "") == node_id:
+            return node
+    return None
+
+
+def _send_approval_telegram_confirmation(run: PipelineRun, node_id: str, decision: str) -> None:
+    node = _lookup_run_node_snapshot(run, node_id) or {}
+    node_data = node.get("data") or {}
+    notif_cfg = _load_notif_config()
+    bot_token = str(node_data.get("tg_bot_token") or notif_cfg.get("telegram_bot_token") or "").strip()
+    chat_id = str(node_data.get("tg_chat_id") or notif_cfg.get("telegram_chat_id") or "").strip()
+    if not bot_token or not chat_id:
+        return
+
+    label = str(node_data.get("label") or node_id)
+    verdict = "approved" if decision == "approved" else "rejected"
+    emoji = "✅" if decision == "approved" else "❌"
+    verdict_text = "одобрено" if decision == "approved" else "отклонено"
+    message = (
+        f"{emoji} *Решение записано*\n\n"
+        f"*Пайплайн:* {run.pipeline.name}\n"
+        f"*Запуск:* #{run.pk}\n"
+        f"*Узел:* {label}\n"
+        f"*Решение:* {verdict_text}"
+    )
+    try:
+        httpx.post(
+            f"https://api.telegram.org/bot{bot_token}/sendMessage",
+            json={
+                "chat_id": chat_id,
+                "text": message,
+                "parse_mode": "Markdown",
+                "disable_web_page_preview": True,
+            },
+            timeout=15,
+        )
+    except Exception:
+        return
+
+
 def _require_admin(request, *, message: str = "Admin access required") -> JsonResponse | None:
     if getattr(request.user, "is_staff", False):
         return None
@@ -251,10 +320,84 @@ def _pipeline_queryset_for_user(user):
 
 
 def _run_queryset_for_user(user):
-    qs = PipelineRun.objects.select_related("pipeline", "pipeline__owner", "triggered_by")
+    qs = PipelineRun.objects.select_related("pipeline", "pipeline__owner", "triggered_by", "trigger")
     if _is_admin(user):
         return qs.order_by("-created_at")
     return qs.filter(pipeline__owner=user).order_by("-created_at")
+
+
+def _clone_json_snapshot(value):
+    return json.loads(json.dumps(value))
+
+
+def _initial_routing_state(entry_node_id: str) -> dict:
+    entry = str(entry_node_id or "").strip()
+    return {
+        "entry_node_id": entry,
+        "activated_nodes": [entry] if entry else [],
+        "completed_nodes": [],
+        "queued_nodes": [],
+        "pending_merges": {},
+    }
+
+
+def _default_pipeline_draft_nodes() -> list[dict]:
+    return [
+        {
+            "id": "manual_start",
+            "type": "trigger/manual",
+            "position": {"x": 280, "y": 80},
+            "data": {
+                "label": "Manual Start",
+                "is_active": True,
+                "description": "Select this trigger to launch the pipeline manually.",
+            },
+        }
+    ]
+
+
+def _create_pipeline_run(
+    *,
+    pipeline: Pipeline,
+    triggered_by=None,
+    trigger: PipelineTrigger | None = None,
+    context: dict | None = None,
+    trigger_data: dict | None = None,
+    entry_node_id: str,
+) -> PipelineRun:
+    return _dispatch_create_pipeline_run(
+        pipeline=pipeline,
+        triggered_by=triggered_by,
+        trigger=trigger,
+        context=context,
+        trigger_data=trigger_data,
+        entry_node_id=entry_node_id,
+    )
+
+
+def _resolve_manual_entry_trigger(pipeline: Pipeline, requested_entry_node_id: str = "") -> tuple[PipelineTrigger | None, list[str]]:
+    entry = str(requested_entry_node_id or "").strip()
+    manual_triggers = list(
+        pipeline.triggers.filter(
+            trigger_type=PipelineTrigger.TYPE_MANUAL,
+            is_active=True,
+        ).order_by("created_at", "id")
+    )
+    if not manual_triggers:
+        return None, ["Pipeline has no active manual trigger nodes."]
+
+    if entry:
+        selected = next((item for item in manual_triggers if item.node_id == entry), None)
+        if selected is None:
+            options = ", ".join(item.node_id for item in manual_triggers[:6])
+            return None, [f"Manual trigger '{entry}' was not found. Available manual triggers: {options}."]
+        return selected, []
+
+    if len(manual_triggers) == 1:
+        return manual_triggers[0], []
+
+    options = ", ".join(item.node_id for item in manual_triggers[:6])
+    return None, [f"Pipeline has multiple manual triggers. Provide entry_node_id. Available manual triggers: {options}."]
 
 
 def _agent_read_queryset_for_user(user):
@@ -470,7 +613,14 @@ def _compact_selected_node(node: dict) -> dict:
 
 def _sanitize_graph_patch(raw_graph_patch: object, *, fallback_anchor: str | None = None) -> dict:
     if not isinstance(raw_graph_patch, dict):
-        return {"anchor_node_id": fallback_anchor, "nodes": [], "edges": []}
+        return {
+            "anchor_node_id": fallback_anchor,
+            "nodes": [],
+            "edges": [],
+            "update_nodes": [],
+            "remove_node_ids": [],
+            "remove_edge_ids": [],
+        }
 
     raw_nodes = raw_graph_patch.get("nodes")
     raw_edges = raw_graph_patch.get("edges")
@@ -527,11 +677,37 @@ def _sanitize_graph_patch(raw_graph_patch: object, *, fallback_anchor: str | Non
             }
         )
 
+    raw_update_nodes = raw_graph_patch.get("update_nodes")
+    if not isinstance(raw_update_nodes, list):
+        raw_update_nodes = []
+    update_nodes = []
+    for item in raw_update_nodes[:24]:
+        if not isinstance(item, dict):
+            continue
+        node_id = str(item.get("node_id") or "").strip()
+        raw_data = item.get("data")
+        if not node_id or not isinstance(raw_data, dict):
+            continue
+        update_nodes.append({"node_id": node_id, "data": raw_data})
+
+    raw_remove_node_ids = raw_graph_patch.get("remove_node_ids")
+    if not isinstance(raw_remove_node_ids, list):
+        raw_remove_node_ids = []
+    remove_node_ids = [str(item).strip() for item in raw_remove_node_ids[:24] if str(item).strip()]
+
+    raw_remove_edge_ids = raw_graph_patch.get("remove_edge_ids")
+    if not isinstance(raw_remove_edge_ids, list):
+        raw_remove_edge_ids = []
+    remove_edge_ids = [str(item).strip() for item in raw_remove_edge_ids[:48] if str(item).strip()]
+
     anchor_node_id = str(raw_graph_patch.get("anchor_node_id") or "").strip() or fallback_anchor
     return {
         "anchor_node_id": anchor_node_id,
         "nodes": nodes,
         "edges": edges,
+        "update_nodes": update_nodes,
+        "remove_node_ids": remove_node_ids,
+        "remove_edge_ids": remove_edge_ids,
     }
 
 
@@ -556,7 +732,14 @@ def api_pipelines(request):
             return _err("name is required")
         nodes = data.get("nodes", [])
         edges = data.get("edges", [])
-        errors = validate_pipeline_definition(nodes=nodes, edges=edges, owner=request.user)
+        if not nodes and not edges:
+            nodes = _default_pipeline_draft_nodes()
+        errors = validate_pipeline_definition(
+            nodes=nodes,
+            edges=edges,
+            owner=request.user,
+            graph_version=CURRENT_PIPELINE_GRAPH_VERSION,
+        )
         if errors:
             return _validation_err(errors, prefix="Pipeline validation failed")
         pipeline = Pipeline.objects.create(
@@ -566,6 +749,7 @@ def api_pipelines(request):
             tags=data.get("tags", []),
             nodes=nodes,
             edges=edges,
+            graph_version=CURRENT_PIPELINE_GRAPH_VERSION,
             owner=request.user,
         )
         pipeline.sync_triggers_from_nodes()
@@ -587,12 +771,18 @@ def api_pipeline_detail(request, pipeline_id: int):
         data = _json_body(request)
         next_nodes = data.get("nodes", pipeline.nodes)
         next_edges = data.get("edges", pipeline.edges)
-        errors = validate_pipeline_definition(nodes=next_nodes, edges=next_edges, owner=pipeline.owner)
+        errors = validate_pipeline_definition(
+            nodes=next_nodes,
+            edges=next_edges,
+            owner=pipeline.owner,
+            graph_version=CURRENT_PIPELINE_GRAPH_VERSION,
+        )
         if errors:
             return _validation_err(errors, prefix="Pipeline validation failed")
         for field in ("name", "description", "icon", "tags", "nodes", "edges", "is_shared"):
             if field in data:
                 setattr(pipeline, field, data[field])
+        pipeline.graph_version = CURRENT_PIPELINE_GRAPH_VERSION
         pipeline.save()
         pipeline.sync_triggers_from_nodes()
         return _ok(pipeline.to_detail_dict())
@@ -620,17 +810,32 @@ def api_pipeline_run(request, pipeline_id: int):
     context, error = ensure_json_object(payload.get("context", {}), label="context")
     if error:
         return _err(error)
+    entry_node_id = str(payload.get("entry_node_id") or "").strip()
 
-    validation_errors = validate_pipeline_definition(nodes=pipeline.nodes, edges=pipeline.edges, owner=pipeline.owner)
+    validation_errors = validate_pipeline_definition(
+        nodes=pipeline.nodes,
+        edges=pipeline.edges,
+        owner=pipeline.owner,
+        graph_version=pipeline.graph_version,
+        require_manual_trigger=True,
+    )
     if validation_errors:
         return _validation_err(validation_errors, prefix="Pipeline is not runnable")
+    selected_trigger, trigger_errors = _resolve_manual_entry_trigger(pipeline, entry_node_id)
+    if trigger_errors:
+        return _validation_err(trigger_errors, prefix="Pipeline is not runnable")
 
-    run = PipelineRun.objects.create(
+    run = _create_pipeline_run(
         pipeline=pipeline,
         triggered_by=request.user,
-        status=PipelineRun.STATUS_PENDING,
+        trigger=selected_trigger,
         context=context,
-        trigger_data={"source": "manual"},
+        trigger_data={
+            "source": "manual",
+            "trigger_type": PipelineTrigger.TYPE_MANUAL,
+            "entry_node_id": selected_trigger.node_id,
+        },
+        entry_node_id=selected_trigger.node_id,
     )
     _launch_pipeline_run_async(run)
     return _ok(run.to_dict(), status=202)
@@ -650,6 +855,7 @@ def api_pipeline_clone(request, pipeline_id: int):
         tags=pipeline.tags,
         nodes=pipeline.nodes,
         edges=pipeline.edges,
+        graph_version=CURRENT_PIPELINE_GRAPH_VERSION,
         owner=request.user,
     )
     clone.sync_triggers_from_nodes()
@@ -674,6 +880,7 @@ def api_pipeline_assistant(request):
     nodes = data.get("nodes") or []
     edges = data.get("edges") or []
     selected_node = data.get("selected_node")
+    history = data.get("history") or []
 
     if not user_message:
         return _err("user_message is required")
@@ -681,6 +888,8 @@ def api_pipeline_assistant(request):
         return _err("nodes and edges must be arrays")
     if selected_node not in (None, "") and not isinstance(selected_node, dict):
         return _err("selected_node must be an object or null")
+    if not isinstance(history, list):
+        return _err("history must be an array")
 
     pipeline_id_raw = data.get("pipeline_id")
     if pipeline_id_raw not in (None, ""):
@@ -701,6 +910,16 @@ def api_pipeline_assistant(request):
     if selected_node_id and selected_node_id not in node_map:
         node_map[selected_node_id] = selected_node
     current_node = node_map[selected_node_id] if selected_node_id and selected_node_id in node_map else None
+
+    conversation_history = []
+    for item in history[-10:]:
+        if not isinstance(item, dict):
+            continue
+        role = str(item.get("role") or "").strip().lower()
+        content = str(item.get("content") or "").strip()
+        if role not in {"user", "assistant"} or not content:
+            continue
+        conversation_history.append({"role": role, "content": content[:4000]})
 
     if current_node:
         incoming_ids = [
@@ -806,6 +1025,16 @@ def api_pipeline_assistant(request):
         except Exception:
             selected_mcp_tools = []
 
+    graph_node_summaries = [_compact_node_summary(item) for item in node_map.values()]
+    graph_overview = {
+        "node_count": len(nodes),
+        "edge_count": len(edges),
+        "trigger_nodes": [item for item in graph_node_summaries if str(item.get("type") or "").startswith("trigger/")],
+        "agent_nodes": [item for item in graph_node_summaries if str(item.get("type") or "").startswith("agent/")],
+        "logic_nodes": [item for item in graph_node_summaries if str(item.get("type") or "").startswith("logic/")],
+        "output_nodes": [item for item in graph_node_summaries if str(item.get("type") or "").startswith("output/")],
+    }
+
     prompt = f"""Ты — корпоративный AI copilot для Studio Pipeline Editor.
 
 Ты помогаешь администратору проектировать, проверять и улучшать ВЕСЬ pipeline. Если передана focus node, ты можешь также дать точечный patch для неё.
@@ -815,12 +1044,14 @@ def api_pipeline_assistant(request):
 - Предлагай изменения с учетом реальных доступных ресурсов: servers, agent configs, MCP servers, skills.
 - Если можно использовать существующий ресурс, ссылайся на него по точному ID.
 - Если нужен точечный конфиг ноды, указывай target_node_id и заполняй node_patch только полями data этой ноды.
-- Если хочешь предложить новые шаги или ветку, используй graph_patch.
+- Если пользователь хочет изменить несколько существующих шагов или убрать мусор из графа, используй graph_patch.update_nodes / remove_node_ids / remove_edge_ids.
+- Если хочешь предложить новые шаги или ветку, используй graph_patch.nodes и graph_patch.edges.
 - Если вопрос общий по pipeline, можешь оставить target_node_id пустым и дать только graph_patch и reply.
 - Не удаляй существующие значения без явной просьбы пользователя.
 - Для logic/condition обязательно учитывай source_node_id и входящие связи.
 - Для agent/mcp_call предпочитай доступные MCP tools и валидные JSON arguments.
-- reply должен быть понятным оператору: что уже хорошо, что отсутствует, что нужно добавить или изменить дальше.
+- reply должен быть коротким и практичным: что понял, что меняешь, что осталось проверить. Избегай длинных таблиц и воды.
+- Если граф почти пустой или пользователь просит «собери пайплайн», верни готовый starter workflow, а не только советы.
 
 Верни ТОЛЬКО JSON-объект строго такого вида:
 {{
@@ -845,29 +1076,43 @@ def api_pipeline_assistant(request):
         "target": "existing_node_id_or_ref",
         "label": ""
       }}
-    ]
+    ],
+    "update_nodes": [
+      {{
+        "node_id": "existing_node_id",
+        "data": {{}}
+      }}
+    ],
+    "remove_node_ids": [],
+    "remove_edge_ids": []
   }},
   "warnings": ["optional warning"]
 }}
 
 Правила для graph_patch:
-- graph_patch должен содержать только НОВЫЕ ноды и новые связи.
+- graph_patch.nodes / graph_patch.edges должны содержать только НОВЫЕ ноды и новые связи.
 - В nodes[].ref используй короткие уникальные временные идентификаторы.
 - В edges[].source / edges[].target можно ссылаться либо на существующий node_id, либо на ref из graph_patch.nodes.
-- Если нужны только текстовые рекомендации без вставки в graph, оставляй graph_patch.nodes и graph_patch.edges пустыми.
+- Для правки существующих нод используй graph_patch.update_nodes.
+- Для удаления существующих элементов используй remove_node_ids и remove_edge_ids.
+- Если нужны только текстовые рекомендации без вставки в graph, оставляй graph_patch пустым.
 - Используй только допустимые типы нод:
-  trigger/manual, trigger/webhook, trigger/schedule,
+  trigger/manual, trigger/webhook, trigger/schedule, trigger/monitoring,
   agent/react, agent/multi, agent/ssh_cmd, agent/llm_query, agent/mcp_call,
-  logic/condition, logic/parallel, logic/wait, logic/human_approval,
+  logic/condition, logic/parallel, logic/merge, logic/wait, logic/human_approval, logic/telegram_input,
   output/report, output/webhook, output/email, output/telegram
+
+История диалога:
+{json.dumps(conversation_history, ensure_ascii=False, indent=2)}
 
 Контекст пайплайна:
 {json.dumps({
     "pipeline_name": pipeline_name,
+    "graph_overview": graph_overview,
     "focus_node": _compact_selected_node(current_node) if current_node else None,
     "incoming_nodes": incoming_nodes,
     "outgoing_nodes": outgoing_nodes,
-    "graph_nodes": [_compact_node_summary(item) for item in node_map.values()],
+    "graph_nodes": graph_node_summaries,
     "available_agents": agents,
     "available_servers": servers,
     "available_mcp_servers": mcps,
@@ -991,7 +1236,11 @@ def api_run_approve(request, run_id: int, node_id: str):
     except PipelineRun.DoesNotExist:
         return _err("Run not found", 404)
 
-    node_state = run.node_states.get(node_id)
+    resolved_node_id = _resolve_run_node_id(run.node_states, node_id)
+    if not resolved_node_id:
+        return _err(f"Node '{node_id}' not found in run #{run_id}", 404)
+
+    node_state = run.node_states.get(resolved_node_id)
     if not node_state:
         return _err(f"Node '{node_id}' not found in run #{run_id}", 404)
 
@@ -1004,13 +1253,14 @@ def api_run_approve(request, run_id: int, node_id: str):
         return _ok({"ok": True, "message": f"Already decided: {existing}"})
 
     # Record the decision — the polling loop in the executor will pick this up
-    run.node_states[node_id] = {
+    run.node_states[resolved_node_id] = {
         **node_state,
         "approval_decision": decision,
         "approval_response": response_text,
         "decided_at": timezone.now().isoformat(),
     }
     PipelineRun.objects.filter(pk=run_id).update(node_states=run.node_states)
+    _send_approval_telegram_confirmation(run, resolved_node_id, decision)
 
     emoji = "✅" if decision == "approved" else "❌"
     html = (
@@ -1021,7 +1271,6 @@ def api_run_approve(request, run_id: int, node_id: str):
         f"<p style='color:#888'>You can close this tab.</p>"
         f"</body></html>"
     )
-    from django.http import HttpResponse
 
     return HttpResponse(html, content_type="text/html")
 
@@ -1938,6 +2187,7 @@ def api_triggers(request):
             "is_active": data.get("is_active", True),
             "cron_expression": data.get("cron_expression", ""),
             "webhook_payload_map": data.get("webhook_payload_map", {}),
+            "monitoring_filters": data.get("monitoring_filters", {}),
         }
         if node_id:
             trigger, _created = PipelineTrigger.objects.update_or_create(
@@ -1972,7 +2222,15 @@ def api_trigger_detail(request, trigger_id: int):
             and PipelineTrigger.objects.filter(pipeline=trigger.pipeline, node_id=next_node_id).exclude(pk=trigger.pk).exists()
         ):
             return _err(f"Trigger for node '{next_node_id}' already exists")
-        for field in ("node_id", "name", "trigger_type", "is_active", "cron_expression", "webhook_payload_map"):
+        for field in (
+            "node_id",
+            "name",
+            "trigger_type",
+            "is_active",
+            "cron_expression",
+            "webhook_payload_map",
+            "monitoring_filters",
+        ):
             if field in data:
                 setattr(trigger, field, data[field])
         trigger.save()
@@ -2011,7 +2269,12 @@ def api_trigger_receive(request, token: str):
     if error:
         return _err(error)
 
-    validation_errors = validate_pipeline_definition(nodes=trigger.pipeline.nodes, edges=trigger.pipeline.edges, owner=trigger.pipeline.owner)
+    validation_errors = validate_pipeline_definition(
+        nodes=trigger.pipeline.nodes,
+        edges=trigger.pipeline.edges,
+        owner=trigger.pipeline.owner,
+        graph_version=trigger.pipeline.graph_version,
+    )
     if validation_errors:
         return _validation_err(validation_errors, prefix="Pipeline is not runnable")
 
@@ -2021,12 +2284,12 @@ def api_trigger_receive(request, token: str):
     if limit_error:
         return JsonResponse(limit_error, status=429)
 
-    run = PipelineRun.objects.create(
+    run = _create_pipeline_run(
         pipeline=trigger.pipeline,
         trigger=trigger,
-        status=PipelineRun.STATUS_PENDING,
-        trigger_data=payload,
         context=context,
+        trigger_data=payload,
+        entry_node_id=trigger.node_id,
     )
     trigger.last_triggered_at = timezone.now()
     trigger.save(update_fields=["last_triggered_at"])
@@ -2075,6 +2338,16 @@ def api_template_use(request, slug: str):
         template = PipelineTemplate.objects.get(slug=slug)
     except PipelineTemplate.DoesNotExist:
         return _err("Template not found", 404)
+    if template.graph_version != CURRENT_PIPELINE_GRAPH_VERSION:
+        return _validation_err(
+            [
+                (
+                    f"Template '{template.slug}' uses graph_version={template.graph_version}. "
+                    f"Reload built-in templates as V{CURRENT_PIPELINE_GRAPH_VERSION} before using it."
+                )
+            ],
+            prefix="Template is outdated",
+        )
     pipeline = template.instantiate_for_user(request.user)
     pipeline.sync_triggers_from_nodes()
     return _ok(pipeline.to_detail_dict(), status=201)
@@ -2235,30 +2508,4 @@ def api_notification_test_email(request):
 
 
 def _launch_pipeline_run_async(run: PipelineRun):
-    """Launch pipeline execution in a background thread (Django dev server)."""
-
-    run_pk = run.pk
-
-    def _run_in_thread():
-        try:
-            async def _main():
-                from asgiref.sync import sync_to_async
-
-                from studio.pipeline_executor import PipelineExecutor
-
-                run_obj = await sync_to_async(
-                    lambda: PipelineRun.objects.select_related("pipeline", "pipeline__owner", "triggered_by").get(pk=run_pk)
-                )()
-                executor = PipelineExecutor(run_obj)
-                await executor.execute(context=run_obj.context)
-
-            asyncio.run(_main())
-        except Exception as exc:
-            PipelineRun.objects.filter(pk=run_pk).update(
-                status=PipelineRun.STATUS_FAILED,
-                error=str(exc),
-                finished_at=timezone.now(),
-            )
-
-    thread = threading.Thread(target=_run_in_thread, daemon=True)
-    thread.start()
+    _dispatch_launch_pipeline_run_async(run)

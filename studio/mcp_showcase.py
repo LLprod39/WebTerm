@@ -6,7 +6,7 @@ from pathlib import Path
 
 from django.utils import timezone
 
-from .models import MCPServerPool, Pipeline, PipelineRun
+from .models import CURRENT_PIPELINE_GRAPH_VERSION, MCPServerPool, Pipeline, PipelineRun
 from .pipeline_executor import PipelineExecutor
 
 DEMO_SERVER_NAME = "Studio Local MCP Demo"
@@ -94,6 +94,24 @@ def build_showcase_nodes(mcp_server_id: int) -> list[dict]:
                 ),
                 "include_all_outputs": False,
                 "on_failure": "continue",
+            },
+        },
+        {
+            "id": "scan_merge",
+            "type": "logic/merge",
+            "position": {"x": 620, "y": 280},
+            "data": {
+                "label": "Scan Results Ready",
+                "mode": "all",
+            },
+        },
+        {
+            "id": "compose_ready",
+            "type": "logic/merge",
+            "position": {"x": 1160, "y": 300},
+            "data": {
+                "label": "AI Brief Settled",
+                "mode": "any",
             },
         },
         {
@@ -261,34 +279,43 @@ def build_showcase_nodes(mcp_server_id: int) -> list[dict]:
                 ),
             },
         },
+        {
+            "id": "final_merge",
+            "type": "logic/merge",
+            "position": {"x": 620, "y": 980},
+            "data": {
+                "label": "Artifacts Ready",
+                "mode": "all",
+            },
+        },
     ]
 
 
 def build_showcase_edges() -> list[dict]:
     return [
-        {"id": "e1", "source": "start_manual", "target": "scan_workspace", "animated": True},
-        {"id": "e2", "source": "start_manual", "target": "scan_todos", "animated": True},
-        {"id": "e3", "source": "scan_workspace", "target": "ai_brief", "animated": True},
-        {"id": "e4", "source": "scan_todos", "target": "ai_brief", "animated": True},
-        {"id": "e5", "source": "scan_workspace", "target": "compose_plan", "animated": True},
-        {"id": "e6", "source": "scan_todos", "target": "compose_plan", "animated": True},
-        {"id": "e7", "source": "ai_brief", "target": "compose_plan", "animated": True},
-        {"id": "e8", "source": "scan_todos", "target": "todo_flag", "animated": True},
-        {"id": "e9", "source": "scan_workspace", "target": "compose_manifest", "animated": True},
-        {"id": "e10", "source": "scan_todos", "target": "compose_manifest", "animated": True},
-        {"id": "e11", "source": "compose_plan", "target": "compose_manifest", "animated": True},
-        {"id": "e12", "source": "ai_brief", "target": "compose_manifest", "animated": True},
-        {"id": "e13", "source": "compose_plan", "target": "write_plan", "animated": True},
-        {"id": "e14", "source": "compose_manifest", "target": "write_manifest", "animated": True},
-        {"id": "e15", "source": "write_plan", "target": "check_plan", "animated": True},
-        {"id": "e16", "source": "write_plan", "target": "preview_plan", "animated": True},
-        {"id": "e17", "source": "write_manifest", "target": "check_manifest", "animated": True},
-        {"id": "e18", "source": "write_manifest", "target": "preview_manifest", "animated": True},
-        {"id": "e19", "source": "todo_flag", "target": "final_report", "animated": True},
-        {"id": "e20", "source": "check_plan", "target": "final_report", "animated": True},
-        {"id": "e21", "source": "preview_plan", "target": "final_report", "animated": True},
-        {"id": "e22", "source": "check_manifest", "target": "final_report", "animated": True},
-        {"id": "e23", "source": "preview_manifest", "target": "final_report", "animated": True},
+        {"id": "e1", "source": "start_manual", "target": "scan_workspace", "sourceHandle": "out", "animated": True},
+        {"id": "e2", "source": "start_manual", "target": "scan_todos", "sourceHandle": "out", "animated": True},
+        {"id": "e3", "source": "scan_workspace", "target": "scan_merge", "sourceHandle": "success", "animated": True},
+        {"id": "e4", "source": "scan_todos", "target": "scan_merge", "sourceHandle": "success", "animated": True},
+        {"id": "e5", "source": "scan_todos", "target": "todo_flag", "sourceHandle": "success", "animated": True},
+        {"id": "e6", "source": "scan_merge", "target": "ai_brief", "sourceHandle": "out", "animated": True},
+        {"id": "e7", "source": "ai_brief", "target": "compose_ready", "sourceHandle": "success", "animated": True},
+        {"id": "e8", "source": "ai_brief", "target": "compose_ready", "sourceHandle": "error", "animated": True},
+        {"id": "e9", "source": "compose_ready", "target": "compose_plan", "sourceHandle": "out", "animated": True},
+        {"id": "e10", "source": "compose_plan", "target": "compose_manifest", "sourceHandle": "success", "animated": True},
+        {"id": "e11", "source": "compose_plan", "target": "write_plan", "sourceHandle": "success", "animated": True},
+        {"id": "e12", "source": "compose_manifest", "target": "write_manifest", "sourceHandle": "success", "animated": True},
+        {"id": "e13", "source": "write_plan", "target": "check_plan", "sourceHandle": "success", "animated": True},
+        {"id": "e14", "source": "write_plan", "target": "preview_plan", "sourceHandle": "success", "animated": True},
+        {"id": "e15", "source": "write_manifest", "target": "check_manifest", "sourceHandle": "success", "animated": True},
+        {"id": "e16", "source": "write_manifest", "target": "preview_manifest", "sourceHandle": "success", "animated": True},
+        {"id": "e17", "source": "todo_flag", "target": "final_merge", "sourceHandle": "true", "animated": True},
+        {"id": "e18", "source": "todo_flag", "target": "final_merge", "sourceHandle": "false", "animated": True},
+        {"id": "e19", "source": "check_plan", "target": "final_merge", "sourceHandle": "success", "animated": True},
+        {"id": "e20", "source": "preview_plan", "target": "final_merge", "sourceHandle": "success", "animated": True},
+        {"id": "e21", "source": "check_manifest", "target": "final_merge", "sourceHandle": "success", "animated": True},
+        {"id": "e22", "source": "preview_manifest", "target": "final_merge", "sourceHandle": "success", "animated": True},
+        {"id": "e23", "source": "final_merge", "target": "final_report", "sourceHandle": "out", "animated": True},
     ]
 
 
@@ -306,6 +333,7 @@ def ensure_showcase_pipeline(user, mcp_server: MCPServerPool) -> Pipeline:
             "tags": ["mcp", "showcase", "local", "artifacts", "studio"],
             "nodes": build_showcase_nodes(mcp_server.id),
             "edges": build_showcase_edges(),
+            "graph_version": CURRENT_PIPELINE_GRAPH_VERSION,
             "is_shared": False,
         },
     )
@@ -314,12 +342,25 @@ def ensure_showcase_pipeline(user, mcp_server: MCPServerPool) -> Pipeline:
 
 
 def create_showcase_run(pipeline: Pipeline, user) -> PipelineRun:
+    manual_trigger = pipeline.triggers.filter(trigger_type="manual", is_active=True).order_by("created_at", "id").first()
+    entry_node_id = manual_trigger.node_id if manual_trigger else ""
     return PipelineRun.objects.create(
         pipeline=pipeline,
         triggered_by=user,
         status=PipelineRun.STATUS_PENDING,
+        nodes_snapshot=json.loads(json.dumps(pipeline.nodes or [])),
+        edges_snapshot=json.loads(json.dumps(pipeline.edges or [])),
         context={},
         trigger_data={"source": "manual", "showcase": "mcp"},
+        trigger=manual_trigger,
+        entry_node_id=entry_node_id,
+        routing_state={
+            "entry_node_id": entry_node_id,
+            "activated_nodes": [entry_node_id] if entry_node_id else [],
+            "completed_nodes": [],
+            "queued_nodes": [],
+            "pending_merges": {},
+        },
     )
 
 

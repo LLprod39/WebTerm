@@ -28,6 +28,7 @@ import json
 import logging
 import re
 import secrets
+import threading
 from collections import defaultdict, deque
 from datetime import timedelta
 from threading import Event
@@ -63,10 +64,174 @@ from .skill_registry import normalise_skill_slugs, resolve_skills
 logger = logging.getLogger(__name__)
 _SIMPLE_TEMPLATE_PATTERN = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
 _PIPELINE_MEMORY_STORE = DjangoServerMemoryStore()
+_TELEGRAM_UPDATE_OFFSETS: dict[str, int] = {}
+_TELEGRAM_UPDATE_LOCKS: dict[str, threading.Lock] = {}
+_TELEGRAM_PENDING_CALLBACKS: dict[str, dict[str, Any]] = {}
+_TELEGRAM_PENDING_REPLIES: dict[str, list[dict[str, Any]]] = {}
 
 
 def _s2a_fn(func, thread_sensitive=False):
     return _s2a(func, thread_sensitive=thread_sensitive)
+
+
+def _telegram_approval_callback_data(decision: str, approval_token: str) -> str:
+    return f"approval:{decision}:{approval_token}"
+
+
+def _parse_telegram_approval_callback_data(value: str) -> dict[str, str] | None:
+    raw = str(value or "").strip()
+    if not raw.startswith("approval:"):
+        return None
+    parts = raw.split(":", 2)
+    if len(parts) != 3:
+        return None
+    _, decision, token = parts
+    if decision not in {"approved", "rejected"} or not token:
+        return None
+    return {"decision": decision, "token": token}
+
+
+def _telegram_reply_key(chat_id: str, reply_to_message_id: int) -> str:
+    return f"{chat_id}:{reply_to_message_id}"
+
+
+def _telegram_update_lock(bot_token: str) -> threading.Lock:
+    lock = _TELEGRAM_UPDATE_LOCKS.get(bot_token)
+    if lock is None:
+        lock = threading.Lock()
+        _TELEGRAM_UPDATE_LOCKS[bot_token] = lock
+    return lock
+
+
+def _pop_telegram_reply(chat_id: str, reply_to_message_id: int) -> dict[str, Any] | None:
+    key = _telegram_reply_key(chat_id, reply_to_message_id)
+    queued = _TELEGRAM_PENDING_REPLIES.get(key) or []
+    if not queued:
+        return None
+    item = queued.pop(0)
+    if queued:
+        _TELEGRAM_PENDING_REPLIES[key] = queued
+    else:
+        _TELEGRAM_PENDING_REPLIES.pop(key, None)
+    return item
+
+
+async def _poll_telegram_updates(bot_token: str) -> None:
+    if not bot_token:
+        return
+
+    lock = _telegram_update_lock(bot_token)
+    await asyncio.to_thread(lock.acquire)
+    try:
+        offset = int(_TELEGRAM_UPDATE_OFFSETS.get(bot_token, 0) or 0)
+        base_url = f"https://api.telegram.org/bot{bot_token}"
+        max_update_id = offset - 1
+
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                response = await client.post(
+                    f"{base_url}/getUpdates",
+                    json={
+                        "offset": offset,
+                        "timeout": 0,
+                        "allowed_updates": ["callback_query", "message"],
+                    },
+                )
+                if response.status_code != 200:
+                    logger.warning(
+                        "Telegram polling failed for bot %s: %s %s",
+                        bot_token[:8],
+                        response.status_code,
+                        response.text[:200],
+                    )
+                    return
+
+                payload = response.json()
+                if not payload.get("ok"):
+                    logger.warning("Telegram polling returned not-ok payload for bot %s", bot_token[:8])
+                    return
+
+                for update in payload.get("result") or []:
+                    try:
+                        update_id = int(update.get("update_id"))
+                    except (TypeError, ValueError):
+                        update_id = None
+                    if update_id is not None:
+                        max_update_id = max(max_update_id, update_id)
+
+                    callback = update.get("callback_query") or {}
+                    parsed = _parse_telegram_approval_callback_data(callback.get("data"))
+                    callback_id = str(callback.get("id") or "").strip()
+                    if callback_id and parsed:
+                        with contextlib.suppress(Exception):
+                            await client.post(
+                                f"{base_url}/answerCallbackQuery",
+                                json={"callback_query_id": callback_id, "text": "Решение получено"},
+                            )
+                    if parsed:
+                        _TELEGRAM_PENDING_CALLBACKS[parsed["token"]] = {
+                            "decision": parsed["decision"],
+                            "response_text": "через кнопку в Telegram",
+                            "callback_query_id": callback_id,
+                            "callback_from": ((callback.get("from") or {}) or {}).get("username") or "",
+                        }
+
+                    message = update.get("message") or {}
+                    if not isinstance(message, dict):
+                        continue
+                    reply_to = message.get("reply_to_message") or {}
+                    chat = message.get("chat") or {}
+                    text = str(message.get("text") or "").strip()
+                    chat_id = str(chat.get("id") or "").strip()
+                    try:
+                        reply_to_message_id = int(reply_to.get("message_id"))
+                    except (TypeError, ValueError):
+                        reply_to_message_id = 0
+                    if not chat_id or reply_to_message_id <= 0 or not text:
+                        continue
+                    key = _telegram_reply_key(chat_id, reply_to_message_id)
+                    _TELEGRAM_PENDING_REPLIES.setdefault(key, []).append(
+                        {
+                            "text": text,
+                            "chat_id": chat_id,
+                            "message_id": message.get("message_id"),
+                            "reply_to_message_id": reply_to_message_id,
+                            "from_username": ((message.get("from") or {}) or {}).get("username") or "",
+                        }
+                    )
+        except Exception as exc:
+            logger.warning("Telegram polling error for bot %s: %s", bot_token[:8], exc)
+            return
+        finally:
+            next_offset = max_update_id + 1
+            if next_offset > offset:
+                _TELEGRAM_UPDATE_OFFSETS[bot_token] = next_offset
+    finally:
+        lock.release()
+
+
+async def _poll_telegram_approval_decision(bot_token: str, approval_token: str) -> dict[str, Any] | None:
+    if not bot_token or not approval_token:
+        return None
+
+    cached = _TELEGRAM_PENDING_CALLBACKS.pop(approval_token, None)
+    if cached:
+        return cached
+
+    await _poll_telegram_updates(bot_token)
+    return _TELEGRAM_PENDING_CALLBACKS.pop(approval_token, None)
+
+
+async def _poll_telegram_reply_message(bot_token: str, chat_id: str, reply_to_message_id: int) -> dict[str, Any] | None:
+    if not bot_token or not chat_id or reply_to_message_id <= 0:
+        return None
+
+    cached = _pop_telegram_reply(chat_id, reply_to_message_id)
+    if cached:
+        return cached
+
+    await _poll_telegram_updates(bot_token)
+    return _pop_telegram_reply(chat_id, reply_to_message_id)
 
 
 def _merge_unique_strings(*groups: list[str]) -> list[str]:
@@ -117,12 +282,27 @@ def _coerce_mcp_arguments(config: dict[str, Any]) -> tuple[dict[str, Any] | None
 
 
 def _pipeline_actor_context(run: PipelineRun) -> dict[str, Any]:
-    actor = getattr(run, "triggered_by", None) or getattr(getattr(run, "pipeline", None), "owner", None)
+    fields_cache = getattr(getattr(run, "_state", None), "fields_cache", {}) or {}
+    actor = fields_cache.get("triggered_by")
+    pipeline = fields_cache.get("pipeline")
+
+    user_id = getattr(run, "triggered_by_id", None)
     username = ""
-    user_id = None
+
     if actor is not None:
-        user_id = getattr(actor, "id", None)
+        user_id = getattr(actor, "id", user_id)
         username = str(getattr(actor, "username", "") or "").strip()
+
+    if user_id is None and pipeline is not None:
+        owner = getattr(getattr(pipeline, "_state", None), "fields_cache", {}).get("owner")
+        user_id = getattr(pipeline, "owner_id", None)
+        if owner is not None:
+            user_id = getattr(owner, "id", user_id)
+            username = str(getattr(owner, "username", "") or "").strip()
+
+    pipeline_name = ""
+    if pipeline is not None:
+        pipeline_name = str(getattr(pipeline, "name", "") or "").strip()
     return {
         "user_id": user_id,
         "username_snapshot": username,
@@ -130,7 +310,7 @@ def _pipeline_actor_context(run: PipelineRun) -> dict[str, Any]:
         "path": f"/api/studio/pipelines/{run.pipeline_id}/run/",
         "entity_type": "pipeline_run",
         "entity_id": str(run.pk),
-        "entity_name": str(getattr(getattr(run, "pipeline", None), "name", "") or f"pipeline-run-{run.pk}"),
+        "entity_name": pipeline_name or f"pipeline-run-{run.pk}",
     }
 
 
@@ -429,6 +609,145 @@ def _topo_sort(nodes: list[dict], edges: list[dict]) -> list[list[dict]]:
             layers.append(layer)
 
     return layers
+
+
+def _graph_edge_handle(edge: dict[str, Any]) -> str:
+    return str(edge.get("sourceHandle") or "").strip() or "out"
+
+
+def _possible_routing_ports(node_type: str) -> set[str]:
+    if node_type.startswith("trigger/"):
+        return {"out"}
+    if node_type == "logic/condition":
+        return {"true", "false"}
+    if node_type == "logic/parallel":
+        return {"out"}
+    if node_type == "logic/merge":
+        return {"out"}
+    if node_type == "logic/wait":
+        return {"done", "out"}
+    if node_type == "logic/human_approval":
+        return {"approved", "rejected", "timeout"}
+    if node_type == "logic/telegram_input":
+        return {"received", "timeout"}
+    if node_type.startswith("agent/") or node_type.startswith("output/"):
+        return {"success", "error", "out"}
+    return {"out"}
+
+
+def _routing_ports_for_state(node_type: str, state: dict[str, Any] | None) -> set[str]:
+    if isinstance(state, dict):
+        raw = state.get("routing_ports")
+        if isinstance(raw, list) and raw:
+            return {str(item).strip() for item in raw if str(item).strip()}
+    return _possible_routing_ports(node_type)
+
+
+def _result_routing_ports(node: dict[str, Any], result: dict[str, Any]) -> list[str]:
+    node_type = str(node.get("type") or "")
+    status = str(result.get("status") or "")
+    if status == "stopped":
+        return []
+    if node_type == "logic/condition":
+        return ["true"] if bool(result.get("passed")) else ["false"]
+    if node_type == "logic/parallel":
+        return ["out"]
+    if node_type == "logic/merge":
+        return ["out"]
+    if node_type == "logic/wait":
+        return ["done", "out"] if status == "completed" else []
+    if node_type == "logic/human_approval":
+        decision = str(result.get("decision") or "").strip()
+        return [decision] if decision in {"approved", "rejected", "timeout"} else []
+    if node_type == "logic/telegram_input":
+        decision = str(result.get("decision") or "").strip()
+        return [decision] if decision in {"received", "timeout"} else []
+    if node_type.startswith("agent/") or node_type.startswith("output/"):
+        if status == "completed":
+            return ["success", "out"]
+        if status == "failed":
+            return ["error"]
+        return []
+    return ["out"] if status == "completed" else []
+
+
+def _serialize_routing_state(
+    *,
+    entry_node_id: str,
+    activated_nodes: set[str],
+    completed_nodes: set[str],
+    queued_nodes: set[str],
+    pending_merges: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    serialized_merges: dict[str, dict[str, Any]] = {}
+    for node_id, item in pending_merges.items():
+        serialized_merges[node_id] = {
+            "mode": str(item.get("mode") or "all"),
+            "arrived_sources": sorted(str(source) for source in (item.get("arrived_sources") or set())),
+            "possible_sources": sorted(str(source) for source in (item.get("possible_sources") or set())),
+            "released": bool(item.get("released")),
+        }
+    return {
+        "entry_node_id": str(entry_node_id or ""),
+        "activated_nodes": sorted(activated_nodes),
+        "completed_nodes": sorted(completed_nodes),
+        "queued_nodes": sorted(queued_nodes),
+        "pending_merges": serialized_merges,
+    }
+
+
+def _reachable_nodes_from_entry(
+    *,
+    entry_node_id: str,
+    id_to_node: dict[str, dict[str, Any]],
+    outgoing_edges: dict[str, list[dict[str, Any]]],
+    node_states: dict[str, dict[str, Any]],
+) -> set[str]:
+    if not entry_node_id or entry_node_id not in id_to_node:
+        return set()
+    visited: set[str] = set()
+    queue: deque[str] = deque([entry_node_id])
+    while queue:
+        node_id = queue.popleft()
+        if node_id in visited:
+            continue
+        visited.add(node_id)
+        node_type = str(id_to_node[node_id].get("type") or "")
+        allowed_ports = _routing_ports_for_state(node_type, node_states.get(node_id))
+        for edge in outgoing_edges.get(node_id, []):
+            if _graph_edge_handle(edge) not in allowed_ports:
+                continue
+            target = str(edge.get("target") or "")
+            if target and target not in visited:
+                queue.append(target)
+    return visited
+
+
+def _possible_merge_sources(
+    *,
+    merge_node_id: str,
+    entry_node_id: str,
+    id_to_node: dict[str, dict[str, Any]],
+    incoming_edges: dict[str, list[dict[str, Any]]],
+    outgoing_edges: dict[str, list[dict[str, Any]]],
+    node_states: dict[str, dict[str, Any]],
+) -> set[str]:
+    reachable = _reachable_nodes_from_entry(
+        entry_node_id=entry_node_id,
+        id_to_node=id_to_node,
+        outgoing_edges=outgoing_edges,
+        node_states=node_states,
+    )
+    possible: set[str] = set()
+    for edge in incoming_edges.get(merge_node_id, []):
+        source = str(edge.get("source") or "")
+        if not source or source not in reachable or source not in id_to_node:
+            continue
+        source_type = str(id_to_node[source].get("type") or "")
+        allowed_ports = _routing_ports_for_state(source_type, node_states.get(source))
+        if _graph_edge_handle(edge) in allowed_ports:
+            possible.add(source)
+    return possible
 
 
 # ---------------------------------------------------------------------------
@@ -1297,6 +1616,52 @@ def _normalize_email_recipient(to_email: str, smtp_host: str) -> str:
     return to_email
 
 
+async def _send_telegram_message(
+    *,
+    bot_token: str,
+    chat_id: str,
+    message: str,
+    parse_mode: str = "Markdown",
+    reply_markup: dict[str, Any] | None = None,
+    disable_web_page_preview: bool = False,
+) -> dict[str, Any]:
+    """Send one or more Telegram messages, optionally attaching inline buttons to the final chunk."""
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    chunks = [message[i : i + 4000] for i in range(0, len(message), 4000)] or [""]
+    sent = 0
+    message_ids: list[int] = []
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        for index, chunk in enumerate(chunks):
+            payload: dict[str, Any] = {
+                "chat_id": chat_id,
+                "text": chunk,
+            }
+            if parse_mode:
+                payload["parse_mode"] = parse_mode
+            if disable_web_page_preview:
+                payload["disable_web_page_preview"] = True
+            if reply_markup and index == len(chunks) - 1:
+                payload["reply_markup"] = reply_markup
+
+            resp = await client.post(url, json=payload)
+            if resp.status_code != 200:
+                err = resp.text[:200]
+                return {"status": "failed", "error": f"Telegram API error {resp.status_code}: {err}"}
+            with contextlib.suppress(Exception):
+                resp_payload = resp.json()
+                message_id = int(((resp_payload.get("result") or {}) or {}).get("message_id"))
+                message_ids.append(message_id)
+            sent += 1
+
+    return {
+        "status": "completed",
+        "output": f"📱 Telegram message sent to {chat_id} ({sent} chunk(s))",
+        "message_ids": message_ids,
+        "last_message_id": message_ids[-1] if message_ids else None,
+    }
+
+
 async def _execute_output_telegram(node: dict, context: dict, node_outputs: dict[str, dict], run: PipelineRun) -> dict:
     """Send a message via Telegram Bot API. Falls back to TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID from .env."""
     config = node.get("data", {})
@@ -1320,6 +1685,11 @@ async def _execute_output_telegram(node: dict, context: dict, node_outputs: dict
         message_template = "\n\n".join(lines) or f"Pipeline {run.pipeline.name} status update."
 
     subs = dict(context)
+    subs["pipeline_name"] = run.pipeline.name
+    subs["run_id"] = str(run.pk)
+    subs["entry_node_id"] = str(run.entry_node_id or "")
+    subs["trigger_type"] = str(getattr(run.trigger, "trigger_type", "") or "")
+    subs["trigger_name"] = str(getattr(run.trigger, "name", "") or "")
     subs["all_outputs"] = "\n\n".join(
         f"[{nid}]: {(v.get('output') or '')[:500]}" for nid, v in node_outputs.items() if v.get("output")
     )
@@ -1328,22 +1698,19 @@ async def _execute_output_telegram(node: dict, context: dict, node_outputs: dict
     except (KeyError, ValueError):
         message = message_template
 
-    # Telegram has 4096 char limit per message; split if needed
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     parse_mode = config.get("parse_mode", "Markdown")
+    reply_markup = config.get("reply_markup")
+    disable_web_page_preview = bool(config.get("disable_web_page_preview", False))
 
-    chunks = [message[i : i + 4000] for i in range(0, len(message), 4000)]
-    sent = []
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            for chunk in chunks:
-                payload = {"chat_id": chat_id, "text": chunk, "parse_mode": parse_mode}
-                resp = await client.post(url, json=payload)
-                if resp.status_code != 200:
-                    err = resp.text[:200]
-                    return {"status": "failed", "error": f"Telegram API error {resp.status_code}: {err}"}
-                sent.append(resp.status_code)
-        return {"status": "completed", "output": f"📱 Telegram message sent to {chat_id} ({len(chunks)} chunk(s))"}
+        return await _send_telegram_message(
+            bot_token=bot_token,
+            chat_id=chat_id,
+            message=message,
+            parse_mode=parse_mode,
+            reply_markup=reply_markup if isinstance(reply_markup, dict) else None,
+            disable_web_page_preview=disable_web_page_preview,
+        )
     except Exception as exc:
         return {"status": "failed", "error": f"Telegram send error: {exc}"}
 
@@ -1371,7 +1738,7 @@ async def _execute_logic_wait(node: dict, context: dict, run: PipelineRun, stop_
         sleep_seconds = min(1.0, remaining_seconds)
         await asyncio.sleep(sleep_seconds)
         remaining_seconds -= sleep_seconds
-    return {"status": "completed", "output": f"⏱️ Waited {minutes:.1f} minute(s)"}
+    return {"status": "completed", "output": f"⏱️ Ожидание завершено: {minutes:.1f} мин."}
 
 
 async def _execute_logic_human_approval(
@@ -1386,10 +1753,11 @@ async def _execute_logic_human_approval(
 
     How it works:
     1. Generates a signed one-time token stored in node_states.
-    2. Sends an email and/or Telegram message with two clickable links:
+    2. Sends an email and/or Telegram message with approve/reject actions.
        APPROVE → GET /api/studio/runs/<run_id>/approve/<node_id>/?token=...&decision=approved
        REJECT  → GET /api/studio/runs/<run_id>/approve/<node_id>/?token=...&decision=rejected
-    3. Polls the DB every 10 seconds for the decision (set by the approve endpoint).
+       Telegram uses inline callback buttons, so no external browser access is required.
+    3. Polls Telegram callbacks and the DB for the decision.
     4. On timeout, returns failed.
     5. If approved, the pipeline continues; if rejected, the run is treated as failed
        (downstream nodes can check {node_id_status} == "failed" with a logic/condition).
@@ -1414,13 +1782,13 @@ async def _execute_logic_human_approval(
 
     message_template = config.get(
         "message",
-        "🔔 *Pipeline approval required*\n\n"
-        "*Pipeline:* {pipeline_name}\n"
-        "*Run ID:* {run_id}\n\n"
+        "🔔 *Требуется подтверждение пайплайна*\n\n"
+        "*Пайплайн:* {pipeline_name}\n"
+        "*Запуск:* {run_id}\n\n"
         "{all_outputs}\n\n"
-        "Please review the plan above and approve or reject:\n\n"
-        "✅ *APPROVE:* {approve_url}\n\n"
-        "❌ *REJECT:* {reject_url}",
+        "Пожалуйста, проверьте план выше и примите решение:\n\n"
+        "✅ *ОДОБРИТЬ:* {approve_url}\n\n"
+        "❌ *ОТКЛОНИТЬ:* {reject_url}",
     )
 
     # Generate one-time token
@@ -1509,13 +1877,43 @@ async def _execute_logic_human_approval(
     # Telegram notification — node config overrides global settings
     tg_bot_token = (config.get("tg_bot_token") or g_token or "").strip()
     tg_chat_id = (config.get("tg_chat_id") or g_chat or "").strip()
+    raw_tg_parse_mode = config.get("tg_parse_mode")
+    tg_parse_mode = "Markdown" if raw_tg_parse_mode is None else str(raw_tg_parse_mode).strip()
     if tg_bot_token and tg_chat_id:
+        telegram_message_template = (
+            config.get("telegram_message")
+            or "🔔 *Требуется подтверждение пайплайна*\n\n"
+            "*Пайплайн:* {pipeline_name}\n"
+            "*Запуск:* {run_id}\n\n"
+            "{all_outputs}\n\n"
+            "Нажмите кнопку ниже, чтобы одобрить или отклонить шаг прямо в Telegram."
+        )
+        try:
+            telegram_message = telegram_message_template.format_map(subs)
+        except (KeyError, ValueError):
+            telegram_message = str(telegram_message_template)
         tg_node = {
             "id": f"{node_id}_approval_tg",
-            "data": {
-                "bot_token": tg_bot_token,
-                "chat_id": tg_chat_id,
-                "message": message,
+                "data": {
+                    "bot_token": tg_bot_token,
+                    "chat_id": tg_chat_id,
+                    "message": telegram_message,
+                    "parse_mode": tg_parse_mode,
+                    "disable_web_page_preview": True,
+                    "reply_markup": {
+                    "inline_keyboard": [
+                        [
+                            {
+                                "text": "✅ Одобрить",
+                                "callback_data": _telegram_approval_callback_data("approved", approval_token),
+                            },
+                            {
+                                "text": "❌ Отклонить",
+                                "callback_data": _telegram_approval_callback_data("rejected", approval_token),
+                            },
+                        ]
+                    ]
+                },
             },
         }
         try:
@@ -1533,12 +1931,37 @@ async def _execute_logic_human_approval(
             return {"status": "stopped", "output": "Approval wait cancelled by stop request", "stopped": True}
         await asyncio.sleep(poll_interval)
 
+        telegram_callback = None
+        if tg_bot_token and tg_chat_id:
+            telegram_callback = await _poll_telegram_approval_decision(tg_bot_token, approval_token)
+
         # Check if pipeline was stopped externally
         fresh_run = await _s2a(lambda: PipelineRun.objects.get(pk=run.pk), thread_sensitive=False)()
-        if fresh_run.status == PipelineRun.STATUS_STOPPED:
-            return {"status": "stopped", "output": "Approval wait cancelled by stop request", "stopped": True}
 
-        node_state = fresh_run.node_states.get(node_id, {})
+        node_state = dict(fresh_run.node_states.get(node_id, {}))
+        if telegram_callback and not node_state.get("approval_decision"):
+            node_state["approval_decision"] = telegram_callback.get("decision")
+            node_state["approval_response"] = telegram_callback.get("response_text") or "via Telegram callback"
+            node_state["approval_source"] = "telegram_callback"
+            node_state["decided_at"] = timezone.now().isoformat()
+            await _update_node_state(fresh_run, node_id, node_state)
+            if tg_bot_token and tg_chat_id:
+                verdict = "approved" if node_state["approval_decision"] == "approved" else "rejected"
+                emoji = "✅" if verdict == "approved" else "❌"
+                verdict_text = "одобрено" if verdict == "approved" else "отклонено"
+                with contextlib.suppress(Exception):
+                    await _send_telegram_message(
+                        bot_token=tg_bot_token,
+                        chat_id=tg_chat_id,
+                        message=(
+                            f"{emoji} *Решение записано*\n\n"
+                            f"*Пайплайн:* {run.pipeline.name}\n"
+                            f"*Запуск:* #{run.pk}\n"
+                            f"*Узел:* {config.get('label') or node_id}\n"
+                            f"*Решение:* {verdict_text}"
+                        ),
+                    )
+
         decision = node_state.get("approval_decision")
 
         if decision == "approved":
@@ -1546,8 +1969,9 @@ async def _execute_logic_human_approval(
             logger.info("human_approval node %s: APPROVED (response: %r)", node_id, user_response[:100])
             return {
                 "status": "completed",
-                "output": f"APPROVED\n\nUser response:\n{user_response}" if user_response else "APPROVED",
+                "output": f"ОДОБРЕНО\n\nКомментарий:\n{user_response}" if user_response else "ОДОБРЕНО",
                 "approved": True,
+                "decision": "approved",
                 "user_response": user_response,
             }
 
@@ -1556,16 +1980,167 @@ async def _execute_logic_human_approval(
             logger.info("human_approval node %s: REJECTED", node_id)
             return {
                 "status": "failed",
-                "error": f"REJECTED by user.\n\nReason: {user_response}" if user_response else "REJECTED by user.",
+                "error": f"ОТКЛОНЕНО оператором.\n\nПричина: {user_response}" if user_response else "ОТКЛОНЕНО оператором.",
                 "approved": False,
+                "decision": "rejected",
             }
+
+        if is_runtime_stop_requested(fresh_run):
+            return {"status": "stopped", "output": "Approval wait cancelled by stop request", "stopped": True}
 
         if timezone.now() >= deadline:
             logger.warning("human_approval node %s: TIMEOUT after %.0f min", node_id, timeout_minutes)
             return {
                 "status": "failed",
-                "error": f"Approval timeout — no response within {timeout_minutes:.0f} minutes",
+                "error": f"Таймаут подтверждения — нет ответа в течение {timeout_minutes:.0f} мин.",
+                "decision": "timeout",
             }
+
+
+async def _execute_logic_telegram_input(
+    node: dict,
+    context: dict,
+    node_outputs: dict[str, dict],
+    run: PipelineRun,
+    stop_event: Event | None = None,
+) -> dict:
+    """Wait for a plain-text operator reply in Telegram."""
+
+    config = node.get("data", {})
+    node_id = str(node.get("id") or "")
+    try:
+        timeout_minutes = float(config.get("timeout_minutes", 120) or 120)
+    except (TypeError, ValueError):
+        timeout_minutes = 120.0
+    g_token, g_chat = _global_tg_defaults()
+    bot_token = (config.get("tg_bot_token") or g_token or "").strip()
+    chat_id = str(config.get("tg_chat_id") or g_chat or "").strip()
+    parse_mode = str(config.get("parse_mode") or "Markdown").strip() or "Markdown"
+
+    if not bot_token:
+        return {"status": "failed", "error": "tg_bot_token not configured for telegram_input node.", "decision": "timeout"}
+    if not chat_id:
+        return {"status": "failed", "error": "tg_chat_id not configured for telegram_input node.", "decision": "timeout"}
+
+    all_outputs_text = "\n\n".join(
+        f"--- [{nid}] ---\n{(v.get('output') or '').strip()[:2000]}"
+        for nid, v in node_outputs.items()
+        if (v.get("output") or "").strip()
+    )
+    subs = dict(context)
+    subs["pipeline_name"] = run.pipeline.name
+    subs["run_id"] = str(run.pk)
+    subs["all_outputs"] = all_outputs_text
+    subs["node_label"] = str(config.get("label") or node_id)
+    message_template = (
+        config.get("message")
+        or "📝 *Нужна инструкция оператора*\n\n"
+        "*Пайплайн:* {pipeline_name}\n"
+        "*Запуск:* {run_id}\n"
+        "*Узел:* {node_label}\n\n"
+        "{all_outputs}\n\n"
+        "Ответьте на это сообщение обычным текстом. Ответ будет передан агенту."
+    )
+    try:
+        prompt_message = str(message_template).format_map(subs)
+    except (KeyError, ValueError):
+        prompt_message = str(message_template)
+
+    telegram_result = await _send_telegram_message(
+        bot_token=bot_token,
+        chat_id=chat_id,
+        message=prompt_message,
+        parse_mode=parse_mode,
+        reply_markup={"force_reply": True, "selective": False},
+    )
+    if telegram_result.get("status") != "completed":
+        return {
+            "status": "failed",
+            "error": str(telegram_result.get("error") or "Не удалось отправить Telegram-сообщение."),
+            "decision": "timeout",
+        }
+
+    try:
+        prompt_message_id = int(telegram_result.get("last_message_id") or 0)
+    except (TypeError, ValueError):
+        prompt_message_id = 0
+    if prompt_message_id <= 0:
+        return {
+            "status": "failed",
+            "error": "Telegram не вернул message_id для ожидания ответа оператора.",
+            "decision": "timeout",
+        }
+
+    await _update_node_state(
+        run,
+        node_id,
+        {
+            "status": "awaiting_operator_reply",
+            "telegram_prompt_message_id": prompt_message_id,
+            "telegram_chat_id": chat_id,
+            "started_at": timezone.now().isoformat(),
+        },
+    )
+
+    deadline = timezone.now() + timedelta(minutes=timeout_minutes)
+    poll_interval = 2
+
+    while True:
+        if stop_event and stop_event.is_set():
+            return {"status": "stopped", "output": "Ожидание ответа оператора отменено", "stopped": True}
+        await asyncio.sleep(poll_interval)
+
+        operator_reply = await _poll_telegram_reply_message(bot_token, chat_id, prompt_message_id)
+
+        fresh_run = await _s2a(lambda: PipelineRun.objects.get(pk=run.pk), thread_sensitive=False)()
+        node_state = dict(fresh_run.node_states.get(node_id, {}))
+        if operator_reply and not node_state.get("operator_response"):
+            response_text = str(operator_reply.get("text") or "").strip()
+            node_state["operator_response"] = response_text
+            node_state["operator_message_id"] = operator_reply.get("message_id")
+            node_state["operator_source"] = operator_reply.get("from_username") or ""
+            node_state["responded_at"] = timezone.now().isoformat()
+            await _update_node_state(fresh_run, node_id, node_state)
+            with contextlib.suppress(Exception):
+                await _send_telegram_message(
+                    bot_token=bot_token,
+                    chat_id=chat_id,
+                    message=(
+                        "✅ *Ответ оператора получен*\n\n"
+                        f"*Пайплайн:* {run.pipeline.name}\n"
+                        f"*Запуск:* #{run.pk}\n"
+                        f"*Узел:* {subs['node_label']}\n\n"
+                        "Передаю сообщение агенту."
+                    ),
+                    parse_mode="Markdown",
+                )
+
+        operator_response = str(node_state.get("operator_response") or "").strip()
+        if operator_response:
+            return {
+                "status": "completed",
+                "output": operator_response,
+                "decision": "received",
+                "response_text": operator_response,
+            }
+
+        if is_runtime_stop_requested(fresh_run):
+            return {"status": "stopped", "output": "Ожидание ответа оператора отменено", "stopped": True}
+
+        if timezone.now() >= deadline:
+            return {
+                "status": "failed",
+                "error": f"Таймаут ожидания ответа оператора — нет ответа в течение {timeout_minutes:.0f} мин.",
+                "decision": "timeout",
+            }
+
+
+async def _execute_logic_merge(node: dict, context: dict, node_outputs: dict[str, dict], run: PipelineRun) -> dict:
+    mode = str((node.get("data") or {}).get("mode") or "all").strip().lower()
+    if mode not in {"all", "any"}:
+        mode = "all"
+    mode_label = "любая ветка" if mode == "any" else "все ветки"
+    return {"status": "completed", "output": f"объединение: {mode_label}"}
 
 
 # ---------------------------------------------------------------------------
@@ -1639,17 +2214,24 @@ async def _update_node_state(run: PipelineRun, node_id: str, state: dict):
             )
 
 
+async def _update_routing_state(run: PipelineRun, routing_state: dict[str, Any]) -> None:
+    run.routing_state = routing_state
+    await _s2a_fn(lambda: PipelineRun.objects.filter(pk=run.pk).update(routing_state=run.routing_state))()
+
+
 async def _update_run_status(run: PipelineRun, status: str, **extra):
     run.status = status
+    update_fields = ["status"]
     for k, v in extra.items():
         setattr(run, k, v)
+        update_fields.append(k)
     logger.info(
         "pipeline run %s status -> %s%s",
         run.pk,
         status,
         f" extra={list(extra.keys())}" if extra else "",
     )
-    await _s2a_fn(run.save)()
+    await _s2a_fn(run.save)(update_fields=list(dict.fromkeys(update_fields)))
 
     actor_ctx = _pipeline_actor_context(run)
     await log_user_activity_async(
@@ -1684,7 +2266,7 @@ async def _update_run_status(run: PipelineRun, status: str, **extra):
 
 class PipelineExecutor:
     """
-    Executes a Pipeline by traversing nodes in topological (BFS) order.
+    Executes a Pipeline via a selected trigger entry node and explicit edge routing.
 
     Usage::
         executor = PipelineExecutor(pipeline_run)
@@ -1715,6 +2297,118 @@ class PipelineExecutor:
             self.request_stop()
         return self._stop_requested
 
+    def _build_graph(self, nodes: list[dict[str, Any]], edges: list[dict[str, Any]]) -> tuple[
+        dict[str, dict[str, Any]],
+        dict[str, list[dict[str, Any]]],
+        dict[str, list[dict[str, Any]]],
+    ]:
+        id_to_node = {str(node.get("id") or ""): node for node in nodes if str(node.get("id") or "").strip()}
+        outgoing_edges: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        incoming_edges: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for edge in edges or []:
+            source = str(edge.get("source") or "").strip()
+            target = str(edge.get("target") or "").strip()
+            if source in id_to_node and target in id_to_node:
+                outgoing_edges[source].append(edge)
+                incoming_edges[target].append(edge)
+        return id_to_node, outgoing_edges, incoming_edges
+
+    async def _persist_routing_state(
+        self,
+        *,
+        entry_node_id: str,
+        activated_nodes: set[str],
+        completed_nodes: set[str],
+        ready_nodes: set[str],
+        pending_merges: dict[str, dict[str, Any]],
+    ) -> None:
+        await _update_routing_state(
+            self.run,
+            _serialize_routing_state(
+                entry_node_id=entry_node_id,
+                activated_nodes=activated_nodes,
+                completed_nodes=completed_nodes,
+                queued_nodes=ready_nodes,
+                pending_merges=pending_merges,
+            ),
+        )
+
+    async def _route_from_node(
+        self,
+        *,
+        source_node_id: str,
+        routing_ports: set[str],
+        entry_node_id: str,
+        id_to_node: dict[str, dict[str, Any]],
+        outgoing_edges: dict[str, list[dict[str, Any]]],
+        incoming_edges: dict[str, list[dict[str, Any]]],
+        node_states: dict[str, dict[str, Any]],
+        ready_queue: deque[str],
+        ready_nodes: set[str],
+        activated_nodes: set[str],
+        completed_nodes: set[str],
+        pending_merges: dict[str, dict[str, Any]],
+    ) -> None:
+        source_id = str(source_node_id or "").strip()
+        if not source_id:
+            return
+        activated_nodes.add(source_id)
+
+        for edge in outgoing_edges.get(source_id, []):
+            if _graph_edge_handle(edge) not in routing_ports:
+                continue
+
+            target_id = str(edge.get("target") or "").strip()
+            target_node = id_to_node.get(target_id)
+            if not target_id or target_node is None:
+                continue
+
+            target_type = str(target_node.get("type") or "")
+            activated_nodes.add(target_id)
+
+            if target_type == "logic/merge":
+                merge_state = pending_merges.setdefault(
+                    target_id,
+                    {
+                        "mode": str((target_node.get("data") or {}).get("mode") or "all").strip().lower() or "all",
+                        "arrived_sources": set(),
+                        "possible_sources": set(),
+                        "released": False,
+                    },
+                )
+                if merge_state["mode"] not in {"all", "any"}:
+                    merge_state["mode"] = "all"
+                merge_state.setdefault("arrived_sources", set()).add(source_id)
+                merge_state["possible_sources"] = _possible_merge_sources(
+                    merge_node_id=target_id,
+                    entry_node_id=entry_node_id,
+                    id_to_node=id_to_node,
+                    incoming_edges=incoming_edges,
+                    outgoing_edges=outgoing_edges,
+                    node_states=node_states,
+                )
+                if merge_state.get("released") or target_id in completed_nodes or target_id in ready_nodes:
+                    continue
+
+                arrived_sources = set(merge_state.get("arrived_sources") or set())
+                possible_sources = set(merge_state.get("possible_sources") or set())
+                should_release = False
+                if merge_state["mode"] == "any":
+                    should_release = bool(arrived_sources)
+                else:
+                    should_release = bool(possible_sources) and arrived_sources >= possible_sources
+
+                if should_release:
+                    merge_state["released"] = True
+                    ready_queue.append(target_id)
+                    ready_nodes.add(target_id)
+                continue
+
+            if target_id in completed_nodes or target_id in ready_nodes:
+                continue
+            ready_queue.append(target_id)
+            ready_nodes.add(target_id)
+
     async def execute(self, context: dict | None = None) -> PipelineRun:
         run = self.run
         owner = await _s2a_fn(lambda: run.pipeline.owner)()
@@ -1736,11 +2430,15 @@ class PipelineExecutor:
                     return run
                 context = dict(context)
 
+                nodes = list(run.nodes_snapshot or run.pipeline.nodes or [])
+                edges = list(run.edges_snapshot or run.pipeline.edges or [])
+                graph_version = getattr(run.pipeline, "graph_version", None)
                 validation_errors = await _s2a_fn(
                     lambda: validate_pipeline_definition(
-                        nodes=run.pipeline.nodes or [],
-                        edges=run.pipeline.edges or [],
+                        nodes=nodes,
+                        edges=edges,
                         owner=owner,
+                        graph_version=graph_version,
                     )
                 )()
                 if validation_errors:
@@ -1751,99 +2449,217 @@ class PipelineExecutor:
                         finished_at=timezone.now(),
                     )
                     return run
-                if not any(not str(node.get("type") or "").startswith("trigger/") for node in (run.pipeline.nodes or [])):
+                entry_node_id = str(run.entry_node_id or getattr(getattr(run, "trigger", None), "node_id", "") or "").strip()
+                id_to_node, outgoing_edges, incoming_edges = self._build_graph(nodes, edges)
+                entry_node = id_to_node.get(entry_node_id)
+                if not entry_node_id or entry_node is None:
                     await _update_run_status(
                         run,
                         PipelineRun.STATUS_FAILED,
-                        error="Pipeline has no executable nodes.",
+                        error="Pipeline run is missing a valid entry trigger node.",
+                        finished_at=timezone.now(),
+                    )
+                    return run
+                if not str(entry_node.get("type") or "").startswith("trigger/"):
+                    await _update_run_status(
+                        run,
+                        PipelineRun.STATUS_FAILED,
+                        error=f"Entry node '{entry_node_id}' is not a trigger node.",
                         finished_at=timezone.now(),
                     )
                     return run
 
-                run.nodes_snapshot = run.pipeline.nodes
-                run.edges_snapshot = run.pipeline.edges
+                reachable_from_entry = _reachable_nodes_from_entry(
+                    entry_node_id=entry_node_id,
+                    id_to_node=id_to_node,
+                    outgoing_edges=outgoing_edges,
+                    node_states={},
+                )
+                if not any(
+                    not str(id_to_node[node_id].get("type") or "").startswith("trigger/")
+                    for node_id in reachable_from_entry
+                ):
+                    await _update_run_status(
+                        run,
+                        PipelineRun.STATUS_FAILED,
+                        error=f"Selected trigger '{entry_node_id}' has no downstream executable nodes.",
+                        finished_at=timezone.now(),
+                    )
+                    return run
+
+                run.nodes_snapshot = nodes
+                run.edges_snapshot = edges
                 run.context = context
+                run.entry_node_id = entry_node_id
+                run.node_states = {}
+                run.routing_state = _serialize_routing_state(
+                    entry_node_id=entry_node_id,
+                    activated_nodes={entry_node_id},
+                    completed_nodes={entry_node_id},
+                    queued_nodes=set(),
+                    pending_merges={},
+                )
+                run.error = ""
                 run.started_at = timezone.now()
                 await _s2a_fn(run.save)()
 
                 logger.info(
-                    "pipeline run %s start: pipeline=%s context_keys=%s nodes=%s edges=%s",
+                    "pipeline run %s start: pipeline=%s entry=%s context_keys=%s nodes=%s edges=%s",
                     run.pk,
                     run.pipeline.name,
+                    entry_node_id,
                     sorted(context.keys()),
                     len(run.nodes_snapshot or []),
                     len(run.edges_snapshot or []),
                 )
                 await _update_run_status(run, PipelineRun.STATUS_RUNNING)
 
-                nodes = run.nodes_snapshot
-                edges = run.edges_snapshot
-
-                layers = _topo_sort(nodes, edges)
                 node_outputs: dict[str, dict] = {}
+                ready_queue: deque[str] = deque()
+                ready_nodes: set[str] = set()
+                activated_nodes: set[str] = {entry_node_id}
+                completed_nodes: set[str] = {entry_node_id}
+                pending_merges: dict[str, dict[str, Any]] = {}
+                await self._route_from_node(
+                    source_node_id=entry_node_id,
+                    routing_ports={"out"},
+                    entry_node_id=entry_node_id,
+                    id_to_node=id_to_node,
+                    outgoing_edges=outgoing_edges,
+                    incoming_edges=incoming_edges,
+                    node_states=run.node_states,
+                    ready_queue=ready_queue,
+                    ready_nodes=ready_nodes,
+                    activated_nodes=activated_nodes,
+                    completed_nodes=completed_nodes,
+                    pending_merges=pending_merges,
+                )
+                await self._persist_routing_state(
+                    entry_node_id=entry_node_id,
+                    activated_nodes=activated_nodes,
+                    completed_nodes=completed_nodes,
+                    ready_nodes=ready_nodes,
+                    pending_merges=pending_merges,
+                )
 
                 try:
-                    for layer_index, layer in enumerate(layers, start=1):
+                    batch_index = 0
+                    while ready_queue:
                         if await self._sync_stop_state_from_db():
                             break
 
-                        # Filter trigger nodes — they just inject context and pass through
-                        exec_nodes = [n for n in layer if not n.get("type", "").startswith("trigger/")]
-                        logger.info(
-                            "pipeline run %s layer %s start: nodes=%s exec_nodes=%s",
-                            run.pk,
-                            layer_index,
-                            [n.get("id") for n in layer],
-                            [n.get("id") for n in exec_nodes],
-                        )
+                        batch_index += 1
+                        batch_node_ids: list[str] = []
+                        while ready_queue:
+                            node_id = ready_queue.popleft()
+                            ready_nodes.discard(node_id)
+                            if node_id not in id_to_node or node_id in completed_nodes:
+                                continue
+                            batch_node_ids.append(node_id)
 
-                        if not exec_nodes:
+                        if not batch_node_ids:
                             continue
 
-                        # Mark all nodes in this layer as running
+                        exec_nodes = [id_to_node[node_id] for node_id in batch_node_ids]
+                        logger.info(
+                            "pipeline run %s batch %s start: nodes=%s",
+                            run.pk,
+                            batch_index,
+                            [node.get("id") for node in exec_nodes],
+                        )
+
+                        started_at = timezone.now().isoformat()
                         for node in exec_nodes:
                             await _update_node_state(
                                 run,
-                                node["id"],
-                                {"status": "running", "started_at": timezone.now().isoformat()},
+                                str(node["id"]),
+                                {"status": "running", "started_at": started_at},
                             )
 
-                        # Execute all nodes in this layer concurrently
-                        tasks = [self._execute_node(node, context, node_outputs) for node in exec_nodes]
-                        results = await asyncio.gather(*tasks, return_exceptions=True)
+                        results = await asyncio.gather(
+                            *(self._execute_node(node, context, node_outputs) for node in exec_nodes),
+                            return_exceptions=True,
+                        )
+
+                        resolved_states: list[tuple[dict[str, Any], dict[str, Any]]] = []
+                        abort_error: str | None = None
+                        stop_in_batch = False
+                        finished_at = timezone.now().isoformat()
 
                         for node, result in zip(exec_nodes, results, strict=False):
-                            nid = node["id"]
+                            nid = str(node["id"])
                             if isinstance(result, Exception):
                                 logger.exception("pipeline run %s node %s raised exception", run.pk, nid, exc_info=result)
                                 state: dict[str, Any] = {
                                     "status": "failed",
                                     "error": str(result),
-                                    "finished_at": timezone.now().isoformat(),
                                 }
                             else:
-                                state = {**result, "finished_at": timezone.now().isoformat()}
-                                if "started_at" not in state:
-                                    state["started_at"] = timezone.now().isoformat()
+                                state = dict(result)
 
+                            state.setdefault("started_at", started_at)
+                            state["finished_at"] = finished_at
+                            state["routing_ports"] = _result_routing_ports(node, state)
                             node_outputs[nid] = state
+                            completed_nodes.add(nid)
+                            activated_nodes.add(nid)
+                            resolved_states.append((node, state))
                             await _update_node_state(run, nid, state)
+
                             logger.info(
-                                "pipeline run %s node %s finished: type=%s status=%s error=%s output_chars=%s",
+                                "pipeline run %s node %s finished: type=%s status=%s ports=%s error=%s output_chars=%s",
                                 run.pk,
                                 nid,
                                 node.get("type", ""),
                                 state.get("status"),
+                                state.get("routing_ports"),
                                 (state.get("error") or "")[:300],
                                 len(state.get("output") or ""),
                             )
 
-                            # If a critical node failed and no condition node follows, abort
-                            node_type = node.get("type", "")
-                            if state["status"] == "failed" and node_type.startswith("agent/"):
-                                on_fail = node.get("data", {}).get("on_failure", "continue")
-                                if on_fail == "abort":
-                                    raise RuntimeError(f"Node {nid} failed: {state.get('error')}")
+                            if state.get("status") == "stopped":
+                                stop_in_batch = True
+                                self.request_stop()
+
+                            node_type = str(node.get("type") or "")
+                            on_fail = str((node.get("data") or {}).get("on_failure") or "continue").strip().lower()
+                            if (
+                                abort_error is None
+                                and state.get("status") == "failed"
+                                and on_fail == "abort"
+                                and (node_type.startswith("agent/") or node_type.startswith("output/"))
+                            ):
+                                abort_error = f"Node {nid} failed: {state.get('error')}"
+
+                        if abort_error is None and not stop_in_batch and not self._stop_requested:
+                            for node, state in resolved_states:
+                                await self._route_from_node(
+                                    source_node_id=str(node.get("id") or ""),
+                                    routing_ports=set(state.get("routing_ports") or []),
+                                    entry_node_id=entry_node_id,
+                                    id_to_node=id_to_node,
+                                    outgoing_edges=outgoing_edges,
+                                    incoming_edges=incoming_edges,
+                                    node_states=run.node_states,
+                                    ready_queue=ready_queue,
+                                    ready_nodes=ready_nodes,
+                                    activated_nodes=activated_nodes,
+                                    completed_nodes=completed_nodes,
+                                    pending_merges=pending_merges,
+                                )
+
+                        await self._persist_routing_state(
+                            entry_node_id=entry_node_id,
+                            activated_nodes=activated_nodes,
+                            completed_nodes=completed_nodes,
+                            ready_nodes=ready_nodes,
+                            pending_merges=pending_merges,
+                        )
+
+                        if abort_error is not None:
+                            raise RuntimeError(abort_error)
+                        if stop_in_batch or self._stop_requested:
+                            break
 
                 except Exception as exc:
                     run.error = str(exc)
@@ -1868,6 +2684,11 @@ class PipelineExecutor:
         # {n2}, {n2_output}, {n2_error} are all available in every node.
         # Use a defaultdict so unknown keys return "" instead of raising KeyError.
         enriched: dict = defaultdict(str, context)
+        enriched["pipeline_name"] = self.run.pipeline.name
+        enriched["run_id"] = str(self.run.pk)
+        enriched["entry_node_id"] = str(self.run.entry_node_id or "")
+        enriched["trigger_type"] = str(getattr(self.run.trigger, "trigger_type", "") or "")
+        enriched["trigger_name"] = str(getattr(self.run.trigger, "name", "") or "")
         for nid, state in node_outputs.items():
             out = state.get("output", "") or ""
             err = state.get("error", "") or ""
@@ -1895,14 +2716,19 @@ class PipelineExecutor:
             return await _execute_logic_condition(node, enriched, node_outputs, self.run)
 
         if node_type == "logic/parallel":
-            # Parallel node just passes through; actual parallelism is handled by BFS layer
-            return {"status": "completed", "output": "parallel gateway"}
+            return {"status": "completed", "output": "параллельное разветвление"}
+
+        if node_type == "logic/merge":
+            return await _execute_logic_merge(node, enriched, node_outputs, self.run)
 
         if node_type == "logic/wait":
             return await _execute_logic_wait(node, enriched, self.run, self._stop_event)
 
         if node_type == "logic/human_approval":
             return await _execute_logic_human_approval(node, enriched, node_outputs, self.run, self._stop_event)
+
+        if node_type == "logic/telegram_input":
+            return await _execute_logic_telegram_input(node, enriched, node_outputs, self.run, self._stop_event)
 
         if node_type == "output/report":
             return await _execute_output_report(node, enriched, node_outputs, self.run)

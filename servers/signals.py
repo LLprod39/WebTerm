@@ -129,6 +129,21 @@ def ingest_alert(sender, instance: ServerAlert, created: bool, **kwargs):
         actor_user_id=instance.resolved_by_id,
         force_compact=not instance.is_resolved,
     )
+    if created and not instance.is_resolved:
+        transaction.on_commit(lambda: _launch_monitoring_pipelines(instance.pk))
+
+
+def _launch_monitoring_pipelines(alert_id: int) -> None:
+    alert = ServerAlert.objects.select_related("server", "server__user").filter(pk=alert_id).first()
+    if not alert or alert.is_resolved:
+        return
+    try:
+        from studio.trigger_dispatch import launch_monitoring_triggers_for_alert
+
+        launch_monitoring_triggers_for_alert(alert)
+    except Exception:
+        # Monitoring-trigger dispatch must never block core alert ingestion.
+        return
 
 
 @receiver(post_save, sender=AgentRunEvent)

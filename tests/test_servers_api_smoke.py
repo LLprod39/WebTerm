@@ -22,6 +22,9 @@ from servers.models import (
     ServerConnection,
     ServerHealthCheck,
     ServerKnowledge,
+    ServerMemoryEpisode,
+    ServerMemoryEvent,
+    ServerMemoryRevalidation,
     ServerMemorySnapshot,
     ServerWatcherDraft,
 )
@@ -291,6 +294,121 @@ def test_share_master_password_and_knowledge_endpoints(monkeypatch):
     assert manual_snapshot["version_group_id"]
     assert "created_by_username" in manual_snapshot
 
+    user_snapshot = ServerMemorySnapshot.objects.create(
+        server=server,
+        created_by=owner,
+        memory_key="profile",
+        layer=ServerMemorySnapshot.LAYER_CANONICAL,
+        title="Server profile",
+        content="Ubuntu host with nginx",
+        source_kind="manual",
+        source_ref="test",
+        version_group_id="profile-test",
+        version=1,
+        is_active=True,
+        metadata={"rewrite_reason": "Merged duplicate profile notes"},
+    )
+
+    list_snapshots = client.get(f"/servers/api/{server.id}/memory/snapshots/")
+    assert list_snapshots.status_code == 200
+    assert list_snapshots.json()["success"] is True
+    snapshot_payload = next(
+        item for item in list_snapshots.json()["items"] if item["id"] == user_snapshot.id
+    )
+    assert snapshot_payload["title"] == "Server profile"
+    assert snapshot_payload["kind"] == "canonical"
+    assert isinstance(snapshot_payload["freshness"], float)
+    assert snapshot_payload["rewrite_reason"] == "Merged duplicate profile notes"
+
+    ai_note_snapshot = ServerMemorySnapshot.objects.create(
+        server=server,
+        created_by=owner,
+        memory_key="knowledge_note:999",
+        layer=ServerMemorySnapshot.LAYER_CANONICAL,
+        title="AI profile",
+        content="Discovered by terminal AI",
+        source_kind="manual_knowledge",
+        source_ref="knowledge:999",
+        version_group_id="knowledge-note-999",
+        version=1,
+        is_active=True,
+    )
+    list_snapshots = client.get(f"/servers/api/{server.id}/memory/snapshots/")
+    assert list_snapshots.status_code == 200
+    ai_note_payload = next(
+        item for item in list_snapshots.json()["items"] if item["id"] == ai_note_snapshot.id
+    )
+    assert ai_note_payload["kind"] == "ai_note"
+
+    update_snapshot = client.post(
+        f"/servers/api/{server.id}/memory/snapshots/{user_snapshot.id}/update/",
+        data=_json({"title": "Server profile updated", "content": "Ubuntu host with nginx and certbot"}),
+        content_type="application/json",
+    )
+    assert update_snapshot.status_code == 200
+    assert update_snapshot.json()["success"] is True
+    user_snapshot.refresh_from_db()
+    assert user_snapshot.title == "Server profile updated"
+    assert user_snapshot.content == "Ubuntu host with nginx and certbot"
+
+    snapshot_to_delete = ServerMemorySnapshot.objects.create(
+        server=server,
+        created_by=owner,
+        memory_key="automation_candidate:test-delete-one",
+        layer=ServerMemorySnapshot.LAYER_CANONICAL,
+        title="Delete one snapshot",
+        content="Temporary AI memory",
+        source_kind="dream",
+        source_ref="test-delete",
+        version_group_id="delete-one",
+        version=1,
+        is_active=True,
+    )
+    delete_snapshot = client.post(
+        f"/servers/api/{server.id}/memory/snapshots/{snapshot_to_delete.id}/delete/",
+        content_type="application/json",
+    )
+    assert delete_snapshot.status_code == 200
+    assert delete_snapshot.json()["success"] is True
+    assert ServerMemorySnapshot.objects.filter(pk=snapshot_to_delete.id).exists() is False
+
+    snapshot_bulk_one = ServerMemorySnapshot.objects.create(
+        server=server,
+        created_by=owner,
+        memory_key="pattern_candidate:test-bulk-one",
+        layer=ServerMemorySnapshot.LAYER_CANONICAL,
+        title="Bulk delete one",
+        content="Temporary AI memory one",
+        source_kind="dream",
+        source_ref="test-bulk",
+        version_group_id="bulk-one",
+        version=1,
+        is_active=True,
+    )
+    snapshot_bulk_two = ServerMemorySnapshot.objects.create(
+        server=server,
+        created_by=owner,
+        memory_key="pattern_candidate:test-bulk-two",
+        layer=ServerMemorySnapshot.LAYER_CANONICAL,
+        title="Bulk delete two",
+        content="Temporary AI memory two",
+        source_kind="dream",
+        source_ref="test-bulk",
+        version_group_id="bulk-two",
+        version=1,
+        is_active=True,
+    )
+    bulk_delete_snapshots = client.post(
+        f"/servers/api/{server.id}/memory/snapshots/bulk-delete/",
+        data=_json({"snapshot_ids": [snapshot_bulk_one.id, snapshot_bulk_two.id]}),
+        content_type="application/json",
+    )
+    assert bulk_delete_snapshots.status_code == 200
+    assert bulk_delete_snapshots.json()["success"] is True
+    assert bulk_delete_snapshots.json()["deleted_count"] == 2
+    assert ServerMemorySnapshot.objects.filter(pk=snapshot_bulk_one.id).exists() is False
+    assert ServerMemorySnapshot.objects.filter(pk=snapshot_bulk_two.id).exists() is False
+
     update_knowledge = client.post(
         f"/servers/api/{server.id}/knowledge/{knowledge_id}/update/",
         data=_json({"title": "Nginx main config", "is_active": False, "confidence": 0.6}),
@@ -374,6 +492,111 @@ def test_share_master_password_and_knowledge_endpoints(monkeypatch):
     assert reveal.status_code == 200
     assert reveal.json()["success"] is True
     assert reveal.json()["password"] == "plain-password"
+
+
+@pytest.mark.django_db
+def test_server_memory_purge_user_clears_ai_memory_everywhere():
+    from app.agent_kernel.memory.store import DjangoServerMemoryStore
+
+    owner = User.objects.create_user(username="purge-owner", password="x")
+    owner.is_staff = True
+    owner.save(update_fields=["is_staff"])
+    _grant_feature(owner, "servers")
+    client = Client()
+    client.force_login(owner)
+
+    server = _create_server(owner, name="forget-me", server_type="ssh", port=22)
+    store = DjangoServerMemoryStore()
+
+    manual_knowledge = ServerKnowledge.objects.create(
+        server=server,
+        category="config",
+        title="Manual note",
+        content="Keep this manual note",
+        source="manual",
+        is_active=True,
+        created_by=owner,
+    )
+    store._sync_manual_knowledge_snapshot_sync(manual_knowledge.id)
+
+    ai_knowledge = ServerKnowledge.objects.create(
+        server=server,
+        category="issues",
+        title="AI note",
+        content="Delete this AI note",
+        source="ai_auto",
+        is_active=True,
+        created_by=owner,
+    )
+    store._sync_manual_knowledge_snapshot_sync(ai_knowledge.id)
+
+    canonical_snapshot = ServerMemorySnapshot.objects.create(
+        server=server,
+        created_by=owner,
+        memory_key="profile",
+        layer=ServerMemorySnapshot.LAYER_CANONICAL,
+        title="Canonical profile",
+        content="Ephemeral AI memory",
+        source_kind="dream",
+        source_ref="dream:test",
+        version_group_id="purge-profile",
+        version=1,
+        is_active=True,
+    )
+    ServerMemoryRevalidation.objects.create(
+        server=server,
+        source_snapshot=canonical_snapshot,
+        memory_key="profile",
+        title="Review profile",
+        reason="stale",
+    )
+    ServerMemoryEpisode.objects.create(
+        server=server,
+        episode_kind=ServerMemoryEpisode.KIND_AGENT,
+        source_kind="agent_run",
+        source_ref="run:123",
+        session_id="run:123",
+        title="AI episode",
+        summary="Summarized AI history",
+        event_count=2,
+        is_active=True,
+    )
+    ServerMemoryEvent.objects.create(
+        server=server,
+        actor_user=owner,
+        source_kind=ServerMemoryEvent.SOURCE_AGENT_RUN,
+        actor_kind=ServerMemoryEvent.ACTOR_AGENT,
+        source_ref="run:123",
+        session_id="run:123",
+        event_type="run_completed",
+        raw_text_redacted="temporary AI payload",
+    )
+
+    purge_response = client.post(f"/servers/api/{server.id}/memory/purge/")
+    assert purge_response.status_code == 200
+    payload = purge_response.json()
+    assert payload["success"] is True
+    assert payload["deleted"]["snapshots"] >= 2
+    assert payload["deleted"]["episodes"] >= 1
+    assert payload["deleted"]["events"] >= 1
+    assert payload["deleted"]["revalidations"] >= 1
+    assert payload["deleted"]["knowledge"] >= 1
+
+    assert ServerKnowledge.objects.filter(pk=manual_knowledge.id, server=server).exists() is True
+    assert ServerMemorySnapshot.objects.filter(server=server, memory_key=f"manual_note:{manual_knowledge.id}").exists() is True
+    assert ServerKnowledge.objects.filter(pk=ai_knowledge.id, server=server).exists() is False
+    assert ServerMemorySnapshot.objects.filter(server=server, memory_key="profile").exists() is False
+    assert ServerMemorySnapshot.objects.filter(server=server, memory_key=f"knowledge_note:{ai_knowledge.id}").exists() is False
+    assert ServerMemoryEpisode.objects.filter(server=server).exists() is False
+    assert ServerMemoryEvent.objects.filter(server=server).exists() is False
+    assert ServerMemoryRevalidation.objects.filter(server=server).exists() is False
+
+    overview = client.get(f"/servers/api/{server.id}/memory/overview/")
+    assert overview.status_code == 200
+    overview_payload = overview.json()
+    assert overview_payload["success"] is True
+    assert overview_payload["stats"]["episodes"] == 0
+    assert overview_payload["stats"]["archive"] == 0
 
 
 @pytest.mark.django_db
