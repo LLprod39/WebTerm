@@ -15,12 +15,17 @@ const Login = lazy(() => import("./pages/Login"));
 const Servers = lazy(() => import("./pages/Servers"));
 const TerminalPage = lazy(() => import("./pages/TerminalPage"));
 const DashboardRouter = lazy(() => import("./pages/DashboardRouter"));
-const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const RdpPage = lazy(() => import("./pages/RdpPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const SettingsUsersPage = lazy(() => import("./pages/SettingsUsersPage"));
 const SettingsGroupsPage = lazy(() => import("./pages/SettingsGroupsPage"));
 const SettingsPermissionsPage = lazy(() => import("./pages/SettingsPermissionsPage"));
+// New Settings Pages with Layout
+const SettingsLayout = lazy(() => import("./components/settings/SettingsLayout"));
+const SettingsAIPage = lazy(() => import("./pages/settings/SettingsAIPage"));
+const SettingsAccessPage = lazy(() => import("./pages/settings/SettingsAccessPage"));
+const SettingsMemoryPage = lazy(() => import("./pages/settings/SettingsMemoryPage"));
+const SettingsAuditPage = lazy(() => import("./pages/settings/SettingsAuditPage"));
 const AgentsPage = lazy(() => import("./pages/AgentsPage"));
 const AgentRunPage = lazy(() => import("./pages/AgentRunPage"));
 const StudioPage = lazy(() => import("./pages/StudioPage"));
@@ -213,38 +218,24 @@ const App = () => (
                     </FeatureGate>
                   )}
                 />
+                {/* Settings with new layout */}
                 <Route
                   path="/settings"
                   element={(
                     <FeatureGate feature="settings">
-                      <SettingsPage />
+                      <SettingsLayout />
                     </FeatureGate>
                   )}
-                />
-                <Route
-                  path="/settings/users"
-                  element={(
-                    <FeatureGate feature="settings">
-                      <SettingsUsersPage />
-                    </FeatureGate>
-                  )}
-                />
-                <Route
-                  path="/settings/groups"
-                  element={(
-                    <FeatureGate feature="settings">
-                      <SettingsGroupsPage />
-                    </FeatureGate>
-                  )}
-                />
-                <Route
-                  path="/settings/permissions"
-                  element={(
-                    <FeatureGate feature="settings">
-                      <SettingsPermissionsPage />
-                    </FeatureGate>
-                  )}
-                />
+                >
+                  <Route index element={<Navigate to="/settings/ai" replace />} />
+                  <Route path="ai" element={<SettingsAIPage />} />
+                  <Route path="access" element={<SettingsAccessPage />} />
+                  <Route path="users" element={<SettingsUsersPage />} />
+                  <Route path="groups" element={<SettingsGroupsPage />} />
+                  <Route path="permissions" element={<SettingsPermissionsPage />} />
+                  <Route path="memory" element={<SettingsMemoryPage />} />
+                  <Route path="audit" element={<SettingsAuditPage />} />
+                </Route>
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
