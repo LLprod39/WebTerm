@@ -23,6 +23,7 @@ export function ConditionNode({ data, selected }: NodeProps) {
         { id: "false", label: localize(lang, "НЕТ", "FALSE"), className: "!bg-red-500/70 hover:!bg-red-500", labelClassName: "text-red-500" },
       ]}
       accentColor="border-amber-500/40"
+      categoryColor="#f97316"
       {...getNodeRuntimeProps(d)}
     >
       <div className="text-[10px] text-muted-foreground">{localize(lang, "Явное ветвление true / false", "Explicit true / false branch")}</div>

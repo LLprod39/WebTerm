@@ -16,6 +16,7 @@ export function WaitNode({ data, selected }: NodeProps) {
       icon={<Timer className="h-4 w-4 text-purple-400" />}
       description={minutes ? localize(lang, `Пауза на ${minutes} мин.`, `Pause for ${minutes} minute(s)`) : localize(lang, "Настройте длительность паузы", "Configure wait duration")}
       accentColor="border-orange-500/40"
+      categoryColor="#f97316"
       sourcePorts={[{ id: "done", label: localize(lang, "ГОТОВО", "DONE") }]}
       {...getNodeRuntimeProps(d)}
     />

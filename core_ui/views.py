@@ -10,28 +10,31 @@ import os
 import shutil
 import time
 import uuid
-from io import StringIO
 from collections import defaultdict
+from collections.abc import AsyncGenerator
+from datetime import datetime, timedelta, timezone
+from io import StringIO
 from pathlib import Path
-from datetime import datetime, timezone, timedelta
-from django.utils import timezone as django_timezone
 from urllib import error as urllib_error
 from urllib import parse as urllib_parse
 from urllib import request as urllib_request
-from typing import AsyncGenerator
-from django.shortcuts import render, redirect
-from django.http import StreamingHttpResponse, JsonResponse, HttpResponse, HttpResponseForbidden, FileResponse, Http404
-from django.views.decorators.csrf import ensure_csrf_cookie
-from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
-from django.contrib.auth.views import LoginView
-from django.contrib.auth.decorators import login_required
-from django.views.decorators.http import require_http_methods, require_GET
-from django.conf import settings
-from django.db import transaction
-from django.db.models import OuterRef, Subquery, Count, Q
-from django.urls import reverse
-from django.middleware.csrf import get_token
+
 from asgiref.sync import async_to_sync, sync_to_async
+from django.conf import settings
+from django.contrib.auth import authenticate
+from django.contrib.auth import login as auth_login
+from django.contrib.auth import logout as auth_logout
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.views import LoginView
+from django.db import transaction
+from django.db.models import Count, OuterRef, Q, Subquery
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse, StreamingHttpResponse
+from django.middleware.csrf import get_token
+from django.shortcuts import redirect, render
+from django.urls import reverse
+from django.utils import timezone as django_timezone
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.http import require_GET, require_http_methods
 from dotenv import load_dotenv
 from loguru import logger
 
@@ -65,11 +68,6 @@ try:
     from app.agents.manager import get_agent_manager
 except Exception:
     get_agent_manager = None
-from core_ui.context_processors import user_can_feature, is_server_only_user
-from core_ui.decorators import require_feature, async_login_required, async_require_feature
-from core_ui.activity import log_user_activity
-from core_ui.logging_setup import log_sink_summary
-from core_ui.audit import maybe_apply_log_retention
 from core_ui.access import (
     access_feature_labels,
     access_feature_slugs,
@@ -78,8 +76,13 @@ from core_ui.access import (
     load_group_permission_sources,
     load_user_explicit_permissions,
 )
-from core_ui.models import ChatSession, ChatMessage, UserActivityLog
+from core_ui.activity import log_user_activity
+from core_ui.audit import maybe_apply_log_retention
+from core_ui.context_processors import is_server_only_user, user_can_feature
+from core_ui.decorators import async_login_required, async_require_feature, require_feature
+from core_ui.logging_setup import log_sink_summary
 from core_ui.middleware import get_template_name
+from core_ui.models import ChatMessage, ChatSession, UserActivityLog
 
 # Singleton instances
 _unified_orchestrator = None
@@ -596,10 +599,7 @@ def _sum_openai_costs(payload: dict) -> float:
                 total += value
         for result in bucket.get("results", []):
             amount = result.get("amount")
-            if isinstance(amount, dict):
-                value = _to_float(amount.get("value"))
-            else:
-                value = _to_float(amount)
+            value = _to_float(amount.get("value")) if isinstance(amount, dict) else _to_float(amount)
             if value is not None:
                 total += value
     return total
@@ -855,12 +855,14 @@ def _get_provider_billing_snapshot(now_utc: datetime, providers: dict) -> dict:
 
 def _collect_admin_dashboard_data(include_version: bool = False) -> dict:
     from datetime import date, timedelta
-    from django.utils import timezone as tz
+
     from django.contrib.auth.models import User
-    from django.db.models import Count, Sum, Q
+    from django.db.models import Count, Q, Sum
     from django.db.models.functions import TruncHour
-    from servers.models import Server, ServerConnection
+    from django.utils import timezone as tz
+
     from core_ui.models import LLMUsageLog
+    from servers.models import Server, ServerConnection
 
     Task = _model_or_none("tasks", "Task")
     AgentRun = _model_or_none("agent_hub", "AgentRun")
@@ -1001,7 +1003,7 @@ def _collect_admin_dashboard_data(include_version: bool = False) -> dict:
     tasks_in_progress = Task.objects.filter(status="IN_PROGRESS").count() if Task is not None else 0
 
     # Fleet health from monitoring
-    from servers.models import ServerHealthCheck, ServerAlert
+    from servers.models import ServerAlert, ServerHealthCheck
 
     fleet_health = {
         "avg_cpu": 0,
@@ -1013,7 +1015,8 @@ def _collect_admin_dashboard_data(include_version: bool = False) -> dict:
         "unreachable": 0,
     }
     try:
-        from django.db.models import Max, Avg as AvgF
+        from django.db.models import Avg as AvgF
+        from django.db.models import Max
 
         latest_per_server = ServerHealthCheck.objects.values("server_id").annotate(last_id=Max("id"))
         latest_ids = [r["last_id"] for r in latest_per_server]
@@ -1106,7 +1109,7 @@ def api_admin_users_activity(request):
     if not user_can_feature(request.user, "dashboard"):
         return JsonResponse({"error": "Forbidden"}, status=403)
 
-    from django.db.models import Count, Q as QQ
+    from django.db.models import Q as QQ
 
     try:
         limit = min(int(request.GET.get("limit", 50)), 200)
@@ -1166,7 +1169,7 @@ def api_admin_users_sessions(request):
         return JsonResponse({"error": "Forbidden"}, status=403)
 
     from django.contrib.auth.models import User as AuthUser
-    from django.db.models import Max, Count
+
     from servers.models import ServerConnection
 
     last_5min = django_timezone.now() - timedelta(minutes=5)
@@ -1297,7 +1300,7 @@ def _apply_access_profile(user, profile: str) -> None:
             user.save(update_fields=["is_staff"])
     else:
         # admin_full
-        target = {feature: True for feature in features}
+        target = dict.fromkeys(features, True)
         if not user.is_staff:
             user.is_staff = True
             user.save(update_fields=["is_staff"])
@@ -1355,7 +1358,8 @@ def _apply_group_explicit_permissions(group, permissions: dict | None) -> None:
 
 def _get_access_data():
     """Данные для раздела «Управление доступом»."""
-    from django.contrib.auth.models import User, Group
+    from django.contrib.auth.models import Group, User
+
     from core_ui.models import UserAppPermission
 
     users = list(User.objects.all().prefetch_related("groups").order_by("username"))
@@ -1629,8 +1633,9 @@ def _load_task_context_for_user(user_id: int, task_id) -> dict:
         return {}
 
     from django.contrib.auth.models import User
-    from tasks.models import Task
+
     from app.services.permissions import PermissionService
+    from tasks.models import Task
 
     user = User.objects.filter(id=user_id).first()
     if not user:
@@ -2539,7 +2544,7 @@ def api_settings(request):
                 "retention_days",
                 "export_format",
             }
-            requested_audit_keys = sorted(key for key in data.keys() if key in audit_logging_keys)
+            requested_audit_keys = sorted(key for key in data if key in audit_logging_keys)
             if requested_audit_keys and not request.user.is_staff:
                 return JsonResponse(
                     {"success": False, "error": "Only admins can update audit logging settings"},
@@ -3057,7 +3062,7 @@ def _resolve_ide_workspace(workspace_param: str) -> Path:
 
         # Проверка через is_relative_to (Python 3.9+)
         if not str(resolved).startswith(str(projects_resolved)):
-            raise ValueError(f"Workspace path must be within AGENT_PROJECTS_DIR")
+            raise ValueError("Workspace path must be within AGENT_PROJECTS_DIR")
     except Exception as e:
         if isinstance(e, ValueError):
             raise
@@ -3195,7 +3200,7 @@ def api_ide_read_file(request):
 
         # Читаем файл
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 content = f.read()
         except UnicodeDecodeError:
             # Пробуем как бинарный файл
@@ -3327,7 +3332,7 @@ def api_access_users(request):
     GET /api/access/users/ - список пользователей
     POST /api/access/users/ - создание нового пользователя
     """
-    from django.contrib.auth.models import User, Group
+    from django.contrib.auth.models import Group, User
 
     if request.method == "GET":
         users = User.objects.all().prefetch_related("groups").order_by("username")
@@ -3439,8 +3444,8 @@ def api_access_user_detail(request, user_id):
     PUT /api/access/users/<id>/ - обновить пользователя
     DELETE /api/access/users/<id>/ - удалить пользователя
     """
-    from django.contrib.auth.models import User, Group
-    from core_ui.models import UserAppPermission
+    from django.contrib.auth.models import Group, User
+
 
     try:
         user = User.objects.get(id=user_id)
@@ -3652,6 +3657,7 @@ def api_access_groups(request):
     POST /api/access/groups/ - создание новой группы
     """
     from django.contrib.auth.models import Group
+
     from core_ui.models import GroupAppPermission
 
     if request.method == "GET":
@@ -3725,6 +3731,7 @@ def api_access_group_detail(request, group_id):
     DELETE /api/access/groups/<id>/ - удалить группу
     """
     from django.contrib.auth.models import Group, User
+
     from core_ui.models import GroupAppPermission
 
     try:
@@ -3845,7 +3852,8 @@ def api_access_permissions(request):
     POST /api/access/permissions/ - создание/обновление права
     """
     from django.contrib.auth.models import User
-    from core_ui.models import UserAppPermission, GroupAppPermission
+
+    from core_ui.models import GroupAppPermission, UserAppPermission
 
     if request.method == "GET":
         permissions = UserAppPermission.objects.select_related("user").all().order_by("user__username", "feature")
@@ -3932,6 +3940,7 @@ def api_access_permissions(request):
 def api_access_group_permissions(request):
     """Group-level feature permissions."""
     from django.contrib.auth.models import Group
+
     from core_ui.models import GroupAppPermission
 
     if request.method == "GET":

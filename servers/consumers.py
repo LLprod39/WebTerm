@@ -13,7 +13,7 @@ import shlex
 import uuid
 from dataclasses import dataclass
 from errno import ECONNRESET
-from typing import Any, Optional
+from typing import Any
 
 import asyncssh
 from channels.db import database_sync_to_async
@@ -131,25 +131,25 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
           {type: "ai_clear_memory"}
     """
 
-    server: Optional[Server] = None
-    _user_id: Optional[int] = None
+    server: Server | None = None
+    _user_id: int | None = None
 
-    _ssh_conn: Optional[asyncssh.SSHClientConnection] = None
-    _ssh_proc: Optional[asyncssh.SSHClientProcess[str]] = None
-    _stdout_task: Optional[asyncio.Task[None]] = None
-    _stderr_task: Optional[asyncio.Task[None]] = None
-    _wait_task: Optional[asyncio.Task[None]] = None
-    _connection_heartbeat_task: Optional[asyncio.Task[None]] = None
+    _ssh_conn: asyncssh.SSHClientConnection | None = None
+    _ssh_proc: asyncssh.SSHClientProcess[str] | None = None
+    _stdout_task: asyncio.Task[None] | None = None
+    _stderr_task: asyncio.Task[None] | None = None
+    _wait_task: asyncio.Task[None] | None = None
+    _connection_heartbeat_task: asyncio.Task[None] | None = None
     _connect_lock: asyncio.Lock
 
     _ai_lock: asyncio.Lock
-    _ai_task: Optional[asyncio.Task[None]] = None
+    _ai_task: asyncio.Task[None] | None = None
     _ai_plan: list[dict[str, Any]]
     _ai_plan_index: int
     _ai_next_id: int
     _ai_forbidden_patterns: list[str]
     _ai_exit_futures: dict[int, asyncio.Future[int]]
-    _ai_active_cmd_id: Optional[int]
+    _ai_active_cmd_id: int | None
     _ai_active_output: str
     _ai_user_message: str
     _ai_chat_mode: str
@@ -163,14 +163,14 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
     _terminal_tail: str
     _ai_history: list[dict]
     _unavailable_cmds: set[str]    # commands that returned exit=127 this session
-    _ai_reply_futures: dict[str, "asyncio.Future[str]"]  # q_id → future waiting for user reply
+    _ai_reply_futures: dict[str, asyncio.Future[str]]  # q_id → future waiting for user reply
     _ai_error_retries: dict[int, int]   # cmd_id → retry count (max 2)
     _ai_run_id: str
     _ai_marker_token: str
     _ai_stop_requested: bool
     _manual_next_cmd_id: int
     _manual_pending_commands: list[dict[str, Any]]
-    _manual_active_cmd_id: Optional[int]
+    _manual_active_cmd_id: int | None
     _manual_active_output: str
 
     _marker_suppress: dict[str, bool]
@@ -179,8 +179,8 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
     @staticmethod
     def _resolve_ws_token_user(token: str):
         """Validate a short-lived WS token and return the User or None."""
-        from django.core.signing import TimestampSigner, BadSignature, SignatureExpired
         from django.contrib.auth.models import User as _User
+        from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
         signer = TimestampSigner(salt="ws-token")
         try:
             user_id = int(signer.unsign(token, max_age=300))
@@ -736,9 +736,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             return False
         if re.search(r"\b(?:then|do|else|elif|in)\s*$", lowered):
             return False
-        if stripped.count("'") % 2 or stripped.count('"') % 2 or stripped.count("`") % 2:
-            return False
-        return True
+        return not (stripped.count("'") % 2 or stripped.count('"') % 2 or stripped.count("`") % 2)
 
     @staticmethod
     def _strip_terminal_input_sequences(data: str) -> str:
@@ -859,7 +857,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         except Exception as e:
             await self._safe_send_json({"type": "error", "message": f"resize failed: {e}"})
 
-    async def _interrupt_active_command(self) -> Optional[int]:
+    async def _interrupt_active_command(self) -> int | None:
         """
         Try to interrupt active command with Ctrl+C and unblock waiter with exit=130.
         Returns active cmd_id if interrupted.
@@ -879,10 +877,8 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
 
         async with self._ai_lock:
             if fut and not fut.done():
-                try:
+                with contextlib.suppress(Exception):
                     fut.set_result(130)
-                except Exception:
-                    pass
         return cmd_id
 
     async def _handle_ai_stop(self):
@@ -928,9 +924,8 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
 
     async def _cancel_ai_locked(self):
         current = asyncio.current_task()
-        if self._ai_task and not self._ai_task.done():
-            if current is None or self._ai_task is not current:
-                self._ai_task.cancel()
+        if self._ai_task and not self._ai_task.done() and (current is None or self._ai_task is not current):
+            self._ai_task.cancel()
         self._ai_task = None
 
         for fut in (self._ai_exit_futures or {}).values():
@@ -1866,12 +1861,12 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             self._ssh_proc.stdin.write(marker_cmd + "\n")
 
         # For streaming commands: schedule Ctrl+C after 8 s to allow output capture
-        interrupt_task: Optional[asyncio.Task] = None
+        interrupt_task: asyncio.Task | None = None
         if is_streaming:
             interrupt_task = asyncio.create_task(self._interrupt_streaming_after(8.0))
 
         # For install commands: start periodic monitoring
-        monitor_task: Optional[asyncio.Task] = None
+        monitor_task: asyncio.Task | None = None
         if is_install and not is_streaming:
             monitor_task = asyncio.create_task(self._monitor_install(cmd_id, clean_cmd))
 
@@ -1894,16 +1889,12 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             # Always cancel the interrupt/monitor tasks if still pending
             if interrupt_task and not interrupt_task.done():
                 interrupt_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await interrupt_task
-                except asyncio.CancelledError:
-                    pass
             if monitor_task and not monitor_task.done():
                 monitor_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await monitor_task
-                except asyncio.CancelledError:
-                    pass
             async with self._ai_lock:
                 self._ai_exit_futures.pop(cmd_id, None)
 
@@ -1918,10 +1909,8 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         """Send Ctrl+C after `delay` seconds to interrupt a streaming command."""
         await asyncio.sleep(delay)
         if self._ssh_proc:
-            try:
+            with contextlib.suppress(Exception):
                 self._ssh_proc.stdin.write("\x03")
-            except Exception:
-                pass
 
     @staticmethod
     def _is_streaming_command(cmd: str) -> bool:
@@ -2482,6 +2471,7 @@ EXIT_CODE: {exit_code}
         issues: list[str],
     ) -> dict[str, Any]:
         from django.contrib.auth.models import User
+
         from servers.knowledge_service import ServerKnowledgeService
         from servers.models import Server
 
@@ -2725,10 +2715,8 @@ EXIT_CODE: {exit_code}
                 # Try parse marker output line: __WEUAI_EXIT_<token>_<id>:<code>__
                 m = marker_re.match(buf.strip())
                 if m:
-                    try:
+                    with contextlib.suppress(Exception):
                         markers.append((int(m.group(1)), int(m.group(2))))
-                    except Exception:
-                        pass
                 buf = ""
                 suppress = False
                 # Preserve the newline which ended the suppressed line

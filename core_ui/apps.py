@@ -7,6 +7,7 @@ class CoreUiConfig(AppConfig):
 
     def ready(self):
         from django.db.backends.signals import connection_created
+
         import core_ui.checks  # noqa: F401
         import core_ui.logging_setup  # noqa: F401
         import core_ui.signals  # noqa: F401

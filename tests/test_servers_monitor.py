@@ -7,13 +7,12 @@ from django.contrib.auth.models import User
 from servers.models import Server
 from servers.monitor import check_all_servers
 
-
 pytestmark = pytest.mark.django_db(transaction=True)
 
 
 def test_check_all_servers_can_be_scoped_to_specific_server_ids(monkeypatch):
     owner = User.objects.create_user(username="monitor-scope", password="x")
-    server_a = Server.objects.create(
+    Server.objects.create(
         user=owner,
         name="srv-a",
         host="10.0.0.31",

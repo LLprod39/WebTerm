@@ -13,6 +13,7 @@ from django.conf import settings as django_settings
 from loguru import logger
 
 from core_ui.managed_secrets import get_mcp_secret_env
+
 from .models import MCPServerPool
 
 SUPPORTED_PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")

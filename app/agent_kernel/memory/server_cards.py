@@ -31,12 +31,7 @@ def _is_session_noise_line(line: str) -> bool:
         "rdp terminal session closed",
     }:
         return True
-    if (
-        any(marker in normalized for marker in ("connection_id", "user_id"))
-        and any(term in normalized for term in ("session_opened", "session_closed", "session opened", "session closed"))
-    ):
-        return True
-    return False
+    return bool(any(marker in normalized for marker in ("connection_id", "user_id")) and any(term in normalized for term in ("session_opened", "session_closed", "session opened", "session closed")))
 
 
 def _clean_episode_summary(summary: str, *, limit: int = 3) -> str:

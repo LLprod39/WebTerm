@@ -2,7 +2,6 @@ from django.urls import path
 
 from . import views
 
-
 urlpatterns = [
     path("auth/login/", views.auth_login),
     path("auth/refresh/", views.auth_refresh),

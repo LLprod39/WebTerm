@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import UserAppPermission, UserActivityLog
+
+from .models import UserActivityLog, UserAppPermission
 
 
 @admin.register(UserAppPermission)

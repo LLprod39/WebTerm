@@ -42,6 +42,7 @@ export function TriggerNode({ data, selected, type }: NodeProps) {
       hasTarget={false}
       sourcePorts={[{ id: "out", label: "OUT" }]}
       accentColor="border-amber-500/40"
+      categoryColor="#38bdf8"
       {...getNodeRuntimeProps(d)}
     />
   );

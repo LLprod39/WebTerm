@@ -10,9 +10,9 @@ Usage:
 - Prints pipeline ID and instructions to run it in Studio.
 """
 
+from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
-from django.contrib.auth import get_user_model
 
 from studio.models import PipelineTemplate
 

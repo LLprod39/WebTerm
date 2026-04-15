@@ -81,10 +81,7 @@ def parse_csv_items(raw_value: str | list[Any] | tuple[Any, ...] | None) -> list
         return []
     result: list[str] = []
     seen: set[str] = set()
-    if isinstance(raw_value, (list, tuple)):
-        parts = [str(item) for item in raw_value]
-    else:
-        parts = str(raw_value).split(",")
+    parts = [str(item) for item in raw_value] if isinstance(raw_value, (list, tuple)) else str(raw_value).split(",")
     for part in parts:
         item = part.strip()
         if not item:

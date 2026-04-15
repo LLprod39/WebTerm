@@ -2,7 +2,10 @@
 One-shot script: creates the Full DevOps Autopilot mega-pipeline.
 Run from mini_prod root:  python create_mega_pipeline.py
 """
-import os, sys, json, django
+import os
+import sys
+
+import django
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.getcwd())
@@ -10,6 +13,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "web_ui.settings")
 django.setup()
 
 from django.contrib.auth.models import User
+
 from studio.models import Pipeline
 
 user = User.objects.filter(is_superuser=True).first()

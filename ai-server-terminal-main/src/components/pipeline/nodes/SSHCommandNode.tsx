@@ -16,6 +16,7 @@ export function SSHCommandNode({ data, selected }: NodeProps) {
       icon={<Terminal className="h-4 w-4 text-cyan-400" />}
       description={command ? command.slice(0, 40) + (command.length > 40 ? "…" : "") : localize(lang, "Точная SSH-команда", "Direct SSH command")}
       accentColor="border-cyan-500/40"
+      categoryColor="#8b5cf6"
       sourcePorts={[
         { id: "success", label: localize(lang, "OK", "SUCCESS"), className: "!bg-green-500/70 hover:!bg-green-500", labelClassName: "text-green-500" },
         { id: "error", label: localize(lang, "ERR", "ERROR"), className: "!bg-red-500/70 hover:!bg-red-500", labelClassName: "text-red-500" },

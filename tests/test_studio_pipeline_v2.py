@@ -8,13 +8,13 @@ from django.contrib.auth.models import User
 from django.test import Client
 
 from core_ui.models import UserAppPermission
-from studio.management.commands.run_scheduled_pipelines import Command as RunScheduledPipelinesCommand
 from studio.keycloak_provisioning import (
     build_keycloak_edges,
     build_keycloak_nodes,
     build_keycloak_ops_edges,
     build_keycloak_ops_nodes,
 )
+from studio.management.commands.run_scheduled_pipelines import Command as RunScheduledPipelinesCommand
 from studio.mcp_showcase import build_showcase_edges, build_showcase_nodes
 from studio.models import MCPServerPool, Pipeline, PipelineRun
 from studio.pipeline_executor import PipelineExecutor

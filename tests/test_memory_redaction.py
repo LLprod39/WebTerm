@@ -1,8 +1,6 @@
 """Tests for app.agent_kernel.memory.redaction — secret redaction layer."""
 from __future__ import annotations
 
-import pytest
-
 from app.agent_kernel.memory.redaction import redact_for_storage, redact_text
 
 

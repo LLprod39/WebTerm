@@ -7,8 +7,7 @@ from django.dispatch import receiver
 from app.agent_kernel.memory.store import DjangoServerMemoryStore
 from servers.memory_heuristics import should_capture_command_history_memory
 from servers.models import AgentRunEvent, ServerAlert, ServerCommandHistory, ServerHealthCheck, ServerWatcherDraft
-
-memory_store = DjangoServerMemoryStore()
+from servers.tasks import ingest_memory_event_task
 
 
 def _deferred_ingest_command_history(pk: int):
@@ -26,8 +25,8 @@ def _deferred_ingest_command_history(pk: int):
         source_kind=instance.source_kind or "terminal",
     ):
         return
-    memory_store._ingest_event_sync(
-        instance.server_id,
+    ingest_memory_event_task.delay(
+        server_id=instance.server_id,
         source_kind=instance.source_kind or "terminal",
         actor_kind=instance.actor_kind or "human",
         source_ref=instance.session_id or f"command-history:{instance.pk}",
@@ -76,11 +75,12 @@ def _deferred_ingest_health_check(pk: int):
     if not _should_capture_health_check(instance):
         return
     raw_output = instance.raw_output or {}
-    memory_store._ingest_event_sync(
-        instance.server_id,
+    ingest_memory_event_task.delay(
+        server_id=instance.server_id,
         source_kind="monitoring",
         actor_kind="system",
         source_ref=f"health:{instance.pk}",
+        session_id=None,
         event_type=f"health_{instance.status}",
         raw_text=(
             f"Health check status={instance.status}, cpu={instance.cpu_percent}, mem={instance.memory_percent}, "
@@ -111,11 +111,12 @@ def ingest_health_check(sender, instance: ServerHealthCheck, created: bool, **kw
 def ingest_alert(sender, instance: ServerAlert, created: bool, **kwargs):
     event_type = "alert_resolved" if instance.is_resolved else "alert_opened"
     importance = 0.95 if instance.severity == ServerAlert.SEVERITY_CRITICAL else 0.82
-    memory_store._ingest_event_sync(
-        instance.server_id,
+    ingest_memory_event_task.delay(
+        server_id=instance.server_id,
         source_kind="monitoring",
         actor_kind="watcher" if created else "system",
         source_ref=f"alert:{instance.pk}",
+        session_id=None,
         event_type=event_type,
         raw_text=f"{instance.title}\n{instance.message}".strip(),
         structured_payload={
@@ -150,8 +151,8 @@ def _launch_monitoring_pipelines(alert_id: int) -> None:
 def ingest_agent_run_event(sender, instance: AgentRunEvent, created: bool, **kwargs):
     if not created or not instance.run_id or not instance.run.server_id:
         return
-    memory_store._ingest_event_sync(
-        instance.run.server_id,
+    ingest_memory_event_task.delay(
+        server_id=instance.run.server_id,
         source_kind="agent_event",
         actor_kind="agent",
         source_ref=f"agent-run:{instance.run_id}",
@@ -170,11 +171,12 @@ def ingest_agent_run_event(sender, instance: AgentRunEvent, created: bool, **kwa
 
 @receiver(post_save, sender=ServerWatcherDraft)
 def ingest_watcher_draft(sender, instance: ServerWatcherDraft, created: bool, **kwargs):
-    memory_store._ingest_event_sync(
-        instance.server_id,
+    ingest_memory_event_task.delay(
+        server_id=instance.server_id,
         source_kind="watcher",
         actor_kind="watcher",
         source_ref=f"watcher-draft:{instance.pk}",
+        session_id=None,
         event_type="watcher_draft_opened" if created else f"watcher_draft_{instance.status}",
         raw_text=instance.objective,
         structured_payload={

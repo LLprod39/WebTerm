@@ -7,8 +7,7 @@ from django.utils import timezone
 
 from core_ui.activity import log_user_activity
 from core_ui.audit import audit_context
-from core_ui.models import UserAppPermission
-from core_ui.models import UserActivityLog
+from core_ui.models import UserActivityLog, UserAppPermission
 
 
 def _json(payload: dict) -> str:

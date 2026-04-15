@@ -175,6 +175,7 @@ def test_pipeline_executor_honors_db_stop_request_without_live_registry():
 @pytest.mark.django_db
 def test_execute_agent_ssh_cmd_awaits_async_connect_kwargs(monkeypatch):
     import asyncio
+
     import asyncssh
 
     user = User.objects.create_user(username="studio-ssh-cmd-user", password="x")
@@ -271,6 +272,7 @@ def test_pipeline_executor_wait_node_honors_stop_request():
 
     def _target():
         import asyncio
+
         from django.db import connections
 
         try:

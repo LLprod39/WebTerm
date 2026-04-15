@@ -81,6 +81,7 @@ class PipelineRunConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def _user_can_access_run(self, user_id: int, run_id: int) -> bool:
         from django.contrib.auth.models import User
+
         from core_ui.context_processors import user_can_feature
         from studio.models import PipelineRun
 

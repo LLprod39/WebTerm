@@ -12,17 +12,6 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
 from core_ui.context_processors import user_can_feature
-from core_ui.desktop_auth import (
-    ACCESS_TOKEN_TTL_SECONDS,
-    DesktopAuthError,
-    authenticate_access_token,
-    authenticate_credentials,
-    create_refresh_token,
-    issue_access_token,
-    issue_ws_token,
-    revoke_refresh_token,
-    rotate_refresh_token,
-)
 from core_ui.desktop_api.serializers import (
     accessible_share_for_server,
     connected_ids_for_servers,
@@ -35,10 +24,26 @@ from core_ui.desktop_api.serializers import (
     serialize_server_summary,
     serialize_user,
 )
+from core_ui.desktop_auth import (
+    ACCESS_TOKEN_TTL_SECONDS,
+    DesktopAuthError,
+    authenticate_access_token,
+    authenticate_credentials,
+    create_refresh_token,
+    issue_access_token,
+    issue_ws_token,
+    revoke_refresh_token,
+    rotate_refresh_token,
+)
 from core_ui.managed_secrets import set_mcp_secret_env
 from servers.models import GlobalServerRules, Server, ServerGroup, ServerKnowledge
 from servers.secret_utils import clear_server_auth_secret, store_server_auth_secret
-from servers.views import _accessible_servers_queryset, _active_server_share, _get_group_role, _shared_server_context_allowed
+from servers.views import (
+    _accessible_servers_queryset,
+    _active_server_share,
+    _get_group_role,
+    _shared_server_context_allowed,
+)
 from studio.mcp_client import MCPClientError, inspect_mcp_server
 from studio.models import MCPServerPool
 from studio.views import _normalize_sse_url, _test_mcp_connection

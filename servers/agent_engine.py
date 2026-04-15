@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import re
 import time
 from collections.abc import Callable, Coroutine
 from contextlib import suppress
@@ -51,7 +50,8 @@ def sync_to_async(func, thread_sensitive=False):
     return _s2a(func, thread_sensitive=thread_sensitive)
 
 
-from app.agent_kernel.runtime.parsing import parse_action as _parse_action, parse_response  # noqa: F401
+from app.agent_kernel.runtime.parsing import parse_action as _parse_action  # noqa: F401
+from app.agent_kernel.runtime.parsing import parse_response
 
 SESSION_TIMEOUT_DEFAULT = 600
 MAX_ITERATIONS_CAP = 100

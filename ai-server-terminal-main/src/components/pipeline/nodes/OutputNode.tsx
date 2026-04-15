@@ -30,6 +30,7 @@ export function OutputNode({ data, selected, type }: NodeProps) {
         { id: "error", label: localize(lang, "ERR", "ERROR"), className: "!bg-red-500/70 hover:!bg-red-500", labelClassName: "text-red-500" },
       ]}
       accentColor="border-rose-500/40"
+      categoryColor="#34d399"
       {...getNodeRuntimeProps(d)}
     />
   );

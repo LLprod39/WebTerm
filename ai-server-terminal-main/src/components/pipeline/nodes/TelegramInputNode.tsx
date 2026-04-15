@@ -26,6 +26,7 @@ export function TelegramInputNode({ data, selected }: NodeProps) {
       icon={<MessageCircle className="h-4 w-4 text-purple-400" />}
       description={desc}
       accentColor="border-cyan-500/40"
+      categoryColor="#f97316"
       sourcePorts={[
         {
           id: "received",

@@ -6,10 +6,11 @@ from __future__ import annotations
 
 import contextlib
 import time
+from collections.abc import Iterator
 from contextvars import ContextVar
 from datetime import timedelta
 from threading import Lock
-from typing import Any, Iterator
+from typing import Any
 
 from django.utils import timezone
 from loguru import logger

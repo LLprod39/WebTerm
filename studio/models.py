@@ -467,12 +467,14 @@ class PipelineRun(models.Model):
     STATUS_COMPLETED = "completed"
     STATUS_FAILED = "failed"
     STATUS_STOPPED = "stopped"
+    STATUS_HIBERNATING = "hibernating"
     STATUS_CHOICES = [
         (STATUS_PENDING, "Pending"),
         (STATUS_RUNNING, "Running"),
         (STATUS_COMPLETED, "Completed"),
         (STATUS_FAILED, "Failed"),
         (STATUS_STOPPED, "Stopped"),
+        (STATUS_HIBERNATING, "Hibernating"),
     ]
 
     pipeline = models.ForeignKey(Pipeline, on_delete=models.CASCADE, related_name="runs")

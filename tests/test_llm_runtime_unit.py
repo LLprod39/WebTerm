@@ -1,11 +1,11 @@
 import asyncio
 
 import pytest
-from core_ui.audit import audit_context
 from django.test import override_settings
 
 from app.core.llm import LLMProvider, _is_timeout_error, _log_llm_usage, _provider_timeout_seconds
 from app.core.model_config import ModelManager, model_manager
+from core_ui.audit import audit_context
 
 
 def test_is_timeout_error_detects_timeout_variants():

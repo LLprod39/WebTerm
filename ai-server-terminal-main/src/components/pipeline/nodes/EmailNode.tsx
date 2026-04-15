@@ -18,6 +18,7 @@ export function EmailNode({ data, selected }: NodeProps) {
       icon={<Mail className="h-4 w-4 text-sky-400" />}
       description={toEmail ? `${localize(lang, "Кому", "To")}: ${toEmail}` : localize(lang, "Настройте получателей письма", "Configure recipient email")}
       accentColor="border-sky-500/40"
+      categoryColor="#34d399"
       sourcePorts={[
         { id: "success", label: localize(lang, "OK", "SUCCESS"), className: "!bg-green-500/70 hover:!bg-green-500", labelClassName: "text-green-500" },
         { id: "error", label: localize(lang, "ERR", "ERROR"), className: "!bg-red-500/70 hover:!bg-red-500", labelClassName: "text-red-500" },

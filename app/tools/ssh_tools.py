@@ -2,12 +2,13 @@
 SSH Agent Tool for Remote Operations
 Allows the agent to connect to SSH servers and execute commands
 """
-import asyncssh
 import secrets
-from loguru import logger
-from typing import Optional, Dict, Any
+from typing import Any
+
+import asyncssh
 from asgiref.sync import sync_to_async
 from django.conf import settings
+from loguru import logger
 
 from app.tools.base import BaseTool, ToolMetadata, ToolParameter
 from app.tools.safety import is_dangerous_command
@@ -18,24 +19,24 @@ from servers.ssh_host_keys import ensure_server_known_hosts, parse_host_port_val
 
 class SSHConnectionManager:
     """Manages SSH connections"""
-    
+
     def __init__(self):
-        self.connections: Dict[str, asyncssh.SSHClientConnection] = {}
-    
+        self.connections: dict[str, asyncssh.SSHClientConnection] = {}
+
     async def connect(
         self,
         host: str,
         username: str,
-        password: Optional[str] = None,
-        key_path: Optional[str] = None,
+        password: str | None = None,
+        key_path: str | None = None,
         port: int = 22,
-        network_config: Optional[Dict] = None,
-        server: Optional[Any] = None,
+        network_config: dict | None = None,
+        server: Any | None = None,
         refresh_host_key: bool = False,
     ) -> str:
         """
         Establish SSH connection с учётом network_config
-        
+
         Args:
             network_config: Конфигурация корпоративной сети:
                 - proxy: {http_proxy, https_proxy, no_proxy}
@@ -43,13 +44,13 @@ class SSHConnectionManager:
                 - network: {bastion_host, subnet, gateway}
                 - firewall: {inbound_ports, outbound_restrictions}
                 - environment: {HTTP_PROXY, custom_vars, ...}
-        
+
         Returns:
             connection ID
         """
         normalized_host, normalized_port = parse_host_port_value(host, port)
         conn_id = f"{username}@{normalized_host}:{normalized_port}:{secrets.token_hex(4)}"
-        
+
         try:
             logger.info(f"Connecting to {conn_id}...")
             effective_network_config = network_config or getattr(server, "network_config", None) or {}
@@ -62,7 +63,7 @@ class SSHConnectionManager:
                     normalized_port,
                     network_config=effective_network_config,
                 )
-            
+
             # Prepare connection options
             options = {
                 "known_hosts": known_hosts,
@@ -71,11 +72,11 @@ class SSHConnectionManager:
                 "keepalive_interval": max(1, int(getattr(settings, "SSH_KEEPALIVE_INTERVAL_SECONDS", 20) or 20)),
                 "keepalive_count_max": max(1, int(getattr(settings, "SSH_KEEPALIVE_COUNT_MAX", 3) or 3)),
             }
-            
+
             # Network config handling
             if effective_network_config:
                 nc = effective_network_config
-                
+
                 # Bastion/Jump host
                 bastion = nc.get('network', {}).get('bastion_host')
                 if bastion:
@@ -86,7 +87,7 @@ class SSHConnectionManager:
                     else:
                         options['jump_host'] = bastion
                     logger.info(f"Using bastion host: {bastion}")
-                
+
                 # Proxy command (для работы через HTTP прокси)
                 proxy = nc.get('proxy', {}).get('http_proxy')
                 if proxy:
@@ -98,13 +99,13 @@ class SSHConnectionManager:
                         # ProxyCommand: nc -X connect -x proxy:port %h %p
                         options['tunnel'] = (proxy_host, int(proxy_port))
                     logger.info(f"Using proxy: {proxy}")
-                
+
                 # Environment variables (для команд на удалённом сервере)
                 # Сохраняем для использования в execute
                 if nc.get('environment'):
                     # Будем добавлять в команды: export VAR=value && command
                     pass
-            
+
             # Auth handling:
             # - password only -> password auth
             # - key only -> public key auth
@@ -116,14 +117,14 @@ class SSHConnectionManager:
                     options['passphrase'] = password
                 else:
                     options['password'] = password
-            
+
             conn = await asyncssh.connect(
                 host=normalized_host,
                 port=normalized_port,
                 username=username,
                 **options,
             )
-            
+
             # Сохраняем network_config вместе с connection для использования в execute
             self.connections[conn_id] = {
                 'connection': conn,
@@ -131,11 +132,11 @@ class SSHConnectionManager:
             }
             logger.success(f"Connected to {conn_id}")
             return conn_id
-            
+
         except Exception as e:
             logger.error(f"SSH connection failed: {e}")
             raise
-    
+
     async def disconnect(self, conn_id: str):
         """Close SSH connection"""
         if conn_id in self.connections:
@@ -149,22 +150,22 @@ class SSHConnectionManager:
                 await conn_data.wait_closed()
             del self.connections[conn_id]
             logger.info(f"Disconnected from {conn_id}")
-    
-    async def execute(self, conn_id: str, command: str) -> Dict[str, Any]:
+
+    async def execute(self, conn_id: str, command: str) -> dict[str, Any]:
         """Execute command on remote host с учётом network_config"""
         if conn_id not in self.connections:
             raise ValueError(f"No active connection: {conn_id}")
-        
+
         try:
             conn_data = self.connections[conn_id]
-            
+
             if isinstance(conn_data, dict):
                 conn = conn_data['connection']
                 network_config = conn_data.get('network_config') or {}
             else:
                 conn = conn_data
                 network_config = {}
-            
+
             # Добавляем environment variables из network_config
             final_command = command
             if network_config.get('environment'):
@@ -174,13 +175,13 @@ class SSHConnectionManager:
                 for key, value in env_vars.items():
                     if key and value:
                         exports.append(f"export {key}={value}")
-                
+
                 if exports:
                     final_command = "; ".join(exports) + "; " + command
                     logger.debug(f"Command with env: {final_command}")
-            
+
             result = await conn.run(final_command, check=False)
-            
+
             return {
                 "stdout": result.stdout,
                 "stderr": result.stderr,
@@ -203,7 +204,7 @@ ssh_manager = SSHConnectionManager()
 
 class SSHConnectTool(BaseTool):
     """Tool for establishing SSH connections"""
-    
+
     def get_metadata(self) -> ToolMetadata:
         return ToolMetadata(
             name="ssh_connect",
@@ -217,9 +218,9 @@ class SSHConnectTool(BaseTool):
                 ToolParameter(name="port", type="number", description="SSH port", required=False, default=22),
             ]
         )
-    
-    async def execute(self, host: str, username: str, password: Optional[str] = None,
-                     key_path: Optional[str] = None, port: int = 22) -> str:
+
+    async def execute(self, host: str, username: str, password: str | None = None,
+                     key_path: str | None = None, port: int = 22) -> str:
         """Execute SSH connection"""
         conn_id = await ssh_manager.connect(host, username, password, key_path, port)
         return f"Successfully connected to {conn_id}. Use this ID for subsequent SSH commands."
@@ -227,7 +228,7 @@ class SSHConnectTool(BaseTool):
 
 class SSHExecuteTool(BaseTool):
     """Tool for executing commands over SSH"""
-    
+
     def get_metadata(self) -> ToolMetadata:
         return ToolMetadata(
             name="ssh_execute",
@@ -244,8 +245,8 @@ class SSHExecuteTool(BaseTool):
                 ),
             ]
         )
-    
-    async def execute(self, conn_id: str, command: str, allow_destructive: bool = False) -> Dict[str, Any]:
+
+    async def execute(self, conn_id: str, command: str, allow_destructive: bool = False) -> dict[str, Any]:
         """Execute command over SSH"""
         audit_ctx = get_audit_context()
         if is_dangerous_command(command) and not allow_destructive:
@@ -289,7 +290,7 @@ class SSHExecuteTool(BaseTool):
 
 class SSHDisconnectTool(BaseTool):
     """Tool for closing SSH connections"""
-    
+
     def get_metadata(self) -> ToolMetadata:
         return ToolMetadata(
             name="ssh_disconnect",
@@ -299,7 +300,7 @@ class SSHDisconnectTool(BaseTool):
                 ToolParameter(name="conn_id", type="string", description="SSH connection ID to close"),
             ]
         )
-    
+
     async def execute(self, conn_id: str) -> str:
         """Close SSH connection"""
         await ssh_manager.disconnect(conn_id)

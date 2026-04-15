@@ -4,8 +4,8 @@ import pytest
 from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
 
-from servers.monitor import _create_alerts
 from servers.models import Server, ServerAlert
+from servers.monitor import _create_alerts
 from studio.docker_service_recovery import (
     _build_container_verify_command,
     ensure_docker_service_recovery_pipeline,
@@ -13,7 +13,6 @@ from studio.docker_service_recovery import (
 from studio.models import Pipeline, PipelineRun
 from studio.pipeline_validation import validate_pipeline_definition
 from studio.trigger_dispatch import launch_monitoring_triggers_for_alert, monitoring_trigger_matches_alert
-
 
 pytestmark = pytest.mark.django_db(transaction=True)
 

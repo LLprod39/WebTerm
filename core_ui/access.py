@@ -6,8 +6,8 @@ from typing import Any
 from core_ui.models import (
     DEFAULT_ALLOWED_FEATURES,
     FEATURE_CHOICES,
-    GroupAppPermission,
     STAFF_ONLY_FEATURES,
+    GroupAppPermission,
     UserAppPermission,
 )
 

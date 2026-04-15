@@ -1145,10 +1145,7 @@ class KeycloakAdminClient:
         response = self._post_json(f"{self.config.admin_base_url}/groups", payload, allow_statuses=(201, 204))
         location = response.headers.get("Location", "")
         group_id = location.rstrip("/").split("/")[-1] if location else ""
-        if group_id:
-            created = self.resolve_group(group_id)
-        else:
-            created = self.resolve_group(f"/{name}")
+        created = self.resolve_group(group_id) if group_id else self.resolve_group(f"/{name}")
         return _group_summary(created)
 
 

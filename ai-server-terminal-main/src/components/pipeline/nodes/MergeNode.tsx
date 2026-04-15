@@ -17,6 +17,7 @@ export function MergeNode({ data, selected }: NodeProps) {
       icon={<Merge className="h-4 w-4 text-purple-400" />}
       description={mode === "any" ? localize(lang, "Продолжить после первой ветки", "Continue after the first branch") : localize(lang, "Ждать все активные ветки", "Wait for all active branches")}
       accentColor="border-orange-500/40"
+      categoryColor="#f97316"
       sourcePorts={[{ id: "out", label: "OUT" }]}
       {...getNodeRuntimeProps(d)}
     >

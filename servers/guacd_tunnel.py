@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import asyncio
 import re
-from typing import Optional
 
 from django.conf import settings
 from loguru import logger
@@ -116,7 +115,7 @@ async def guacd_rdp_handshake(
     await writer.drain()
 
     buf = b""
-    args_line: Optional[str] = None
+    args_line: str | None = None
     while True:
         chunk = await reader.read(4096)
         if not chunk:

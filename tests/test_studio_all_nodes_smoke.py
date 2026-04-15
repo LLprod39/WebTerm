@@ -7,7 +7,6 @@ from servers.models import Server
 from studio.all_nodes_smoke import build_all_nodes_smoke_edges, ensure_all_nodes_smoke_pipeline
 from studio.pipeline_validation import KNOWN_NODE_TYPES, validate_pipeline_definition
 
-
 pytestmark = pytest.mark.django_db
 
 

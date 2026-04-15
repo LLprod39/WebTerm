@@ -675,10 +675,7 @@ def _build_log_source_command(source: str, lines: int, service: str) -> str:
         )
 
     paths = preset["path"]
-    if isinstance(paths, str):
-        path_candidates = [paths]
-    else:
-        path_candidates = list(paths)
+    path_candidates = [paths] if isinstance(paths, str) else list(paths)
 
     file_checks = " ".join(f"{shlex.quote(candidate)}" for candidate in path_candidates)
     return (
@@ -1125,10 +1122,7 @@ async def get_linux_ui_logs(
         if preset["kind"] != "file":
             continue
         preset_paths = preset["path"]
-        if isinstance(preset_paths, str):
-            paths = [preset_paths]
-        else:
-            paths = list(preset_paths)
+        paths = [preset_paths] if isinstance(preset_paths, str) else list(preset_paths)
         file_checks = " || ".join(f"[ -f {shlex.quote(candidate)} ]" for candidate in paths)
         meta_script_lines.append(
             f"if {file_checks}; then printf 'preset_{preset_key}=1\\n'; else printf 'preset_{preset_key}=0\\n'; fi"

@@ -15,6 +15,7 @@ export function ParallelNode({ data, selected }: NodeProps) {
       icon={<Zap className="h-4 w-4 text-purple-400" />}
       description={localize(lang, "Следующие ветки пойдут параллельно", "Run next nodes in parallel")}
       accentColor="border-orange-500/40"
+      categoryColor="#f97316"
       sourcePorts={[{ id: "out", label: "OUT" }]}
       {...getNodeRuntimeProps(d)}
     />

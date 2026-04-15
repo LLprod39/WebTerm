@@ -3,10 +3,10 @@
 Использование: python manage.py seed_servers_for_frontend [--username USER]
 Без --username берётся первый суперпользователь.
 """
-from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
+from django.core.management.base import BaseCommand
 
-from servers.models import ServerGroup, Server
+from servers.models import Server, ServerGroup
 
 User = get_user_model()
 
@@ -67,7 +67,7 @@ class Command(BaseCommand):
         existing = ServerGroup.objects.filter(user=user, name__in=[g[0] for g in GROUPS])
         if existing.exists() and not noinput:
             confirm = input(
-                f"Группы с такими именами уже есть у пользователя. Пересоздать серверы в них? [y/N]: "
+                "Группы с такими именами уже есть у пользователя. Пересоздать серверы в них? [y/N]: "
             )
             if confirm.lower() != "y":
                 self.stdout.write("Отменено.")

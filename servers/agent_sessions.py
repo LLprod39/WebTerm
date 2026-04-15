@@ -16,7 +16,6 @@ from collections.abc import Callable, Coroutine
 from typing import Any
 
 import asyncssh
-from asgiref.sync import sync_to_async as _s2a
 from loguru import logger
 
 from servers.monitor import _build_connect_kwargs

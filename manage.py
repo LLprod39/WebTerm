@@ -24,12 +24,12 @@ def main():
             "available on your PYTHONPATH environment variable? Did you "
             "forget to activate a virtual environment?"
         ) from exc
-    
+
     # Если запускается runserver без указания порта, используем порт из переменной окружения или 9000
     if len(sys.argv) >= 2 and sys.argv[1] == 'runserver' and len(sys.argv) == 2:
         default_port = os.getenv('DJANGO_PORT', '9000')
         sys.argv.append(default_port)
-    
+
     execute_from_command_line(sys.argv)
 
 

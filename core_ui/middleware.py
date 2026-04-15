@@ -9,13 +9,12 @@ import uuid
 from urllib.parse import urlparse
 
 from asgiref.sync import iscoroutinefunction, markcoroutinefunction
-from django.utils import translation
 from django.conf import settings
+from django.utils import translation
 from loguru import logger
 
 from core_ui.activity import log_user_activity
 from core_ui.audit import audit_context, infer_request_category
-
 
 _SENSITIVE_REQUEST_KEYS = (
     "password",
@@ -55,7 +54,7 @@ def _sanitize_request_value(value, *, max_len: int = 2000):
 def _extract_request_payload(request):
     method = (request.method or "GET").upper()
     content_type = str(request.META.get("CONTENT_TYPE") or "").lower()
-    query_params = {key: request.GET.getlist(key) for key in request.GET.keys()}
+    query_params = {key: request.GET.getlist(key) for key in request.GET}
     metadata = {"query": _sanitize_request_value(query_params)}
 
     if method in {"GET", "HEAD", "OPTIONS"}:
@@ -75,7 +74,7 @@ def _extract_request_payload(request):
             return metadata
 
     if content_type.startswith("multipart/form-data") or content_type.startswith("application/x-www-form-urlencoded"):
-        metadata["payload"] = _sanitize_request_value({key: request.POST.getlist(key) for key in request.POST.keys()})
+        metadata["payload"] = _sanitize_request_value({key: request.POST.getlist(key) for key in request.POST})
         if request.FILES:
             metadata["files"] = [
                 {
@@ -274,51 +273,49 @@ class RequestAuditMiddleware:
         start_ts = time.monotonic()
         request_id = self._ensure_request_id(request)
         scope = self._audit_scope(request)
-        with (scope or contextlib.nullcontext()):
-            with self._logger_scope(request):
-                try:
-                    response = self.get_response(request)
-                except Exception as exc:
-                    self._log_request(
-                        request,
-                        status_code=500,
-                        duration_ms=int((time.monotonic() - start_ts) * 1000),
-                        error_text=str(exc),
-                    )
-                    raise
-                response = self._attach_request_id(response, request_id)
-                if not self._should_skip(request):
-                    self._log_request(
-                        request,
-                        status_code=getattr(response, "status_code", 200),
-                        duration_ms=int((time.monotonic() - start_ts) * 1000),
-                    )
-                return response
+        with (scope or contextlib.nullcontext(), self._logger_scope(request)):
+            try:
+                response = self.get_response(request)
+            except Exception as exc:
+                self._log_request(
+                    request,
+                    status_code=500,
+                    duration_ms=int((time.monotonic() - start_ts) * 1000),
+                    error_text=str(exc),
+                )
+                raise
+            response = self._attach_request_id(response, request_id)
+            if not self._should_skip(request):
+                self._log_request(
+                    request,
+                    status_code=getattr(response, "status_code", 200),
+                    duration_ms=int((time.monotonic() - start_ts) * 1000),
+                )
+            return response
 
     async def __acall__(self, request):
         start_ts = time.monotonic()
         request_id = self._ensure_request_id(request)
         scope = self._audit_scope(request)
-        with (scope or contextlib.nullcontext()):
-            with self._logger_scope(request):
-                try:
-                    response = await self.get_response(request)
-                except Exception as exc:
-                    self._log_request(
-                        request,
-                        status_code=500,
-                        duration_ms=int((time.monotonic() - start_ts) * 1000),
-                        error_text=str(exc),
-                    )
-                    raise
-                response = self._attach_request_id(response, request_id)
-                if not self._should_skip(request):
-                    self._log_request(
-                        request,
-                        status_code=getattr(response, "status_code", 200),
-                        duration_ms=int((time.monotonic() - start_ts) * 1000),
-                    )
-                return response
+        with (scope or contextlib.nullcontext(), self._logger_scope(request)):
+            try:
+                response = await self.get_response(request)
+            except Exception as exc:
+                self._log_request(
+                    request,
+                    status_code=500,
+                    duration_ms=int((time.monotonic() - start_ts) * 1000),
+                    error_text=str(exc),
+                )
+                raise
+            response = self._attach_request_id(response, request_id)
+            if not self._should_skip(request):
+                self._log_request(
+                    request,
+                    status_code=getattr(response, "status_code", 200),
+                    duration_ms=int((time.monotonic() - start_ts) * 1000),
+                )
+            return response
 
 
 class MobileDetectionMiddleware:
@@ -326,26 +323,26 @@ class MobileDetectionMiddleware:
     Определяет мобильные устройства по User-Agent.
     Устанавливает request.is_mobile = True/False.
     """
-    
+
     MOBILE_KEYWORDS = [
-        'mobile', 'android', 'iphone', 'ipad', 'ipod', 
+        'mobile', 'android', 'iphone', 'ipad', 'ipod',
         'webos', 'blackberry', 'opera mini', 'opera mobi',
         'iemobile', 'windows phone', 'palm', 'symbian'
     ]
-    
+
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
         user_agent = request.META.get('HTTP_USER_AGENT', '').lower()
         request.is_mobile = any(kw in user_agent for kw in self.MOBILE_KEYWORDS)
-        
+
         # Также проверяем query параметр для тестирования
         if request.GET.get('mobile') == '1':
             request.is_mobile = True
         elif request.GET.get('mobile') == '0':
             request.is_mobile = False
-            
+
         response = self.get_response(request)
         return response
 
@@ -353,11 +350,11 @@ class MobileDetectionMiddleware:
 def get_template_name(request, desktop_template: str) -> str:
     """
     Возвращает мобильный или десктопный шаблон в зависимости от устройства.
-    
+
     Args:
         request: Django request object
         desktop_template: имя десктопного шаблона (например 'chat.html')
-        
+
     Returns:
         Путь к шаблону: 'mobile/chat.html' или 'chat.html'
     """

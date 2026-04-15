@@ -1803,10 +1803,8 @@ async def _execute_logic_human_approval(
     subs["all_outputs"] = all_outputs_text
     subs["timeout_minutes"] = str(int(timeout_minutes))
 
-    try:
-        message = message_template.format_map(subs)
-    except (KeyError, ValueError):
-        message = message_template
+    with contextlib.suppress(KeyError, ValueError):
+        message_template.format_map(subs)
 
     # Save initial "awaiting" state with token
     await _update_node_state(
@@ -2041,6 +2039,34 @@ async def _execute_logic_telegram_input(
         "{all_outputs}\n\n"
         "Ответьте на это сообщение обычным текстом. Ответ будет передан агенту."
     )
+    node_state = dict(run.node_states.get(node_id, {}))
+    
+    # ── Phase 2: Wakeup / Timeout check ──
+    if node_state.get("status") in {"hibernating", "awaiting_operator_reply"}:
+        operator_response = str(node_state.get("operator_response") or "").strip()
+        if operator_response:
+            return {
+                "status": "completed",
+                "output": operator_response,
+                "decision": "received",
+                "response_text": operator_response,
+            }
+            
+        started_at_str = node_state.get("started_at")
+        if started_at_str:
+            from dateutil.parser import isoparse
+            started_at = isoparse(started_at_str)
+            if timezone.now() >= started_at + timedelta(minutes=timeout_minutes):
+                return {
+                    "status": "failed",
+                    "error": f"Таймаут ожидания ответа оператора — нет ответа в течение {timeout_minutes:.0f} мин.",
+                    "decision": "timeout",
+                }
+        if is_runtime_stop_requested(run):
+            return {"status": "stopped", "output": "Ожидание ответа оператора отменено", "stopped": True}
+        return {"status": "hibernating", "reason": "awaiting_operator_reply"}
+
+    # ── Phase 1: Send prompt ──
     try:
         prompt_message = str(message_template).format_map(subs)
     except (KeyError, ValueError):
@@ -2075,64 +2101,14 @@ async def _execute_logic_telegram_input(
         run,
         node_id,
         {
-            "status": "awaiting_operator_reply",
+            "status": "hibernating",
             "telegram_prompt_message_id": prompt_message_id,
             "telegram_chat_id": chat_id,
+            "bot_token": bot_token,
             "started_at": timezone.now().isoformat(),
         },
     )
-
-    deadline = timezone.now() + timedelta(minutes=timeout_minutes)
-    poll_interval = 2
-
-    while True:
-        if stop_event and stop_event.is_set():
-            return {"status": "stopped", "output": "Ожидание ответа оператора отменено", "stopped": True}
-        await asyncio.sleep(poll_interval)
-
-        operator_reply = await _poll_telegram_reply_message(bot_token, chat_id, prompt_message_id)
-
-        fresh_run = await _s2a(lambda: PipelineRun.objects.get(pk=run.pk), thread_sensitive=False)()
-        node_state = dict(fresh_run.node_states.get(node_id, {}))
-        if operator_reply and not node_state.get("operator_response"):
-            response_text = str(operator_reply.get("text") or "").strip()
-            node_state["operator_response"] = response_text
-            node_state["operator_message_id"] = operator_reply.get("message_id")
-            node_state["operator_source"] = operator_reply.get("from_username") or ""
-            node_state["responded_at"] = timezone.now().isoformat()
-            await _update_node_state(fresh_run, node_id, node_state)
-            with contextlib.suppress(Exception):
-                await _send_telegram_message(
-                    bot_token=bot_token,
-                    chat_id=chat_id,
-                    message=(
-                        "✅ *Ответ оператора получен*\n\n"
-                        f"*Пайплайн:* {run.pipeline.name}\n"
-                        f"*Запуск:* #{run.pk}\n"
-                        f"*Узел:* {subs['node_label']}\n\n"
-                        "Передаю сообщение агенту."
-                    ),
-                    parse_mode="Markdown",
-                )
-
-        operator_response = str(node_state.get("operator_response") or "").strip()
-        if operator_response:
-            return {
-                "status": "completed",
-                "output": operator_response,
-                "decision": "received",
-                "response_text": operator_response,
-            }
-
-        if is_runtime_stop_requested(fresh_run):
-            return {"status": "stopped", "output": "Ожидание ответа оператора отменено", "stopped": True}
-
-        if timezone.now() >= deadline:
-            return {
-                "status": "failed",
-                "error": f"Таймаут ожидания ответа оператора — нет ответа в течение {timeout_minutes:.0f} мин.",
-                "decision": "timeout",
-            }
+    return {"status": "hibernating", "reason": "awaiting_operator_reply"}
 
 
 async def _execute_logic_merge(node: dict, context: dict, node_outputs: dict[str, dict], run: PipelineRun) -> dict:

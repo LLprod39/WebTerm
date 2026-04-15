@@ -22,6 +22,7 @@ import {
   Play,
   Plus,
   ArrowLeft,
+  Bell,
   BookOpen,
   ChevronRight,
   X,
@@ -33,18 +34,16 @@ import {
   Square,
   ChevronDown,
   ChevronUp,
-  Sparkles,
   Zap,
   Bot,
   Wand2,
   MoreHorizontal,
   Copy,
+  FileText,
   Info,
+  Link2,
   Search,
   RotateCcw,
-  ArrowUp,
-  PanelRightClose,
-  PanelRightOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,6 +60,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import {
   studioPipelines,
@@ -78,11 +78,11 @@ import {
   type PipelineEdge,
   type PipelineRun,
   type PipelineTrigger,
-  type StudioPipelineGraphPatch,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { getPipelineActivityState } from "@/components/pipeline/pipelineActivity";
 import { buildPipelineRunGraphState } from "@/components/pipeline/pipelineRunGraph";
+import { AgentNodePanel } from "@/components/pipeline/node-panel/AgentNodePanel";
 import {
   TriggerNode,
   AgentNode,
@@ -101,7 +101,7 @@ import {
   NODE_PALETTE,
   type NodeType,
 } from "@/components/pipeline/nodes";
-import { getNodeTypeGuidance } from "@/components/pipeline/nodes/nodeMeta";
+import { getNodeCategoryLabel, getNodeTypeGuidance } from "@/components/pipeline/nodes/nodeMeta";
 
 // ---------------------------------------------------------------------------
 // React Flow node type map
@@ -132,26 +132,63 @@ const nodeTypes = {
 // Node type friendly names
 // ---------------------------------------------------------------------------
 const NODE_TYPE_LABELS: Record<string, { label: string; icon: string }> = {
-  "trigger/manual":        { label: "Manual Trigger",   icon: "▶️" },
-  "trigger/webhook":       { label: "Webhook Trigger",  icon: "🔗" },
-  "trigger/schedule":      { label: "Schedule Trigger", icon: "⏰" },
-  "trigger/monitoring":    { label: "Monitoring Trigger", icon: "🚨" },
-  "agent/react":           { label: "ReAct Agent",      icon: "🤖" },
-  "agent/multi":           { label: "Multi-Agent",      icon: "🦾" },
-  "agent/ssh_cmd":         { label: "SSH Command",      icon: "💻" },
-  "agent/llm_query":       { label: "LLM Query",        icon: "🧠" },
-  "agent/mcp_call":        { label: "MCP Call",         icon: "🧩" },
-  "logic/condition":       { label: "Condition",        icon: "🔀" },
-  "logic/parallel":        { label: "Parallel",         icon: "⚡" },
-  "logic/merge":           { label: "Merge",            icon: "🪢" },
-  "logic/wait":            { label: "Wait",             icon: "⏱️" },
-  "logic/human_approval":  { label: "Human Approval",  icon: "👤" },
-  "logic/telegram_input":  { label: "Telegram Input",  icon: "💬" },
-  "output/report":         { label: "Report",           icon: "📋" },
-  "output/webhook":        { label: "Send Webhook",     icon: "📤" },
-  "output/email":          { label: "Send Email",       icon: "✉️" },
-  "output/telegram":       { label: "Telegram",         icon: "📱" },
+  "trigger/manual":        { label: "Manual Trigger",   icon: "â¶ï¸" },
+  "trigger/webhook":       { label: "Webhook Trigger",  icon: "ð" },
+  "trigger/schedule":      { label: "Schedule Trigger", icon: "â°" },
+  "trigger/monitoring":    { label: "Monitoring Trigger", icon: "ð¨" },
+  "agent/react":           { label: "ReAct Agent",      icon: "ð¤" },
+  "agent/multi":           { label: "Multi-Agent",      icon: "ð¦¾" },
+  "agent/ssh_cmd":         { label: "SSH Command",      icon: "ð»" },
+  "agent/llm_query":       { label: "LLM Query",        icon: "ð§ " },
+  "agent/mcp_call":        { label: "MCP Call",         icon: "ð§©" },
+  "logic/condition":       { label: "Condition",        icon: "ð" },
+  "logic/parallel":        { label: "Parallel",         icon: "â¡" },
+  "logic/merge":           { label: "Merge",            icon: "ðª¢" },
+  "logic/wait":            { label: "Wait",             icon: "â±ï¸" },
+  "logic/human_approval":  { label: "Human Approval",  icon: "ð¤" },
+  "logic/telegram_input":  { label: "Telegram Input",  icon: "ð¬" },
+  "output/report":         { label: "Report",           icon: "ð" },
+  "output/webhook":        { label: "Send Webhook",     icon: "ð¤" },
+  "output/email":          { label: "Send Email",       icon: "âï¸" },
+  "output/telegram":       { label: "Telegram",         icon: "ð±" },
 };
+
+const NODE_TYPE_LOOKUP = Object.fromEntries(
+  NODE_PALETTE.flatMap((group) => group.nodes.map((node) => [node.type, node] as const)),
+);
+
+const CATEGORY_ICONS = {
+  Triggers: Play,
+  Agents: Bot,
+  Logic: Zap,
+  Output: FileText,
+} as const;
+
+function getNodePhaseKey(type?: string) {
+  if (type?.startsWith("trigger/")) return "trigger";
+  if (type?.startsWith("agent/")) return "agent";
+  if (type?.startsWith("logic/")) return "logic";
+  if (type?.startsWith("output/")) return "output";
+  return "other";
+}
+
+function getNodePhaseLabel(type: string | undefined, lang: string) {
+  const phase = getNodePhaseKey(type);
+  if (phase === "trigger") return localize(lang, "Триггеры", "Triggers");
+  if (phase === "agent") return localize(lang, "Агенты", "Agents");
+  if (phase === "logic") return localize(lang, "Логика", "Logic");
+  if (phase === "output") return localize(lang, "Выход", "Output");
+  return localize(lang, "Шаги", "Steps");
+}
+
+function getNodePhaseBadgeClass(type?: string) {
+  const phase = getNodePhaseKey(type);
+  if (phase === "trigger") return "border-sky-500/25 bg-sky-500/10 text-sky-200";
+  if (phase === "agent") return "border-violet-500/25 bg-violet-500/10 text-violet-200";
+  if (phase === "logic") return "border-orange-500/25 bg-orange-500/10 text-orange-200";
+  if (phase === "output") return "border-emerald-500/25 bg-emerald-500/10 text-emerald-200";
+  return "border-border/70 bg-background/60 text-muted-foreground";
+}
 
 function localize(lang: string, ru: string, en: string) {
   return lang === "ru" ? ru : en;
@@ -237,9 +274,9 @@ function RunMonitorPanel({
           <button
             className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded hover:bg-muted/40"
             onClick={() => navigate("/studio/runs")}
-            title="Все логи"
+            title="ÐÑÐµ Ð»Ð¾Ð³Ð¸"
           >
-            <ChevronRight className="h-3 w-3" /> Логи
+            <ChevronRight className="h-3 w-3" /> ÐÐ¾Ð³Ð¸
           </button>
           <button className="p-1 rounded hover:bg-muted/40 text-muted-foreground hover:text-foreground" onClick={onClose}>
             <X className="h-3.5 w-3.5" />
@@ -289,10 +326,10 @@ function RunMonitorPanel({
                 )}
               </button>
 
-              {/* Human Approval waiting state — always show links */}
+              {/* Human Approval waiting state â always show links */}
               {status === "awaiting_approval" && (
                 <div className="border-t border-border px-3 py-2 space-y-2">
-                  <p className="text-yellow-400 text-[11px] font-medium">⏳ Waiting for your decision...</p>
+                  <p className="text-yellow-400 text-[11px] font-medium">â³ Waiting for your decision...</p>
                   {typeof stateExtra.approve_url === "string" && (
                     <div className="flex gap-2">
                       <a
@@ -301,7 +338,7 @@ function RunMonitorPanel({
                         rel="noopener noreferrer"
                         className="flex-1 text-center text-xs py-1.5 rounded bg-green-800/40 border border-green-600/40 text-green-300 hover:bg-green-700/50 transition-colors"
                       >
-                        ✅ Approve
+                        Approve
                       </a>
                       <a
                         href={typeof stateExtra.reject_url === "string" ? stateExtra.reject_url : "#"}
@@ -309,7 +346,7 @@ function RunMonitorPanel({
                         rel="noopener noreferrer"
                         className="flex-1 text-center text-xs py-1.5 rounded bg-red-900/30 border border-red-600/40 text-red-300 hover:bg-red-800/40 transition-colors"
                       >
-                        ❌ Reject
+                        Reject
                       </a>
                     </div>
                   )}
@@ -323,7 +360,7 @@ function RunMonitorPanel({
                   )}
                   {output && (
                     <pre className="text-muted-foreground whitespace-pre-wrap break-all max-h-48 overflow-auto leading-relaxed">
-                      {output.length > 2000 ? output.slice(0, 2000) + "\n…[truncated]" : output}
+                      {output.length > 2000 ? output.slice(0, 2000) + "\nâ¦[truncated]" : output}
                     </pre>
                   )}
                 </div>
@@ -334,7 +371,7 @@ function RunMonitorPanel({
 
         {!run && (
           <div className="flex items-center justify-center py-8 text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading…
+            <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loadingâ¦
           </div>
         )}
       </div>
@@ -401,17 +438,6 @@ function formatStudioDateTime(value?: string | null) {
   if (!value) return "Never";
   return new Date(value).toLocaleString();
 }
-
-type AssistantMessage = {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  targetNodeId?: string | null;
-  nodePatch?: Record<string, unknown>;
-  graphPatch?: StudioPipelineGraphPatch | null;
-  warnings?: string[];
-  omitFromHistory?: boolean;
-};
 
 function getNodeDisplayLabel(node: PipelineNode | { id: string; type: string; label?: string }) {
   if ("data" in node) {
@@ -493,10 +519,10 @@ function getPipelineNodeStatusLabel(
 ) {
   if (!status) return undefined;
   if (status === "awaiting_approval") {
-    return localize(lang, "Ждет approve", "Waiting approval");
+    return localize(lang, "Ждёт подтверждение", "Waiting approval");
   }
   if (status === "awaiting_operator_reply") {
-    return localize(lang, "Ждет ответ", "Waiting reply");
+    return localize(lang, "Ждёт ответ", "Waiting reply");
   }
   if (status === "running") {
     return localize(lang, "Выполняется", "Running");
@@ -733,521 +759,24 @@ function isNodeType(value: string): value is NodeType {
   return value in nodeTypes;
 }
 
-function describeGraphPatch(graphPatch: StudioPipelineGraphPatch | null | undefined) {
-  if (
-    !graphPatch ||
-    (!graphPatch.nodes.length &&
-      !graphPatch.edges.length &&
-      !(graphPatch.update_nodes || []).length &&
-      !(graphPatch.remove_node_ids || []).length &&
-      !(graphPatch.remove_edge_ids || []).length)
-  ) {
-    return null;
-  }
-  return {
-    addNodeCount: graphPatch.nodes.length,
-    addEdgeCount: graphPatch.edges.length,
-    updateNodeCount: (graphPatch.update_nodes || []).length,
-    removeNodeCount: (graphPatch.remove_node_ids || []).length,
-    removeEdgeCount: (graphPatch.remove_edge_ids || []).length,
-    nodeLabels: graphPatch.nodes.map((item) => item.label || NODE_TYPE_LABELS[item.type]?.label || item.type),
-    edgeLabels: graphPatch.edges.map((item) => `${item.source} -> ${item.target}${item.label ? ` (${item.label})` : ""}`),
-    updatedNodeIds: (graphPatch.update_nodes || []).map((item) => item.node_id),
-    removedNodeIds: graphPatch.remove_node_ids || [],
-  };
-}
-
-function buildAssistantIntroMessage(
-  pipelineId: number | null,
-  pipelineName: string,
-  lang: string,
-): AssistantMessage {
-  return {
-    id: `pipeline-assistant-intro-${pipelineId ?? "new"}`,
-    role: "assistant",
-    omitFromHistory: true,
-    content: localize(
-      lang,
-      `Опишите задачу обычным языком, и я соберу или доработаю пайплайн${pipelineName ? ` **${pipelineName}**` : ""}.\n\nЯ умею строить основу автоматизации, менять существующие шаги, добавлять safety/approval и возвращать конкретные правки для канваса.`,
-      `Describe the task in plain language and I will build or refine the pipeline${pipelineName ? ` **${pipelineName}**` : ""}.\n\nI can create the automation structure, edit existing steps, add safety or approval, and return concrete graph changes for the canvas.`,
-    ),
-  };
-}
-
-function PipelineAssistantDialog({
-  open,
-  onOpenChange,
-  pipelineId,
-  pipelineName,
-  nodes,
-  edges,
-  selectedNode,
-  hasLocalChanges,
-  activityLabel,
-  lang,
-  onApplyPatch,
-  onApplyGraphPatch,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  pipelineId: number | null;
-  pipelineName: string;
-  nodes: PipelineNode[];
-  edges: PipelineEdge[];
-  selectedNode: PipelineNode | null;
-  hasLocalChanges: boolean;
-  activityLabel: string;
-  lang: string;
-  onApplyPatch: (targetNodeId: string, patch: Record<string, unknown>) => void;
-  onApplyGraphPatch: (graphPatch: StudioPipelineGraphPatch) => void;
-}) {
-  const { toast } = useToast();
-  const [draft, setDraft] = useState("");
-  const [messages, setMessages] = useState<AssistantMessage[]>(() => [
-    buildAssistantIntroMessage(pipelineId, pipelineName, lang),
-  ]);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    setDraft("");
-    setMessages([buildAssistantIntroMessage(pipelineId, pipelineName, lang)]);
-  }, [pipelineId, lang]);
-
-  useEffect(() => {
-    if (!open) return;
-    setTimeout(() => inputRef.current?.focus(), 100);
-  }, [open]);
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages, open]);
-
-  const history = useMemo(
-    () =>
-      messages
-        .filter((message) => !message.omitFromHistory)
-        .map((message) => ({ role: message.role, content: message.content }))
-        .slice(-10),
-    [messages],
-  );
-
-  const assistantMutation = useMutation({
-    mutationFn: ({ message, history }: { message: string; history: Array<{ role: "user" | "assistant"; content: string }> }) =>
-      studioPipelines.assistant({
-        pipeline_id: pipelineId,
-        pipeline_name: pipelineName || "Untitled",
-        nodes,
-        edges,
-        selected_node: selectedNode,
-        user_message: message,
-        history,
-      }),
-    onSuccess: (result) => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `pipeline-assistant-${Date.now()}`,
-          role: "assistant",
-          content: result.reply,
-          targetNodeId: result.target_node_id,
-          nodePatch: result.node_patch,
-          graphPatch: result.graph_patch,
-          warnings: result.warnings,
-        },
-      ]);
-    },
-    onError: (error) => {
-      toast({
-        variant: "destructive",
-        description:
-          error instanceof Error
-            ? error.message
-            : localize(lang, "AI помощник пайплайна не ответил.", "Pipeline assistant failed."),
-      });
-    },
-  });
-
-  const submitPrompt = async (value: string) => {
-    const trimmed = value.trim();
-    if (!trimmed || assistantMutation.isPending) return;
-    const nextHistory = [...history, { role: "user" as const, content: trimmed }].slice(-10);
-    setMessages((prev) => [
-      ...prev,
-      { id: `pipeline-user-${Date.now()}`, role: "user", content: trimmed },
-    ]);
-    setDraft("");
-    await assistantMutation.mutateAsync({ message: trimmed, history: nextHistory });
-  };
-
-  const quickPrompts = [
-    {
-      key: "build",
-      icon: "🧩",
-      title: localize(lang, "Собери автоматизацию по описанию", "Build automation from a task"),
-      prompt: localize(
-        lang,
-        "Построй качественный стартовый пайплайн под эту задачу. Добавь подходящий trigger, основные шаги, safety или approval там где это нужно, и финальный отчет.",
-        "Build a solid starter pipeline for this task. Add the right trigger, main steps, safety or approval where needed, and a final report.",
-      ),
-    },
-    {
-      key: "improve",
-      icon: "⚙️",
-      title: localize(lang, "Улучши текущий граф", "Improve the current graph"),
-      prompt: localize(
-        lang,
-        "Проанализируй текущий пайплайн как production automation. Найди слабые места и верни конкретные правки графа и конфигов, а не только общие советы.",
-        "Review this pipeline as a production automation. Find weak spots and return concrete graph and config changes, not just general advice.",
-      ),
-    },
-    {
-      key: "selected",
-      icon: "🎯",
-      title: selectedNode
-        ? localize(lang, `Доработай шаг: ${getNodeDisplayLabel(selectedNode)}`, `Refine step: ${getNodeDisplayLabel(selectedNode)}`)
-        : localize(lang, "Предложи следующий шаг", "Suggest the next step"),
-      prompt: selectedNode
-        ? localize(
-            lang,
-            `Сфокусируйся на ноде ${getNodeDisplayLabel(selectedNode)}. Улучши ее настройки и при необходимости добавь недостающие шаги до или после нее.`,
-            `Focus on the node ${getNodeDisplayLabel(selectedNode)}. Improve its configuration and add missing steps before or after it if needed.`,
-          )
-        : localize(
-            lang,
-            "Предложи следующий полезный шаг в текущем пайплайне и верни конкретные изменения графа.",
-            "Suggest the next useful step in the current pipeline and return concrete graph changes.",
-          ),
-    },
-    {
-      key: "safety",
-      icon: "🛡️",
-      title: localize(lang, "Добавь safety и оператора", "Add safety and operator control"),
-      prompt: localize(
-        lang,
-        "Добавь в этот пайплайн операционные guardrails: approval, fallback, операторский ответ через Telegram и финальный отчет там, где это уместно.",
-        "Add operational guardrails to this pipeline: approval, fallback, operator reply via Telegram, and a final report where appropriate.",
-      ),
-    },
-  ];
-
-  return (
-    <div className="border-t border-border bg-background/95 backdrop-blur">
-      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center">
-              <Bot className="h-4 w-4 text-primary" />
-            </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-sm font-semibold">{localize(lang, "AI Builder для Studio", "Studio AI Builder")}</h3>
-                <Badge variant="secondary" className="text-[10px]">
-                  {nodes.length} {localize(lang, "нод", "nodes")}
-                </Badge>
-                <Badge variant="outline" className="text-[10px]">
-                  {edges.length} {localize(lang, "связей", "edges")}
-                </Badge>
-                {selectedNode ? (
-                  <Badge variant="outline" className="text-[10px]">
-                    {localize(lang, "Фокус", "Focus")}: {getNodeDisplayLabel(selectedNode)}
-                  </Badge>
-                ) : null}
-                {hasLocalChanges ? (
-                  <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-[10px] text-amber-300">
-                    {localize(lang, "Есть несохраненные правки", "Unsaved changes")}
-                  </Badge>
-                ) : null}
-              </div>
-              <p className="text-[10px] text-muted-foreground">
-                {localize(lang, "Опишите задачу или попросите изменить текущий граф. Статус пайплайна", "Describe the task or ask to change the current graph. Pipeline status")}:
-                {" "}
-                {activityLabel}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {messages.length > 1 ? (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-8 text-xs"
-                onClick={() => {
-                  setDraft("");
-                  setMessages([buildAssistantIntroMessage(pipelineId, pipelineName, lang)]);
-                }}
-              >
-                {localize(lang, "Сбросить диалог", "Reset chat")}
-              </Button>
-            ) : null}
-            <Button size="sm" variant={open ? "secondary" : "outline"} className="h-8 gap-1.5 text-xs" onClick={() => onOpenChange(!open)}>
-              <Bot className="h-3.5 w-3.5" />
-              {open ? localize(lang, "Свернуть чат", "Collapse chat") : localize(lang, "Открыть чат", "Open chat")}
-            </Button>
-          </div>
-      </div>
-
-      {open ? (
-        <>
-          {messages.length <= 1 && (
-            <div className="px-5 pt-2 pb-3 border-t border-border bg-muted/10">
-              <p className="text-[9px] text-muted-foreground mb-2 uppercase font-medium tracking-wider">
-                {localize(lang, "Быстрые сценарии", "Quick actions")}
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-              {quickPrompts.map((qp) => (
-                <button
-                  key={qp.key}
-                  onClick={() => void submitPrompt(qp.prompt)}
-                  disabled={assistantMutation.isPending}
-                  title={qp.prompt}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card hover:bg-primary/8 hover:border-primary/40 transition-all text-xs font-medium text-foreground/80 hover:text-foreground"
-                >
-                  <span className="text-sm">{qp.icon}</span>
-                  {qp.title}
-                </button>
-              ))}
-              </div>
-          </div>
-          )}
-
-          <div ref={scrollRef} className="overflow-auto px-5 py-4 space-y-4 min-h-[220px] max-h-[360px] border-t border-border">
-          {messages.map((message) => {
-            const isAI = message.role === "assistant";
-            const hasPatch = Boolean(message.nodePatch && Object.keys(message.nodePatch).length && message.targetNodeId);
-            const graphPatchSummary = describeGraphPatch(message.graphPatch);
-
-            return (
-              <div key={message.id} className={cn("flex gap-3", !isAI && "flex-row-reverse")}>
-                {/* Avatar */}
-                <div className={cn(
-                  "h-7 w-7 rounded-full flex items-center justify-center shrink-0 text-xs",
-                  isAI ? "bg-primary/10 text-primary" : "bg-muted/60 text-muted-foreground"
-                )}>
-                  {isAI ? <Bot className="h-3.5 w-3.5" /> : "U"}
-                </div>
-
-                {/* Bubble */}
-                <div className={cn(
-                  "max-w-[85%] space-y-2",
-                  !isAI && "text-right"
-                )}>
-                  <div className={cn(
-                    "rounded-xl px-3.5 py-2.5 text-sm leading-relaxed",
-                    isAI
-                      ? "bg-card border border-border text-foreground"
-                      : "bg-muted/50 border border-border/50 text-foreground"
-                  )}>
-                    <div className="whitespace-pre-wrap">{message.content}</div>
-                  </div>
-
-                  {/* Warnings */}
-                  {message.warnings?.length ? (
-                    <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 space-y-1">
-                      {message.warnings.map((w) => (
-                        <p key={w} className="text-[11px] text-amber-600 dark:text-amber-400 flex items-start gap-1.5">
-                          <span className="shrink-0">⚠️</span> {w}
-                        </p>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  {/* Node patch action */}
-                  {hasPatch && (
-                    <div className="rounded-xl border border-border bg-card overflow-hidden">
-                      <div className="px-3 py-2 border-b border-border bg-muted/30 flex items-center gap-2">
-                        <Wand2 className="h-3 w-3 text-primary" />
-                        <span className="text-[11px] font-medium">
-                          {localize(lang, "Правка ноды", "Node patch")}: {message.targetNodeId}
-                        </span>
-                      </div>
-                      <pre className="px-3 py-2 text-[10px] leading-4 text-muted-foreground max-h-32 overflow-auto font-mono">
-                        {JSON.stringify(message.nodePatch, null, 2)}
-                      </pre>
-                      <div className="px-3 py-2 border-t border-border">
-                        <Button
-                          size="sm"
-                          className="h-7 gap-1.5 text-xs w-full"
-                          onClick={() => onApplyPatch(message.targetNodeId || "", message.nodePatch || {})}
-                        >
-                          <Wand2 className="h-3 w-3" />
-                          {localize(lang, "Применить правку", "Apply patch")}
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Graph patch action */}
-                  {graphPatchSummary && (
-                    <div className="rounded-xl border border-border bg-card overflow-hidden">
-                      <div className="px-3 py-2 border-b border-border bg-muted/30 flex items-center gap-2">
-                        <Sparkles className="h-3 w-3 text-primary" />
-                        <span className="text-[11px] font-medium">
-                          {localize(lang, "Изменение графа", "Graph change")}
-                        </span>
-                      </div>
-                      <div className="px-3 py-2 space-y-2 text-[11px] text-muted-foreground">
-                        <div className="flex flex-wrap gap-2">
-                          {graphPatchSummary.addNodeCount ? (
-                            <span className="bg-primary/10 text-primary rounded px-1.5 py-0.5 font-medium">
-                              +{graphPatchSummary.addNodeCount} {localize(lang, "нод", "nodes")}
-                            </span>
-                          ) : null}
-                          {graphPatchSummary.addEdgeCount ? (
-                            <span className="bg-muted rounded px-1.5 py-0.5">
-                              +{graphPatchSummary.addEdgeCount} {localize(lang, "связей", "edges")}
-                            </span>
-                          ) : null}
-                          {graphPatchSummary.updateNodeCount ? (
-                            <span className="rounded px-1.5 py-0.5 bg-cyan-500/10 text-cyan-300">
-                              {localize(lang, "обновить", "update")} {graphPatchSummary.updateNodeCount}
-                            </span>
-                          ) : null}
-                          {graphPatchSummary.removeNodeCount ? (
-                            <span className="rounded px-1.5 py-0.5 bg-red-500/10 text-red-300">
-                              {localize(lang, "удалить ноды", "remove nodes")} {graphPatchSummary.removeNodeCount}
-                            </span>
-                          ) : null}
-                          {graphPatchSummary.removeEdgeCount ? (
-                            <span className="rounded px-1.5 py-0.5 bg-red-500/10 text-red-300">
-                              {localize(lang, "удалить связи", "remove edges")} {graphPatchSummary.removeEdgeCount}
-                            </span>
-                          ) : null}
-                        </div>
-                        {graphPatchSummary.nodeLabels.length > 0 && (
-                          <p className="text-[10px]">{graphPatchSummary.nodeLabels.join(" → ")}</p>
-                        )}
-                        {graphPatchSummary.updatedNodeIds.length > 0 && (
-                          <p className="text-[10px]">
-                            {localize(lang, "Обновит", "Updates")}: {graphPatchSummary.updatedNodeIds.join(", ")}
-                          </p>
-                        )}
-                        {graphPatchSummary.removedNodeIds.length > 0 && (
-                          <p className="text-[10px]">
-                            {localize(lang, "Удалит", "Removes")}: {graphPatchSummary.removedNodeIds.join(", ")}
-                          </p>
-                        )}
-                      </div>
-                      <div className="px-3 py-2 border-t border-border">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 gap-1.5 text-xs w-full"
-                          onClick={() =>
-                            onApplyGraphPatch(
-                              message.graphPatch || {
-                                anchor_node_id: null,
-                                nodes: [],
-                                edges: [],
-                                update_nodes: [],
-                                remove_node_ids: [],
-                                remove_edge_ids: [],
-                              },
-                            )
-                          }
-                        >
-                          <Sparkles className="h-3 w-3" />
-                          {localize(lang, "Применить изменения графа", "Apply graph changes")}
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-
-          {/* Typing indicator */}
-          {assistantMutation.isPending && (
-            <div className="flex gap-3">
-              <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 text-xs">🤖</div>
-              <div className="bg-card border border-border rounded-xl px-4 py-3 flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 animate-pulse" />
-                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 animate-pulse [animation-delay:150ms]" />
-                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 animate-pulse [animation-delay:300ms]" />
-              </div>
-            </div>
-          )}
-        </div>
-
-          <div className="border-t border-border px-4 py-3 bg-card/50">
-          <div className="flex items-end gap-2">
-            <Textarea
-              ref={inputRef}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  void submitPrompt(draft);
-                }
-              }}
-              rows={2}
-              placeholder={localize(
-                lang,
-                "Опишите задачу или попросите изменить текущий пайплайн…",
-                "Describe the task or ask to change the current pipeline…",
-              )}
-              className="text-sm resize-none min-h-[48px] max-h-[120px] flex-1"
-            />
-            <Button
-              size="icon"
-              className="h-10 w-10 shrink-0 rounded-xl"
-              disabled={!draft.trim() || assistantMutation.isPending}
-              onClick={() => void submitPrompt(draft)}
-            >
-              {assistantMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <ArrowUp className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
-            <div className="mt-1.5 flex items-center justify-between gap-4 text-[9px] text-muted-foreground">
-              <span>{localize(lang, "Enter — отправить, Shift+Enter — новая строка", "Enter — send, Shift+Enter — new line")}</span>
-              <span>{localize(lang, "Чат учитывает текущий граф и выбранную ноду", "The chat uses the current graph and focused node")}</span>
-            </div>
-          </div>
-        </>
-      ) : (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3">
-          <div className="min-w-0">
-            <p className="text-sm font-medium">
-              {localize(lang, "Попросите AI собрать или доработать автоматизацию", "Ask AI to build or refine the automation")}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {localize(
-                lang,
-                "Например: «Собери мониторинг Docker-сервиса с Telegram approval и восстановлением»",
-                `For example: "Build Docker service monitoring with Telegram approval and recovery"`,
-              )}
-            </p>
-          </div>
-          <Button size="sm" className="gap-1.5" onClick={() => onOpenChange(true)}>
-            <Bot className="h-3.5 w-3.5" />
-            {localize(lang, "Открыть AI Builder", "Open AI Builder")}
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function NodeConfigPanel({
   node,
   pipelineId,
   trigger,
+  lang,
   onUpdate,
   onClose,
   onDelete,
+  onDuplicate,
 }: {
   node: PipelineNode;
   pipelineId: number | null;
   trigger?: PipelineTrigger | null;
+  lang?: "en" | "ru";
   onUpdate: (id: string, data: Record<string, unknown>) => void;
   onClose: () => void;
   onDelete: (id: string) => void;
+  onDuplicate: (id: string) => void;
 }) {
   const navigate = useNavigate();
   const { data: agents = [] } = useQuery({ queryKey: ["studio", "agents"], queryFn: studioAgents.list });
@@ -1263,6 +792,7 @@ function NodeConfigPanel({
   const [mcpArgsText, setMcpArgsText] = useState(
     () => (typeof node.data?.arguments_text === "string" ? String(node.data.arguments_text) : toJsonEditorText(node.data?.arguments || {})),
   );
+  const uiLang: "en" | "ru" = lang === "ru" ? "ru" : "en";
 
   const set = useCallback((key: string, val: unknown) => {
     setD((prev) => {
@@ -1371,14 +901,111 @@ function NodeConfigPanel({
       .finally(() => setLoadingModelsFor(null));
   }, [loadingModelsFor, modelProvider, modelsData, node.id, onUpdate, queryClient, type]);
 
-  const typeInfo = NODE_TYPE_LABELS[type] || { label: type, icon: "🔧" };
+  const typeInfo = NODE_TYPE_LABELS[type] || { label: type, icon: "" };
+  const TypeIcon = NODE_TYPE_LOOKUP[type as NodeType]?.icon;
+  const typeIconClassName = NODE_TYPE_LOOKUP[type as NodeType]?.iconClassName || "text-foreground";
   const triggerWebhookUrl = trigger?.webhook_url ? new URL(trigger.webhook_url, window.location.origin).toString() : "";
+
+  const handleAgentProviderChange = useCallback((nextProvider: string) => {
+    if (nextProvider === "auto") {
+      setMany({ provider: "auto", model: "" });
+      return;
+    }
+    if (!isModelProvider(nextProvider)) return;
+
+    set("provider", nextProvider);
+    setLoadingModelsFor(nextProvider);
+    refreshModels(nextProvider)
+      .then((res) => {
+        queryClient.setQueryData(["api", "models"], (old: Record<string, unknown> | undefined) => ({
+          ...(old ?? {}),
+          [nextProvider]: res.models,
+        }));
+        if (res.models.length && providerRef.current === nextProvider) {
+          setMany({ provider: nextProvider, model: res.models[0] });
+        }
+      })
+      .finally(() => setLoadingModelsFor(null));
+  }, [queryClient, set, setMany]);
+
+  const agentProviderOptions = useMemo(
+    () =>
+      AGENT_PROVIDER_OPTIONS.map((item) => {
+        if (item.value === "auto") {
+          return {
+            value: item.value,
+            label: item.label,
+            modelLabel: localize(uiLang, "Глобальная модель агента", "Workspace default agent model"),
+            hint: localize(uiLang, "Берётся из системного дефолта", "Uses the workspace default"),
+          };
+        }
+
+        const availableModels = getModelsForProvider(modelsData, item.value);
+        const modelLabel =
+          loadingModelsFor === item.value
+            ? localize(uiLang, "Загрузка моделей...", "Loading models...")
+            : provider === item.value
+              ? currentModel || availableModels[0] || localize(uiLang, "Модели недоступны", "No models available")
+              : availableModels[0] || localize(uiLang, "Нажмите, чтобы загрузить", "Click to load");
+
+        return {
+          value: item.value,
+          label: item.label,
+          modelLabel,
+          hint:
+            provider === item.value
+              ? localize(uiLang, "Активный провайдер", "Active provider")
+              : localize(uiLang, "Доступно для выбора", "Available to select"),
+        };
+      }),
+    [currentModel, loadingModelsFor, modelsData, provider, uiLang],
+  );
+
+  if (type === "agent/react" || type === "agent/multi") {
+    const displayLabel = typeof d.label === "string" && d.label.trim() ? d.label.trim() : typeInfo.label;
+    const guidance = getNodeTypeGuidance(type, uiLang);
+
+    return (
+      <AgentNodePanel
+        lang={uiLang}
+        node={node}
+        data={d}
+        title={displayLabel}
+        breadcrumb={`${guidance.category} / ${typeInfo.label}`}
+        icon={
+          TypeIcon
+            ? <TypeIcon className={`h-5 w-5 ${typeIconClassName}`} />
+            : <span className="text-xs font-semibold text-foreground">#</span>
+        }
+        agents={agents}
+        selectedAgent={selectedAgent}
+        provider={provider || "auto"}
+        providerOptions={agentProviderOptions}
+        modelList={modelList}
+        loadingModelsFor={loadingModelsFor}
+        mcpList={mcpList}
+        servers={servers}
+        skillList={skillList}
+        selectedSkillSlugs={selectedSkillSlugs}
+        selectedSkills={selectedSkills}
+        onSet={set}
+        onSetMany={setMany}
+        onProviderChange={handleAgentProviderChange}
+        onClose={onClose}
+        onDuplicate={() => onDuplicate(node.id)}
+        onDelete={() => onDelete(node.id)}
+        onBrowseCatalog={() => navigate("/studio/skills")}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <h3 className="text-sm font-semibold flex items-center gap-2">
-          <span>{typeInfo.icon}</span>
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-border/70 bg-background/70">
+            {TypeIcon ? <TypeIcon className={`h-4 w-4 ${typeIconClassName}`} /> : <span className="text-xs">#</span>}
+          </span>
           <span>{typeInfo.label}</span>
         </h3>
         <div className="flex items-center gap-1">
@@ -1392,9 +1019,9 @@ function NodeConfigPanel({
       </div>
 
       <div className="flex-1 overflow-auto p-4 space-y-4">
-        {/* Guidance — collapsible */}
+        {/* Guidance â collapsible */}
         {(() => {
-          const guidance = getNodeTypeGuidance(type, "en");
+          const guidance = getNodeTypeGuidance(type, uiLang);
           return (
             <div className="rounded-lg border border-border/50 overflow-hidden">
               <button
@@ -1404,7 +1031,7 @@ function NodeConfigPanel({
               >
                 <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
                   <Info className="h-3 w-3" />
-                  {guidance.category} · {typeInfo.label}
+                  {guidance.category} / {typeInfo.label}
                 </div>
                 {guidanceOpen
                   ? <ChevronUp className="h-3 w-3 text-muted-foreground" />
@@ -1416,7 +1043,7 @@ function NodeConfigPanel({
                   <ul className="space-y-0.5">
                     {guidance.checklist.map((item, i) => (
                       <li key={i} className="text-[10px] text-muted-foreground flex items-start gap-1.5">
-                        <span className="text-primary shrink-0 mt-px">✓</span> {item}
+                        <span className="text-primary shrink-0 mt-px">-</span> {item}
                       </li>
                     ))}
                   </ul>
@@ -1779,7 +1406,7 @@ function NodeConfigPanel({
                           {skill.safety_level ? <Badge variant="outline" className="text-[9px]">{skill.safety_level}</Badge> : null}
                         </div>
                         {skill.guardrail_summary?.length ? (
-                          <p className="mt-1 text-[10px] text-muted-foreground">{skill.guardrail_summary.slice(0, 2).join(" • ")}</p>
+                          <p className="mt-1 text-[10px] text-muted-foreground">{skill.guardrail_summary.slice(0, 2).join(" â¢ ")}</p>
                         ) : null}
                       </div>
                     </label>
@@ -2324,7 +1951,7 @@ function NodeConfigPanel({
               max={1440}
               step={0.5}
             />
-            <p className="text-[10px] text-muted-foreground">Range: 0.1 – 1440 minutes (24h max)</p>
+            <p className="text-[10px] text-muted-foreground">Range: 0.1 â 1440 minutes (24h max)</p>
           </div>
         )}
 
@@ -2332,32 +1959,32 @@ function NodeConfigPanel({
         {type === "logic/human_approval" && (
           <>
             <div className="space-y-1.5">
-              <Label className="text-xs">Кому (email)</Label>
+              <Label className="text-xs">ÐÐ¾Ð¼Ñ (email)</Label>
               <Input
                 value={(d.to_email as string) || ""}
                 onChange={(e) => set("to_email", e.target.value)}
-                placeholder="или из Studio → Notifications"
+                placeholder="Ð¸Ð»Ð¸ Ð¸Ð· Studio â Notifications"
                 className="h-7 text-xs"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Тема письма (шаблон)</Label>
+              <Label className="text-xs">Ð¢ÐµÐ¼Ð° Ð¿Ð¸ÑÑÐ¼Ð° (ÑÐ°Ð±Ð»Ð¾Ð½)</Label>
               <Input
                 value={(d.email_subject as string) || ""}
                 onChange={(e) => set("email_subject", e.target.value)}
-                placeholder="Пусто = тема по умолчанию"
+                placeholder="ÐÑÑÑÐ¾ = ÑÐµÐ¼Ð° Ð¿Ð¾ ÑÐ¼Ð¾Ð»ÑÐ°Ð½Ð¸Ñ"
                 className="h-7 text-xs"
               />
               <p className="text-[10px] text-muted-foreground">
-                Переменные: {"{pipeline_name}"}, {"{run_id}"}
+                ÐÐµÑÐµÐ¼ÐµÐ½Ð½ÑÐµ: {"{pipeline_name}"}, {"{run_id}"}
               </p>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Текст письма (шаблон)</Label>
+              <Label className="text-xs">Ð¢ÐµÐºÑÑ Ð¿Ð¸ÑÑÐ¼Ð° (ÑÐ°Ð±Ð»Ð¾Ð½)</Label>
               <Textarea
                 value={(d.email_body as string) || ""}
                 onChange={(e) => set("email_body", e.target.value)}
-                placeholder="Пусто = текст по умолчанию. Переменные ниже."
+                placeholder="ÐÑÑÑÐ¾ = ÑÐµÐºÑÑ Ð¿Ð¾ ÑÐ¼Ð¾Ð»ÑÐ°Ð½Ð¸Ñ. ÐÐµÑÐµÐ¼ÐµÐ½Ð½ÑÐµ Ð½Ð¸Ð¶Ðµ."
                 className="text-xs resize-none"
                 rows={8}
               />
@@ -2402,7 +2029,7 @@ function NodeConfigPanel({
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Сообщение в Telegram (шаблон)</Label>
+              <Label className="text-xs">Ð¡Ð¾Ð¾Ð±ÑÐµÐ½Ð¸Ðµ Ð² Telegram (ÑÐ°Ð±Ð»Ð¾Ð½)</Label>
               <Textarea
                 value={(d.message as string) || ""}
                 onChange={(e) => set("message", e.target.value)}
@@ -2441,14 +2068,14 @@ function NodeConfigPanel({
         {type === "logic/telegram_input" && (
           <>
             <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-[11px] text-cyan-100">
-              Этот узел отправляет сообщение в Telegram и ждёт обычный текстовый reply от оператора.
+              Ð­ÑÐ¾Ñ ÑÐ·ÐµÐ» Ð¾ÑÐ¿ÑÐ°Ð²Ð»ÑÐµÑ ÑÐ¾Ð¾Ð±ÑÐµÐ½Ð¸Ðµ Ð² Telegram Ð¸ Ð¶Ð´ÑÑ Ð¾Ð±ÑÑÐ½ÑÐ¹ ÑÐµÐºÑÑÐ¾Ð²ÑÐ¹ reply Ð¾Ñ Ð¾Ð¿ÐµÑÐ°ÑÐ¾ÑÐ°.
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Bot Token</Label>
               <Input
                 value={(d.tg_bot_token as string) || ""}
                 onChange={(e) => set("tg_bot_token", e.target.value)}
-                placeholder="или глобально в Studio → Notifications"
+                placeholder="Ð¸Ð»Ð¸ Ð³Ð»Ð¾Ð±Ð°Ð»ÑÐ½Ð¾ Ð² Studio â Notifications"
                 className="h-7 text-xs font-mono"
               />
             </div>
@@ -2466,12 +2093,12 @@ function NodeConfigPanel({
               <Textarea
                 value={(d.message as string) || ""}
                 onChange={(e) => set("message", e.target.value)}
-                placeholder="Опишите, какой ответ вы ждёте от оператора"
+                placeholder="ÐÐ¿Ð¸ÑÐ¸ÑÐµ, ÐºÐ°ÐºÐ¾Ð¹ Ð¾ÑÐ²ÐµÑ Ð²Ñ Ð¶Ð´ÑÑÐµ Ð¾Ñ Ð¾Ð¿ÐµÑÐ°ÑÐ¾ÑÐ°"
                 className="text-xs resize-none"
                 rows={6}
               />
               <p className="text-[10px] text-muted-foreground">
-                Переменные: {"{pipeline_name}"}, {"{run_id}"}, {"{all_outputs}"}
+                ÐÐµÑÐµÐ¼ÐµÐ½Ð½ÑÐµ: {"{pipeline_name}"}, {"{run_id}"}, {"{all_outputs}"}
               </p>
             </div>
             <div className="space-y-1.5">
@@ -2518,7 +2145,7 @@ function NodeConfigPanel({
               <Textarea
                 value={(d.message as string) || ""}
                 onChange={(e) => set("message", e.target.value)}
-                placeholder="📊 *{pipeline_name}*\n\n{all_outputs}"
+                placeholder="ð *{pipeline_name}*\n\n{all_outputs}"
                 className="text-xs resize-none"
                 rows={4}
               />
@@ -2535,16 +2162,9 @@ function NodeConfigPanel({
 }
 
 // ---------------------------------------------------------------------------
-// Node Palette (left panel) — with search, drag, category icons
+// Node Palette (left panel) - with search, drag, and hover previews
 // ---------------------------------------------------------------------------
-const CATEGORY_ICONS: Record<string, string> = {
-  Triggers: "🚀",
-  Agents: "🤖",
-  Logic: "⚙️",
-  Output: "📤",
-};
-
-function NodePalette({ onAddNode }: { onAddNode: (type: NodeType) => void }) {
+function NodePalette({ onAddNode, lang }: { onAddNode: (type: NodeType) => void; lang: "en" | "ru" }) {
   const [search, setSearch] = useState("");
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set(NODE_PALETTE.map((c) => c.category)));
 
@@ -2568,64 +2188,101 @@ function NodePalette({ onAddNode }: { onAddNode: (type: NodeType) => void }) {
   })).filter((cat) => cat.nodes.length > 0);
 
   return (
-    <div className="flex flex-col h-full border-r border-border bg-card">
-      <div className="px-3 py-3 border-b border-border space-y-2">
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-          <Plus className="h-3 w-3" /> Add Node
+    <div className="flex h-full flex-col border-r border-border/80 bg-card/95">
+      <div className="space-y-2 border-b border-border/80 px-3 py-3">
+        <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <Plus className="h-3 w-3" /> {localize(lang, "Добавить ноду", "Add node")}
         </h3>
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search nodes..."
-          className="h-7 text-xs"
+          placeholder={localize(lang, "Поиск нод...", "Search nodes...")}
+          className="h-8 border-border/70 bg-background/70 text-xs"
         />
       </div>
-      <div className="flex-1 overflow-auto p-2 space-y-1">
-        {filtered.map((cat) => (
-          <div key={cat.category}>
-            <button
-              onClick={() => toggleCat(cat.category)}
-              className="w-full text-left flex items-center gap-1.5 px-1 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase hover:text-foreground transition-colors"
-            >
-              <span>{CATEGORY_ICONS[cat.category] || "📦"}</span>
-              <span className="flex-1">{cat.category}</span>
-              <span className="text-[9px] font-normal bg-muted/50 rounded px-1">{cat.nodes.length}</span>
-              {expandedCats.has(cat.category) ? (
-                <ChevronUp className="h-2.5 w-2.5" />
-              ) : (
-                <ChevronDown className="h-2.5 w-2.5" />
-              )}
-            </button>
-            {expandedCats.has(cat.category) && cat.nodes.map((node) => (
-              <button
-                key={node.type}
-                onClick={() => onAddNode(node.type)}
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.setData("application/pipeline-node-type", node.type);
-                  e.dataTransfer.effectAllowed = "copy";
-                }}
-                className="w-full text-left flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-primary/5 border border-transparent hover:border-border/50 transition-all group cursor-grab active:cursor-grabbing"
-                title={node.description}
-              >
-                <span className="text-base h-8 w-8 flex items-center justify-center rounded-lg bg-muted/40 group-hover:bg-primary/10 transition-colors shrink-0">
-                  {node.icon}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-medium text-foreground truncate">{node.label}</div>
-                  <div className="text-[10px] text-muted-foreground truncate leading-tight mt-0.5">{node.description}</div>
-                </div>
-                <Plus className="h-3.5 w-3.5 ml-auto text-primary opacity-0 group-hover:opacity-100 shrink-0 transition-opacity" />
-              </button>
-            ))}
-          </div>
-        ))}
-        {filtered.length === 0 && search.trim() && (
-          <p className="text-[11px] text-muted-foreground text-center py-4">No nodes match "{search}"</p>
-        )}
-      </div>
-      <div className="px-3 py-2 border-t border-border">
-        <p className="text-[9px] text-muted-foreground text-center">Click or drag nodes to canvas</p>
+      <TooltipProvider delayDuration={400}>
+        <div className="flex-1 space-y-1 overflow-auto p-2">
+          {filtered.map((cat) => {
+            const CategoryIcon = CATEGORY_ICONS[cat.category as keyof typeof CATEGORY_ICONS] || FileText;
+            return (
+              <div key={cat.category}>
+                <button
+                  onClick={() => toggleCat(cat.category)}
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+                >
+                  <CategoryIcon className="h-3.5 w-3.5" />
+                  <span className="flex-1">{getNodeCategoryLabel(cat.category, lang)}</span>
+                  <span className="rounded bg-muted/50 px-1.5 py-0.5 text-[9px] font-normal">{cat.nodes.length}</span>
+                  {expandedCats.has(cat.category) ? (
+                    <ChevronUp className="h-3 w-3" />
+                  ) : (
+                    <ChevronDown className="h-3 w-3" />
+                  )}
+                </button>
+                {expandedCats.has(cat.category) &&
+                  cat.nodes.map((node) => {
+                    const Icon = node.icon;
+                    const guidance = getNodeTypeGuidance(node.type, lang);
+                    return (
+                      <Tooltip key={node.type}>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => onAddNode(node.type)}
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData("application/pipeline-node-type", node.type);
+                              e.dataTransfer.effectAllowed = "copy";
+                            }}
+                            className="group flex w-full items-center gap-3 rounded-xl border border-transparent px-2.5 py-2.5 text-left transition-all hover:border-border/70 hover:bg-primary/5 cursor-grab active:cursor-grabbing"
+                          >
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-muted/40 transition-colors group-hover:border-primary/20 group-hover:bg-primary/10">
+                              <Icon className={`h-[18px] w-[18px] ${node.iconClassName || "text-foreground"}`} />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-[12px] font-medium text-foreground">{node.label}</div>
+                              <div className="mt-0.5 truncate text-[10px] leading-tight text-muted-foreground">{node.description}</div>
+                            </div>
+                            <Plus className="ml-auto h-3.5 w-3.5 shrink-0 text-primary opacity-0 transition-opacity group-hover:opacity-100" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="max-w-[320px] rounded-xl border-border/80 bg-popover/98 px-3.5 py-3">
+                          <div className="space-y-2">
+                            <div className="flex items-start gap-2">
+                              <span className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-lg border border-border/70 bg-background/70">
+                                <Icon className={`h-4 w-4 ${node.iconClassName || "text-foreground"}`} />
+                              </span>
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-foreground">{node.label}</p>
+                                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{guidance.category}</p>
+                              </div>
+                            </div>
+                            <p className="text-[12px] leading-5 text-foreground/80">{guidance.summary}</p>
+                            <div className="space-y-1">
+                              {guidance.checklist.slice(0, 2).map((item) => (
+                                <p key={item} className="text-[11px] leading-4 text-muted-foreground">
+                                  - {item}
+                                </p>
+                              ))}
+                            </div>
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    );
+                  })}
+              </div>
+            );
+          })}
+          {filtered.length === 0 && search.trim() && (
+            <p className="py-4 text-center text-[11px] text-muted-foreground">
+              {localize(lang, `Ничего не найдено по запросу "${search}"`, `No nodes match "${search}"`)}
+            </p>
+          )}
+        </div>
+      </TooltipProvider>
+      <div className="border-t border-border/80 px-3 py-2">
+        <p className="text-center text-[9px] text-muted-foreground">
+          {localize(lang, "Кликните по ноде или перетащите её на холст", "Click a node or drag it onto the canvas")}
+        </p>
       </div>
     </div>
   );
@@ -2650,8 +2307,6 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     enabled: !!pipelineId,
     refetchOnMount: "always",
   });
-  const { data: pipelineCopilotMcpList = [] } = useQuery({ queryKey: ["studio", "mcp"], queryFn: studioMCP.list });
-
   const [nodes, setNodes, onNodesChangeRaw] = useNodesState([]);
   const [edges, setEdges, onEdgesChangeRaw] = useEdgesState([]);
   const [selectedNode, setSelectedNode] = useState<PipelineNode | null>(null);
@@ -2661,7 +2316,6 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
   const [graphRunId, setGraphRunId] = useState<number | null>(null);
   const [graphRunLive, setGraphRunLive] = useState<PipelineRun | null>(null);
   const [runDialogOpen, setRunDialogOpen] = useState(false);
-  const [pipelineCopilotOpen, setPipelineCopilotOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(true);
   const [runTaskText, setRunTaskText] = useState("");
   const [runRequester, setRunRequester] = useState("");
@@ -2772,7 +2426,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       }, 0);
       nodeIdCounter.current = maxId + 1;
       // Fit view after nodes load
-      setTimeout(() => fitView({ padding: 0.15, duration: 300 }), 100);
+      setTimeout(() => fitView({ padding: 0.22, duration: 300 }), 100);
     }
   }, [pipeline, pipelineId, isFetchedAfterMount, setNodes, setEdges, fitView]);
 
@@ -2901,7 +2555,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     mutationFn: (data: { nodes: PipelineNode[]; edges: PipelineEdge[]; name: string }) =>
       pipelineId
         ? studioPipelines.update(pipelineId, data)
-        : studioPipelines.create({ ...data, icon: "⚡" }),
+        : studioPipelines.create({ ...data, icon: "â¡" }),
     onSuccess: (p) => {
       queryClient.setQueryData(["studio", "pipeline", p.id], p);
       queryClient.invalidateQueries({ queryKey: ["studio", "pipelines"] });
@@ -2946,7 +2600,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       setRunContextError(null);
       setRunEntryNodeId("");
       setRunTriggerError(null);
-      toast({ description: `Pipeline started — run #${run.id}` });
+      toast({ description: `Pipeline started â run #${run.id}` });
     },
     onError: (err: Error) => toast({ variant: "destructive", description: err.message }),
   });
@@ -2957,7 +2611,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         variant: "destructive",
         description: localize(
           lang,
-          "Редактор еще загружает актуальную версию графа. Подождите секунду и попробуйте снова.",
+          "Ð ÐµÐ´Ð°ÐºÑÐ¾Ñ ÐµÑÐµ Ð·Ð°Ð³ÑÑÐ¶Ð°ÐµÑ Ð°ÐºÑÑÐ°Ð»ÑÐ½ÑÑ Ð²ÐµÑÑÐ¸Ñ Ð³ÑÐ°ÑÐ°. ÐÐ¾Ð´Ð¾Ð¶Ð´Ð¸ÑÐµ ÑÐµÐºÑÐ½Ð´Ñ Ð¸ Ð¿Ð¾Ð¿ÑÐ¾Ð±ÑÐ¹ÑÐµ ÑÐ½Ð¾Ð²Ð°.",
           "The editor is still loading the latest graph from the server. Wait a moment and try again.",
         ),
       });
@@ -3017,11 +2671,11 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
   const handleCopyWebhookUrl = async (webhookUrl: string) => {
     try {
       await navigator.clipboard.writeText(toAbsoluteWebhookUrl(webhookUrl));
-      toast({ description: localize(lang, "Webhook URL скопирован.", "Webhook URL copied.") });
+      toast({ description: localize(lang, "Webhook URL ÑÐºÐ¾Ð¿Ð¸ÑÐ¾Ð²Ð°Ð½.", "Webhook URL copied.") });
     } catch (error) {
       const message = error instanceof Error
         ? error.message
-        : localize(lang, "Не удалось скопировать webhook URL.", "Failed to copy webhook URL.");
+        : localize(lang, "ÐÐµ ÑÐ´Ð°Ð»Ð¾ÑÑ ÑÐºÐ¾Ð¿Ð¸ÑÐ¾Ð²Ð°ÑÑ webhook URL.", "Failed to copy webhook URL.");
       toast({ variant: "destructive", description: message });
     }
   };
@@ -3031,7 +2685,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       setRunTriggerError(
         localize(
           lang,
-          "У этого пайплайна нет ручного trigger. Используйте webhook или schedule trigger.",
+          "Ð£ ÑÑÐ¾Ð³Ð¾ Ð¿Ð°Ð¹Ð¿Ð»Ð°Ð¹Ð½Ð° Ð½ÐµÑ ÑÑÑÐ½Ð¾Ð³Ð¾ trigger. ÐÑÐ¿Ð¾Ð»ÑÐ·ÑÐ¹ÑÐµ webhook Ð¸Ð»Ð¸ schedule trigger.",
           "This pipeline has no manual trigger. Use its webhook or schedule trigger instead.",
         ),
       );
@@ -3055,7 +2709,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         ? manualTriggerOptions[0].node_id
         : runEntryNodeId.trim();
     if (!selectedEntryNodeId) {
-      setRunTriggerError(localize(lang, "Выберите ручной trigger для запуска.", "Select the manual trigger that should start this run."));
+      setRunTriggerError(localize(lang, "ÐÑÐ±ÐµÑÐ¸ÑÐµ ÑÑÑÐ½Ð¾Ð¹ trigger Ð´Ð»Ñ Ð·Ð°Ð¿ÑÑÐºÐ°.", "Select the manual trigger that should start this run."));
       return;
     }
     setRunTriggerError(null);
@@ -3139,6 +2793,33 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     [clearGraphOverlay, nodes, selectedNode, setNodes, screenToFlowPosition],
   );
 
+  const handleDuplicateNode = useCallback(
+    (nodeId: string) => {
+      const sourceNode = (nodes as unknown as PipelineNode[]).find((item) => item.id === nodeId);
+      if (!sourceNode) return;
+
+      const duplicatedNode = {
+        ...sourceNode,
+        id: `node_${nodeIdCounter.current++}`,
+        position: {
+          x: sourceNode.position.x + 40,
+          y: sourceNode.position.y + 40,
+        },
+        data: { ...(sourceNode.data || {}) },
+      } satisfies PipelineNode;
+
+      setHasLocalChanges(true);
+      setNodes((nds) => [...nds, duplicatedNode as never]);
+      clearGraphOverlay();
+      setActiveRunId(null);
+      setSelectedNode(duplicatedNode);
+      toast({
+        description: `${getNodeDisplayLabel(sourceNode)} duplicated.`,
+      });
+    },
+    [clearGraphOverlay, nodes, setNodes, toast],
+  );
+
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "copy";
@@ -3182,157 +2863,6 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       setSelectedNode(null);
     },
     [clearGraphOverlay, setNodes, setEdges],
-  );
-
-  const handleApplyPipelineAssistantPatch = useCallback(
-    (targetNodeId: string, patch: Record<string, unknown>) => {
-      if (!targetNodeId || !Object.keys(patch).length) return;
-      const normalized = normaliseAssistantPatch(patch, {
-        mcpList: pipelineCopilotMcpList.map((item) => ({ id: item.id, name: item.name })),
-      });
-      const targetNode = (nodes as unknown as PipelineNode[]).find((item) => item.id === targetNodeId);
-      if (!targetNode) {
-        toast({ variant: "destructive", description: `Node ${targetNodeId} was not found.` });
-        return;
-      }
-
-      const merged = { ...(targetNode.data || {}), ...normalized };
-      setHasLocalChanges(true);
-      setNodes((nds) => nds.map((item) => (item.id === targetNodeId ? ({ ...item, data: merged } as never) : item)));
-      setActiveRunId(null);
-      setSelectedNode({ ...targetNode, data: merged });
-      toast({ description: `AI suggestion applied to ${getNodeDisplayLabel({ ...targetNode, data: merged })}.` });
-    },
-    [nodes, pipelineCopilotMcpList, setNodes, toast],
-  );
-
-  const handleApplyPipelineAssistantGraphPatch = useCallback(
-    (graphPatch: StudioPipelineGraphPatch) => {
-      const updateSpecs = (graphPatch.update_nodes || []).filter(
-        (item) => item && typeof item.node_id === "string" && item.data && typeof item.data === "object",
-      );
-      const removeNodeIds = new Set((graphPatch.remove_node_ids || []).filter((item): item is string => Boolean(item)));
-      const removeEdgeIds = new Set((graphPatch.remove_edge_ids || []).filter((item): item is string => Boolean(item)));
-      if (!graphPatch.nodes.length && !graphPatch.edges.length && !updateSpecs.length && !removeNodeIds.size && !removeEdgeIds.size) {
-        toast({ description: localize(lang, "В этом ответе нет изменений графа.", "This suggestion does not include graph changes.") });
-        return;
-      }
-
-      const existingNodes = nodes as unknown as PipelineNode[];
-      const existingEdges = edges as unknown as PipelineEdge[];
-      const existingNodeIds = new Set(existingNodes.map((item) => item.id));
-      const anchorNode =
-        existingNodes.find((item) => item.id === graphPatch.anchor_node_id) ||
-        (selectedNode ? existingNodes.find((item) => item.id === selectedNode.id) : null) ||
-        existingNodes[existingNodes.length - 1] ||
-        null;
-      const anchorPosition = anchorNode?.position || screenToFlowPosition({ x: 420, y: 260 });
-
-      const refToId = new Map<string, string>();
-      const createdNodes: PipelineNode[] = [];
-      graphPatch.nodes.forEach((spec, index) => {
-        if (!spec.ref || !isNodeType(spec.type)) return;
-        const newId = `node_${nodeIdCounter.current++}`;
-        refToId.set(spec.ref, newId);
-        const data: Record<string, unknown> = {
-          ...buildDefaultNodeData(spec.type),
-          ...(spec.data || {}),
-        };
-        if (spec.label && !String(data.label || "").trim()) data.label = spec.label;
-        createdNodes.push({
-          id: newId,
-          type: spec.type,
-          position: {
-            x: anchorPosition.x + (typeof spec.x_offset === "number" ? spec.x_offset : 280 * (index + 1)),
-            y: anchorPosition.y + (typeof spec.y_offset === "number" ? spec.y_offset : (index % 3) * 120),
-          },
-          data,
-        });
-      });
-
-      const resolveNodeId = (token: string) => {
-        if (!token) return null;
-        if (refToId.has(token)) return refToId.get(token) || null;
-        if (existingNodeIds.has(token)) return token;
-        return null;
-      };
-
-      const existingEdgeKeys = new Set(existingEdges.map((edge) => `${edge.source}:${edge.target}:${edge.label || ""}`));
-      const createdEdges: PipelineEdge[] = [];
-      graphPatch.edges.forEach((spec, index) => {
-        const source = resolveNodeId(spec.source);
-        const target = resolveNodeId(spec.target);
-        if (!source || !target) return;
-        const edgeKey = `${source}:${target}:${spec.label || ""}`;
-        if (existingEdgeKeys.has(edgeKey)) return;
-        existingEdgeKeys.add(edgeKey);
-        createdEdges.push({
-          id: `edge_${Date.now()}_${index}_${source}_${target}`,
-          source,
-          target,
-          label: spec.label,
-          sourceHandle: spec.source_handle,
-          targetHandle: spec.target_handle,
-        });
-      });
-
-      const updateMap = new Map(
-        updateSpecs.map((item) => [
-          item.node_id,
-          normaliseAssistantPatch(item.data as Record<string, unknown>, {
-            mcpList: pipelineCopilotMcpList.map((entry) => ({ id: entry.id, name: entry.name })),
-          }),
-        ]),
-      );
-      const updatedNodes = existingNodes
-        .filter((node) => updateMap.has(node.id))
-        .map((node) => ({
-          ...node,
-          data: { ...(node.data || {}), ...(updateMap.get(node.id) || {}) },
-        }));
-      const updatedNodeMap = new Map(updatedNodes.map((node) => [node.id, node]));
-
-      const nextNodes = existingNodes
-        .filter((node) => !removeNodeIds.has(node.id))
-        .map((node) => updatedNodeMap.get(node.id) || node);
-      if (createdNodes.length) {
-        nextNodes.push(...createdNodes);
-      }
-
-      const nextEdges = existingEdges
-        .filter((edge) => !removeEdgeIds.has(edge.id))
-        .filter((edge) => !removeNodeIds.has(edge.source) && !removeNodeIds.has(edge.target));
-      if (createdEdges.length) {
-        nextEdges.push(...createdEdges);
-      }
-
-      if (
-        !createdNodes.length &&
-        !createdEdges.length &&
-        !updatedNodes.length &&
-        !removeNodeIds.size &&
-        !removeEdgeIds.size
-      ) {
-        toast({ description: localize(lang, "Не удалось извлечь валидные изменения графа.", "No valid graph changes were found in this AI suggestion.") });
-        return;
-      }
-
-      setHasLocalChanges(true);
-      setNodes(nextNodes as never[]);
-      setEdges(nextEdges as never[]);
-      setSelectedNode(createdNodes[0] || updatedNodes[0] || null);
-      clearGraphOverlay();
-      setActiveRunId(null);
-      toast({
-        description: localize(
-          lang,
-          `Применено: +${createdNodes.length} нод, +${createdEdges.length} связей, обновлено ${updatedNodes.length}, удалено ${removeNodeIds.size} нод и ${removeEdgeIds.size} связей.`,
-          `Applied: +${createdNodes.length} nodes, +${createdEdges.length} edges, updated ${updatedNodes.length}, removed ${removeNodeIds.size} nodes and ${removeEdgeIds.size} edges.`,
-        ),
-      });
-      setTimeout(() => fitView({ padding: 0.18, duration: 300 }), 60);
-    },
-    [clearGraphOverlay, edges, fitView, lang, nodes, pipelineCopilotMcpList, screenToFlowPosition, selectedNode, setEdges, setNodes, toast],
   );
 
   const onPaneClick = useCallback(() => setSelectedNode(null), []);
@@ -3424,8 +2954,12 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         ? Clock
         : pipelineActivityState.icon === "manual"
           ? Play
+          : pipelineActivityState.icon === "webhook"
+            ? Link2
           : pipelineActivityState.icon === "schedule"
             ? Clock
+            : pipelineActivityState.icon === "monitoring"
+              ? Bell
             : pipelineActivityState.icon === "warning"
               ? XCircle
               : Zap;
@@ -3468,7 +3002,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
             className="h-7 gap-1.5"
           >
             {saveMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
-            {localize(lang, "���������", "Save")}
+            {localize(lang, "Сохранить", "Save")}
           </Button>
           <Button
             size="sm"
@@ -3478,20 +3012,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
             className="h-7 gap-1.5"
           >
             {runMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
-            {localize(lang, "������", "Run")}
-          </Button>
-
-          <div className="w-px h-4 bg-border mx-1" />
-
-          <Button
-            size="icon"
-            variant={pipelineCopilotOpen ? "secondary" : "ghost"}
-            onClick={() => setPipelineCopilotOpen((prev) => !prev)}
-            className={cn("h-7 w-7", pipelineCopilotOpen && "bg-primary/10 text-primary")}
-            aria-label="AI Builder"
-            title={localize(lang, "AI ���������", "AI Assistant")}
-          >
-            {pipelineCopilotOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
+            {localize(lang, "Запуск", "Run")}
           </Button>
           
           <DropdownMenu>
@@ -3504,7 +3025,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
               {resolvedLastRun && (
                 <DropdownMenuItem onClick={() => setActiveRunId(resolvedLastRun.id)}>
                   <Clock className="mr-2 h-3.5 w-3.5" />
-                  {localize(lang, "������� ������ #", "Open run #")}
+                  {localize(lang, "Открыть запуск #", "Open run #")}
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>
@@ -3512,29 +3033,14 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         </div>
       </div>
 
-      <PipelineAssistantDialog
-        open={pipelineCopilotOpen}
-        onOpenChange={setPipelineCopilotOpen}
-        pipelineId={pipelineId}
-        pipelineName={pipelineName}
-        nodes={pipelineNodes}
-        edges={pipelineEdges}
-        selectedNode={selectedNode}
-        hasLocalChanges={hasLocalChanges}
-        activityLabel={pipelineActivityState.label}
-        lang={lang}
-        onApplyPatch={handleApplyPipelineAssistantPatch}
-        onApplyGraphPatch={handleApplyPipelineAssistantGraphPatch}
-      />
-
-      <div className="flex items-center gap-3 border-b border-border bg-muted/20 px-4 py-2 text-xs">
-        <div className={`flex items-center gap-2 rounded-full border px-2.5 py-1 ${toolbarActivityToneClass}`}>
+      <div className="flex items-center gap-3 border-b border-border/80 bg-[#15191f] px-4 py-2.5 text-xs">
+        <div className={`flex items-center gap-2 rounded-full border px-2.5 py-1.5 ${toolbarActivityToneClass}`}>
           <ToolbarActivityIcon
             className={`h-3.5 w-3.5 ${pipelineActivityState.icon === "running" ? "animate-spin" : ""}`}
           />
           <span className="font-medium">{pipelineActivityState.label}</span>
         </div>
-        <p className="text-muted-foreground">{pipelineActivityState.detail}</p>
+        <p className="min-w-0 flex-1 truncate text-muted-foreground/90">{pipelineActivityState.detail}</p>
         {graphRunId && highlightedNode ? (
           <div className="inline-flex items-center gap-2 rounded-full border border-sky-500/25 bg-sky-500/10 px-2.5 py-1 text-sky-200">
             {isLivePipelineRunStatus(graphRunLive?.status) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Info className="h-3.5 w-3.5" />}
@@ -3553,10 +3059,11 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
 
       {/* Flow summary bar */}
       {nodes.length > 0 && (
-        <div className="flex items-center gap-1 px-4 py-1.5 border-b border-border bg-muted/30 overflow-x-auto">
-          <span className="text-[10px] text-muted-foreground shrink-0 mr-1">Flow:</span>
+        <div className="flex items-center gap-2 overflow-x-auto border-b border-border/80 bg-[#10141a] px-4 py-2">
+          <span className="mr-1 shrink-0 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/80">
+            {localize(lang, "Flow", "Flow")}
+          </span>
           {(() => {
-            // Build a simple chain from triggers -> connected nodes
             const pNodes = pipelineNodes;
             const pEdges = pipelineEdges;
             const visited = new Set<string>();
@@ -3574,33 +3081,72 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                 .filter(Boolean) as PipelineNode[];
               queue.push(...downstream);
             }
-            // Add orphans
             pNodes.forEach((n) => { if (!visited.has(n.id) && chain.length < 15) chain.push(n); });
-            return chain.map((n, i) => (
-              <span key={n.id} className="flex items-center gap-1 shrink-0">
-                {i > 0 && <ChevronRight className="h-2.5 w-2.5 text-muted-foreground/40" />}
-                <button
-                  onClick={() => {
-                    setSelectedNode(n);
-                    setActiveRunId(null);
-                  }}
-                  className={cn(
-                    "text-[10px] px-1.5 py-0.5 rounded-md border transition-colors",
-                    graphState.currentNodeId === n.id
-                      ? "border-blue-500/40 bg-blue-500/10 text-blue-200 shadow-[0_0_16px_rgba(59,130,246,0.18)]"
-                      : graphState.traversedNodeIds.has(n.id)
-                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
-                        : graphState.queuedNodeIds.has(n.id)
-                          ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-200"
-                          : selectedNode?.id === n.id
-                            ? "border-primary/40 bg-primary/10 text-primary"
-                            : "border-transparent hover:bg-muted/50 text-muted-foreground hover:text-foreground"
-                  )}
+            const visibleChain = chain.slice(0, 6);
+            const hiddenCount = Math.max(0, chain.length - visibleChain.length);
+            const items: React.ReactNode[] = [];
+            let previousPhase = "";
+
+            visibleChain.forEach((n, index) => {
+              const phaseLabel = getNodePhaseLabel(n.type, lang);
+              const meta = NODE_TYPE_LOOKUP[n.type || ""];
+              const StepIcon = meta?.icon;
+
+              if (phaseLabel !== previousPhase) {
+                items.push(
+                  <span
+                    key={`${n.id}-phase`}
+                    className={cn(
+                      "ml-1 inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
+                      getNodePhaseBadgeClass(n.type),
+                    )}
+                  >
+                    {phaseLabel}
+                  </span>,
+                );
+                previousPhase = phaseLabel;
+              }
+
+              items.push(
+                <span key={n.id} className="flex shrink-0 items-center gap-1.5">
+                  <button
+                    onClick={() => {
+                      setSelectedNode(n);
+                      setActiveRunId(null);
+                    }}
+                    className={cn(
+                      "inline-flex max-w-[190px] items-center gap-1.5 rounded-lg border px-2 py-1 text-[10px] transition-colors",
+                      graphState.currentNodeId === n.id
+                        ? "border-blue-500/40 bg-blue-500/10 text-blue-200 shadow-[0_0_16px_rgba(59,130,246,0.18)]"
+                        : graphState.traversedNodeIds.has(n.id)
+                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+                          : graphState.queuedNodeIds.has(n.id)
+                            ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-200"
+                            : selectedNode?.id === n.id
+                              ? "border-primary/40 bg-primary/10 text-primary"
+                              : "border-border/60 bg-background/60 text-muted-foreground hover:border-border hover:bg-muted/40 hover:text-foreground"
+                    )}
+                  >
+                    {StepIcon ? <StepIcon className={`h-3.5 w-3.5 shrink-0 ${meta.iconClassName || "text-foreground"}`} /> : null}
+                    <span className="truncate">{getNodeDisplayLabel(n)}</span>
+                  </button>
+                  {index < visibleChain.length - 1 ? <ChevronRight className="h-2.5 w-2.5 text-muted-foreground/40" /> : null}
+                </span>,
+              );
+            });
+
+            if (hiddenCount > 0) {
+              items.push(
+                <span
+                  key="flow-overflow"
+                  className="inline-flex shrink-0 items-center rounded-full border border-border/70 bg-background/60 px-2 py-0.5 text-[10px] text-muted-foreground"
                 >
-                  {NODE_TYPE_LABELS[n.type || ""]?.icon || "🔧"} {getNodeDisplayLabel(n)}
-                </button>
-              </span>
-            ));
+                  +{hiddenCount} {localize(lang, "этапов", "more")}
+                </span>,
+              );
+            }
+
+            return items;
           })()}
         </div>
       )}
@@ -3608,12 +3154,12 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       {/* Main area */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left: Node palette */}
-        <div className="w-56 shrink-0">
-          <NodePalette onAddNode={handleAddNode} />
+        <div className="w-64 shrink-0">
+          <NodePalette onAddNode={handleAddNode} lang={lang} />
         </div>
 
         {/* Center: Canvas */}
-        <div className="flex flex-1 min-w-0 flex-col">
+        <div className="flex min-w-0 flex-1 flex-col bg-[#111317]">
           <div className="flex-1">
             <ReactFlow
             nodes={displayNodes}
@@ -3680,9 +3226,11 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                 node={selectedNode}
                 pipelineId={pipelineId}
                 trigger={pipeline?.triggers?.find((item) => item.node_id === selectedNode.id) || null}
+                lang={lang}
                 onUpdate={handleUpdateNodeData}
                 onClose={() => setSelectedNode(null)}
                 onDelete={handleDeleteNode}
+                onDuplicate={handleDuplicateNode}
               />
             ) : null}
           </div>
@@ -3728,10 +3276,10 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                       <SelectValue
                         placeholder={
                           manualTriggerOptions.length === 0
-                            ? localize(lang, "Нет активных manual trigger нод", "No active manual trigger nodes")
+                            ? localize(lang, "ÐÐµÑ Ð°ÐºÑÐ¸Ð²Ð½ÑÑ manual trigger Ð½Ð¾Ð´", "No active manual trigger nodes")
                             : manualTriggerOptions.length === 1
                               ? manualTriggerOptions[0].label
-                              : localize(lang, "Выберите trigger", "Select a trigger")
+                              : localize(lang, "ÐÑÐ±ÐµÑÐ¸ÑÐµ trigger", "Select a trigger")
                         }
                       />
                     </SelectTrigger>
@@ -3745,8 +3293,8 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                   </Select>
                   <p className="text-[11px] text-muted-foreground">
                     {manualTriggerOptions.length <= 1
-                      ? localize(lang, "Если ручной trigger один, он будет выбран автоматически.", "When there is only one manual trigger, it is selected automatically.")
-                      : localize(lang, "Этот trigger запустит только свою ветку графа.", "This trigger starts only its own branch of the graph.")}
+                      ? localize(lang, "ÐÑÐ»Ð¸ ÑÑÑÐ½Ð¾Ð¹ trigger Ð¾Ð´Ð¸Ð½, Ð¾Ð½ Ð±ÑÐ´ÐµÑ Ð²ÑÐ±ÑÐ°Ð½ Ð°Ð²ÑÐ¾Ð¼Ð°ÑÐ¸ÑÐµÑÐºÐ¸.", "When there is only one manual trigger, it is selected automatically.")
+                      : localize(lang, "Ð­ÑÐ¾Ñ trigger Ð·Ð°Ð¿ÑÑÑÐ¸Ñ ÑÐ¾Ð»ÑÐºÐ¾ ÑÐ²Ð¾Ñ Ð²ÐµÑÐºÑ Ð³ÑÐ°ÑÐ°.", "This trigger starts only its own branch of the graph.")}
                   </p>
                   {runTriggerError ? <p className="text-xs text-red-400">{runTriggerError}</p> : null}
                 </div>
@@ -3825,7 +3373,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                   <div className="rounded-xl border border-sky-500/25 bg-sky-500/10 px-3 py-2 text-xs text-sky-200">
                     {localize(
                       lang,
-                      "Trigger уже armed и ждёт входящий POST запрос. Новый run появится только когда webhook реально придёт.",
+                      "Trigger ÑÐ¶Ðµ armed Ð¸ Ð¶Ð´ÑÑ Ð²ÑÐ¾Ð´ÑÑÐ¸Ð¹ POST Ð·Ð°Ð¿ÑÐ¾Ñ. ÐÐ¾Ð²ÑÐ¹ run Ð¿Ð¾ÑÐ²Ð¸ÑÑÑ ÑÐ¾Ð»ÑÐºÐ¾ ÐºÐ¾Ð³Ð´Ð° webhook ÑÐµÐ°Ð»ÑÐ½Ð¾ Ð¿ÑÐ¸Ð´ÑÑ.",
                       "This trigger is already armed and waiting for an incoming POST request. A new run will appear only when the webhook actually arrives.",
                     )}
                   </div>
@@ -3833,7 +3381,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                   <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
                     {localize(
                       lang,
-                      "Сначала сохраните граф, чтобы arm webhook trigger и получить URL.",
+                      "Ð¡Ð½Ð°ÑÐ°Ð»Ð° ÑÐ¾ÑÑÐ°Ð½Ð¸ÑÐµ Ð³ÑÐ°Ñ, ÑÑÐ¾Ð±Ñ arm webhook trigger Ð¸ Ð¿Ð¾Ð»ÑÑÐ¸ÑÑ URL.",
                       "Save the graph first to arm the webhook trigger and generate its URL.",
                     )}
                   </div>
@@ -3848,7 +3396,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                         </div>
                         <Button size="sm" variant="outline" onClick={() => void handleCopyWebhookUrl(trigger.webhook_url)}>
                           <Copy className="mr-1.5 h-3.5 w-3.5" />
-                          {localize(lang, "Скопировать URL", "Copy URL")}
+                          {localize(lang, "Ð¡ÐºÐ¾Ð¿Ð¸ÑÐ¾Ð²Ð°ÑÑ URL", "Copy URL")}
                         </Button>
                       </div>
                       <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground break-all">
@@ -3856,8 +3404,8 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                       </div>
                       <p className="text-[11px] text-muted-foreground">
                         {trigger.last_triggered_at
-                          ? localize(lang, `Последний trigger: ${formatStudioDateTime(trigger.last_triggered_at)}`, `Last trigger: ${formatStudioDateTime(trigger.last_triggered_at)}`)
-                          : localize(lang, "Ещё не вызывался.", "Has not been triggered yet.")}
+                          ? localize(lang, `ÐÐ¾ÑÐ»ÐµÐ´Ð½Ð¸Ð¹ trigger: ${formatStudioDateTime(trigger.last_triggered_at)}`, `Last trigger: ${formatStudioDateTime(trigger.last_triggered_at)}`)
+                          : localize(lang, "ÐÑÑ Ð½Ðµ Ð²ÑÐ·ÑÐ²Ð°Ð»ÑÑ.", "Has not been triggered yet.")}
                       </p>
                     </div>
                   ))
@@ -3865,7 +3413,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                   <div className="rounded-xl border border-dashed border-border px-3 py-3 text-xs text-muted-foreground">
                     {localize(
                       lang,
-                      "Сначала сохраните pipeline, чтобы сгенерировать webhook URL для этой trigger ноды.",
+                      "Ð¡Ð½Ð°ÑÐ°Ð»Ð° ÑÐ¾ÑÑÐ°Ð½Ð¸ÑÐµ pipeline, ÑÑÐ¾Ð±Ñ ÑÐ³ÐµÐ½ÐµÑÐ¸ÑÐ¾Ð²Ð°ÑÑ webhook URL Ð´Ð»Ñ ÑÑÐ¾Ð¹ trigger Ð½Ð¾Ð´Ñ.",
                       "Save the pipeline first to generate a webhook URL for this trigger node.",
                     )}
                   </div>
@@ -3876,7 +3424,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                 <div className="rounded-xl border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
                   {localize(
                     lang,
-                    "Schedule trigger запускается планировщиком. Ручной Run для него не нужен.",
+                    "Schedule trigger Ð·Ð°Ð¿ÑÑÐºÐ°ÐµÑÑÑ Ð¿Ð»Ð°Ð½Ð¸ÑÐ¾Ð²ÑÐ¸ÐºÐ¾Ð¼. Ð ÑÑÐ½Ð¾Ð¹ Run Ð´Ð»Ñ Ð½ÐµÐ³Ð¾ Ð½Ðµ Ð½ÑÐ¶ÐµÐ½.",
                     "Schedule triggers are started by the scheduler. They do not need a manual Run.",
                   )}
                 </div>
@@ -3905,7 +3453,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                 <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
                   {localize(
                     lang,
-                    "Monitoring trigger уже armed после сохранения и ждёт alert от server monitoring. Run появится только при реальной проблеме.",
+                    "Monitoring trigger ÑÐ¶Ðµ armed Ð¿Ð¾ÑÐ»Ðµ ÑÐ¾ÑÑÐ°Ð½ÐµÐ½Ð¸Ñ Ð¸ Ð¶Ð´ÑÑ alert Ð¾Ñ server monitoring. Run Ð¿Ð¾ÑÐ²Ð¸ÑÑÑ ÑÐ¾Ð»ÑÐºÐ¾ Ð¿ÑÐ¸ ÑÐµÐ°Ð»ÑÐ½Ð¾Ð¹ Ð¿ÑÐ¾Ð±Ð»ÐµÐ¼Ðµ.",
                     "The monitoring trigger is armed after save and waits for a server monitoring alert. A run appears only when a real issue is detected.",
                   )}
                 </div>
@@ -3929,7 +3477,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                       <div>Severity: {Array.isArray((trigger.filters as Record<string, unknown>).severities) && ((trigger.filters as Record<string, unknown>).severities as unknown[]).length ? (((trigger.filters as Record<string, unknown>).severities as unknown[]).join(", ")) : "any"}</div>
                       <div>Alert type: {Array.isArray((trigger.filters as Record<string, unknown>).alert_types) && ((trigger.filters as Record<string, unknown>).alert_types as unknown[]).length ? (((trigger.filters as Record<string, unknown>).alert_types as unknown[]).join(", ")) : "any"}</div>
                       <div>Containers: {Array.isArray((trigger.filters as Record<string, unknown>).container_names) && ((trigger.filters as Record<string, unknown>).container_names as unknown[]).length ? (((trigger.filters as Record<string, unknown>).container_names as unknown[]).join(", ")) : "any"}</div>
-                      {trigger.lastTriggeredAt ? <div>{localize(lang, `Последний trigger: ${formatStudioDateTime(trigger.lastTriggeredAt)}`, `Last trigger: ${formatStudioDateTime(trigger.lastTriggeredAt)}`)}</div> : null}
+                      {trigger.lastTriggeredAt ? <div>{localize(lang, `ÐÐ¾ÑÐ»ÐµÐ´Ð½Ð¸Ð¹ trigger: ${formatStudioDateTime(trigger.lastTriggeredAt)}`, `Last trigger: ${formatStudioDateTime(trigger.lastTriggeredAt)}`)}</div> : null}
                     </div>
                   </div>
                 ))}
@@ -3948,7 +3496,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
             ) : (
               <Button onClick={handleSave} disabled={saveMutation.isPending || (Boolean(pipelineId) && !hasHydratedPipeline)}>
                 {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                {localize(lang, "Сохранить trigger", "Save Trigger")}
+                {localize(lang, "Ð¡Ð¾ÑÑÐ°Ð½Ð¸ÑÑ trigger", "Save Trigger")}
               </Button>
             )}
           </DialogFooter>

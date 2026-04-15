@@ -2,57 +2,56 @@
 Инструменты для работы с серверами из вкладки Servers.
 Используют серверы текущего пользователя (user_id из _context) и SSH.
 """
+import contextlib
 import os
-from typing import Any, Dict, Optional, Tuple
-from loguru import logger
+from typing import Any
+
+from asgiref.sync import sync_to_async
 from django.db.models import Q
 from django.utils import timezone
-from core_ui.activity import log_user_activity
+from loguru import logger
+
 from app.tools.base import BaseTool, ToolMetadata, ToolParameter
-from app.tools.ssh_tools import ssh_manager
 from app.tools.safety import is_dangerous_command
-from asgiref.sync import sync_to_async
+from app.tools.ssh_tools import ssh_manager
+from core_ui.activity import log_user_activity
 from servers.secret_utils import get_server_auth_secret
 
 
-def _get_user_id(kwargs: Dict[str, Any]) -> Optional[int]:
+def _get_user_id(kwargs: dict[str, Any]) -> int | None:
     ctx = kwargs.get("_context") or {}
     user_id = ctx.get("user_id")
     # Также проверяем переменные окружения (для CLI/MCP контекста)
     if not user_id:
         env_user_id = os.environ.get("WEU_USER_ID")
         if env_user_id:
-            try:
+            with contextlib.suppress(ValueError):
                 user_id = int(env_user_id)
-            except ValueError:
-                pass
     return user_id
 
 
-def _get_master_password(kwargs: Dict[str, Any]) -> Optional[str]:
+def _get_master_password(kwargs: dict[str, Any]) -> str | None:
     ctx = kwargs.get("_context") or {}
     return ctx.get("master_password") or os.environ.get("MASTER_PASSWORD")
 
 
-def _get_target_server(kwargs: Dict[str, Any]) -> Tuple[Optional[int], Optional[str]]:
+def _get_target_server(kwargs: dict[str, Any]) -> tuple[int | None, str | None]:
     """Получить целевой сервер из контекста или переменных окружения."""
     ctx = kwargs.get("_context") or {}
-    
+
     target_server_id = ctx.get("target_server_id")
     target_server_name = ctx.get("target_server_name")
-    
+
     # Проверяем переменные окружения (для CLI/MCP контекста)
     if not target_server_id:
         env_target_id = os.environ.get("WEU_TARGET_SERVER_ID")
         if env_target_id:
-            try:
+            with contextlib.suppress(ValueError):
                 target_server_id = int(env_target_id)
-            except ValueError:
-                pass
-    
+
     if not target_server_name:
         target_server_name = os.environ.get("WEU_TARGET_SERVER_NAME")
-    
+
     return target_server_id, target_server_name
 
 
@@ -140,29 +139,29 @@ class ServerExecuteTool(BaseTool):
         user_id = _get_user_id(kwargs)
         if not user_id:
             return "Требуется контекст пользователя. Используй только в чате WEU AI."
-        
+
         ctx = kwargs.get("_context") or {}
         server_name_or_id = (kwargs.get("server_name_or_id") or "").strip()
         command = (kwargs.get("command") or "").strip()
         allow_destructive = bool(kwargs.get("allow_destructive") or ctx.get("allow_destructive"))
-        
+
         if not server_name_or_id or not command:
             return "Нужны server_name_or_id и command."
         if is_dangerous_command(command) and not allow_destructive:
             return "Команда выглядит опасной. Нужен явный допуск allow_destructive=true после подтверждения пользователя."
-        
+
         # Проверяем, есть ли ограничение на конкретный сервер (из workflow/task или env)
         target_server_id, target_server_name = _get_target_server(kwargs)
-        
+
         # Находим запрошенный сервер
         server = await sync_to_async(self._get_server, thread_sensitive=True)(user_id, server_name_or_id)
         share = await sync_to_async(self._get_active_share, thread_sensitive=True)(user_id, server)
-        
+
         if not server:
             if target_server_id:
                 return f"Сервер не найден: «{server_name_or_id}». ВАЖНО: Используй ТОЛЬКО целевой сервер «{target_server_name}» (id={target_server_id})!"
             return f"Сервер не найден: «{server_name_or_id}». Вызови servers_list, чтобы увидеть доступные серверы."
-        
+
         # Если есть ограничение на целевой сервер — проверяем
         if target_server_id and server.id != target_server_id:
             logger.warning(f"server_execute: попытка использовать сервер {server.name} (id={server.id}), но целевой сервер = {target_server_name} (id={target_server_id})")
@@ -202,7 +201,7 @@ class ServerExecuteTool(BaseTool):
             if not out:
                 out = str(result)
             code = result.get("exit_code", -1)
-            
+
             # Save command to history
             try:
                 await sync_to_async(self._save_command_history, thread_sensitive=True)(
@@ -306,8 +305,9 @@ class ServerExecuteTool(BaseTool):
 
     @staticmethod
     def _save_command_history(user_id: int, server, command: str, output: str, exit_code: int):
-        from servers.models import ServerCommandHistory
         from django.contrib.auth.models import User
+
+        from servers.models import ServerCommandHistory
         user = User.objects.filter(id=user_id).first()
         ServerCommandHistory.objects.create(
             server=server,
@@ -321,8 +321,9 @@ class ServerExecuteTool(BaseTool):
 
     @staticmethod
     def _save_knowledge(user_id: int, server, command_output: str, command: str, task_id=None):
-        from servers.knowledge_service import ServerKnowledgeService
         from django.contrib.auth.models import User
+
+        from servers.knowledge_service import ServerKnowledgeService
         user = User.objects.filter(id=user_id).first()
         ServerKnowledgeService.analyze_and_save_knowledge(
             server=server,

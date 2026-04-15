@@ -568,8 +568,10 @@ export default function StudioPage() {
                   <>
                     <section className="rounded-lg border border-border bg-card p-5">
                       <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                        <h2 className="text-lg font-semibold text-foreground">
-                          {search ? `Results for "${search}"` : "All Pipelines"}
+                        <div>
+                          <p className="text-[11px] font-medium text-muted-foreground">Pipelines</p>
+                          <h2 className="mt-1 text-lg font-semibold text-foreground">
+                            {search ? `Results for "${search}"` : "All Pipelines"}
                           </h2>
                         </div>
                         <p className="text-xs text-muted-foreground">

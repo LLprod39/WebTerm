@@ -22,7 +22,6 @@ from app.agent_kernel.memory.repair import (
     decay_confidence,
     detect_fact_conflicts,
     needs_revalidation,
-    resolve_winning_fact,
 )
 from app.agent_kernel.memory.server_cards import build_server_memory_card
 
@@ -693,7 +692,8 @@ class DjangoServerMemoryStore:
             self._record_change_sync(run.server_id, change, source_ref=source_ref, session_id=source_ref)
         for incident in summary.get("incidents") or []:
             self._record_incident_sync(run.server_id, incident, source_ref=source_ref, session_id=source_ref)
-        self._run_dream_cycle_sync(run.server_id, job_kind="nearline")
+        from servers.tasks import run_dream_cycle_task
+        run_dream_cycle_task.delay(run.server_id, job_kind="nearline")
         return event_id
 
     def _upsert_server_fact_sync(
@@ -1195,9 +1195,7 @@ class DjangoServerMemoryStore:
             return False
         if cls._is_destructive_command(normalized):
             return False
-        if cls._looks_mutating_command(normalized):
-            return False
-        return True
+        return not cls._looks_mutating_command(normalized)
 
     @classmethod
     def _is_session_noise_line(cls, line: str) -> bool:
@@ -1213,12 +1211,7 @@ class DjangoServerMemoryStore:
             "rdp terminal session closed",
         }:
             return True
-        if (
-            any(marker in normalized for marker in ("connection_id", "user_id"))
-            and any(term in normalized for term in ("session_opened", "session_closed", "session opened", "session closed"))
-        ):
-            return True
-        return False
+        return bool(any(marker in normalized for marker in ("connection_id", "user_id")) and any(term in normalized for term in ("session_opened", "session_closed", "session opened", "session closed")))
 
     @classmethod
     def _filter_memory_lines(cls, value: Any, *, limit: int = 6) -> list[str]:
@@ -1271,8 +1264,8 @@ class DjangoServerMemoryStore:
             Server,
             ServerAlert,
             ServerHealthCheck,
-            ServerMemoryEvent,
             ServerMemoryEpisode,
+            ServerMemoryEvent,
             ServerMemoryRevalidation,
             ServerMemorySnapshot,
         )
@@ -2954,7 +2947,8 @@ class DjangoServerMemoryStore:
             importance_hint=0.82,
             actor_user_id=knowledge.created_by_id,
         )
-        self._run_dream_cycle_sync(knowledge.server_id, job_kind="nearline")
+        from servers.tasks import run_dream_cycle_task
+        run_dream_cycle_task.delay(knowledge.server_id, job_kind="nearline")
         return str(snapshot.pk)
 
     def _archive_manual_knowledge_snapshot_sync(self, knowledge_id: int) -> int:

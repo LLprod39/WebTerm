@@ -4,8 +4,7 @@ from email import message_from_string
 from types import SimpleNamespace
 
 import pytest
-from asgiref.sync import async_to_sync
-from asgiref.sync import sync_to_async
+from asgiref.sync import async_to_sync, sync_to_async
 from django.contrib.auth.models import User
 
 from servers.models import Server
@@ -25,7 +24,6 @@ from studio.pipeline_executor import (
     _poll_telegram_approval_decision,
 )
 from studio.pipeline_validation import KNOWN_NODE_TYPES
-
 
 pytestmark = pytest.mark.django_db(transaction=True)
 

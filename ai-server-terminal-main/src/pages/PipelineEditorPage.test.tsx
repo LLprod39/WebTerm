@@ -28,7 +28,24 @@ vi.mock("@xyflow/react", async () => {
 
   return {
     ReactFlowProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
-    ReactFlow: ({ children }: { children?: ReactNode }) => <div data-testid="react-flow">{children}</div>,
+    ReactFlow: ({
+      children,
+      nodes = [],
+      onNodeClick,
+    }: {
+      children?: ReactNode;
+      nodes?: Array<{ id: string; data?: { label?: string } }>;
+      onNodeClick?: (event: unknown, node: { id: string; data?: { label?: string } }) => void;
+    }) => (
+      <div data-testid="react-flow">
+        {nodes.map((node) => (
+          <button key={node.id} type="button" data-testid={`node-${node.id}`} onClick={() => onNodeClick?.({}, node)}>
+            {node.data?.label || node.id}
+          </button>
+        ))}
+        {children}
+      </div>
+    ),
     Background: () => null,
     Controls: () => null,
     MiniMap: () => null,
@@ -250,6 +267,72 @@ const freshPipeline = {
   ],
 };
 
+const complexPipeline = {
+  ...freshPipeline,
+  id: 48,
+  name: "Docker Recovery",
+  nodes: [
+    {
+      id: "monitoring_start",
+      type: "trigger/monitoring",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "Docker Service Alert",
+        is_active: true,
+        server_ids: [20],
+        severities: ["critical"],
+        alert_types: ["service"],
+        container_names: ["mini-prod-mcp-demo"],
+        monitoring_filters: {
+          server_ids: [20],
+          severities: ["critical"],
+          alert_types: ["service"],
+          container_names: ["mini-prod-mcp-demo"],
+        },
+      },
+    },
+    {
+      id: "investigate_agent",
+      type: "agent/react",
+      position: { x: 240, y: 0 },
+      data: {
+        label: "AI Investigation",
+        goal: "Investigate the alert and produce a technical conclusion.",
+        provider: "grok",
+        model: "grok-4-1-fast-non-reasoning",
+        server_ids: [20],
+        allowed_tools: ["ssh_execute", "read_console"],
+      },
+    },
+    {
+      id: "approval_gate",
+      type: "logic/human_approval",
+      position: { x: 480, y: 0 },
+      data: {
+        label: "Approve Recovery",
+        to_email: "",
+        tg_chat_id: "",
+        timeout_minutes: 45,
+      },
+    },
+  ],
+  edges: [
+    {
+      id: "monitoring_to_agent",
+      source: "monitoring_start",
+      target: "investigate_agent",
+      sourceHandle: "out",
+    },
+    {
+      id: "agent_to_approval",
+      source: "investigate_agent",
+      target: "approval_gate",
+      sourceHandle: "success",
+    },
+  ],
+  triggers: [],
+};
+
 function renderPage(queryClient: QueryClient) {
   return render(
     <QueryClientProvider client={queryClient}>
@@ -295,7 +378,7 @@ describe("PipelineEditorPage save hydration", () => {
       expect(api.studioPipelines.get).toHaveBeenCalledWith(45);
     });
 
-    const saveButton = await screen.findByRole("button", { name: /^Save$/ });
+    const saveButton = await screen.findByRole("button", { name: /^(Save|Сохранить)$/ });
     await waitFor(() => expect(saveButton).not.toBeDisabled());
 
     fireEvent.click(saveButton);
@@ -379,50 +462,41 @@ describe("PipelineEditorPage save hydration", () => {
     expect(await screen.findByText(/Текущий шаг:/)).toHaveTextContent("Entry Snapshot");
   });
 
-  it("keeps assistant chat history when sending follow-up edits", async () => {
-    vi.mocked(api.studioPipelines.assistant)
-      .mockResolvedValueOnce({
-        reply: "Добавлю Telegram-уведомление.",
-        target_node_id: null,
-        node_patch: {},
-        graph_patch: { anchor_node_id: "entry_report", nodes: [], edges: [], update_nodes: [], remove_node_ids: [], remove_edge_ids: [] },
-        warnings: [],
-      } as never)
-      .mockResolvedValueOnce({
-        reply: "Сделаю текст уведомления короче.",
-        target_node_id: "entry_report",
-        node_patch: { title: "Краткий отчет" },
-        graph_patch: { anchor_node_id: null, nodes: [], edges: [], update_nodes: [], remove_node_ids: [], remove_edge_ids: [] },
-        warnings: [],
-      } as never);
+  it("opens the node config panel for monitoring, agent, and approval nodes without crashing", async () => {
+    vi.mocked(api.studioPipelines.get).mockResolvedValue(complexPipeline as never);
+    vi.mocked(api.studioServers.list).mockResolvedValue([
+      { id: 20, name: "mini-prod", host: "10.0.0.20" },
+    ] as never);
+    vi.mocked(api.fetchModels).mockResolvedValue({
+      gemini: [],
+      grok: ["grok-4-1-fast-non-reasoning"],
+      openai: [],
+      claude: [],
+      ollama: [],
+      current: {
+        default_provider: "grok",
+        chat_gemini: "",
+        chat_grok: "grok-4-1-fast-non-reasoning",
+        chat_openai: "",
+        chat_claude: "",
+      },
+    } as never);
 
     const queryClient = buildQueryClient();
     renderPage(queryClient);
 
-    await waitFor(() => expect(api.studioPipelines.get).toHaveBeenCalledWith(45));
+    const monitoringButton = await screen.findByTestId("node-monitoring_start");
+    fireEvent.click(monitoringButton);
+    expect(await screen.findByText("Docker container names")).toBeInTheDocument();
 
-    fireEvent.click(await screen.findByRole("button", { name: "AI Builder" }));
+    const agentButton = screen.getByTestId("node-investigate_agent");
+    fireEvent.click(agentButton);
+    expect(await screen.findByText("Goal")).toBeInTheDocument();
+    expect(screen.getByText("Target Servers")).toBeInTheDocument();
 
-    const textarea = await screen.findByPlaceholderText("Опишите задачу или попросите изменить текущий пайплайн…");
-    fireEvent.change(textarea, { target: { value: "Собери автоматизацию для Telegram-уведомления." } });
-    fireEvent.keyDown(textarea, { key: "Enter" });
-
-    await waitFor(() => expect(api.studioPipelines.assistant).toHaveBeenCalledTimes(1));
-
-    fireEvent.change(await screen.findByPlaceholderText("Опишите задачу или попросите изменить текущий пайплайн…"), {
-      target: { value: "Теперь укороти текст отчета." },
-    });
-    fireEvent.keyDown(await screen.findByPlaceholderText("Опишите задачу или попросите изменить текущий пайплайн…"), { key: "Enter" });
-
-    await waitFor(() => expect(api.studioPipelines.assistant).toHaveBeenCalledTimes(2));
-
-    const secondCall = vi.mocked(api.studioPipelines.assistant).mock.calls[1][0];
-    expect(secondCall.history).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ role: "user", content: "Собери автоматизацию для Telegram-уведомления." }),
-        expect.objectContaining({ role: "assistant", content: "Добавлю Telegram-уведомление." }),
-        expect.objectContaining({ role: "user", content: "Теперь укороти текст отчета." }),
-      ]),
-    );
+    const approvalButton = screen.getByTestId("node-approval_gate");
+    fireEvent.click(approvalButton);
+    expect(await screen.findByText("Timeout (minutes)")).toBeInTheDocument();
   });
+
 });

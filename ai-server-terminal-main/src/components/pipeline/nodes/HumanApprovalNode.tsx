@@ -27,6 +27,7 @@ export function HumanApprovalNode({ data, selected }: NodeProps) {
       icon={<UserCheck className="h-4 w-4 text-yellow-400" />}
       description={desc}
       accentColor="border-yellow-500/40"
+      categoryColor="#f97316"
       sourcePorts={[
         { id: "approved", label: localize(lang, "OK", "APPROVED"), className: "!bg-green-500/70 hover:!bg-green-500", labelClassName: "text-green-500" },
         { id: "rejected", label: localize(lang, "НЕТ", "REJECTED"), className: "!bg-red-500/70 hover:!bg-red-500", labelClassName: "text-red-500" },

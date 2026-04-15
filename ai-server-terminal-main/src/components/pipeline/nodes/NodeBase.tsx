@@ -75,7 +75,7 @@ export function NodeBase({
   return (
     <div
       className={cn(
-        "min-w-[200px] max-w-[280px] rounded-2xl border bg-card/95 shadow-sm transition-all backdrop-blur overflow-hidden",
+        "min-h-[84px] min-w-[232px] max-w-[320px] rounded-2xl border bg-card/98 shadow-sm transition-all backdrop-blur overflow-hidden",
         "relative",
         selected ? "border-primary shadow-lg shadow-primary/10 ring-1 ring-primary/20" : accentColor,
         status === "running" && "border-blue-500/60",
@@ -99,29 +99,29 @@ export function NodeBase({
         />
       )}
 
-      <div className="px-3.5 py-3">
-        <div className="flex items-center gap-2">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-border/70 bg-background/70 text-base">
+      <div className="px-4 py-3.5">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border/80 bg-background/85 text-base shadow-sm">
             {icon}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[12px] font-semibold text-foreground truncate">{label}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[13px] font-semibold leading-5 text-foreground truncate">{label}</span>
               {status && <StatusIcon status={status} />}
             </div>
             {description && (
-              <span className="mt-0.5 block text-[10px] leading-4 text-muted-foreground line-clamp-2">{description}</span>
+              <span className="mt-1 block text-[11px] leading-4.5 text-foreground/75 line-clamp-2">{description}</span>
             )}
             {statusLabel && (
-              <div className="mt-1.5">
-                <span className="rounded-full border border-border/70 bg-background/60 px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground">
+              <div className="mt-2">
+                <span className="rounded-full border border-border/70 bg-background/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                   {statusLabel}
                 </span>
               </div>
             )}
           </div>
         </div>
-        {children && <div className="mt-2.5 space-y-1.5">{children}</div>}
+        {children && <div className="mt-3 space-y-1.5">{children}</div>}
       </div>
 
       {resolvedSourcePorts.map((port, index) => {
@@ -142,7 +142,7 @@ export function NodeBase({
             {port.label ? (
               <span
                 className={cn(
-                  "pointer-events-none absolute -bottom-5 text-[9px] font-medium text-muted-foreground",
+                  "pointer-events-none absolute -bottom-5 text-[10px] font-medium text-muted-foreground",
                   port.labelClassName,
                 )}
                 style={{ left, transform: "translateX(-50%)" }}

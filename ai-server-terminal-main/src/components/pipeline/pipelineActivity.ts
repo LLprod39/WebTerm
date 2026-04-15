@@ -131,7 +131,7 @@ export function getPipelineActivityState({
   const webhookOnly = summary.active_webhook > 0 && summary.active_manual === 0 && summary.active_schedule === 0 && (summary.active_monitoring || 0) === 0;
   if (webhookOnly) {
     return {
-      label: "Armed",
+      label: "Active",
       detail: appendLastTriggered("Waiting for webhook POST.", summary.last_triggered_at),
       tone: "info",
       icon: "webhook",
@@ -141,7 +141,7 @@ export function getPipelineActivityState({
   const scheduleOnly = summary.active_schedule > 0 && summary.active_manual === 0 && summary.active_webhook === 0 && (summary.active_monitoring || 0) === 0;
   if (scheduleOnly) {
     return {
-      label: "Armed",
+      label: "Active",
       detail: appendLastTriggered("Waiting for the schedule trigger.", summary.last_triggered_at),
       tone: "info",
       icon: "schedule",
@@ -151,7 +151,7 @@ export function getPipelineActivityState({
   const monitoringOnly = (summary.active_monitoring || 0) > 0 && summary.active_manual === 0 && summary.active_webhook === 0 && summary.active_schedule === 0;
   if (monitoringOnly) {
     return {
-      label: "Armed",
+      label: "Active",
       detail: appendLastTriggered("Waiting for a monitoring alert.", summary.last_triggered_at),
       tone: "info",
       icon: "monitoring",
@@ -159,7 +159,7 @@ export function getPipelineActivityState({
   }
 
   return {
-    label: "Armed",
+    label: "Active",
     detail: appendLastTriggered(`Multiple trigger types are active: ${describeMixedTriggerSummary(summary)}.`, summary.last_triggered_at),
     tone: "info",
     icon: "webhook",

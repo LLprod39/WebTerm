@@ -56,26 +56,26 @@ import json
 import os
 import re
 import shutil
-import threading
 from pathlib import Path, PurePosixPath
 
 import httpx
-from django.contrib.auth.models import User
 from django.conf import settings as django_settings
+from django.contrib.auth.models import User
 from django.db.models import Q
-from core_ui.access import feature_allowed_for_user
-from core_ui.decorators import require_any_feature, require_feature
 from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
 from app.runtime_limits import get_pipeline_run_limit_error
+from core_ui.access import feature_allowed_for_user
+from core_ui.decorators import require_any_feature, require_feature
 from core_ui.managed_secrets import get_mcp_secret_env, get_mcp_secret_env_keys
+
 from .mcp_client import MCPClientError, inspect_mcp_server
 from .models import (
-    AgentConfig,
     CURRENT_PIPELINE_GRAPH_VERSION,
+    AgentConfig,
     MCPServerPool,
     Pipeline,
     PipelineRun,
@@ -85,12 +85,12 @@ from .models import (
 )
 from .pipeline_runtime import get_executor_for_run, update_runtime_control
 from .pipeline_validation import ensure_json_object, validate_pipeline_definition
-from .trigger_dispatch import create_pipeline_run as _dispatch_create_pipeline_run
-from .trigger_dispatch import launch_pipeline_run_async as _dispatch_launch_pipeline_run_async
 from .skill_authoring import parse_csv_items, scaffold_skill, validate_skill_dir, validate_skills
 from .skill_policy import compile_skill_policies
 from .skill_registry import SkillNotFoundError, get_skill, list_skills, normalise_skill_slugs, resolve_skills
 from .skill_templates import get_skill_template, list_skill_templates
+from .trigger_dispatch import create_pipeline_run as _dispatch_create_pipeline_run
+from .trigger_dispatch import launch_pipeline_run_async as _dispatch_launch_pipeline_run_async
 
 # ---------------------------------------------------------------------------
 # Notification config helpers  (stored in BASE_DIR/.notification_config.json)
@@ -222,7 +222,7 @@ def _resolve_run_node_id(node_states: dict, requested_node_id: str) -> str | Non
 
     matches = [
         str(node_id)
-        for node_id in node_states.keys()
+        for node_id in node_states
         if _normalize_node_lookup_key(str(node_id)) == normalized_requested
     ]
     if len(matches) == 1:
@@ -247,7 +247,6 @@ def _send_approval_telegram_confirmation(run: PipelineRun, node_id: str, decisio
         return
 
     label = str(node_data.get("label") or node_id)
-    verdict = "approved" if decision == "approved" else "rejected"
     emoji = "✅" if decision == "approved" else "❌"
     verdict_text = "одобрено" if decision == "approved" else "отклонено"
     message = (

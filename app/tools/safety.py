@@ -3,7 +3,6 @@ Safety helpers for tool execution.
 """
 import re
 
-
 _DANGEROUS_CMD_PATTERNS = [
     r"\brm\s+-rf\b",
     r"\brm\s+-r\b",

@@ -5,9 +5,10 @@ import posixpath
 import re
 import stat as stat_module
 import uuid
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from tempfile import SpooledTemporaryFile
-from typing import Any, AsyncIterator
+from typing import Any
 
 import asyncssh
 from asyncssh import sftp as asyncssh_sftp
@@ -80,9 +81,8 @@ def _serialize_entry(path: str, name: str, attrs: asyncssh.SFTPAttrs) -> dict[st
 async def open_server_sftp(server: Server, *, secret: str = "") -> AsyncIterator[asyncssh_sftp.SFTPClient]:
     known_hosts = await ensure_server_known_hosts(server)
     connect_kwargs = build_server_connect_kwargs(server, secret=secret, known_hosts=known_hosts)
-    async with asyncssh.connect(**connect_kwargs) as conn:
-        async with conn.start_sftp_client() as sftp:
-            yield sftp
+    async with asyncssh.connect(**connect_kwargs) as conn, conn.start_sftp_client() as sftp:
+        yield sftp
 
 
 async def resolve_remote_path(sftp: asyncssh_sftp.SFTPClient, path: str | None) -> str:

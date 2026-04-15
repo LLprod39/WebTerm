@@ -25,7 +25,7 @@ def _build_fernet() -> Fernet:
         or os.getenv("APP_SECRET_ENCRYPTION_KEY")
         or settings.SECRET_KEY
     )
-    digest = hashlib.sha256(f"{seed}:managed-secret:v1".encode("utf-8")).digest()
+    digest = hashlib.sha256(f"{seed}:managed-secret:v1".encode()).digest()
     return Fernet(base64.urlsafe_b64encode(digest))
 
 

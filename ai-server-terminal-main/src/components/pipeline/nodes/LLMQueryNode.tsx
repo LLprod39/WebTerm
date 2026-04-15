@@ -19,6 +19,7 @@ export function LLMQueryNode({ data, selected }: NodeProps) {
       icon={<BrainCircuit className="h-4 w-4 text-blue-400" />}
       description={prompt ? prompt.slice(0, 55) + (prompt.length > 55 ? "…" : "") : `${model}`}
       accentColor="border-cyan-500/40"
+      categoryColor="#8b5cf6"
       sourcePorts={[
         { id: "success", label: "SUCCESS", className: "!bg-green-500/70 hover:!bg-green-500", labelClassName: "text-green-500" },
         { id: "error", label: "ERROR", className: "!bg-red-500/70 hover:!bg-red-500", labelClassName: "text-red-500" },

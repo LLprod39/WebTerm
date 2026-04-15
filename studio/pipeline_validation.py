@@ -11,7 +11,7 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency in local m
 
 from servers.models import Server
 
-from .models import AgentConfig, MCPServerPool, CURRENT_PIPELINE_GRAPH_VERSION
+from .models import CURRENT_PIPELINE_GRAPH_VERSION, AgentConfig, MCPServerPool
 from .skill_registry import normalise_skill_slugs, resolve_skills
 
 TRIGGER_NODE_TYPES = {

@@ -2,7 +2,8 @@
 Base Tool Interface for WEU Agent System
 """
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -12,7 +13,7 @@ class ToolParameter(BaseModel):
     type: str  # "string", "number", "boolean", "array", "object"
     description: str
     required: bool = True
-    default: Optional[Any] = None
+    default: Any | None = None
 
 
 class ToolMetadata(BaseModel):
@@ -25,21 +26,21 @@ class ToolMetadata(BaseModel):
 
 class BaseTool(ABC):
     """Base class for all tools"""
-    
+
     def __init__(self):
         self._metadata = self.get_metadata()
-    
+
     @abstractmethod
     def get_metadata(self) -> ToolMetadata:
         """Return tool metadata"""
         raise NotImplementedError("BaseTool.get_metadata must be implemented by subclasses.")
-    
+
     @abstractmethod
     async def execute(self, **kwargs) -> Any:
         """Execute the tool with given parameters"""
         raise NotImplementedError("BaseTool.execute must be implemented by subclasses.")
-    
-    def to_dict(self) -> Dict:
+
+    def to_dict(self) -> dict:
         """Convert tool to dictionary representation"""
         return {
             "name": self._metadata.name,

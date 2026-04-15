@@ -1,11 +1,14 @@
-import os
 import asyncio
 import contextlib
+import os
 import time
+from collections.abc import AsyncGenerator
+from typing import Any
+
+from django.conf import settings as django_settings
 from google import genai
 from loguru import logger
-from typing import Any, AsyncGenerator, Optional
-from django.conf import settings as django_settings
+
 from app.core.model_config import model_manager
 
 # Таймаут для стрима Gemini (сек), экспоненциальная задержка при retry
@@ -161,9 +164,7 @@ def _is_retryable_error(e: Exception) -> bool:
             return True
     if "429" in s or "resource exhausted" in s or "rate" in s:
         return True
-    if "503" in s or "502" in s or "500" in s or "internal" in s:
-        return True
-    return False
+    return bool("503" in s or "502" in s or "500" in s or "internal" in s)
 
 
 async def with_retry(coro, max_attempts: int = 3):
@@ -292,7 +293,7 @@ class LLMProvider:
         """Lazy load Gemini client only when enabled"""
         if not model_manager.config.gemini_enabled:
             return None
-        
+
         if self._gemini_client is None and self.gemini_api_key:
             try:
                 self._gemini_client = genai.Client(api_key=self.gemini_api_key)
@@ -300,9 +301,9 @@ class LLMProvider:
             except Exception as e:
                 logger.error(f"Failed to configure Gemini: {e}")
                 self._gemini_client = None
-        
+
         return self._gemini_client
-    
+
     @property
     def gemini_client(self):
         """Property for backward compatibility"""
@@ -388,9 +389,7 @@ class LLMProvider:
                 specific_model = purpose_model
 
             # Явный выбор в конфиге + есть ключ — используем провайдер даже без глобального *_enabled
-            if _has_key(preferred):
-                model = preferred
-            elif _enabled(preferred):
+            if _has_key(preferred) or _enabled(preferred):
                 model = preferred
             else:
                 # Fallback: pick first enabled provider
@@ -406,7 +405,7 @@ class LLMProvider:
                     model = preferred
             logger.info(f"[{purpose}] using provider: {model}, model: {specific_model or '(default)'}")
         logger.info(f"Streaming chat from {model} with prompt: {prompt[:50]}...")
-        
+
         if model == "gemini":
             # Check if Gemini is enabled
             if not model_manager.config.gemini_enabled:
@@ -493,8 +492,9 @@ class LLMProvider:
                 yield "Error: Grok API Key not configured."
                 return
 
-            import aiohttp
             import json
+
+            import aiohttp
 
             headers = {
                 "Content-Type": "application/json",
@@ -583,7 +583,7 @@ class LLMProvider:
                         else:
                             yield f"Error calling Grok: {str(e)}"
                         return
-        
+
         elif model == "claude":
             if not model_manager.config.claude_enabled:
                 yield "Error: Claude API disabled. Enable in settings."
@@ -602,7 +602,6 @@ class LLMProvider:
 
             for attempt in range(max_attempts):
                 try:
-                    import anthropic as _anthropic_pkg
                     _output = ""
                     async with asyncio.timeout(timeout_seconds):
                         async with client.messages.stream(
@@ -643,7 +642,7 @@ class LLMProvider:
                         else:
                             yield f"Error calling Claude: {str(e)}"
                         return
-        
+
         elif model == "openai":
             if not model_manager.config.openai_enabled:
                 logger.warning("OpenAI: openai_enabled=False, but proceeding because key is present")
@@ -653,8 +652,9 @@ class LLMProvider:
                 yield "Error: OpenAI API Key not configured."
                 return
 
-            import aiohttp
             import json
+
+            import aiohttp
 
             target_model = specific_model or model_manager.get_chat_model("openai")
             key_preview = self.openai_api_key[:8] + "..." if self.openai_api_key else "—"
@@ -831,8 +831,9 @@ class LLMProvider:
                 yield "Error: Ollama is disabled in settings."
                 return
 
-            import aiohttp
             import json
+
+            import aiohttp
 
             target_model = specific_model or model_manager.get_chat_model("ollama")
             if not target_model:

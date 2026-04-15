@@ -22,6 +22,8 @@ from django.conf import settings
 def sync_to_async(func, thread_sensitive=False):
     """Wrapper that defaults thread_sensitive=False to avoid CurrentThreadExecutor conflicts."""
     return _s2a(func, thread_sensitive=thread_sensitive)
+import contextlib
+
 from django.utils import timezone
 from loguru import logger
 
@@ -159,15 +161,11 @@ def _parse_quick_output(raw: str) -> dict[str, Any]:
             else:
                 result["process_count"] = val
         elif stripped.startswith("NET_RX_BYTES="):
-            try:
+            with contextlib.suppress(ValueError):
                 result["net_rx_bytes"] = int(stripped.split("=", 1)[1].strip())
-            except ValueError:
-                pass
         elif stripped.startswith("NET_TX_BYTES="):
-            try:
+            with contextlib.suppress(ValueError):
                 result["net_tx_bytes"] = int(stripped.split("=", 1)[1].strip())
-            except ValueError:
-                pass
 
     if "load_1m" in result:
         result["cpu_percent"] = min(round(result["load_1m"] * 100 / max(_get_cpu_estimate(result), 1), 1), 100.0)
@@ -480,7 +478,7 @@ async def _save_unreachable(server: Server, error_msg: str, elapsed_ms: int = 0)
             server=server,
             alert_type=ServerAlert.TYPE_UNREACHABLE,
             severity=ServerAlert.SEVERITY_CRITICAL,
-            title=f"Server unreachable",
+            title="Server unreachable",
             message=error_msg[:500],
         )
     return health
