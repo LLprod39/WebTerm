@@ -196,18 +196,18 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <div className={cn("workspace-empty", className)}>
+    <div className={cn("flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-white/[0.08] bg-white/[0.01] px-6 py-10 text-center", className)}>
       {icon ? (
-        <div className="flex h-10 w-10 items-center justify-center rounded-md border border-border bg-secondary text-muted-foreground">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/[0.04] text-muted-foreground/40">
           {icon}
         </div>
       ) : null}
-      <div className="space-y-2">
-        <div className="text-base font-semibold text-foreground">{title}</div>
-        <div className="max-w-2xl text-sm leading-6 text-muted-foreground">{description}</div>
+      <div className="space-y-1">
+        <div className="text-sm font-semibold text-foreground/80">{title}</div>
+        <div className="max-w-sm text-xs text-muted-foreground/50">{description}</div>
       </div>
-      {actions ? <div className="flex flex-wrap items-center gap-3">{actions}</div> : null}
-      {hint ? <div className="rounded-md bg-secondary/60 px-4 py-3 text-xs leading-5 text-muted-foreground">{hint}</div> : null}
+      {actions ? <div className="flex flex-wrap items-center justify-center gap-2 mt-1">{actions}</div> : null}
+      {hint ? <div className="rounded-lg bg-white/[0.03] px-3 py-2 text-[11px] text-muted-foreground/50 mt-1 max-w-xs">{hint}</div> : null}
     </div>
   );
 }
@@ -225,14 +225,14 @@ export function StatusBadge({
 }) {
   const toneClass =
     tone === "success"
-      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+      ? "bg-emerald-500/10 text-emerald-400"
       : tone === "warning"
-        ? "border-amber-500/20 bg-amber-500/10 text-amber-300"
+        ? "bg-amber-500/10 text-amber-400"
         : tone === "danger"
-          ? "border-red-500/20 bg-red-500/10 text-red-300"
+          ? "bg-red-500/10 text-red-400"
           : tone === "info"
-            ? "border-primary/20 bg-primary/10 text-primary"
-            : "border-border bg-secondary/70 text-muted-foreground";
+            ? "bg-primary/10 text-primary"
+            : "bg-white/[0.04] text-muted-foreground";
   const dotClass =
     tone === "success"
       ? "bg-emerald-400"
@@ -242,10 +242,10 @@ export function StatusBadge({
           ? "bg-red-400"
           : tone === "info"
             ? "bg-primary"
-            : "bg-muted-foreground";
+            : "bg-muted-foreground/60";
 
   return (
-    <span className={cn("inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium", toneClass, className)}>
+    <span className={cn("inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-medium", toneClass, className)}>
       {dot ? <span className={cn("h-1.5 w-1.5 rounded-full", dotClass)} /> : null}
       {label}
     </span>

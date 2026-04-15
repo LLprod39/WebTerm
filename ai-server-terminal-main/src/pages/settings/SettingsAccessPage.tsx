@@ -9,15 +9,15 @@ const accessPages = [
     icon: Users,
     url: "/settings/users",
     color: "text-blue-400",
-    bgColor: "bg-blue-500/10",
+    bgColor: "bg-blue-500/12",
   },
   {
     title: "Группы",
     description: "Команды, участники и общая политика доступа для группы",
     icon: FolderOpen,
     url: "/settings/groups",
-    color: "text-emerald-400",
-    bgColor: "bg-emerald-500/10",
+    color: "text-violet-400",
+    bgColor: "bg-violet-500/12",
   },
   {
     title: "Разрешения",
@@ -25,7 +25,7 @@ const accessPages = [
     icon: Shield,
     url: "/settings/permissions",
     color: "text-amber-400",
-    bgColor: "bg-amber-500/10",
+    bgColor: "bg-amber-500/12",
   },
 ];
 
@@ -46,80 +46,88 @@ const quickActions = [
 
 export default function SettingsAccessPage() {
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
+    <div className="space-y-6 pb-10">
+      {/* Header */}
       <div>
-        <h1 className="text-xl font-semibold text-foreground">Управление доступом</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Пользователи, группы и разрешения для контроля доступа к платформе
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Управление доступом</h1>
+        <p className="mt-1 text-sm text-muted-foreground/70">
+          Пользователи, группы и точечные разрешения для контроля доступа к платформе
         </p>
       </div>
 
-      {/* Info Banner */}
-      <div className="rounded-xl border border-border bg-secondary/20 px-5 py-4">
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          Базовую модель прав лучше собирать через профили и группы. 
-          Раздел разрешений используй только там, где действительно нужно сделать исключение.
+      {/* Info */}
+      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-5 py-4">
+        <p className="text-sm leading-relaxed text-muted-foreground/70">
+          Базовую модель прав лучше собирать через <strong className="text-foreground/80 font-medium">профили</strong> и <strong className="text-foreground/80 font-medium">группы</strong>.
+          Раздел <strong className="text-foreground/80 font-medium">разрешений</strong> используй только там, где действительно нужно сделать точечное исключение.
         </p>
       </div>
 
-      {/* Main Navigation Cards */}
-      <div className="overflow-hidden rounded-xl border border-border">
+      {/* Navigation cards */}
+      <div className="rounded-xl border border-white/[0.06] bg-white/[0.015] overflow-hidden">
         {accessPages.map((page, index, pages) => (
           <Link
             key={page.url}
             to={page.url}
             className={cn(
-              "group flex items-center gap-4 bg-card px-5 py-5 transition-colors hover:bg-secondary/30",
-              index < pages.length - 1 && "border-b border-border"
+              "group flex items-center gap-4 px-5 py-5 transition-all duration-200 hover:bg-white/[0.03]",
+              index < pages.length - 1 && "border-b border-white/[0.04]"
             )}
           >
-            <div className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-xl", page.bgColor)}>
+            <div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-105", page.bgColor)}>
               <page.icon className={cn("h-5 w-5", page.color)} aria-hidden="true" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-foreground">{page.title}</p>
-              <p className="mt-0.5 text-sm text-muted-foreground">{page.description}</p>
+              <p className="text-sm font-semibold text-foreground/90 transition-colors group-hover:text-foreground">{page.title}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground/60">{page.description}</p>
             </div>
-            <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" aria-hidden="true" />
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground/30 transition-all duration-200 group-hover:bg-white/[0.04] group-hover:text-foreground/60 group-hover:translate-x-0.5">
+              <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            </div>
           </Link>
         ))}
       </div>
 
-      {/* Quick Actions */}
+      {/* Quick actions */}
       <div>
-        <h2 className="mb-3 text-sm font-medium text-foreground">Быстрые действия</h2>
+        <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">Быстрые действия</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {quickActions.map((action) => (
             <Link
               key={action.url}
               to={action.url}
-              className="group flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 transition-colors hover:bg-secondary/30"
+              className="group flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.015] px-4 py-3.5 transition-all duration-200 hover:bg-white/[0.03] hover:border-white/[0.1]"
             >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary/50 transition-colors group-hover:bg-secondary">
-                <action.icon className="h-4 w-4 text-muted-foreground" />
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors duration-200 group-hover:bg-primary group-hover:text-primary-foreground">
+                <action.icon className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-foreground">{action.title}</p>
-                <p className="text-xs text-muted-foreground">{action.description}</p>
+                <p className="text-sm font-medium text-foreground/90">{action.title}</p>
+                <p className="text-[11px] text-muted-foreground/50">{action.description}</p>
               </div>
             </Link>
           ))}
         </div>
       </div>
 
-      {/* Help Section */}
-      <div className="rounded-xl border border-dashed border-border bg-secondary/10 px-5 py-4">
-        <h3 className="text-sm font-medium text-foreground">Как работает система доступа</h3>
-        <div className="mt-3 space-y-2 text-sm text-muted-foreground">
-          <p>
-            <strong className="text-foreground">1. Пользователи</strong> - создавайте аккаунты и назначайте профили доступа
+      {/* How it works */}
+      <div className="rounded-xl border border-dashed border-white/[0.08] bg-white/[0.01] px-5 py-5">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 flex items-center gap-2">
+          <div className="h-1.5 w-1.5 rounded-full bg-primary/60" />
+          Как работает система доступа
+        </h3>
+        <div className="mt-4 space-y-3 text-[13px] text-muted-foreground/60">
+          <p className="flex items-start gap-2.5">
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-white/[0.04] text-[10px] font-bold text-muted-foreground/70 mt-px">1</span>
+            <span><strong className="text-foreground/70 font-medium">Пользователи</strong> — создавайте аккаунты и назначайте профили доступа.</span>
           </p>
-          <p>
-            <strong className="text-foreground">2. Группы</strong> - объединяйте пользователей с одинаковыми правами
+          <p className="flex items-start gap-2.5">
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-white/[0.04] text-[10px] font-bold text-muted-foreground/70 mt-px">2</span>
+            <span><strong className="text-foreground/70 font-medium">Группы</strong> — объединяйте пользователей с одинаковыми правами.</span>
           </p>
-          <p>
-            <strong className="text-foreground">3. Разрешения</strong> - настраивайте точечные исключения при необходимости
+          <p className="flex items-start gap-2.5">
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-white/[0.04] text-[10px] font-bold text-muted-foreground/70 mt-px">3</span>
+            <span><strong className="text-foreground/70 font-medium">Разрешения</strong> — настраивайте точечные исключения при необходимости.</span>
           </p>
         </div>
       </div>

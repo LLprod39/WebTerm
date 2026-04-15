@@ -48,20 +48,21 @@ function SectionCard({ title, icon: Icon, children, description, actions }: {
   actions?: React.ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-xl border border-border bg-card">
-      <div className="flex flex-col gap-4 border-b border-border bg-secondary/20 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-start gap-3">
-          <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg bg-background text-primary">
-            <Icon className="h-4 w-4" />
+    <section className="group relative overflow-hidden rounded-2xl border border-primary/10 bg-card/40 backdrop-blur-3xl shadow-sm transition-all duration-500 hover:shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+      <div className="relative flex flex-col gap-4 border-b border-border/40 bg-secondary/10 px-6 py-5 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary shadow-inner border border-primary/10 transition-transform duration-300 group-hover:scale-105">
+            <Icon className="h-5 w-5 drop-shadow-sm" />
           </div>
           <div>
-            <h2 className="text-base font-semibold text-foreground">{title}</h2>
-            {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
+            <h2 className="text-lg font-bold tracking-tight text-foreground/90">{title}</h2>
+            {description ? <p className="mt-1 flex items-center text-sm font-medium text-muted-foreground/80">{description}</p> : null}
           </div>
         </div>
         {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
       </div>
-      <div className="p-5">{children}</div>
+      <div className="relative p-6">{children}</div>
     </section>
   );
 }
@@ -237,27 +238,28 @@ export default function SettingsAuditPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 pb-10">
       {/* Page Header */}
-      <div>
-        <h1 className="text-xl font-semibold text-foreground">Аудит и журнал</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Настройки логирования и история действий пользователей
+      <div className="relative">
+        <div className="absolute -inset-1 rounded-3xl bg-gradient-to-r from-primary/20 via-primary/5 to-transparent blur-2xl -z-10" />
+        <h1 className="text-3xl font-black tracking-tight text-foreground">Аудит и журнал</h1>
+        <p className="mt-2 text-base font-medium text-muted-foreground/80 max-w-2xl">
+          Настройки логирования и подробная история всех действий пользователей на платформе
         </p>
       </div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "logging" | "activity")}>
-        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 rounded-xl border border-border/60 bg-card p-1">
-          <TabsTrigger value="logging" className="gap-1.5 rounded-lg px-3 py-2 data-[state=active]:bg-background">
-            <Eye className="h-3.5 w-3.5" />
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "logging" | "activity")} className="w-full">
+        <TabsList className="grid h-auto w-full max-w-md grid-cols-2 gap-2 rounded-2xl border border-primary/10 bg-card/40 p-1.5 shadow-sm backdrop-blur-xl">
+          <TabsTrigger value="logging" className="gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm">
+            <Eye className="h-4 w-4" />
             Логирование
           </TabsTrigger>
-          <TabsTrigger value="activity" className="gap-1.5 rounded-lg px-3 py-2 data-[state=active]:bg-background">
-            <Activity className="h-3.5 w-3.5" />
+          <TabsTrigger value="activity" className="gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm">
+            <Activity className="h-4 w-4" />
             Журнал
             {filteredActivity.length > 0 && (
-              <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">{filteredActivity.length}</Badge>
+              <Badge variant="default" className="ml-1 h-5 px-1.5 text-[10px] bg-primary text-primary-foreground">{filteredActivity.length}</Badge>
             )}
           </TabsTrigger>
         </TabsList>
@@ -275,28 +277,31 @@ export default function SettingsAuditPage() {
               </Button>
             }
           >
-            <div className="space-y-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {LOGGING_ITEMS.map((item) => {
                 const Icon = item.icon;
                 const enabled = loggingConfig[item.key as keyof typeof loggingConfig];
                 return (
                   <label
                     key={item.key}
-                    className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-3 transition-colors hover:bg-muted/30"
+                    className="group flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-primary/5 bg-background/50 px-4 py-4 shadow-sm transition-all duration-300 hover:border-primary/20 hover:bg-background/80 hover:shadow-md"
                   >
-                    <div className={cn(
-                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors",
-                      enabled ? "bg-primary/10" : "bg-muted/50"
-                    )}>
-                      <Icon className={cn("h-4 w-4", enabled ? "text-primary" : "text-muted-foreground")} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium">{item.label}</p>
-                      <p className="text-[10px] text-muted-foreground">{item.desc}</p>
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div className={cn(
+                        "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl shadow-inner transition-colors duration-300",
+                        enabled ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground group-hover:bg-muted/80"
+                      )}>
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className={cn("text-sm font-bold tracking-tight transition-colors", enabled ? "text-foreground" : "text-foreground/70")}>{item.label}</p>
+                        <p className="text-[11px] font-medium text-muted-foreground/80 truncate">{item.desc}</p>
+                      </div>
                     </div>
                     <Switch
                       checked={Boolean(enabled)}
                       onCheckedChange={(v) => updateLogging(item.key, v)}
+                      className="data-[state=checked]:bg-primary"
                     />
                   </label>
                 );

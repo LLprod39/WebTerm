@@ -5,6 +5,7 @@ import {
   FolderOpen,
   ScrollText,
   Activity,
+  Globe,
   type LucideIcon,
 } from "lucide-react";
 
@@ -69,6 +70,14 @@ export const settingsNavGroups: SettingsNavGroup[] = [
         description: "Точечные правила доступа",
         icon: Shield,
         path: "/settings/permissions",
+      },
+      {
+        id: "sso",
+        label: "SSO / Домен",
+        description: "Доменная авторизация и LDAP",
+        icon: Globe,
+        path: "/settings/sso",
+        adminOnly: true,
       },
     ],
   },

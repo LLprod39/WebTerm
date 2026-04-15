@@ -43,20 +43,21 @@ function SectionCard({ title, icon: Icon, children, description, actions }: {
   actions?: React.ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-xl border border-border bg-card">
-      <div className="flex flex-col gap-4 border-b border-border bg-secondary/20 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-start gap-3">
-          <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg bg-background text-primary">
-            <Icon className="h-4 w-4" />
+    <section className="group relative overflow-hidden rounded-2xl border border-primary/10 bg-card/40 backdrop-blur-3xl shadow-sm transition-all duration-500 hover:shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+      <div className="relative flex flex-col gap-4 border-b border-border/40 bg-secondary/10 px-6 py-5 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary shadow-inner border border-primary/10 transition-transform duration-300 group-hover:scale-105">
+            <Icon className="h-5 w-5 drop-shadow-sm" />
           </div>
           <div>
-            <h2 className="text-base font-semibold text-foreground">{title}</h2>
-            {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
+            <h2 className="text-lg font-bold tracking-tight text-foreground/90">{title}</h2>
+            {description ? <p className="mt-1 flex items-center text-sm font-medium text-muted-foreground/80">{description}</p> : null}
           </div>
         </div>
         {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
       </div>
-      <div className="p-5">{children}</div>
+      <div className="relative p-6">{children}</div>
     </section>
   );
 }
@@ -309,12 +310,13 @@ export default function SettingsMemoryPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 pb-10">
       {/* Page Header */}
-      <div>
-        <h1 className="text-xl font-semibold text-foreground">AI Memory</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Dreams, snapshots и learned operational patterns
+      <div className="relative">
+        <div className="absolute -inset-1 rounded-3xl bg-gradient-to-r from-primary/20 via-primary/5 to-transparent blur-2xl -z-10" />
+        <h1 className="text-3xl font-black tracking-tight text-foreground">AI Memory</h1>
+        <p className="mt-2 text-base font-medium text-muted-foreground/80 max-w-2xl">
+          Сны агентов, долговременная память, snapshots и распознанные операционные паттерны
         </p>
       </div>
 
@@ -431,7 +433,7 @@ export default function SettingsMemoryPage() {
           {/* Memory Stats */}
           {memoryOverview ? (
             <>
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-7">
                 {[
                   { label: "Canonical", value: memoryOverview.stats.canonical },
                   { label: "Patterns", value: memoryOverview.stats.patterns },
@@ -441,9 +443,10 @@ export default function SettingsMemoryPage() {
                   { label: "Episodes", value: memoryOverview.stats.episodes },
                   { label: "Archive", value: memoryOverview.stats.archive },
                 ].map((stat) => (
-                  <div key={stat.label} className="rounded-lg border border-border bg-secondary/10 px-3 py-2">
-                    <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{stat.label}</p>
-                    <p className="mt-1 text-lg font-semibold text-foreground">{stat.value}</p>
+                  <div key={stat.label} className="group/stat relative overflow-hidden rounded-xl border border-primary/5 bg-background/50 px-4 py-4 shadow-sm transition-all hover:border-primary/20 hover:bg-background/80 hover:shadow-md">
+                    <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 transition-opacity group-hover/stat:opacity-100" />
+                    <p className="relative z-10 text-[11px] font-bold uppercase tracking-widest text-muted-foreground/70 group-hover/stat:text-primary transition-colors">{stat.label}</p>
+                    <p className="relative z-10 mt-2 text-2xl font-black text-foreground/90">{stat.value}</p>
                   </div>
                 ))}
               </div>

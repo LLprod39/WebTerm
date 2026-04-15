@@ -26,6 +26,7 @@ const SettingsAIPage = lazy(() => import("./pages/settings/SettingsAIPage"));
 const SettingsAccessPage = lazy(() => import("./pages/settings/SettingsAccessPage"));
 const SettingsMemoryPage = lazy(() => import("./pages/settings/SettingsMemoryPage"));
 const SettingsAuditPage = lazy(() => import("./pages/settings/SettingsAuditPage"));
+const SettingsSSOPage = lazy(() => import("./pages/settings/SettingsSSOPage"));
 const AgentsPage = lazy(() => import("./pages/AgentsPage"));
 const AgentRunPage = lazy(() => import("./pages/AgentRunPage"));
 const StudioPage = lazy(() => import("./pages/StudioPage"));
@@ -233,6 +234,7 @@ const App = () => (
                   <Route path="users" element={<SettingsUsersPage />} />
                   <Route path="groups" element={<SettingsGroupsPage />} />
                   <Route path="permissions" element={<SettingsPermissionsPage />} />
+                  <Route path="sso" element={<SettingsSSOPage />} />
                   <Route path="memory" element={<SettingsMemoryPage />} />
                   <Route path="audit" element={<SettingsAuditPage />} />
                 </Route>

@@ -38,20 +38,21 @@ function SectionCard({ title, icon: Icon, children, description, actions }: {
   actions?: React.ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-xl border border-border bg-card">
-      <div className="flex flex-col gap-4 border-b border-border bg-secondary/20 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-start gap-3">
-          <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg bg-background text-primary">
-            <Icon className="h-4 w-4" />
+    <section className="group relative overflow-hidden rounded-2xl border border-primary/10 bg-card/40 backdrop-blur-3xl shadow-sm transition-all duration-500 hover:shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+      <div className="relative flex flex-col gap-4 border-b border-border/40 bg-secondary/10 px-6 py-5 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary shadow-inner border border-primary/10 transition-transform duration-300 group-hover:scale-105">
+            <Icon className="h-5 w-5 drop-shadow-sm" />
           </div>
           <div>
-            <h2 className="text-base font-semibold text-foreground">{title}</h2>
-            {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
+            <h2 className="text-lg font-bold tracking-tight text-foreground/90">{title}</h2>
+            {description ? <p className="mt-1 flex items-center text-sm font-medium text-muted-foreground/80">{description}</p> : null}
           </div>
         </div>
         {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
       </div>
-      <div className="p-5">{children}</div>
+      <div className="relative p-6">{children}</div>
     </section>
   );
 }
@@ -133,52 +134,52 @@ function PurposeModelSelector({
   onRefresh: () => void; refreshing: boolean;
 }) {
   return (
-    <div className="space-y-3 rounded-lg border border-border bg-secondary/20 p-4">
-      <div className="flex items-center gap-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-background text-primary">
-          <Icon className="h-4 w-4" />
+    <div className="group/selector relative space-y-4 rounded-xl border border-primary/5 bg-background/50 p-5 shadow-sm transition-all duration-300 hover:border-primary/20 hover:bg-background/80 hover:shadow-md">
+      <div className="flex items-center gap-3.5">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary shadow-inner transition-colors group-hover/selector:bg-primary group-hover/selector:text-primary-foreground">
+          <Icon className="h-5 w-5" />
         </div>
         <div>
-          <p className="text-sm font-medium text-foreground">{label}</p>
-          <p className="text-xs text-muted-foreground">{description}</p>
+          <p className="font-semibold tracking-tight text-foreground/90">{label}</p>
+          <p className="text-xs text-muted-foreground/80">{description}</p>
         </div>
       </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div className="space-y-1">
-          <label className="text-[10px] font-medium uppercase text-muted-foreground">Провайдер</label>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/70">Провайдер</label>
           <Select value={provider} onValueChange={onProviderChange}>
-            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-9 transition-colors group-hover/selector:border-primary/30"><SelectValue /></SelectTrigger>
             <SelectContent>
               {LLM_PROVIDERS.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-1">
-          <label className="text-[10px] font-medium uppercase text-muted-foreground">Модель</label>
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/70">Модель</label>
           {availableModels.length > 0 ? (
             <Select value={model} onValueChange={onModelChange}>
-              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 transition-colors group-hover/selector:border-primary/30"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {availableModels.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
               </SelectContent>
             </Select>
           ) : (
             <div className="flex gap-1.5">
-              <Input value={model} onChange={(e) => onModelChange(e.target.value)} placeholder="Model name" className="h-8 text-xs" />
-              <Button size="icon" variant="outline" className="h-8 w-8 shrink-0" onClick={onRefresh} disabled={refreshing}>
-                <RefreshCw className={cn("h-3 w-3", refreshing && "animate-spin")} />
+              <Input value={model} onChange={(e) => onModelChange(e.target.value)} placeholder="Model name" className="h-9 text-xs" />
+              <Button size="icon" variant="outline" className="h-9 w-9 shrink-0 transition-colors hover:bg-primary/5 hover:text-primary" onClick={onRefresh} disabled={refreshing}>
+                <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
               </Button>
             </div>
           )}
         </div>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground">
-        <span>{getProviderLabel(provider)}</span>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/40 pt-3 text-[11px] font-medium text-muted-foreground">
+        <span className="flex items-center gap-1.5"><div className="h-1.5 w-1.5 rounded-full bg-primary/60" />{getProviderLabel(provider)}</span>
         <span>{availableModels.length ? `${availableModels.length} моделей в каталоге` : "Ручной ввод модели"}</span>
       </div>
       {availableModels.length > 0 && (
-        <Button size="sm" variant="ghost" className="h-7 justify-start px-2 text-[11px] text-muted-foreground" onClick={onRefresh} disabled={refreshing}>
-          <RefreshCw className={cn("h-2.5 w-2.5", refreshing && "animate-spin")} /> Обновить список
+        <Button size="sm" variant="ghost" className="mt-1 h-8 w-full justify-center px-3 text-xs text-muted-foreground/80 transition-colors hover:bg-primary/5 hover:text-primary" onClick={onRefresh} disabled={refreshing}>
+          <RefreshCw className={cn("mr-2 h-3 w-3", refreshing && "animate-spin")} /> Обновить каталог
         </Button>
       )}
     </div>
@@ -419,29 +420,31 @@ export default function SettingsAIPage() {
   const configuredProviderCount = providerOverview.filter((p) => p.configured).length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 pb-10">
       {/* Page Header */}
-      <div>
-        <h1 className="text-xl font-semibold text-foreground">AI конфигурация</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Провайдеры, модели, маршрутизация и runtime настройки
+      <div className="relative">
+        <div className="absolute -inset-1 rounded-3xl bg-gradient-to-r from-primary/20 via-primary/5 to-transparent blur-2xl -z-10" />
+        <h1 className="text-3xl font-black tracking-tight text-foreground">AI конфигурация</h1>
+        <p className="mt-2 text-base font-medium text-muted-foreground/80 max-w-2xl">
+          Провайдеры, модели, маршрутизация и runtime настройки интеллектуального ядра платформы
         </p>
       </div>
 
       {/* Status Bar */}
-      <div className="flex flex-col gap-3 rounded-xl border border-border bg-secondary/20 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="space-y-1">
-          <p className="text-sm font-medium text-foreground">AI модели и маршрутизация</p>
-          <p className="max-w-3xl text-xs text-muted-foreground">
+      <div className="group relative flex flex-col gap-4 rounded-2xl border border-primary/10 bg-card/60 backdrop-blur-xl px-6 py-5 shadow-sm transition-all hover:bg-card/80 hover:shadow-md lg:flex-row lg:items-center lg:justify-between">
+        <div className="absolute -left-0.5 top-1/2 -translate-y-1/2 h-2/3 w-1.5 rounded-full bg-primary/40 transition-all group-hover:bg-primary" />
+        <div className="space-y-1.5">
+          <p className="text-base font-bold tracking-tight text-foreground/90">AI модели и маршрутизация</p>
+          <p className="max-w-3xl text-sm font-medium text-muted-foreground/70">
             Сначала выбери провайдера по умолчанию, потом разнеси модели по ролям.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Badge variant={aiDraftDirty ? "default" : "secondary"}>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant={aiDraftDirty ? "default" : "secondary"} className={cn("px-3 py-1 shadow-sm", aiDraftDirty && "bg-primary text-primary-foreground font-semibold")}>
             {aiDraftDirty ? "Есть несохраненные изменения" : "Все сохранено"}
           </Badge>
-          <Badge variant="outline">{configuredProviderCount} провайдера готово</Badge>
-          <Badge variant="outline">{uniqueRouteProviders.length > 1 ? "Раздельная маршрутизация" : "Один провайдер"}</Badge>
+          <Badge variant="outline" className="px-3 py-1 bg-background/50 backdrop-blur backdrop-filter">{configuredProviderCount} провайдера готово</Badge>
+          <Badge variant="outline" className="px-3 py-1 bg-background/50 backdrop-blur backdrop-filter">{uniqueRouteProviders.length > 1 ? "Раздельная маршрутизация" : "Один провайдер"}</Badge>
         </div>
       </div>
 

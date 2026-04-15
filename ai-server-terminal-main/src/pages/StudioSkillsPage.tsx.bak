@@ -32,7 +32,6 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ShareAccessEditor } from "@/components/studio/ShareAccessEditor";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -201,7 +200,7 @@ function SkillCard({
       className={`group relative w-full overflow-hidden rounded-xl border p-4 text-left transition-all duration-300 ${
         isSelected
           ? "border-primary/50 bg-primary/5 shadow-md shadow-primary/5 ring-1 ring-primary/20"
-          : "border-border/60 bg-background/40 hover:border-border/90 hover:bg-background/60 hover:shadow-lg"
+          : "border-border/60 bg-background/40 hover:border-border/90 hover:bg-background/60 hover:-translate-y-0.5 hover:shadow-lg"
       }`}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -388,8 +387,12 @@ export default function StudioSkillsPage() {
   });
 
   useEffect(() => {
-    if (selectedSlug && !filteredSkills.some((skill) => skill.slug === selectedSlug)) {
-      setSelectedSlug("");
+    if (!filteredSkills.length) {
+      if (selectedSlug) setSelectedSlug("");
+      return;
+    }
+    if (!selectedSlug || !filteredSkills.some((skill) => skill.slug === selectedSlug)) {
+      setSelectedSlug(filteredSkills[0].slug);
     }
   }, [filteredSignature, selectedSlug, filteredSkills]);
 
@@ -572,153 +575,180 @@ export default function StudioSkillsPage() {
   return (
     <div className="flex h-full flex-col">
       <StudioNav />
-      {validationReport && (
-        <div className="px-6 py-2">
-          <ValidationSummaryCard report={validationReport} />
-        </div>
-      )}
-
-      {!selectedSlug ? (
-        <div className="flex-1 overflow-auto flex flex-col">
-          {/* Banner */}
-          <div className="px-6 py-6 pb-4 shrink-0">
-            <section className="relative overflow-hidden rounded-2xl border border-border/50 bg-gradient-to-b from-primary/5 via-background/40 to-background/20 px-6 py-8 shadow-sm backdrop-blur-xl">
-              <div className="absolute top-0 left-0 h-[1px] w-full bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
-              <div className="relative z-10 flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-                <div className="max-w-3xl space-y-4">
-                  <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0 rounded-full bg-background/50 backdrop-blur-md hover:bg-background/80" onClick={() => navigate("/studio")}>
-                      <ArrowLeft className="h-5 w-5 text-muted-foreground" />
-                    </Button>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="inline-flex h-6 items-center rounded-full bg-primary/10 px-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-primary ring-1 ring-primary/20">{tr("Studio library", "Studio library")}</span>
-                      </div>
-                      <h1 className="mt-2 flex items-center gap-2.5 text-3xl font-bold tracking-tight text-foreground">
-                        <BookOpen className="h-7 w-7 text-primary" />
-                        {tr("Каталог скиллов", "Skill Catalog")}
-                      </h1>
-                    </div>
-                  </div>
-                  <p className="max-w-2xl text-[15px] leading-relaxed text-muted-foreground">
-                    {tr(
-                      "Скилл здесь это рабочий плейбук. Выберите сервис, проверьте guardrails и runtime policy, а затем правьте сам workspace прямо из Studio.",
-                      "A skill here is an operating playbook. Pick the service, review guardrails and runtime policy, then edit the workspace directly from Studio.",
-                    )}
-                  </p>
-                  <div className="flex flex-wrap items-center gap-3 text-xs font-medium text-muted-foreground">
-                    <div className="flex items-center gap-1.5 rounded-full bg-background/40 px-3 py-1 ring-1 ring-border/50"><BookOpen className="h-3.5 w-3.5"/><span>{tr(`${skills.length} скиллов`, `${skills.length} skills`)}</span></div>
-                    <div className="flex items-center gap-1.5 rounded-full bg-background/40 px-3 py-1 ring-1 ring-border/50"><ShieldCheck className="h-3.5 w-3.5 text-amber-500/80"/><span>{tr(`${runtimeEnforcedCount} enforced`, `${runtimeEnforcedCount} enforced`)}</span></div>
-                    <div className="flex items-center gap-1.5 rounded-full bg-background/40 px-3 py-1 ring-1 ring-border/50"><Server className="h-3.5 w-3.5"/><span>{tr(`${serviceCount} сервисов`, `${serviceCount} services`)}</span></div>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3 pt-2 xl:justify-end">
-                  {canOpenMcp ? (
-                    <Button variant="outline" size="sm" onClick={() => navigate("/studio/mcp")} className="h-10 gap-2 rounded-full px-4 font-medium shadow-sm border-border/50 hover:bg-background/80">
-                      <Server className="h-4 w-4 text-primary/80" />
-                      {tr("MCP Реестр", "MCP Registry")}
-                    </Button>
-                  ) : null}
-                  <Button variant="outline" size="sm" onClick={() => validateMutation.mutate()} className="h-10 gap-2 rounded-full px-4 font-medium shadow-sm border-border/50 hover:bg-background/80">
-                    {validateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4 text-primary/80" />}
-                    {tr("Проверить", "Validate")}
-                  </Button>
-                  <Button size="sm" onClick={() => openCreateDialog()} className="h-10 gap-2 rounded-full bg-primary px-5 font-medium text-primary-foreground shadow-sm shadow-primary/20 transition-all hover:bg-primary/90 hover:shadow-md">
-                    <WandSparkles className="h-4 w-4" />
-                    {tr("Новый скилл", "New Skill")}
-                  </Button>
-                  {canOpenAgents ? (
-                    <Button size="sm" variant="outline" onClick={() => navigate("/studio/agents")} className="h-10 gap-2 rounded-full px-4 font-medium shadow-sm border-border/50 hover:bg-background/80">
-                      <Bot className="h-4 w-4 text-primary/80" />
-                      {tr("Агенты", "Agents")}
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-            </section>
-          </div>
-
-          {/* Grid section */}
-          <div className="px-6 pb-8 flex-1 flex flex-col gap-6">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center justify-between rounded-2xl border border-border/70 bg-background/30 p-2 pl-4 pr-3 backdrop-blur-md">
-              <div className="flex items-center gap-4 flex-1">
-                <Search className="h-4 w-4 text-muted-foreground shrink-0" />
-                <Input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder={tr("Поиск скиллов по названию, сервису или тегу...", "Search skills by name, service or tag...")}
-                  className="h-10 border-0 bg-transparent shadow-none focus-visible:ring-0 text-sm px-0"
-                />
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <Select value={serviceFilter} onValueChange={setServiceFilter}>
-                  <SelectTrigger className="h-9 w-[180px] text-xs bg-background/50 border-border/50 rounded-lg">
-                    <SelectValue placeholder={tr("Все сервисы", "All services")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__all__">{tr("Все сервисы", "All services")}</SelectItem>
-                    {services.map((s) => (
-                      <SelectItem key={s} value={s}>{s}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <div className="w-px h-6 bg-border/40 mx-1"></div>
-                <span className="text-[11px] font-medium text-muted-foreground whitespace-nowrap bg-muted/40 px-2 py-1 rounded-md">
-                  {tr(`${filteredSkills.length} найдено`, `${filteredSkills.length} found`)}
-                </span>
-                <Button size="sm" variant="outline" className="h-9 gap-1.5 rounded-lg px-3" onClick={() => openCreateDialog()}>
-                  <Sparkles className="h-3.5 w-3.5" />
-                  {tr("Создать", "Create")}
+      <div className="px-6 py-6 pb-2">
+        <section className="relative overflow-hidden rounded-2xl border border-border/50 bg-gradient-to-b from-primary/5 via-background/40 to-background/20 px-6 py-8 shadow-sm backdrop-blur-xl">
+          <div className="absolute top-0 left-0 h-[1px] w-full bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
+          <div className="relative z-10 flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+            <div className="max-w-3xl space-y-4">
+              <div className="flex items-center gap-4">
+                <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0 rounded-full bg-background/50 backdrop-blur-md hover:bg-background/80" onClick={() => navigate("/studio")}>
+                  <ArrowLeft className="h-5 w-5 text-muted-foreground" />
                 </Button>
-              </div>
-            </div>
-
-            {isLoading ? (
-              <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-                <Loader2 className="mr-2 h-5 w-5 animate-spin opacity-50" />
-                {tr("Загрузка скиллов...", "Loading skills...")}
-              </div>
-            ) : filteredSkills.length === 0 ? (
-              <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-muted/5 min-h-[300px]">
-                <div className="h-12 w-12 rounded-full bg-muted/20 flex items-center justify-center mb-3">
-                  <Search className="h-5 w-5 text-muted-foreground/60" />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex h-6 items-center rounded-full bg-primary/10 px-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-primary ring-1 ring-primary/20">{tr("Studio library", "Studio library")}</span>
+                  </div>
+                  <h1 className="mt-2 flex items-center gap-2.5 text-3xl font-bold tracking-tight text-foreground">
+                    <BookOpen className="h-7 w-7 text-primary" />
+                    {tr("Каталог скиллов", "Skill Catalog")}
+                  </h1>
                 </div>
-                <p className="text-sm font-medium text-foreground">{tr("Скиллы не найдены", "No skills found")}</p>
-                <p className="text-xs text-muted-foreground mt-1">{tr("Попробуйте изменить параметры поиска", "Try changing your search filters")}</p>
               </div>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-                {filteredSkills.map((skill) => (
-                  <SkillCard key={skill.slug} skill={skill} isSelected={false} onSelect={() => setSelectedSlug(skill.slug)} lang={lang} />
-                ))}
+              <p className="max-w-2xl text-[15px] leading-relaxed text-muted-foreground">
+                {tr(
+                  "Скилл здесь это рабочий плейбук. Выберите сервис, проверьте guardrails и runtime policy, а затем правьте сам workspace прямо из Studio.",
+                  "A skill here is an operating playbook. Pick the service, review guardrails and runtime policy, then edit the workspace directly from Studio.",
+                )}
+              </p>
+              <div className="flex flex-wrap items-center gap-3 text-xs font-medium text-muted-foreground">
+                <div className="flex items-center gap-1.5 rounded-full bg-background/40 px-3 py-1 ring-1 ring-border/50"><BookOpen className="h-3.5 w-3.5"/><span>{tr(`${skills.length} скиллов`, `${skills.length} skills`)}</span></div>
+                <div className="flex items-center gap-1.5 rounded-full bg-background/40 px-3 py-1 ring-1 ring-border/50"><ShieldCheck className="h-3.5 w-3.5 text-amber-500/80"/><span>{tr(`${runtimeEnforcedCount} enforced`, `${runtimeEnforcedCount} enforced`)}</span></div>
+                <div className="flex items-center gap-1.5 rounded-full bg-background/40 px-3 py-1 ring-1 ring-border/50"><Server className="h-3.5 w-3.5"/><span>{tr(`${serviceCount} сервисов`, `${serviceCount} services`)}</span></div>
               </div>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="flex-1 flex flex-col overflow-hidden bg-muted/10 relative">
-          {/* MASTER BACK BAR */}
-          <div className="px-6 py-3 flex items-center justify-between border-b border-border/40 bg-background/60 backdrop-blur-md sticky top-0 z-20 shrink-0 shadow-sm">
-            <Button variant="ghost" size="sm" onClick={() => setSelectedSlug("")} className="h-8 gap-2 rounded-lg text-muted-foreground hover:text-foreground">
-              <ArrowLeft className="h-4 w-4" />
-              {tr("Назад в каталог", "Back to catalog")}
-            </Button>
-            
-            <div className="flex items-center gap-2">
-              {selectedSkill && <Badge variant="outline" className="font-mono text-[10px] bg-background/50">{selectedSkill.slug}</Badge>}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 pt-2 xl:justify-end">
+              {canOpenMcp ? (
+                <Button variant="outline" size="sm" onClick={() => navigate("/studio/mcp")} className="h-10 gap-2 rounded-full px-4 font-medium shadow-sm border-border/50 hover:bg-background/80">
+                  <Server className="h-4 w-4 text-primary/80" />
+                  {tr("MCP Реестр", "MCP Registry")}
+                </Button>
+              ) : null}
+              <Button variant="outline" size="sm" onClick={() => validateMutation.mutate()} className="h-10 gap-2 rounded-full px-4 font-medium shadow-sm border-border/50 hover:bg-background/80">
+                {validateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4 text-primary/80" />}
+                {tr("Проверить", "Validate")}
+              </Button>
+              <Button size="sm" onClick={() => openCreateDialog()} className="h-10 gap-2 rounded-full bg-primary px-5 font-medium text-primary-foreground shadow-sm shadow-primary/20 transition-all hover:bg-primary/90 hover:shadow-md">
+                <WandSparkles className="h-4 w-4" />
+                {tr("Новый скилл", "New Skill")}
+              </Button>
+              {canOpenAgents ? (
+                <Button size="sm" variant="outline" onClick={() => navigate("/studio/agents")} className="h-10 gap-2 rounded-full px-4 font-medium shadow-sm border-border/50 hover:bg-background/80">
+                  <Bot className="h-4 w-4 text-primary/80" />
+                  {tr("Агенты", "Agents")}
+                </Button>
+              ) : null}
             </div>
           </div>
+        </section>
+      </div>
 
-          {/* WORKSPACE AND TABS AREA */}
-          <div className="flex-1 overflow-auto px-6 lg:px-10 py-8 pb-16">
-            {isFetchingSkill && !selectedSkill ? (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                {tr("Загрузка рабочего пространства...", "Loading workspace...")}
+      <div className="flex-1 overflow-auto px-6 pb-8">
+        <div className="space-y-4">
+          {validationReport && <ValidationSummaryCard report={validationReport} />}
+          <div className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
+            <div className="space-y-4 xl:sticky xl:top-6 xl:self-start">
+              <div className="rounded-xl border border-border/70 bg-background/24 p-4">
+                <div className="mb-3">
+                  <Label className="text-xs">{tr("Каталог", "Catalog")}</Label>
+                  <p className="mt-1 text-[11px] text-muted-foreground">{tr("Ищите по сервису, тегам или названию. Полный playbook и файловый workspace откроются справа.", "Search by service, tags, or name. The full playbook and workspace open on the right.")}</p>
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_160px] xl:grid-cols-1">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder={tr("Поиск по скиллам, сервисам и тегам...", "Search skills, services, tags...")}
+                      className="h-10 rounded-md pl-9 text-sm"
+                    />
+                  </div>
+                  <Select value={serviceFilter} onValueChange={setServiceFilter}>
+                    <SelectTrigger className="h-10 rounded-md text-xs">
+                      <SelectValue placeholder={tr("Все сервисы", "All services")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">{tr("Все сервисы", "All services")}</SelectItem>
+                      {services.map((service) => (
+                        <SelectItem key={service} value={service}>{service}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                  <span>{tr(`${filteredSkills.length} найдено`, `${filteredSkills.length} found`)}</span>
+                  <span>{tr(`${services.length} сервисных фильтров`, `${services.length} service filters`)}</span>
+                </div>
+
+                <div className="mt-4">
+                  {isLoading ? (
+                    <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      {tr("Загрузка скиллов...", "Loading skills...")}
+                    </div>
+                  ) : filteredSkills.length === 0 ? (
+                    <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-border/70 bg-background/24 text-center text-sm text-muted-foreground">
+                      {tr("По текущим фильтрам скиллы не найдены.", "No skills match the current filters.")}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {filteredSkills.map((skill) => (
+                        <SkillCard key={skill.slug} skill={skill} isSelected={skill.slug === selectedSlug} onSelect={() => setSelectedSlug(skill.slug)} lang={lang} />
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-            ) : selectedSkill ? (
-              <Tabs defaultValue="overview" className="flex h-full flex-col w-full max-w-7xl mx-auto space-y-4">
+
+              <div className="rounded-xl border border-border/70 bg-background/24 p-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div>
+                    <Label className="text-xs">{tr("Создать новый скилл", "Create a new skill")}</Label>
+                    <p className="mt-1 text-[11px] text-muted-foreground">{tr("Лучше выбрать шаблон сервиса и потом открывать мастер. Так сразу подтянутся дефолтные policy и guardrails.", "Pick a service template first, then open the wizard. That preloads sensible policy and guardrails.")}</p>
+                  </div>
+                  <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-md px-3 text-[11px]" onClick={() => openCreateDialog()}>
+                    <Sparkles className="h-3 w-3" />
+                    {tr("Пустой мастер", "Blank Wizard")}
+                  </Button>
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                  <Select value={launcherTemplateSlug} onValueChange={setLauncherTemplateSlug}>
+                    <SelectTrigger className="h-10 rounded-md text-xs">
+                      <SelectValue placeholder={tr("Выберите шаблон сервиса", "Choose a service template")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">{tr("Начать с нуля", "Start from scratch")}</SelectItem>
+                      {templates.map((template) => (
+                        <SelectItem key={template.slug} value={template.slug}>
+                          {template.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button size="sm" className="h-10 gap-1.5 rounded-md px-4" onClick={() => openCreateDialog(launcherTemplate)}>
+                    <WandSparkles className="h-3.5 w-3.5" />
+                    {tr("Открыть мастер", "Open wizard")}
+                  </Button>
+                </div>
+
+                {launcherTemplate && (
+                  <div className="mt-3 rounded-xl border border-border/70 bg-background/30 px-3 py-3">
+                    <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                      <span className="font-medium text-foreground">{launcherTemplate.name}</span>
+                      {launcherTemplate.defaults.service && <span className="text-muted-foreground">{launcherTemplate.defaults.service}</span>}
+                      {launcherTemplate.defaults.safety_level && <span className="text-muted-foreground">· {launcherTemplate.defaults.safety_level}</span>}
+                    </div>
+                    <p className="mt-2 text-[11px] leading-5 text-muted-foreground">{launcherTemplate.summary || launcherTemplate.description}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="min-w-0">
+              {!selectedSlug ? (
+                <div className="flex h-72 items-center justify-center rounded-xl border border-border/70 bg-background/24 text-center text-sm text-muted-foreground">
+                  {tr("Выберите скилл слева, чтобы изучить его плейбук, guardrails и workspace.", "Select a skill on the left to inspect its playbook, guardrails, and workspace.")}
+                </div>
+              ) : isFetchingSkill && !selectedSkill ? (
+                <div className="flex h-72 items-center justify-center rounded-xl border border-border/70 bg-background/24 text-sm text-muted-foreground">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {tr("Загрузка деталей скилла...", "Loading skill details...")}
+                </div>
+              ) : selectedSkill ? (
+                <Tabs defaultValue="overview" className="flex h-full flex-col space-y-4">
                   <div className="rounded-xl border border-border/50 bg-background/40 backdrop-blur-md px-5 pt-5 shadow-sm">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div>
@@ -900,271 +930,264 @@ export default function StudioSkillsPage() {
                         )}
                       </div>
                     )}
-                                        <div className="flex flex-1 overflow-hidden gap-4" style={{ minHeight: "600px" }}>
-                      <div className="w-1/4 min-w-[240px] flex flex-col gap-2 rounded-xl border border-border/40 bg-muted/10 p-3 overflow-y-auto">
-                        <div className="mb-2 flex items-center justify-between gap-2">
-                          <div>
-                            <p className="text-xs font-medium text-foreground">{tr("Файлы пакета", "Package Files")}</p>
-                            <p className="text-[10px] text-muted-foreground">{tr("SKILL.md, references/, scripts/, assets/", "SKILL.md, references/, scripts/, assets/")}</p>
-                          </div>
-                          {isFetchingWorkspace ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
-                        </div>
-                        {!workspace?.files.length ? (
-                          <div className="rounded-xl border border-dashed border-border/70 px-3 py-6 text-center text-[11px] text-muted-foreground">
-                            {tr("Файлы ещё не найдены.", "No files found yet.")}
-                          </div>
-                        ) : (
-                          <div className="space-y-2">
-                            {workspace.files.map((file) => (
-                              <button
-                                key={file.path}
-                                type="button"
-                                onClick={() => setSelectedFilePath(file.path)}
-                                className={`w-full rounded-xl border px-3 py-3 text-left transition-colors ${
-                                  selectedFilePath === file.path ? "border-primary/40 bg-primary/5" : "border-border/70 bg-background/24 hover:bg-background/40"
-                                }`}
-                              >
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="truncate text-[11px] font-medium text-foreground">{file.name}</span>
-                                  <span className="text-[10px] text-muted-foreground">{formatFileSize(file.size)}</span>
-                                </div>
-                                <div className="mt-1 truncate font-mono text-[10px] text-muted-foreground">{file.path}</div>
-                                <div className="mt-2 flex flex-wrap gap-1">
-                                  <Badge variant="outline" className="text-[9px]">{fileKindLabel(file.kind, lang)}</Badge>
-                                  <Badge variant="secondary" className="text-[9px]">{file.language}</Badge>
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        )}
+                  </div>
+                    <div className="flex flex-1 overflow-hidden" style={{ minHeight: "600px" }}>
+                      <div className="w-1/4 min-w-[240px] border-r border-border/40 bg-muted/10 p-2 overflow-y-auto">
+                        <FileTree
+                          manifest={selectedSkill?.parsed_manifest}
+                          selectedPath={selectedFilePath}
+                          onSelect={setSelectedFilePath}
+                        />
                       </div>
-
-                      <div className="flex-1 flex flex-col rounded-xl border border-border/40 bg-muted/5">
-                        {!selectedWorkspaceFile ? (
-                          <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-muted-foreground">
-                            {tr("Выберите файл слева, чтобы открыть редактор.", "Select a file on the left to open the editor.")}
-                          </div>
-                        ) : isFetchingFile && !selectedFileDetail ? (
-                          <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            {tr("Загрузка файла...", "Loading file...")}
-                          </div>
-                        ) : (
-                          <div className="flex flex-col h-full">
-                            <div className="border-b border-border/40 px-4 py-4 bg-background/50 shrink-0">
-                              <div className="flex flex-wrap items-start justify-between gap-3">
-                                <div>
-                                  <div className="text-sm font-medium text-foreground">{selectedWorkspaceFile.name}</div>
-                                  <div className="mt-1 break-all font-mono text-[10px] text-muted-foreground">{selectedWorkspaceFile.path}</div>
-                                </div>
-                                <div className="flex flex-wrap gap-1">
-                                  <Badge variant="outline" className="text-[9px]">{fileKindLabel(selectedWorkspaceFile.kind, lang)}</Badge>
-                                  <Badge variant="secondary" className="text-[9px]">{selectedWorkspaceFile.language}</Badge>
-                                  <Badge variant="outline" className="text-[9px]">{formatFileSize(selectedWorkspaceFile.size)}</Badge>
-                                </div>
-                              </div>
-                            </div>
-                            
-                            <div className="p-4 flex-1 flex flex-col min-h-0 bg-background/20">
-                              <Textarea 
-                                value={editorValue} 
-                                onChange={(event) => setEditorValue(event.target.value)} 
-                                className="flex-1 font-mono text-[12px] leading-relaxed resize-none shadow-inner border-border/50" 
-                                readOnly={!canEditSelectedFile} 
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="settings" className="m-0 space-y-4 outline-none">
-                    <div className="rounded-xl border border-border/50 bg-background/40 backdrop-blur-md p-6 shadow-sm">
-                      <div className="mb-6 flex items-center gap-3 border-b border-border/50 pb-4">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 ring-1 ring-primary/20 shadow-inner">
-                          <Settings2 className="h-5 w-5 text-primary" />
-                        </div>
-                        <div>
-                          <h3 className="text-base font-semibold text-foreground">{tr("Настройки доступа", "Access Settings")}</h3>
-                          <p className="text-[12px] text-muted-foreground">{tr("Текущее управление доступом пока не реализовано в Studio, перейдите в Access Management.", "Access control is managed in Access Management.")}</p>
-                        </div>
-                      </div>
-                      <div className="text-[13px] text-muted-foreground">
-                        {tr("В будущем здесь можно будет детально управлять настройками скилла, владельцем и привязками.", "In the future, detailed skill settings, ownership, and bindings will be manageable here.")}
+                      <div className="flex-1 flex flex-col">
+                        <SkillEditor
+                          selectedSkill={selectedSkill!}
+                          selectedFilePath={selectedFilePath}
+                          fileContent={fileContent}
+                          setFileContent={setFileContent}
+                          canEdit={canEditSelectedFile}
+                        />
                       </div>
                     </div>
                   </TabsContent>
                 </Tabs>
-            ) : (
-              <div className="flex h-full items-center justify-center text-sm text-red-500/80">
-                {tr("Ошибка загрузки скилла.", "Error loading skill.")}
-              </div>
-            )}
+                <div className="flex h-72 items-center justify-center rounded-xl border border-border/70 bg-background/24 text-sm text-muted-foreground">
+                  {tr("Детали скилла недоступны.", "Skill details are unavailable.")}
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      )}
+      </div>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-h-[90vh] max-w-2xl overflow-auto p-0 rounded-xl border-border bg-background shadow-2xl">
-          <div className="bg-muted/30 px-6 py-5 border-b border-border/40">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-semibold flex items-center gap-2">
-                <WandSparkles className="h-5 w-5 text-primary" />
-                {tr("Создание скилла", "Create Skill")}
-              </DialogTitle>
-              <DialogDescription className="text-[13px] mt-1.5">
-                {tr("Скилл — это рабочий плейбук агента. Заполните основные поля, а сложную конфигурацию мы спрятали в продвинутых настройках.", "A skill is an operational playbook. Fill out the basics, and we'll leave the complex configuration in advanced settings.")}
-              </DialogDescription>
-            </DialogHeader>
+        <DialogContent className="max-h-[90vh] max-w-5xl overflow-auto rounded-md border-border bg-background/95">
+          <DialogHeader>
+            <DialogTitle>{tr("Мастер скиллов", "Skill Wizard")}</DialogTitle>
+            <DialogDescription>{tr("Создайте корпоративный пакет скиллов из шаблона сервиса или с нуля.", "Create a corporate skill pack from a service template or from scratch.")}</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-border/70 bg-background/24 px-3 py-3 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">{wizard.name.trim() || tr("Новый скилл", "New skill")}</span>
+            <span>{selectedTemplate ? selectedTemplate.name : tr("без шаблона", "no template")}</span>
+            <span>{tr(`safety: ${wizard.safety_level}`, `safety: ${wizard.safety_level}`)}</span>
+            <span>{tr(`${[wizard.with_references, wizard.with_scripts, wizard.with_assets].filter(Boolean).length} папок`, `${[wizard.with_references, wizard.with_scripts, wizard.with_assets].filter(Boolean).length} folders`)}</span>
           </div>
 
-          <div className="px-6 py-6 space-y-8">
-            {/* 1. Base Info */}
+          <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
             <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-[11px] font-bold text-primary">1</div>
-                <h3 className="text-sm font-medium">{tr("Основная информация", "Basic Information")}</h3>
-              </div>
-              
-              <div className="space-y-4 pl-8">
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">{tr("Если есть готовый концепт, выберите шаблон", "If you have a concept, pick a template")}</Label>
-                  <Select
-                    value={selectedTemplateSlug}
-                    onValueChange={(value) => {
-                      setSelectedTemplateSlug(value);
-                      const template = templates.find((item) => item.slug === value) || null;
-                      setWizard(createWizardState(template));
-                      setSlugTouched(false);
-                    }}
-                  >
-                    <SelectTrigger className="h-10">
-                      <SelectValue placeholder={tr("Начать с чистого листа", "Start from a blank slate")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">{tr("С чистого листа (пустой скилл)", "Blank slate")}</SelectItem>
-                      {templates.map((template) => (
-                        <SelectItem key={template.slug} value={template.slug}>{template.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <div className="workspace-subtle rounded-2xl px-4 py-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  {([
+                    { id: "basics", label: tr("1. Основа", "1. Basics"), description: tr("Шаблон, имя, сервис", "Template, name, service") },
+                    { id: "policy", label: tr("2. Guardrails", "2. Guardrails"), description: tr("Правила, теги, runtime policy", "Rules, tags, runtime policy") },
+                    { id: "files", label: tr("3. Файлы", "3. Files"), description: tr("references, scripts, assets", "references, scripts, assets") },
+                  ] as const).map((section) => {
+                    const active = wizardSection === section.id;
+                    return (
+                      <button
+                        key={section.id}
+                        type="button"
+                        onClick={() => setWizardSection(section.id)}
+                        className={`rounded-xl border px-3 py-2 text-left transition-colors ${
+                          active ? "border-border bg-background text-foreground" : "border-transparent bg-transparent text-muted-foreground hover:border-border/70 hover:bg-background/35 hover:text-foreground"
+                        }`}
+                      >
+                        <div className="text-xs font-medium">{section.label}</div>
+                        <div className="mt-1 text-[11px] leading-5 text-muted-foreground">{section.description}</div>
+                      </button>
+                    );
+                  })}
                 </div>
+              </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
+              {wizardSection === "basics" && (
+                <div className="space-y-4 rounded-xl border border-border/70 bg-background/24 p-4">
                   <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">{tr("Название (Что делает?)", "Name (What it does)")}</Label>
-                    <Input
-                      className="h-10"
-                      value={wizard.name}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        setWizard((prev) => ({ ...prev, name: value, slug: slugTouched ? prev.slug : slugifySkillName(value) }));
+                    <Label className="text-xs">{tr("Шаблон сервиса", "Service Template")}</Label>
+                    <Select
+                      value={selectedTemplateSlug}
+                      onValueChange={(value) => {
+                        setSelectedTemplateSlug(value);
+                        const template = templates.find((item) => item.slug === value) || null;
+                        setWizard(createWizardState(template));
+                        setSlugTouched(false);
                       }}
-                      placeholder={tr("Управление токенами", "Token Management")}
-                    />
+                    >
+                      <SelectTrigger className="text-xs">
+                        <SelectValue placeholder={tr("Начать с нуля", "Start from scratch")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">{tr("Пустой мастер", "Blank wizard")}</SelectItem>
+                        {templates.map((template) => (
+                          <SelectItem key={template.slug} value={template.slug}>{template.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {selectedTemplate && (
+                    <div className="rounded-xl border border-border/70 bg-background/30 px-3 py-3">
+                      <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                        <span className="font-medium text-foreground">{selectedTemplate.name}</span>
+                        {selectedTemplate.defaults.service && <span className="text-muted-foreground">{selectedTemplate.defaults.service}</span>}
+                        {selectedTemplate.defaults.safety_level && <span className="text-muted-foreground">· {selectedTemplate.defaults.safety_level}</span>}
+                      </div>
+                      <p className="mt-2 text-[11px] leading-5 text-muted-foreground">{selectedTemplate.summary || selectedTemplate.description}</p>
+                    </div>
+                  )}
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">{tr("Название", "Name")}</Label>
+                      <Input
+                        value={wizard.name}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setWizard((prev) => ({ ...prev, name: value, slug: slugTouched ? prev.slug : slugifySkillName(value) }));
+                        }}
+                        placeholder={tr("Рабочий процесс операций Keycloak", "Keycloak Operations Workflow")}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">{tr("Slug", "Slug")}</Label>
+                      <Input value={wizard.slug} onChange={(e) => { setSlugTouched(true); setWizard((prev) => ({ ...prev, slug: e.target.value })); }} placeholder={tr("keycloak-operations-workflow", "keycloak-operations-workflow")} />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">{tr("Описание", "Description")}</Label>
+                    <Textarea rows={3} value={wizard.description} onChange={(e) => setWizard((prev) => ({ ...prev, description: e.target.value }))} placeholder={tr("Когда этот скилл нужно подключать и использовать.", "When this skill should be attached and used.")} />
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">{tr("Сервис", "Service")}</Label>
+                      <Input value={wizard.service} onChange={(e) => setWizard((prev) => ({ ...prev, service: e.target.value }))} placeholder={tr("keycloak", "keycloak")} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">{tr("Категория", "Category")}</Label>
+                      <Input value={wizard.category} onChange={(e) => setWizard((prev) => ({ ...prev, category: e.target.value }))} placeholder={tr("Управление доступом", "Identity and Access")} />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">{tr("Уровень безопасности", "Safety level")}</Label>
+                    <Select value={wizard.safety_level} onValueChange={(value) => setWizard((prev) => ({ ...prev, safety_level: value }))}>
+                      <SelectTrigger className="text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {SAFETY_LEVELS.map((level) => (
+                          <SelectItem key={level} value={level}>{level}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+
+              {wizardSection === "policy" && (
+                <div className="space-y-4 rounded-xl border border-border/70 bg-background/24 p-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">{tr("UI-подсказка", "UI hint")}</Label>
+                    <Input value={wizard.ui_hint} onChange={(e) => setWizard((prev) => ({ ...prev, ui_hint: e.target.value }))} placeholder={tr("Короткая инструкция для админа в Studio", "Short admin-facing instruction in Studio")} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">{tr("Сервис (Где делает?)", "Service (Where)")}</Label>
-                    <Input className="h-10" value={wizard.service} onChange={(e) => setWizard((prev) => ({ ...prev, service: e.target.value }))} placeholder={tr("github, keycloak...", "github, keycloak...")} />
+                    <Label className="text-xs">{tr("Теги", "Tags")}</Label>
+                    <Input value={wizard.tags_text} onChange={(e) => setWizard((prev) => ({ ...prev, tags_text: e.target.value }))} placeholder={tr("keycloak, iam, mcp, безопасность", "keycloak, iam, mcp, safety")} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">{tr("Сводка guardrail-правил", "Guardrail summary")}</Label>
+                    <Textarea rows={3} value={wizard.guardrail_summary_text} onChange={(e) => setWizard((prev) => ({ ...prev, guardrail_summary_text: e.target.value }))} placeholder={tr("Требует preflight, фиксирует profile=test, блокирует переключение профиля", "Requires preflight, Pins profile=test, Blocks profile switching")} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">{tr("Рекомендуемые инструменты агента", "Recommended agent tools")}</Label>
+                    <Input value={wizard.recommended_tools_text} onChange={(e) => setWizard((prev) => ({ ...prev, recommended_tools_text: e.target.value }))} placeholder={tr("report, ask_user, analyze_output", "report, ask_user, analyze_output")} />
+                  </div>
+                  <div className="rounded-xl border border-border/70 bg-background/30 p-4">
+                    <div className="flex items-center gap-2">
+                      <Shield className="h-4 w-4 text-muted-foreground" />
+                      <p className="text-sm font-medium">{tr("Runtime policy", "Runtime policy")}</p>
+                    </div>
+                    <p className="mt-1 text-[11px] text-muted-foreground">{tr("Оставляйте template-default policy, если не уверены в точных названиях MCP tool и pinned args.", "Keep the template default unless you know the exact MCP tool names and pinned arguments.")}</p>
+                    <Textarea rows={14} value={wizard.runtime_policy_text} onChange={(e) => setWizard((prev) => ({ ...prev, runtime_policy_text: e.target.value }))} className="mt-3 font-mono text-[11px]" />
                   </div>
                 </div>
+              )}
 
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">{tr("Описание для агентов", "Description for agents")}</Label>
-                  <Textarea rows={2} className="resize-none" value={wizard.description} onChange={(e) => setWizard((prev) => ({ ...prev, description: e.target.value }))} placeholder={tr("Когда и зачем агент должен применять этот плейбук.", "When and why the agent should apply this playbook.")} />
+              {wizardSection === "files" && (
+                <div className="space-y-4 rounded-xl border border-border/70 bg-background/24 p-4">
+                  <div className="space-y-3 rounded-xl border border-border/70 bg-background/30 p-4">
+                    <p className="text-sm font-medium">{tr("Необязательные папки скилла", "Optional skill folders")}</p>
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-medium">{tr("references/", "references/")}</p>
+                        <p className="text-[10px] text-muted-foreground">{tr("Доменные документы, примеры и длинные процедуры.", "Domain docs, examples, and longer procedures.")}</p>
+                      </div>
+                      <Switch checked={wizard.with_references} onCheckedChange={(checked) => setWizard((prev) => ({ ...prev, with_references: Boolean(checked) }))} />
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-medium">{tr("scripts/", "scripts/")}</p>
+                        <p className="text-[10px] text-muted-foreground">{tr("Детерминированные помощники для хрупких и повторяющихся действий.", "Deterministic helpers for fragile or repetitive actions.")}</p>
+                      </div>
+                      <Switch checked={wizard.with_scripts} onCheckedChange={(checked) => setWizard((prev) => ({ ...prev, with_scripts: Boolean(checked) }))} />
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-medium">{tr("assets/", "assets/")}</p>
+                        <p className="text-[10px] text-muted-foreground">{tr("Шаблоны, бренд-файлы и выходные ассеты.", "Templates, brand files, and output assets.")}</p>
+                      </div>
+                      <Switch checked={wizard.with_assets} onCheckedChange={(checked) => setWizard((prev) => ({ ...prev, with_assets: Boolean(checked) }))} />
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-medium">{tr("Перезаписать существующий скилл", "Overwrite existing skill")}</p>
+                        <p className="text-[10px] text-muted-foreground">{tr("Используйте только если осознанно обновляете тот же slug.", "Use only when intentionally updating the same slug.")}</p>
+                      </div>
+                      <Switch checked={wizard.force} onCheckedChange={(checked) => setWizard((prev) => ({ ...prev, force: Boolean(checked) }))} />
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
-            {/* 2. Architecture */}
             <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-[11px] font-bold text-primary">2</div>
-                <h3 className="text-sm font-medium">{tr("Структура и безопасность", "Structure & Security")}</h3>
+              <div className="rounded-xl border border-border/70 bg-background/24 p-4">
+                <p className="text-xs font-medium text-foreground">{tr("Текущий пакет", "Current package")}</p>
+                <div className="mt-3 space-y-2 text-[11px] text-muted-foreground">
+                  <div className="rounded-xl border border-border/70 bg-background/30 px-3 py-3">
+                    <div className="font-medium text-foreground">{wizard.name.trim() || tr("Новый скилл", "New skill")}</div>
+                    <div className="mt-1 font-mono text-[10px] text-muted-foreground">{wizard.slug || tr("slug будет сгенерирован", "slug will be generated")}</div>
+                  </div>
+                  <div className="rounded-xl border border-border/70 bg-background/30 px-3 py-3">
+                    <div>{selectedTemplate ? selectedTemplate.name : tr("Без сервисного шаблона", "No service template")}</div>
+                    <div className="mt-1">{wizard.service || tr("Сервис не указан", "No service yet")} {wizard.category ? `· ${wizard.category}` : ""}</div>
+                    <div className="mt-1">{tr(`safety: ${wizard.safety_level}`, `safety: ${wizard.safety_level}`)}</div>
+                  </div>
+                  <div className="rounded-xl border border-border/70 bg-background/30 px-3 py-3">
+                    <div>{tr("Guardrails", "Guardrails")}: {wizard.guardrail_summary_text.trim() ? parseCsvInput(wizard.guardrail_summary_text).length : 0}</div>
+                    <div className="mt-1">{tr("Рекомендуемые инструменты", "Recommended tools")}: {wizard.recommended_tools_text.trim() ? parseCsvInput(wizard.recommended_tools_text).length : 0}</div>
+                    <div className="mt-1">{tr("Папки", "Folders")}: {[wizard.with_references, wizard.with_scripts, wizard.with_assets].filter(Boolean).length}</div>
+                  </div>
+                </div>
               </div>
 
-              <div className="pl-8 grid gap-6 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">{tr("Уровень безопасности", "Safety Level")}</Label>
-                  <Select value={wizard.safety_level} onValueChange={(value) => setWizard((prev) => ({ ...prev, safety_level: value }))}>
-                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {SAFETY_LEVELS.map((level) => (<SelectItem key={level} value={level}>{level}</SelectItem>))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-3 pt-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <Label className="cursor-pointer text-xs font-normal" htmlFor="tog-ref">{tr("Добавить папку references/", "Include references/ folder")}</Label>
-                    <Switch id="tog-ref" checked={wizard.with_references} onCheckedChange={(checked) => setWizard((prev) => ({ ...prev, with_references: Boolean(checked) }))} />
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <Label className="cursor-pointer text-xs font-normal" htmlFor="tog-scr">{tr("Добавить папку scripts/", "Include scripts/ folder")}</Label>
-                    <Switch id="tog-scr" checked={wizard.with_scripts} onCheckedChange={(checked) => setWizard((prev) => ({ ...prev, with_scripts: Boolean(checked) }))} />
-                  </div>
+              <div className="rounded-xl border border-border/70 bg-background/24 p-4">
+                <p className="text-xs font-medium text-foreground">{tr("Простой порядок", "Simple order")}</p>
+                <div className="mt-2 space-y-2 text-[11px] leading-5 text-muted-foreground">
+                  <p>{tr("1. Выберите template или начните с нуля.", "1. Pick a template or start from scratch.")}</p>
+                  <p>{tr("2. Коротко опишите назначение и сервис.", "2. Describe the purpose and service.")}</p>
+                  <p>{tr("3. Добавьте только нужные guardrails и policy.", "3. Add only the guardrails and policy you actually need.")}</p>
+                  <p>{tr("4. Подключайте папки только если они реально нужны рантайму.", "4. Add folders only if the runtime truly needs them.")}</p>
                 </div>
               </div>
             </div>
-
-            {/* 3. Advanced Tools */}
-            <Accordion type="single" collapsible className="w-full">
-              <AccordionItem value="advanced" className="border-border/40">
-                <AccordionTrigger className="text-sm px-2 hover:bg-muted/30 rounded-md transition-colors">{tr("Продвинутые настройки (Опционально)", "Advanced Settings (Optional)")}</AccordionTrigger>
-                <AccordionContent className="pt-4 px-2 space-y-5">
-                  
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs text-muted-foreground">{tr("Slug (Уникальный ID)", "Slug (Unique ID)")}</Label>
-                      <Input className="h-9 font-mono text-xs" value={wizard.slug} onChange={(e) => { setSlugTouched(true); setWizard((prev) => ({ ...prev, slug: e.target.value })); }} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs text-muted-foreground">{tr("Категория", "Category")}</Label>
-                      <Input className="h-9 text-xs" value={wizard.category} onChange={(e) => setWizard((prev) => ({ ...prev, category: e.target.value }))} placeholder="IAM, DevOps..." />
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs text-muted-foreground">{tr("UI-подсказка", "UI Hint")}</Label>
-                      <Input className="h-9 text-xs" value={wizard.ui_hint} onChange={(e) => setWizard((prev) => ({ ...prev, ui_hint: e.target.value }))} placeholder={tr("Инструкция для списка", "Hint for list view")} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs text-muted-foreground">{tr("Теги (CSV)", "Tags (CSV)")}</Label>
-                      <Input className="h-9 text-xs" value={wizard.tags_text} onChange={(e) => setWizard((prev) => ({ ...prev, tags_text: e.target.value }))} placeholder="tag1, tag2" />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">{tr("Рекомендуемые MCP инструменты (CSV)", "Recommended MCP tools (CSV)")}</Label>
-                    <Input className="h-9 text-xs" value={wizard.recommended_tools_text} onChange={(e) => setWizard((prev) => ({ ...prev, recommended_tools_text: e.target.value }))} placeholder="github_search, ask_user" />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">{tr("Guardrail Правила", "Guardrail Rules")}</Label>
-                    <Textarea rows={2} className="text-xs" value={wizard.guardrail_summary_text} onChange={(e) => setWizard((prev) => ({ ...prev, guardrail_summary_text: e.target.value }))} placeholder={tr("Описание жестких ограничений.", "Description of hard constraints.")} />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">{tr("Runtime Policy (Конфиг среды)", "Runtime Policy (Env config)")}</Label>
-                    <Textarea rows={6} value={wizard.runtime_policy_text} onChange={(e) => setWizard((prev) => ({ ...prev, runtime_policy_text: e.target.value }))} className="font-mono text-[11px] bg-muted/20" />
-                  </div>
-
-                  <div className="flex items-center space-x-2 pt-2">
-                    <Switch id="force-overwrite" checked={wizard.force} onCheckedChange={(checked) => setWizard((prev) => ({ ...prev, force: Boolean(checked) }))} />
-                    <Label htmlFor="force-overwrite" className="text-xs text-destructive">{tr("Перезаписать скилл с таким же slug", "Overwrite skill with same slug")}</Label>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
           </div>
 
-          <div className="bg-muted/20 px-6 py-4 flex items-center justify-between border-t border-border/40">
-            <Button variant="ghost" className="text-muted-foreground" onClick={() => setCreateOpen(false)}>{tr("Отмена", "Cancel")}</Button>
-            <Button onClick={submitWizard} disabled={!wizard.name.trim() || !wizard.description.trim() || scaffoldMutation.isPending} className="gap-2 px-6">
-              {scaffoldMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
-              {tr("Создать", "Create")}
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>{tr("Отмена", "Cancel")}</Button>
+            <Button onClick={submitWizard} disabled={!wizard.name.trim() || !wizard.description.trim() || scaffoldMutation.isPending} className="gap-1.5">
+              {scaffoldMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <WandSparkles className="h-3.5 w-3.5" />}
+              {tr("Создать скилл", "Create Skill")}
             </Button>
           </div>
         </DialogContent>

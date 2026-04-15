@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Pencil, KeyRound, Trash2, UserPlus, ShieldCheck, Users as UsersIcon, ChevronDown, ChevronUp } from "lucide-react";
 
 import {
   ACCESS_FEATURE_OPTIONS,
@@ -14,8 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { EmptyState, SectionCard, StatusBadge } from "@/components/ui/page-shell";
-import { SettingsWorkspace } from "@/components/settings/SettingsWorkspace";
+import { EmptyState, StatusBadge } from "@/components/ui/page-shell";
 import { useI18n } from "@/lib/i18n";
 import {
   ACCESS_UI_TEXT,
@@ -27,10 +27,13 @@ import {
 } from "@/lib/accessUiText";
 
 type PermissionMode = "inherit" | "allow" | "deny";
-const SELECT_CLASS = "h-10 rounded-xl border border-border bg-background/80 px-3 text-sm text-foreground";
+
+const SELECT_CLASS =
+  "h-9 w-full rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 text-sm text-foreground outline-none ring-0 transition-all focus:border-primary/40 focus:ring-1 focus:ring-primary/30";
 
 const FALLBACK_FEATURES = ACCESS_FEATURE_OPTIONS;
 
+/* ── helpers ── */
 function createPermissionModes(
   features: Array<{ value: string; label: string }>,
   explicit?: Record<string, boolean>,
@@ -49,6 +52,34 @@ function buildExplicitPayload(modes: Record<string, PermissionMode>) {
   );
 }
 
+function toggleId(source: number[], id: number) {
+  return source.includes(id) ? source.filter((value) => value !== id) : [...source, id];
+}
+
+/* ── micro-components ── */
+function FieldLabel({ htmlFor, children }: { htmlFor?: string; children: string }) {
+  return (
+    <label htmlFor={htmlFor} className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+      {children}
+    </label>
+  );
+}
+
+function UserAvatar({ name, active }: { name: string; active: boolean }) {
+  const initials = name.slice(0, 2).toUpperCase();
+  return (
+    <div
+      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold tracking-wide transition-colors ${
+        active
+          ? "bg-primary/15 text-primary ring-1 ring-primary/20"
+          : "bg-muted/40 text-muted-foreground ring-1 ring-border/20"
+      }`}
+    >
+      {initials}
+    </div>
+  );
+}
+
 function PermissionModeField({
   lang,
   label,
@@ -64,28 +95,26 @@ function PermissionModeField({
   effective?: boolean;
   onChange: (value: PermissionMode) => void;
 }) {
+  const t = ACCESS_UI_TEXT[lang].common;
   return (
-    <div className="rounded-2xl border border-border/70 bg-background/50 p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-sm font-medium text-foreground">{label}</div>
-          <div className="mt-1 text-[11px] leading-5 text-muted-foreground">
-            {ACCESS_UI_TEXT[lang].common.effective}:{" "}
-            {effective ? ACCESS_UI_TEXT[lang].common.allowed : ACCESS_UI_TEXT[lang].common.denied}
-            {source ? ` • ${ACCESS_UI_TEXT[lang].common.source.toLowerCase()}: ${getAccessSourceLabel(lang, source)}` : ""}
-          </div>
+    <div className="group/perm flex items-center justify-between gap-3 rounded-lg border border-white/[0.04] bg-white/[0.02] px-3 py-2.5 transition-colors hover:bg-white/[0.04]">
+      <div className="min-w-0 flex-1">
+        <div className="text-[13px] font-medium text-foreground/90">{label}</div>
+        <div className="mt-0.5 text-[11px] text-muted-foreground/60">
+          {t.effective}: {effective ? t.allowed : t.denied}
+          {source ? ` · ${getAccessSourceLabel(lang, source)}` : ""}
         </div>
-        <select
-          value={mode}
-          onChange={(e) => onChange(e.target.value as PermissionMode)}
-          className={SELECT_CLASS}
-          aria-label={`${label} mode`}
-        >
-          <option value="inherit">{ACCESS_UI_TEXT[lang].common.inherit}</option>
-          <option value="allow">{ACCESS_UI_TEXT[lang].common.allow}</option>
-          <option value="deny">{ACCESS_UI_TEXT[lang].common.deny}</option>
-        </select>
       </div>
+      <select
+        value={mode}
+        onChange={(e) => onChange(e.target.value as PermissionMode)}
+        className="h-7 rounded-md border border-white/[0.06] bg-white/[0.03] px-2 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary/30"
+        aria-label={`${label} mode`}
+      >
+        <option value="inherit">{t.inherit}</option>
+        <option value="allow">{t.allow}</option>
+        <option value="deny">{t.deny}</option>
+      </select>
     </div>
   );
 }
@@ -100,7 +129,7 @@ function GroupPicker({
   onToggle: (groupId: number) => void;
 }) {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-1.5">
       {groups.map((group) => {
         const active = selectedGroupIds.includes(group.id);
         return (
@@ -108,37 +137,26 @@ function GroupPicker({
             key={group.id}
             type="button"
             onClick={() => onToggle(group.id)}
-            className={`rounded-xl border px-3 py-1.5 text-sm transition-colors ${
+            className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-all ${
               active
-                ? "border-primary bg-primary/10 text-primary"
-                : "border-border bg-background/60 text-muted-foreground hover:text-foreground"
+                ? "bg-primary/15 text-primary ring-1 ring-primary/25"
+                : "bg-white/[0.03] text-muted-foreground ring-1 ring-white/[0.06] hover:bg-white/[0.06] hover:text-foreground"
             }`}
           >
             {group.name}
           </button>
         );
       })}
+      {groups.length === 0 && <span className="text-xs text-muted-foreground/50 italic">Нет групп</span>}
     </div>
   );
 }
 
-function toggleId(source: number[], id: number) {
-  return source.includes(id) ? source.filter((value) => value !== id) : [...source, id];
-}
-
-function FieldLabel({ htmlFor, children }: { htmlFor?: string; children: string }) {
-  return (
-    <label htmlFor={htmlFor} className="mb-1.5 block text-[11px] font-medium text-muted-foreground">
-      {children}
-    </label>
-  );
-}
-
+/* ── page ── */
 export default function SettingsUsersPage() {
   const { lang } = useI18n();
   const copy = ACCESS_UI_TEXT[lang].users;
   const common = ACCESS_UI_TEXT[lang].common;
-  const directoryTitle = lang === "ru" ? "Каталог пользователей" : "User directory";
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -250,7 +268,11 @@ export default function SettingsUsersPage() {
   };
 
   if (isLoading) {
-    return <div className="p-6 text-sm text-muted-foreground">{copy.loading}</div>;
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
   }
   if (error) {
     return <div className="p-6 text-sm text-destructive">{copy.error}</div>;
@@ -260,213 +282,270 @@ export default function SettingsUsersPage() {
   const staffUsers = users.filter((user) => user.is_staff).length;
 
   return (
-    <SettingsWorkspace
-      title={copy.title}
-      description={copy.subtitle}
-      asideHint="Профиль пользователя задаёт базовый уровень доступа. Группы расширяют его, а явные правила оставляйте только для редких исключений."
-      actions={
-        <>
-          <StatusBadge label={`Users: ${users.length}`} dot={false} />
-          <StatusBadge label={`${common.active}: ${activeUsers}`} tone="success" dot={false} />
-          <StatusBadge label={`${common.staff}: ${staffUsers}`} tone="info" dot={false} />
-          <StatusBadge label={`${common.groups}: ${groups.length}`} dot={false} />
-        </>
-      }
-    >
-      <div className="workspace-subtle rounded-xl px-4 py-3 text-sm leading-6 text-muted-foreground">
-        Слева список пользователей, справа форма создания. Для правок открой карточку пользователя и меняй только то, что реально нужно.
+    <div className="space-y-6 pb-10">
+      {/* ── Header ── */}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">{copy.title}</h1>
+        <p className="mt-1 text-sm text-muted-foreground/70">{copy.subtitle}</p>
       </div>
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <SectionCard
-          title={directoryTitle}
-          description="Список пользователей, их итоговый доступ и точечные действия."
-        >
-          <div className="space-y-4">
-            {users.length === 0 ? (
-              <EmptyState
-                title="Пользователей пока нет"
-                description="Создайте первый аккаунт справа, затем назначьте профиль доступа и группы."
-              />
-            ) : null}
 
-            {users.map((user) => {
-          const isEditing = editingId === user.id;
-          const draft = editing as {
-            username?: string;
-            email?: string;
-            is_staff?: boolean;
-            is_active?: boolean;
-            access_profile?: string;
-            groups?: number[];
-            permission_modes?: Record<string, PermissionMode>;
-          };
+      {/* ── Stats row ── */}
+      <div className="flex flex-wrap items-center gap-5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-5 py-3">
+        <div className="flex items-center gap-2">
+          <UsersIcon className="h-4 w-4 text-muted-foreground/50" />
+          <span className="text-sm font-medium text-foreground">{users.length}</span>
+          <span className="text-xs text-muted-foreground/60">{lang === "ru" ? "всего" : "total"}</span>
+        </div>
+        <div className="h-4 w-px bg-white/[0.06]" />
+        <div className="flex items-center gap-1.5">
+          <div className="h-2 w-2 rounded-full bg-emerald-400/80" />
+          <span className="text-sm font-medium text-foreground">{activeUsers}</span>
+          <span className="text-xs text-muted-foreground/60">{common.active.toLowerCase()}</span>
+        </div>
+        <div className="h-4 w-px bg-white/[0.06]" />
+        <div className="flex items-center gap-1.5">
+          <div className="h-2 w-2 rounded-full bg-blue-400/80" />
+          <span className="text-sm font-medium text-foreground">{staffUsers}</span>
+          <span className="text-xs text-muted-foreground/60">staff</span>
+        </div>
+        <div className="h-4 w-px bg-white/[0.06]" />
+        <div className="flex items-center gap-1.5">
+          <div className="h-2 w-2 rounded-full bg-violet-400/80" />
+          <span className="text-sm font-medium text-foreground">{groups.length}</span>
+          <span className="text-xs text-muted-foreground/60">{common.groups.toLowerCase()}</span>
+        </div>
+      </div>
 
-          return (
-            <div key={user.id} className="rounded-2xl border border-border/80 bg-background/50 p-4">
-              {!isEditing ? (
-                <div className="space-y-3">
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="text-base font-semibold text-foreground">{user.username}</div>
-                        <StatusBadge label={getAccessProfileLabel(lang, user.access_profile || "custom")} dot={false} />
-                        <StatusBadge label={user.is_active ? common.active : common.inactive} tone={user.is_active ? "success" : "warning"} />
-                        {user.is_staff ? <StatusBadge label={common.staff} tone="info" /> : null}
-                      </div>
-                      <div className="mt-1 text-sm text-muted-foreground">{user.email || common.noEmail}</div>
-                      <div className="mt-3 grid gap-3 md:grid-cols-2">
-                        <div className="workspace-subtle rounded-xl px-3 py-3">
-                          <div className="text-[11px] font-medium text-muted-foreground">{common.groups}</div>
-                          <div className="mt-1 text-sm text-foreground">
-                            {(user.groups || []).length ? user.groups?.map((group) => group.name).join(", ") : common.none}
-                          </div>
-                        </div>
-                        <div className="workspace-subtle rounded-xl px-3 py-3">
-                          <div className="text-[11px] font-medium text-muted-foreground">{copy.effectiveAccess}</div>
-                          <div className="mt-1 text-sm text-foreground">
-                            {summarizeAllowedFeatures(lang, user.effective_permissions) || common.none}
-                          </div>
-                        </div>
-                      </div>
+      {/* ── Main 2-col layout ── */}
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+
+        {/* ── User directory ── */}
+        <div className="space-y-3">
+          {users.length === 0 && (
+            <EmptyState
+              icon={<UsersIcon className="h-6 w-6" />}
+              title={lang === "ru" ? "Пользователей пока нет" : "No users yet"}
+              description={lang === "ru" ? "Создайте первый аккаунт справа." : "Create the first account on the right."}
+            />
+          )}
+
+          {users.map((user) => {
+            const isEditing = editingId === user.id;
+            const draft = editing as {
+              username?: string;
+              email?: string;
+              is_staff?: boolean;
+              is_active?: boolean;
+              access_profile?: string;
+              groups?: number[];
+              permission_modes?: Record<string, PermissionMode>;
+            };
+
+            return (
+              <div
+                key={user.id}
+                className={`rounded-xl border transition-all duration-200 ${
+                  isEditing
+                    ? "border-primary/30 bg-white/[0.03] shadow-[0_0_0_1px_rgba(var(--primary-rgb),0.1)]"
+                    : "border-white/[0.06] bg-white/[0.015] hover:bg-white/[0.03] hover:border-white/[0.1]"
+                }`}
+              >
+                {/* Card head — always visible */}
+                <div className="flex items-center gap-3 px-4 py-3.5">
+                  <UserAvatar name={user.username} active={user.is_active} />
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[15px] font-semibold text-foreground">{user.username}</span>
+                      <StatusBadge label={getAccessProfileLabel(lang, user.access_profile || "custom")} dot={false} />
+                      {!user.is_active && <StatusBadge label={common.inactive} tone="warning" />}
+                      {user.is_staff && <StatusBadge label="staff" tone="info" dot={false} />}
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button size="sm" variant="outline" onClick={() => startEdit(user)}>
-                        {copy.editAction}
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => void resetPassword(user)}>
-                        {common.password}
-                      </Button>
-                      <Button size="sm" variant="destructive" onClick={() => void removeUser(user)}>
-                        {common.delete}
-                      </Button>
+                    <div className="mt-0.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground/60">
+                      <span>{user.email || common.noEmail}</span>
+                      {(user.groups || []).length > 0 && (
+                        <span>
+                          {common.groups}: {user.groups?.map((g) => g.name).join(", ")}
+                        </span>
+                      )}
                     </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      onClick={() => (isEditing ? cancelEdit() : startEdit(user))}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/50 transition-colors hover:bg-white/[0.06] hover:text-foreground"
+                      title={isEditing ? common.cancel : copy.editAction}
+                    >
+                      {isEditing ? <ChevronUp className="h-4 w-4" /> : <Pencil className="h-3.5 w-3.5" />}
+                    </button>
+                    <button
+                      onClick={() => void resetPassword(user)}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/50 transition-colors hover:bg-white/[0.06] hover:text-foreground"
+                      title={common.password}
+                    >
+                      <KeyRound className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => void removeUser(user)}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/50 transition-colors hover:bg-red-500/10 hover:text-red-400"
+                      title={common.delete}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-3">
-                    <div>
-                      <FieldLabel htmlFor={`user-username-${user.id}`}>{copy.username}</FieldLabel>
-                      <Input
-                        id={`user-username-${user.id}`}
-                        name="username"
-                        autoComplete="username"
-                        spellCheck={false}
-                        value={draft.username || ""}
-                        onChange={(e) => setEditing((state) => ({ ...state, username: e.target.value }))}
-                      />
-                    </div>
-                    <div>
-                      <FieldLabel htmlFor={`user-email-${user.id}`}>{copy.email}</FieldLabel>
-                      <Input
-                        id={`user-email-${user.id}`}
-                        name="email"
-                        type="email"
-                        autoComplete="email"
-                        spellCheck={false}
-                        value={draft.email || ""}
-                        onChange={(e) => setEditing((state) => ({ ...state, email: e.target.value }))}
-                      />
-                    </div>
-                    <div>
-                      <FieldLabel htmlFor={`user-profile-${user.id}`}>{common.profile}</FieldLabel>
-                      <select
-                        id={`user-profile-${user.id}`}
-                        value={draft.access_profile || "custom"}
-                        onChange={(e) => setEditing((state) => ({ ...state, access_profile: e.target.value }))}
-                        className={SELECT_CLASS}
-                        aria-label={common.profile}
-                      >
-                        <option value="server_only">{getAccessProfileLabel(lang, "server_only")}</option>
-                        <option value="admin_full">{getAccessProfileLabel(lang, "admin_full")}</option>
-                        <option value="custom">{getAccessProfileLabel(lang, "custom")}</option>
-                        <option value="reset_defaults">{getAccessProfileLabel(lang, "reset_defaults")}</option>
-                      </select>
-                    </div>
-                  </div>
 
-                  <div className="flex flex-wrap items-center gap-6 rounded-2xl border border-border/70 bg-background/40 px-4 py-3">
-                    <label className="flex items-center gap-3 text-sm">
-                      {common.staff}
-                      <Switch
-                        checked={!!draft.is_staff}
-                        onCheckedChange={(value) => setEditing((state) => ({ ...state, is_staff: value }))}
-                      />
-                    </label>
-                    <label className="flex items-center gap-3 text-sm">
-                      {common.active}
-                      <Switch
-                        checked={!!draft.is_active}
-                        onCheckedChange={(value) => setEditing((state) => ({ ...state, is_active: value }))}
-                      />
-                    </label>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="text-[11px] font-medium text-muted-foreground">{common.groups}</div>
-                    <GroupPicker
-                      groups={groups}
-                      selectedGroupIds={(draft.groups as number[]) || []}
-                      onToggle={(groupId) =>
-                        setEditing((state) => ({
-                          ...state,
-                          groups: toggleId(((state.groups as number[]) || []), groupId),
-                        }))
-                      }
-                    />
-                  </div>
-
-                  <div className="space-y-3">
-                    <div>
-                      <div className="text-sm font-medium text-foreground">{copy.explicitOverrides}</div>
-                      <div className="text-sm text-muted-foreground">{copy.explicitOverridesHint}</div>
-                    </div>
-                    <div className="grid gap-3 md:grid-cols-2">
-                      {features.map((feature) => (
-                        <PermissionModeField
-                          key={feature.value}
-                          lang={lang}
-                          label={feature.label}
-                          mode={draft.permission_modes?.[feature.value] || "inherit"}
-                          source={user.permission_sources?.[feature.value]}
-                          effective={user.effective_permissions?.[feature.value]}
-                          onChange={(value) =>
-                            setEditing((state) => ({
-                              ...state,
-                              permission_modes: {
-                                ...((state.permission_modes as Record<string, PermissionMode> | undefined) || {}),
-                                [feature.value]: value,
-                              },
-                            }))
-                          }
-                        />
+                {/* Effective access summary — always visible */}
+                {!isEditing && (user.effective_permissions && Object.keys(user.effective_permissions).length > 0) && (
+                  <div className="border-t border-white/[0.04] px-4 py-2.5">
+                    <div className="flex flex-wrap gap-1.5">
+                      {Object.entries(user.effective_permissions || {}).map(([feat, allowed]) => (
+                        <span
+                          key={feat}
+                          className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium ${
+                            allowed
+                              ? "bg-emerald-500/10 text-emerald-400"
+                              : "bg-red-500/8 text-red-400/80"
+                          }`}
+                        >
+                          {features.find(f => f.value === feat)?.label || feat}
+                        </span>
                       ))}
                     </div>
                   </div>
+                )}
 
-                  <div className="flex gap-2">
-                    <Button size="sm" onClick={() => void saveEdit()} disabled={saving}>
-                      {saving ? common.saving : common.save}
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={cancelEdit} disabled={saving}>
-                      {common.cancel}
-                    </Button>
+                {/* ── Edit panel (collapsible) ── */}
+                {isEditing && (
+                  <div className="border-t border-primary/15 px-4 pb-5 pt-4 space-y-5">
+                    {/* Basic fields */}
+                    <div className="grid gap-4 sm:grid-cols-3">
+                      <div>
+                        <FieldLabel htmlFor={`user-username-${user.id}`}>{copy.username}</FieldLabel>
+                        <Input
+                          id={`user-username-${user.id}`}
+                          name="username"
+                          autoComplete="username"
+                          spellCheck={false}
+                          value={draft.username || ""}
+                          onChange={(e) => setEditing((s) => ({ ...s, username: e.target.value }))}
+                          className="h-9 bg-white/[0.03] border-white/[0.06]"
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel htmlFor={`user-email-${user.id}`}>{copy.email}</FieldLabel>
+                        <Input
+                          id={`user-email-${user.id}`}
+                          name="email"
+                          type="email"
+                          autoComplete="email"
+                          spellCheck={false}
+                          value={draft.email || ""}
+                          onChange={(e) => setEditing((s) => ({ ...s, email: e.target.value }))}
+                          className="h-9 bg-white/[0.03] border-white/[0.06]"
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel htmlFor={`user-profile-${user.id}`}>{common.profile}</FieldLabel>
+                        <select
+                          id={`user-profile-${user.id}`}
+                          value={draft.access_profile || "custom"}
+                          onChange={(e) => setEditing((s) => ({ ...s, access_profile: e.target.value }))}
+                          className={SELECT_CLASS + " h-9"}
+                          aria-label={common.profile}
+                        >
+                          <option value="server_only">{getAccessProfileLabel(lang, "server_only")}</option>
+                          <option value="admin_full">{getAccessProfileLabel(lang, "admin_full")}</option>
+                          <option value="custom">{getAccessProfileLabel(lang, "custom")}</option>
+                          <option value="reset_defaults">{getAccessProfileLabel(lang, "reset_defaults")}</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Toggles */}
+                    <div className="flex flex-wrap gap-6">
+                      <label className="flex items-center gap-2.5 text-sm text-foreground/80 cursor-pointer select-none">
+                        <Switch checked={!!draft.is_staff} onCheckedChange={(v) => setEditing((s) => ({ ...s, is_staff: v }))} />
+                        Staff
+                      </label>
+                      <label className="flex items-center gap-2.5 text-sm text-foreground/80 cursor-pointer select-none">
+                        <Switch checked={!!draft.is_active} onCheckedChange={(v) => setEditing((s) => ({ ...s, is_active: v }))} />
+                        {common.active}
+                      </label>
+                    </div>
+
+                    {/* Groups */}
+                    <div>
+                      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">{common.groups}</div>
+                      <GroupPicker
+                        groups={groups}
+                        selectedGroupIds={(draft.groups as number[]) || []}
+                        onToggle={(groupId) =>
+                          setEditing((s) => ({
+                            ...s,
+                            groups: toggleId(((s.groups as number[]) || []), groupId),
+                          }))
+                        }
+                      />
+                    </div>
+
+                    {/* Permissions grid */}
+                    <div>
+                      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">{copy.explicitOverrides}</div>
+                      <div className="mb-3 text-xs text-muted-foreground/50">{copy.explicitOverridesHint}</div>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {features.map((feature) => (
+                          <PermissionModeField
+                            key={feature.value}
+                            lang={lang}
+                            label={feature.label}
+                            mode={draft.permission_modes?.[feature.value] || "inherit"}
+                            source={user.permission_sources?.[feature.value]}
+                            effective={user.effective_permissions?.[feature.value]}
+                            onChange={(value) =>
+                              setEditing((s) => ({
+                                ...s,
+                                permission_modes: {
+                                  ...((s.permission_modes as Record<string, PermissionMode> | undefined) || {}),
+                                  [feature.value]: value,
+                                },
+                              }))
+                            }
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Save / Cancel */}
+                    <div className="flex gap-2 pt-2">
+                      <Button size="sm" onClick={() => void saveEdit()} disabled={saving}>
+                        {saving ? common.saving : common.save}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={cancelEdit} disabled={saving}>
+                        {common.cancel}
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-          </div>
-        </SectionCard>
+                )}
+              </div>
+            );
+          })}
+        </div>
 
-        <SectionCard
-          title={copy.createTitle}
-          description={copy.createHint}
-          className="xl:sticky xl:top-4"
-          bodyClassName="space-y-4"
-        >
-          <div className="grid gap-4">
+        {/* ── Create user sidebar ── */}
+        <div className="xl:sticky xl:top-4 h-fit rounded-xl border border-white/[0.06] bg-white/[0.015]">
+          <div className="flex items-center gap-3 border-b border-white/[0.06] px-5 py-4">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 text-primary">
+              <UserPlus className="h-4 w-4" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-foreground">{copy.createTitle}</h2>
+              <p className="text-[11px] text-muted-foreground/60">{copy.createHint}</p>
+            </div>
+          </div>
+          <div className="space-y-4 px-5 py-5">
             <div>
               <FieldLabel htmlFor="create-user-username">{copy.username}</FieldLabel>
               <Input
@@ -476,7 +555,8 @@ export default function SettingsUsersPage() {
                 spellCheck={false}
                 placeholder={copy.username}
                 value={createForm.username}
-                onChange={(e) => setCreateForm((state) => ({ ...state, username: e.target.value }))}
+                onChange={(e) => setCreateForm((s) => ({ ...s, username: e.target.value }))}
+                className="h-9 bg-white/[0.03] border-white/[0.06]"
               />
             </div>
             <div>
@@ -489,7 +569,8 @@ export default function SettingsUsersPage() {
                 spellCheck={false}
                 placeholder={copy.email}
                 value={createForm.email}
-                onChange={(e) => setCreateForm((state) => ({ ...state, email: e.target.value }))}
+                onChange={(e) => setCreateForm((s) => ({ ...s, email: e.target.value }))}
+                className="h-9 bg-white/[0.03] border-white/[0.06]"
               />
             </div>
             <div>
@@ -501,7 +582,8 @@ export default function SettingsUsersPage() {
                 autoComplete="new-password"
                 placeholder={copy.passwordPlaceholder}
                 value={createForm.password}
-                onChange={(e) => setCreateForm((state) => ({ ...state, password: e.target.value }))}
+                onChange={(e) => setCreateForm((s) => ({ ...s, password: e.target.value }))}
+                className="h-9 bg-white/[0.03] border-white/[0.06]"
               />
             </div>
             <div>
@@ -509,8 +591,8 @@ export default function SettingsUsersPage() {
               <select
                 id="create-user-profile"
                 value={createForm.access_profile}
-                onChange={(e) => setCreateForm((state) => ({ ...state, access_profile: e.target.value }))}
-                className={SELECT_CLASS}
+                onChange={(e) => setCreateForm((s) => ({ ...s, access_profile: e.target.value }))}
+                className={SELECT_CLASS + " h-9"}
                 aria-label={common.profile}
               >
                 <option value="server_only">{getAccessProfileLabel(lang, "server_only")}</option>
@@ -519,41 +601,45 @@ export default function SettingsUsersPage() {
                 <option value="reset_defaults">{getAccessProfileLabel(lang, "reset_defaults")}</option>
               </select>
             </div>
-            <div className="flex flex-wrap items-center gap-6 rounded-2xl border border-border/70 bg-background/40 px-4 py-3">
-              <label className="flex items-center gap-3 text-sm">
-                {common.staff}
+
+            <div className="flex flex-wrap gap-5 rounded-lg border border-white/[0.04] bg-white/[0.02] px-4 py-3">
+              <label className="flex items-center gap-2.5 text-sm text-foreground/80 cursor-pointer select-none">
                 <Switch
                   checked={createForm.is_staff}
-                  onCheckedChange={(value) => setCreateForm((state) => ({ ...state, is_staff: value }))}
+                  onCheckedChange={(v) => setCreateForm((s) => ({ ...s, is_staff: v }))}
                 />
+                Staff
               </label>
-              <label className="flex items-center gap-3 text-sm">
-                {common.active}
+              <label className="flex items-center gap-2.5 text-sm text-foreground/80 cursor-pointer select-none">
                 <Switch
                   checked={createForm.is_active}
-                  onCheckedChange={(value) => setCreateForm((state) => ({ ...state, is_active: value }))}
+                  onCheckedChange={(v) => setCreateForm((s) => ({ ...s, is_active: v }))}
                 />
+                {common.active}
               </label>
             </div>
+
             <div>
-              <div className="mb-1.5 text-[11px] font-medium text-muted-foreground">{common.groups}</div>
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">{common.groups}</div>
               <GroupPicker
                 groups={groups}
                 selectedGroupIds={createForm.groups}
                 onToggle={(groupId) =>
-                  setCreateForm((state) => ({ ...state, groups: toggleId(state.groups, groupId) }))
+                  setCreateForm((s) => ({ ...s, groups: toggleId(s.groups, groupId) }))
                 }
               />
             </div>
+
             <Button
+              className="w-full"
               onClick={() => void createUser()}
               disabled={saving || !createForm.username.trim() || !createForm.password.trim()}
             >
               {saving ? copy.creatingAction : copy.createAction}
             </Button>
           </div>
-        </SectionCard>
+        </div>
       </div>
-    </SettingsWorkspace>
+    </div>
   );
 }
