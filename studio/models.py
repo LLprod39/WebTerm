@@ -71,6 +71,10 @@ class MCPServerPool(models.Model):
         ordering = ["name"]
         verbose_name = "MCP Server"
         verbose_name_plural = "MCP Servers"
+        indexes = [
+            models.Index(fields=["owner", "name"]),
+            models.Index(fields=["is_shared"]),
+        ]
 
     def __str__(self):
         return f"{self.name} ({self.transport})"
@@ -184,6 +188,9 @@ class AgentConfig(models.Model):
         ordering = ["-updated_at"]
         verbose_name = "Agent Config"
         verbose_name_plural = "Agent Configs"
+        indexes = [
+            models.Index(fields=["owner", "-updated_at"]),
+        ]
 
     def __str__(self):
         return self.name
@@ -252,6 +259,10 @@ class Pipeline(models.Model):
         ordering = ["-updated_at"]
         verbose_name = "Pipeline"
         verbose_name_plural = "Pipelines"
+        indexes = [
+            models.Index(fields=["owner", "-updated_at"]),
+            models.Index(fields=["is_shared"]),
+        ]
 
     def __str__(self):
         return self.name
@@ -430,6 +441,10 @@ class PipelineTrigger(models.Model):
         ordering = ["pipeline", "trigger_type"]
         verbose_name = "Pipeline Trigger"
         verbose_name_plural = "Pipeline Triggers"
+        indexes = [
+            models.Index(fields=["pipeline", "trigger_type"]),
+            models.Index(fields=["is_active"]),
+        ]
 
     def __str__(self):
         return f"{self.pipeline.name} / {self.get_trigger_type_display()}"
@@ -538,6 +553,11 @@ class PipelineRun(models.Model):
         ordering = ["-created_at"]
         verbose_name = "Pipeline Run"
         verbose_name_plural = "Pipeline Runs"
+        indexes = [
+            models.Index(fields=["pipeline", "status"]),
+            models.Index(fields=["pipeline", "-created_at"]),
+            models.Index(fields=["status", "-created_at"]),
+        ]
 
     def __str__(self):
         return f"{self.pipeline.name} run #{self.pk} [{self.status}]"

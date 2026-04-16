@@ -5,7 +5,7 @@ from typing import Any
 
 from celery import shared_task
 
-from app.agent_kernel.memory.store import DjangoServerMemoryStore
+from servers.adapters.memory_store import DjangoServerMemoryStore
 
 logger = logging.getLogger(__name__)
 

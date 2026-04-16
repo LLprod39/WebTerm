@@ -39,6 +39,7 @@ import {
 import ReactMarkdown from "react-markdown";
 import { Link, useNavigate } from "react-router-dom";
 import { useState, type ElementType } from "react";
+import { QueryStateBlock } from "@/components/ui/page-shell";
 
 function relativeTime(iso: string | null): string {
   if (!iso) return "now";
@@ -151,12 +152,16 @@ export default function UserDashboard() {
     await refresh();
   };
 
-  if (isLoading) {
-    return <div className="p-6 text-sm text-muted-foreground">{t("dash.loading")}</div>;
-  }
-
-  if (error || !bootstrapData) {
-    return <div className="p-6 text-sm text-destructive">{t("dash.error")}</div>;
+  if (isLoading || error || !bootstrapData) {
+    return (
+      <QueryStateBlock
+        loading={isLoading}
+        error={error || (!isLoading && !bootstrapData ? new Error(t("dash.error")) : undefined)}
+        className="p-6"
+      >
+        {null}
+      </QueryStateBlock>
+    );
   }
 
   const servers = bootstrapData.servers || [];
@@ -189,41 +194,34 @@ export default function UserDashboard() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <div className="rounded-2xl border border-border/80 bg-card/95 p-4">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-[11px] font-medium text-muted-foreground">Servers</span>
-            <Server className="h-4 w-4 text-primary" />
+      <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+        <div className="rounded-xl border border-border/60 bg-card p-3 flex items-center gap-3">
+          <Server className="h-4 w-4 text-primary shrink-0" />
+          <div>
+            <div className="text-lg font-semibold text-foreground leading-none">{configuredServers}</div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">Servers</div>
           </div>
-          <div className="text-2xl font-semibold text-foreground">{configuredServers}</div>
-          <div className="text-sm text-muted-foreground">Configured servers</div>
         </div>
-
-        <div className="rounded-2xl border border-border/80 bg-card/95 p-4">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-[11px] font-medium text-muted-foreground">Online</span>
-            <CheckCircle2 className="h-4 w-4 text-green-400" />
+        <div className="rounded-xl border border-border/60 bg-card p-3 flex items-center gap-3">
+          <CheckCircle2 className="h-4 w-4 text-green-400 shrink-0" />
+          <div>
+            <div className="text-lg font-semibold text-foreground leading-none">{onlineServers}</div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">Online</div>
           </div>
-          <div className="text-2xl font-semibold text-foreground">{onlineServers}</div>
-          <div className="text-sm text-muted-foreground">From saved server status</div>
         </div>
-
-        <div className="rounded-2xl border border-border/80 bg-card/95 p-4">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-[11px] font-medium text-muted-foreground">Agents</span>
-            <Bot className="h-4 w-4 text-primary" />
+        <div className="rounded-xl border border-border/60 bg-card p-3 flex items-center gap-3">
+          <Bot className="h-4 w-4 text-primary shrink-0" />
+          <div>
+            <div className="text-lg font-semibold text-foreground leading-none">{agents.length}</div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">Agents</div>
           </div>
-          <div className="text-2xl font-semibold text-foreground">{agents.length}</div>
-          <div className="text-sm text-muted-foreground">Configured agents</div>
         </div>
-
-        <div className="rounded-2xl border border-border/80 bg-card/95 p-4">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-[11px] font-medium text-muted-foreground">Active Runs</span>
-            <Activity className="h-4 w-4 text-blue-400" />
+        <div className="rounded-xl border border-border/60 bg-card p-3 flex items-center gap-3">
+          <Activity className="h-4 w-4 text-blue-400 shrink-0" />
+          <div>
+            <div className="text-lg font-semibold text-foreground leading-none">{activeRuns.length}</div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">Active</div>
           </div>
-          <div className="text-2xl font-semibold text-foreground">{activeRuns.length}</div>
-          <div className="text-sm text-muted-foreground">Running right now</div>
         </div>
       </div>
 
@@ -244,12 +242,12 @@ export default function UserDashboard() {
         </section>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="overflow-hidden rounded-2xl border border-border/80 bg-card/95">
-          <div className="flex items-center gap-2 border-b border-border bg-secondary/20 px-4 py-3">
-            <Activity className="h-4 w-4 text-blue-400" />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <section className="overflow-hidden rounded-xl border border-border bg-card">
+          <div className="flex items-center gap-2 px-4 py-3">
+            <Activity className="h-3.5 w-3.5 text-blue-400" />
             <span className="text-sm font-medium text-foreground">Active Runs</span>
-            <span className="text-xs text-muted-foreground">{activeRuns.length}</span>
+            {activeRuns.length > 0 && <span className="text-xs text-muted-foreground">{activeRuns.length}</span>}
           </div>
           {activeRuns.length === 0 ? (
             <div className="px-4 py-6 text-sm text-muted-foreground">No active agent runs.</div>
@@ -295,11 +293,11 @@ export default function UserDashboard() {
           )}
         </section>
 
-        <section className="overflow-hidden rounded-2xl border border-border/80 bg-card/95">
-          <div className="flex items-center gap-2 border-b border-border bg-secondary/20 px-4 py-3">
-            <Clock className="h-4 w-4 text-muted-foreground" />
+        <section className="overflow-hidden rounded-xl border border-border bg-card">
+          <div className="flex items-center gap-2 px-4 py-3">
+            <Clock className="h-3.5 w-3.5 text-muted-foreground" />
             <span className="text-sm font-medium text-foreground">Recent Runs</span>
-            <span className="text-xs text-muted-foreground">{recentRuns.length}</span>
+            {recentRuns.length > 0 && <span className="text-xs text-muted-foreground">{recentRuns.length}</span>}
           </div>
           {recentRuns.length === 0 ? (
             <div className="px-4 py-6 text-sm text-muted-foreground">No recent runs.</div>
@@ -341,8 +339,8 @@ export default function UserDashboard() {
         </section>
       </div>
 
-      <section className="overflow-hidden rounded-2xl border border-border/80 bg-card/95">
-        <div className="flex items-center justify-between border-b border-border bg-secondary/20 px-4 py-3">
+      <section className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
             <Bot className="h-4 w-4 text-primary" />
             <span className="text-sm font-medium text-foreground">Agents</span>

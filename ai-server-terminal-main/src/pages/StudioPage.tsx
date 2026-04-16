@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircle2,
+  ChevronRight,
   Copy,
   Loader2,
   MoreHorizontal,
@@ -36,6 +37,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
+import { StudioHero, HeroStatChip, HeroActionButton } from "@/components/studio/StudioHero";
 import {
   studioPipelines,
   studioMCP,
@@ -50,6 +53,7 @@ import {
 import { StudioNav } from "@/components/StudioNav";
 import { hasFeatureAccess } from "@/lib/featureAccess";
 import { getPipelineActivityState } from "@/components/pipeline/pipelineActivity";
+import { EmptyState, MetricCard, QueryStateBlock } from "@/components/ui/page-shell";
 
 type ManualTriggerOption = {
   nodeId: string;
@@ -190,7 +194,12 @@ function PipelineCard({
     triggerSummary: pipeline.trigger_summary,
     graphVersion: pipeline.graph_version,
   });
-  const activityToneClass = "border-border bg-secondary/30 text-foreground";
+  const activityToneClass =
+    activityState.icon === "running"
+      ? "border-primary/30 bg-primary/10 text-primary"
+      : activityState.icon === "warning"
+      ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
+      : "border-border bg-secondary/30 text-muted-foreground";
   const ActivityIcon =
     activityState.icon === "running"
       ? Loader2
@@ -202,38 +211,47 @@ function PipelineCard({
             ? Clock
             : activityState.icon === "warning"
               ? XCircle
-              : Zap;
+              : activityState.icon === "webhook" || activityState.icon === "monitoring"
+                ? Zap
+                : Zap;
+
+  const isRunning = pipeline.last_run?.status === "running" || running;
 
   return (
     <article
-      className="group cursor-pointer rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary/50 hover:bg-secondary/20"
+      className={cn(
+        "group cursor-pointer rounded-lg border bg-card p-4 transition-colors hover:bg-secondary/20",
+        isRunning
+          ? "border-primary/40 hover:border-primary/60"
+          : "border-border hover:border-primary/30"
+      )}
       onClick={onOpen}
     >
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-secondary text-sm font-semibold text-foreground">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-sm font-semibold text-primary">
           {pipeline.icon || "W"}
         </div>
 
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1 pr-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-sm font-semibold text-foreground">{pipeline.name}</h3>
                 {pipeline.last_run && <RunStatusBadge status={pipeline.last_run.status} />}
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 text-xs text-muted-foreground line-clamp-1">
                 {pipeline.description || "No description"}
               </p>
             </div>
 
             <div onClick={(e) => e.stopPropagation()}>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground" aria-label={`Actions for ${pipeline.name}`}>
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground" aria-label={`Actions for ${pipeline.name}`}>
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
                   <DropdownMenuItem onClick={onOpen}>Open Editor</DropdownMenuItem>
                   <DropdownMenuItem onClick={onClone}>
                     <Copy className="mr-1.5 h-3.5 w-3.5" /> Clone
@@ -246,20 +264,38 @@ function PipelineCard({
             </div>
           </div>
 
-          <div className="mt-4 flex items-center justify-between gap-3">
-            <span className="text-xs text-muted-foreground">
-              Updated {formatRelativeTime(pipeline.updated_at)}
-            </span>
+          {tags.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {tags.map((tag) => (
+                <span key={tag} className="inline-flex items-center rounded border border-border px-1.5 py-0 text-[10px] text-muted-foreground">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-muted-foreground">
+                {formatRelativeTime(pipeline.updated_at)}
+              </span>
+              {activityState.label && (
+                <span className={cn("inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium", activityToneClass)}>
+                  <ActivityIcon className={cn("h-2.5 w-2.5", activityState.icon === "running" && "animate-spin")} />
+                  {activityState.label}
+                </span>
+              )}
+            </div>
 
             <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-              <Button size="sm" className="h-8 gap-1.5 px-3 text-xs" onClick={onRun} disabled={running}>
-                {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+              <Button size="sm" className="h-7 gap-1.5 px-3 text-xs" onClick={onRun} disabled={running}>
+                {running ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
                 Run
               </Button>
             </div>
           </div>
 
-          {cloning && <p className="mt-2 text-xs text-primary">Creating a copy...</p>}
+          {cloning && <p className="mt-2 text-[11px] text-primary">Creating a copy...</p>}
         </div>
       </div>
     </article>
@@ -509,91 +545,86 @@ export default function StudioPage() {
     <div className="flex h-full flex-col">
       <StudioNav />
 
-      <div className="flex-1 overflow-auto">
-        <div className="w-full px-4 py-5 md:px-6 xl:px-8">
-          <div className="w-full space-y-6">
-            <section className="rounded-lg border border-border bg-card p-6">
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-                <div className="max-w-3xl space-y-1">
-                  <h1 className="text-2xl font-semibold text-foreground">
-                    {canPipelines ? "Pipelines" : "Studio"}
-                  </h1>
-                  <p className="text-sm text-muted-foreground">
-                    {canPipelines
-                      ? "Build, run, and monitor automations"
-                      : "Access your Studio sections"}
-                  </p>
-                </div>
+      <div className="flex-1 overflow-auto flex flex-col">
+      <StudioHero
+        kicker="Studio"
+        title={canPipelines ? "Pipelines" : "Studio"}
+        titleIcon={<Workflow className="h-7 w-7 text-primary" />}
+        description="Build and automate workflows. Connect pipelines, agents, skills, and MCP servers."
+        stats={
+          <>
+            {canPipelines && <HeroStatChip icon={<Workflow className="h-3.5 w-3.5" />} label={`${pipelines.length} pipelines`} />}
+            {canSkills && Array.isArray(skills) && <HeroStatChip icon={<BookOpen className="h-3.5 w-3.5" />} label={`${skills.length} skills`} />}
+            {canRuns && <HeroStatChip icon={<CheckCircle2 className="h-3.5 w-3.5" />} label={`${runs.filter((r) => r.status === "completed").length} completed`} />}
+            {canRuns && runs.filter((r) => r.status === "failed").length > 0 && (
+              <HeroStatChip icon={<XCircle className="h-3.5 w-3.5" />} label={`${runs.filter((r) => r.status === "failed").length} failed`} />
+            )}
+          </>
+        }
+        actions={
+          canPipelines ? (
+            <HeroActionButton
+              onClick={() => setShowCreate(true)}
+              icon={<Plus className="h-4 w-4" />}
+              label="New Pipeline"
+              primary
+            />
+          ) : sectionLinks.length > 0 ? (
+            <>
+              {sectionLinks.slice(0, 2).map((item) => (
+                <HeroActionButton
+                  key={item.path}
+                  onClick={() => navigate(item.path)}
+                  icon={<item.icon className="h-4 w-4 text-primary/80" />}
+                  label={item.label}
+                />
+              ))}
+            </>
+          ) : undefined
+        }
+      />
 
-                <div className="flex w-full flex-col gap-2 sm:flex-row xl:w-auto">
-                  {canPipelines ? (
-                    <>
-                      <div className="relative min-w-0 sm:flex-1 xl:w-72">
-                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          value={search}
-                          onChange={(e) => setSearch(e.target.value)}
-                          placeholder="Search pipelines..."
-                          aria-label="Search pipelines"
-                          className="h-10 rounded-lg border-border bg-background pl-9"
-                        />
-                      </div>
-                      <Button className="h-10 gap-1.5 px-4" onClick={() => setShowCreate(true)}>
-                        <Plus className="h-4 w-4" /> New Pipeline
-                      </Button>
-                    </>
-                  ) : (
-                    sectionLinks.slice(0, 2).map((item) => (
-                      <Button key={item.path} variant="outline" className="h-10 gap-1.5 px-4" onClick={() => navigate(item.path)}>
-                        <item.icon className="h-4 w-4" />
-                        {item.label}
-                      </Button>
-                    ))
-                  )}
-                </div>
-              </div>
-            </section>
+      <div className="flex-1 px-6 pb-8 space-y-5">
+        {canPipelines && (
+          <div className="flex items-center gap-4 rounded-2xl border border-border/70 bg-background/30 p-2 pl-4 backdrop-blur-md">
+            <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search pipelines..."
+              aria-label="Search pipelines"
+              className="h-10 border-0 bg-transparent shadow-none focus-visible:ring-0 text-sm px-0"
+            />
+          </div>
+        )}
 
-            {stats.length > 0 ? (
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 2xl:grid-cols-6">
-                {stats.map((stat) => (
-                  <StatCard key={stat.label} icon={stat.icon} label={stat.label} value={stat.value} sub={stat.sub} />
-                ))}
-              </div>
-            ) : null}
-
-            <div className="grid grid-cols-1 gap-6">
-              <div className="min-w-0 space-y-6">
+            <div className="grid grid-cols-1 gap-4">
+              <div className="min-w-0 space-y-4">
                 {canPipelines ? (
                   <>
-                    <section className="rounded-lg border border-border bg-card p-5">
-                      <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                        <div>
-                          <p className="text-[11px] font-medium text-muted-foreground">Pipelines</p>
-                          <h2 className="mt-1 text-lg font-semibold text-foreground">
-                            {search ? `Results for "${search}"` : "All Pipelines"}
-                          </h2>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          {pipelines.length} workflow{pipelines.length === 1 ? "" : "s"} available
-                        </p>
+                    <section className="rounded-xl border border-border bg-card p-4">
+                      <div className="mb-3 flex items-center justify-between">
+                        <h2 className="text-sm font-semibold text-foreground">
+                          {search ? `Results for “${search}”` : "All Pipelines"}
+                        </h2>
+                        {pipelines.length > 0 && (
+                          <span className="text-xs text-muted-foreground">{pipelines.length}</span>
+                        )}
                       </div>
 
-                      {isLoading ? (
-                        <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading...
-                        </div>
-                      ) : pipelines.length === 0 ? (
-                        <div className="workspace-empty border-dashed p-10 text-center">
-                          <Workflow className="mx-auto mb-3 h-10 w-10 text-muted-foreground/30" />
-                          <p className="text-sm font-medium text-foreground">{search ? "No matches" : "No pipelines yet"}</p>
-                          <p className="mt-1 text-xs text-muted-foreground">{search ? "Try a broader query." : "Create a new pipeline to start automating tasks."}</p>
-                          {!search && (
-                            <Button size="sm" className="mt-4 gap-1.5" onClick={() => setShowCreate(true)}>
+                      <QueryStateBlock loading={isLoading} loadingText="Loading pipelines...">
+                      {pipelines.length === 0 ? (
+                        <EmptyState
+                          icon={<Workflow className="h-5 w-5" />}
+                          title={search ? "No matches" : "No pipelines yet"}
+                          description={search ? "Try a broader query." : "Create a new pipeline to start automating tasks."}
+                          actions={!search ? (
+                            <Button size="sm" className="gap-1.5" onClick={() => setShowCreate(true)}>
                               <Plus className="h-3.5 w-3.5" /> New Pipeline
                             </Button>
-                          )}
-                        </div>
+                          ) : undefined}
+                          hint={!search ? "Add a manual trigger node to run on demand, or a schedule/webhook trigger to automate." : undefined}
+                        />
                       ) : (
                         <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
                           {pipelines.map((pipeline) => (
@@ -613,35 +644,39 @@ export default function StudioPage() {
                           ))}
                         </div>
                       )}
+                      </QueryStateBlock>
                     </section>
                   </>
                 ) : (
-                  <section className="rounded-[24px] border border-border bg-card/85 p-5">
-                    <div className="space-y-3">
+                  <section className="workspace-panel p-5">
+                    <div className="space-y-4">
                       <div>
-                        <p className="text-[11px] font-medium text-muted-foreground">Studio sections</p>
-                        <h2 className="mt-1 text-lg font-semibold text-foreground">Available for this user</h2>
+                        <p className="enterprise-kicker mb-1">Studio</p>
+                        <h2 className="text-xl font-semibold text-foreground">Available sections</h2>
                       </div>
                       {sectionLinks.length === 0 ? (
-                        <div className="workspace-empty border-dashed p-10 text-center">
-                          <Workflow className="mx-auto mb-3 h-10 w-10 text-muted-foreground/30" />
-                          <p className="text-sm font-medium text-foreground">No Studio sections available</p>
-                          <p className="mt-1 text-xs text-muted-foreground">Grant a Studio section in Settings to open Skills, MCP, Agents, Runs, or Notifications.</p>
-                        </div>
+                        <EmptyState
+                          icon={<Workflow className="h-5 w-5" />}
+                          title="No Studio sections available"
+                          description="Grant a Studio section in Settings to open Skills, MCP, Agents, Runs, or Notifications."
+                        />
                       ) : (
-                        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+                        <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
                           {sectionLinks.map((item) => (
                             <button
                               key={item.path}
                               type="button"
                               onClick={() => navigate(item.path)}
-                              className="flex items-start gap-3 rounded-2xl border border-border bg-background/45 px-4 py-4 text-left transition-colors hover:border-primary/20 hover:bg-secondary/30"
+                              className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3.5 text-left transition-colors hover:border-primary/30 hover:bg-secondary/30"
                             >
-                              <item.icon className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                              <div>
-                                <div className="text-sm font-medium text-foreground">{item.label}</div>
-                                <div className="mt-1 text-xs leading-5 text-muted-foreground">{item.desc}</div>
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                                <item.icon className="h-4 w-4" />
                               </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-sm font-medium text-foreground">{item.label}</div>
+                                <div className="mt-0.5 text-xs text-muted-foreground">{item.desc}</div>
+                              </div>
+                              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50" />
                             </button>
                           ))}
                         </div>
@@ -651,7 +686,6 @@ export default function StudioPage() {
                 )}
               </div>
             </div>
-          </div>
         </div>
       </div>
 

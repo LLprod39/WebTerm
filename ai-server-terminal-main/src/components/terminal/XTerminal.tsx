@@ -1,7 +1,10 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
+import type { ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
+import { WebLinksAddon } from "@xterm/addon-web-links";
+import { Unicode11Addon } from "@xterm/addon-unicode11";
 import "@xterm/xterm/css/xterm.css";
 import { getWsUrl, fetchWsToken } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -45,19 +48,44 @@ export interface TerminalHandle {
   sendAiCancel: (id: number) => void;
   clearTerminal: () => void;
   fit: () => void;
+  sendRaw: (payload: Record<string, unknown>) => void;
 }
 
 interface XTerminalProps {
   serverId: number;
   active?: boolean;
+  themeOverride?: ITheme;
+  fontSize?: number;
+  fontFamily?: string;
+  lineHeight?: number;
+  cursorStyle?: "block" | "bar" | "underline";
+  cursorBlink?: boolean;
+  scrollback?: number;
   onStatusChange?: (status: TerminalConnectionStatus) => void;
   onError?: (message: string) => void;
   onEvent?: (payload: Record<string, unknown>) => void;
   onFilesDrop?: (files: File[]) => void;
+  /** Called BEFORE sending data to pty. Return string to type instead, or null for pass-through. */
+  onInterceptInput?: (data: string) => string | null;
 }
 
 export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTerminal(
-  { serverId, active = true, onStatusChange, onError, onEvent, onFilesDrop }: XTerminalProps,
+  {
+    serverId,
+    active = true,
+    themeOverride,
+    fontSize = 14,
+    fontFamily = "'JetBrains Mono', monospace",
+    lineHeight = 1.4,
+    cursorStyle = "block",
+    cursorBlink: cursorBlinkProp = true,
+    scrollback = 5000,
+    onStatusChange,
+    onError,
+    onEvent,
+    onFilesDrop,
+    onInterceptInput,
+  }: XTerminalProps,
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -80,9 +108,11 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
   const onStatusChangeRef = useRef(onStatusChange);
   const onErrorRef = useRef(onError);
   const onEventRef = useRef(onEvent);
+  const onInterceptRef = useRef(onInterceptInput);
   useEffect(() => { onStatusChangeRef.current = onStatusChange; });
   useEffect(() => { onErrorRef.current = onError; });
   useEffect(() => { onEventRef.current = onEvent; });
+  useEffect(() => { onInterceptRef.current = onInterceptInput; });
   useEffect(() => { activeRef.current = active; }, [active]);
   useEffect(() => {
     mountedRef.current = true;
@@ -114,38 +144,49 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
     pendingMessagesRef.current = [];
     lastSizeRef.current = null;
 
+    const defaultTheme: ITheme = {
+      background: "#0a0e14",
+      foreground: "#a3be8c",
+      cursor: "#22b8cf",
+      selectionBackground: "#22b8cf33",
+      black: "#1a1e24",
+      red: "#e06c75",
+      green: "#a3be8c",
+      yellow: "#e5c07b",
+      blue: "#61afef",
+      magenta: "#c678dd",
+      cyan: "#22b8cf",
+      white: "#abb2bf",
+      brightBlack: "#5c6370",
+      brightRed: "#e06c75",
+      brightGreen: "#a3be8c",
+      brightYellow: "#e5c07b",
+      brightBlue: "#61afef",
+      brightMagenta: "#c678dd",
+      brightCyan: "#22b8cf",
+      brightWhite: "#ffffff",
+    };
+
     const term = new Terminal({
-      cursorBlink: true,
-      fontSize: 14,
-      fontFamily: "'JetBrains Mono', monospace",
-      theme: {
-        background: "#0a0e14",
-        foreground: "#a3be8c",
-        cursor: "#22b8cf",
-        selectionBackground: "#22b8cf33",
-        black: "#1a1e24",
-        red: "#e06c75",
-        green: "#a3be8c",
-        yellow: "#e5c07b",
-        blue: "#61afef",
-        magenta: "#c678dd",
-        cyan: "#22b8cf",
-        white: "#abb2bf",
-        brightBlack: "#5c6370",
-        brightRed: "#e06c75",
-        brightGreen: "#a3be8c",
-        brightYellow: "#e5c07b",
-        brightBlue: "#61afef",
-        brightMagenta: "#c678dd",
-        brightCyan: "#22b8cf",
-        brightWhite: "#ffffff",
-      },
+      allowProposedApi: true,
+      cursorBlink: cursorBlinkProp,
+      cursorStyle,
+      fontSize,
+      fontFamily,
+      lineHeight,
+      scrollback,
+      theme: themeOverride ?? defaultTheme,
     });
 
     const fit = new FitAddon();
     const search = new SearchAddon();
+    const webLinks = new WebLinksAddon();
+    const unicode11 = new Unicode11Addon();
     term.loadAddon(fit);
     term.loadAddon(search);
+    term.loadAddon(webLinks);
+    term.loadAddon(unicode11);
+    term.unicode.activeVersion = "11";
     term.open(containerRef.current);
 
     setTimeout(() => fit.fit(), 50);
@@ -292,6 +333,15 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
     };
 
     term.onData((data) => {
+      const intercept = onInterceptRef.current;
+      if (intercept) {
+        const result = intercept(data);
+        if (result !== null) {
+          // Overlay consumed the key — type the replacement into pty
+          if (result.length > 0) sendJson({ type: "input", data: result });
+          return;
+        }
+      }
       sendJson({ type: "input", data });
     });
 
@@ -349,6 +399,20 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
     return () => window.clearTimeout(timer);
   }, [active]);
 
+  // Live-apply settings without recreating the terminal
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
+    if (themeOverride) term.options.theme = themeOverride;
+    term.options.fontSize = fontSize;
+    term.options.fontFamily = fontFamily;
+    term.options.lineHeight = lineHeight;
+    term.options.cursorStyle = cursorStyle;
+    term.options.cursorBlink = cursorBlinkProp;
+    term.options.scrollback = scrollback;
+    fitRef.current?.fit();
+  }, [themeOverride, fontSize, fontFamily, lineHeight, cursorStyle, cursorBlinkProp, scrollback]);
+
   useImperativeHandle(ref, () => ({
     sendAiRequest: (
       message: string,
@@ -405,6 +469,9 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
         lastSizeRef.current = null;
         sendJson({ type: "resize", cols: term.cols || 120, rows: term.rows || 32 });
       }
+    },
+    sendRaw: (payload: Record<string, unknown>) => {
+      sendJson(payload, true);
     },
   }));
 

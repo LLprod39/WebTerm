@@ -51,8 +51,8 @@ from servers.agent_sessions import AgentSessionManager
 from servers.agent_tools import get_enabled_tools, get_tools_description
 from servers.mcp_tool_runtime import build_mcp_tools_description, execute_bound_mcp_tool, load_mcp_tool_bindings
 from servers.models import AgentRun, Server, ServerAgent
-from studio.skill_policy import apply_skill_policies, compile_skill_policies
-from studio.skill_registry import SkillDefinition, build_skill_catalog_description
+from app.agent_kernel import skill_provider_registry
+from app.agent_kernel.domain.specs import SkillProvider
 
 
 def sync_to_async(func, thread_sensitive=False):
@@ -126,8 +126,9 @@ class MultiAgentEngine:
         model_preference: str = "auto",
         specific_model: str | None = None,
         mcp_servers: list | None = None,
-        skills: list[SkillDefinition] | None = None,
+        skills: list | None = None,
         skill_errors: list[str] | None = None,
+        skill_provider: SkillProvider | None = None,
     ):
         self.agent = agent
         self.servers = servers
@@ -154,7 +155,11 @@ class MultiAgentEngine:
         self.mcp_tool_errors: list[str] = []
         self.skills = list(skills or [])
         self.skill_errors = list(skill_errors or [])
-        self.skill_policies, policy_errors = compile_skill_policies(self.skills)
+        self._skill_provider: SkillProvider | None = skill_provider or skill_provider_registry.get()
+        if self._skill_provider is not None:
+            self.skill_policies, policy_errors = self._skill_provider.compile_skill_policies(self.skills)
+        else:
+            self.skill_policies, policy_errors = ([], [])
         self.skill_policy_errors = list(policy_errors)
         if self.skill_policy_errors:
             self.skill_errors.extend(self.skill_policy_errors)
@@ -790,7 +795,7 @@ class MultiAgentEngine:
         connected = self.session.get_connected_info()
         servers_desc = "\n".join(f"- {c['server_name']} (id: {c['server_id']})" for c in connected)
         custom_system = self.agent.system_prompt or ""
-        skills_desc = build_skill_catalog_description(self.skills)
+        skills_desc = self._skill_provider.build_skill_catalog_description(self.skills) if self._skill_provider else ""
         role_options = "\n".join(
             f"- {slug}: {spec.title}; фокус: {', '.join(spec.focus_areas)}"
             for slug, spec in ROLE_SPECS.items()
@@ -1002,7 +1007,7 @@ Attached skills:
         tools_desc = get_tools_description(task_tool_names)
         local_mcp_tools = {name: binding for name, binding in self.mcp_tools.items() if name in task_tool_names}
         mcp_tools_desc = build_mcp_tools_description(local_mcp_tools)
-        skills_desc = build_skill_catalog_description(self.skills)
+        skills_desc = self._skill_provider.build_skill_catalog_description(self.skills) if self._skill_provider else ""
         if mcp_tools_desc:
             tools_desc = f"{tools_desc}\n\n{mcp_tools_desc}" if tools_desc else mcp_tools_desc
         mcp_errors = ""
@@ -1531,12 +1536,12 @@ ACTION: tool_name {{"param1": "val1"}}
                 return sandbox_decision.reason
         if name in self.mcp_tools:
             binding = self.mcp_tools[name]
-            prepared_args, policy_messages, policy_error = apply_skill_policies(
-                self.skill_policies,
-                binding,
-                args,
-                self._executed_mcp_tools,
-            )
+            if self._skill_provider is not None:
+                prepared_args, policy_messages, policy_error = self._skill_provider.apply_skill_policies(
+                    self.skill_policies, binding, args, self._executed_mcp_tools
+                )
+            else:
+                prepared_args, policy_messages, policy_error = args, [], None
             if policy_error:
                 return policy_error
             result = await execute_bound_mcp_tool(self.mcp_tools, name, prepared_args)

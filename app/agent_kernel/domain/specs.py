@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Literal, Protocol, runtime_checkable
 
 ToolCategory = Literal["ssh", "file", "docker", "service", "nginx", "keycloak", "monitoring", "mcp", "general"]
 ToolRisk = Literal["read", "write", "exec", "network", "admin"]
@@ -144,3 +144,26 @@ class SubagentSpec:
     allowed_categories: tuple[ToolCategoryName, ...] = ()
     max_iterations: int = 0
     metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@runtime_checkable
+class SkillProvider(Protocol):
+    """
+    Decouples servers.agent_engine from studio.skill_* imports.
+    Concrete implementation: studio.skill_adapter.StudioSkillProvider.
+    (ARCHITECTURE_CONTRACT §5.2 / TASK-007)
+    """
+
+    def resolve_skills(self, slugs: list[str]) -> list[Any]: ...
+
+    def compile_skill_policies(self, skills: list[Any]) -> Any: ...
+
+    def apply_skill_policies(
+        self,
+        policies: list[Any],
+        binding: Any,
+        args: dict[str, Any],
+        executed_mcp_tools: set[str],
+    ) -> tuple[dict[str, Any], list[str], str | None]: ...
+
+    def build_skill_catalog_description(self, skills: list[Any]) -> str: ...

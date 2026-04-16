@@ -4,9 +4,7 @@ WebSocket routes for servers app.
 
 from django.urls import path
 
-from servers.agent_consumer import AgentLiveConsumer
-from servers.consumers import SSHTerminalConsumer
-from servers.rdp_consumer import RDPTerminalConsumer
+from servers.consumers import AgentLiveConsumer, RDPTerminalConsumer, SSHTerminalConsumer
 
 websocket_urlpatterns = [
     path("ws/servers/<int:server_id>/terminal/", SSHTerminalConsumer.as_asgi()),

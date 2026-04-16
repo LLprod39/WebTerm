@@ -356,6 +356,8 @@ async def write_text_file(
             if isinstance(permissions, int):
                 await sftp.chmod(temp_path, permissions & 0o7777)
 
+            if await sftp.exists(target_path):
+                await sftp.remove(target_path)
             await sftp.rename(temp_path, target_path)
         except Exception:
             with contextlib.suppress(Exception):

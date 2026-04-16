@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchAuthSession } from "@/lib/api";
 import UserDashboard from "./UserDashboard";
 import AdminDashboard from "./AdminDashboard";
+import { QueryStateBlock } from "@/components/ui/page-shell";
 
 export default function DashboardRouter() {
   const { data, isLoading } = useQuery({
@@ -12,7 +13,7 @@ export default function DashboardRouter() {
   });
 
   if (isLoading) {
-    return <div className="p-6 text-sm text-muted-foreground">Loading...</div>;
+    return <QueryStateBlock loading className="p-6">{null}</QueryStateBlock>;
   }
 
   if (data?.user?.is_staff) {

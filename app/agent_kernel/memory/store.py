@@ -127,6 +127,11 @@ class _OperationalPattern:
     last_seen: Any | None = None
 
 
+# ---------------------------------------------------------------------------
+# MIGRATION NOTE (T-014): DjangoServerMemoryStore will be physically moved to
+# servers/adapters/memory_store.py. Import consumers have already been updated.
+# DO NOT add new imports here — use servers.adapters.memory_store instead.
+# ---------------------------------------------------------------------------
 class DjangoServerMemoryStore:
     async def get_server_card(self, server_id: int) -> ServerMemoryCard:
         return await sync_to_async(self._get_server_card_sync, thread_sensitive=True)(server_id)

@@ -11,7 +11,7 @@ from core_ui.managed_secrets import (
 from core_ui.managed_secrets import (
     set_server_auth_secret as set_managed_server_auth_secret,
 )
-from passwords.encryption import PasswordEncryption
+from servers.encryption import PasswordEncryption
 
 
 def has_saved_server_secret(server) -> bool:

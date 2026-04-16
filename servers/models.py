@@ -78,6 +78,10 @@ class ServerGroupMember(models.Model):
 
     class Meta:
         unique_together = ["group", "user"]
+        indexes = [
+            models.Index(fields=["group", "user"]),
+            models.Index(fields=["user"]),
+        ]
 
     def __str__(self):
         return f"{self.group.name} - {self.user.username} ({self.role})"
@@ -97,6 +101,9 @@ class ServerGroupSubscription(models.Model):
 
     class Meta:
         unique_together = ["group", "user", "kind"]
+        indexes = [
+            models.Index(fields=["user", "kind"]),
+        ]
 
 
 class ServerGroupPermission(models.Model):
@@ -112,6 +119,10 @@ class ServerGroupPermission(models.Model):
 
     class Meta:
         unique_together = ["group", "user"]
+        indexes = [
+            models.Index(fields=["group"]),
+            models.Index(fields=["user"]),
+        ]
 
 
 class Server(models.Model):
@@ -948,13 +959,16 @@ class ServerGroupKnowledge(models.Model):
 
     class Meta:
         ordering = ["-updated_at"]
+        indexes = [
+            models.Index(fields=["group", "-updated_at"]),
+        ]
 
     def __str__(self):
-        return f"{self.group.name}: {self.title}"
+        return f"{self.group.name}: {self.title[:50]}"
 
 
 class ServerAgent(models.Model):
-    """User-configurable agent that runs on servers. Supports mini (command list) and full (ReAct) modes."""
+    """Configured server agent with scheduling."""
 
     MODE_MINI = "mini"
     MODE_FULL = "full"

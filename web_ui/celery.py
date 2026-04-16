@@ -16,7 +16,7 @@ import os
 from celery import Celery
 
 # Set default Django settings
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "web_ui.settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "web_ui.settings.development")
 
 app = Celery("weu_platform")
 

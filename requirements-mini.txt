@@ -30,3 +30,8 @@ anthropic>=0.40.0
 
 # Studio: scheduler for cron-based pipeline triggers
 croniter>=3.0
+
+# Task queue (memory ingestion, dream cycles)
+# In dev without Redis: CELERY_TASK_ALWAYS_EAGER=True runs tasks synchronously
+celery>=5.3
+redis>=5.0

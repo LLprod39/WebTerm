@@ -44,8 +44,10 @@ export function StudioNav() {
   });
 
   return (
-    <nav className="flex items-center gap-1 overflow-x-auto border-b border-border bg-card/40 px-4 py-2">
-      <span className="mr-3 shrink-0 text-sm font-semibold text-foreground">Studio</span>
+    <nav className="flex items-center gap-0 overflow-x-auto border-b border-border bg-card/60 px-4">
+      <span className="mr-4 shrink-0 text-[10px] font-semibold uppercase tracking-widest text-primary">
+        Studio
+      </span>
       {items.map((item) => {
         const active = isActive(item.path, "exact" in item ? item.exact : undefined);
         const Icon = item.icon;
@@ -55,10 +57,10 @@ export function StudioNav() {
             key={item.path}
             onClick={() => navigate(item.path)}
             className={cn(
-              "flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors",
+              "relative flex shrink-0 items-center gap-1.5 border-b-2 px-4 pb-3 pt-2.5 text-sm font-medium transition-colors",
               active
-                ? "bg-secondary text-foreground"
-                : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
             )}
           >
             <Icon className="h-3.5 w-3.5" />

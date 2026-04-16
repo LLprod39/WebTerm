@@ -2508,7 +2508,7 @@ export interface ServerMemoryOverviewResponse {
   success: boolean;
   server_id: number;
   policy: {
-    dream_mode: string;
+    dream_mode: "heuristic" | "nightly_llm" | "hybrid";
     nightly_model_alias: string;
     nearline_event_threshold: number;
     sleep_start_hour: number;
@@ -2518,6 +2518,9 @@ export interface ServerMemoryOverviewResponse {
     rdp_semantic_capture_enabled: boolean;
     human_habits_capture_enabled: boolean;
     is_enabled: boolean;
+    ai_memory_enabled: boolean;
+    operational_memory_enabled: boolean;
+    rdp_semantic_enabled: boolean;
   };
   daemon_state: BackgroundWorkerStateRecord;
   worker_states?: Record<string, BackgroundWorkerStateRecord>;

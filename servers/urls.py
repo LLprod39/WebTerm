@@ -108,4 +108,7 @@ urlpatterns = [
     path('api/agents/runs/<int:run_id>/approve-plan/', views.agent_run_approve_plan, name='agent_run_approve_plan'),
     path('api/agents/runs/<int:run_id>/tasks/<int:task_id>/update/', views.agent_run_task_update, name='agent_run_task_update'),
     path('api/agents/runs/<int:run_id>/tasks/<int:task_id>/ai-refine/', views.agent_run_task_ai_refine, name='agent_run_task_ai_refine'),
+
+    # Terminal autocomplete
+    path('api/<int:server_id>/command-suggestions/', views.api_command_suggestions, name='api_command_suggestions'),
 ]

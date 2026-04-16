@@ -87,6 +87,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { QueryStateBlock } from "@/components/ui/page-shell";
 
 interface ServerForm {
   name: string;
@@ -1670,8 +1671,18 @@ export default function Servers() {
     else setExecResult(tr("srv.execute_error", { error: resp.error || t("srv.unknown_error") }));
   };
 
-  if (isLoading) return <div className="p-6 text-sm text-muted-foreground">{t("srv.loading")}</div>;
-  if (error || !data) return <div className="p-6 text-sm text-destructive">{t("srv.error")}</div>;
+  if (isLoading || error || !data) {
+    return (
+      <QueryStateBlock
+        loading={isLoading}
+        error={error || (!isLoading && !data ? new Error(t("srv.error")) : undefined)}
+        errorText={t("srv.error")}
+        className="p-6"
+      >
+        {null}
+      </QueryStateBlock>
+    );
+  }
 
   return (
     <div className="p-5 max-w-6xl mx-auto space-y-4">

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from django.core.management.base import BaseCommand
 
-from app.agent_kernel.memory.store import DjangoServerMemoryStore
+from servers.adapters.memory_store import DjangoServerMemoryStore
 from servers.models import Server
 
 

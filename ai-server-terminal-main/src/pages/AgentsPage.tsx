@@ -29,6 +29,7 @@ import ReactMarkdown from "react-markdown";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter,
 } from "@/components/ui/dialog";
+import { EmptyState, QueryStateBlock } from "@/components/ui/page-shell";
 
 function formatDuration(ms: number): string {
   if (!ms) return "—";
@@ -144,7 +145,7 @@ export default function AgentsPage() {
     await queryClient.invalidateQueries({ queryKey: ["agents"] });
   };
 
-  if (isLoading) return <div className="p-6 text-sm text-muted-foreground">Loading...</div>;
+  if (isLoading) return <QueryStateBlock loading loadingText="Загрузка агентов..." className="p-6">{null}</QueryStateBlock>;
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-5">
@@ -194,18 +195,20 @@ export default function AgentsPage() {
         <ReportModal result={result} open={reportModalOpen} onClose={() => setReportModalOpen(false)} />
       )}
       {agents.length === 0 ? (
-        <div className="bg-card border border-border rounded-lg p-8 text-center">
-          <Bot className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-          <p className="text-sm text-muted-foreground mb-3">No agents yet</p>
-          <Button size="sm" onClick={() => setCreateOpen(true)} className="gap-1">
-            <Plus className="h-3 w-3" /> Create your first agent
-          </Button>
-        </div>
+        <EmptyState
+          icon={<Bot className="h-5 w-5" />}
+          title="No agents yet"
+          description={modeFilter !== "all" ? "No agents match this filter." : "Create an agent to automate tasks across your servers."}
+          actions={
+            <Button size="sm" onClick={() => setCreateOpen(true)} className="gap-1">
+              <Plus className="h-3 w-3" /> Create your first agent
+            </Button>
+          }
+        />
       ) : (
-        <div className="bg-card border border-border rounded-lg overflow-hidden">
-          <div className="divide-y divide-border/50">
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          <div className="divide-y divide-border/40">
             {agents.map((ag) => {
-              const ModeIcon = MODE_ICONS[ag.mode] || Zap;
               const AgentIcon = AGENT_ICONS[ag.agent_type] || Settings2;
               const isRunning = runningId === ag.id || !!ag.active_run_id;
               return (
@@ -231,10 +234,9 @@ export default function AgentsPage() {
                       )}
                     </div>
                     <div className="flex items-center gap-3 text-[10px] text-muted-foreground mt-0.5">
-                      <span className="flex items-center gap-0.5"><Server className="h-2.5 w-2.5" /> {ag.server_count} servers</span>
+                      <span className="flex items-center gap-0.5"><Server className="h-2.5 w-2.5" /> {ag.server_count}</span>
                       {ag.last_run_at && <span className="flex items-center gap-0.5"><Clock className="h-2.5 w-2.5" /> {relativeTime(ag.last_run_at)}</span>}
-                      {ag.schedule_minutes > 0 && <span className="flex items-center gap-0.5"><RefreshCw className="h-2.5 w-2.5" /> every {ag.schedule_minutes}m</span>}
-                      {(ag.mode === "full" || ag.mode === "multi") && <span className="flex items-center gap-0.5"><Target className="h-2.5 w-2.5" /> {ag.mode === "multi" ? "Pipeline" : `${ag.max_iterations} iters`}</span>}
+                      {ag.schedule_minutes > 0 && <span className="flex items-center gap-0.5"><RefreshCw className="h-2.5 w-2.5" /> {ag.schedule_minutes}m</span>}
                     </div>
                     {ag.goal && <p className="text-[10px] text-muted-foreground mt-0.5 truncate max-w-md">{ag.goal}</p>}
                   </div>

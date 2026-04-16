@@ -25,10 +25,10 @@ from core_ui.access import feature_allowed_for_user
 from core_ui.activity import log_user_activity
 from core_ui.decorators import require_feature
 from core_ui.models import UserActivityLog
-from passwords.encryption import PasswordEncryption
+from servers.encryption import PasswordEncryption
 
-from .agent_dispatch import serialize_agent_dispatch
-from .agent_service import (
+from servers.agent_dispatch import serialize_agent_dispatch
+from servers.agent_service import (
     approve_agent_plan_for_user,
     dispatch_scheduled_agents_for_user,
     launch_watcher_draft_for_user,
@@ -38,7 +38,7 @@ from .agent_service import (
     start_agent_run_for_user,
     stop_agent_run_for_user,
 )
-from .linux_ui import (
+from servers.linux_ui import (
     get_linux_ui_capabilities,
     get_linux_ui_disk,
     get_linux_ui_docker,
@@ -55,7 +55,7 @@ from .linux_ui import (
     run_linux_ui_process_action,
     run_linux_ui_service_action,
 )
-from .models import (
+from servers.models import (
     AgentRun,
     AgentRunEvent,
     GlobalServerRules,
@@ -71,13 +71,13 @@ from .models import (
     ServerKnowledge,
     ServerShare,
 )
-from .run_events import serialize_run_event
-from .secret_utils import (
+from servers.run_events import serialize_run_event
+from servers.secret_utils import (
     get_server_auth_secret,
     has_saved_server_secret,
     store_server_auth_secret,
 )
-from .sftp import (
+from servers.sftp import (
     change_owner,
     change_permissions,
     create_directory,
@@ -89,8 +89,8 @@ from .sftp import (
     upload_local_file,
     write_text_file,
 )
-from .ssh_host_keys import clear_server_trusted_host_keys, get_server_trusted_host_keys
-from .watcher_service import WatcherService
+from servers.ssh_host_keys import clear_server_trusted_host_keys, get_server_trusted_host_keys
+from servers.watcher_service import WatcherService
 
 PASSWORD_ENCRYPTION_COMPAT = PasswordEncryption
 
@@ -439,15 +439,17 @@ def _materialize_uploaded_file(uploaded_file) -> tuple[str, bool]:
 
 
 def _sftp_error_response(exc: Exception) -> JsonResponse:
-    if isinstance(exc, FileNotFoundError):
+    import asyncssh as _asyncssh
+
+    if isinstance(exc, (FileNotFoundError, _asyncssh.SFTPNoSuchFile, _asyncssh.SFTPNoSuchPath)):
         return JsonResponse({"success": False, "error": "Файл или папка не найдены"}, status=404)
-    if isinstance(exc, FileExistsError):
+    if isinstance(exc, (FileExistsError, _asyncssh.SFTPFileAlreadyExists)):
         return JsonResponse({"success": False, "error": "Файл уже существует"}, status=409)
     if isinstance(exc, NotADirectoryError):
         return JsonResponse({"success": False, "error": "Указанный путь не является папкой"}, status=400)
     if isinstance(exc, IsADirectoryError):
         return JsonResponse({"success": False, "error": "Операция требует файл, а не папку"}, status=400)
-    if isinstance(exc, PermissionError):
+    if isinstance(exc, (PermissionError, _asyncssh.SFTPPermissionDenied)):
         return JsonResponse({"success": False, "error": "Недостаточно прав для выполнения операции"}, status=403)
     if isinstance(exc, ValueError):
         return JsonResponse({"success": False, "error": str(exc)}, status=400)
@@ -2496,7 +2498,7 @@ def server_knowledge_list(request, server_id):
 def server_knowledge_create(request, server_id):
     """Create knowledge entry in edit modal."""
     try:
-        from app.agent_kernel.memory.store import DjangoServerMemoryStore
+        from servers.adapters.memory_store import DjangoServerMemoryStore
 
         server = get_object_or_404(Server, id=server_id, user=request.user)
         data = json.loads(request.body or "{}")
@@ -2535,7 +2537,7 @@ def server_knowledge_create(request, server_id):
 def server_knowledge_update(request, server_id, knowledge_id):
     """Update title/content/category/flags for knowledge entry."""
     try:
-        from app.agent_kernel.memory.store import DjangoServerMemoryStore
+        from servers.adapters.memory_store import DjangoServerMemoryStore
 
         server = get_object_or_404(Server, id=server_id, user=request.user)
         knowledge = get_object_or_404(ServerKnowledge, id=knowledge_id, server=server)
@@ -2582,7 +2584,7 @@ def server_knowledge_update(request, server_id, knowledge_id):
 def server_knowledge_delete(request, server_id, knowledge_id):
     """Delete knowledge entry."""
     try:
-        from app.agent_kernel.memory.store import DjangoServerMemoryStore
+        from servers.adapters.memory_store import DjangoServerMemoryStore
 
         server = get_object_or_404(Server, id=server_id, user=request.user)
         knowledge = get_object_or_404(ServerKnowledge, id=knowledge_id, server=server)
@@ -2685,7 +2687,7 @@ def server_memory_snapshot_update(request, server_id, snapshot_id):
 @require_feature('servers')
 @require_http_methods(["POST"])
 def server_memory_snapshot_delete_user(request, server_id, snapshot_id):
-    from app.agent_kernel.memory.store import DjangoServerMemoryStore
+    from servers.adapters.memory_store import DjangoServerMemoryStore
 
     server = get_object_or_404(Server, id=server_id, user=request.user)
     store = DjangoServerMemoryStore()
@@ -2710,7 +2712,7 @@ def server_memory_snapshot_delete_user(request, server_id, snapshot_id):
 @require_feature('servers')
 @require_http_methods(["POST"])
 def server_memory_snapshots_bulk_delete_user(request, server_id):
-    from app.agent_kernel.memory.store import DjangoServerMemoryStore
+    from servers.adapters.memory_store import DjangoServerMemoryStore
     from servers.models import ServerMemorySnapshot
 
     server = get_object_or_404(Server, id=server_id, user=request.user)
@@ -2778,7 +2780,7 @@ def server_memory_snapshots_bulk_delete_user(request, server_id):
 @require_feature('servers')
 @require_http_methods(["POST"])
 def server_memory_purge_user(request, server_id):
-    from app.agent_kernel.memory.store import DjangoServerMemoryStore
+    from servers.adapters.memory_store import DjangoServerMemoryStore
 
     server = get_object_or_404(Server, id=server_id, user=request.user)
     result = DjangoServerMemoryStore()._purge_server_ai_memory_sync(server.id, actor_user_id=request.user.id)
@@ -2789,7 +2791,7 @@ def server_memory_purge_user(request, server_id):
 @require_feature('servers')
 @require_http_methods(["GET"])
 def server_memory_overview(request, server_id):
-    from app.agent_kernel.memory.store import DjangoServerMemoryStore
+    from servers.adapters.memory_store import DjangoServerMemoryStore
 
     if not request.user.is_staff:
         return JsonResponse({"success": False, "error": "Forbidden"}, status=403)
@@ -2803,7 +2805,7 @@ def server_memory_overview(request, server_id):
 @require_feature('servers')
 @require_http_methods(["POST"])
 def server_memory_run_dreams(request, server_id):
-    from app.agent_kernel.memory.store import DjangoServerMemoryStore
+    from servers.adapters.memory_store import DjangoServerMemoryStore
 
     if not request.user.is_staff:
         return JsonResponse({"success": False, "error": "Forbidden"}, status=403)
@@ -2822,7 +2824,7 @@ def server_memory_run_dreams(request, server_id):
 @require_feature('servers')
 @require_http_methods(["POST"])
 def server_memory_policy_update(request, server_id):
-    from app.agent_kernel.memory.store import DjangoServerMemoryStore
+    from servers.adapters.memory_store import DjangoServerMemoryStore
 
     if not request.user.is_staff:
         return JsonResponse({"success": False, "error": "Forbidden"}, status=403)
@@ -2864,7 +2866,7 @@ def server_memory_policy_update(request, server_id):
 @require_feature('servers')
 @require_http_methods(["POST"])
 def server_memory_snapshot_archive(request, server_id, snapshot_id):
-    from app.agent_kernel.memory.store import DjangoServerMemoryStore
+    from servers.adapters.memory_store import DjangoServerMemoryStore
 
     if not request.user.is_staff:
         return JsonResponse({"success": False, "error": "Forbidden"}, status=403)
@@ -2883,7 +2885,7 @@ def server_memory_snapshot_archive(request, server_id, snapshot_id):
 @require_feature('servers')
 @require_http_methods(["POST"])
 def server_memory_snapshot_promote_note(request, server_id, snapshot_id):
-    from app.agent_kernel.memory.store import DjangoServerMemoryStore
+    from servers.adapters.memory_store import DjangoServerMemoryStore
 
     if not request.user.is_staff:
         return JsonResponse({"success": False, "error": "Forbidden"}, status=403)
@@ -2905,7 +2907,7 @@ def server_memory_snapshot_promote_note(request, server_id, snapshot_id):
 @require_feature('servers')
 @require_http_methods(["POST"])
 def server_memory_snapshot_promote_skill(request, server_id, snapshot_id):
-    from app.agent_kernel.memory.store import DjangoServerMemoryStore
+    from servers.adapters.memory_store import DjangoServerMemoryStore
 
     if not request.user.is_staff:
         return JsonResponse({"success": False, "error": "Forbidden"}, status=403)

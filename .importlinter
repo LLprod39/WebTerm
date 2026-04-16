@@ -1,0 +1,76 @@
+[importlinter]
+root_package = .
+include_external_packages = True
+
+# ─── Contract 1: agent_kernel must not import Django ORM ──────────────────────
+[importlinter:contract:agent-kernel-no-django-orm]
+name = agent_kernel must not import Django ORM models layer
+type = forbidden
+source_modules =
+    app.agent_kernel
+forbidden_modules =
+    django.db.models
+    django.db.transaction
+ignore_imports =
+    # django.utils.timezone is allowed as a utility (not ORM)
+    app.agent_kernel.memory.store -> django.utils
+
+# ─── Contract 2: app/ shared layer must not import Django apps ────────────────
+[importlinter:contract:app-no-django-apps]
+name = app/ shared services must not import servers, studio, or core_ui
+type = forbidden
+source_modules =
+    app.core
+    app.tools
+forbidden_modules =
+    servers
+    studio
+    core_ui
+
+# ─── Contract 3: core_ui must not import servers or studio ────────────────────
+[importlinter:contract:core-ui-isolation]
+name = core_ui must not import servers or studio
+type = forbidden
+source_modules =
+    core_ui
+forbidden_modules =
+    servers
+    studio
+ignore_imports =
+    # desktop_api is an explicit Electron-desktop integration layer — it bridges
+    # multiple bounded contexts by design (documented in DEVELOPMENT_RULES.md §2)
+    core_ui.desktop_api.views -> servers
+    core_ui.desktop_api.views -> studio
+    core_ui.desktop_api.serializers -> servers
+    # Admin dashboard views aggregate cross-context data for system monitoring
+    core_ui.views._views_all -> servers
+    # Seed management command — dev/test tooling only, not production code
+    core_ui.management.commands.seed_multi_user_smoke -> servers
+    core_ui.management.commands.seed_multi_user_smoke -> studio
+
+# ─── Contract 5: app.tools → servers is the one allowed exception ────────────
+# app/tools/server_tools.py and ssh_tools.py directly access servers models.
+# This is a known design compromise: SSH execution tools must know about Server ORM.
+# Future: Extract into servers/tools/ and remove from app/tools/
+[importlinter:contract:app-tools-server-exception]
+name = app.tools may access servers ORM (documented exception)
+type = forbidden
+source_modules =
+    app.tools
+forbidden_modules =
+    servers
+ignore_imports =
+    app.tools.server_tools -> servers
+    app.tools.ssh_tools -> servers
+
+# ─── Contract 4: servers must not import studio directly ─────────────────────
+[importlinter:contract:servers-no-studio]
+name = servers must not import studio directly (use Signals or SkillProvider DI)
+type = forbidden
+source_modules =
+    servers
+forbidden_modules =
+    studio
+ignore_imports =
+    # mcp_tool_runtime is a thin re-export shim — acceptable until fully migrated
+    servers.mcp_tool_runtime -> studio

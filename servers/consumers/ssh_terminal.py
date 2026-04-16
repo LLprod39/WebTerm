@@ -36,6 +36,7 @@ from servers.memory_heuristics import (
 )
 from servers.models import Server, ServerConnection, ServerShare
 from servers.secret_utils import get_server_auth_secret, has_saved_server_secret
+from servers.services.editor_intercept import detect_editor_command
 from servers.ssh_host_keys import build_server_connect_kwargs, ensure_server_known_hosts
 
 
@@ -469,6 +470,9 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         if msg_type == "ai_clear_memory":
             await self._handle_ai_clear_memory()
             return
+        if msg_type == "set_editor_intercept":
+            self._intercept_editors = bool((content or {}).get("enabled", True))
+            return
         if msg_type == "ping":
             if self._server_connection_id:
                 await self._touch_server_connection(self._server_connection_id)
@@ -685,6 +689,26 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             if not completed_commands:
                 self._ssh_proc.stdin.write(data)
                 return
+
+            # Intercept editor commands (nano, vim, vi, etc.) → GUI editor
+            if (
+                len(completed_commands) == 1
+                and getattr(self, "_intercept_editors", True)
+            ):
+                editor_info = detect_editor_command(completed_commands[0])
+                if editor_info:
+                    # Characters were already forwarded to pty keystroke-by-
+                    # keystroke, so we must CANCEL the typed command — NOT
+                    # execute it.  Ctrl+U clears the line, Ctrl+C aborts.
+                    self._ssh_proc.stdin.write("\x15\x03")
+
+                    await self._safe_send_json({
+                        "type": "editor_intercept",
+                        "path": editor_info["path"],
+                        "editor": editor_info["editor"],
+                        "sudo": editor_info["sudo"],
+                    })
+                    return
 
             newline_count = len(re.findall(r"\r\n|\r|\n", data))
             can_capture_result = (

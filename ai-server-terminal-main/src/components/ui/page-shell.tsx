@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Loader2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function PageShell({
@@ -250,4 +251,56 @@ export function StatusBadge({
       {label}
     </span>
   );
+}
+
+export function QueryStateBlock({
+  loading,
+  error,
+  loadingText = "Загрузка...",
+  errorText,
+  onRetry,
+  children,
+  className,
+}: {
+  loading?: boolean;
+  error?: unknown;
+  loadingText?: string;
+  errorText?: string;
+  onRetry?: () => void;
+  children: ReactNode;
+  className?: string;
+}) {
+  if (loading) {
+    return (
+      <div className={cn("flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground", className)}>
+        <Loader2 className="h-4 w-4 animate-spin" />
+        {loadingText}
+      </div>
+    );
+  }
+
+  if (error) {
+    const message = errorText ?? (error instanceof Error ? error.message : "Произошла ошибка");
+    return (
+      <div className={cn("rounded-lg border border-destructive/30 bg-destructive/8 px-5 py-4", className)}>
+        <div className="flex items-start gap-3">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-destructive">{message}</p>
+            {onRetry ? (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="mt-1 text-xs text-destructive/70 underline-offset-2 hover:underline"
+              >
+                Попробовать снова
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
 }

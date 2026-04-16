@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { fetchFrontendBootstrap, getRdpPath } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { useParams } from "react-router-dom";
+import { QueryStateBlock } from "@/components/ui/page-shell";
 
 export default function RdpPage() {
   const { lang } = useI18n();
@@ -19,12 +20,16 @@ export default function RdpPage() {
 
   const server = data?.servers.find((item) => item.id === requestedId);
 
-  if (isLoading) {
-    return <div className="p-6 text-sm text-muted-foreground">{tr("Загрузка RDP...", "Loading RDP...")}</div>;
-  }
-
-  if (error || !server) {
-    return <div className="p-6 text-sm text-destructive">{tr("RDP-сервер не найден.", "RDP server not found.")}</div>;
+  if (isLoading || error || !server) {
+    return (
+      <QueryStateBlock
+        loading={isLoading}
+        error={error || (!isLoading && !server ? new Error(tr("RDP-сервер не найден.", "RDP server not found.")) : undefined)}
+        className="p-6"
+      >
+        {null}
+      </QueryStateBlock>
+    );
   }
 
   return (

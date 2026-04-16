@@ -109,6 +109,16 @@ production-upload-bundle-*.rar
 *.exe
 **/claude.exe
 
+# Backup and debug artifacts — never commit
+*.bak
+diff.txt
+*.new
+
+# Playwright / codex tool artifacts
+.codex-logs/
+.playwright-cli/
+runtime_logs/
+
 # Deployment files that must stay tracked
 !docker-compose.yml
 !docker-compose.postgres-mcp.yml

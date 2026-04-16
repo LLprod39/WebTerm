@@ -65,4 +65,6 @@ urlpatterns = [
         views.api_access_group_permission_detail,
         name="api_access_group_permission_detail",
     ),
+    # Terminal preferences
+    path("api/terminal/preferences/", views.api_terminal_preferences, name="api_terminal_preferences"),
 ]

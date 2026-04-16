@@ -24,6 +24,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { getStudioPipelineRunWsUrl, studioRuns, type PipelineRun, type PipelineNode } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { StudioHero, HeroStatChip, HeroActionButton } from "@/components/studio/StudioHero";
 
 // ---------------------------------------------------------------------------
 // Agent event types from WebSocket
@@ -481,36 +482,27 @@ export default function PipelineRunsPage() {
   return (
     <div className="flex flex-col h-full">
       <StudioNav />
+      <StudioHero
+        kicker="Studio / Runs"
+        title="Execution History"
+        titleIcon={<Workflow className="h-7 w-7 text-primary" />}
+        description="Monitor pipeline execution results and debug run logs."
+        stats={
+          <>
+            <HeroStatChip icon={<CheckCircle2 className="h-3.5 w-3.5" />} label={`${statusCount("completed")} completed`} />
+            {statusCount("failed") > 0 && <HeroStatChip icon={<XCircle className="h-3.5 w-3.5" />} label={`${statusCount("failed")} failed`} />}
+            {statusCount("running") > 0 && <HeroStatChip icon={<Loader2 className="h-3.5 w-3.5" />} label={`${statusCount("running")} running`} />}
+          </>
+        }
+        actions={
+          <HeroActionButton onClick={() => refetch()} icon={<RotateCcw className="h-4 w-4" />} label="Refresh" />
+        }
+      />
       <div className="flex flex-1 min-h-0">
       {/* Left: runs list */}
       <div className={`flex flex-col border-r border-border ${selectedRunId ? "w-80 shrink-0" : "flex-1"}`}>
-        {/* Header */}
-        <div className="px-5 py-4 border-b border-border bg-card shrink-0">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <button onClick={() => navigate("/studio")} className="text-muted-foreground hover:text-foreground">
-                <ArrowLeft className="h-4 w-4" />
-              </button>
-              <h1 className="text-base font-semibold flex items-center gap-2">
-                <Workflow className="h-4 w-4 text-primary" />
-                История запусков
-              </h1>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="ghost" className="h-7" onClick={() => refetch()}>
-                <RotateCcw className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          </div>
-
-          {/* Stats */}
-          <div className="flex gap-3 text-xs text-muted-foreground mb-3">
-            <span className="text-green-400 font-medium">{statusCount("completed")} выполнено</span>
-            <span className="text-red-400 font-medium">{statusCount("failed")} ошибок</span>
-            <span className="text-blue-400 font-medium">{statusCount("running")} активных</span>
-          </div>
-
-          {/* Filters */}
+        {/* Filters */}
+        <div className="px-5 py-3 border-b border-border bg-card shrink-0">
           <div className="flex gap-1 flex-wrap">
             {STATUS_FILTERS.map((s) => (
               <button

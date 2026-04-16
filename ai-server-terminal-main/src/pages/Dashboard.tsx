@@ -2,6 +2,7 @@ import { Activity, AlertTriangle, Server, Wifi, WifiOff } from "lucide-react";
 import { fetchFrontendBootstrap, fetchAuthSession } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { useI18n } from "@/lib/i18n";
+import { QueryStateBlock } from "@/components/ui/page-shell";
 
 function toRelativeTime(value: string | null): string {
   if (!value) return "just now";
@@ -29,11 +30,12 @@ export default function Dashboard() {
     staleTime: 20_000,
   });
 
-  if (isLoading) {
-    return <div className="p-6 text-sm text-muted-foreground">{t("dash.loading")}</div>;
-  }
-  if (error || !data) {
-    return <div className="p-6 text-sm text-destructive">{t("dash.error")}</div>;
+  if (isLoading || error || !data) {
+    return (
+      <QueryStateBlock loading={isLoading} error={error || (!isLoading && !data ? new Error(t("dash.error")) : undefined)} className="p-6">
+        {null}
+      </QueryStateBlock>
+    );
   }
 
   const servers = data.servers || [];

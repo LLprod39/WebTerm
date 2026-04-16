@@ -8,7 +8,7 @@ import {
 } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Bot, FolderOpen, Monitor, Plus, Search, Server, X } from "lucide-react";
+import { ArrowLeft, Bot, FolderOpen, Monitor, Plus, Search, Server, Settings, X } from "lucide-react";
 import {
   XTerminal,
   type AiAssistantSettings,
@@ -26,6 +26,15 @@ import { Button } from "@/components/ui/button";
 import { StatusIndicator } from "@/components/StatusIndicator";
 import { toast } from "@/hooks/use-toast";
 import { fetchFrontendBootstrap, type FrontendServer } from "@/lib/api";
+import { QueryStateBlock } from "@/components/ui/page-shell";
+import { useTerminalPreferences } from "@/hooks/useTerminalPreferences";
+import { useTerminalInputBuffer } from "@/hooks/useTerminalInputBuffer";
+import { resolveTheme } from "@/components/terminal/TerminalThemes";
+import { TerminalSettingsPanel } from "@/components/terminal/TerminalSettingsPanel";
+import { CompletionOverlay } from "@/components/terminal/CompletionOverlay";
+import { FileEditorModal } from "@/components/editor/FileEditorModal";
+import { useEditorInterceptor } from "@/hooks/useEditorInterceptor";
+import { useI18n } from "@/lib/i18n";
 
 interface Tab {
   id: string;
@@ -408,7 +417,15 @@ export default function TerminalPage() {
   const [sidePanelMode, setSidePanelMode] = useState<"none" | "ai" | "files" | "ui">("none");
   const [panelWidth, setPanelWidth] = useState(380);
   const [globalAiPreferences, setGlobalAiPreferences] = useState<AiPreferences>(() => readStoredAiPreferences());
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
+  const { t } = useI18n();
+  const { editorState, closeEditor, handleWsEvent: handleEditorWsEvent } = useEditorInterceptor();
+  const { prefs: termPrefs, update: updateTermPrefs } = useTerminalPreferences();
+  const resolvedTheme = useMemo(
+    () => resolveTheme(termPrefs.theme_name, termPrefs.theme_colors),
+    [termPrefs.theme_name, termPrefs.theme_colors],
+  );
   const isDragging = useRef(false);
   const dragStartX = useRef(0);
   const dragStartWidth = useRef(0);
@@ -494,6 +511,10 @@ export default function TerminalPage() {
   }, [servers, tabs]);
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId) || tabs[0];
+  const inputBuf = useTerminalInputBuffer({
+    serverId: activeTab?.serverId ?? null,
+    enabled: true,
+  });
   const activeServer = activeTab ? findServer(servers, activeTab.serverId) : null;
   const activeAiState = activeTabId ? tabAiState[activeTabId] || createEmptyAiState() : createEmptyAiState();
   const activeAiPreferences =
@@ -649,7 +670,9 @@ export default function TerminalPage() {
     };
   }, []);
 
-  const handleTabWsEvent = useCallback((tabId: string, payload: Record<string, unknown>) => {
+  const handleTabWsEvent = useCallback((tabId: string, serverId: number, payload: Record<string, unknown>) => {
+    if (handleEditorWsEvent(serverId, payload)) return;
+
     const type = String(payload.type || "");
 
     if (type === "ai_status") {
@@ -825,7 +848,7 @@ export default function TerminalPage() {
         isGenerating: false,
       }));
     }
-  }, [revealAiPanelForTab, updateTabAiState]);
+  }, [revealAiPanelForTab, updateTabAiState, handleEditorWsEvent]);
 
   useEffect(() => {
     if (!activeTabId) return;
@@ -953,9 +976,35 @@ export default function TerminalPage() {
     }
   }, [activeServer?.server_type, sidePanelMode]);
 
-  if (isLoading) return <div className="p-6 text-sm text-muted-foreground">Загрузка...</div>;
-  if (error || !data) return <div className="p-6 text-sm text-destructive">Ошибка загрузки данных терминала.</div>;
-  if (!activeTab || !activeServer) return <div className="p-6 text-sm text-muted-foreground">Сервер не найден или недоступен.</div>;
+  // Sync intercept_editors pref → SSH consumer
+  useEffect(() => {
+    for (const tab of tabs) {
+      terminalRefs.current[tab.id]?.sendRaw({
+        type: "set_editor_intercept",
+        enabled: termPrefs.intercept_editors,
+      });
+    }
+  }, [termPrefs.intercept_editors, tabs]);
+
+  if (isLoading || error || !data || !activeTab || !activeServer) {
+    return (
+      <QueryStateBlock
+        loading={isLoading}
+        error={
+          error
+            ? error
+            : !isLoading && !data
+              ? new Error("Ошибка загрузки данных терминала")
+              : !activeTab || !activeServer
+                ? new Error("Сервер не найден или недоступен")
+                : undefined
+        }
+        className="p-6"
+      >
+        {null}
+      </QueryStateBlock>
+    );
+  }
 
   return (
     <div className="flex h-[100dvh] flex-col bg-background">
@@ -1067,12 +1116,25 @@ export default function TerminalPage() {
               <Bot className="h-3.5 w-3.5" />
               AI
             </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-8 gap-1.5 px-2.5 text-[11px]"
+              onClick={() => setSettingsOpen(true)}
+              title={t("terminal.settingsBtn")}
+            >
+              <Settings className="h-3.5 w-3.5" />
+            </Button>
           </div>
         </div>
       </div>
 
       <div className="flex min-h-0 flex-1">
-        <div className={isUiMode ? "hidden" : "min-h-0 flex-1 bg-terminal-bg p-0"}>
+        <div
+          className={isUiMode ? "hidden" : "min-h-0 flex-1 p-0"}
+          style={{ backgroundColor: resolvedTheme.background ?? "#0a0e14" }}
+        >
           <div className="relative h-full w-full">
             {tabs.map((tab) => (
               <div
@@ -1086,6 +1148,13 @@ export default function TerminalPage() {
                   }}
                   serverId={tab.serverId}
                   active={tab.id === activeTabId}
+                  themeOverride={resolvedTheme}
+                  fontSize={termPrefs.font_size}
+                  fontFamily={termPrefs.font_family}
+                  lineHeight={termPrefs.line_height}
+                  cursorStyle={termPrefs.cursor_style}
+                  cursorBlink={termPrefs.cursor_blink}
+                  scrollback={termPrefs.scrollback}
                   onStatusChange={(status) => updateTabStatus(tab.id, status)}
                   onError={(message) =>
                     updateTabAiState(tab.id, (state) => ({
@@ -1094,10 +1163,16 @@ export default function TerminalPage() {
                     }))
                   }
                   onFilesDrop={(files) => handleTabFileDrop(tab.id, files)}
-                  onEvent={(payload) => handleTabWsEvent(tab.id, payload)}
+                  onEvent={(payload) => handleTabWsEvent(tab.id, tab.serverId, payload)}
+                  onInterceptInput={tab.id === activeTabId ? inputBuf.interceptInput : undefined}
                 />
               </div>
             ))}
+            <CompletionOverlay
+              suggestions={inputBuf.suggestions}
+              selectedIdx={inputBuf.selectedIdx}
+              visible={inputBuf.suggestions.length > 0}
+            />
           </div>
         </div>
 
@@ -1200,6 +1275,18 @@ export default function TerminalPage() {
         onClose={() => setShowServerPicker(false)}
         onSelect={handleServerSelect}
         openSessionCounts={openSessionCounts}
+      />
+      <TerminalSettingsPanel
+        prefs={termPrefs}
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        onUpdate={updateTermPrefs}
+      />
+      <FileEditorModal
+        serverId={editorState.serverId ?? (activeTab?.serverId || 0)}
+        open={editorState.isOpen}
+        initialPath={editorState.filePath}
+        onClose={closeEditor}
       />
     </div>
   );

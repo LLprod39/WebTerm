@@ -72,8 +72,8 @@ from core_ui.access import feature_allowed_for_user
 from core_ui.decorators import require_any_feature, require_feature
 from core_ui.managed_secrets import get_mcp_secret_env, get_mcp_secret_env_keys
 
-from .mcp_client import MCPClientError, inspect_mcp_server
-from .models import (
+from studio.mcp_client import MCPClientError, inspect_mcp_server
+from studio.models import (
     CURRENT_PIPELINE_GRAPH_VERSION,
     AgentConfig,
     MCPServerPool,
@@ -83,14 +83,14 @@ from .models import (
     PipelineTrigger,
     StudioSkillAccess,
 )
-from .pipeline_runtime import get_executor_for_run, update_runtime_control
-from .pipeline_validation import ensure_json_object, validate_pipeline_definition
-from .skill_authoring import parse_csv_items, scaffold_skill, validate_skill_dir, validate_skills
-from .skill_policy import compile_skill_policies
-from .skill_registry import SkillNotFoundError, get_skill, list_skills, normalise_skill_slugs, resolve_skills
-from .skill_templates import get_skill_template, list_skill_templates
-from .trigger_dispatch import create_pipeline_run as _dispatch_create_pipeline_run
-from .trigger_dispatch import launch_pipeline_run_async as _dispatch_launch_pipeline_run_async
+from studio.pipeline_runtime import get_executor_for_run, update_runtime_control
+from studio.pipeline_validation import ensure_json_object, validate_pipeline_definition
+from studio.skill_authoring import parse_csv_items, scaffold_skill, validate_skill_dir, validate_skills
+from studio.skill_policy import compile_skill_policies
+from studio.skill_registry import SkillNotFoundError, get_skill, list_skills, normalise_skill_slugs, resolve_skills
+from studio.skill_templates import get_skill_template, list_skill_templates
+from studio.trigger_dispatch import create_pipeline_run as _dispatch_create_pipeline_run
+from studio.trigger_dispatch import launch_pipeline_run_async as _dispatch_launch_pipeline_run_async
 
 # ---------------------------------------------------------------------------
 # Notification config helpers  (stored in BASE_DIR/.notification_config.json)

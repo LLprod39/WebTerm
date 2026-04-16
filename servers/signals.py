@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from django.db import transaction
 from django.db.models.signals import post_save
-from django.dispatch import receiver
+from django.dispatch import Signal, receiver
 
-from app.agent_kernel.memory.store import DjangoServerMemoryStore
+# Public signal fired when a new unresolved alert is created.
+# studio.apps.StudioConfig.ready() connects the pipeline trigger handler.
+server_alert_opened = Signal()
+
+from servers.adapters.memory_store import DjangoServerMemoryStore
 from servers.memory_heuristics import should_capture_command_history_memory
 from servers.models import AgentRunEvent, ServerAlert, ServerCommandHistory, ServerHealthCheck, ServerWatcherDraft
 from servers.tasks import ingest_memory_event_task
@@ -138,13 +142,14 @@ def _launch_monitoring_pipelines(alert_id: int) -> None:
     alert = ServerAlert.objects.select_related("server", "server__user").filter(pk=alert_id).first()
     if not alert or alert.is_resolved:
         return
-    try:
-        from studio.trigger_dispatch import launch_monitoring_triggers_for_alert
-
-        launch_monitoring_triggers_for_alert(alert)
-    except Exception:
-        # Monitoring-trigger dispatch must never block core alert ingestion.
-        return
+    # Fire Django signal — studio.apps.StudioConfig.ready() subscribes the handler.
+    # This removes the direct servers → studio import (ARCHITECTURE_CONTRACT §5.1).
+    server_alert_opened.send(
+        sender=ServerAlert,
+        alert_id=alert.pk,
+        server_id=alert.server_id,
+        severity=alert.severity,
+    )
 
 
 @receiver(post_save, sender=AgentRunEvent)

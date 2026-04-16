@@ -36,6 +36,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { ShareAccessEditor } from "@/components/studio/ShareAccessEditor";
 import { useToast } from "@/hooks/use-toast";
+import { StudioHero, HeroStatChip, HeroActionButton } from "@/components/studio/StudioHero";
 import { fetchAuthSession, studioMCP, studioShareUsers, type MCPServer, type MCPTemplate } from "@/lib/api";
 
 function previewConnection(server: Pick<MCPServer, "transport" | "command" | "args" | "url">) {
@@ -367,19 +368,28 @@ export default function MCPHubPage() {
   return (
     <div className="flex flex-col h-full">
       <StudioNav />
-      <div className="flex-1 overflow-auto">
-      <PageShell width="full">
-      <SectionCard
-        title="MCP Hub"
-        description="Manage Model Context Protocol servers used by Studio."
-        icon={<Server className="h-5 w-5" />}
-        actions={
-            <Button type="button" className="gap-1.5" onClick={openCreateDialog}>
-              <Plus className="h-4 w-4" />
-              Add server
-            </Button>
+      <div className="flex-1 overflow-auto flex flex-col">
+      <StudioHero
+        kicker="Studio / MCP"
+        title="MCP Registry"
+        titleIcon={<Server className="h-7 w-7 text-primary" />}
+        description="Manage Model Context Protocol servers used by Studio agents and pipelines."
+        stats={
+          <>
+            <HeroStatChip icon={<Server className="h-3.5 w-3.5" />} label={`${mcpList.length} servers`} />
+            <HeroStatChip icon={<Zap className="h-3.5 w-3.5" />} label={`${templates.length} templates`} />
+          </>
         }
-      >
+        actions={
+          <HeroActionButton
+            onClick={openCreateDialog}
+            icon={<Plus className="h-4 w-4" />}
+            label="Add server"
+            primary
+          />
+        }
+      />
+      <div className="flex-1 px-6 pb-8 space-y-5">
         <Tabs defaultValue="mine" className="space-y-5">
           <TabsList>
             <TabsTrigger value="mine">My servers ({mcpList.length})</TabsTrigger>
@@ -576,7 +586,6 @@ export default function MCPHubPage() {
             )}
           </TabsContent>
         </Tabs>
-      </SectionCard>
 
       {editorOpen && editMcp ? (
         <SectionCard
@@ -628,7 +637,7 @@ export default function MCPHubPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </PageShell>
+      </div>
       </div>
     </div>
   );

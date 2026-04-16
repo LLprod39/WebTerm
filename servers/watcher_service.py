@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from django.db.models import Max
 from django.utils import timezone
 
-from app.agent_kernel.memory.store import DjangoServerMemoryStore
+from servers.adapters.memory_store import DjangoServerMemoryStore
 
 
 @dataclass(frozen=True)

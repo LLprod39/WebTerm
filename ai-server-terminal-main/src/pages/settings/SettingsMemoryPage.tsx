@@ -30,37 +30,8 @@ import {
   type ServerMemorySnapshotRecord,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Section Card Component
-// ─────────────────────────────────────────────────────────────────────────────
-
-function SectionCard({ title, icon: Icon, children, description, actions }: {
-  title: string;
-  icon: React.ElementType;
-  children: React.ReactNode;
-  description?: string;
-  actions?: React.ReactNode;
-}) {
-  return (
-    <section className="group relative overflow-hidden rounded-2xl border border-primary/10 bg-card/40 backdrop-blur-3xl shadow-sm transition-all duration-500 hover:shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
-      <div className="relative flex flex-col gap-4 border-b border-border/40 bg-secondary/10 px-6 py-5 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-start gap-4">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary shadow-inner border border-primary/10 transition-transform duration-300 group-hover:scale-105">
-            <Icon className="h-5 w-5 drop-shadow-sm" />
-          </div>
-          <div>
-            <h2 className="text-lg font-bold tracking-tight text-foreground/90">{title}</h2>
-            {description ? <p className="mt-1 flex items-center text-sm font-medium text-muted-foreground/80">{description}</p> : null}
-          </div>
-        </div>
-        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
-      </div>
-      <div className="relative p-6">{children}</div>
-    </section>
-  );
-}
+import { SettingsSectionCard as SectionCard } from "@/components/settings/SettingsSectionCard";
+import { QueryStateBlock } from "@/components/ui/page-shell";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Component
@@ -296,13 +267,8 @@ export default function SettingsMemoryPage() {
     </div>
   ), [memoryActionKey, onArchiveMemorySnapshot, onPromoteMemorySnapshotToNote, onPromoteMemorySnapshotToSkill]);
 
-  // Auth check
   if (authLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-sm text-muted-foreground">Загрузка...</div>
-      </div>
-    );
+    return <QueryStateBlock loading>{null}</QueryStateBlock>;
   }
 
   if (!isAdmin) {
@@ -310,14 +276,11 @@ export default function SettingsMemoryPage() {
   }
 
   return (
-    <div className="space-y-8 pb-10">
+    <div className="space-y-6 pb-10">
       {/* Page Header */}
-      <div className="relative">
-        <div className="absolute -inset-1 rounded-3xl bg-gradient-to-r from-primary/20 via-primary/5 to-transparent blur-2xl -z-10" />
-        <h1 className="text-3xl font-black tracking-tight text-foreground">AI Memory</h1>
-        <p className="mt-2 text-base font-medium text-muted-foreground/80 max-w-2xl">
-          Сны агентов, долговременная память, snapshots и распознанные операционные паттерны
-        </p>
+      <div>
+        <h1 className="text-xl font-semibold text-foreground">AI Memory</h1>
+        <p className="mt-0.5 text-sm text-muted-foreground">Долговременная память, snapshots и паттерны агентов</p>
       </div>
 
       {/* Main Memory Section */}
@@ -554,9 +517,11 @@ export default function SettingsMemoryPage() {
               ) : null}
             </>
           ) : (
-            <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-              {selectedMemoryServerId ? "Загрузка memory overview..." : "Выбери сервер, чтобы увидеть AI memory настройки."}
-            </div>
+            <QueryStateBlock loading={!!(selectedMemoryServerId && memoryLoading)}>
+              <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+                Выбери сервер, чтобы увидеть AI memory.
+              </div>
+            </QueryStateBlock>
           )}
         </div>
       </SectionCard>

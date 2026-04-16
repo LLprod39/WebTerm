@@ -36,6 +36,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { ShareAccessEditor } from "@/components/studio/ShareAccessEditor";
 import { useToast } from "@/hooks/use-toast";
+import { StudioHero, HeroStatChip, HeroActionButton } from "@/components/studio/StudioHero";
 import {
   fetchAuthSession,
   studioAgents,
@@ -510,30 +511,25 @@ export default function AgentConfigPage() {
   return (
     <div className="flex flex-col h-full">
       <StudioNav />
-      <div className="flex-1 overflow-auto">
-      <div className="space-y-6 p-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl" onClick={() => navigate("/studio")}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <h1 className="flex items-center gap-2 text-2xl font-semibold text-foreground">
-              <Bot className="h-6 w-6 text-primary" />
-              Agent configs
-            </h1>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Reusable agent profiles for pipeline nodes and automation tasks.
-          </p>
-        </div>
-
-        <Button className="gap-2" onClick={() => setEditAgent({})}>
-          <Plus className="h-4 w-4" />
-          New agent
-        </Button>
-      </div>
-
+      <div className="flex-1 overflow-auto flex flex-col">
+      <StudioHero
+        kicker="Studio / Agents"
+        title="Agent Configs"
+        titleIcon={<Bot className="h-7 w-7 text-primary" />}
+        description="Reusable agent profiles for pipeline nodes and automation tasks."
+        stats={
+          <HeroStatChip icon={<Bot className="h-3.5 w-3.5" />} label={`${agents.length} configs`} />
+        }
+        actions={
+          <HeroActionButton
+            onClick={() => setEditAgent({})}
+            icon={<Plus className="h-4 w-4" />}
+            label="New agent"
+            primary
+          />
+        }
+      />
+      <div className="flex-1 px-6 pb-8 space-y-5">
       {isLoading ? (
         <div className="flex h-40 items-center justify-center text-muted-foreground">
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />

@@ -50,7 +50,7 @@ skip-magic-trailing-comma = false
 line-ending = "auto"
 
 [tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "web_ui.settings"
+DJANGO_SETTINGS_MODULE = "web_ui.settings.test"
 python_files = ["test_*.py", "*_test.py"]
 addopts = "-v --tb=short"
 testpaths = ["tests", "app", "core_ui", "agent_hub", "tasks", "servers", "passwords"]

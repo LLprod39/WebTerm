@@ -4,7 +4,7 @@ import time
 
 from django.core.management.base import BaseCommand
 
-from app.agent_kernel.memory.store import DjangoServerMemoryStore
+from servers.adapters.memory_store import DjangoServerMemoryStore
 from servers.models import Server
 from servers.worker_state import claim_background_worker, heartbeat_background_worker, stop_background_worker
 

@@ -45,14 +45,14 @@ from app.agent_kernel.hooks.manager import HookManager
 from app.agent_kernel.memory.compaction import compact_text
 from app.agent_kernel.memory.redaction import sanitize_observation_text
 from app.agent_kernel.memory.server_cards import render_server_cards_prompt
-from app.agent_kernel.memory.store import DjangoServerMemoryStore
+from servers.adapters.memory_store import DjangoServerMemoryStore
 from app.agent_kernel.permissions.engine import PermissionEngine
 from app.agent_kernel.runtime.context import build_ops_prompt_context
 from app.agent_kernel.sandbox.manager import SandboxManager
 from app.core.model_utils import resolve_provider_and_model
 from core_ui.activity import log_user_activity_async
 from core_ui.audit import audit_context
-from servers.mcp_tool_runtime import MCPBoundTool
+from studio.mcp_tool_runtime import MCPBoundTool
 
 from .mcp_client import call_mcp_tool
 from .models import PipelineRun

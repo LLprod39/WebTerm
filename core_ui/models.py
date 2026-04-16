@@ -21,6 +21,9 @@ class ChatSession(models.Model):
 
     class Meta:
         ordering = ["-updated_at"]
+        indexes = [
+            models.Index(fields=["user", "-updated_at"]),
+        ]
 
     def __str__(self):
         return f"{self.user.username}: {self.title}"
@@ -40,6 +43,9 @@ class ChatMessage(models.Model):
 
     class Meta:
         ordering = ["created_at"]
+        indexes = [
+            models.Index(fields=["session", "created_at"]),
+        ]
 
     def __str__(self):
         return f"{self.session_id} [{self.role}]: {self.content[:50]}..."
@@ -243,3 +249,48 @@ class ManagedSecret(models.Model):
 
     def __str__(self):
         return f"{self.namespace}:{self.object_id}:{self.key}"
+
+
+# -----------------------------------------
+# Terminal Preferences
+# -----------------------------------------
+
+
+class TerminalPreference(models.Model):
+    """Per-user terminal appearance/behaviour settings (synced to DB)."""
+
+    CURSOR_BLOCK = "block"
+    CURSOR_BAR = "bar"
+    CURSOR_UNDERLINE = "underline"
+    CURSOR_CHOICES = [
+        (CURSOR_BLOCK, "Block"),
+        (CURSOR_BAR, "Bar"),
+        (CURSOR_UNDERLINE, "Underline"),
+    ]
+
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name="terminal_preference",
+    )
+    theme_name = models.CharField(max_length=40, default="one_dark")
+    theme_colors = models.JSONField(default=dict, blank=True)
+    font_size = models.PositiveSmallIntegerField(default=14)
+    font_family = models.CharField(max_length=80, default="JetBrains Mono")
+    line_height = models.FloatField(default=1.4)
+    cursor_style = models.CharField(
+        max_length=10,
+        choices=CURSOR_CHOICES,
+        default=CURSOR_BLOCK,
+    )
+    cursor_blink = models.BooleanField(default=True)
+    scrollback = models.PositiveIntegerField(default=5000)
+    intercept_editors = models.BooleanField(default=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["user"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username}: {self.theme_name} {self.font_size}px"
