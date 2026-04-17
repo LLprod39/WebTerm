@@ -74,6 +74,8 @@ const DEFAULT_AI_SETTINGS: AiAssistantSettings = {
   blacklistPatterns: [],
   showSuggestedCommands: true,
   showExecutedCommands: true,
+  // A5: dry-run off by default — users opt in explicitly.
+  dryRun: false,
 };
 
 const DEFAULT_AI_PREFERENCES: AiPreferences = {
@@ -145,6 +147,8 @@ function sanitizeAiSettings(value: unknown): AiAssistantSettings {
       typeof raw.showExecutedCommands === "boolean"
         ? raw.showExecutedCommands
         : DEFAULT_AI_SETTINGS.showExecutedCommands,
+    // A5: read dry-run out of stored prefs with safe default.
+    dryRun: typeof raw.dryRun === "boolean" ? raw.dryRun : DEFAULT_AI_SETTINGS.dryRun,
   };
 }
 
@@ -730,6 +734,49 @@ export default function TerminalPage() {
       return;
     }
 
+    // F2-8 v2: captured output from a non-PTY exec_direct channel. Merge it
+    // into the matching command so `AiPanel` can render it inline.
+    if (type === "ai_direct_output") {
+      const cmdId = Number(payload.id);
+      const directOutput = String(payload.output || "");
+      const exitCode = payload.exit_code !== undefined ? Number(payload.exit_code) : undefined;
+
+      updateTabAiState(tabId, (state) => ({
+        ...state,
+        messages: state.messages.map((message) => {
+          if (message.type !== "commands" || !message.commands?.some((command) => command.id === cmdId)) return message;
+          return {
+            ...message,
+            commands: message.commands.map((command) =>
+              command.id === cmdId
+                ? { ...command, direct_output: directOutput, exit_code: exitCode ?? command.exit_code }
+                : command,
+            ),
+          };
+        }),
+      }));
+      return;
+    }
+
+    // A6: merge explanation text into the matching command card.
+    if (type === "ai_explanation") {
+      const cmdId = Number(payload.id);
+      const explanation = String(payload.explanation || "");
+      updateTabAiState(tabId, (state) => ({
+        ...state,
+        messages: state.messages.map((message) => {
+          if (message.type !== "commands" || !message.commands?.some((c) => c.id === cmdId)) return message;
+          return {
+            ...message,
+            commands: message.commands.map((c) =>
+              c.id === cmdId ? { ...c, explanation, explaining: false } : c,
+            ),
+          };
+        }),
+      }));
+      return;
+    }
+
     if (type === "ai_report") {
       const report = String(payload.report || "");
       const reportStatus = String(payload.status || "ok") as AiMessage["reportStatus"];
@@ -963,6 +1010,28 @@ export default function TerminalPage() {
   const handleClearAiMemory = useCallback(() => {
     terminalRefs.current[activeTabIdRef.current]?.sendAiClearMemory();
   }, []);
+
+  // A6: set explaining=true optimistically, then fire the WS request.
+  const handleExplainCommand = useCallback((cmd: AiCommand) => {
+    const tabId = activeTabIdRef.current;
+    // Mark as explaining to disable the button / show spinner.
+    updateTabAiState(tabId, (state) => ({
+      ...state,
+      messages: state.messages.map((message) => {
+        if (message.type !== "commands" || !message.commands?.some((c) => c.id === cmd.id)) return message;
+        return {
+          ...message,
+          commands: message.commands.map((c) => (c.id === cmd.id ? { ...c, explaining: true } : c)),
+        };
+      }),
+    }));
+    terminalRefs.current[tabId]?.sendAiExplainOutput({
+      id: cmd.id,
+      cmd: cmd.cmd,
+      output: cmd.direct_output ?? "",
+      exit_code: cmd.exit_code,
+    });
+  }, [updateTabAiState]);
 
   const handleTabFileDrop = useCallback((tabId: string, files: File[]) => {
     if (!files.length) return;
@@ -1200,6 +1269,7 @@ export default function TerminalPage() {
                   onReply={handleReply}
                   onGenerateReport={handleGenerateReport}
                   onClearMemory={handleClearAiMemory}
+                  onExplainCommand={handleExplainCommand}
                   onSettingsChange={handleSettingsChange}
                   onSaveDefaults={handleSaveAiDefaults}
                   onResetToDefaults={handleResetAiPreferences}

@@ -674,6 +674,14 @@ class ModelManager:
             # agent-level ReAct calls.
             "terminal_planning": "chat",
             "memory_extraction": "chat",
+            # A4: expanded per-purpose routing for terminal AI sub-calls.
+            # All of these are small, focused tasks and do not need the
+            # flagship agent model — route them to the chat bucket.
+            "terminal_step_decision": "chat",   # 1-shot "next / stop" JSON
+            "terminal_recovery": "chat",         # retry/skip/ask after error
+            "terminal_report": "chat",           # short run summary
+            "terminal_answer": "chat",           # pure knowledge answer
+            "terminal_explain": "chat",          # A6: explain command output
         }
         normalized_purpose = purpose_aliases.get(purpose, purpose)
 

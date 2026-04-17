@@ -25,6 +25,9 @@ export interface AiAssistantSettings {
   blacklistPatterns: string[];
   showSuggestedCommands: boolean;
   showExecutedCommands: boolean;
+  // A5: dry-run mode — when true the backend returns a synthetic
+  // "Would execute: <cmd>" output without touching the remote host.
+  dryRun: boolean;
 }
 
 export interface AiPreferences {
@@ -46,6 +49,14 @@ export interface TerminalHandle {
   sendAiReply: (qId: string, text: string) => void;
   sendAiConfirm: (id: number) => void;
   sendAiCancel: (id: number) => void;
+  // A6: request a human-readable explanation for a finished command.
+  sendAiExplainOutput: (payload: {
+    id: number;
+    cmd: string;
+    output: string;
+    exit_code?: number;
+    question?: string;
+  }) => void;
   clearTerminal: () => void;
   fit: () => void;
   sendRaw: (payload: Record<string, unknown>) => void;
@@ -435,6 +446,8 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
                 confirm_dangerous_commands: settings.confirmDangerousCommands,
                 allowlist_patterns: settings.whitelistPatterns,
                 blocklist_patterns: settings.blacklistPatterns,
+                // A5: forward dry-run flag to the backend WS handler.
+                dry_run: settings.dryRun,
               }
             : undefined,
         },
@@ -458,6 +471,9 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
     },
     sendAiCancel: (id: number) => {
       sendJson({ type: "ai_cancel", id }, true);
+    },
+    sendAiExplainOutput: (payload) => {
+      sendJson({ type: "ai_explain_output", ...payload }, true);
     },
     clearTerminal: () => {
       termRef.current?.clear();

@@ -10,6 +10,7 @@ from servers.services.terminal_ai.memory import (
     sanitize_memory_line,
     save_server_profile_sync,
     select_memory_candidate_commands,
+    should_extract_memory,
 )
 from servers.services.terminal_ai.reporter import (
     build_fallback_report,
@@ -313,3 +314,63 @@ def test_save_server_profile_sync_only_facts_writes_profile_only():
     assert result["saved"] == 1
     assert result["titles"] == ["Профиль сервера (авто)"]
     assert ServerKnowledge.objects.filter(server=server).count() == 1
+
+
+# ---------------------------------------------------------------------------
+# should_extract_memory — A2 cost-saver heuristic
+# ---------------------------------------------------------------------------
+
+
+class TestShouldExtractMemory:
+    def test_empty_list_skips(self):
+        assert should_extract_memory([]) is False
+        assert should_extract_memory(None) is False
+
+    def test_single_command_skips(self):
+        assert should_extract_memory([{"cmd": "apt install nginx", "exit_code": 0}]) is False
+
+    def test_all_noise_zero_exit_skips(self):
+        items = [
+            {"cmd": "ls -la", "exit_code": 0},
+            {"cmd": "pwd", "exit_code": 0},
+            {"cmd": "whoami", "exit_code": 0},
+        ]
+        assert should_extract_memory(items) is False
+
+    def test_non_zero_exit_triggers_extract(self):
+        items = [
+            {"cmd": "ls", "exit_code": 0},
+            {"cmd": "systemctl status nginx", "exit_code": 3},
+        ]
+        assert should_extract_memory(items) is True
+
+    def test_durable_command_triggers_extract(self):
+        items = [
+            {"cmd": "ls", "exit_code": 0},
+            {"cmd": "apt install -y htop", "exit_code": 0},
+        ]
+        assert should_extract_memory(items) is True
+
+    def test_sudo_prefix_recognized(self):
+        items = [
+            {"cmd": "ls", "exit_code": 0},
+            {"cmd": "sudo systemctl restart nginx", "exit_code": 0},
+        ]
+        assert should_extract_memory(items) is True
+
+    def test_mixed_non_noise_non_durable_keeps_extract(self):
+        # Command we don't classify either way — safer to keep extraction.
+        items = [
+            {"cmd": "curl https://api.example", "exit_code": 0},
+            {"cmd": "jq .version response.json", "exit_code": 0},
+        ]
+        assert should_extract_memory(items) is True
+
+    def test_ctrl_c_exit_130_does_not_count_as_failure(self):
+        # User interrupted the command — not a real failure worth learning.
+        items = [
+            {"cmd": "ls", "exit_code": 0},
+            {"cmd": "tail -f /var/log/syslog", "exit_code": 130},
+        ]
+        # All noise + interrupt → still skip.
+        assert should_extract_memory(items) is False

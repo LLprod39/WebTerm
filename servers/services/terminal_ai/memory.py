@@ -77,6 +77,106 @@ def select_memory_candidate_commands(commands_with_output: list[dict[str, Any]])
     return candidates
 
 
+_DURABLE_COMMAND_HINTS = (
+    # Package management
+    "apt", "apt-get", "apt-cache", "dpkg", "yum", "dnf", "zypper", "apk",
+    "pip", "pip3", "npm", "yarn", "pnpm", "brew",
+    # Service / daemon control
+    "systemctl", "service", "rc-service",
+    # User / permissions
+    "useradd", "usermod", "userdel", "groupadd", "passwd", "chown", "chmod", "chgrp",
+    # Config writes / edits
+    "sed", "tee", "install",
+    # Container / orchestration
+    "docker", "podman", "kubectl", "helm", "docker-compose",
+    # Firewall / networking state-changers
+    "iptables", "nft", "ufw", "firewall-cmd",
+    # Filesystem layout
+    "mkfs", "mount", "umount", "fdisk", "parted",
+)
+
+_NOISE_COMMAND_HINTS = (
+    "ls", "pwd", "whoami", "id", "date", "uptime", "hostname", "uname",
+    "echo", "cat", "head", "tail", "clear", "history", "which", "type",
+    "df", "du", "free", "ps", "top", "htop",
+)
+
+
+def _cmd_root(cmd: str) -> str:
+    """Return the first token of ``cmd`` without path prefix.
+
+    Tolerates ``sudo``, pipes, redirects — we only need an approximate
+    classification, false-positives merely cost us an extra extraction
+    call, they never drop legitimate signal.
+    """
+    text = str(cmd or "").strip()
+    if not text:
+        return ""
+    # Peel leading ``sudo`` / ``nice`` / ``time`` wrappers.
+    tokens = text.split()
+    while tokens and tokens[0] in {"sudo", "nice", "time", "env"}:
+        tokens = tokens[1:]
+    if not tokens:
+        return ""
+    first = tokens[0]
+    # Strip VAR=value style env assignments (``FOO=bar ls``).
+    if "=" in first and not first.startswith("/"):
+        # Whole token looks like env assignment — use next token.
+        if len(tokens) > 1:
+            first = tokens[1]
+        else:
+            return ""
+    return first.split("/")[-1].lower()
+
+
+def should_extract_memory(done_items: list[dict[str, Any]] | None) -> bool:
+    """Return True when a memory-extraction LLM call is worthwhile (A2).
+
+    Cheap-to-skip cases (~30% of runs in practice):
+
+    * ``len < 2`` — a single command rarely yields a durable multi-fact insight
+      worth the extraction cost.
+    * Every command succeeded AND every command root is in the noise list
+      (``ls``, ``pwd``, ``df`` …) — these are diagnostic peeks, not ops state
+      changes.
+
+    In all other cases we keep extracting:
+      * non-zero exit somewhere → worth learning *why* it failed;
+      * any durable hint (``apt``, ``systemctl``, ``docker``…) → likely
+        changed server state and must be remembered.
+    """
+    items = list(done_items or [])
+    if len(items) < 2:
+        return False
+
+    # If anything failed, extract.
+    for it in items:
+        exit_code = it.get("exit_code")
+        if exit_code not in (None, 0, 130):
+            return True
+
+    # All succeeded — only extract when there's a durable signal.
+    has_durable = False
+    for it in items:
+        root = _cmd_root(str(it.get("cmd", "")))
+        if not root:
+            continue
+        if root in _DURABLE_COMMAND_HINTS:
+            has_durable = True
+            break
+
+    if has_durable:
+        return True
+
+    # Otherwise, if EVERY root is noise, skip.
+    all_noise = all(
+        _cmd_root(str(it.get("cmd", ""))) in _NOISE_COMMAND_HINTS
+        for it in items
+    )
+    # Mixed case: no durable hint, some non-noise — keep extraction (safer).
+    return not all_noise
+
+
 def _bridge_to_layered_memory(
     *,
     server_id: int,

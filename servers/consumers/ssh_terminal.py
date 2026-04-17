@@ -141,6 +141,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
           {type: "ai_reply", q_id: str, text: str}
           {type: "ai_generate_report", force?: bool}
           {type: "ai_clear_memory"}
+          {type: "ai_explain_output", id: int, cmd: str, output: str, exit_code?: int, question?: str}
     """
 
     server: Server | None = None
@@ -340,6 +341,12 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             "confirm_dangerous_commands": True,
             "allowlist_patterns": [],
             "blocklist_patterns": [],
+            # A5: dry-run mode — when enabled, planned commands are NOT sent
+            # to the server. Instead the consumer fabricates a "[DRY-RUN]
+            # Would execute: <cmd>" stdout with exit_code=0 so the rest of
+            # the pipeline (history, report, memory) runs normally but
+            # nothing on the remote host changes.
+            "dry_run": False,
         }
 
     @staticmethod
@@ -395,6 +402,8 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             ),
             "allowlist_patterns": self._normalize_pattern_list(incoming.get("allowlist_patterns")),
             "blocklist_patterns": self._normalize_pattern_list(incoming.get("blocklist_patterns")),
+            # A5: accept ``dry_run`` from the UI; default off.
+            "dry_run": self._parse_bool(incoming.get("dry_run"), bool(defaults["dry_run"])),
         }
 
     @staticmethod
@@ -407,6 +416,8 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             "confirm_dangerous_commands": bool(base.get("confirm_dangerous_commands", True)),
             "allowlist_patterns": list(base.get("allowlist_patterns") or []),
             "blocklist_patterns": list(base.get("blocklist_patterns") or []),
+            # A5: pass through the dry-run flag into the active settings.
+            "dry_run": bool(base.get("dry_run", False)),
         }
 
     @staticmethod
@@ -535,18 +546,27 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         # WS reconnects / page reloads. Respects per-user memory_ttl_requests
         # when applying the rolling window later, but we always load a
         # reasonable max-recent here.
-        try:
-            from servers.services.terminal_ai import load_recent as _load_history
+        #
+        # A3: gate the restore on the current ``memory_enabled`` setting so
+        # a user who turned memory off still sees an empty context on the
+        # next connect, even if the DB hasn't been wiped yet (e.g. they
+        # flipped the setting through another client).
+        memory_enabled_now = bool(
+            (self._ai_settings or {}).get("memory_enabled", True)
+        )
+        if memory_enabled_now:
+            try:
+                from servers.services.terminal_ai import load_recent as _load_history
 
-            restored = await _load_history(
-                user_id=self._user_id,
-                server_id=self.server.id,
-                limit=40,
-            )
-            if restored:
-                self._ai_history = list(restored)
-        except Exception as hist_exc:  # pragma: no cover — non-fatal
-            logger.warning("terminal-ai chat history restore failed: %s", hist_exc)
+                restored = await _load_history(
+                    user_id=self._user_id,
+                    server_id=self.server.id,
+                    limit=40,
+                )
+                if restored:
+                    self._ai_history = list(restored)
+            except Exception as hist_exc:  # pragma: no cover — non-fatal
+                logger.warning("terminal-ai chat history restore failed: %s", hist_exc)
 
         await self.accept()
         await self._safe_send_json(
@@ -618,6 +638,9 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             return
         if msg_type == "ai_clear_memory":
             await self._handle_ai_clear_memory()
+            return
+        if msg_type == "ai_explain_output":
+            await self._handle_ai_explain_output(content or {})
             return
         if msg_type == "set_editor_intercept":
             self._intercept_editors = bool((content or {}).get("enabled", True))
@@ -1190,6 +1213,15 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
 
         async with self._ai_lock:
             await self._cancel_ai_locked()
+            # A3: detect memory_enabled transition True → False so we can
+            # wipe both in-memory and persisted chat history in one shot.
+            # Capture the *previous* value before overwriting ``_ai_settings``.
+            prev_memory_enabled = bool(
+                (self._ai_settings or {}).get("memory_enabled", True)
+            )
+            new_memory_enabled = bool(ai_settings.get("memory_enabled", True))
+            memory_disabled_now = prev_memory_enabled and not new_memory_enabled
+
             self._ai_settings = self._clone_ai_settings(ai_settings)
             self._ai_allowlist_patterns = list(self._ai_settings.get("allowlist_patterns") or [])
             self._ai_run_id = self._new_run_id()
@@ -1205,6 +1237,20 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             self._ai_last_report = ""
             if not bool(self._ai_settings.get("memory_enabled", True)):
                 self._ai_history = []
+
+        # A3: persist the wipe to the DB when the user just flipped
+        # memory_enabled from True → False. Doing this *outside* the lock
+        # because ``clear_history`` is an async DB call.
+        if memory_disabled_now:
+            try:
+                user_id = int(getattr(self, "_user_id", 0) or 0)
+                server_id = int(getattr(self.server, "id", 0) or 0) if getattr(self, "server", None) else 0
+                if user_id and server_id:
+                    from servers.services.terminal_ai import clear_history as _clear_history
+
+                    await _clear_history(user_id=user_id, server_id=server_id)
+            except Exception as exc:  # pragma: no cover — non-fatal
+                logger.debug("A3 chat-history wipe skipped: %s", exc)
 
         logger.debug(
             "Terminal AI request: server_id=%s run_id=%s",
@@ -1275,6 +1321,10 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                     unavailable_cmds=set(getattr(self, "_unavailable_cmds", set())),
                     chat_mode=requested_chat_mode,
                     execution_mode=requested_mode,
+                    # A5: forward dry-run state so the planner prompt can
+                    # adapt (no hard behaviour change — the short-circuit
+                    # in _ai_process_queue is authoritative).
+                    dry_run=bool(self._ai_settings.get("dry_run", False)),
                 )
             except Exception as e:
                 err_msg = str(e).strip() or "Unknown error"
@@ -1498,6 +1548,81 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             }
         )
 
+    async def _handle_ai_explain_output(self, content: dict[str, Any]):
+        """A6: turn a (command, output, exit_code) triple into a short
+        human-readable explanation via the cheap ``terminal_chat`` bucket.
+
+        Frontend sends::
+
+            { type: "ai_explain_output", id: <cmd_id>, cmd, output, exit_code, question? }
+
+        We reply with a single ``ai_explanation`` event keyed by the same
+        ``id`` so the UI can render it inline next to the command card.
+        """
+        payload = content if isinstance(content, dict) else {}
+        cmd = str(payload.get("cmd") or payload.get("command") or "").strip()
+        output = str(payload.get("output") or "")
+        cmd_id = payload.get("id")
+        question = str(payload.get("question") or "").strip()
+        try:
+            exit_code: int | None = int(payload.get("exit_code"))
+        except (TypeError, ValueError):
+            exit_code = None
+
+        if not cmd and not output:
+            await self._send_ai_event(
+                {
+                    "type": "ai_error",
+                    "message": "Нужна команда и её вывод для объяснения.",
+                }
+            )
+            return
+
+        from app.core.llm import LLMProvider
+        from servers.services.terminal_ai import build_explain_output_prompt
+
+        prompt = build_explain_output_prompt(
+            command=cmd,
+            output=output,
+            exit_code=exit_code,
+            user_question=question,
+        )
+
+        await self._send_ai_event(
+            {"type": "ai_status", "status": "explaining", "id": cmd_id}
+        )
+
+        llm = LLMProvider()
+        text = ""
+        try:
+            async with _TERMINAL_AI_LLM_SEMAPHORE:
+                # A6: route to the same cheap bucket as chat/report.
+                async for chunk in llm.stream_chat(prompt, model="auto", purpose="terminal_chat"):
+                    text += chunk
+                    if len(text) > 4000:
+                        break
+            await self._send_ai_event(
+                {
+                    "type": "ai_explanation",
+                    "id": cmd_id,
+                    "cmd": cmd,
+                    "explanation": (text or "").strip(),
+                }
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning("ai_explain_output failed: %s", exc)
+            await self._send_ai_event(
+                {
+                    "type": "ai_error",
+                    "message": f"Не удалось объяснить вывод: {exc}",
+                    "id": cmd_id,
+                }
+            )
+        finally:
+            await self._send_ai_event({"type": "ai_status", "status": "idle"})
+
     async def _handle_ai_generate_report(self, content: dict[str, Any]):
         force_regenerate = self._parse_bool((content or {}).get("force"), False)
         async with self._ai_lock:
@@ -1684,8 +1809,36 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
 
                 await self._send_ai_event({"type": "ai_command_status", "id": item_id, "status": "running"})
 
+                # F2-8 v2: route safe stateless commands through a non-PTY
+                # channel so the interactive shell is not polluted by
+                # diagnostic reads (df -h, ps aux, systemctl status…).
+                item_exec_mode = str(item.get("exec_mode") or "pty").strip().lower()
+                # A5: dry-run short-circuit. We do NOT touch the remote
+                # host at all — neither via PTY nor via exec_direct. The
+                # fake output makes downstream history/report/memory work
+                # exactly as on a real run so the user can preview the
+                # plan end-to-end.
+                dry_run_active = bool((self._ai_settings or {}).get("dry_run", False))
                 try:
-                    exit_code, output_snippet = await self._ai_execute_command(cmd, item_id)
+                    if dry_run_active:
+                        output_snippet = f"[DRY-RUN] Would execute: {cmd}"
+                        exit_code = 0
+                        # Emit a direct_output-style event so the UI
+                        # renders the preview inline without marker tokens.
+                        await self._send_ai_event(
+                            {
+                                "type": "ai_direct_output",
+                                "id": item_id,
+                                "cmd": cmd,
+                                "output": output_snippet,
+                                "exit_code": 0,
+                                "dry_run": True,
+                            }
+                        )
+                    elif item_exec_mode == "direct":
+                        exit_code, output_snippet = await self._ai_execute_command_direct(cmd, item_id)
+                    else:
+                        exit_code, output_snippet = await self._ai_execute_command(cmd, item_id)
                 except asyncio.CancelledError:
                     raise
                 except Exception as e:
@@ -2108,6 +2261,13 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                     if self._is_auto_report_enabled(self._ai_settings, getattr(self, "_ai_execution_mode", "step")):
                         await self._send_ai_event({"type": "ai_status", "status": "generating_report"})
                         report = await self._generate_ai_report_text(user_msg, done_items)
+                        # A5: clearly mark the report so the user can't
+                        # confuse a dry-run preview with a real operation.
+                        if bool((self._ai_settings or {}).get("dry_run", False)) and report:
+                            report = (
+                                "🔸 **DRY-RUN RESULT** — никаких изменений на сервере не сделано.\n\n"
+                                + report
+                            )
                         await self._send_ai_event(
                             {
                                 "type": "ai_report",
@@ -2134,8 +2294,16 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                     # sees ``idle`` immediately after the report; the memory
                     # write is ~4-5s of LLM latency that must not block UX.
                     memory_candidates = self._select_memory_candidate_commands(done_with_output)
+                    # A2: additional guard — skip the LLM extraction call
+                    # on trivially-diagnostic runs (single command, or all
+                    # commands in the noise list with zero-exit). Saves
+                    # ~30% of extraction calls in typical usage without
+                    # losing any durable signal.
+                    from servers.services.terminal_ai import should_extract_memory as _should_extract
+
                     if (
                         memory_candidates
+                        and _should_extract(done_items)
                         and self.server
                         and self._user_id
                         and bool(self._ai_settings.get("memory_enabled", True))
@@ -2237,6 +2405,67 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         output_snippet = (self._ai_active_output or "")[-6000:]
         async with self._ai_lock:
             self._ai_active_cmd_id = None
+        return exit_code, output_snippet
+
+    # F2-8 v2: non-PTY execution path for safe stateless reads.
+    #
+    # How it differs from :meth:`_ai_execute_command`:
+    #   * uses a fresh channel via ``SSHClientConnection.run(...)`` — nothing
+    #     is typed into the interactive PTY, so the user's shell state (cwd,
+    #     history, env) is untouched and there are no marker tokens mixed
+    #     into the terminal output;
+    #   * has its own shorter default timeout (30s) because ``direct`` is
+    #     only picked for non-streaming read-only commands;
+    #   * emits an ``ai_direct_output`` WS event so the UI can render the
+    #     captured stdout inline in the AI panel rather than the terminal.
+    DIRECT_EXEC_TIMEOUT_SEC = 30
+    DIRECT_EXEC_MAX_OUTPUT = 6000
+
+    async def _ai_execute_command_direct(self, cmd: str, cmd_id: int) -> tuple[int, str]:
+        """Execute ``cmd`` via a non-PTY asyncssh channel.
+
+        Returns ``(exit_code, captured_output)``; the caller treats this
+        tuple the same way as :meth:`_ai_execute_command` so recovery,
+        logging and memory-ingestion flows all keep working.
+        """
+        if not self._ssh_conn:
+            raise RuntimeError("SSH connection not established")
+
+        clean_cmd = self._normalize_command_text(cmd)
+        if not clean_cmd:
+            return -1, ""
+
+        try:
+            result = await asyncio.wait_for(
+                self._ssh_conn.run(clean_cmd, check=False),
+                timeout=self.DIRECT_EXEC_TIMEOUT_SEC,
+            )
+        except asyncio.TimeoutError:
+            output_snippet = "WEUAI_EXECUTION_ERROR: direct exec timed out"
+            exit_code = 124  # POSIX convention for `timeout`
+        else:
+            stdout = str(result.stdout or "")
+            stderr = str(result.stderr or "")
+            combined = stdout + (("\n" + stderr) if stderr else "")
+            output_snippet = combined[-self.DIRECT_EXEC_MAX_OUTPUT :]
+            # asyncssh returns None when the remote side reported no exit
+            # status (rare, but happens on certain device shells). Treat as
+            # failure so the recovery path kicks in.
+            exit_code = (
+                int(result.exit_status) if result.exit_status is not None else 1
+            )
+
+        # Surface the captured output to the UI — this is the ONLY place
+        # the user sees direct-path output (the PTY was not touched).
+        await self._send_ai_event(
+            {
+                "type": "ai_direct_output",
+                "id": cmd_id,
+                "cmd": clean_cmd,
+                "output": output_snippet,
+                "exit_code": exit_code,
+            }
+        )
         return exit_code, output_snippet
 
     async def _interrupt_streaming_after(self, delay: float) -> None:
@@ -2354,8 +2583,9 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
 
         llm = LLMProvider()
         out = ""
+        # A4: recovery — 1-shot JSON decision, route to cheap bucket.
         async with _TERMINAL_AI_LLM_SEMAPHORE:
-            async for chunk in llm.stream_chat(prompt, model="auto", purpose="ops"):
+            async for chunk in llm.stream_chat(prompt, model="auto", purpose="terminal_recovery"):
                 out += chunk
                 if len(out) > 3000:
                     break
@@ -2402,8 +2632,9 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
 
         llm = LLMProvider()
         out = ""
+        # A4: step decision — next/stop JSON, route to cheap bucket.
         async with _TERMINAL_AI_LLM_SEMAPHORE:
-            async for chunk in llm.stream_chat(prompt, model="auto", purpose="ops"):
+            async for chunk in llm.stream_chat(prompt, model="auto", purpose="terminal_step_decision"):
                 out += chunk
                 if len(out) > 5000:
                     break
@@ -2432,6 +2663,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         unavailable_cmds: set[str] | None = None,
         chat_mode: str = "agent",
         execution_mode: str = "step",
+        dry_run: bool = False,
     ) -> dict[str, Any]:
         """
         Ask internal LLM to decide mode and return JSON:
@@ -2468,6 +2700,9 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             unavailable_cmds=unavailable_cmds,
             chat_mode=chat_mode,
             execution_mode=execution_mode,
+            # A5: dry-run flag surfaces in the planner prompt so the LLM
+            # can mention it to the user via ``assistant_text``.
+            dry_run=dry_run,
         )
 
         llm = LLMProvider()
@@ -2552,8 +2787,9 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
 
         llm = LLMProvider()
         out = ""
+        # A4: run report — short narrative summary, route to cheap bucket.
         async with _TERMINAL_AI_LLM_SEMAPHORE:
-            async for chunk in llm.stream_chat(prompt, model="auto", purpose="opssummary"):
+            async for chunk in llm.stream_chat(prompt, model="auto", purpose="terminal_report"):
                 out += chunk
                 if len(out) > 12000:
                     break

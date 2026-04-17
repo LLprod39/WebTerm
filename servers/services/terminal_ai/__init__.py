@@ -34,6 +34,7 @@ from servers.services.terminal_ai.memory import (  # noqa: F401
     save_server_profile,
     save_server_profile_sync,
     select_memory_candidate_commands,
+    should_extract_memory,
 )
 from servers.services.terminal_ai.policy import (  # noqa: F401
     CommandPolicy,
@@ -42,6 +43,8 @@ from servers.services.terminal_ai.policy import (  # noqa: F401
     match_patterns,
 )
 from servers.services.terminal_ai.prompts import (  # noqa: F401
+    build_dry_run_block,
+    build_explain_output_prompt,
     build_memory_extraction_prompt,
     build_planner_prompt,
     build_recovery_prompt,

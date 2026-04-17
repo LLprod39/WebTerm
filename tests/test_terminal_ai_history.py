@@ -183,6 +183,45 @@ class TestClearHistory:
 
 
 @pytest.mark.django_db
+class TestMemoryDisabledGate:
+    """A3: when the user toggles memory_enabled off, historic rows must
+    not leak back into context.
+
+    These tests exercise the same ``clear_history_sync`` + ``load_recent_sync``
+    APIs that the consumer uses in its A3 branch — we validate the *service*
+    contract here; integration with the consumer is covered by existing
+    WS tests.
+    """
+
+    def test_clear_is_safe_when_history_empty(self):
+        user, server = _make_user_and_server("a3-empty")
+        deleted = clear_history_sync(user_id=user.id, server_id=server.id)
+        assert deleted == 0
+
+    def test_clear_then_load_returns_nothing(self):
+        user, server = _make_user_and_server("a3-toggle")
+        for i in range(5):
+            append_message_sync(user_id=user.id, server_id=server.id, role="user", text=f"m-{i}")
+        # Simulates consumer behaviour when memory_enabled goes True → False.
+        clear_history_sync(user_id=user.id, server_id=server.id)
+
+        assert load_recent_sync(user_id=user.id, server_id=server.id, limit=40) == []
+
+    def test_clear_one_user_does_not_touch_other(self):
+        """Toggling memory off for one user must not affect anyone else."""
+        user_a, server_a = _make_user_and_server("a3-a")
+        user_b, server_b = _make_user_and_server("a3-b")
+        append_message_sync(user_id=user_a.id, server_id=server_a.id, role="user", text="keep-a")
+        append_message_sync(user_id=user_b.id, server_id=server_b.id, role="user", text="keep-b")
+
+        clear_history_sync(user_id=user_a.id, server_id=server_a.id)
+
+        # Cross-tenant safety
+        assert load_recent_sync(user_id=user_a.id, server_id=server_a.id, limit=10) == []
+        assert len(load_recent_sync(user_id=user_b.id, server_id=server_b.id, limit=10)) == 1
+
+
+@pytest.mark.django_db
 class TestFullRoundtrip:
     def test_append_then_load_yields_chronological_conversation(self):
         user, server = _make_user_and_server()

@@ -50,6 +50,15 @@ export interface AiCommand {
   risk_categories?: string[];
   risk_reasons?: string[];
   exec_mode?: "pty" | "direct";
+  // F2-8 v2: output captured from a non-PTY channel. Only populated when
+  // the command was executed via ``exec_mode=direct`` — we render it inline
+  // in the AI panel because the terminal did not receive this output.
+  direct_output?: string;
+  // A6: human-readable explanation of the command + its output. Populated
+  // when the user clicks "Объяснить" and the backend replies with
+  // ``ai_explanation`` keyed by the same ``id``.
+  explanation?: string;
+  explaining?: boolean;
 }
 
 export interface AiMessage {
@@ -82,6 +91,8 @@ interface AiPanelProps {
   onClearChat?: () => void;
   onGenerateReport?: (force?: boolean) => void;
   onClearMemory?: () => void;
+  // A6: ask the backend to explain a single executed command inline.
+  onExplainCommand?: (cmd: AiCommand) => void;
   onSettingsChange: (settings: AiAssistantSettings) => void;
   onSaveDefaults?: () => void;
   onResetToDefaults?: () => void;
@@ -314,11 +325,13 @@ function CommandsMsg({
   settings,
   onConfirm,
   onCancel,
+  onExplainCommand,
 }: {
   msg: AiMessage;
   settings: AiAssistantSettings;
   onConfirm?: (id: number) => void;
   onCancel?: (id: number) => void;
+  onExplainCommand?: (cmd: AiCommand) => void;
 }) {
   const allCommands = msg.commands || [];
   const visibleCommands = allCommands.filter((command) => {
@@ -354,6 +367,41 @@ function CommandsMsg({
                     </div>
                   </div>
                   {cmd.why ? <p className="text-xs text-muted-foreground">{cmd.why}</p> : null}
+                  {cmd.direct_output ? (
+                    // F2-8 v2: the command ran outside the interactive PTY,
+                    // so we render its captured output here — otherwise the
+                    // user would not see it anywhere.
+                    <pre className="max-h-48 overflow-auto rounded-md border border-border/60 bg-secondary/40 px-2 py-1.5 font-mono text-[11px] leading-relaxed text-muted-foreground">
+                      {cmd.direct_output}
+                    </pre>
+                  ) : null}
+                  {/* A6: explain-output affordance — visible once the command has finished.
+                      We only show the button if the parent supplied a handler and the
+                      command actually ran (exit_code is defined). */}
+                  {onExplainCommand && cmd.status === "done" && typeof cmd.exit_code === "number" ? (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 gap-1 px-2 text-[11px]"
+                        disabled={!!cmd.explaining}
+                        onClick={() => onExplainCommand(cmd)}
+                      >
+                        {cmd.explaining ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <HelpCircle className="h-3 w-3" />
+                        )}
+                        {cmd.explanation ? "Переобъяснить" : "Объяснить"}
+                      </Button>
+                    </div>
+                  ) : null}
+                  {cmd.explanation ? (
+                    <div className="rounded-md border border-primary/30 bg-primary/5 px-2 py-1.5 text-[12px] leading-relaxed">
+                      <ReactMarkdown>{cmd.explanation}</ReactMarkdown>
+                    </div>
+                  ) : null}
                   {cmd.requires_confirm && (!cmd.status || cmd.status === "pending") ? (
                     <div className="flex gap-1.5">
                       <Button
@@ -536,16 +584,18 @@ function MsgRenderer({
   onConfirm,
   onCancel,
   onReply,
+  onExplainCommand,
 }: {
   msg: AiMessage;
   settings: AiAssistantSettings;
   onConfirm?: (id: number) => void;
   onCancel?: (id: number) => void;
   onReply?: (qId: string, text: string) => void;
+  onExplainCommand?: (cmd: AiCommand) => void;
 }) {
   const type = msg.type || "text";
 
-  if (type === "commands") return <div className="w-full"><CommandsMsg msg={msg} settings={settings} onConfirm={onConfirm} onCancel={onCancel} /></div>;
+  if (type === "commands") return <div className="w-full"><CommandsMsg msg={msg} settings={settings} onConfirm={onConfirm} onCancel={onCancel} onExplainCommand={onExplainCommand} /></div>;
   if (type === "report") return <div className="w-full"><ReportMsg msg={msg} /></div>;
   if (type === "question") return <div className="w-full"><QuestionMsg msg={msg} onReply={onReply} /></div>;
   if (type === "progress") return <div className="w-full"><ProgressMsg msg={msg} /></div>;
@@ -639,6 +689,7 @@ export function AiPanel({
   onClearChat,
   onGenerateReport,
   onClearMemory,
+  onExplainCommand,
   onSettingsChange,
   onSaveDefaults,
   onResetToDefaults,
@@ -786,6 +837,12 @@ export function AiPanel({
                   checked={settings.confirmDangerousCommands}
                   onCheckedChange={(checked) => updateSettings({ confirmDangerousCommands: checked })}
                 />
+                <ToggleRow
+                  title="Dry-run режим"
+                  description="AI показывает, что выполнило бы, но не трогает сервер."
+                  checked={settings.dryRun}
+                  onCheckedChange={(checked) => updateSettings({ dryRun: checked })}
+                />
 
                 <div className="grid gap-2.5 pt-1 md:grid-cols-2">
                   <div>
@@ -901,7 +958,14 @@ export function AiPanel({
         {/* Compact mode bar */}
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/50 px-3.5 py-2">
           <ChatModeSelector mode={chatMode} onChange={onChatModeChange} />
-          <ModeSelector mode={executionMode} onChange={onModeChange} />
+          <div className="flex items-center gap-1.5">
+            {settings.dryRun ? (
+              <span className="inline-flex items-center rounded border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning">
+                dry-run
+              </span>
+            ) : null}
+            <ModeSelector mode={executionMode} onChange={onModeChange} />
+          </div>
         </div>
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3">
@@ -936,6 +1000,7 @@ export function AiPanel({
                 onConfirm={onConfirm}
                 onCancel={onCancel}
                 onReply={onReply}
+                onExplainCommand={onExplainCommand}
               />
             ))
           )}

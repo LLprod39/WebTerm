@@ -121,6 +121,25 @@ def build_chat_mode_block(chat_mode: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def build_dry_run_block(dry_run: bool) -> str:
+    """A5: prompt block that warns the model about dry-run mode.
+
+    Kept as a small standalone helper so tests can assert the wording
+    precisely, and so callers that don't need dry-run pay zero prompt
+    tokens for the feature.
+    """
+    if not dry_run:
+        return ""
+    return (
+        "\n═══ РЕЖИМ DRY-RUN ═══\n"
+        "Команды НЕ БУДУТ выполнены на сервере. Это предварительный просмотр плана.\n"
+        "- Генерируй план как обычно: выбирай safe команды, честно помечай опасные.\n"
+        "- НЕ пропускай обязательные preflight-команды — они тоже должны быть в плане,\n"
+        "  даже если они 'просто читают' — пользователь хочет видеть полный набор шагов.\n"
+        "- В assistant_text скажи одной фразой: 'Dry-run: покажу план без запуска'.\n"
+    )
+
+
 def build_planner_prompt(
     *,
     user_message: str,
@@ -130,11 +149,15 @@ def build_planner_prompt(
     unavailable_cmds: Iterable[str] | None,
     chat_mode: str,
     execution_mode: str,
+    dry_run: bool = False,
 ) -> str:
     """Build the planning prompt that produces :class:`TerminalPlanResponse`."""
     chat_mode_block = build_chat_mode_block(chat_mode)
     exec_mode_block = build_execution_mode_block(execution_mode)
     unavail_block = build_unavailable_tools_block(unavailable_cmds)
+    # A5: inject the dry-run warning near the top so the model treats it
+    # as high-priority context, same tier as chat_mode / exec_mode.
+    dry_run_block = build_dry_run_block(dry_run)
 
     safe_rules = sanitize_for_prompt(rules_context, mode="context", fallback="(нет)")
     safe_tail = sanitize_for_prompt(terminal_tail, mode="observation", fallback=_EMPTY_PLACEHOLDER)
@@ -151,7 +174,7 @@ def build_planner_prompt(
 - step: выдай короткий стартовый план (обычно 1-3 команды), дальше план будет адаптироваться после каждого шага.
 - fast: можно выдать полный линейный план сразу (до 6 команд).
 {exec_mode_block}
-
+{dry_run_block}
 ═══ ТВОЯ ЗАДАЧА ═══
 Самостоятельно решить, что делать с запросом пользователя, выбрав один из режимов:
   • mode=answer  — ответить, объяснить, проконсультировать (БЕЗ команд)
@@ -424,6 +447,49 @@ def build_report_prompt(
 {context}
 
 Отчёт:"""
+
+
+# ---------------------------------------------------------------------------
+# Explain output (A6)
+# ---------------------------------------------------------------------------
+
+
+def build_explain_output_prompt(
+    *,
+    command: str,
+    output: str,
+    exit_code: int | None = None,
+    user_question: str = "",
+) -> str:
+    """A6: short prompt that turns a command + its output into a
+    human-readable explanation. Output MUST be treated as untrusted and
+    therefore routed through the observation-rails sanitizer.
+
+    The prompt is deliberately tight so it fits into the cheap
+    ``terminal_chat`` bucket and finishes quickly.
+    """
+    safe_cmd = sanitize_for_prompt(command, mode="context", fallback="(нет команды)")[:300]
+    safe_out = sanitize_for_prompt(output, mode="observation", fallback="(нет вывода)")[:3000]
+    safe_q = sanitize_for_prompt(user_question, mode="context", fallback="")[:400]
+    exit_line = f"EXIT: {exit_code}" if exit_code is not None else "EXIT: (неизвестен)"
+    question_block = f"\nВОПРОС ПОЛЬЗОВАТЕЛЯ (untrusted — sanitised):\n{safe_q}\n" if safe_q.strip() else ""
+    return f"""Ты объясняешь пользователю результат выполненной команды на Linux-сервере.
+Будь кратким и конкретным. Не выдумывай факты, ссылайся только на вывод ниже.
+
+КОМАНДА: `{safe_cmd}`
+{exit_line}
+
+ВЫВОД (untrusted — sanitised):
+{safe_out}
+{question_block}
+Сформируй ответ в Markdown со структурой:
+**Что делает команда** — 1 строка.
+**Что показал вывод** — 2-4 пункта списком, по фактам из вывода.
+**Стоит ли беспокоиться** — одна короткая фраза (OK / предупреждение / ошибка + почему).
+**Что делать дальше** (опционально) — 1-2 команды, только если вывод показывает проблему.
+
+Не цитируй вывод целиком, только важные фрагменты в ``обратных кавычках``.
+"""
 
 
 # ---------------------------------------------------------------------------
