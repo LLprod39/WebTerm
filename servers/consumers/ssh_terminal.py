@@ -24,19 +24,16 @@ from django.utils import timezone
 from loguru import logger
 
 from app.runtime_limits import get_terminal_session_limit_error
-from app.tools.safety import is_dangerous_command
 from core_ui.activity import log_user_activity_async
 from core_ui.audit import audit_context
 from core_ui.context_processors import user_can_feature
 from servers.memory_heuristics import (
     is_trivial_memory_command,
     normalize_memory_command_text,
-    should_capture_command_history_memory,
-    should_persist_ai_memory,
 )
-from servers.models import Server, ServerConnection, ServerShare
+from servers.models import Server, ServerConnection
 from servers.secret_utils import get_server_auth_secret, has_saved_server_secret
-from servers.services.editor_intercept import detect_editor_command
+from servers.services.editor_intercept import detect_editor_command, is_interactive_tui_command
 from servers.ssh_host_keys import build_server_connect_kwargs, ensure_server_known_hosts
 
 
@@ -51,20 +48,34 @@ _WEUAI_MARKER_PREFIX = "__WEUAI_EXIT_"
 # Regex to detect commands that produce infinite/continuous output or need user input
 _STREAMING_CMD_RE = re.compile(
     r"(?:"
-    r"\btail\s+.*-[a-zA-Z]*[fF]\b"                              # tail -f / -F / -fq
+    r"\btail\s+.*-[a-zA-Z]*[fF]\b"  # tail -f / -F / -fq
     r"|\btail\s+--follow\b"
-    r"|\bjournalctl\s+.*(?:-[a-zA-Z]*[fF]\b|--follow\b)"        # journalctl -f/-fu/--follow
-    r"|\bdocker\s+logs?\s+.*(?:-[a-zA-Z]*[fF]\b|--follow\b)"   # docker logs -f/--follow
-    r"|\bkubectl\s+logs?\s+.*-[a-zA-Z]*[fF]\b"                  # kubectl logs -f
+    r"|\bjournalctl\s+.*(?:-[a-zA-Z]*[fF]\b|--follow\b)"  # journalctl -f/-fu/--follow
+    r"|\bdocker\s+logs?\s+.*(?:-[a-zA-Z]*[fF]\b|--follow\b)"  # docker logs -f/--follow
+    r"|\bkubectl\s+logs?\s+.*-[a-zA-Z]*[fF]\b"  # kubectl logs -f
     r"|\bpodman\s+logs?\s+.*(?:-[a-zA-Z]*[fF]\b|--follow\b)"
-    r"|\bwatch\s+"                                               # watch anything
+    r"|\bwatch\s+"  # watch anything
     r"|\btcpdump\b"
     r"|\bstrace\b"
-    r"|\bping\s+(?!.*-c\s*\d)"                                   # ping without -c count
+    r"|\bping\s+(?!.*-c\s*\d)"  # ping without -c count
     r")",
     re.IGNORECASE,
 )
-_INTERACTIVE_CMDS = {"top", "htop", "iotop", "iftop", "nethogs", "vim", "vi", "nano", "less", "more", "man", "pstree", "glances"}
+_INTERACTIVE_CMDS = {
+    "top",
+    "htop",
+    "iotop",
+    "iftop",
+    "nethogs",
+    "vim",
+    "vi",
+    "nano",
+    "less",
+    "more",
+    "man",
+    "pstree",
+    "glances",
+}
 
 # Regex to detect long-running install/build commands that should be monitored
 _INSTALL_CMD_RE = re.compile(
@@ -112,7 +123,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
           {type: "error", message: "<text>"}
           {type: "exit", exit_status: int|null, exit_signal: any|null}
           {type: "ai_status", status: "thinking"|"running"|"waiting_confirm"|"idle", ...}
-          {type: "ai_response", assistant_text: str, commands: [{id, cmd, why, requires_confirm, reason}]}
+          {type: "ai_response", assistant_text: str, commands: [{id, cmd, why, requires_confirm, reason, risk_categories?, risk_reasons?}]}
           {type: "ai_command_status", id: int, status: "running"|"done"|"skipped", exit_code?, reason?}
           {type: "ai_report", report: str, status: "ok"|"warning"|"error"}
           {type: "ai_error", message: "<text>"}
@@ -163,9 +174,9 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
 
     _terminal_tail: str
     _ai_history: list[dict]
-    _unavailable_cmds: set[str]    # commands that returned exit=127 this session
+    _unavailable_cmds: set[str]  # commands that returned exit=127 this session
     _ai_reply_futures: dict[str, asyncio.Future[str]]  # q_id → future waiting for user reply
-    _ai_error_retries: dict[int, int]   # cmd_id → retry count (max 2)
+    _ai_error_retries: dict[int, int]  # cmd_id → retry count (max 2)
     _ai_run_id: str
     _ai_marker_token: str
     _ai_stop_requested: bool
@@ -182,6 +193,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         """Validate a short-lived WS token and return the User or None."""
         from django.contrib.auth.models import User as _User
         from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
+
         signer = TimestampSigner(salt="ws-token")
         try:
             user_id = int(signer.unsign(token, max_age=300))
@@ -216,6 +228,108 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         if isinstance(exc, asyncssh.misc.HostKeyNotVerifiable):
             return f"SSH host key не доверен: {exc}"
         return str(exc) or exc.__class__.__name__
+
+    # ------------------------------------------------------------------
+    # F2-1: backward-compat @property accessors for the per-request state
+    # that lives on self._ai_session (TerminalAiSession). Getters return
+    # the underlying attribute; setters mutate the session in place so
+    # existing ``self._ai_plan = []`` etc. call-sites keep working.
+    # ------------------------------------------------------------------
+    @property
+    def _ai_plan(self) -> list[dict[str, Any]]:
+        return self._ai_session.plan
+
+    @_ai_plan.setter
+    def _ai_plan(self, value: list[dict[str, Any]]) -> None:
+        self._ai_session.plan = value
+
+    @property
+    def _ai_plan_index(self) -> int:
+        return self._ai_session.plan_index
+
+    @_ai_plan_index.setter
+    def _ai_plan_index(self, value: int) -> None:
+        self._ai_session.plan_index = int(value)
+
+    @property
+    def _ai_next_id(self) -> int:
+        return self._ai_session.next_id
+
+    @_ai_next_id.setter
+    def _ai_next_id(self, value: int) -> None:
+        self._ai_session.next_id = int(value)
+
+    @property
+    def _ai_step_extra_count(self) -> int:
+        return self._ai_session.step_extra_count
+
+    @_ai_step_extra_count.setter
+    def _ai_step_extra_count(self, value: int) -> None:
+        self._ai_session.step_extra_count = int(value)
+
+    @property
+    def _ai_user_message(self) -> str:
+        return self._ai_session.user_message
+
+    @_ai_user_message.setter
+    def _ai_user_message(self, value: str) -> None:
+        self._ai_session.user_message = str(value or "")
+
+    @property
+    def _ai_chat_mode(self) -> str:
+        return self._ai_session.chat_mode
+
+    @_ai_chat_mode.setter
+    def _ai_chat_mode(self, value: str) -> None:
+        self._ai_session.chat_mode = str(value or "agent")
+
+    @property
+    def _ai_execution_mode(self) -> str:
+        return self._ai_session.execution_mode
+
+    @_ai_execution_mode.setter
+    def _ai_execution_mode(self, value: str) -> None:
+        self._ai_session.execution_mode = str(value or "step")
+
+    @property
+    def _ai_run_id(self) -> str:
+        return self._ai_session.run_id
+
+    @_ai_run_id.setter
+    def _ai_run_id(self, value: str) -> None:
+        self._ai_session.run_id = str(value or "")
+
+    @property
+    def _ai_marker_token(self) -> str:
+        return self._ai_session.marker_token
+
+    @_ai_marker_token.setter
+    def _ai_marker_token(self, value: str) -> None:
+        self._ai_session.marker_token = str(value or "")
+
+    @property
+    def _ai_last_done_items(self) -> list[dict[str, Any]]:
+        return self._ai_session.last_done_items
+
+    @_ai_last_done_items.setter
+    def _ai_last_done_items(self, value: list[dict[str, Any]]) -> None:
+        self._ai_session.last_done_items = value
+
+    @property
+    def _ai_last_report(self) -> str:
+        return self._ai_session.last_report
+
+    @_ai_last_report.setter
+    def _ai_last_report(self, value: str) -> None:
+        self._ai_session.last_report = str(value or "")
+
+    @property
+    def _ai_stop_requested(self) -> bool:
+        return self._ai_session.stop_requested
+
+    @_ai_stop_requested.setter
+    def _ai_stop_requested(self, value: bool) -> None:
+        self._ai_session.stop_requested = bool(value)
 
     @staticmethod
     def _default_ai_settings() -> dict[str, Any]:
@@ -319,6 +433,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         # on WebSocket upgrades (common http-proxy limitation).
         if not user or not getattr(user, "is_authenticated", False):
             from urllib.parse import parse_qs, unquote
+
             qs = self.scope.get("query_string", b"").decode()
             qs_params = parse_qs(qs)
             ws_token = unquote(qs_params.get("ws_token", [""])[0])
@@ -339,29 +454,24 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         self._user_id = int(user.id)
         self._ai_lock = asyncio.Lock()
         self._ai_task = None
-        self._ai_plan = []
-        self._ai_plan_index = 0
-        self._ai_next_id = 1
+        # F2-1: per-request queue / run-id / cursor / step-counter state
+        # lives in a single TerminalAiSession object. The historical
+        # ``self._ai_*`` attributes are kept as @property forwarders to
+        # avoid churning the hundreds of call-sites in this file.
+        from servers.services.terminal_ai import TerminalAiSession
+
+        self._ai_session = TerminalAiSession()
         self._ai_forbidden_patterns = []
         self._ai_exit_futures = {}
         self._ai_active_cmd_id = None
         self._ai_active_output = ""
-        self._ai_user_message = ""
-        self._ai_chat_mode = "agent"
-        self._ai_execution_mode = "step"
-        self._ai_step_extra_count = 0
         self._ai_settings = self._default_ai_settings()
         self._ai_allowlist_patterns = []
-        self._ai_last_done_items = []
-        self._ai_last_report = ""
         self._terminal_tail = ""
         self._ai_history = []
         self._unavailable_cmds: set[str] = set()
         self._ai_reply_futures: dict[str, asyncio.Future] = {}
         self._ai_error_retries: dict[int, int] = {}
-        self._ai_run_id = ""
-        self._ai_marker_token = ""
-        self._ai_stop_requested = False
         self._marker_suppress = {"stdout": False, "stderr": False}
         self._marker_line_buf = {"stdout": "", "stderr": ""}
         self._manual_input_buffer = ""
@@ -373,6 +483,9 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         self._ai_audit_context: dict[str, Any] = {}
         self._server_connection_id: str | None = None
         self._connection_heartbeat_task = None
+        # Fire-and-forget tasks spawned outside _ai_process_queue (F1-7),
+        # tracked so disconnect/cancel can drain them without leaks.
+        self._ai_background_tasks: set[asyncio.Task[Any]] = set()
 
         can_servers = await self._user_can_servers(user.id)
         logger.debug("WS connect: user={} can_servers={}", user, can_servers)
@@ -406,7 +519,9 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             )
             return
         except Exception as exc:
-            logger.exception("WS connect REJECT: unexpected error fetching server {} for user={}: {}", server_id, user, exc)
+            logger.exception(
+                "WS connect REJECT: unexpected error fetching server {} for user={}: {}", server_id, user, exc
+            )
             await self._reject_with_error(
                 code=4500,
                 message="Не удалось подготовить подключение к серверу.",
@@ -415,6 +530,24 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             return
 
         has_encrypted_secret = await database_sync_to_async(has_saved_server_secret, thread_sensitive=True)(self.server)
+
+        # F2-9: restore persisted chat history so the conversation survives
+        # WS reconnects / page reloads. Respects per-user memory_ttl_requests
+        # when applying the rolling window later, but we always load a
+        # reasonable max-recent here.
+        try:
+            from servers.services.terminal_ai import load_recent as _load_history
+
+            restored = await _load_history(
+                user_id=self._user_id,
+                server_id=self.server.id,
+                limit=40,
+            )
+            if restored:
+                self._ai_history = list(restored)
+        except Exception as hist_exc:  # pragma: no cover — non-fatal
+            logger.warning("terminal-ai chat history restore failed: %s", hist_exc)
+
         await self.accept()
         await self._safe_send_json(
             {
@@ -423,12 +556,28 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                 "server_name": self.server.name,
                 "auth_method": self.server.auth_method,
                 "has_encrypted_secret": has_encrypted_secret,
+                # F2-9: signal the client that prior messages are available.
+                "restored_history_count": len(self._ai_history or []),
             }
         )
 
     async def disconnect(self, code):
         await self._cancel_ai()
+        await self._drain_ai_background_tasks()
         await self._disconnect_ssh()
+
+    async def _drain_ai_background_tasks(self) -> None:
+        """Cancel and drain any fire-and-forget AI background tasks (F1-7)."""
+        tasks = list(getattr(self, "_ai_background_tasks", ()) or ())
+        for t in tasks:
+            if not t.done():
+                t.cancel()
+        for t in tasks:
+            # Best-effort drain — never raise out of disconnect().
+            with contextlib.suppress(asyncio.TimeoutError, asyncio.CancelledError, Exception):
+                await asyncio.wait_for(t, timeout=2.0)
+        if hasattr(self, "_ai_background_tasks"):
+            self._ai_background_tasks.clear()
 
     async def receive_json(self, content: Any, **kwargs):
         msg_type = (content or {}).get("type")
@@ -596,7 +745,9 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             try:
                 limit_error = await self._get_terminal_session_limit(self._user_id)
                 if limit_error:
-                    await self._safe_send_json({"type": "error", "message": f"SSH connect blocked: {limit_error['error']}"})
+                    await self._safe_send_json(
+                        {"type": "error", "message": f"SSH connect blocked: {limit_error['error']}"}
+                    )
                     await self._safe_send_json({"type": "status", "status": "disconnected"})
                     return
 
@@ -637,17 +788,17 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                 await self._safe_send_json({"type": "status", "status": "connected"})
                 await log_user_activity_async(
                     user_id=self._user_id,
-                    category='servers',
-                    action='terminal_connect',
-                    status='success',
+                    category="servers",
+                    action="terminal_connect",
+                    status="success",
                     description=f'Connected to server terminal "{self.server.name}"',
-                    entity_type='server',
+                    entity_type="server",
                     entity_id=self.server.id,
                     entity_name=self.server.name,
                     metadata={
-                        'host': self.server.host,
-                        'port': self.server.port,
-                        'auth_method': self.server.auth_method,
+                        "host": self.server.host,
+                        "port": self.server.port,
+                        "auth_method": self.server.auth_method,
                     },
                 )
                 self._server_connection_id = f"term-{uuid.uuid4().hex}"
@@ -667,13 +818,13 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                 error_message = self._format_ssh_connect_error(e)
                 await log_user_activity_async(
                     user_id=self._user_id,
-                    category='servers',
-                    action='terminal_connect',
-                    status='error',
-                    description=f'SSH terminal connect failed: {error_message}',
-                    entity_type='server',
-                    entity_id=self.server.id if self.server else '',
-                    entity_name=self.server.name if self.server else '',
+                    category="servers",
+                    action="terminal_connect",
+                    status="error",
+                    description=f"SSH terminal connect failed: {error_message}",
+                    entity_type="server",
+                    entity_id=self.server.id if self.server else "",
+                    entity_name=self.server.name if self.server else "",
                 )
                 await self._safe_send_json({"type": "error", "message": f"SSH connect failed: {error_message}"})
                 await self._safe_send_json({"type": "status", "status": "disconnected"})
@@ -691,10 +842,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                 return
 
             # Intercept editor commands (nano, vim, vi, etc.) → GUI editor
-            if (
-                len(completed_commands) == 1
-                and getattr(self, "_intercept_editors", True)
-            ):
+            if len(completed_commands) == 1 and getattr(self, "_intercept_editors", True):
                 editor_info = detect_editor_command(completed_commands[0])
                 if editor_info:
                     # Characters were already forwarded to pty keystroke-by-
@@ -702,12 +850,14 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                     # execute it.  Ctrl+U clears the line, Ctrl+C aborts.
                     self._ssh_proc.stdin.write("\x15\x03")
 
-                    await self._safe_send_json({
-                        "type": "editor_intercept",
-                        "path": editor_info["path"],
-                        "editor": editor_info["editor"],
-                        "sudo": editor_info["sudo"],
-                    })
+                    await self._safe_send_json(
+                        {
+                            "type": "editor_intercept",
+                            "path": editor_info["path"],
+                            "editor": editor_info["editor"],
+                            "sudo": editor_info["sudo"],
+                        }
+                    )
                     return
 
             newline_count = len(re.findall(r"\r\n|\r|\n", data))
@@ -749,6 +899,14 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         stripped = normalized.strip()
         lowered = stripped.lower()
         if not stripped:
+            return False
+        # Full-screen TUI programs (nano, vim, less, top, man, htop, tmux, …)
+        # take over the pty and read stdin directly. If we append an exit-code
+        # marker command after launching them, those bytes are injected into
+        # the running TUI as keystrokes instead of being executed by the shell,
+        # which corrupts its state and leaves the terminal "frozen" for the
+        # user (Ctrl+X / arrow keys stop working until they close the tab).
+        if is_interactive_tui_command(stripped):
             return False
         if "<<" in stripped:
             return False
@@ -845,7 +1003,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
 
         marker_prefix = self._marker_prefix()
         marker_var = f"{marker_prefix}{cmd_id}"
-        marker_cmd = f"{marker_var}=$?; echo \"{marker_prefix}{cmd_id}:${{{marker_var}}}__\""
+        marker_cmd = f'{marker_var}=$?; echo "{marker_prefix}{cmd_id}:${{{marker_var}}}__"'
         self._ssh_proc.stdin.write(marker_cmd + "\n")
 
     @staticmethod
@@ -1073,19 +1231,19 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         self._add_to_history("user", msg)
         await log_user_activity_async(
             user_id=self._user_id,
-            category='assistant',
-            action='terminal_ai_request',
-            status='success',
+            category="assistant",
+            action="terminal_ai_request",
+            status="success",
             description=msg[:400],
-            entity_type='server',
-            entity_id=self.server.id if self.server else '',
-            entity_name=self.server.name if self.server else '',
+            entity_type="server",
+            entity_id=self.server.id if self.server else "",
+            entity_name=self.server.name if self.server else "",
             metadata={
-                'message_length': len(msg),
-                'chat_mode': requested_chat_mode,
-                'execution_mode': requested_mode,
-                'memory_enabled': bool(self._ai_settings.get("memory_enabled", True)),
-                'auto_report': str(self._ai_settings.get("auto_report") or "auto"),
+                "message_length": len(msg),
+                "chat_mode": requested_chat_mode,
+                "execution_mode": requested_mode,
+                "memory_enabled": bool(self._ai_settings.get("memory_enabled", True)),
+                "auto_report": str(self._ai_settings.get("auto_report") or "auto"),
             },
         )
         await self._send_ai_event(
@@ -1105,7 +1263,9 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                 )
                 merged_forbidden = list(forbidden_patterns or [])
                 for pattern in list(self._ai_settings.get("blocklist_patterns") or []):
-                    if str(pattern or "").strip() and str(pattern).strip().lower() not in {p.lower() for p in merged_forbidden}:
+                    if str(pattern or "").strip() and str(pattern).strip().lower() not in {
+                        p.lower() for p in merged_forbidden
+                    }:
                         merged_forbidden.append(str(pattern).strip())
                 plan_obj = await self._ai_plan_commands(
                     user_message=msg,
@@ -1118,7 +1278,9 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                 )
             except Exception as e:
                 err_msg = str(e).strip() or "Unknown error"
-                if any(hint in err_msg.lower() for hint in ("timeout", "429", "rate", "resource exhausted", "overloaded")):
+                if any(
+                    hint in err_msg.lower() for hint in ("timeout", "429", "rate", "resource exhausted", "overloaded")
+                ):
                     err_msg = "Временная ошибка API (лимит или перегрузка). Попробуйте позже."
                 await self._send_ai_event({"type": "ai_error", "message": err_msg})
                 await self._send_ai_event({"type": "ai_status", "status": "idle"})
@@ -1139,15 +1301,17 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         # --- answer / ask mode: just reply, no commands needed ---
         if mode in ("answer", "ask"):
             self._add_to_history("assistant", assistant_text or "(ответ)")
-            await self._send_ai_event({
-                "type": "ai_response",
-                "mode": mode,
-                "assistant_text": assistant_text,
-                "commands": [],
-                "chat_mode": requested_chat_mode,
-                "execution_mode": selected_mode,
-                "requested_execution_mode": requested_mode,
-            })
+            await self._send_ai_event(
+                {
+                    "type": "ai_response",
+                    "mode": mode,
+                    "assistant_text": assistant_text,
+                    "commands": [],
+                    "chat_mode": requested_chat_mode,
+                    "execution_mode": selected_mode,
+                    "requested_execution_mode": requested_mode,
+                }
+            )
             await self._send_ai_event({"type": "ai_status", "status": "idle"})
             return
 
@@ -1207,6 +1371,8 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                     forbidden_patterns=merged_forbidden,
                     allowlist_patterns=list(self._ai_allowlist_patterns or []),
                     confirm_dangerous_commands=bool(self._ai_settings.get("confirm_dangerous_commands", True)),
+                    # F2-8: forward LLM-provided exec_mode hint when present.
+                    exec_mode=c.get("exec_mode"),
                 )
             )
 
@@ -1223,15 +1389,17 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             self._ai_next_id = next_id
             self._ai_forbidden_patterns = merged_forbidden or []
 
-        await self._send_ai_event({
-            "type": "ai_response",
-            "mode": "execute",
-            "assistant_text": assistant_text,
-            "commands": plan_items,
-            "chat_mode": requested_chat_mode,
-            "execution_mode": selected_mode,
-            "requested_execution_mode": requested_mode,
-        })
+        await self._send_ai_event(
+            {
+                "type": "ai_response",
+                "mode": "execute",
+                "assistant_text": assistant_text,
+                "commands": plan_items,
+                "chat_mode": requested_chat_mode,
+                "execution_mode": selected_mode,
+                "requested_execution_mode": requested_mode,
+            }
+        )
 
         if not plan_items:
             self._add_to_history("assistant", assistant_text or "Команды не нужны")
@@ -1256,7 +1424,9 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                 return
             item = self._ai_plan[self._ai_plan_index]
             if int(item.get("id") or 0) != cmd_id:
-                await self._send_ai_event({"type": "ai_error", "message": "Подтверждать можно только текущую ожидающую команду"})
+                await self._send_ai_event(
+                    {"type": "ai_error", "message": "Подтверждать можно только текущую ожидающую команду"}
+                )
                 return
             if not item.get("requires_confirm"):
                 return
@@ -1286,7 +1456,9 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                 return
             item = self._ai_plan[self._ai_plan_index]
             if int(item.get("id") or 0) != cmd_id:
-                await self._send_ai_event({"type": "ai_error", "message": "Отменять можно только текущую ожидающую команду"})
+                await self._send_ai_event(
+                    {"type": "ai_error", "message": "Отменять можно только текущую ожидающую команду"}
+                )
                 return
             item["status"] = "skipped"
             self._ai_plan_index += 1
@@ -1305,6 +1477,17 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             self._ai_history = []
             self._ai_last_done_items = []
             self._ai_last_report = ""
+        # F2-9: also wipe the persistent DB copy so a page reload does not
+        # restore the history the user just cleared.
+        try:
+            user_id = int(getattr(self, "_user_id", 0) or 0)
+            server_id = int(getattr(self.server, "id", 0) or 0) if getattr(self, "server", None) else 0
+            if user_id and server_id:
+                from servers.services.terminal_ai import clear_history as _clear_history
+
+                await _clear_history(user_id=user_id, server_id=server_id)
+        except Exception as exc:  # pragma: no cover — non-fatal
+            logger.debug("terminal-ai chat history clear skipped: %s", exc)
         await self._send_ai_event(
             {
                 "type": "ai_response",
@@ -1319,14 +1502,18 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         force_regenerate = self._parse_bool((content or {}).get("force"), False)
         async with self._ai_lock:
             if self._ai_task and not self._ai_task.done():
-                await self._send_ai_event({"type": "ai_error", "message": "Дождитесь завершения текущего запуска ассистента."})
+                await self._send_ai_event(
+                    {"type": "ai_error", "message": "Дождитесь завершения текущего запуска ассистента."}
+                )
                 return
             done_items = list(self._ai_last_done_items or [])
             user_message = str(self._ai_user_message or "")
             cached_report = "" if force_regenerate else str(self._ai_last_report or "")
 
         if not done_items:
-            await self._send_ai_event({"type": "ai_error", "message": "Нет завершённых команд для формирования отчёта."})
+            await self._send_ai_event(
+                {"type": "ai_error", "message": "Нет завершённых команд для формирования отчёта."}
+            )
             return
 
         try:
@@ -1344,7 +1531,12 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             await self._send_ai_event({"type": "ai_status", "status": "idle"})
 
     def _add_to_history(self, role: str, text: str) -> None:
-        """Append a message to the conversation history (max 20 entries)."""
+        """Append a message to the conversation history (in-memory + DB, F2-9).
+
+        The in-memory deque is the fast path used by every prompt builder;
+        we additionally fire-and-forget a DB write so the conversation
+        survives WebSocket reconnects and page reloads.
+        """
         if not bool(getattr(self, "_ai_settings", {}).get("memory_enabled", True)):
             return
         entry = {"role": role, "text": (text or "")[:800]}
@@ -1356,6 +1548,31 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         if len(self._ai_history) > max_entries:
             self._ai_history = self._ai_history[-max_entries:]
 
+        # F2-9: persist to DB in a tracked background task so UX is not
+        # slowed down by the extra INSERT + pruning queries.
+        try:
+            user_id = int(getattr(self, "_user_id", 0) or 0)
+            server_id = int(getattr(self.server, "id", 0) or 0) if getattr(self, "server", None) else 0
+            if user_id and server_id and entry["text"]:
+                from servers.services.terminal_ai import append_message as _append_history
+
+                task = asyncio.create_task(
+                    _append_history(
+                        user_id=user_id,
+                        server_id=server_id,
+                        role=role,
+                        text=entry["text"],
+                        max_entries=max_entries * 2,
+                    )
+                )
+                self._ai_background_tasks.add(task)
+                task.add_done_callback(self._ai_background_tasks.discard)
+        except RuntimeError:
+            # No running event loop (e.g. synchronous test harness) — skip.
+            pass
+        except Exception as exc:  # pragma: no cover — non-fatal
+            logger.debug("terminal-ai chat history persist skipped: %s", exc)
+
     def _build_plan_item(
         self,
         item_id: int,
@@ -1364,30 +1581,41 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         forbidden_patterns: list[str] | None = None,
         allowlist_patterns: list[str] | None = None,
         confirm_dangerous_commands: bool = True,
+        exec_mode: str | None = None,
     ) -> dict[str, Any]:
+        # F2-6: single-source policy decision (allowed / confirm / reason / risk / exec_mode).
+        from servers.services.terminal_ai import decide_command_policy
+
         clean_cmd = str(cmd or "").strip()
-        reason = self._compute_confirm_reason(
+        verdict = decide_command_policy(
             clean_cmd,
-            forbidden_patterns or [],
-            allowlist_patterns or [],
+            forbidden_patterns=forbidden_patterns,
+            allowlist_patterns=allowlist_patterns,
+            chat_mode=getattr(self, "_ai_chat_mode", "agent"),
             confirm_dangerous_commands=confirm_dangerous_commands,
         )
-        blocked = reason in {"forbidden", "outside_allowlist"}
-        requires_confirm = bool(reason == "dangerous")
-        if getattr(self, "_ai_chat_mode", "agent") == "ask" and clean_cmd and not blocked:
-            requires_confirm = True
-            if not reason:
-                reason = "ask_mode"
+        blocked = not verdict.allowed
+        # F2-8: trust LLM-provided exec_mode only when valid; otherwise fall
+        # back to policy-picked default. For v1 we keep execution on PTY —
+        # the value is an informational hint for the orchestrator / UI.
+        resolved_exec_mode = (exec_mode or verdict.exec_mode or "pty").strip().lower()
+        if resolved_exec_mode not in {"pty", "direct"}:
+            resolved_exec_mode = verdict.exec_mode
         return {
             "id": int(item_id),
             "cmd": clean_cmd,
             "why": str(why or "").strip(),
             # forbidden => hard block, dangerous/ask_mode => explicit confirm
-            "requires_confirm": requires_confirm,
+            "requires_confirm": verdict.requires_confirm,
             "blocked": blocked,
-            "reason": reason,
+            "reason": verdict.reason,
             "status": "blocked" if blocked else "pending",
             "streaming": self._is_streaming_command(clean_cmd),
+            # F2-5: expose risk categories/reasons for UI tooltips & audit logs.
+            "risk_categories": list(verdict.risk_categories),
+            "risk_reasons": list(verdict.risk_reasons),
+            # F2-8: hybrid executor hint.
+            "exec_mode": resolved_exec_mode,
         }
 
     @staticmethod
@@ -1481,21 +1709,31 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
 
                 # ── Adaptive error recovery ─────────────────────────────────
                 # For non-trivial failures (not success, not interrupted, not skipped):
-                # call the LLM to decide: retry / skip / ask user / abort
+                # call the LLM to decide: retry / skip / ask user / abort.
+                #
+                # F1-9: in step-mode we skip this dedicated recovery call and let
+                # the unified post-step controller (_ai_step_decide_next) handle
+                # both success and error cases in a single LLM round-trip
+                # (-30–50% LLM cost in step-mode on errors). In fast-mode the
+                # block below is the only place where errors are handled.
                 recovery_action = None
-                if exit_code not in (0, 130, None) and not item.get("_no_recovery"):
+                skip_recovery = step_mode  # unified controller handles errors
+                if exit_code not in (0, 130, None) and not item.get("_no_recovery") and not skip_recovery:
                     retries = self._ai_error_retries.get(item_id, 0)
                     if retries < 2:
-                        await self._send_ai_event({
-                            "type": "ai_status",
-                            "status": "analyzing_error",
-                            "cmd": cmd,
-                            "exit_code": exit_code,
-                        })
+                        await self._send_ai_event(
+                            {
+                                "type": "ai_status",
+                                "status": "analyzing_error",
+                                "cmd": cmd,
+                                "exit_code": exit_code,
+                            }
+                        )
                         try:
                             async with self._ai_lock:
                                 remaining_cmds = [
-                                    it.get("cmd", "") for it in self._ai_plan[self._ai_plan_index + 1:]
+                                    it.get("cmd", "")
+                                    for it in self._ai_plan[self._ai_plan_index + 1 :]
                                     if it.get("status") not in ("done", "skipped")
                                 ]
                             decision = await self._ai_handle_error(cmd, exit_code, output_snippet, remaining_cmds)
@@ -1511,7 +1749,9 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                                     async with self._ai_lock:
                                         forbidden_patterns = list(self._ai_forbidden_patterns or [])
                                         allowlist_patterns = list(self._ai_allowlist_patterns or [])
-                                        confirm_dangerous = bool(self._ai_settings.get("confirm_dangerous_commands", True))
+                                        confirm_dangerous = bool(
+                                            self._ai_settings.get("confirm_dangerous_commands", True)
+                                        )
                                     new_item = self._build_plan_item(
                                         item_id=next_id,
                                         cmd=new_cmd,
@@ -1524,16 +1764,18 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                                     async with self._ai_lock:
                                         # Insert right after current position
                                         self._ai_plan.insert(self._ai_plan_index + 1, new_item)
-                                    await self._send_ai_event({
-                                        "type": "ai_recovery",
-                                        "original_cmd": cmd,
-                                        "new_cmd": new_cmd,
-                                        "new_id": next_id,
-                                        "why": why,
-                                        "requires_confirm": bool(new_item.get("requires_confirm")),
-                                        "reason": str(new_item.get("reason") or ""),
-                                        "streaming": bool(new_item.get("streaming")),
-                                    })
+                                    await self._send_ai_event(
+                                        {
+                                            "type": "ai_recovery",
+                                            "original_cmd": cmd,
+                                            "new_cmd": new_cmd,
+                                            "new_id": next_id,
+                                            "why": why,
+                                            "requires_confirm": bool(new_item.get("requires_confirm")),
+                                            "reason": str(new_item.get("reason") or ""),
+                                            "streaming": bool(new_item.get("streaming")),
+                                        }
+                                    )
 
                             elif recovery_action == "ask":
                                 question = str(decision.get("question") or "Как лучше продолжить?")
@@ -1542,20 +1784,21 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                                 loop = asyncio.get_event_loop()
                                 reply_fut: asyncio.Future = loop.create_future()
                                 self._ai_reply_futures[q_id] = reply_fut
-                                await self._send_ai_event({
-                                    "type": "ai_question",
-                                    "q_id": q_id,
-                                    "question": question,
-                                    "cmd": cmd,
-                                    "exit_code": exit_code,
-                                })
+                                await self._send_ai_event(
+                                    {
+                                        "type": "ai_question",
+                                        "q_id": q_id,
+                                        "question": question,
+                                        "cmd": cmd,
+                                        "exit_code": exit_code,
+                                    }
+                                )
                                 try:
                                     user_reply = await asyncio.wait_for(reply_fut, timeout=300)
                                     self._add_to_history("user", f"[Ответ агенту]: {user_reply}")
                                     # Re-evaluate with user's answer
                                     decision2 = await self._ai_handle_error(
-                                        cmd, exit_code, output_snippet, remaining_cmds,
-                                        user_reply=user_reply
+                                        cmd, exit_code, output_snippet, remaining_cmds, user_reply=user_reply
                                     )
                                     if decision2.get("action") == "retry":
                                         new_cmd2 = str(decision2.get("cmd") or "").strip()
@@ -1567,7 +1810,9 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                                             async with self._ai_lock:
                                                 forbidden_patterns = list(self._ai_forbidden_patterns or [])
                                                 allowlist_patterns = list(self._ai_allowlist_patterns or [])
-                                                confirm_dangerous = bool(self._ai_settings.get("confirm_dangerous_commands", True))
+                                                confirm_dangerous = bool(
+                                                    self._ai_settings.get("confirm_dangerous_commands", True)
+                                                )
                                             new_item2 = self._build_plan_item(
                                                 item_id=next_id2,
                                                 cmd=new_cmd2,
@@ -1579,23 +1824,27 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                                             new_item2["_no_recovery"] = False
                                             async with self._ai_lock:
                                                 self._ai_plan.insert(self._ai_plan_index + 1, new_item2)
-                                            await self._send_ai_event({
-                                                "type": "ai_recovery",
-                                                "original_cmd": cmd,
-                                                "new_cmd": new_cmd2,
-                                                "new_id": next_id2,
-                                                "why": why2,
-                                                "requires_confirm": bool(new_item2.get("requires_confirm")),
-                                                "reason": str(new_item2.get("reason") or ""),
-                                                "streaming": bool(new_item2.get("streaming")),
-                                            })
+                                            await self._send_ai_event(
+                                                {
+                                                    "type": "ai_recovery",
+                                                    "original_cmd": cmd,
+                                                    "new_cmd": new_cmd2,
+                                                    "new_id": next_id2,
+                                                    "why": why2,
+                                                    "requires_confirm": bool(new_item2.get("requires_confirm")),
+                                                    "reason": str(new_item2.get("reason") or ""),
+                                                    "streaming": bool(new_item2.get("streaming")),
+                                                }
+                                            )
                                             recovery_action = "retry"
                                     elif decision2.get("action") == "abort":
                                         recovery_action = "abort"
-                                        await self._send_ai_event({
-                                            "type": "ai_error",
-                                            "message": str(decision2.get("why") or "Выполнение прервано"),
-                                        })
+                                        await self._send_ai_event(
+                                            {
+                                                "type": "ai_error",
+                                                "message": str(decision2.get("why") or "Выполнение прервано"),
+                                            }
+                                        )
                                 except asyncio.TimeoutError:
                                     # User didn't reply in time → skip
                                     logger.info("ai_question timeout, skipping command")
@@ -1604,10 +1853,14 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                                     self._ai_reply_futures.pop(q_id, None)
 
                             elif recovery_action == "abort":
-                                await self._send_ai_event({
-                                    "type": "ai_error",
-                                    "message": str(decision.get("why") or "Выполнение прервано из-за критической ошибки"),
-                                })
+                                await self._send_ai_event(
+                                    {
+                                        "type": "ai_error",
+                                        "message": str(
+                                            decision.get("why") or "Выполнение прервано из-за критической ошибки"
+                                        ),
+                                    }
+                                )
 
                         except asyncio.CancelledError:
                             raise
@@ -1620,14 +1873,25 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                 # ── End adaptive error recovery ─────────────────────────────
 
                 async with self._ai_lock:
-                    if self._ai_plan_index < len(self._ai_plan) and int(self._ai_plan[self._ai_plan_index].get("id") or 0) == item_id:
+                    if (
+                        self._ai_plan_index < len(self._ai_plan)
+                        and int(self._ai_plan[self._ai_plan_index].get("id") or 0) == item_id
+                    ):
                         self._ai_plan[self._ai_plan_index]["status"] = "done"
                         self._ai_plan[self._ai_plan_index]["exit_code"] = exit_code
                         self._ai_plan[self._ai_plan_index]["output_snippet"] = output_snippet or ""
                         self._ai_plan_index += 1
 
                 is_stream = bool(item.get("streaming", False))
-                await self._send_ai_event({"type": "ai_command_status", "id": item_id, "status": "done", "exit_code": exit_code, "streaming": is_stream})
+                await self._send_ai_event(
+                    {
+                        "type": "ai_command_status",
+                        "id": item_id,
+                        "status": "done",
+                        "exit_code": exit_code,
+                        "streaming": is_stream,
+                    }
+                )
 
                 # Step-by-step mode: re-evaluate after each command, not only on errors.
                 if step_mode:
@@ -1681,7 +1945,47 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                             finally:
                                 self._ai_reply_futures.pop(q_id, None)
 
-                        if action == "next":
+                        # F1-9: unified step controller also handles retry/skip on error.
+                        if action == "retry":
+                            # Replace failed cmd with fixed one; insert next in queue.
+                            retries = self._ai_error_retries.get(item_id, 0)
+                            new_cmd = str(decision.get("cmd") or "").strip()
+                            if new_cmd and new_cmd != cmd and retries < 2:
+                                async with self._ai_lock:
+                                    forbidden_patterns = list(self._ai_forbidden_patterns or [])
+                                    allowlist_patterns = list(self._ai_allowlist_patterns or [])
+                                    retry_id = int(self._ai_next_id)
+                                    self._ai_next_id += 1
+                                    self._ai_error_retries[retry_id] = retries + 1
+                                    retry_item = self._build_plan_item(
+                                        item_id=retry_id,
+                                        cmd=new_cmd,
+                                        why=str(decision.get("why") or "Retry after error (step-mode)"),
+                                        forbidden_patterns=forbidden_patterns,
+                                        allowlist_patterns=allowlist_patterns,
+                                        confirm_dangerous_commands=bool(
+                                            self._ai_settings.get("confirm_dangerous_commands", True)
+                                        ),
+                                    )
+                                    retry_item["_no_recovery"] = False
+                                    self._ai_plan.insert(self._ai_plan_index, retry_item)
+                                await self._send_ai_event(
+                                    {
+                                        "type": "ai_recovery",
+                                        "original_cmd": cmd,
+                                        "new_cmd": new_cmd,
+                                        "new_id": retry_id,
+                                        "why": str(decision.get("why") or ""),
+                                        "requires_confirm": bool(retry_item.get("requires_confirm")),
+                                        "reason": str(retry_item.get("reason") or ""),
+                                        "streaming": bool(retry_item.get("streaming")),
+                                    }
+                                )
+                        elif action == "skip":
+                            # Non-critical failure on the (already completed) item; just proceed.
+                            # Nothing to do — the remaining plan continues as-is.
+                            pass
+                        elif action == "next":
                             next_cmd = str(decision.get("next_cmd") or "").strip()
                             if next_cmd:
                                 extra_limit = 20
@@ -1713,21 +2017,28 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                                             why=str(decision.get("why") or "Следующий адаптивный шаг"),
                                             forbidden_patterns=forbidden_patterns,
                                             allowlist_patterns=allowlist_patterns,
-                                            confirm_dangerous_commands=bool(self._ai_settings.get("confirm_dangerous_commands", True)),
+                                            confirm_dangerous_commands=bool(
+                                                self._ai_settings.get("confirm_dangerous_commands", True)
+                                            ),
                                         )
                                         self._ai_plan.insert(self._ai_plan_index, new_item)
                                     await self._send_ai_event(
                                         {
                                             "type": "ai_response",
                                             "mode": "execute",
-                                            "assistant_text": str(decision.get("assistant_text") or "Добавляю следующий шаг по результатам проверки."),
+                                            "assistant_text": str(
+                                                decision.get("assistant_text")
+                                                or "Добавляю следующий шаг по результатам проверки."
+                                            ),
                                             "commands": [new_item],
                                             "execution_mode": "step",
                                         }
                                     )
 
                         elif action == "done":
-                            done_text = str(decision.get("assistant_text") or "Цель достигнута. Останавливаю дальнейшие шаги.").strip()
+                            done_text = str(
+                                decision.get("assistant_text") or "Цель достигнута. Останавливаю дальнейшие шаги."
+                            ).strip()
                             self._add_to_history("assistant", done_text[:800])
                             await self._send_ai_event(
                                 {
@@ -1762,7 +2073,10 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                             await self._send_ai_event(
                                 {
                                     "type": "ai_error",
-                                    "message": str(decision.get("assistant_text") or "Выполнение остановлено из-за критического состояния."),
+                                    "message": str(
+                                        decision.get("assistant_text")
+                                        or "Выполнение остановлено из-за критического состояния."
+                                    ),
                                 }
                             )
                             break
@@ -1814,28 +2128,26 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                         if report:
                             self._add_to_history("assistant", f"[Отчёт]\n{report[:400]}")
 
-                    # Save concise server memory snapshot only for durable operational signals.
+                    # Save concise server memory snapshot only for durable
+                    # operational signals. The extraction is done in a
+                    # fire-and-forget background task (F1-7) so that the UI
+                    # sees ``idle`` immediately after the report; the memory
+                    # write is ~4-5s of LLM latency that must not block UX.
                     memory_candidates = self._select_memory_candidate_commands(done_with_output)
-                    if memory_candidates and self.server and self._user_id and bool(self._ai_settings.get("memory_enabled", True)):
-                        try:
-                            memory_obj = await self._ai_extract_server_memory(
-                                user_message=user_msg,
-                                commands_with_output=memory_candidates,
-                                report=report,
-                            )
-                            mem_summary = str(memory_obj.get("summary") or "").strip()
-                            mem_facts = memory_obj.get("facts") or []
-                            mem_issues = memory_obj.get("issues") or []
-                            if mem_summary or mem_facts or mem_issues:
-                                await self._save_ai_server_profile(
-                                    user_id=self._user_id,
-                                    server_id=self.server.id,
-                                    summary=mem_summary,
-                                    facts=mem_facts,
-                                    issues=mem_issues,
-                                )
-                        except Exception as e:
-                            logger.warning("Server memory snapshot save failed: %s", e)
+                    if (
+                        memory_candidates
+                        and self.server
+                        and self._user_id
+                        and bool(self._ai_settings.get("memory_enabled", True))
+                    ):
+                        self._spawn_memory_extraction_task(
+                            user_message=user_msg,
+                            commands_with_output=memory_candidates,
+                            report=report,
+                            user_id=int(self._user_id),
+                            server_id=int(self.server.id),
+                            audit_ctx=dict(self._ai_audit_context or {}),
+                        )
 
         except asyncio.CancelledError:
             raise
@@ -1879,9 +2191,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             # Marker line to capture exit status (filtered from UI output)
             marker_prefix = self._marker_prefix()
             marker_var = f"{marker_prefix}{cmd_id}"
-            marker_cmd = (
-                f"{marker_var}=$?; echo \"{marker_prefix}{cmd_id}:${{{marker_var}}}__\""
-            )
+            marker_cmd = f'{marker_var}=$?; echo "{marker_prefix}{cmd_id}:${{{marker_var}}}__"'
             self._ssh_proc.stdin.write(marker_cmd + "\n")
 
         # For streaming commands: schedule Ctrl+C after 8 s to allow output capture
@@ -1958,23 +2268,10 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         return is_trivial_memory_command(cmd)
 
     def _select_memory_candidate_commands(self, commands_with_output: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        candidates: list[dict[str, Any]] = []
-        for row in commands_with_output or []:
-            command = self._normalize_command_text(str(row.get("cmd") or ""))
-            if not command:
-                continue
-            output = str(row.get("output") or "").strip()
-            exit_code = row.get("exit_code")
-            if not should_capture_command_history_memory(
-                command=command,
-                output=output,
-                exit_code=exit_code,
-                actor_kind="agent",
-                source_kind="agent",
-            ):
-                continue
-            candidates.append({**row, "cmd": command, "output": output})
-        return candidates
+        # F2-3: forwarder — canonical impl in servers.services.terminal_ai.memory
+        from servers.services.terminal_ai import select_memory_candidate_commands
+
+        return select_memory_candidate_commands(commands_with_output)
 
     @staticmethod
     def _detect_install_error(output: str) -> bool:
@@ -2001,12 +2298,14 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                 # Send progress notification to frontend
                 last_line = (output_so_far.strip().split("\n")[-1] or "").strip()
                 try:
-                    await self._send_ai_event({
-                        "type": "ai_install_progress",
-                        "cmd": cmd,
-                        "elapsed": elapsed,
-                        "output_tail": last_line[:200],
-                    })
+                    await self._send_ai_event(
+                        {
+                            "type": "ai_install_progress",
+                            "cmd": cmd,
+                            "elapsed": elapsed,
+                            "output_tail": last_line[:200],
+                        }
+                    )
                 except Exception:
                     return
 
@@ -2033,42 +2332,25 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         """
         Ask LLM to decide what to do after a command failed.
         Returns {"action": "retry"|"skip"|"ask"|"abort", "cmd"?, "why"?, "question"?}
+
+        Untrusted output/user_reply is sanitised by
+        :func:`servers.services.terminal_ai.prompts.build_recovery_prompt`
+        before embedding into the prompt (F1-1 / F1-2).
         """
         from app.core.llm import LLMProvider
-
-        remaining_text = (
-            "\n".join(f"  {i + 1}. {c}" for i, c in enumerate(remaining_cmds[:5]))
-            or "(нет следующих команд)"
+        from servers.services.terminal_ai import (
+            RecoveryDecision,
+            build_recovery_prompt,
+            parse_or_repair,
         )
-        user_block = f"\n\nОтвет пользователя: «{user_reply}»" if user_reply else ""
 
-        prompt = f"""Ты DevOps-агент. Команда завершилась с ошибкой. Реши, что делать дальше.
-
-КОМАНДА: {cmd}
-КОД ВЫХОДА: {exit_code}
-ВЫВОД:
-{(output or '(нет вывода)')[:2000]}
-
-СЛЕДУЮЩИЕ КОМАНДЫ В ПЛАНЕ:
-{remaining_text}{user_block}
-
-ПРАВИЛА ПРИНЯТИЯ РЕШЕНИЯ:
-- exit=127 → команда не найдена → action=retry с альтернативой (ss вместо netstat, ip addr вместо ifconfig, etc.)
-- Ошибка прав доступа ("Permission denied", "sudo required", exit=1/126) → action=ask (спросить пользователя нужен ли sudo)
-- Явная опечатка или неправильные флаги → action=retry с исправленной командой
-- Критическая ошибка, делающая следующие команды бессмысленными → action=abort
-- Незначительная ошибка, остальные команды независимы → action=skip
-- Неоднозначная ситуация — нужна информация от пользователя → action=ask
-
-ФОРМАТ ОТВЕТА (только JSON, без markdown):
-{{
-  "action": "retry" | "skip" | "ask" | "abort",
-  "cmd": "новая_команда (только для action=retry)",
-  "why": "краткое объяснение решения (1-2 предложения)",
-  "question": "вопрос пользователю (только для action=ask)"
-}}
-
-Верни только JSON."""
+        prompt = build_recovery_prompt(
+            cmd=cmd,
+            exit_code=exit_code,
+            output=output or "",
+            remaining_cmds=remaining_cmds or [],
+            user_reply=user_reply,
+        )
 
         llm = LLMProvider()
         out = ""
@@ -2078,16 +2360,11 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                 if len(out) > 3000:
                     break
 
-        try:
-            result = self._extract_json_object(out)
-            action = str(result.get("action") or "skip").lower().strip()
-            if action not in ("retry", "skip", "ask", "abort"):
-                action = "skip"
-            result["action"] = action
-            return result
-        except Exception as e:
-            logger.warning("_ai_handle_error JSON parse failed: %s, output: %.200s", e, out)
+        decision, err = parse_or_repair(out, RecoveryDecision)
+        if decision is None:
+            logger.warning("_ai_handle_error parse failed: %s, output: %.200s", err, out)
             return {"action": "skip", "why": "Не удалось разобрать ответ LLM — пропускаю команду"}
+        return decision.model_dump()
 
     async def _ai_step_decide_next(
         self,
@@ -2102,51 +2379,27 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         Step-by-step controller:
         after each command decides whether to continue current plan, add a new command,
         ask user, finish, or abort.
+
+        Untrusted goal/output/user_reply are sanitised by
+        :func:`servers.services.terminal_ai.prompts.build_step_decision_prompt`
+        before embedding into the prompt (F1-1 / F1-2).
         """
         from app.core.llm import LLMProvider
-
-        remaining_text = (
-            "\n".join(f"  {i + 1}. {c}" for i, c in enumerate(remaining_cmds[:6]))
-            or "(нет оставшихся команд)"
+        from servers.services.terminal_ai import (
+            StepDecision,
+            build_step_decision_prompt,
+            parse_or_repair,
         )
-        user_reply_block = f"\n\nОтвет пользователя: «{user_reply}»" if user_reply else ""
-        prompt = f"""Ты DevOps-агент в режиме step-by-step.
-После КАЖДОГО шага ты анализируешь вывод и выбираешь следующее действие.
 
-ЦЕЛЬ ПОЛЬЗОВАТЕЛЯ:
-{user_goal}
+        prompt = build_step_decision_prompt(
+            user_goal=user_goal,
+            last_cmd=last_cmd,
+            exit_code=exit_code,
+            output=output or "",
+            remaining_cmds=remaining_cmds or [],
+            user_reply=user_reply,
+        )
 
-ПОСЛЕДНЯЯ КОМАНДА:
-{last_cmd}
-EXIT_CODE: {exit_code}
-ВЫВОД:
-{(output or '(нет вывода)')[:2500]}
-
-ОСТАВШИЙСЯ ПЛАН:
-{remaining_text}{user_reply_block}
-
-Выбери одно действие:
-- continue: оставить текущий план без изменений
-- next: добавить СЛЕДУЮЩУЮ команду перед оставшимся планом
-- done: цель уже достигнута, можно завершать
-- ask: нужен короткий вопрос к пользователю
-- abort: критическая ситуация, выполнение надо прервать
-
-Правила:
-- Если цель уже достигнута по выводу, выбирай done.
-- Если есть явный лучший следующий шаг, выбирай next.
-- Если данных мало или нужно решение пользователя, выбирай ask.
-- Не предлагай опасные/разрушительные команды без явной необходимости.
-
-ФОРМАТ (только JSON):
-{{
-  "action": "continue" | "next" | "done" | "ask" | "abort",
-  "assistant_text": "краткий комментарий пользователю (опционально)",
-  "next_cmd": "команда (только для action=next)",
-  "why": "зачем этот шаг (для action=next)",
-  "question": "вопрос пользователю (только для action=ask)"
-}}
-"""
         llm = LLMProvider()
         out = ""
         async with _TERMINAL_AI_LLM_SEMAPHORE:
@@ -2154,17 +2407,12 @@ EXIT_CODE: {exit_code}
                 out += chunk
                 if len(out) > 5000:
                     break
-        try:
-            result = self._extract_json_object(out)
-        except Exception as e:
-            logger.warning("_ai_step_decide_next JSON parse failed: %s, output: %.200s", e, out)
-            return {"action": "continue"}
 
-        action = str(result.get("action") or "continue").lower().strip()
-        if action not in {"continue", "next", "done", "ask", "abort"}:
-            action = "continue"
-        result["action"] = action
-        return result
+        decision, err = parse_or_repair(out, StepDecision)
+        if decision is None:
+            logger.warning("_ai_step_decide_next parse failed: %s, output: %.200s", err, out)
+            return {"action": "continue"}
+        return decision.model_dump()
 
     async def _ai_type_text(self, text: str):
         if not self._ssh_proc or not text:
@@ -2190,13 +2438,20 @@ EXIT_CODE: {exit_code}
           mode=answer → just reply, no commands
           mode=ask    → ask a clarifying question
           mode=execute → run commands on the server
+
+        Untrusted inputs (terminal_tail, rules_context, history, user_message)
+        are sanitised by
+        :func:`servers.services.terminal_ai.prompts.build_planner_prompt`
+        before embedding into the prompt (F1-1 / F1-2).
+        The response is validated against
+        :class:`servers.services.terminal_ai.schemas.TerminalPlanResponse`
+        (F1-6).
         """
         from app.core.llm import LLMProvider
-        from servers.terminal_ai import (
-            build_chat_mode_block,
-            build_execution_mode_block,
-            build_history_text,
-            build_unavailable_tools_block,
+        from servers.services.terminal_ai import (
+            TerminalPlanResponse,
+            build_planner_prompt,
+            parse_or_repair,
         )
 
         logger.debug(
@@ -2204,72 +2459,16 @@ EXIT_CODE: {exit_code}
             getattr(self.server, "id", None),
             getattr(self, "_ai_run_id", ""),
         )
-        history_text = build_history_text(history)
-        unavail_block = build_unavailable_tools_block(unavailable_cmds)
-        mode_selector_block = build_execution_mode_block(execution_mode)
 
-        chat_mode_block = build_chat_mode_block(chat_mode)
-
-        prompt = f"""Ты умный DevOps/SSH ассистент в составе платформы управления серверами.
-Ты ведёшь диалог с пользователем и имеешь доступ к SSH-терминалу сервера.
-
-{chat_mode_block}
-
-РЕЖИМ ВЫПОЛНЕНИЯ: {execution_mode}
-- auto: агент сам выбирает step/fast для этого запуска.
-- step: выдай короткий стартовый план (обычно 1-3 команды), дальше план будет адаптироваться после каждого шага.
-- fast: можно выдать полный линейный план сразу (до 6 команд).
-{mode_selector_block}
-
-═══ ТВОЯ ЗАДАЧА ═══
-Самостоятельно решить, что делать с запросом пользователя, выбрав один из режимов:
-  • mode=answer  — ответить, объяснить, проконсультировать (БЕЗ команд)
-  • mode=execute — выполнить команды на сервере
-  • mode=ask     — задать уточняющий вопрос пользователю
-
-═══ ПРАВИЛА ВЫБОРА РЕЖИМА ═══
-→ Общие вопросы, "что такое X", "как работает Y", теория → mode=answer
-→ Приветствия, благодарности, короткие реплики → mode=answer (кратко)
-→ Нужно что-то проверить/сделать/настроить на сервере → mode=execute
-→ Пользователь хочет одновременно объяснения и действий → mode=execute (объяснение в assistant_text)
-→ Запрос слишком неоднозначен, нужна конкретика → mode=ask
-{unavail_block}
-═══ КРИТИЧЕСКИЕ ПРАВИЛА ДЛЯ КОМАНД (только mode=execute) ═══
-1. НИКОГДА не используй команды с бесконечным выводом — они зависнут:
-   ✗ tail -f   → ✓ tail -n 100
-   ✗ journalctl -f   → ✓ journalctl -n 100 --no-pager
-   ✗ docker logs -f  → ✓ docker logs --tail=100
-   ✗ watch cmd       → ✓ разовая команда
-   ✗ top/htop        → ✓ ps aux --sort=-%cpu | head -20
-   ✗ ping host       → ✓ ping -c 4 host
-2. Используй --no-pager для journalctl, systemctl show, git log и т.д.
-3. Максимум 6 команд. Начинай с диагностики, потом действия.
-4. Разрушительные команды (rm -rf, drop, truncate) — только если явно попросили + нужно подтверждение.
-5. Для редактирования файлов: используй sed -i, awk, tee или heredoc (cat > file << 'EOF').
-
-═══ ФОРМАТ ОТВЕТА (ТОЛЬКО JSON, без markdown вокруг) ═══
-{{
-  "execution_mode": "step" | "fast",
-  "mode": "answer" | "execute" | "ask",
-  "assistant_text": "текст пользователю (Markdown, всегда заполнен)",
-  "commands": [{{"cmd": "команда", "why": "зачем эта команда"}}]
-}}
-Поле execution_mode всегда обязательно.
-Поле commands — только для mode=execute. Для остальных режимов — [].
-
-═══ КОНТЕКСТ СЕРВЕРА/ПОЛИТИКИ ═══
-{rules_context or "(нет)"}
-
-═══ ИСТОРИЯ ДИАЛОГА ═══
-{history_text}
-
-═══ ПОСЛЕДНИЙ ВЫВОД ТЕРМИНАЛА ═══
-{terminal_tail or "(пусто)"}
-
-═══ ТЕКУЩИЙ ЗАПРОС ПОЛЬЗОВАТЕЛЯ ═══
-{user_message}
-
-Верни только JSON."""
+        prompt = build_planner_prompt(
+            user_message=user_message,
+            rules_context=rules_context,
+            terminal_tail=terminal_tail,
+            history=history,
+            unavailable_cmds=unavailable_cmds,
+            chat_mode=chat_mode,
+            execution_mode=execution_mode,
+        )
 
         llm = LLMProvider()
         out = ""
@@ -2282,16 +2481,44 @@ EXIT_CODE: {exit_code}
         if (out or "").strip().lower().startswith("error:"):
             raise ValueError(out.strip())
 
-        return self._extract_json_object(out)
+        plan, err = parse_or_repair(out, TerminalPlanResponse)
+        if plan is None:
+            logger.warning("_ai_plan_commands parse failed: %s, output: %.200s", err, out)
+            # Fallback: keep backward-compat with legacy JSON extraction so that
+            # minor schema deviations do not lose the entire plan.
+            try:
+                return self._extract_json_object(out)
+            except Exception:
+                return {
+                    "mode": "answer",
+                    "execution_mode": execution_mode if execution_mode != "auto" else "step",
+                    "assistant_text": ("Не удалось разобрать ответ модели. Попробуйте переформулировать запрос."),
+                    "commands": [],
+                }
+        payload = plan.model_dump()
+        payload["commands"] = [
+            {
+                "cmd": c["cmd"],
+                "why": c.get("why", ""),
+                # F2-8: preserve exec_mode hint if planner supplied one.
+                "exec_mode": c.get("exec_mode", "pty"),
+            }
+            for c in payload.get("commands", [])
+        ]
+        return payload
 
     @staticmethod
     def _compute_report_status(done_items: list[dict[str, Any]]) -> str:
-        from servers.terminal_ai import compute_report_status
+        # F2-3: forwarder — canonical impl in servers.services.terminal_ai.reporter
+        from servers.services.terminal_ai import compute_report_status
+
         return compute_report_status(done_items)
 
     @staticmethod
     def _build_fallback_report(done_items: list[dict[str, Any]]) -> str:
-        from servers.terminal_ai import build_fallback_report
+        # F2-3: forwarder — canonical impl in servers.services.terminal_ai.reporter
+        from servers.services.terminal_ai import build_fallback_report
+
         return build_fallback_report(done_items)
 
     async def _generate_ai_report_text(self, user_message: str, done_items: list[dict[str, Any]]) -> str:
@@ -2310,71 +2537,18 @@ EXIT_CODE: {exit_code}
         """
         По выводу выполненных команд и запросу пользователя формирует краткий отчёт:
         какие проблемы обнаружены или что проблем нет.
+
+        Untrusted output/user_message is sanitised by
+        :func:`servers.services.terminal_ai.prompts.build_report_prompt`
+        before embedding into the prompt (F1-1 / F1-2).
         """
         from app.core.llm import LLMProvider
+        from servers.services.terminal_ai import build_report_prompt
 
-        # Build a summary header (makes it easy for the LLM to reference commands by exact text)
-        summary_lines = []
-        for i, row in enumerate(commands_with_output[:10], 1):
-            cmd_text = str(row.get("cmd") or "").strip() or f"cmd_{i}"
-            code = row.get("exit_code")
-            mark = "OK" if code == 0 else ("CAPTURED" if code == 130 else f"FAIL(exit={code})")
-            summary_lines.append(f"  {i}. [{mark}] {cmd_text}")
-        summary = "\n".join(summary_lines)
-
-        # Detailed blocks — use COMMAND:/EXIT_CODE:/OUTPUT: labels, no brackets that confuse the LLM
-        parts = []
-        for i, row in enumerate(commands_with_output[:10], 1):
-            cmd_text = str(row.get("cmd") or "").strip() or f"cmd_{i}"
-            code = row.get("exit_code")
-            out = (str(row.get("output") or "")).strip() or "(no output)"
-            parts.append(
-                f"COMMAND: {cmd_text}\n"
-                f"EXIT_CODE: {code}\n"
-                f"OUTPUT:\n{out[:1200]}"
-            )
-        context = "\n\n---\n\n".join(parts)
-
-        prompt = f"""Ты старший DevOps-инженер. Напиши отчёт по результатам выполнения команд.
-
-Список выполненных команд:
-{summary}
-
-ПРАВИЛА ДЛИНЫ:
-- Если вывод содержит список объектов (контейнеры, образы, процессы, файлы, порты, пользователи) — покажи ПОЛНЫЙ список в таблице. Не обрезай.
-- Если вывод короткий или числовой — будь кратким (до 15 строк).
-- Цель: отчёт должен содержать всю полезную информацию из вывода, но без воды.
-
-СТРУКТУРА (только актуальные секции):
-**Статус**: ✅ OK / ⚠️ Предупреждение / ❌ Ошибка + одна фраза-итог.
-
-**Контейнеры / Образы / Процессы / Порты** (нужный заголовок):
-Таблица со ВСЕМИ найденными объектами. Колонки подбери по содержимому.
-Для docker ps: Имя | Образ | Статус | Порты
-Для docker images: Репозиторий | Тег | Размер | Создан
-Для процессов: PID | Команда | CPU% | MEM%
-Для портов: Протокол | Адрес | Порт | Сервис (если известен)
-
-**Проблемы** (если есть):
-Список ≤3 пунктов. Формат: `точная-команда` — что случилось — последствие.
-Команда exit=127 = "не установлена" (не критическая ошибка). Не пиши "ошибка сервера".
-Если основные команды выполнились — Статус ✅ OK, отсутствие утилит упомяни только в Проблемах.
-
-**Действия** (только если есть реальные проблемы): ≤2 конкретных команды.
-
-ПРИМЕР формата Проблем:
-- `ufw status verbose` — утилита не установлена (exit 127) — рекомендуется `apt install ufw`
-- `iptables -L -v -n` — требуются права root (exit 4) — выполни с sudo
-
-Начинай сразу с **Статус**. Без заголовка "Отчёт:" и преамбулы.
-Ссылайся на команды по ТОЧНОМУ тексту из списка выше (в обратных кавычках).
-
-ЗАПРОС ПОЛЬЗОВАТЕЛЯ: {user_message[:300]}
-
-ВЫВОД КОМАНД:
-{context[:8000]}
-
-Отчёт:"""
+        prompt = build_report_prompt(
+            user_message=user_message,
+            commands_with_output=commands_with_output or [],
+        )
 
         llm = LLMProvider()
         out = ""
@@ -2387,8 +2561,76 @@ EXIT_CODE: {exit_code}
 
     @staticmethod
     def _sanitize_memory_line(text: str) -> str:
-        from servers.terminal_ai import sanitize_memory_line
+        # F2-3: forwarder — canonical impl in servers.services.terminal_ai.memory
+        from servers.services.terminal_ai import sanitize_memory_line
+
         return sanitize_memory_line(text)
+
+    def _spawn_memory_extraction_task(
+        self,
+        *,
+        user_message: str,
+        commands_with_output: list[dict[str, Any]],
+        report: str,
+        user_id: int,
+        server_id: int,
+        audit_ctx: dict[str, Any],
+    ) -> None:
+        """Fire-and-forget: extract + persist server memory (F1-7).
+
+        The extraction+save pair is ~4-5s of LLM latency + DB writes. Running
+        them inline in ``_ai_process_queue`` blocks the UI ``idle`` event.
+        Instead we spawn a detached task and track it so disconnect/cancel
+        can wait on or cancel in-flight background work.
+        """
+        loop = asyncio.get_event_loop()
+        task = loop.create_task(
+            self._run_memory_extraction_background(
+                user_message=user_message,
+                commands_with_output=list(commands_with_output or []),
+                report=report or "",
+                user_id=user_id,
+                server_id=server_id,
+                audit_ctx=dict(audit_ctx or {}),
+            ),
+            name=f"terminal-ai-memory-{getattr(self, '_ai_run_id', '')}",
+        )
+        self._ai_background_tasks.add(task)
+        task.add_done_callback(self._ai_background_tasks.discard)
+
+    async def _run_memory_extraction_background(
+        self,
+        *,
+        user_message: str,
+        commands_with_output: list[dict[str, Any]],
+        report: str,
+        user_id: int,
+        server_id: int,
+        audit_ctx: dict[str, Any],
+    ) -> None:
+        """Body of the fire-and-forget memory-extraction task (F1-7)."""
+        try:
+            with audit_context(**audit_ctx):
+                memory_obj = await self._ai_extract_server_memory(
+                    user_message=user_message,
+                    commands_with_output=commands_with_output,
+                    report=report,
+                )
+                summary = str(memory_obj.get("summary") or "").strip()
+                facts = memory_obj.get("facts") or []
+                issues = memory_obj.get("issues") or []
+                if summary or facts or issues:
+                    await self._save_ai_server_profile(
+                        user_id=user_id,
+                        server_id=server_id,
+                        summary=summary,
+                        facts=facts,
+                        issues=issues,
+                    )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning("Background memory extraction failed: %s", exc)
 
     async def _ai_extract_server_memory(
         self,
@@ -2399,49 +2641,25 @@ EXIT_CODE: {exit_code}
         """
         Build concise, durable server context from current run:
         key facts, important paths/services, and active issues.
+
+        Untrusted output/report/user_message is sanitised by
+        :func:`servers.services.terminal_ai.prompts.build_memory_extraction_prompt`
+        before embedding into the prompt (F1-1 / F1-2). The response is
+        validated against
+        :class:`servers.services.terminal_ai.schemas.MemoryExtraction` (F1-6).
         """
         from app.core.llm import LLMProvider
+        from servers.services.terminal_ai import (
+            MemoryExtraction,
+            build_memory_extraction_prompt,
+            parse_or_repair,
+        )
 
-        blocks: list[str] = []
-        for idx, row in enumerate((commands_with_output or [])[:8], 1):
-            cmd = str(row.get("cmd") or "").strip()
-            code = row.get("exit_code")
-            out = str(row.get("output") or "").strip()
-            blocks.append(
-                f"{idx}. CMD: {cmd}\nEXIT: {code}\nOUT:\n{out[:1200]}"
-            )
-        commands_block = "\n\n---\n\n".join(blocks) if blocks else "(нет данных)"
-        report_block = (report or "").strip()[:1800] or "(нет отчёта)"
-
-        prompt = f"""Ты формируешь долгосрочную память о сервере после выполненной задачи.
-Нужны только факты, которые помогут будущим задачам на этом сервере.
-
-ЗАПРОС ПОЛЬЗОВАТЕЛЯ:
-{(user_message or '')[:300]}
-
-КРАТКИЙ ОТЧЁТ:
-{report_block}
-
-ВЫПОЛНЕННЫЕ КОМАНДЫ И ВЫВОД:
-{commands_block}
-
-Верни только JSON:
-{{
-  "summary": "1-2 коротких предложения, что важно запомнить",
-  "facts": [
-    "стабильный факт с конкретикой (версия, путь, сервис, порт, стек)"
-  ],
-  "issues": [
-    "актуальная проблема/риск с привязкой к факту"
-  ]
-}}
-
-Правила:
-- facts: максимум 8 пунктов, только подтверждённые по выводу.
-- issues: максимум 4 пункта.
-- Не добавляй секреты: пароли, токены, ключи.
-- Если данных мало, верни пустые списки, но summary оставь.
-"""
+        prompt = build_memory_extraction_prompt(
+            user_message=user_message,
+            commands_with_output=commands_with_output or [],
+            report=report,
+        )
 
         llm = LLMProvider()
         out = ""
@@ -2451,20 +2669,15 @@ EXIT_CODE: {exit_code}
                 if len(out) > 7000:
                     break
 
-        try:
-            obj = self._extract_json_object(out)
-        except Exception as e:
-            logger.warning("_ai_extract_server_memory JSON parse failed: %s, output: %.200s", e, out)
+        extraction, err = parse_or_repair(out, MemoryExtraction)
+        if extraction is None:
+            logger.warning("_ai_extract_server_memory parse failed: %s, output: %.200s", err, out)
             return {"summary": "", "facts": [], "issues": []}
 
-        summary = self._sanitize_memory_line(str(obj.get("summary") or ""))
-
-        def _clean_list(raw: Any, limit: int) -> list[str]:
-            if not isinstance(raw, list):
-                return []
+        def _clean_list(items: list[str], limit: int) -> list[str]:
             seen: set[str] = set()
             cleaned: list[str] = []
-            for it in raw:
+            for it in items or []:
                 line = self._sanitize_memory_line(str(it or ""))
                 if not line:
                     continue
@@ -2477,16 +2690,13 @@ EXIT_CODE: {exit_code}
                     break
             return cleaned
 
-        facts = _clean_list(obj.get("facts"), 8)
-        issues = _clean_list(obj.get("issues"), 4)
         return {
-            "summary": summary,
-            "facts": facts,
-            "issues": issues,
+            "summary": self._sanitize_memory_line(extraction.summary),
+            "facts": _clean_list(extraction.facts, 8),
+            "issues": _clean_list(extraction.issues, 4),
         }
 
-    @database_sync_to_async
-    def _save_ai_server_profile(
+    async def _save_ai_server_profile(
         self,
         user_id: int,
         server_id: int,
@@ -2494,65 +2704,16 @@ EXIT_CODE: {exit_code}
         facts: list[str],
         issues: list[str],
     ) -> dict[str, Any]:
-        from django.contrib.auth.models import User
+        """Forwarder to :func:`servers.services.terminal_ai.save_server_profile` (F2-3)."""
+        from servers.services.terminal_ai import save_server_profile
 
-        from servers.knowledge_service import ServerKnowledgeService
-        from servers.models import Server
-
-        user = User.objects.filter(id=user_id).first()
-        server = Server.objects.filter(id=server_id).first()
-        if not server:
-            return {"saved": 0, "titles": []}
-
-        cleaned_summary = self._sanitize_memory_line(summary)
-        cleaned_facts = [self._sanitize_memory_line(x) for x in (facts or [])]
-        cleaned_facts = [x for x in cleaned_facts if x]
-        cleaned_issues = [self._sanitize_memory_line(x) for x in (issues or [])]
-        cleaned_issues = [x for x in cleaned_issues if x]
-
-        # Do not persist ephemeral chat summaries without durable facts/issues.
-        if not should_persist_ai_memory(facts=cleaned_facts, issues=cleaned_issues):
-            return {"saved": 0, "titles": []}
-
-        saved = 0
-        titles: list[str] = []
-        now_str = timezone.now().strftime("%Y-%m-%d %H:%M")
-
-        if cleaned_summary or cleaned_facts:
-            profile_parts = [f"Обновлено: {now_str}"]
-            if cleaned_summary:
-                profile_parts.append(f"Кратко: {cleaned_summary}")
-            if cleaned_facts:
-                profile_parts.append("Факты:")
-                profile_parts.extend([f"- {x}" for x in cleaned_facts[:10]])
-            profile_content = "\n".join(profile_parts)[:3500]
-            ServerKnowledgeService.save_ai_knowledge(
-                server=server,
-                title="Профиль сервера (авто)",
-                content=profile_content,
-                category="system",
-                user=user,
-                confidence=0.88,
-            )
-            saved += 1
-            titles.append("Профиль сервера (авто)")
-
-        if cleaned_issues:
-            issues_parts = [f"Обновлено: {now_str}", "Риски/замечания:"]
-            issues_parts.extend([f"- {x}" for x in cleaned_issues[:8]])
-            issues_content = "\n".join(issues_parts)[:2500]
-            ServerKnowledgeService.save_ai_knowledge(
-                server=server,
-                title="Текущие риски (авто)",
-                content=issues_content,
-                category="issues",
-                user=user,
-                confidence=0.8,
-            )
-            saved += 1
-            titles.append("Текущие риски (авто)")
-
-        return {"saved": saved, "titles": titles}
+        return await save_server_profile(
+            user_id=user_id,
+            server_id=server_id,
+            summary=summary,
+            facts=facts,
+            issues=issues,
+        )
 
     @staticmethod
     def _extract_json_object(text: str) -> dict[str, Any]:
@@ -2577,47 +2738,26 @@ EXIT_CODE: {exit_code}
         *,
         confirm_dangerous_commands: bool = True,
     ) -> str:
-        text = (cmd or "").strip()
-        if not text:
-            return ""
-        if self._matches_patterns(text, forbidden_patterns or []):
-            return "forbidden"
-        if allowlist_patterns and not self._matches_patterns(text, allowlist_patterns or []):
-            return "outside_allowlist"
-        if confirm_dangerous_commands and is_dangerous_command(text):
-            return "dangerous"
-        return ""
+        # F2-6: thin forwarder to the CommandPolicy service. Kept for
+        # backward compatibility with any call sites that still reference
+        # this method directly; new code should call ``decide_command_policy``.
+        from servers.services.terminal_ai import decide_command_policy
+
+        verdict = decide_command_policy(
+            cmd,
+            forbidden_patterns=forbidden_patterns,
+            allowlist_patterns=allowlist_patterns,
+            chat_mode="agent",  # ask_mode handled at plan-item layer
+            confirm_dangerous_commands=confirm_dangerous_commands,
+        )
+        return verdict.reason
 
     @staticmethod
     def _matches_patterns(cmd: str, patterns: list[str]) -> bool:
-        cmd_l = (cmd or "").lower()
-        for p in patterns or []:
-            pat = (str(p or "")).strip()
-            if not pat:
-                continue
-            pl = pat.lower()
-            if pl.startswith("re:"):
-                expr = pat[3:].strip()
-                if not expr:
-                    continue
-                try:
-                    if re.search(expr, cmd, flags=re.IGNORECASE):
-                        return True
-                except re.error:
-                    continue
-                continue
+        # F2-6: forwarder — canonical impl in services.terminal_ai.policy
+        from servers.services.terminal_ai import match_patterns
 
-            pat_tokens = re.findall(r"[a-z0-9_./:-]+", pl)
-            cmd_tokens = re.findall(r"[a-z0-9_./:-]+", cmd_l)
-            if pat_tokens and cmd_tokens:
-                plen = len(pat_tokens)
-                for i in range(0, len(cmd_tokens) - plen + 1):
-                    if cmd_tokens[i : i + plen] == pat_tokens:
-                        return True
-
-            if pl in cmd_l:
-                return True
-        return False
+        return match_patterns(cmd, patterns)
 
     async def _disconnect_ssh(self):
         was_connected = bool(self._ssh_conn or self._ssh_proc)
@@ -2663,11 +2803,11 @@ EXIT_CODE: {exit_code}
         if was_connected and self.server and self._user_id:
             await log_user_activity_async(
                 user_id=self._user_id,
-                category='servers',
-                action='terminal_disconnect',
-                status='info',
+                category="servers",
+                action="terminal_disconnect",
+                status="info",
                 description=f'Disconnected from server terminal "{self.server.name}"',
-                entity_type='server',
+                entity_type="server",
                 entity_id=self.server.id,
                 entity_name=self.server.name,
             )
@@ -2815,7 +2955,9 @@ EXIT_CODE: {exit_code}
         if item is None:
             return
 
-        raw_output = self._manual_active_output if int(getattr(self, "_manual_active_cmd_id", 0) or 0) == int(cmd_id) else ""
+        raw_output = (
+            self._manual_active_output if int(getattr(self, "_manual_active_cmd_id", 0) or 0) == int(cmd_id) else ""
+        )
         clean_output = self._normalize_manual_command_output(str(item.get("command") or ""), raw_output)
         await database_sync_to_async(self._persist_manual_terminal_command_result, thread_sensitive=True)(
             user_id=int(item.get("user_id") or 0),
@@ -3030,8 +3172,7 @@ EXIT_CODE: {exit_code}
             fallback_plain=plain_password or "",
         )
 
-    @database_sync_to_async
-    def _get_ai_rules_and_forbidden(
+    async def _get_ai_rules_and_forbidden(
         self, user_id: int, server_id: int
     ) -> tuple[list[str], str, list[str], dict[str, Any]]:
         """
@@ -3040,187 +3181,21 @@ EXIT_CODE: {exit_code}
           - rules_context_text
           - required_checks
           - merged_environment_vars (global/group/server network_config)
+
+        Forwarder to :func:`servers.services.terminal_ai.load_terminal_rules`
+        (F2-4) — the body was extracted out of the consumer to keep this
+        file focused on WebSocket/SSH transport only.
         """
-        from servers.models import GlobalServerRules, ServerGroupKnowledge, ServerKnowledge
+        from servers.services.terminal_ai import load_terminal_rules
 
-        now = timezone.now()
-        server = (
-            Server.objects.select_related("group", "user")
-            .filter(id=server_id, is_active=True)
-            .filter(
-                Q(user_id=user_id)
-                | (
-                    Q(shares__user_id=user_id, shares__is_revoked=False)
-                    & (Q(shares__expires_at__isnull=True) | Q(shares__expires_at__gt=now))
-                )
-            )
-            .distinct()
-            .first()
-        )
-        if not server:
-            return [], "", [], {}
+        ctx = await load_terminal_rules(user_id=user_id, server_id=server_id)
+        return ctx.as_tuple()
 
-        share = None
-        if server.user_id != user_id:
-            share = (
-                ServerShare.objects.filter(server_id=server_id, user_id=user_id, is_revoked=False)
-                .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
-                .first()
-            )
-        share_context_enabled = bool(share.share_context) if share else True
+    async def _get_effective_environment_vars(self, user_id: int, server_id: int) -> dict[str, Any]:
+        """Forwarder to :func:`servers.services.terminal_ai.load_effective_environment_vars` (F2-4)."""
+        from servers.services.terminal_ai import load_effective_environment_vars
 
-        global_rules = GlobalServerRules.objects.filter(user_id=server.user_id).first()
-
-        forbidden: list[str] = []
-        parts: list[str] = []
-        required_checks: list[str] = []
-        env_vars: dict[str, Any] = {}
-
-        if global_rules:
-            if share_context_enabled:
-                ctx = global_rules.get_context_for_ai()
-                if ctx:
-                    parts.append(ctx)
-                required_checks.extend([str(x) for x in (global_rules.required_checks or []) if str(x).strip()])
-                env_vars.update(global_rules.environment_vars or {})
-            if global_rules.forbidden_commands:
-                forbidden.extend([str(x) for x in global_rules.forbidden_commands if x])
-
-        if server.group:
-            if share_context_enabled:
-                gctx = server.group.get_context_for_ai()
-                if gctx:
-                    parts.append(gctx)
-                env_vars.update(server.group.environment_vars or {})
-            if server.group.forbidden_commands:
-                forbidden.extend([str(x) for x in server.group.forbidden_commands if x])
-
-        if share_context_enabled:
-            try:
-                server_ctx = server.get_network_context_summary()
-                if server_ctx:
-                    parts.append("=== КОНТЕКСТ СЕРВЕРА ===\n" + server_ctx)
-            except Exception:
-                pass
-
-            # Compact knowledge context to improve AI continuity between runs.
-            try:
-                knowledge_rows = list(
-                    ServerKnowledge.objects.filter(server_id=server.id, is_active=True)
-                    .order_by("-updated_at")
-                    .values_list("category", "title", "content")[:12]
-                )
-                if knowledge_rows:
-                    k_lines = []
-                    for category, title, content in knowledge_rows:
-                        t = str(title or "").strip()
-                        c = str(content or "").strip().replace("\n", " ")
-                        if t or c:
-                            k_lines.append(f"- [{category}] {t}: {c[:220]}")
-                    if k_lines:
-                        parts.append("=== НАКОПЛЕННЫЕ ЗНАНИЯ О СЕРВЕРЕ ===\n" + "\n".join(k_lines))
-            except Exception:
-                pass
-
-            if server.group_id:
-                try:
-                    gk_rows = list(
-                        ServerGroupKnowledge.objects.filter(group_id=server.group_id, is_active=True)
-                        .order_by("-updated_at")
-                        .values_list("category", "title", "content")[:8]
-                    )
-                    if gk_rows:
-                        gk_lines = []
-                        for category, title, content in gk_rows:
-                            t = str(title or "").strip()
-                            c = str(content or "").strip().replace("\n", " ")
-                            if t or c:
-                                gk_lines.append(f"- [{category}] {t}: {c[:220]}")
-                        if gk_lines:
-                            parts.append("=== ГРУППОВЫЕ ЗНАНИЯ ===\n" + "\n".join(gk_lines))
-                except Exception:
-                    pass
-
-            # Server-level env vars from network_config have highest priority.
-            if isinstance(server.network_config, dict):
-                env_vars.update(server.network_config.get("env_vars") or {})
-                env_vars.update(server.network_config.get("environment") or {})
-
-        # De-duplicate forbidden patterns (case-insensitive)
-        seen: set[str] = set()
-        uniq: list[str] = []
-        for p in forbidden:
-            s = (p or "").strip()
-            if not s:
-                continue
-            k = s.lower()
-            if k in seen:
-                continue
-            seen.add(k)
-            uniq.append(s)
-
-        # De-duplicate required checks preserving order
-        req_seen: set[str] = set()
-        req_uniq: list[str] = []
-        for c in required_checks:
-            s = str(c or "").strip()
-            if not s:
-                continue
-            k = s.lower()
-            if k in req_seen:
-                continue
-            req_seen.add(k)
-            req_uniq.append(s)
-
-        return uniq, "\n\n".join([p for p in parts if p]).strip(), req_uniq, env_vars
-
-    @database_sync_to_async
-    def _get_effective_environment_vars(self, user_id: int, server_id: int) -> dict[str, Any]:
-        """
-        Get merged env vars for shell session.
-        Priority: global < group < server network_config(env_vars/environment)
-        """
-        from servers.models import GlobalServerRules
-
-        now = timezone.now()
-        server = (
-            Server.objects.select_related("group", "user")
-            .filter(id=server_id, is_active=True)
-            .filter(
-                Q(user_id=user_id)
-                | (
-                    Q(shares__user_id=user_id, shares__is_revoked=False)
-                    & (Q(shares__expires_at__isnull=True) | Q(shares__expires_at__gt=now))
-                )
-            )
-            .distinct()
-            .first()
-        )
-        if not server:
-            return {}
-
-        share = None
-        if server.user_id != user_id:
-            share = (
-                ServerShare.objects.filter(server_id=server_id, user_id=user_id, is_revoked=False)
-                .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
-                .first()
-            )
-        share_context_enabled = bool(share.share_context) if share else True
-
-        env_vars: dict[str, Any] = {}
-        if share_context_enabled:
-            global_rules = GlobalServerRules.objects.filter(user_id=server.user_id).first()
-            if global_rules:
-                env_vars.update(global_rules.environment_vars or {})
-            if server.group:
-                env_vars.update(server.group.environment_vars or {})
-
-        if isinstance(server.network_config, dict):
-            env_vars.update(server.network_config.get("env_vars") or {})
-            env_vars.update(server.network_config.get("environment") or {})
-
-        return env_vars
+        return await load_effective_environment_vars(user_id=user_id, server_id=server_id)
 
     @database_sync_to_async
     def _log_ai_command_history(

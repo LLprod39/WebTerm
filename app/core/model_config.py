@@ -665,6 +665,15 @@ class ModelManager:
             "opssummary": "chat",
             "opsguard": "chat",
             "opsmemory": "chat",
+            # Terminal AI purposes (F1-8): cheap/fast tier by default.
+            # ``terminal_planning`` chooses mode/commands — small JSON task;
+            # ``memory_extraction`` compacts a run into facts/issues JSON.
+            # Both route to the "chat" bucket so admins can point them at a
+            # lite model (gpt-5-mini / gemini-flash / claude-haiku) via
+            # ``chat_llm_provider`` / ``chat_llm_model`` without affecting
+            # agent-level ReAct calls.
+            "terminal_planning": "chat",
+            "memory_extraction": "chat",
         }
         normalized_purpose = purpose_aliases.get(purpose, purpose)
 

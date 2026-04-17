@@ -442,6 +442,50 @@ def test_human_approval_node_sends_telegram_callback_buttons(monkeypatch):
     assert reply_markup["inline_keyboard"][0][1]["callback_data"].startswith("approval:rejected:")
 
 
+def test_human_approval_node_uses_global_telegram_defaults_when_node_fields_blank(monkeypatch):
+    run = _make_run("approval-global-telegram-user")
+    node = {
+        "id": "approval_gate",
+        "type": "logic/human_approval",
+        "data": {
+            "timeout_minutes": 1,
+            "base_url": "http://localhost:9000",
+        },
+    }
+    captured: dict[str, object] = {}
+
+    async def fake_output_email(*args, **kwargs):
+        return {"status": "completed", "output": "email skipped"}
+
+    async def fake_output_telegram(tg_node, *_args, **_kwargs):
+        captured["data"] = tg_node["data"]
+        return {"status": "completed", "output": "telegram sent"}
+
+    async def fake_poll(*_args, **_kwargs):
+        return {"decision": "approved", "response_text": "Подтверждено через глобальные настройки"}
+
+    async def fake_sleep(_seconds: float) -> None:
+        return None
+
+    async def fake_send_telegram_message(**_kwargs):
+        return {"status": "completed", "output": "decision confirmation sent"}
+
+    monkeypatch.setattr("studio.pipeline_executor._global_tg_defaults", lambda: ("global-bot", "global-chat"))
+    monkeypatch.setattr("studio.pipeline_executor._global_email_defaults", lambda: ("", "", "", "", ""))
+    monkeypatch.setattr("studio.pipeline_executor._execute_output_email", fake_output_email)
+    monkeypatch.setattr("studio.pipeline_executor._execute_output_telegram", fake_output_telegram)
+    monkeypatch.setattr("studio.pipeline_executor._poll_telegram_approval_decision", fake_poll)
+    monkeypatch.setattr("studio.pipeline_executor._send_telegram_message", fake_send_telegram_message)
+    monkeypatch.setattr("studio.pipeline_executor.asyncio.sleep", fake_sleep)
+
+    result = async_to_sync(_execute_logic_human_approval)(node, {}, {"plan": {"status": "completed", "output": "Ready"}}, run)
+
+    assert result["status"] == "completed"
+    assert result["decision"] == "approved"
+    assert captured["data"]["bot_token"] == "global-bot"
+    assert captured["data"]["chat_id"] == "global-chat"
+
+
 def test_poll_telegram_approval_decision_consumes_callback_updates(monkeypatch):
     import studio.pipeline_executor as executor_module
 
@@ -554,6 +598,44 @@ def test_telegram_input_node_returns_operator_reply(monkeypatch):
     assert sent_messages[0]["reply_markup"] == {"force_reply": True, "selective": False}
     run.refresh_from_db()
     assert run.node_states["operator_input"]["operator_response"] == "Попробуй docker compose up -d mini-prod-mcp-demo"
+
+
+def test_telegram_input_node_uses_global_telegram_defaults_when_node_fields_blank(monkeypatch):
+    run = _make_run("telegram-input-global-user")
+    node = {
+        "id": "operator_input",
+        "type": "logic/telegram_input",
+        "data": {
+            "timeout_minutes": 5,
+            "message": "Что делаем с {container_name}?",
+            "parse_mode": "",
+        },
+    }
+    captured: dict[str, object] = {}
+
+    async def fake_send_telegram_message(**kwargs):
+        captured.update(kwargs)
+        return {
+            "status": "completed",
+            "output": "sent",
+            "message_ids": [111],
+            "last_message_id": 111,
+        }
+
+    monkeypatch.setattr("studio.pipeline_executor._global_tg_defaults", lambda: ("global-bot", "global-chat"))
+    monkeypatch.setattr("studio.pipeline_executor._send_telegram_message", fake_send_telegram_message)
+
+    result = async_to_sync(_execute_logic_telegram_input)(
+        node,
+        {"container_name": "mini-prod-mcp-demo"},
+        {"restart_container": {"status": "failed", "error": "exit 1", "output": "status=exited"}},
+        run,
+    )
+
+    assert result["status"] == "hibernating"
+    assert captured["bot_token"] == "global-bot"
+    assert captured["chat_id"] == "global-chat"
+    assert "mini-prod-mcp-demo" in str(captured["message"])
 
 
 def test_telegram_input_node_prefers_operator_reply_over_stale_stopped_status(monkeypatch):

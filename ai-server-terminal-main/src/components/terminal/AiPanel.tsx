@@ -35,6 +35,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
+import { riskBadgeClass, useAiCommandRisk } from "@/hooks/useAiCommandRisk";
 import type { AiAssistantSettings, AiChatMode, AiExecutionMode } from "./XTerminal";
 
 export interface AiCommand {
@@ -44,6 +45,11 @@ export interface AiCommand {
   requires_confirm: boolean;
   status?: "pending" | "running" | "done" | "skipped" | "cancelled" | "confirmed";
   exit_code?: number;
+  blocked?: boolean;
+  reason?: "" | "forbidden" | "outside_allowlist" | "dangerous" | "ask_mode";
+  risk_categories?: string[];
+  risk_reasons?: string[];
+  exec_mode?: "pty" | "direct";
 }
 
 export interface AiMessage {
@@ -245,6 +251,33 @@ function MD({ content }: { content: string }) {
   );
 }
 
+/**
+ * F2-5 / F2-8 risk badge — shown next to the command line. Clicking the badge
+ * is not interactive; ``title`` provides the native tooltip listing
+ * ``risk_reasons`` and the resolved reason message.
+ */
+function CmdRiskBadge({ command }: { command: AiCommand }) {
+  const risk = useAiCommandRisk(command);
+  // Don't render anything for safe commands without risk categories — keeps
+  // the UI quiet on ``ls``/``pwd``/etc.
+  if (risk.level === "safe" && risk.categories.length === 0 && risk.execMode !== "direct") {
+    return null;
+  }
+  const showExecHint = risk.execMode === "direct" && risk.level === "safe";
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${
+        showExecHint
+          ? "border-border/60 bg-secondary/40 text-muted-foreground"
+          : riskBadgeClass(risk.level)
+      }`}
+      title={risk.tooltip}
+    >
+      {showExecHint ? "DIRECT" : risk.label}
+    </span>
+  );
+}
+
 function CmdStatusBadge({ status, exit_code }: { status?: AiCommand["status"]; exit_code?: number }) {
   if (!status || status === "pending") {
     return <span className="rounded-md border border-border/60 px-1.5 py-0.5 text-[11px] text-muted-foreground">ожидает</span>;
@@ -314,7 +347,9 @@ function CommandsMsg({
                 <div key={cmd.id} className="space-y-1.5 px-3 py-2">
                   <div className="flex items-start justify-between gap-2">
                     <code className="flex-1 break-all font-mono text-xs leading-relaxed text-primary">{cmd.cmd}</code>
-                    <div className="shrink-0 pt-0.5">
+                    <div className="flex shrink-0 items-center gap-1 pt-0.5">
+                      {/* F2-5 / F2-8: expose risk categories / exec_mode hint */}
+                      <CmdRiskBadge command={cmd} />
                       <CmdStatusBadge status={cmd.status} exit_code={cmd.exit_code} />
                     </div>
                   </div>

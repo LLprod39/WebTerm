@@ -156,25 +156,25 @@ function SkillMarkdown({ content }: { content: string }) {
           const code = String(children).replace(/\n$/, "");
           if ((className || "").includes("language-") || code.includes("\n")) {
             return (
-              <code className="block whitespace-pre-wrap rounded-lg border border-border bg-muted/20 p-3 font-mono text-[11px] leading-5 text-foreground">
+              <code className="block whitespace-pre-wrap rounded-lg border border-border bg-muted/30 p-4 font-mono text-[12.5px] leading-6 text-foreground">
                 {code}
               </code>
             );
           }
-          return <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px] text-foreground">{children}</code>;
+          return <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[12px] text-foreground">{children}</code>;
         },
-        h1: ({ children }) => <h1 className="text-base font-semibold text-foreground">{children}</h1>,
-        h2: ({ children }) => <h2 className="mt-4 text-sm font-semibold text-foreground">{children}</h2>,
-        h3: ({ children }) => <h3 className="mt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{children}</h3>,
-        p: ({ children }) => <p className="text-xs leading-6 text-muted-foreground">{children}</p>,
-        ul: ({ children }) => <ul className="list-disc space-y-1 pl-4 text-xs text-muted-foreground">{children}</ul>,
-        ol: ({ children }) => <ol className="list-decimal space-y-1 pl-4 text-xs text-muted-foreground">{children}</ol>,
+        h1: ({ children }) => <h1 className="mt-2 text-xl font-bold tracking-tight text-foreground">{children}</h1>,
+        h2: ({ children }) => <h2 className="mt-6 text-lg font-semibold text-foreground">{children}</h2>,
+        h3: ({ children }) => <h3 className="mt-5 text-sm font-semibold uppercase tracking-wide text-muted-foreground">{children}</h3>,
+        p: ({ children }) => <p className="my-2 text-sm leading-7 text-foreground/85">{children}</p>,
+        ul: ({ children }) => <ul className="list-disc space-y-1.5 pl-5 text-sm leading-7 text-foreground/85">{children}</ul>,
+        ol: ({ children }) => <ol className="list-decimal space-y-1.5 pl-5 text-sm leading-7 text-foreground/85">{children}</ol>,
         li: ({ children }) => <li>{children}</li>,
         strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
         blockquote: ({ children }) => (
-          <blockquote className="border-l-2 border-primary/40 pl-3 text-xs italic text-muted-foreground">{children}</blockquote>
+          <blockquote className="my-3 border-l-2 border-primary/40 pl-4 text-sm italic text-muted-foreground">{children}</blockquote>
         ),
-        hr: () => <hr className="my-3 border-border" />,
+        hr: () => <hr className="my-5 border-border" />,
         pre: ({ children }) => <pre className="overflow-auto">{children}</pre>,
       }}
     >
@@ -673,14 +673,23 @@ export default function StudioSkillsPage() {
       ) : (
         <div className="flex-1 flex flex-col overflow-hidden bg-muted/10 relative">
           {/* MASTER BACK BAR */}
-          <div className="px-6 py-3 flex items-center justify-between border-b border-border/40 bg-background/60 backdrop-blur-md sticky top-0 z-20 shrink-0 shadow-sm">
-            <Button variant="ghost" size="sm" onClick={() => setSelectedSlug("")} className="h-8 gap-2 rounded-lg text-muted-foreground hover:text-foreground">
-              <ArrowLeft className="h-4 w-4" />
-              {tr("Назад в каталог", "Back to catalog")}
-            </Button>
-            
-            <div className="flex items-center gap-2">
-              {selectedSkill && <Badge variant="outline" className="font-mono text-[10px] bg-background/50">{selectedSkill.slug}</Badge>}
+          <div className="px-6 py-3 flex items-center justify-between gap-4 border-b border-border/40 bg-background/70 backdrop-blur-md sticky top-0 z-20 shrink-0 shadow-sm">
+            <div className="flex min-w-0 items-center gap-3">
+              <Button variant="ghost" size="sm" onClick={() => setSelectedSlug("")} className="h-8 gap-2 rounded-lg text-muted-foreground hover:text-foreground shrink-0">
+                <ArrowLeft className="h-4 w-4" />
+                {tr("Каталог", "Catalog")}
+              </Button>
+              {selectedSkill && (
+                <div className="hidden min-w-0 items-center gap-2 md:flex">
+                  <span className="text-muted-foreground/50">/</span>
+                  <BookOpen className="h-3.5 w-3.5 shrink-0 text-primary/70" />
+                  <span className="truncate text-sm font-medium text-foreground">{selectedSkill.name}</span>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {selectedSkill?.service && <Badge variant="secondary" className="text-[11px]">{selectedSkill.service}</Badge>}
+              {selectedSkill && <Badge variant="outline" className="font-mono text-[11px] bg-background/50">{selectedSkill.slug}</Badge>}
             </div>
           </div>
 
@@ -692,19 +701,22 @@ export default function StudioSkillsPage() {
                 {tr("Загрузка рабочего пространства...", "Loading workspace...")}
               </div>
             ) : selectedSkill ? (
-              <Tabs defaultValue="overview" className="flex h-full flex-col w-full max-w-7xl mx-auto space-y-4">
-                  <div className="rounded-xl border border-border/50 bg-background/40 backdrop-blur-md px-5 pt-5 shadow-sm">
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                      <div>
+              <Tabs defaultValue="overview" className="flex h-full flex-col w-full space-y-5">
+                  <div className="rounded-2xl border border-border/50 bg-background/40 backdrop-blur-md px-6 pt-6 shadow-sm">
+                    <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-3">
-                          <h2 className="text-xl font-bold tracking-tight text-foreground">{selectedSkill.name}</h2>
-                          <Badge variant="outline" className="font-mono text-[10px] bg-background/50 backdrop-blur text-muted-foreground ring-1 ring-border/50">{selectedSkill.slug}</Badge>
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20 shadow-inner">
+                            <BookOpen className="h-5 w-5 text-primary" />
+                          </div>
+                          <h2 className="text-2xl lg:text-3xl font-bold tracking-tight text-foreground">{selectedSkill.name}</h2>
+                          <Badge variant="outline" className="font-mono text-[11px] bg-background/50 backdrop-blur text-muted-foreground ring-1 ring-border/50">{selectedSkill.slug}</Badge>
                         </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-                          {selectedSkill.service && <span className="flex items-center gap-1"><Server className="h-3 w-3" /> {selectedSkill.service}</span>}
-                          {selectedSkill.category && <span>· {selectedSkill.category}</span>}
-                          {selectedSkill.runtime_enforced && <span className="flex items-center gap-1 text-amber-500/80">· <ShieldCheck className="h-3 w-3"/> {tr("runtime enforced", "runtime enforced")}</span>}
-                          {selectedSkill.safety_level && <span>· {selectedSkill.safety_level}</span>}
+                        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-medium text-muted-foreground">
+                          {selectedSkill.service && <span className="inline-flex items-center gap-1.5 rounded-md bg-muted/40 px-2 py-1"><Server className="h-3 w-3" /> {selectedSkill.service}</span>}
+                          {selectedSkill.category && <span className="inline-flex items-center rounded-md bg-muted/40 px-2 py-1">{selectedSkill.category}</span>}
+                          {selectedSkill.runtime_enforced && <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2 py-1 text-amber-600 dark:text-amber-400"><ShieldCheck className="h-3 w-3"/> {tr("runtime enforced", "runtime enforced")}</span>}
+                          {selectedSkill.safety_level && <span className="inline-flex items-center rounded-md bg-muted/40 px-2 py-1">{tr("безопасность", "safety")}: {selectedSkill.safety_level}</span>}
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
@@ -715,39 +727,39 @@ export default function StudioSkillsPage() {
                       </div>
                     </div>
                     
-                    <div className="mt-5">
-                      <TabsList className="bg-transparent h-auto p-0 border-b border-border/50 w-full flex justify-start rounded-none">
-                        <TabsTrigger value="overview" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none border-b-2 border-transparent data-[state=active]:border-primary px-4 pb-3 pt-2 font-medium text-muted-foreground data-[state=active]:text-foreground">Основа / Overview</TabsTrigger>
-                        <TabsTrigger value="playbook" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none border-b-2 border-transparent data-[state=active]:border-primary px-4 pb-3 pt-2 font-medium text-muted-foreground data-[state=active]:text-foreground">Плейбук / Playbook</TabsTrigger>
-                        <TabsTrigger value="workspace" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none border-b-2 border-transparent data-[state=active]:border-primary px-4 pb-3 pt-2 font-medium flex items-center gap-1.5 text-muted-foreground data-[state=active]:text-foreground"><FileCode2 className="h-3.5 w-3.5"/> Workspace</TabsTrigger>
-                        <TabsTrigger value="settings" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none border-b-2 border-transparent data-[state=active]:border-primary px-4 pb-3 pt-2 font-medium flex items-center gap-1.5 text-muted-foreground data-[state=active]:text-foreground"><Settings2 className="h-3.5 w-3.5"/> Настройки</TabsTrigger>
+                    <div className="mt-6">
+                      <TabsList className="bg-transparent h-auto p-0 border-b border-border/50 w-full flex justify-start rounded-none gap-1">
+                        <TabsTrigger value="overview" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none border-b-2 border-transparent data-[state=active]:border-primary px-5 pb-3 pt-2 text-sm font-medium inline-flex items-center gap-1.5 text-muted-foreground data-[state=active]:text-foreground"><BookOpen className="h-4 w-4"/> {tr("Обзор", "Overview")}</TabsTrigger>
+                        <TabsTrigger value="playbook" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none border-b-2 border-transparent data-[state=active]:border-primary px-5 pb-3 pt-2 text-sm font-medium inline-flex items-center gap-1.5 text-muted-foreground data-[state=active]:text-foreground"><BookMarked className="h-4 w-4"/> {tr("Плейбук", "Playbook")}</TabsTrigger>
+                        <TabsTrigger value="workspace" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none border-b-2 border-transparent data-[state=active]:border-primary px-5 pb-3 pt-2 text-sm font-medium inline-flex items-center gap-1.5 text-muted-foreground data-[state=active]:text-foreground"><FileCode2 className="h-4 w-4"/> {tr("Файлы", "Workspace")}</TabsTrigger>
+                        <TabsTrigger value="settings" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none border-b-2 border-transparent data-[state=active]:border-primary px-5 pb-3 pt-2 text-sm font-medium inline-flex items-center gap-1.5 text-muted-foreground data-[state=active]:text-foreground"><Settings2 className="h-4 w-4"/> {tr("Настройки", "Settings")}</TabsTrigger>
                       </TabsList>
                     </div>
                   </div>
 
-                  <TabsContent value="overview" className="m-0 space-y-4 outline-none">
-                    <div className="grid gap-4 lg:grid-cols-2">
-                       <div className="flex flex-col gap-4">
-                         <div className="rounded-xl border border-border/50 bg-background/40 backdrop-blur-md p-5 shadow-sm">
-                           <p className="text-sm font-semibold">{tr("Описание", "Description")}</p>
+                  <TabsContent value="overview" className="m-0 space-y-5 outline-none">
+                    <div className="grid gap-5 lg:grid-cols-2">
+                       <div className="flex flex-col gap-5">
+                         <div className="rounded-2xl border border-border/50 bg-background/40 backdrop-blur-md p-6 shadow-sm">
+                           <p className="text-base font-semibold">{tr("Описание", "Description")}</p>
                            {selectedSkill.description ? (
-                             <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">{selectedSkill.description}</p>
+                             <p className="mt-3 text-sm leading-7 text-foreground/85">{selectedSkill.description}</p>
                            ) : (
-                             <p className="mt-2 text-[12px] italic text-muted-foreground">{tr("Нет описания", "No description")}</p>
+                             <p className="mt-3 text-sm italic text-muted-foreground">{tr("Нет описания", "No description")}</p>
                            )}
                            
                            {selectedSkill.ui_hint && (
-                             <div className="mt-4 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-[12px] text-foreground/90 flex gap-2">
+                             <div className="mt-4 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-foreground/90 flex gap-2.5">
                                <Sparkles className="h-4 w-4 shrink-0 text-primary mt-0.5" />
                                <span>{selectedSkill.ui_hint}</span>
                              </div>
                            )}
                          </div>
 
-                         <div className="rounded-xl border border-border/50 bg-background/40 backdrop-blur-md p-5 shadow-sm">
-                           <p className="text-sm font-semibold">{tr("Путь в системе", "System Path")}</p>
+                         <div className="rounded-2xl border border-border/50 bg-background/40 backdrop-blur-md p-6 shadow-sm">
+                           <p className="text-base font-semibold">{tr("Путь в системе", "System Path")}</p>
                            <div className="mt-3 flex items-center gap-2 rounded-lg border border-border/60 bg-background/40 p-2 pl-3">
-                             <div className="flex-1 break-all font-mono text-[11px] text-foreground">{selectedSkill.path}</div>
+                             <div className="flex-1 break-all font-mono text-[12px] text-foreground">{selectedSkill.path}</div>
                              <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md shrink-0 focus:outline-none focus:ring-2 focus:ring-primary/20 hover:bg-background/80" onClick={() => {
                                navigator.clipboard.writeText(selectedSkill.path);
                                toast({description: tr("Путь скопирован", "Path copied")});
@@ -758,27 +770,27 @@ export default function StudioSkillsPage() {
                          </div>
                        </div>
 
-                       <div className="flex flex-col gap-4">
+                       <div className="flex flex-col gap-5">
                          {selectedSkill.guardrail_summary?.length > 0 && (
-                           <div className="rounded-xl border border-border/50 bg-background/40 backdrop-blur-md p-5 shadow-sm">
+                           <div className="rounded-2xl border border-border/50 bg-background/40 backdrop-blur-md p-6 shadow-sm">
                              <div className="flex items-center gap-2">
                                <Shield className="h-4 w-4 text-emerald-500" />
-                               <p className="text-sm font-semibold">{tr("Guardrails", "Guardrails")}</p>
+                               <p className="text-base font-semibold">{tr("Guardrails", "Guardrails")}</p>
                              </div>
-                             <div className="mt-3 space-y-1.5 border-l-2 border-emerald-500/30 pl-3">
+                             <div className="mt-3 space-y-2 border-l-2 border-emerald-500/30 pl-4">
                                {selectedSkill.guardrail_summary.map((item) => (
-                                 <p key={item} className="text-[12px] leading-relaxed text-muted-foreground">{item}</p>
+                                 <p key={item} className="text-sm leading-6 text-foreground/85">{item}</p>
                                ))}
                              </div>
                            </div>
                          )}
 
                          {selectedSkill.recommended_tools?.length > 0 && (
-                           <div className="rounded-xl border border-border/50 bg-background/40 backdrop-blur-md p-5 shadow-sm">
-                             <p className="text-sm font-semibold">{tr("Рекомендуемые инструменты агента", "Recommended agent tools")}</p>
+                           <div className="rounded-2xl border border-border/50 bg-background/40 backdrop-blur-md p-6 shadow-sm">
+                             <p className="text-base font-semibold">{tr("Рекомендуемые инструменты агента", "Recommended agent tools")}</p>
                              <div className="mt-3 flex flex-wrap gap-2">
                                {selectedSkill.recommended_tools.map((toolName) => (
-                                 <Badge key={toolName} variant="secondary" className="px-2.5 py-0.5 text-[11px] bg-secondary/60 hover:bg-secondary/80 font-mono font-normal">
+                                 <Badge key={toolName} variant="secondary" className="px-2.5 py-1 text-xs bg-secondary/60 hover:bg-secondary/80 font-mono font-normal">
                                    {toolName}
                                  </Badge>
                                ))}
@@ -787,12 +799,12 @@ export default function StudioSkillsPage() {
                          )}
 
                          {selectedSkill.runtime_enforced && (
-                           <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-5 shadow-sm backdrop-blur-md">
+                           <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-6 shadow-sm backdrop-blur-md">
                              <div className="flex items-center gap-2">
                                <ShieldCheck className="h-4 w-4 text-amber-500/80" />
-                               <p className="text-sm font-semibold text-amber-600/90 dark:text-amber-400/90">{tr("Runtime policy", "Runtime policy")}</p>
+                               <p className="text-base font-semibold text-amber-600/90 dark:text-amber-400/90">{tr("Runtime policy", "Runtime policy")}</p>
                              </div>
-                             <pre className="mt-3 overflow-auto whitespace-pre-wrap rounded-lg bg-background/50 border border-amber-500/20 p-4 font-mono text-[11px] leading-5 text-muted-foreground shadow-inner">
+                             <pre className="mt-3 overflow-auto whitespace-pre-wrap rounded-lg bg-background/50 border border-amber-500/20 p-4 font-mono text-[12px] leading-6 text-foreground/80 shadow-inner">
                                {JSON.stringify(selectedSkill.runtime_policy, null, 2)}
                              </pre>
                            </div>
@@ -802,23 +814,23 @@ export default function StudioSkillsPage() {
                   </TabsContent>
 
                   <TabsContent value="playbook" className="m-0 space-y-4 outline-none">
-                    <div className="rounded-xl border border-border/50 bg-background/40 backdrop-blur-md p-6 shadow-sm">
-                      <div className="mb-6 flex items-center gap-3 border-b border-border/50 pb-4">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 ring-1 ring-primary/20 shadow-inner">
+                    <div className="rounded-2xl border border-border/50 bg-background/40 backdrop-blur-md p-8 shadow-sm">
+                      <div className="mb-6 flex items-center gap-3 border-b border-border/50 pb-5">
+                        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20 shadow-inner">
                           <BookMarked className="h-5 w-5 text-primary" />
                         </div>
                         <div>
-                          <h3 className="text-base font-semibold text-foreground">{tr("Плейбук скилла (SKILL.md)", "Skill Playbook (SKILL.md)")}</h3>
-                          <p className="text-[12px] text-muted-foreground">{tr("Ниже полный Markdown документации, который читают агенты.", "Below is the full Markdown the agents read at runtime.")}</p>
+                          <h3 className="text-lg font-semibold text-foreground">{tr("Плейбук скилла (SKILL.md)", "Skill Playbook (SKILL.md)")}</h3>
+                          <p className="text-sm text-muted-foreground">{tr("Ниже полный Markdown документации, который читают агенты.", "Below is the full Markdown the agents read at runtime.")}</p>
                         </div>
                       </div>
-                      <div className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground">
+                      <div className="mx-auto max-w-4xl">
                         <SkillMarkdown content={selectedSkill.content} />
                       </div>
                     </div>
                   </TabsContent>
 
-                  <TabsContent value="workspace" className="m-0 flex flex-col gap-4 outline-none min-h-[600px] h-[calc(100vh-280px)]">
+                  <TabsContent value="workspace" className="m-0 flex flex-col gap-4 outline-none min-h-[650px] h-[calc(100vh-240px)]">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between rounded-xl border border-border/50 bg-background/40 backdrop-blur-md p-4 shadow-sm shrink-0">
                       <div className="flex items-center gap-3">
                          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 ring-1 ring-primary/20">
@@ -874,17 +886,17 @@ export default function StudioSkillsPage() {
                         )}
                       </div>
                     )}
-                                        <div className="flex flex-1 overflow-hidden gap-4" style={{ minHeight: "600px" }}>
-                      <div className="w-1/4 min-w-[240px] flex flex-col gap-2 rounded-xl border border-border/40 bg-muted/10 p-3 overflow-y-auto">
+                    <div className="flex flex-1 overflow-hidden gap-4" style={{ minHeight: "600px" }}>
+                      <div className="w-[300px] lg:w-[340px] shrink-0 flex flex-col gap-2 rounded-xl border border-border/40 bg-muted/10 p-4 overflow-y-auto">
                         <div className="mb-2 flex items-center justify-between gap-2">
                           <div>
-                            <p className="text-xs font-medium text-foreground">{tr("Файлы пакета", "Package Files")}</p>
-                            <p className="text-[10px] text-muted-foreground">{tr("SKILL.md, references/, scripts/, assets/", "SKILL.md, references/, scripts/, assets/")}</p>
+                            <p className="text-sm font-semibold text-foreground">{tr("Файлы пакета", "Package Files")}</p>
+                            <p className="text-[11px] text-muted-foreground">{tr("SKILL.md, references/, scripts/, assets/", "SKILL.md, references/, scripts/, assets/")}</p>
                           </div>
                           {isFetchingWorkspace ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
                         </div>
                         {!workspace?.files.length ? (
-                          <div className="rounded-xl border border-dashed border-border/70 px-3 py-6 text-center text-[11px] text-muted-foreground">
+                          <div className="rounded-xl border border-dashed border-border/70 px-3 py-6 text-center text-xs text-muted-foreground">
                             {tr("Файлы ещё не найдены.", "No files found yet.")}
                           </div>
                         ) : (
@@ -895,17 +907,17 @@ export default function StudioSkillsPage() {
                                 type="button"
                                 onClick={() => setSelectedFilePath(file.path)}
                                 className={`w-full rounded-xl border px-3 py-3 text-left transition-colors ${
-                                  selectedFilePath === file.path ? "border-primary/40 bg-primary/5" : "border-border/70 bg-background/24 hover:bg-background/40"
+                                  selectedFilePath === file.path ? "border-primary/50 bg-primary/10 ring-1 ring-primary/20" : "border-border/70 bg-background/40 hover:bg-background/60"
                                 }`}
                               >
                                 <div className="flex items-center justify-between gap-2">
-                                  <span className="truncate text-[11px] font-medium text-foreground">{file.name}</span>
-                                  <span className="text-[10px] text-muted-foreground">{formatFileSize(file.size)}</span>
+                                  <span className="truncate text-sm font-medium text-foreground">{file.name}</span>
+                                  <span className="shrink-0 text-[11px] text-muted-foreground">{formatFileSize(file.size)}</span>
                                 </div>
-                                <div className="mt-1 truncate font-mono text-[10px] text-muted-foreground">{file.path}</div>
+                                <div className="mt-1 truncate font-mono text-[11px] text-muted-foreground">{file.path}</div>
                                 <div className="mt-2 flex flex-wrap gap-1">
-                                  <Badge variant="outline" className="text-[9px]">{fileKindLabel(file.kind, lang)}</Badge>
-                                  <Badge variant="secondary" className="text-[9px]">{file.language}</Badge>
+                                  <Badge variant="outline" className="text-[10px]">{fileKindLabel(file.kind, lang)}</Badge>
+                                  <Badge variant="secondary" className="text-[10px]">{file.language}</Badge>
                                 </div>
                               </button>
                             ))}
@@ -913,10 +925,14 @@ export default function StudioSkillsPage() {
                         )}
                       </div>
 
-                      <div className="flex-1 flex flex-col rounded-xl border border-border/40 bg-muted/5">
+                      <div className="flex-1 flex flex-col rounded-xl border border-border/40 bg-muted/5 overflow-hidden">
                         {!selectedWorkspaceFile ? (
-                          <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-muted-foreground">
-                            {tr("Выберите файл слева, чтобы открыть редактор.", "Select a file on the left to open the editor.")}
+                          <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted/30">
+                              <FileCode2 className="h-5 w-5 text-muted-foreground/70" />
+                            </div>
+                            <p className="text-sm font-medium text-foreground">{tr("Выберите файл слева", "Select a file on the left")}</p>
+                            <p className="text-xs text-muted-foreground max-w-sm">{tr("Откройте SKILL.md, references/, scripts/ или assets/, чтобы править плейбук прямо здесь.", "Open SKILL.md or any file under references/, scripts/, assets/ to edit the playbook here.")}</p>
                           </div>
                         ) : isFetchingFile && !selectedFileDetail ? (
                           <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
@@ -925,16 +941,20 @@ export default function StudioSkillsPage() {
                           </div>
                         ) : (
                           <div className="flex flex-col h-full">
-                            <div className="border-b border-border/40 px-4 py-4 bg-background/50 shrink-0">
+                            <div className="border-b border-border/40 px-5 py-4 bg-background/50 shrink-0">
                               <div className="flex flex-wrap items-start justify-between gap-3">
-                                <div>
-                                  <div className="text-sm font-medium text-foreground">{selectedWorkspaceFile.name}</div>
-                                  <div className="mt-1 break-all font-mono text-[10px] text-muted-foreground">{selectedWorkspaceFile.path}</div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <FileCode2 className="h-4 w-4 text-primary/70" />
+                                    <div className="text-sm font-semibold text-foreground">{selectedWorkspaceFile.name}</div>
+                                    {isEditorDirty && <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-600 dark:text-amber-400">{tr("не сохранено", "unsaved")}</Badge>}
+                                  </div>
+                                  <div className="mt-1 break-all font-mono text-[11px] text-muted-foreground">{selectedWorkspaceFile.path}</div>
                                 </div>
-                                <div className="flex flex-wrap gap-1">
-                                  <Badge variant="outline" className="text-[9px]">{fileKindLabel(selectedWorkspaceFile.kind, lang)}</Badge>
-                                  <Badge variant="secondary" className="text-[9px]">{selectedWorkspaceFile.language}</Badge>
-                                  <Badge variant="outline" className="text-[9px]">{formatFileSize(selectedWorkspaceFile.size)}</Badge>
+                                <div className="flex flex-wrap gap-1.5">
+                                  <Badge variant="outline" className="text-[10px]">{fileKindLabel(selectedWorkspaceFile.kind, lang)}</Badge>
+                                  <Badge variant="secondary" className="text-[10px]">{selectedWorkspaceFile.language}</Badge>
+                                  <Badge variant="outline" className="text-[10px]">{formatFileSize(selectedWorkspaceFile.size)}</Badge>
                                 </div>
                               </div>
                             </div>
@@ -943,7 +963,9 @@ export default function StudioSkillsPage() {
                               <Textarea 
                                 value={editorValue} 
                                 onChange={(event) => setEditorValue(event.target.value)} 
-                                className="flex-1 font-mono text-[12px] leading-relaxed resize-none shadow-inner border-border/50" 
+                                className="flex-1 font-mono text-[13px] leading-6 resize-none shadow-inner border-border/50 bg-background/60 focus-visible:ring-1 focus-visible:ring-primary/30" 
+                                style={{ tabSize: 2 }}
+                                spellCheck={false}
                                 readOnly={!canEditSelectedFile} 
                               />
                             </div>

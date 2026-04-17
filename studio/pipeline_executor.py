@@ -1566,6 +1566,38 @@ def _global_tg_defaults() -> tuple[str, str]:
     return cfg.get("telegram_bot_token") or "", cfg.get("telegram_chat_id") or ""
 
 
+def _resolve_telegram_target(
+    config: dict[str, Any] | None,
+    *,
+    token_keys: tuple[str, ...],
+    chat_keys: tuple[str, ...],
+) -> tuple[str, str]:
+    """
+    Resolve Telegram credentials for a node.
+
+    Priority:
+    1. First non-empty node field from token_keys/chat_keys
+    2. Global Studio notification settings (.notification_config.json / env / Django settings)
+
+    We accept a few aliases because older node payloads and different node types
+    use different field names (`bot_token`, `tg_bot_token`, `telegram_bot_token`).
+    """
+    node_config = config if isinstance(config, dict) else {}
+    global_token, global_chat = _global_tg_defaults()
+
+    def _first_non_empty(keys: tuple[str, ...], fallback: str) -> str:
+        for key in keys:
+            value = str(node_config.get(key) or "").strip()
+            if value:
+                return value
+        return str(fallback or "").strip()
+
+    return (
+        _first_non_empty(token_keys, global_token),
+        _first_non_empty(chat_keys, global_chat),
+    )
+
+
 def _global_email_defaults() -> tuple[str, str, str, str, str]:
     """Return (to_email, smtp_host, smtp_user, smtp_password, from_email)."""
     cfg = _load_notif_cfg()
@@ -1663,11 +1695,13 @@ async def _send_telegram_message(
 
 
 async def _execute_output_telegram(node: dict, context: dict, node_outputs: dict[str, dict], run: PipelineRun) -> dict:
-    """Send a message via Telegram Bot API. Falls back to TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID from .env."""
+    """Send a message via Telegram Bot API. Falls back to global Studio notification settings."""
     config = node.get("data", {})
-    g_token, g_chat = _global_tg_defaults()
-    bot_token = (config.get("bot_token") or g_token or "").strip()
-    chat_id = (config.get("chat_id") or g_chat or "").strip()
+    bot_token, chat_id = _resolve_telegram_target(
+        config,
+        token_keys=("bot_token", "tg_bot_token", "telegram_bot_token"),
+        chat_keys=("chat_id", "tg_chat_id", "telegram_chat_id"),
+    )
 
     if not bot_token:
         return {"status": "failed", "error": "bot_token not configured. Set TELEGRAM_BOT_TOKEN in .env or fill in the node."}
@@ -1873,8 +1907,11 @@ async def _execute_logic_human_approval(
             logger.warning("human_approval email failed: %s", exc)
 
     # Telegram notification — node config overrides global settings
-    tg_bot_token = (config.get("tg_bot_token") or g_token or "").strip()
-    tg_chat_id = (config.get("tg_chat_id") or g_chat or "").strip()
+    tg_bot_token, tg_chat_id = _resolve_telegram_target(
+        config,
+        token_keys=("tg_bot_token", "bot_token", "telegram_bot_token"),
+        chat_keys=("tg_chat_id", "chat_id", "telegram_chat_id"),
+    )
     raw_tg_parse_mode = config.get("tg_parse_mode")
     tg_parse_mode = "Markdown" if raw_tg_parse_mode is None else str(raw_tg_parse_mode).strip()
     if tg_bot_token and tg_chat_id:
@@ -2010,9 +2047,11 @@ async def _execute_logic_telegram_input(
         timeout_minutes = float(config.get("timeout_minutes", 120) or 120)
     except (TypeError, ValueError):
         timeout_minutes = 120.0
-    g_token, g_chat = _global_tg_defaults()
-    bot_token = (config.get("tg_bot_token") or g_token or "").strip()
-    chat_id = str(config.get("tg_chat_id") or g_chat or "").strip()
+    bot_token, chat_id = _resolve_telegram_target(
+        config,
+        token_keys=("tg_bot_token", "bot_token", "telegram_bot_token"),
+        chat_keys=("tg_chat_id", "chat_id", "telegram_chat_id"),
+    )
     parse_mode = str(config.get("parse_mode") or "Markdown").strip() or "Markdown"
 
     if not bot_token:

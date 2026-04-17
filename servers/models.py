@@ -380,6 +380,41 @@ class ServerCommandHistory(models.Model):
         return f"{self.server.name}: {self.command[:50]}"
 
 
+class TerminalAiChatMessage(models.Model):
+    """Persistent turn-by-turn history of the terminal AI assistant (F2-9).
+
+    One row per user/assistant message. Scoped to (user, server) so each
+    user has an independent conversation per server. Older messages are
+    trimmed by the ``servers.services.terminal_ai.history`` service based
+    on the ``memory_ttl_requests`` setting.
+    """
+
+    ROLE_USER = "user"
+    ROLE_ASSISTANT = "assistant"
+    ROLE_CHOICES = [
+        (ROLE_USER, "User"),
+        (ROLE_ASSISTANT, "Assistant"),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="terminal_ai_messages")
+    server = models.ForeignKey(Server, on_delete=models.CASCADE, related_name="terminal_ai_messages")
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    text = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        indexes = [
+            # Fast "last N messages for (user, server)" lookups.
+            models.Index(fields=["user", "server", "-created_at"]),
+        ]
+
+    def __str__(self):
+        # Short debug repr — truncate long assistant outputs.
+        preview = (self.text or "")[:60].replace("\n", " ")
+        return f"{self.role}: {preview}"
+
+
 class GlobalServerRules(models.Model):
     """
     Global rules for all servers belonging to a user.
