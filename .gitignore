@@ -125,3 +125,15 @@ runtime_logs/
 !keycloak_profiles.json
 !create_pipeline.sql
 !create_mega_pipeline.py
+
+# Internal docs kept local-only (not published to GitHub)
+AGENTS.md
+CONTRIBUTING.md
+DEVELOPMENT_RULES.md
+ARCHITECTURE_CONTRACT.md
+PROJECT_FUNCTIONALITY_GUIDE.md
+PROJECT_AUDIT.md
+PRODUCTION_READINESS_PLAN.md
+SECURITY_QA_FOR_IS_REVIEW.md
+AI_MEMORY_PRESENTATION.md
+desktop/README.md

@@ -14,7 +14,7 @@
   <a href="#быстрый-старт"><img alt="Quick start" src="https://img.shields.io/badge/%E2%86%92%20Quick%20start-0EA5E9?style=for-the-badge&logoColor=white"/></a>
   &nbsp;<a href="#nova-ai-ассистент-в-терминале"><img alt="Nova AI" src="https://img.shields.io/badge/%E2%86%92%20Nova%20AI-14B8A6?style=for-the-badge"/></a>
   &nbsp;<a href="#архитектура-в-двух-словах"><img alt="Architecture" src="https://img.shields.io/badge/%E2%86%92%20Architecture-6366F1?style=for-the-badge"/></a>
-  &nbsp;<a href="#документация"><img alt="Docs" src="https://img.shields.io/badge/%E2%86%92%20Docs-A855F7?style=for-the-badge"/></a>
+  &nbsp;<a href="#layered-memory-по-серверам"><img alt="Memory" src="https://img.shields.io/badge/%E2%86%92%20Memory-A855F7?style=for-the-badge"/></a>
 </p>
 
 <p align="center">
@@ -239,7 +239,7 @@ flowchart LR
     classDef store fill:#020617,stroke:#475569,color:#CBD5E1;
 ```
 
-Границы между bounded contexts описаны в [`ARCHITECTURE_CONTRACT.md`](./ARCHITECTURE_CONTRACT.md) и автоматически проверяются `lint-imports` через [`.importlinter`](./.importlinter).
+Границы между bounded contexts автоматически проверяются `lint-imports` через [`.importlinter`](./.importlinter).
 
 ---
 
@@ -566,8 +566,6 @@ dotnet build .\MiniProd.Desktop.sln -c Debug -p:Platform=x64 -m:1 /p:UseSharedCo
 .\src\MiniProd.Desktop\bin\x64\Debug\net8.0-windows10.0.19041.0\MiniProd.Desktop.exe
 ```
 
-Подробности — [`desktop/README.md`](./desktop/README.md).
-
 ---
 
 ## Production notes
@@ -620,69 +618,12 @@ dotnet build .\MiniProd.Desktop.sln -c Debug -p:Platform=x64 -m:1 /p:UseSharedCo
     </td>
     <td width="50%" valign="top">
       <h4>Architecture contract</h4>
-      <a href="./ARCHITECTURE_CONTRACT.md"><code>ARCHITECTURE_CONTRACT.md</code></a>, <a href="./DEVELOPMENT_RULES.md"><code>DEVELOPMENT_RULES.md</code></a>, <a href="./.importlinter"><code>.importlinter</code></a>, <code>servers/services/*</code> как публичный API для <code>studio</code>.
+      <a href="./.importlinter"><code>.importlinter</code></a> + <code>servers/services/*</code> как публичный API для <code>studio</code>, без cross-context ORM-импортов.
     </td>
   </tr>
 </table>
 
 Полная история — `git log --oneline`.
-
----
-
-## Документация
-
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <h4><a href="./AGENTS.md">AGENTS.md</a></h4>
-      Актуальная рабочая карта репозитория для AI-агентов и новых контрибьюторов.
-    </td>
-    <td width="50%" valign="top">
-      <h4><a href="./CONTRIBUTING.md">CONTRIBUTING.md</a></h4>
-      Алгоритм выполнения задач, чеклисты, шаблоны <code>service</code>/<code>view</code>.
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <h4><a href="./DEVELOPMENT_RULES.md">DEVELOPMENT_RULES.md</a></h4>
-      Жёсткие правила R-001 … R-007, список god-files и запрещённых действий.
-    </td>
-    <td width="50%" valign="top">
-      <h4><a href="./ARCHITECTURE_CONTRACT.md">ARCHITECTURE_CONTRACT.md</a></h4>
-      Bounded contexts, dependency matrix, паттерны взаимодействия <code>servers ↔ studio</code>.
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <h4><a href="./PROJECT_FUNCTIONALITY_GUIDE.md">PROJECT_FUNCTIONALITY_GUIDE.md</a></h4>
-      Полный обзор: сценарии, API, WebSocket, модели, management-команды.
-    </td>
-    <td width="50%" valign="top">
-      <h4><a href="./PROJECT_AUDIT.md">PROJECT_AUDIT.md</a></h4>
-      Результат глубокого аудита архитектуры и AI-подсистемы.
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <h4><a href="./PRODUCTION_READINESS_PLAN.md">PRODUCTION_READINESS_PLAN.md</a></h4>
-      План доведения до production: что есть, что нужно доделать.
-    </td>
-    <td width="50%" valign="top">
-      <h4><a href="./SECURITY_QA_FOR_IS_REVIEW.md">SECURITY_QA_FOR_IS_REVIEW.md</a></h4>
-      Вопросы/ответы для security-ревью ИБ.
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <h4><a href="./AI_MEMORY_PRESENTATION.md">AI_MEMORY_PRESENTATION.md</a></h4>
-      Короткая презентация по layered AI memory.
-    </td>
-    <td width="50%" valign="top">
-      <h4><a href="./desktop/README.md">desktop/README.md</a></h4>
-      Подробности и оговорки по WinUI 3 desktop-клиенту.
-    </td>
-  </tr>
-</table>
 
 ---
 
@@ -692,7 +633,7 @@ dotnet build .\MiniProd.Desktop.sln -c Debug -p:Platform=x64 -m:1 /p:UseSharedCo
 - **Опасные действия** обязательно проходят через [`app/tools/safety.py`](./app/tools/safety.py).
 - **`passwords/`** остался в коде, но не подключён в `INSTALLED_APPS`.
 - **Корневой `src/main.tsx`** — thin entrypoint, который реэкспортирует SPA из `ai-server-terminal-main/`.
-- **Нарушения архитектуры** фиксируются `lint-imports` и ограничены списком в `DEVELOPMENT_RULES.md` → раздел «Известные нарушения контрактов».
+- **Нарушения архитектуры** фиксируются [`lint-imports`](./.importlinter).
 
 ---
 
