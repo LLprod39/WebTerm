@@ -1,115 +1,145 @@
-<svg width="1280" height="420" viewBox="0 0 1280 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg width="1280" height="440" viewBox="0 0 1280 440" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="bg" x1="80" y1="40" x2="1180" y2="420" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#09121E"/>
-      <stop offset="1" stop-color="#101827"/>
+    <linearGradient id="bg" x1="80" y1="40" x2="1180" y2="440" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#070B14"/>
+      <stop offset="0.5" stop-color="#0B1524"/>
+      <stop offset="1" stop-color="#0F1B2E"/>
     </linearGradient>
-    <radialGradient id="glowA" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(250 72) rotate(55) scale(480 720)">
-      <stop stop-color="#1D4ED8" stop-opacity="0.32"/>
-      <stop offset="1" stop-color="#1D4ED8" stop-opacity="0"/>
+    <radialGradient id="glowA" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(200 60) rotate(55) scale(520 760)">
+      <stop stop-color="#2563EB" stop-opacity="0.38"/>
+      <stop offset="1" stop-color="#2563EB" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="glowB" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1010 120) rotate(120) scale(420 420)">
-      <stop stop-color="#14B8A6" stop-opacity="0.22"/>
+    <radialGradient id="glowB" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1040 120) rotate(120) scale(460 460)">
+      <stop stop-color="#14B8A6" stop-opacity="0.28"/>
       <stop offset="1" stop-color="#14B8A6" stop-opacity="0"/>
     </radialGradient>
-    <linearGradient id="panelStroke" x1="720" y1="54" x2="1202" y2="368" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#2F4B74"/>
+    <radialGradient id="glowC" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(680 420) rotate(-35) scale(480 340)">
+      <stop stop-color="#A855F7" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#A855F7" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="titleGrad" x1="80" y1="120" x2="560" y2="180" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="0.6" stop-color="#CFE4FF"/>
+      <stop offset="1" stop-color="#9CE8DA"/>
+    </linearGradient>
+    <linearGradient id="panelStroke" x1="720" y1="54" x2="1202" y2="388" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3B5F92"/>
       <stop offset="1" stop-color="#18253A"/>
     </linearGradient>
     <linearGradient id="accent" x1="0" y1="0" x2="116" y2="116" gradientUnits="userSpaceOnUse">
       <stop stop-color="#60A5FA"/>
       <stop offset="1" stop-color="#14B8A6"/>
     </linearGradient>
-    <filter id="shadow" x="672" y="28" width="558" height="364" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+    <linearGradient id="accentPurple" x1="0" y1="0" x2="120" y2="40" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A855F7"/>
+      <stop offset="1" stop-color="#60A5FA"/>
+    </linearGradient>
+    <filter id="shadow" x="672" y="28" width="558" height="384" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
       <feFlood flood-opacity="0" result="BackgroundImageFix"/>
       <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
-      <feOffset dy="12"/>
-      <feGaussianBlur stdDeviation="18"/>
+      <feOffset dy="16"/>
+      <feGaussianBlur stdDeviation="22"/>
       <feComposite in2="hardAlpha" operator="out"/>
-      <feColorMatrix type="matrix" values="0 0 0 0 0.0156863 0 0 0 0 0.0588235 0 0 0 0 0.129412 0 0 0 0.48 0"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.0156863 0 0 0 0 0.0588235 0 0 0 0 0.129412 0 0 0 0.56 0"/>
       <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_hero"/>
       <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_hero" result="shape"/>
     </filter>
+    <filter id="novaGlow" x="716" y="220" width="320" height="80" filterUnits="userSpaceOnUse">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
   </defs>
 
-  <rect width="1280" height="420" rx="28" fill="url(#bg)"/>
-  <rect width="1280" height="420" rx="28" fill="url(#glowA)"/>
-  <rect width="1280" height="420" rx="28" fill="url(#glowB)"/>
+  <rect width="1280" height="440" rx="28" fill="url(#bg)"/>
+  <rect width="1280" height="440" rx="28" fill="url(#glowA)"/>
+  <rect width="1280" height="440" rx="28" fill="url(#glowB)"/>
+  <rect width="1280" height="440" rx="28" fill="url(#glowC)"/>
 
-  <g opacity="0.08">
+  <g opacity="0.07">
     <path d="M0 78H1280" stroke="white"/>
     <path d="M0 144H1280" stroke="white"/>
     <path d="M0 210H1280" stroke="white"/>
     <path d="M0 276H1280" stroke="white"/>
     <path d="M0 342H1280" stroke="white"/>
-    <path d="M154 0V420" stroke="white"/>
-    <path d="M308 0V420" stroke="white"/>
-    <path d="M462 0V420" stroke="white"/>
-    <path d="M616 0V420" stroke="white"/>
+    <path d="M154 0V440" stroke="white"/>
+    <path d="M308 0V440" stroke="white"/>
+    <path d="M462 0V440" stroke="white"/>
+    <path d="M616 0V440" stroke="white"/>
   </g>
 
-  <circle cx="104" cy="88" r="12" fill="#60A5FA"/>
-  <circle cx="104" cy="88" r="28" fill="#60A5FA" fill-opacity="0.18"/>
-  <path d="M100 88H108" stroke="white" stroke-width="2" stroke-linecap="round"/>
-  <path d="M104 84V92" stroke="white" stroke-width="2" stroke-linecap="round"/>
-
-  <text x="138" y="78" fill="#9FB3C8" font-family="Segoe UI, Arial, sans-serif" font-size="15" letter-spacing="0.24em">SERVER OPS / AUTOMATION / STUDIO</text>
-  <text x="80" y="164" fill="white" font-family="Segoe UI, Arial, sans-serif" font-size="68" font-weight="700">WebTerm</text>
-  <text x="80" y="203" fill="#B8C6D8" font-family="Segoe UI, Arial, sans-serif" font-size="22">Servers, terminals and controlled automation in one workspace.</text>
-  <text x="80" y="242" fill="#7E94AE" font-family="Segoe UI, Arial, sans-serif" font-size="18">Django API + WebSocket backend, React SPA, Studio for pipelines and a separate WinUI desktop shell.</text>
-
-  <g font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="600">
-    <rect x="80" y="286" width="90" height="36" rx="18" fill="#112033" stroke="#1F3B5F"/>
-    <text x="109" y="309" fill="#CFE5FF">SSH</text>
-
-    <rect x="182" y="286" width="90" height="36" rx="18" fill="#112033" stroke="#1F3B5F"/>
-    <text x="211" y="309" fill="#CFE5FF">RDP</text>
-
-    <rect x="284" y="286" width="108" height="36" rx="18" fill="#112033" stroke="#1F3B5F"/>
-    <text x="312" y="309" fill="#CFE5FF">Agents</text>
-
-    <rect x="404" y="286" width="120" height="36" rx="18" fill="#112033" stroke="#1F3B5F"/>
-    <text x="430" y="309" fill="#CFE5FF">Pipelines</text>
-
-    <rect x="536" y="286" width="92" height="36" rx="18" fill="#112033" stroke="#1F3B5F"/>
-    <text x="565" y="309" fill="#CFE5FF">MCP</text>
+  <g>
+    <circle cx="104" cy="88" r="14" fill="url(#accent)"/>
+    <circle cx="104" cy="88" r="30" fill="#60A5FA" fill-opacity="0.15"/>
+    <circle cx="104" cy="88" r="46" fill="#60A5FA" fill-opacity="0.06"/>
+    <path d="M99 88H109" stroke="white" stroke-width="2.2" stroke-linecap="round"/>
+    <path d="M104 83V93" stroke="white" stroke-width="2.2" stroke-linecap="round"/>
   </g>
 
-  <text x="82" y="356" fill="#7E94AE" font-family="Consolas, 'Courier New', monospace" font-size="16">$ inventory + access + shared context + live runs</text>
+  <text x="142" y="82" fill="#9FB3C8" font-family="Segoe UI, Arial, sans-serif" font-size="14" letter-spacing="0.28em" font-weight="600">OPS · TERMINAL · NOVA · MEMORY · STUDIO</text>
+  <text x="80" y="170" fill="url(#titleGrad)" font-family="Segoe UI, Arial, sans-serif" font-size="78" font-weight="800" letter-spacing="-0.02em">WebTerm</text>
+  <text x="80" y="212" fill="#D5E2F2" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="500">Одна панель для всей ops-работы: серверы, терминал, Nova и автоматизация.</text>
+  <text x="80" y="244" fill="#8FA6C0" font-family="Segoe UI, Arial, sans-serif" font-size="17">SSH · RDP · AI-ассистент с snapshots · layered memory · server agents · visual pipelines · MCP · WinUI desktop.</text>
+
+  <g font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="600">
+    <rect x="80" y="292" width="96" height="36" rx="18" fill="#0F1C2E" stroke="#1F3B5F"/>
+    <circle cx="100" cy="310" r="4" fill="#60A5FA"/>
+    <text x="114" y="315" fill="#CFE5FF">SSH · RDP</text>
+
+    <rect x="188" y="292" width="104" height="36" rx="18" fill="#0F1C2E" stroke="#2F5DBF"/>
+    <circle cx="208" cy="310" r="4" fill="url(#accentPurple)"/>
+    <text x="222" y="315" fill="#DCE9FF">Nova AI</text>
+
+    <rect x="304" y="292" width="114" height="36" rx="18" fill="#0F1C2E" stroke="#1E4F4A"/>
+    <circle cx="324" cy="310" r="4" fill="#34D399"/>
+    <text x="338" y="315" fill="#CFF7EC">Memory</text>
+
+    <rect x="430" y="292" width="108" height="36" rx="18" fill="#0F1C2E" stroke="#1F3B5F"/>
+    <circle cx="450" cy="310" r="4" fill="#FBBF24"/>
+    <text x="464" y="315" fill="#FFEBB5">Agents</text>
+
+    <rect x="550" y="292" width="108" height="36" rx="18" fill="#0F1C2E" stroke="#1F3B5F"/>
+    <circle cx="570" cy="310" r="4" fill="#F472B6"/>
+    <text x="584" y="315" fill="#FBD7E8">Studio</text>
+  </g>
+
+  <g>
+    <rect x="80" y="348" width="324" height="42" rx="12" fill="#0C1523" stroke="#16253A"/>
+    <circle cx="96" cy="369" r="4" fill="#34D399"/>
+    <text x="112" y="374" fill="#9FB3C8" font-family="Consolas, 'Courier New', monospace" font-size="14">ready › 24 servers · 7 pipelines · 3 agents live</text>
+  </g>
 
   <g filter="url(#shadow)">
-    <rect x="708" y="54" width="486" height="292" rx="24" fill="#0F1724" stroke="url(#panelStroke)"/>
-    <rect x="708" y="54" width="486" height="48" rx="24" fill="#121D2C"/>
+    <rect x="708" y="54" width="486" height="332" rx="24" fill="#0B1321" stroke="url(#panelStroke)"/>
+    <rect x="708" y="54" width="486" height="48" rx="24" fill="#0F1827"/>
     <circle cx="742" cy="78" r="6" fill="#F87171"/>
     <circle cx="764" cy="78" r="6" fill="#FBBF24"/>
     <circle cx="786" cy="78" r="6" fill="#34D399"/>
-    <text x="824" y="84" fill="#B7C4D4" font-family="Segoe UI, Arial, sans-serif" font-size="16">Platform overview</text>
+    <text x="824" y="84" fill="#B7C4D4" font-family="Segoe UI, Arial, sans-serif" font-size="15">core-web-01 · nova ▸ agent</text>
+    <rect x="1100" y="68" width="82" height="22" rx="11" fill="#052E24" stroke="#14B8A6"/>
+    <circle cx="1112" cy="79" r="3.2" fill="#34D399"/>
+    <text x="1122" y="83" fill="#5EEAD4" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="600">LIVE</text>
 
-    <rect x="734" y="124" width="196" height="84" rx="18" fill="#111C2A" stroke="#1F3047"/>
+    <rect x="734" y="124" width="196" height="84" rx="18" fill="#0E1A2B" stroke="#1F3047"/>
     <text x="758" y="154" fill="#88A1BE" font-family="Segoe UI, Arial, sans-serif" font-size="12" letter-spacing="0.18em">FLEET</text>
     <text x="758" y="186" fill="white" font-family="Segoe UI, Arial, sans-serif" font-size="32" font-weight="700">24</text>
     <text x="812" y="186" fill="#9BB0C8" font-family="Segoe UI, Arial, sans-serif" font-size="16">servers online</text>
 
-    <rect x="950" y="124" width="218" height="84" rx="18" fill="#111C2A" stroke="#1F3047"/>
-    <text x="974" y="154" fill="#88A1BE" font-family="Segoe UI, Arial, sans-serif" font-size="12" letter-spacing="0.18em">STUDIO</text>
-    <text x="974" y="186" fill="white" font-family="Segoe UI, Arial, sans-serif" font-size="32" font-weight="700">7</text>
-    <text x="1012" y="186" fill="#9BB0C8" font-family="Segoe UI, Arial, sans-serif" font-size="16">active pipelines</text>
+    <rect x="950" y="124" width="218" height="84" rx="18" fill="#0E1A2B" stroke="#1F3047"/>
+    <text x="974" y="154" fill="#88A1BE" font-family="Segoe UI, Arial, sans-serif" font-size="12" letter-spacing="0.18em">MEMORY</text>
+    <text x="974" y="186" fill="white" font-family="Segoe UI, Arial, sans-serif" font-size="32" font-weight="700">L0·L1·L2</text>
 
-    <rect x="734" y="228" width="266" height="88" rx="18" fill="#0D1623" stroke="#1F3047"/>
-    <text x="758" y="254" fill="#88A1BE" font-family="Segoe UI, Arial, sans-serif" font-size="12" letter-spacing="0.18em">INVENTORY</text>
-    <circle cx="764" cy="279" r="5" fill="#34D399"/>
-    <text x="780" y="284" fill="#E5EDF6" font-family="Segoe UI, Arial, sans-serif" font-size="15">core-web-01</text>
-    <text x="900" y="284" fill="#6EE7B7" font-family="Segoe UI, Arial, sans-serif" font-size="13">online</text>
-    <circle cx="764" cy="301" r="5" fill="#60A5FA"/>
-    <text x="780" y="306" fill="#E5EDF6" font-family="Segoe UI, Arial, sans-serif" font-size="15">db-main-02</text>
-    <text x="887" y="306" fill="#93C5FD" font-family="Segoe UI, Arial, sans-serif" font-size="13">monitored</text>
-
-    <rect x="1020" y="228" width="148" height="88" rx="18" fill="#0D1623" stroke="#1F3047"/>
-    <text x="1044" y="254" fill="#88A1BE" font-family="Segoe UI, Arial, sans-serif" font-size="12" letter-spacing="0.18em">LIVE</text>
-    <rect x="1044" y="268" width="100" height="8" rx="4" fill="#16304A"/>
-    <rect x="1044" y="268" width="68" height="8" rx="4" fill="url(#accent)"/>
-    <rect x="1044" y="286" width="84" height="8" rx="4" fill="#16304A"/>
-    <rect x="1044" y="286" width="44" height="8" rx="4" fill="#F59E0B"/>
-    <text x="1044" y="311" fill="#B7C4D4" font-family="Segoe UI, Arial, sans-serif" font-size="14">agents / ws / logs</text>
+    <g filter="url(#novaGlow)">
+      <rect x="734" y="228" width="434" height="132" rx="18" fill="#081222" stroke="#193152"/>
+    </g>
+    <text x="754" y="252" fill="#9FB3C8" font-family="Consolas, 'Courier New', monospace" font-size="12">nova ▸ agent</text>
+    <text x="754" y="274" fill="#D5E2F2" font-family="Consolas, 'Courier New', monospace" font-size="13">plan → files.read → snapshot → shell</text>
+    <circle cx="758" cy="296" r="3.2" fill="#A855F7"/>
+    <text x="772" y="300" fill="#C7B5F2" font-family="Consolas, 'Courier New', monospace" font-size="12">ask_user ▸ 10 r/s · 50 r/s · custom</text>
+    <rect x="754" y="312" width="400" height="6" rx="3" fill="#16304A"/>
+    <rect x="754" y="312" width="280" height="6" rx="3" fill="url(#accent)"/>
+    <text x="754" y="338" fill="#6EE7B7" font-family="Consolas, 'Courier New', monospace" font-size="12">snapshot #482 ▸ nginx reload ok</text>
   </g>
 </svg>
