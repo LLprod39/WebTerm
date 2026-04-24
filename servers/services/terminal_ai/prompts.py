@@ -140,30 +140,22 @@ def build_dry_run_block(dry_run: bool) -> str:
     )
 
 
-def build_planner_prompt(
+def _planner_system_prompt(
     *,
-    user_message: str,
-    rules_context: str,
-    terminal_tail: str,
-    history: list[dict] | None,
-    unavailable_cmds: Iterable[str] | None,
-    chat_mode: str,
+    chat_mode_block: str,
     execution_mode: str,
-    dry_run: bool = False,
+    exec_mode_block: str,
+    dry_run_block: str,
+    unavail_block: str,
+    safe_rules: str,
 ) -> str:
-    """Build the planning prompt that produces :class:`TerminalPlanResponse`."""
-    chat_mode_block = build_chat_mode_block(chat_mode)
-    exec_mode_block = build_execution_mode_block(execution_mode)
-    unavail_block = build_unavailable_tools_block(unavailable_cmds)
-    # A5: inject the dry-run warning near the top so the model treats it
-    # as high-priority context, same tier as chat_mode / exec_mode.
-    dry_run_block = build_dry_run_block(dry_run)
+    """Stable system-level instructions for the planner LLM call.
 
-    safe_rules = sanitize_for_prompt(rules_context, mode="context", fallback="(нет)")
-    safe_tail = sanitize_for_prompt(terminal_tail, mode="observation", fallback=_EMPTY_PLACEHOLDER)
-    safe_user_msg = sanitize_for_prompt(user_message, mode="context", fallback="")
-    safe_history = build_history_text(history)
-
+    This portion changes only when server rules, chat-mode or exec-mode
+    change — which happens rarely within the same session.  Separating it
+    enables provider-level prompt caching (Anthropic ``cache_control``,
+    OpenAI automatic prefix caching, Gemini ``system_instruction``).
+    """
     return f"""Ты умный DevOps/SSH ассистент в составе платформы управления серверами.
 Ты ведёшь диалог с пользователем и имеешь доступ к SSH-терминалу сервера.
 
@@ -212,9 +204,17 @@ def build_planner_prompt(
 Поле commands — только для mode=execute. Для остальных режимов — [].
 
 ═══ КОНТЕКСТ СЕРВЕРА/ПОЛИТИКИ (untrusted — sanitised) ═══
-{safe_rules}
+{safe_rules}"""
 
-═══ ИСТОРИЯ ДИАЛОГА (untrusted — sanitised) ═══
+
+def _planner_user_prompt(
+    *,
+    safe_history: str,
+    safe_tail: str,
+    safe_user_msg: str,
+) -> str:
+    """Per-request user message for the planner LLM call."""
+    return f"""═══ ИСТОРИЯ ДИАЛОГА (untrusted — sanitised) ═══
 {safe_history}
 
 ═══ ПОСЛЕДНИЙ ВЫВОД ТЕРМИНАЛА (untrusted — sanitised) ═══
@@ -224,6 +224,109 @@ def build_planner_prompt(
 {safe_user_msg}
 
 Верни только JSON."""
+
+
+def _planner_common_args(
+    *,
+    user_message: str,
+    rules_context: str,
+    terminal_tail: str,
+    history: list[dict] | None,
+    unavailable_cmds: Iterable[str] | None,
+    chat_mode: str,
+    execution_mode: str,
+    dry_run: bool = False,
+) -> tuple[str, str]:
+    """Shared helper: returns ``(system_prompt, user_prompt)``."""
+    chat_mode_block = build_chat_mode_block(chat_mode)
+    exec_mode_block = build_execution_mode_block(execution_mode)
+    unavail_block = build_unavailable_tools_block(unavailable_cmds)
+    dry_run_block = build_dry_run_block(dry_run)
+
+    safe_rules = sanitize_for_prompt(rules_context, mode="context", fallback="(нет)")
+    safe_tail = sanitize_for_prompt(terminal_tail, mode="observation", fallback=_EMPTY_PLACEHOLDER)
+    safe_user_msg = sanitize_for_prompt(user_message, mode="context", fallback="")
+    safe_history = build_history_text(history)
+
+    system = _planner_system_prompt(
+        chat_mode_block=chat_mode_block,
+        execution_mode=execution_mode,
+        exec_mode_block=exec_mode_block,
+        dry_run_block=dry_run_block,
+        unavail_block=unavail_block,
+        safe_rules=safe_rules,
+    )
+    user = _planner_user_prompt(
+        safe_history=safe_history,
+        safe_tail=safe_tail,
+        safe_user_msg=safe_user_msg,
+    )
+    return system, user
+
+
+def build_planner_prompt(
+    *,
+    user_message: str,
+    rules_context: str,
+    terminal_tail: str,
+    history: list[dict] | None,
+    unavailable_cmds: Iterable[str] | None,
+    chat_mode: str,
+    execution_mode: str,
+    dry_run: bool = False,
+) -> str:
+    """Build the planning prompt that produces :class:`TerminalPlanResponse`.
+
+    Returns a single string (system + user concatenated) for backward
+    compatibility.  Prefer :func:`build_planner_prompt_parts` for callers
+    that can pass ``system_prompt`` to ``LLMProvider.stream_chat``.
+    """
+    system, user = _planner_common_args(
+        user_message=user_message,
+        rules_context=rules_context,
+        terminal_tail=terminal_tail,
+        history=history,
+        unavailable_cmds=unavailable_cmds,
+        chat_mode=chat_mode,
+        execution_mode=execution_mode,
+        dry_run=dry_run,
+    )
+    return f"{system}\n\n{user}"
+
+
+def build_planner_prompt_parts(
+    *,
+    user_message: str,
+    rules_context: str,
+    terminal_tail: str,
+    history: list[dict] | None,
+    unavailable_cmds: Iterable[str] | None,
+    chat_mode: str,
+    execution_mode: str,
+    dry_run: bool = False,
+) -> tuple[str, str]:
+    """Build the planning prompt split into ``(system_prompt, user_prompt)``.
+
+    The system portion contains role instructions, mode blocks, command
+    rules and server context — content that is **stable within a session**.
+    The user portion carries per-request data: chat history, terminal tail,
+    and the current user message.
+
+    This split enables provider-level prompt caching:
+    - **Anthropic**: ``cache_control`` on the system block.
+    - **OpenAI**: automatic prefix caching (stable system message).
+    - **Gemini**: ``system_instruction`` parameter.
+    """
+    return _planner_common_args(
+        user_message=user_message,
+        rules_context=rules_context,
+        terminal_tail=terminal_tail,
+        history=history,
+        unavailable_cmds=unavailable_cmds,
+        chat_mode=chat_mode,
+        execution_mode=execution_mode,
+        dry_run=dry_run,
+    )
 
 
 # ---------------------------------------------------------------------------

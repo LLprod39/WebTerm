@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-from django.db.models import QuerySet
-
-from servers.models import Server
-
 from .mcp_showcase import ensure_demo_mcp_server
 from .models import CURRENT_PIPELINE_GRAPH_VERSION, MCPServerPool, Pipeline
+from .services import get_first_owned_server_id, list_owned_server_ids
 
 ALL_NODES_SMOKE_PIPELINE_NAME = "All Nodes Smoke Test"
 ALL_NODES_SMOKE_DESCRIPTION = (
@@ -17,16 +14,12 @@ ALL_NODES_SMOKE_TAGS = ["studio", "smoke", "all-nodes", "safe", "qa"]
 LOCAL_WEBHOOK_TARGET = "http://127.0.0.1:9000/api/health/"
 
 
-def _owner_servers(user) -> QuerySet[Server]:
-    return Server.objects.filter(user=user).order_by("id")
-
-
 def _resolve_server_ids(user, *, limit: int = 2) -> list[int]:
-    return list(_owner_servers(user).values_list("id", flat=True)[:limit])
+    return list_owned_server_ids(user, limit=limit, order_by="id")
 
 
 def _resolve_ssh_server_id(user) -> int | None:
-    return _owner_servers(user).values_list("id", flat=True).first()
+    return get_first_owned_server_id(user, order_by="id")
 
 
 def _resolve_mcp_server_id(user) -> int | None:

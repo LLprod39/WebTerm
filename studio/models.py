@@ -642,12 +642,11 @@ class PipelineTemplate(models.Model):
         edges = list(self.edges)
 
         if self.slug == "server-update-approval":
-            from servers.models import Server
-            server = Server.objects.filter(user=user).filter(name="backup-01").first()
-            if not server:
-                server = Server.objects.filter(user=user).order_by("name").first()
-            if server:
-                server_ids = [server.id]
+            from .services.server_access import get_preferred_owned_server_id
+
+            server_id = get_preferred_owned_server_id(user, preferred_name="backup-01", fallback_order_by="name")
+            if server_id:
+                server_ids = [server_id]
                 for node in nodes:
                     nid = node.get("id")
                     if nid in ("n2", "n8", "n10"):

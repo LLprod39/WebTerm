@@ -47,6 +47,7 @@ from servers.services.terminal_ai.prompts import (  # noqa: F401
     build_explain_output_prompt,
     build_memory_extraction_prompt,
     build_planner_prompt,
+    build_planner_prompt_parts,
     build_recovery_prompt,
     build_report_prompt,
     build_step_decision_prompt,
@@ -69,4 +70,5 @@ from servers.services.terminal_ai.schemas import (  # noqa: F401
     TerminalPlanResponse,
     parse_or_repair,
 )
+from servers.services.terminal_ai.server_ai_policy import is_server_ai_read_only  # noqa: F401
 from servers.services.terminal_ai.session import TerminalAiSession  # noqa: F401

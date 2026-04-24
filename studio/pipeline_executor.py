@@ -45,25 +45,28 @@ from app.agent_kernel.hooks.manager import HookManager
 from app.agent_kernel.memory.compaction import compact_text
 from app.agent_kernel.memory.redaction import sanitize_observation_text
 from app.agent_kernel.memory.server_cards import render_server_cards_prompt
-from servers.adapters.memory_store import DjangoServerMemoryStore
 from app.agent_kernel.permissions.engine import PermissionEngine
 from app.agent_kernel.runtime.context import build_ops_prompt_context
 from app.agent_kernel.sandbox.manager import SandboxManager
 from app.core.model_utils import resolve_provider_and_model
 from core_ui.activity import log_user_activity_async
 from core_ui.audit import audit_context
+from servers.services.command_history import save_command_history_entry
+from servers.services.pipeline_agents import run_pipeline_multi_agent, run_pipeline_react_agent
+from servers.services.pipeline_memory import build_pipeline_operational_recipes, get_pipeline_server_card
+from servers.services.ssh_connection import get_server_connect_kwargs
 from studio.mcp_tool_runtime import MCPBoundTool
 
 from .mcp_client import call_mcp_tool
 from .models import PipelineRun
 from .pipeline_runtime import is_runtime_stop_requested, register_executor, unregister_executor
 from .pipeline_validation import validate_pipeline_definition
+from .services import get_owned_server, get_owned_servers_by_ids
 from .skill_policy import apply_skill_policies, compile_skill_policies
 from .skill_registry import normalise_skill_slugs, resolve_skills
 
 logger = logging.getLogger(__name__)
 _SIMPLE_TEMPLATE_PATTERN = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
-_PIPELINE_MEMORY_STORE = DjangoServerMemoryStore()
 _TELEGRAM_UPDATE_OFFSETS: dict[str, int] = {}
 _TELEGRAM_UPDATE_LOCKS: dict[str, threading.Lock] = {}
 _TELEGRAM_PENDING_CALLBACKS: dict[str, dict[str, Any]] = {}
@@ -315,13 +318,11 @@ def _pipeline_actor_context(run: PipelineRun) -> dict[str, Any]:
 
 
 def _save_server_command_history(*, server_id: int, user_id: int | None, command: str, output: str, exit_code: int | None) -> None:
-    from servers.models import ServerCommandHistory
-
-    ServerCommandHistory.objects.create(
+    save_command_history_entry(
         server_id=server_id,
         user_id=user_id,
         command=command,
-        output=(output or "")[:10000],
+        output=output,
         exit_code=exit_code,
     )
 
@@ -391,11 +392,9 @@ def _mcp_result_to_text(result: dict[str, Any]) -> str:
 
 
 async def _load_owned_servers(owner, server_ids: list[int]):
-    from servers.models import Server
-
     if not server_ids:
         return []
-    return await _s2a_fn(lambda: list(Server.objects.filter(id__in=server_ids, user=owner)))()
+    return await _s2a_fn(get_owned_servers_by_ids)(owner, server_ids, order_by="-updated_at")
 
 
 async def _load_owned_agent_config(owner, agent_config_id: int):
@@ -451,7 +450,7 @@ async def _load_pipeline_server_memory(owner, config: dict[str, Any], context: d
     servers = await _load_owned_servers(owner, server_ids)
     for server in servers[:3]:
         try:
-            cards.append(await _PIPELINE_MEMORY_STORE.get_server_card(server.id))
+            cards.append(await get_pipeline_server_card(server.id))
         except Exception as exc:
             logger.debug("Failed to load pipeline server memory for %s: %s", server.id, exc)
     return render_server_cards_prompt(cards, max_cards=3, max_records=5)
@@ -486,7 +485,7 @@ async def _load_pipeline_operational_recipes(
                 group_ids.append(server.group_id)
 
     recipe_query = "\n".join(part for part in [query, role_slug] if part).strip()
-    return await _PIPELINE_MEMORY_STORE.build_operational_recipes_prompt(
+    return await build_pipeline_operational_recipes(
         recipe_query,
         server_ids=server_ids,
         group_ids=list(dict.fromkeys(group_ids)),
@@ -757,9 +756,6 @@ def _possible_merge_sources(
 
 async def _execute_agent_react(node: dict, context: dict, run: PipelineRun) -> dict:
     """Execute an agent/react node using AgentEngine."""
-    from servers.agent_engine import AgentEngine
-    from servers.models import AgentRun, ServerAgent
-
     config = node.get("data", {})
     node_id = node.get("id")
     agent_config_id = config.get("agent_config_id")
@@ -826,29 +822,6 @@ async def _execute_agent_react(node: dict, context: dict, run: PipelineRun) -> d
         default_provider="auto",
     )
 
-    sa = ServerAgent(
-        name=f"pipeline_node_{node['id']}",
-        mode=ServerAgent.MODE_FULL,
-        goal=goal,
-        system_prompt=system_prompt,
-        ai_prompt=instructions,
-        max_iterations=max_iterations,
-        tools_config=tools_config,
-        allow_multi_server=len(servers) > 1,
-    )
-
-    engine = AgentEngine(
-        agent=sa,
-        servers=servers,
-        user=owner,
-        event_callback=_make_run_event_callback(run, node["id"]),
-        model_preference=model_preference,
-        specific_model=specific_model,
-        mcp_servers=mcp_servers,
-        skills=skills,
-        skill_errors=skill_errors,
-    )
-
     logger.info(
         "pipeline run %s node %s agent/react start: provider=%s model=%s servers=%s mcp_servers=%s skills=%s",
         run.pk,
@@ -859,18 +832,34 @@ async def _execute_agent_react(node: dict, context: dict, run: PipelineRun) -> d
         [srv.name for srv in mcp_servers],
         [skill.slug for skill in skills],
     )
-    agent_run: AgentRun = await engine.run()
+
+    agent_run = await run_pipeline_react_agent(
+        node_id=str(node["id"]),
+        goal=goal,
+        system_prompt=system_prompt,
+        instructions=instructions,
+        max_iterations=max_iterations,
+        tools_config=tools_config,
+        servers=servers,
+        user=owner,
+        event_callback=_make_run_event_callback(run, node["id"]),
+        model_preference=model_preference,
+        specific_model=specific_model,
+        mcp_servers=mcp_servers,
+        skills=skills,
+        skill_errors=skill_errors,
+    )
     logger.info(
         "pipeline run %s node %s agent/react done: agent_run_id=%s status=%s report_chars=%s",
         run.pk,
         node_id,
-        agent_run.pk,
+        agent_run.agent_run_id,
         agent_run.status,
         len(agent_run.final_report or ""),
     )
     return {
         "status": "completed" if agent_run.status == "completed" else "failed",
-        "agent_run_id": agent_run.pk,
+        "agent_run_id": agent_run.agent_run_id,
         "output": agent_run.final_report or "",
         "error": agent_run.ai_analysis if agent_run.status != "completed" else "",
     }
@@ -878,9 +867,6 @@ async def _execute_agent_react(node: dict, context: dict, run: PipelineRun) -> d
 
 async def _execute_agent_multi(node: dict, context: dict, run: PipelineRun) -> dict:
     """Execute an agent/multi node using MultiAgentEngine."""
-    from servers.models import ServerAgent
-    from servers.multi_agent_engine import MultiAgentEngine
-
     config = node.get("data", {})
     server_ids = config.get("server_ids", [])
     mcp_server_ids = config.get("mcp_server_ids", [])
@@ -945,18 +931,12 @@ async def _execute_agent_multi(node: dict, context: dict, run: PipelineRun) -> d
         default_provider="auto",
     )
 
-    sa = ServerAgent(
-        name=f"pipeline_multi_{node['id']}",
-        mode=ServerAgent.MODE_MULTI,
+    agent_run = await run_pipeline_multi_agent(
+        node_id=str(node["id"]),
         goal=goal,
         system_prompt=system_prompt,
         max_iterations=max_iterations,
         tools_config=tools_config,
-        allow_multi_server=True,
-    )
-
-    engine = MultiAgentEngine(
-        agent=sa,
         servers=servers,
         user=owner,
         event_callback=_make_run_event_callback(run, node["id"]),
@@ -966,11 +946,9 @@ async def _execute_agent_multi(node: dict, context: dict, run: PipelineRun) -> d
         skills=skills,
         skill_errors=skill_errors,
     )
-
-    agent_run = await engine.run()
     return {
         "status": "completed" if agent_run.status == "completed" else "failed",
-        "agent_run_id": agent_run.pk,
+        "agent_run_id": agent_run.agent_run_id,
         "output": agent_run.final_report or "",
         "error": agent_run.ai_analysis if agent_run.status != "completed" else "",
     }
@@ -979,8 +957,6 @@ async def _execute_agent_multi(node: dict, context: dict, run: PipelineRun) -> d
 async def _execute_agent_ssh_cmd(node: dict, context: dict, run: PipelineRun) -> dict:
     """Execute a direct SSH command without LLM."""
     import asyncssh
-
-    from servers.models import Server
 
     config = node.get("data", {})
     server_id = config.get("server_id")
@@ -1013,9 +989,8 @@ async def _execute_agent_ssh_cmd(node: dict, context: dict, run: PipelineRun) ->
         }
 
     owner = await _s2a_fn(lambda: run.pipeline.owner)()
-    try:
-        server = await _s2a_fn(Server.objects.get)(id=server_id, user=owner)
-    except Server.DoesNotExist:
+    server = await _s2a_fn(get_owned_server)(owner, server_id)
+    if server is None:
         return {"status": "failed", "error": f"Server not found: {server_id}"}
 
     permission_engine = PermissionEngine(mode=_pipeline_permission_mode(config))
@@ -1031,10 +1006,7 @@ async def _execute_agent_ssh_cmd(node: dict, context: dict, run: PipelineRun) ->
         }
 
     try:
-        from servers.monitor import _build_connect_kwargs
-
-        connect_kwargs = await _build_connect_kwargs(server)
-        connect_kwargs["connect_timeout"] = 30
+        connect_kwargs = await get_server_connect_kwargs(server, connect_timeout=30)
 
         async with asyncssh.connect(**connect_kwargs) as conn:
             combined_outputs: list[str] = []
@@ -1812,8 +1784,8 @@ async def _execute_logic_human_approval(
         if (v.get("output") or "").strip()
     )
     subs = dict(context)
-    subs["all_outputs"] = all_outputs_text
 
+    # Format message
     message_template = config.get(
         "message",
         "🔔 *Требуется подтверждение пайплайна*\n\n"
@@ -2079,7 +2051,7 @@ async def _execute_logic_telegram_input(
         "Ответьте на это сообщение обычным текстом. Ответ будет передан агенту."
     )
     node_state = dict(run.node_states.get(node_id, {}))
-    
+
     # ── Phase 2: Wakeup / Timeout check ──
     if node_state.get("status") in {"hibernating", "awaiting_operator_reply"}:
         operator_response = str(node_state.get("operator_response") or "").strip()
@@ -2090,7 +2062,7 @@ async def _execute_logic_telegram_input(
                 "decision": "received",
                 "response_text": operator_response,
             }
-            
+
         started_at_str = node_state.get("started_at")
         if started_at_str:
             from dateutil.parser import isoparse

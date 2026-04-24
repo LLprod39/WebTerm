@@ -1184,6 +1184,7 @@ export interface ServerDetailsResponse {
   notes: string;
   group_id: number | null;
   is_active: boolean;
+  ai_read_only?: boolean;
   corporate_context?: string;
   network_config?: Record<string, unknown>;
   has_saved_password?: boolean;

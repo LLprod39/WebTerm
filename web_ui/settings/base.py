@@ -565,6 +565,11 @@ LLM_CLAUDE_STREAM_TIMEOUT_SECONDS = _env_int("LLM_CLAUDE_STREAM_TIMEOUT_SECONDS"
 LLM_OPENAI_STREAM_TIMEOUT_SECONDS = _env_int("LLM_OPENAI_STREAM_TIMEOUT_SECONDS", 90)
 LLM_OPENAI_RESPONSES_TIMEOUT_SECONDS = _env_int("LLM_OPENAI_RESPONSES_TIMEOUT_SECONDS", 300)
 
+# B2: per-user daily LLM token budget. 0 = disabled (default).
+# When > 0, every LLM call checks the user's last-24h token usage in
+# core_ui.LLMUsageLog and raises BudgetExceededError if the cap is hit.
+LLM_DAILY_TOKEN_LIMIT_PER_USER = _env_int("LLM_DAILY_TOKEN_LIMIT_PER_USER", 0)
+
 # РџРµСЂРµРґ Р·Р°РїСѓСЃРєРѕРј С‚Р°СЃРєР°/РІРѕСЂРєС„Р»РѕСѓ СЃРЅР°С‡Р°Р»Р° РїСЂРѕРІРµСЂРёС‚СЊ Р·Р°РґР°С‡Сѓ С‡РµСЂРµР· Cursor (--mode=ask). Р•СЃР»Рё True вЂ” С„Р°Р·Р° В«Р°РЅР°Р»РёР·В» РїРµСЂРµРґ РІС‹РїРѕР»РЅРµРЅРёРµРј.
 ANALYZE_TASK_BEFORE_RUN = os.getenv("ANALYZE_TASK_BEFORE_RUN", "1").strip().lower() in ("1", "true", "yes", "on")
 

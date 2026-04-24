@@ -345,15 +345,23 @@ class LLMProvider:
         model: str = "auto",
         specific_model: str = None,
         purpose: str = "chat",
+        system_prompt: str | None = None,
+        json_mode: bool = False,
     ) -> AsyncGenerator[str, None]:
         """
         Stream chat response from the selected model.
 
         Args:
-            prompt: The prompt to send
+            prompt: The prompt to send (user message when system_prompt is given)
             model: Provider name (auto/gemini/grok/openai/claude/ollama). «auto» resolves via purpose.
             specific_model: Specific model version to use (overrides config)
             purpose: One of 'chat', 'agent', 'orchestrator' — used when model=='auto'
+            system_prompt: Optional system-level instructions. When provided,
+                replaces the default generic system message and enables
+                provider-level prompt caching (Anthropic cache_control,
+                OpenAI automatic prefix caching, Gemini system_instruction).
+            json_mode: When True, activates provider-native JSON output mode
+                (3.1) so the LLM is constrained to produce valid JSON.
         """
         def _has_key(p: str) -> bool:
             """Провайдер доступен по ключу (без учёта глобального *_enabled)."""
@@ -406,6 +414,28 @@ class LLMProvider:
             logger.info(f"[{purpose}] using provider: {model}, model: {specific_model or '(default)'}")
         logger.info(f"Streaming chat from {model} with prompt: {prompt[:50]}...")
 
+        # B2: per-user daily token budget pre-flight. Best-effort — never let
+        # a budget-service failure break a real LLM call (lazy import + try).
+        try:
+            from core_ui.audit import get_audit_context
+            from core_ui.services.llm_budget import (
+                BudgetExceededError,
+                get_user_daily_budget_status,
+            )
+
+            _budget_user_id = (get_audit_context() or {}).get("user_id")
+            if _budget_user_id:
+                _budget = get_user_daily_budget_status(int(_budget_user_id))
+                if _budget.exceeded:
+                    raise BudgetExceededError(
+                        f"Daily LLM token budget exceeded: used {_budget.used_tokens} "
+                        f"of {_budget.limit_tokens} tokens in the last 24 h."
+                    )
+        except BudgetExceededError:
+            raise
+        except Exception as _budget_err:  # noqa: BLE001 — budget check must never block on infra issues
+            logger.debug("budget pre-flight skipped: %s", _budget_err)
+
         if model == "gemini":
             # Check if Gemini is enabled
             if not model_manager.config.gemini_enabled:
@@ -427,9 +457,20 @@ class LLMProvider:
                     async def consume():
                         out = []
                         # generate_content_stream возвращает корутину; нужен await перед async for
+                        _gemini_kwargs: dict[str, Any] = {
+                            "model": target_model,
+                            "contents": prompt,
+                        }
+                        _gemini_config: dict[str, Any] = {}
+                        if system_prompt:
+                            _gemini_config["system_instruction"] = system_prompt
+                        # 3.1: JSON mode — Gemini native structured output.
+                        if json_mode:
+                            _gemini_config["response_mime_type"] = "application/json"
+                        if _gemini_config:
+                            _gemini_kwargs["config"] = _gemini_config
                         stream = await self.gemini_client.aio.models.generate_content_stream(
-                            model=target_model,
-                            contents=prompt
+                            **_gemini_kwargs
                         )
                         async for chunk in stream:
                             if chunk.text:
@@ -501,15 +542,18 @@ class LLMProvider:
                 "Authorization": f"Bearer {self.grok_api_key}"
             }
             grok_model = specific_model or model_manager.get_chat_model("grok")
-            data = {
+            data: dict[str, Any] = {
                 "messages": [
-                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "system", "content": system_prompt or "You are a helpful assistant."},
                     {"role": "user", "content": prompt}
                 ],
                 "model": grok_model,
                 "stream": True,
-                "temperature": 0.7
+                "temperature": 0.7,
             }
+            # 3.1: JSON mode — Grok uses OpenAI-compatible response_format.
+            if json_mode:
+                data["response_format"] = {"type": "json_object"}
             timeout = aiohttp.ClientTimeout(total=float(_provider_timeout_seconds("grok")))
             max_attempts = _retry_attempts()
             _t0 = time.monotonic()
@@ -603,11 +647,22 @@ class LLMProvider:
             for attempt in range(max_attempts):
                 try:
                     _output = ""
+                    _claude_kwargs: dict[str, Any] = {
+                        "model": target_model,
+                        "max_tokens": 8192,
+                        "messages": [{"role": "user", "content": prompt}],
+                    }
+                    if system_prompt:
+                        _claude_kwargs["system"] = [
+                            {
+                                "type": "text",
+                                "text": system_prompt,
+                                "cache_control": {"type": "ephemeral"},
+                            }
+                        ]
                     async with asyncio.timeout(timeout_seconds):
                         async with client.messages.stream(
-                            model=target_model,
-                            max_tokens=8192,
-                            messages=[{"role": "user", "content": prompt}],
+                            **_claude_kwargs,
                         ) as stream:
                             async for text in stream.text_stream:
                                 _output += text
@@ -683,10 +738,13 @@ class LLMProvider:
                 api_url = "https://api.openai.com/v1/responses"
                 request_data: dict = {
                     "model": target_model,
-                    "instructions": "You are a helpful assistant.",
+                    "instructions": system_prompt or "You are a helpful assistant.",
                     "input": prompt,
                     "stream": True,
                 }
+                # 3.1: JSON mode — Responses API uses text.format.
+                if json_mode:
+                    request_data["text"] = {"format": {"type": "json_object"}}
                 # Передаём reasoning.effort если задан
                 # "none" — отключить мышление полностью, "low"/"medium"/"high" — уровень
                 # "" — не передавать (модель решает сама)
@@ -709,11 +767,14 @@ class LLMProvider:
                 request_data = {
                     "model": target_model,
                     "messages": [
-                        {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "system", "content": system_prompt or "You are a helpful assistant."},
                         {"role": "user", "content": prompt},
                     ],
                     "stream": True,
                 }
+                # 3.1: JSON mode — Chat Completions uses response_format.
+                if json_mode:
+                    request_data["response_format"] = {"type": "json_object"}
 
             logger.info(f"OpenAI: model={target_model}, endpoint={endpoint_name}, key_prefix={key_preview}")
 
@@ -848,14 +909,17 @@ class LLMProvider:
                     yield "Error: Ollama runtime is not configured."
                 return
 
-            payload = {
+            payload: dict[str, Any] = {
                 "model": request_targets[0]["model"],
                 "messages": [
-                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "system", "content": system_prompt or "You are a helpful assistant."},
                     {"role": "user", "content": prompt},
                 ],
                 "stream": True,
             }
+            # 3.1: JSON mode — Ollama uses format field.
+            if json_mode:
+                payload["format"] = "json"
             think_value = self._get_ollama_think_value()
             if think_value is not None:
                 payload["think"] = think_value

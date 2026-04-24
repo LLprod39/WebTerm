@@ -8,7 +8,7 @@ from typing import Any
 
 from django.conf import settings
 
-from servers.agent_tools import AGENT_TOOLS
+from servers.services.tool_catalog import list_agent_tool_names
 
 from .skill_policy import compile_skill_policies
 from .skill_registry import _load_skill_from_dir, _split_frontmatter
@@ -21,6 +21,7 @@ RECOMMENDED_SECTION_TITLES = (
     "## Reporting",
 )
 KNOWN_SAFETY_LEVELS = {"low", "standard", "medium", "high", "critical"}
+KNOWN_AGENT_TOOLS = set(list_agent_tool_names())
 
 
 @dataclass(slots=True)
@@ -335,7 +336,7 @@ def validate_skill_dir(skill_dir: Path) -> SkillValidationResult:
         result.errors.append("Skill could not be loaded from SKILL.md")
         return result
 
-    unknown_tools = [tool_name for tool_name in skill.recommended_tools if tool_name not in AGENT_TOOLS]
+    unknown_tools = [tool_name for tool_name in skill.recommended_tools if tool_name not in KNOWN_AGENT_TOOLS]
     if unknown_tools:
         rendered = ", ".join(sorted(unknown_tools))
         result.warnings.append(f"recommended_tools contains unknown agent tools: {rendered}")

@@ -24,9 +24,20 @@ from channels.db import database_sync_to_async
 
 
 def sanitize_memory_line(text: str) -> str:
-    """Strip newlines and truncate a single fact/issue/summary line."""
-    line = str(text or "").replace("\n", " ").replace("\r", " ").strip()
-    return line[:400]
+    """Redact secrets, strip newlines, and truncate a single fact/issue/summary line.
+
+    This is the last gate before facts/issues/summaries are written to
+    ``ServerKnowledge`` (and the layered memory store).  It calls
+    :func:`app.agent_kernel.memory.redaction.redact_text` so that tokens,
+    passwords, connection strings etc. are never persisted verbatim.
+    """
+    from app.agent_kernel.memory.redaction import redact_text
+
+    raw = str(text or "").replace("\n", " ").replace("\r", " ").strip()
+    if not raw:
+        return ""
+    redacted = redact_text(raw).text
+    return redacted[:400]
 
 
 def _dedup_clean_list(items: list[str], *, limit: int) -> list[str]:

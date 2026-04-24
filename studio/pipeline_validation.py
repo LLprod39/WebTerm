@@ -9,9 +9,8 @@ try:
 except ModuleNotFoundError:  # pragma: no cover - optional dependency in local mini env
     croniter = None
 
-from servers.models import Server
-
 from .models import CURRENT_PIPELINE_GRAPH_VERSION, AgentConfig, MCPServerPool
+from .services import get_owned_server_id_set, has_owned_server
 from .skill_registry import normalise_skill_slugs, resolve_skills
 
 TRIGGER_NODE_TYPES = {
@@ -144,7 +143,7 @@ def _validate_node_references(node: dict[str, Any], owner, errors: list[str]) ->
             node_id=node_id,
         )
         if server_ids:
-            accessible = set(Server.objects.filter(user=owner, id__in=server_ids).values_list("id", flat=True))
+            accessible = get_owned_server_id_set(owner, server_ids)
             missing = [sid for sid in server_ids if sid not in accessible]
             if missing:
                 errors.append(f"Node '{node_id}' references inaccessible servers: {missing}.")
@@ -164,7 +163,7 @@ def _validate_node_references(node: dict[str, Any], owner, errors: list[str]) ->
     if node_type in {"agent/react", "agent/multi"}:
         server_ids = _collect_int_ids(data.get("server_ids"), field_name="server_ids", errors=errors, node_id=node_id)
         if server_ids:
-            accessible = set(Server.objects.filter(user=owner, id__in=server_ids).values_list("id", flat=True))
+            accessible = get_owned_server_id_set(owner, server_ids)
             missing = [sid for sid in server_ids if sid not in accessible]
             if missing:
                 errors.append(f"Node '{node_id}' references inaccessible servers: {missing}.")
@@ -199,7 +198,7 @@ def _validate_node_references(node: dict[str, Any], owner, errors: list[str]) ->
 
     if node_type == "agent/ssh_cmd":
         server_id = _collect_optional_int(data.get("server_id"), field_name="server_id", errors=errors, node_id=node_id)
-        if server_id is not None and not Server.objects.filter(user=owner, id=server_id).exists():
+        if server_id is not None and not has_owned_server(owner, server_id):
             errors.append(f"Node '{node_id}' references an inaccessible server: {server_id}.")
 
     if node_type == "agent/mcp_call":

@@ -11,15 +11,26 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Bot, FolderOpen, Monitor, Plus, Search, Server, Settings, X } from "lucide-react";
 import {
   XTerminal,
-  type AiAssistantSettings,
-  type AiAutoReportMode,
-  type AiChatMode,
-  type AiExecutionMode,
-  type AiPreferences,
   type TerminalConnectionStatus,
   type TerminalHandle,
 } from "@/components/terminal/XTerminal";
-import { AiPanel, type AiCommand, type AiMessage } from "@/components/terminal/AiPanel";
+import { AiPanel } from "@/components/terminal/AiPanel";
+import {
+  AI_PREFERENCES_STORAGE_KEY,
+  cloneAiPreferences,
+  cloneAiSettings,
+  readStoredAiPreferences,
+} from "@/components/terminal/ai-preferences";
+import type {
+  AiAssistantSettings,
+  AiChatMode,
+  AiCommand,
+  AiExecutionMode,
+  AiMessage,
+  AiPreferences,
+} from "@/components/terminal/ai-types";
+import { parseAiQuestionPayload } from "@/components/terminal/ai-question";
+import { parseNovaContextPayload } from "@/components/terminal/nova-context";
 import { LinuxUiPanel } from "@/components/terminal/LinuxUiPanel";
 import { SftpPanel, type SftpPanelHandle } from "@/components/terminal/SftpPanel";
 import { Button } from "@/components/ui/button";
@@ -27,14 +38,14 @@ import { StatusIndicator } from "@/components/StatusIndicator";
 import { toast } from "@/hooks/use-toast";
 import { fetchFrontendBootstrap, type FrontendServer } from "@/lib/api";
 import { QueryStateBlock } from "@/components/ui/page-shell";
-import { useTerminalPreferences } from "@/hooks/useTerminalPreferences";
-import { useTerminalInputBuffer } from "@/hooks/useTerminalInputBuffer";
 import { resolveTheme } from "@/components/terminal/TerminalThemes";
 import { TerminalSettingsPanel } from "@/components/terminal/TerminalSettingsPanel";
 import { CompletionOverlay } from "@/components/terminal/CompletionOverlay";
 import { FileEditorModal } from "@/components/editor/FileEditorModal";
 import { useEditorInterceptor } from "@/hooks/useEditorInterceptor";
 import { useI18n } from "@/lib/i18n";
+import { useTerminalPreferences } from "@/hooks/useTerminalPreferences";
+import { useTerminalInputBuffer } from "@/hooks/useTerminalInputBuffer";
 
 interface Tab {
   id: string;
@@ -61,132 +72,6 @@ function createEmptyAiState(): TabAiState {
     messages: [],
     isGenerating: false,
   };
-}
-
-const AI_PREFERENCES_STORAGE_KEY = "terminal_ai_preferences_v1";
-
-const DEFAULT_AI_SETTINGS: AiAssistantSettings = {
-  memoryEnabled: true,
-  memoryTtlRequests: 6,
-  autoReport: "auto",
-  confirmDangerousCommands: true,
-  whitelistPatterns: [],
-  blacklistPatterns: [],
-  showSuggestedCommands: true,
-  showExecutedCommands: true,
-  // A5: dry-run off by default — users opt in explicitly.
-  dryRun: false,
-};
-
-const DEFAULT_AI_PREFERENCES: AiPreferences = {
-  chatMode: "agent",
-  executionMode: "auto",
-  settings: DEFAULT_AI_SETTINGS,
-};
-
-function clampTtl(value: unknown) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return DEFAULT_AI_SETTINGS.memoryTtlRequests;
-  return Math.max(1, Math.min(20, Math.round(parsed)));
-}
-
-function normalizePatternList(value: unknown) {
-  const source = Array.isArray(value) ? value : [];
-  const seen = new Set<string>();
-  const normalized: string[] = [];
-
-  for (const item of source) {
-    const line = String(item || "").trim();
-    if (!line) continue;
-    const key = line.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    normalized.push(line);
-  }
-
-  return normalized.slice(0, 50);
-}
-
-function cloneAiSettings(settings: AiAssistantSettings): AiAssistantSettings {
-  return {
-    ...settings,
-    whitelistPatterns: [...settings.whitelistPatterns],
-    blacklistPatterns: [...settings.blacklistPatterns],
-  };
-}
-
-function cloneAiPreferences(preferences: AiPreferences): AiPreferences {
-  return {
-    chatMode: preferences.chatMode,
-    executionMode: preferences.executionMode,
-    settings: cloneAiSettings(preferences.settings),
-  };
-}
-
-function sanitizeAiSettings(value: unknown): AiAssistantSettings {
-  const raw = value && typeof value === "object" ? (value as Partial<AiAssistantSettings>) : {};
-  const autoReport = raw.autoReport;
-  const normalizedAutoReport: AiAutoReportMode =
-    autoReport === "on" || autoReport === "off" || autoReport === "auto" ? autoReport : DEFAULT_AI_SETTINGS.autoReport;
-
-  return {
-    memoryEnabled: typeof raw.memoryEnabled === "boolean" ? raw.memoryEnabled : DEFAULT_AI_SETTINGS.memoryEnabled,
-    memoryTtlRequests: clampTtl(raw.memoryTtlRequests),
-    autoReport: normalizedAutoReport,
-    confirmDangerousCommands:
-      typeof raw.confirmDangerousCommands === "boolean"
-        ? raw.confirmDangerousCommands
-        : DEFAULT_AI_SETTINGS.confirmDangerousCommands,
-    whitelistPatterns: normalizePatternList(raw.whitelistPatterns),
-    blacklistPatterns: normalizePatternList(raw.blacklistPatterns),
-    showSuggestedCommands:
-      typeof raw.showSuggestedCommands === "boolean"
-        ? raw.showSuggestedCommands
-        : DEFAULT_AI_SETTINGS.showSuggestedCommands,
-    showExecutedCommands:
-      typeof raw.showExecutedCommands === "boolean"
-        ? raw.showExecutedCommands
-        : DEFAULT_AI_SETTINGS.showExecutedCommands,
-    // A5: read dry-run out of stored prefs with safe default.
-    dryRun: typeof raw.dryRun === "boolean" ? raw.dryRun : DEFAULT_AI_SETTINGS.dryRun,
-  };
-}
-
-function sanitizeAiPreferences(value: unknown): AiPreferences {
-  const raw = value && typeof value === "object" ? (value as Partial<AiPreferences>) : {};
-  const chatMode = raw.chatMode === "ask" || raw.chatMode === "agent" ? raw.chatMode : DEFAULT_AI_PREFERENCES.chatMode;
-  const executionMode =
-    raw.executionMode === "auto" || raw.executionMode === "fast" || raw.executionMode === "step"
-      ? raw.executionMode
-      : DEFAULT_AI_PREFERENCES.executionMode;
-
-  return {
-    chatMode,
-    executionMode,
-    settings: sanitizeAiSettings(raw.settings),
-  };
-}
-
-function readStoredAiPreferences(): AiPreferences {
-  try {
-    const stored = localStorage.getItem(AI_PREFERENCES_STORAGE_KEY);
-    if (stored) {
-      return sanitizeAiPreferences(JSON.parse(stored));
-    }
-
-    const legacyMode = localStorage.getItem("ai_execution_mode");
-    if (legacyMode === "auto" || legacyMode === "fast" || legacyMode === "step") {
-      return {
-        ...cloneAiPreferences(DEFAULT_AI_PREFERENCES),
-        chatMode: "agent",
-        executionMode: legacyMode,
-      };
-    }
-  } catch {
-    // noop
-  }
-
-  return cloneAiPreferences(DEFAULT_AI_PREFERENCES);
 }
 
 function mapStatus(status: TerminalConnectionStatus): Tab["status"] {
@@ -794,10 +679,7 @@ export default function TerminalPage() {
     }
 
     if (type === "ai_question") {
-      const qId = String(payload.q_id || "");
-      const question = String(payload.question || "");
-      const cmd = payload.cmd ? String(payload.cmd) : undefined;
-      const exitCode = payload.exit_code !== undefined ? Number(payload.exit_code) : undefined;
+      const questionPayload = parseAiQuestionPayload(payload);
 
       revealAiPanelForTab(tabId);
       updateTabAiState(tabId, (state) => ({
@@ -808,11 +690,17 @@ export default function TerminalPage() {
             id: nextId(),
             role: "system",
             type: "question",
-            content: question,
-            qId,
-            question,
-            questionCmd: cmd,
-            questionExitCode: exitCode,
+            content: questionPayload.question,
+            qId: questionPayload.qId,
+            question: questionPayload.question,
+            questionCmd: questionPayload.cmd,
+            questionExitCode: questionPayload.exitCode,
+            questionOptions: questionPayload.options,
+            questionAllowMultiple: questionPayload.allowMultiple,
+            questionFreeTextAllowed: questionPayload.freeTextAllowed,
+            questionPlaceholder: questionPayload.placeholder,
+            questionSource: questionPayload.source,
+            questionAnswered: false,
           },
         ],
       }));
@@ -873,6 +761,181 @@ export default function TerminalPage() {
           },
         ],
       }));
+      return;
+    }
+
+    // ── Nova agent events ────────────────────────────────────────────────
+
+    if (type === "agent_start") {
+      revealAiPanelForTab(tabId);
+      const extras = Array.isArray(payload.extras)
+        ? (payload.extras as unknown[]).map((v) => String(v))
+        : [];
+      updateTabAiState(tabId, (state) => ({
+        ...state,
+        isGenerating: true,
+        messages: [
+          ...state.messages,
+          {
+            id: nextId(),
+            role: "system",
+            type: "agent_start",
+            content: String(payload.goal || ""),
+            agentPrimary: String(payload.primary_target || "primary"),
+            agentExtras: extras,
+            agentContext: parseNovaContextPayload(payload.context),
+          },
+        ],
+      }));
+      return;
+    }
+
+    if (type === "agent_thinking") {
+      const text = String(payload.text || "").trim();
+      if (!text) return;
+      const iteration = Number(payload.iteration || 0) || undefined;
+      updateTabAiState(tabId, (state) => ({
+        ...state,
+        messages: [
+          ...state.messages,
+          {
+            id: nextId(),
+            role: "assistant",
+            type: "agent_thinking",
+            content: text,
+            agentIteration: iteration,
+          },
+        ],
+      }));
+      return;
+    }
+
+    if (type === "agent_tool_call") {
+      const iteration = Number(payload.iteration || 0) || undefined;
+      const toolName = String(payload.tool || "");
+      const toolArgs =
+        payload.args && typeof payload.args === "object"
+          ? (payload.args as Record<string, unknown>)
+          : {};
+      updateTabAiState(tabId, (state) => ({
+        ...state,
+        messages: [
+          ...state.messages,
+          {
+            id: nextId(),
+            role: "assistant",
+            type: "agent_tool",
+            content: "",
+            agentIteration: iteration,
+            agentToolName: toolName,
+            agentToolArgs: toolArgs,
+            agentToolOk: true, // optimistic; overwritten by agent_tool_result
+            agentStartedAt: Date.now(),
+          },
+        ],
+      }));
+      return;
+    }
+
+    if (type === "agent_tool_result") {
+      const iteration = Number(payload.iteration || 0) || undefined;
+      const toolName = String(payload.tool || "");
+      const ok = payload.ok !== false;
+      const output = String(payload.output || "");
+      const error = payload.error ? String(payload.error) : undefined;
+      // ``data`` carries ToolResult.data — we pull exit_code so the UI
+      // can render it as a badge instead of leaving it buried in the
+      // raw output text.
+      const data = (payload.data && typeof payload.data === "object")
+        ? (payload.data as Record<string, unknown>)
+        : {};
+      const rawExit = data.exit_code;
+      const exitCode =
+        typeof rawExit === "number"
+          ? rawExit
+          : typeof rawExit === "string" && rawExit.trim() !== "" && !Number.isNaN(Number(rawExit))
+            ? Number(rawExit)
+            : undefined;
+      updateTabAiState(tabId, (state) => {
+        // Find the most recent matching agent_tool entry and attach the result.
+        const reversed = [...state.messages].reverse();
+        const matchIdx = reversed.findIndex(
+          (m) => m.type === "agent_tool" && m.agentToolName === toolName && m.agentIteration === iteration,
+        );
+        if (matchIdx === -1) return state;
+        const absIdx = state.messages.length - 1 - matchIdx;
+        const updated = [...state.messages];
+        const prev = updated[absIdx];
+        const duration =
+          prev.agentStartedAt ? Date.now() - prev.agentStartedAt : undefined;
+        updated[absIdx] = {
+          ...prev,
+          agentToolOk: ok,
+          agentToolOutput: output,
+          agentToolError: error,
+          agentDurationMs: duration,
+          agentToolExitCode: exitCode,
+        };
+        return { ...state, messages: updated };
+      });
+      return;
+    }
+
+    if (type === "agent_todo_update") {
+      const todos = Array.isArray(payload.todos)
+        ? (payload.todos as Array<Record<string, unknown>>).map((t) => ({
+            id: String(t.id || ""),
+            content: String(t.content || ""),
+            status: (String(t.status || "pending") as
+              | "pending"
+              | "in_progress"
+              | "completed"
+              | "cancelled"),
+          }))
+        : [];
+      updateTabAiState(tabId, (state) => {
+        // Replace the previous agent_todo message in place (single
+        // live checklist) so the UI shows only the latest state.
+        const existingIdx = state.messages.findIndex((m) => m.type === "agent_todo");
+        const msg: AiMessage = {
+          id: existingIdx >= 0 ? state.messages[existingIdx].id : nextId(),
+          role: "assistant",
+          type: "agent_todo",
+          content: "",
+          agentTodos: todos,
+        };
+        if (existingIdx >= 0) {
+          const updated = [...state.messages];
+          updated[existingIdx] = msg;
+          return { ...state, messages: updated };
+        }
+        return { ...state, messages: [...state.messages, msg] };
+      });
+      return;
+    }
+
+    if (type === "agent_stopped") {
+      updateTabAiState(tabId, (state) => ({
+        ...state,
+        isGenerating: false,
+        messages: [
+          ...state.messages,
+          {
+            id: nextId(),
+            role: "system",
+            type: "agent_stopped",
+            content: "",
+            agentStopReason: String(payload.reason || ""),
+          },
+        ],
+      }));
+      return;
+    }
+
+    if (type === "agent_done" || type === "agent_error") {
+      updateTabAiState(tabId, (state) => ({ ...state, isGenerating: false }));
+      // Final text is mirrored via the existing ``ai_response`` event
+      // (see consumer._ai_run_agent) so we don't double-render here.
       return;
     }
 
@@ -1000,8 +1063,20 @@ export default function TerminalPage() {
   }, []);
 
   const handleReply = useCallback((qId: string, text: string) => {
+    updateActiveTabAiState((state) => ({
+      ...state,
+      messages: state.messages.map((message) =>
+        message.qId === qId
+          ? {
+              ...message,
+              questionAnswered: true,
+              questionAnswer: text,
+            }
+          : message,
+      ),
+    }));
     terminalRefs.current[activeTabIdRef.current]?.sendAiReply(qId, text);
-  }, []);
+  }, [updateActiveTabAiState]);
 
   const handleGenerateReport = useCallback((force = false) => {
     terminalRefs.current[activeTabIdRef.current]?.sendAiGenerateReport(force);
@@ -1281,6 +1356,8 @@ export default function TerminalPage() {
                   executionMode={activeExecutionMode}
                   settings={activeAiSettings}
                   onModeChange={handleModeChange}
+                  availableServers={servers}
+                  currentServerId={activeServer?.id}
                 />
               </div>
             </div>

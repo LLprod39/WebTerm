@@ -71,7 +71,6 @@ from app.runtime_limits import get_pipeline_run_limit_error
 from core_ui.access import feature_allowed_for_user
 from core_ui.decorators import require_any_feature, require_feature
 from core_ui.managed_secrets import get_mcp_secret_env, get_mcp_secret_env_keys
-
 from studio.mcp_client import MCPClientError, inspect_mcp_server
 from studio.models import (
     CURRENT_PIPELINE_GRAPH_VERSION,
@@ -85,6 +84,13 @@ from studio.models import (
 )
 from studio.pipeline_runtime import get_executor_for_run, update_runtime_control
 from studio.pipeline_validation import ensure_json_object, validate_pipeline_definition
+from studio.services import (
+    PipelineAssistantError,
+    build_pipeline_assistant_response,
+    get_owned_servers_by_ids,
+    get_pipeline_assistant_context,
+    list_owned_server_payloads,
+)
 from studio.skill_authoring import parse_csv_items, scaffold_skill, validate_skill_dir, validate_skills
 from studio.skill_policy import compile_skill_policies
 from studio.skill_registry import SkillNotFoundError, get_skill, list_skills, normalise_skill_slugs, resolve_skills
@@ -610,106 +616,6 @@ def _compact_selected_node(node: dict) -> dict:
     }
 
 
-def _sanitize_graph_patch(raw_graph_patch: object, *, fallback_anchor: str | None = None) -> dict:
-    if not isinstance(raw_graph_patch, dict):
-        return {
-            "anchor_node_id": fallback_anchor,
-            "nodes": [],
-            "edges": [],
-            "update_nodes": [],
-            "remove_node_ids": [],
-            "remove_edge_ids": [],
-        }
-
-    raw_nodes = raw_graph_patch.get("nodes")
-    raw_edges = raw_graph_patch.get("edges")
-    if not isinstance(raw_nodes, list):
-        raw_nodes = []
-    if not isinstance(raw_edges, list):
-        raw_edges = []
-
-    nodes = []
-    for item in raw_nodes[:24]:
-        if not isinstance(item, dict):
-            continue
-        ref = str(item.get("ref") or "").strip()
-        node_type = str(item.get("type") or "").strip()
-        if not ref or not node_type:
-            continue
-        raw_data = item.get("data")
-        data = raw_data if isinstance(raw_data, dict) else {}
-        label = str(item.get("label") or "").strip()
-        try:
-            x_offset = float(item["x_offset"]) if item.get("x_offset") not in (None, "") else None
-        except (TypeError, ValueError):
-            x_offset = None
-        try:
-            y_offset = float(item["y_offset"]) if item.get("y_offset") not in (None, "") else None
-        except (TypeError, ValueError):
-            y_offset = None
-        nodes.append(
-            {
-                "ref": ref,
-                "type": node_type,
-                "data": data,
-                "label": label or None,
-                "x_offset": x_offset,
-                "y_offset": y_offset,
-            }
-        )
-
-    edges = []
-    for item in raw_edges[:48]:
-        if not isinstance(item, dict):
-            continue
-        source = str(item.get("source") or "").strip()
-        target = str(item.get("target") or "").strip()
-        if not source or not target:
-            continue
-        edges.append(
-            {
-                "source": source,
-                "target": target,
-                "label": str(item.get("label") or "").strip() or None,
-                "source_handle": str(item.get("source_handle") or "").strip() or None,
-                "target_handle": str(item.get("target_handle") or "").strip() or None,
-            }
-        )
-
-    raw_update_nodes = raw_graph_patch.get("update_nodes")
-    if not isinstance(raw_update_nodes, list):
-        raw_update_nodes = []
-    update_nodes = []
-    for item in raw_update_nodes[:24]:
-        if not isinstance(item, dict):
-            continue
-        node_id = str(item.get("node_id") or "").strip()
-        raw_data = item.get("data")
-        if not node_id or not isinstance(raw_data, dict):
-            continue
-        update_nodes.append({"node_id": node_id, "data": raw_data})
-
-    raw_remove_node_ids = raw_graph_patch.get("remove_node_ids")
-    if not isinstance(raw_remove_node_ids, list):
-        raw_remove_node_ids = []
-    remove_node_ids = [str(item).strip() for item in raw_remove_node_ids[:24] if str(item).strip()]
-
-    raw_remove_edge_ids = raw_graph_patch.get("remove_edge_ids")
-    if not isinstance(raw_remove_edge_ids, list):
-        raw_remove_edge_ids = []
-    remove_edge_ids = [str(item).strip() for item in raw_remove_edge_ids[:48] if str(item).strip()]
-
-    anchor_node_id = str(raw_graph_patch.get("anchor_node_id") or "").strip() or fallback_anchor
-    return {
-        "anchor_node_id": anchor_node_id,
-        "nodes": nodes,
-        "edges": edges,
-        "update_nodes": update_nodes,
-        "remove_node_ids": remove_node_ids,
-        "remove_edge_ids": remove_edge_ids,
-    }
-
-
 # ---------------------------------------------------------------------------
 # Pipelines
 # ---------------------------------------------------------------------------
@@ -963,16 +869,7 @@ def api_pipeline_assistant(request):
             for mcp in _mcp_read_queryset_for_user(request.user)
         ]
 
-    from servers.models import Server
-
-    servers = [
-        {
-            "id": server.pk,
-            "name": server.name,
-            "host": server.host,
-        }
-        for server in Server.objects.filter(user=request.user).order_by("name")
-    ]
+    servers = list_owned_server_payloads(request.user)
     available_skills = []
     if _user_has_feature(request.user, STUDIO_FEATURE_SKILLS):
         all_skills = list_skills()
@@ -1034,132 +931,30 @@ def api_pipeline_assistant(request):
         "output_nodes": [item for item in graph_node_summaries if str(item.get("type") or "").startswith("output/")],
     }
 
-    prompt = f"""Ты — корпоративный AI copilot для Studio Pipeline Editor.
-
-Ты помогаешь администратору проектировать, проверять и улучшать ВЕСЬ pipeline. Если передана focus node, ты можешь также дать точечный patch для неё.
-
-Правила:
-- Смотри на весь граф, а не только на одну ноду.
-- Предлагай изменения с учетом реальных доступных ресурсов: servers, agent configs, MCP servers, skills.
-- Если можно использовать существующий ресурс, ссылайся на него по точному ID.
-- Если нужен точечный конфиг ноды, указывай target_node_id и заполняй node_patch только полями data этой ноды.
-- Если пользователь хочет изменить несколько существующих шагов или убрать мусор из графа, используй graph_patch.update_nodes / remove_node_ids / remove_edge_ids.
-- Если хочешь предложить новые шаги или ветку, используй graph_patch.nodes и graph_patch.edges.
-- Если вопрос общий по pipeline, можешь оставить target_node_id пустым и дать только graph_patch и reply.
-- Не удаляй существующие значения без явной просьбы пользователя.
-- Для logic/condition обязательно учитывай source_node_id и входящие связи.
-- Для agent/mcp_call предпочитай доступные MCP tools и валидные JSON arguments.
-- reply должен быть коротким и практичным: что понял, что меняешь, что осталось проверить. Избегай длинных таблиц и воды.
-- Если граф почти пустой или пользователь просит «собери пайплайн», верни готовый starter workflow, а не только советы.
-
-Верни ТОЛЬКО JSON-объект строго такого вида:
-{{
-  "reply": "Markdown explanation for the operator",
-  "target_node_id": null,
-  "node_patch": {{}},
-  "graph_patch": {{
-    "anchor_node_id": null,
-    "nodes": [
-      {{
-        "ref": "new_step_1",
-        "type": "agent/llm_query",
-        "label": "Optional human label",
-        "data": {{}},
-        "x_offset": 260,
-        "y_offset": 0
-      }}
-    ],
-    "edges": [
-      {{
-        "source": "existing_node_id_or_ref",
-        "target": "existing_node_id_or_ref",
-        "label": ""
-      }}
-    ],
-    "update_nodes": [
-      {{
-        "node_id": "existing_node_id",
-        "data": {{}}
-      }}
-    ],
-    "remove_node_ids": [],
-    "remove_edge_ids": []
-  }},
-  "warnings": ["optional warning"]
-}}
-
-Правила для graph_patch:
-- graph_patch.nodes / graph_patch.edges должны содержать только НОВЫЕ ноды и новые связи.
-- В nodes[].ref используй короткие уникальные временные идентификаторы.
-- В edges[].source / edges[].target можно ссылаться либо на существующий node_id, либо на ref из graph_patch.nodes.
-- Для правки существующих нод используй graph_patch.update_nodes.
-- Для удаления существующих элементов используй remove_node_ids и remove_edge_ids.
-- Если нужны только текстовые рекомендации без вставки в graph, оставляй graph_patch пустым.
-- Используй только допустимые типы нод:
-  trigger/manual, trigger/webhook, trigger/schedule, trigger/monitoring,
-  agent/react, agent/multi, agent/ssh_cmd, agent/llm_query, agent/mcp_call,
-  logic/condition, logic/parallel, logic/merge, logic/wait, logic/human_approval, logic/telegram_input,
-  output/report, output/webhook, output/email, output/telegram
-
-История диалога:
-{json.dumps(conversation_history, ensure_ascii=False, indent=2)}
-
-Контекст пайплайна:
-{json.dumps({
-    "pipeline_name": pipeline_name,
-    "graph_overview": graph_overview,
-    "focus_node": _compact_selected_node(current_node) if current_node else None,
-    "incoming_nodes": incoming_nodes,
-    "outgoing_nodes": outgoing_nodes,
-    "graph_nodes": graph_node_summaries,
-    "available_agents": agents,
-    "available_servers": servers,
-    "available_mcp_servers": mcps,
-    "selected_mcp_tools": selected_mcp_tools,
-    "available_skills": available_skills,
-    "selected_skill_details": selected_skill_details,
-}, ensure_ascii=False, indent=2)}
-
-Вопрос пользователя:
-{user_message}
-"""
-
-    async def _call() -> str:
-        from app.core.llm import LLMProvider
-
-        provider = LLMProvider()
-        chunks = []
-        async for chunk in provider.stream_chat(prompt, model="auto", purpose="chat"):
-            chunks.append(chunk)
-        return "".join(chunks)
-
-    loop = asyncio.new_event_loop()
-    try:
-        raw_response = loop.run_until_complete(_call())
-    except Exception as exc:
-        return _err(f"LLM error: {exc}", 500)
-    finally:
-        loop.close()
-
-    parsed = _extract_json_object(raw_response)
-    reply = str(parsed.get("reply") or "").strip() or raw_response.strip() or "No assistant response."
-    target_node_id = str(parsed.get("target_node_id") or "").strip() or None
-    node_patch = parsed.get("node_patch")
-    if not isinstance(node_patch, dict):
-        node_patch = {}
-    graph_patch = _sanitize_graph_patch(parsed.get("graph_patch"), fallback_anchor=target_node_id)
-    warnings = parsed.get("warnings")
-    if not isinstance(warnings, list):
-        warnings = []
-    return _ok(
-        {
-            "reply": reply,
-            "target_node_id": target_node_id,
-            "node_patch": node_patch,
-            "graph_patch": graph_patch,
-            "warnings": [str(item) for item in warnings if str(item).strip()][:8],
-        }
+    assistant_context = get_pipeline_assistant_context(
+        pipeline_name=pipeline_name,
+        graph_overview=graph_overview,
+        focus_node=_compact_selected_node(current_node) if current_node else None,
+        incoming_nodes=incoming_nodes,
+        outgoing_nodes=outgoing_nodes,
+        graph_nodes=graph_node_summaries,
+        available_agents=agents,
+        available_servers=servers,
+        available_mcp_servers=mcps,
+        selected_mcp_tools=selected_mcp_tools,
+        available_skills=available_skills,
+        selected_skill_details=selected_skill_details,
     )
+    try:
+        response = build_pipeline_assistant_response(
+            user_message=user_message,
+            conversation_history=conversation_history,
+            assistant_context=assistant_context,
+            known_node_ids=set(node_map.keys()),
+        )
+    except PipelineAssistantError as exc:
+        return _err(exc.message, exc.status)
+    return _ok(response)
 
 
 def _get_pipeline(request, pipeline_id: int) -> Pipeline | None:
@@ -1393,10 +1188,7 @@ def _set_accessible_mcp_servers(agent: AgentConfig, user, ids: list[int] | None)
 
 
 def _set_owned_server_scope(agent: AgentConfig, owner, ids: list[int] | None):
-    from servers.models import Server
-
-    requested_ids = ids or []
-    items = list(Server.objects.filter(pk__in=requested_ids, user=owner))
+    items = get_owned_servers_by_ids(owner, ids)
     agent.server_scope.set(items)
 
 
@@ -2359,10 +2151,7 @@ def api_template_use(request, slug: str):
 
 @require_any_feature(STUDIO_FEATURE_PIPELINES, STUDIO_FEATURE_AGENTS)
 def api_studio_servers(request):
-    from servers.models import Server
-
-    servers = Server.objects.filter(user=request.user).order_by("name")
-    return _ok([{"id": s.pk, "name": s.name, "host": s.host} for s in servers])
+    return _ok(list_owned_server_payloads(request.user))
 
 
 # ---------------------------------------------------------------------------

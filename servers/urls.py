@@ -1,6 +1,7 @@
 from django.urls import path
 
 from . import views
+from .views import snapshot_views
 
 app_name = "servers"
 
@@ -111,4 +112,9 @@ urlpatterns = [
 
     # Terminal autocomplete
     path('api/<int:server_id>/command-suggestions/', views.api_command_suggestions, name='api_command_suggestions'),
+
+    # Rollback snapshots (2.4)
+    path('api/<int:server_id>/snapshots/', snapshot_views.snapshot_list, name='snapshot_list'),
+    path('api/<int:server_id>/snapshots/<int:snapshot_id>/', snapshot_views.snapshot_detail, name='snapshot_detail'),
+    path('api/<int:server_id>/snapshots/<int:snapshot_id>/restore/', snapshot_views.snapshot_restore, name='snapshot_restore'),
 ]

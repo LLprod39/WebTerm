@@ -7,12 +7,18 @@ from dataclasses import dataclass
 from typing import Any
 
 _TEXT_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    # --- High-specificity patterns first so they are attributed correctly
+    # before the generic secret_assignment fallback consumes the value. ---
     (
         "pem_block",
         re.compile(
             r"-----BEGIN [A-Z0-9 _-]+-----[\s\S]+?-----END [A-Z0-9 _-]+-----",
             re.IGNORECASE,
         ),
+    ),
+    (
+        "private_key_inline",
+        re.compile(r"(?i)\b(?:ssh-rsa|ssh-ed25519)\s+[A-Za-z0-9+/=]{40,}(?:\s+[^\s]+)?"),
     ),
     (
         "bearer_token",
@@ -28,18 +34,8 @@ _TEXT_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
             r"(?i)\b(?:postgres(?:ql)?|mysql|redis|mongodb|amqp|kafka)://[^\s]+"
         ),
     ),
-    (
-        "secret_assignment",
-        re.compile(
-            r"(?i)\b(password|passwd|secret|token|api[_-]?key|access[_-]?key|refresh[_-]?token|cookie|session[_-]?id)\b"
-            r"(\s*[:=]\s*|\s+is\s+)([^\s\"']+|\"[^\"]*\"|'[^']*')"
-        ),
-    ),
-    (
-        "private_key_inline",
-        re.compile(r"(?i)\b(?:ssh-rsa|ssh-ed25519)\s+[A-Za-z0-9+/=]{40,}(?:\s+[^\s]+)?"),
-    ),
-    # Cloud provider credentials
+    # Cloud / service provider tokens — specific prefixes, must come before
+    # secret_assignment so "token: glpat-..." is tagged as gitlab_pat, not generic.
     (
         "aws_access_key",
         re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
@@ -63,6 +59,14 @@ _TEXT_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
         "azure_sas_token",
         re.compile(r"(?i)\b(?:sv|sig|se|sp|spr|st)=[A-Za-z0-9%+/=]{10,}(?:&(?:sv|sig|se|sp|spr|st)=[A-Za-z0-9%+/=]+)+\b"),
+    ),
+    # Generic fallback — catches key=value style assignments not covered above.
+    (
+        "secret_assignment",
+        re.compile(
+            r"(?i)\b(password|passwd|secret|token|api[_-]?key|access[_-]?key|refresh[_-]?token|cookie|session[_-]?id)\b"
+            r"(\s*[:=]\s*|\s+is\s+)([^\s\"']+|\"[^\"]*\"|'[^']*')"
+        ),
     ),
 )
 

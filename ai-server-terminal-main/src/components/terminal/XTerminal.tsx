@@ -8,33 +8,10 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import "@xterm/xterm/css/xterm.css";
 import { getWsUrl, fetchWsToken } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { serializeAiSettings } from "./ai-preferences";
+import type { AiAssistantSettings, AiChatMode, AiExecutionMode } from "./ai-types";
 
 export type TerminalConnectionStatus = "connecting" | "connected" | "disconnected" | "error";
-
-export type AiExecutionMode = "auto" | "step" | "fast";
-export type AiChatMode = "ask" | "agent";
-
-export type AiAutoReportMode = "auto" | "on" | "off";
-
-export interface AiAssistantSettings {
-  memoryEnabled: boolean;
-  memoryTtlRequests: number;
-  autoReport: AiAutoReportMode;
-  confirmDangerousCommands: boolean;
-  whitelistPatterns: string[];
-  blacklistPatterns: string[];
-  showSuggestedCommands: boolean;
-  showExecutedCommands: boolean;
-  // A5: dry-run mode — when true the backend returns a synthetic
-  // "Would execute: <cmd>" output without touching the remote host.
-  dryRun: boolean;
-}
-
-export interface AiPreferences {
-  chatMode: AiChatMode;
-  executionMode: AiExecutionMode;
-  settings: AiAssistantSettings;
-}
 
 export interface TerminalHandle {
   sendAiRequest: (
@@ -438,18 +415,7 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
           message,
           chat_mode: chatMode || "agent",
           execution_mode: mode || "auto",
-          ai_settings: settings
-            ? {
-                memory_enabled: settings.memoryEnabled,
-                memory_ttl_requests: settings.memoryTtlRequests,
-                auto_report: settings.autoReport,
-                confirm_dangerous_commands: settings.confirmDangerousCommands,
-                allowlist_patterns: settings.whitelistPatterns,
-                blocklist_patterns: settings.blacklistPatterns,
-                // A5: forward dry-run flag to the backend WS handler.
-                dry_run: settings.dryRun,
-              }
-            : undefined,
+          ai_settings: serializeAiSettings(settings),
         },
         true,
       );

@@ -8,7 +8,7 @@ from typing import Any
 from django.utils import timezone
 
 from app.runtime_limits import get_pipeline_run_limit_error
-from servers.models import ServerAlert
+from servers.services.alert_query import ServerAlertSnapshot, get_open_alert_snapshot
 
 from .models import PipelineRun, PipelineTrigger
 from .pipeline_validation import validate_pipeline_definition
@@ -89,7 +89,7 @@ def launch_pipeline_run_async(run: PipelineRun) -> None:
     threading.Thread(target=_run_in_thread, daemon=True).start()
 
 
-def build_monitoring_alert_context(alert: ServerAlert) -> dict[str, Any]:
+def build_monitoring_alert_context(alert: ServerAlertSnapshot) -> dict[str, Any]:
     metadata = dict(alert.metadata or {})
     containers = metadata.get("containers") if isinstance(metadata.get("containers"), list) else []
     container_names = [
@@ -103,16 +103,16 @@ def build_monitoring_alert_context(alert: ServerAlert) -> dict[str, Any]:
             container_names = [single]
 
     return {
-        "alert_id": alert.pk,
+        "alert_id": alert.alert_id,
         "alert_type": alert.alert_type,
         "alert_severity": alert.severity,
         "alert_title": alert.title,
         "alert_message": alert.message,
         "alert_metadata": metadata,
         "server_id": alert.server_id,
-        "server_name": alert.server.name,
-        "server_host": alert.server.host,
-        "server_username": alert.server.username,
+        "server_name": alert.server_name,
+        "server_host": alert.server_host,
+        "server_username": alert.server_username,
         "container_name": container_names[0] if container_names else "",
         "container_names": container_names,
         "container_names_csv": ", ".join(container_names),
@@ -136,7 +136,7 @@ def _text_contains_any(text: str, needles: list[str]) -> bool:
     return any(needle.lower() in lowered for needle in needles if needle)
 
 
-def monitoring_trigger_matches_alert(trigger: PipelineTrigger, alert: ServerAlert) -> bool:
+def monitoring_trigger_matches_alert(trigger: PipelineTrigger, alert: ServerAlertSnapshot) -> bool:
     filters = trigger.monitoring_filters if isinstance(trigger.monitoring_filters, dict) else {}
 
     server_ids = {int(item) for item in filters.get("server_ids", []) if str(item).strip().isdigit()}
@@ -181,20 +181,20 @@ def monitoring_trigger_matches_alert(trigger: PipelineTrigger, alert: ServerAler
     return not alert.is_resolved
 
 
-def _iter_matching_monitoring_triggers(alert: ServerAlert) -> list[PipelineTrigger]:
+def _iter_matching_monitoring_triggers(alert: ServerAlertSnapshot) -> list[PipelineTrigger]:
     triggers = (
         PipelineTrigger.objects.select_related("pipeline", "pipeline__owner")
         .filter(
             trigger_type=PipelineTrigger.TYPE_MONITORING,
             is_active=True,
-            pipeline__owner=alert.server.user,
+            pipeline__owner_id=alert.server_owner_id,
         )
         .order_by("pipeline_id", "id")
     )
     return [trigger for trigger in triggers if monitoring_trigger_matches_alert(trigger, alert)]
 
 
-def launch_monitoring_triggers_for_alert(alert: ServerAlert) -> list[PipelineRun]:
+def launch_monitoring_triggers_for_alert(alert: ServerAlertSnapshot) -> list[PipelineRun]:
     if alert.is_resolved:
         return []
 
@@ -219,7 +219,7 @@ def launch_monitoring_triggers_for_alert(alert: ServerAlert) -> list[PipelineRun
             context=context,
             trigger_data={
                 "source": "monitoring",
-                "alert_id": alert.pk,
+                "alert_id": alert.alert_id,
                 "alert_type": alert.alert_type,
                 "severity": alert.severity,
                 "server_id": alert.server_id,
@@ -231,3 +231,10 @@ def launch_monitoring_triggers_for_alert(alert: ServerAlert) -> list[PipelineRun
         launch_pipeline_run_async(run)
         runs.append(run)
     return runs
+
+
+def launch_monitoring_triggers_for_alert_id(alert_id: int) -> list[PipelineRun]:
+    alert = get_open_alert_snapshot(alert_id)
+    if alert is None:
+        return []
+    return launch_monitoring_triggers_for_alert(alert)

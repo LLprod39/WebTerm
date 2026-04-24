@@ -797,6 +797,9 @@ def server_update(request, server_id):
             server.corporate_context = data['corporate_context']
         if 'is_active' in data:
             server.is_active = data['is_active']
+        # 2.11: per-server AI read-only mode
+        if 'ai_read_only' in data:
+            server.ai_read_only = bool(data['ai_read_only'])
 
         # Update group
         if 'group_id' in data:
@@ -2382,6 +2385,7 @@ def server_get(request, server_id):
         'corporate_context': server.corporate_context if can_access_context else '',
         'group_id': server.group_id,
         'is_active': server.is_active,
+        'ai_read_only': bool(getattr(server, 'ai_read_only', False)),
         'network_config': server.network_config if can_access_context else {},
         'has_saved_password': bool(is_owner and has_saved_server_secret(server)),
         'can_view_password': bool(

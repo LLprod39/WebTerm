@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import shlex
 
-from servers.models import Server
-
 from .models import CURRENT_PIPELINE_GRAPH_VERSION, Pipeline
+from .services import get_first_owned_server_id, get_owned_server_name, has_owned_server
 
 DOCKER_RECOVERY_PIPELINE_TAGS = [
     "studio",
@@ -24,24 +23,18 @@ def _quote_shell_arg(value: str) -> str:
 
 
 def _resolve_server_id(user, requested_server_id: int | None = None) -> int:
-    qs = Server.objects.filter(user=user, server_type="ssh").order_by("id")
     if requested_server_id:
-        if not qs.filter(id=requested_server_id).exists():
+        if not has_owned_server(user, requested_server_id, server_type="ssh"):
             raise ValueError(f"SSH-сервер {requested_server_id} не найден у пользователя {user.username}.")
         return int(requested_server_id)
-    server_id = qs.values_list("id", flat=True).first()
+    server_id = get_first_owned_server_id(user, server_type="ssh", order_by="id")
     if not server_id:
         raise ValueError(f"У пользователя {user.username} нет SSH-серверов для recovery pipeline.")
     return int(server_id)
 
 
-def _resolve_server_name(server_id: int) -> str:
-    return (
-        Server.objects.filter(id=server_id)
-        .values_list("name", flat=True)
-        .first()
-        or f"server-{server_id}"
-    )
+def _resolve_server_name(user, server_id: int) -> str:
+    return get_owned_server_name(user, server_id)
 
 
 def _build_container_snapshot_command(container_name: str) -> str:
@@ -482,37 +475,37 @@ def build_docker_service_recovery_nodes(
             "id": "operator_input_1",
             "type": "logic/telegram_input",
             "position": {"x": 720, "y": 2010},
-                "data": {
-                    "label": "Operator Input 1",
-                    "label_ru": "Первая подсказка оператора",
-                    "tg_bot_token": "",
-                    "tg_chat_id": "",
-                    "parse_mode": "",
-                    "timeout_minutes": 90,
-                    "message": (
-                        "Автоматическое восстановление не завершилось успешно.\n\n"
-                        "Контейнер: {container_name}\n"
-                        "Сервер: {server_name} ({server_host})\n"
-                        "Запуск: {run_id}\n\n"
-                        "Последняя проверка:\n"
-                        "{verify_after_recovery_output}\n"
-                        "{verify_after_recovery_error}\n\n"
-                        "Ответьте одним сообщением, как действовать дальше в рамках этого контейнера."
-                    ),
-                    "on_failure": "continue",
-                },
+            "data": {
+                "label": "Operator Input 1",
+                "label_ru": "Первая подсказка оператора",
+                "tg_bot_token": "",
+                "tg_chat_id": "",
+                "parse_mode": "",
+                "timeout_minutes": 90,
+                "message": (
+                    "Автоматическое восстановление не завершилось успешно.\n\n"
+                    "Контейнер: {container_name}\n"
+                    "Сервер: {server_name} ({server_host})\n"
+                    "Запуск: {run_id}\n\n"
+                    "Последняя проверка:\n"
+                    "{verify_after_recovery_output}\n"
+                    "{verify_after_recovery_error}\n\n"
+                    "Ответьте одним сообщением, как действовать дальше в рамках этого контейнера."
+                ),
+                "on_failure": "continue",
             },
+        },
         {
             "id": "guided_recovery_1",
             "type": "agent/react",
             "position": {"x": 720, "y": 2170},
-                "data": {
-                    "label": "Guided Recovery 1",
-                    "label_ru": "Восстановление по первой подсказке",
-                    "server_ids": [server_id],
-                    "model": "gemini-2.0-flash-exp",
-                    "max_iterations": 4,
-                    "allowed_tools": list(RESTRICTED_AGENT_TOOLS),
+            "data": {
+                "label": "Guided Recovery 1",
+                "label_ru": "Восстановление по первой подсказке",
+                "server_ids": [server_id],
+                "model": "gemini-2.0-flash-exp",
+                "max_iterations": 4,
+                "allowed_tools": list(RESTRICTED_AGENT_TOOLS),
                 "goal": (
                     "Контейнер {container_name} не восстановился после первой AI-попытки. Оператор прислал уточнение:\n"
                     "{operator_input_1_output}\n\n"
@@ -525,7 +518,7 @@ def build_docker_service_recovery_nodes(
                     "Запрещены действия вне этого контейнера. Нужно использовать подсказку оператора как приоритетный контекст."
                 ),
                 "instructions": (
-                    "Сначала кратко сверяй текущее состояние контейнера, затем применяй инструкцию оператора. "
+                    "Сначала кратко сверяй текущее состояние контейнера, затем примени инструкцию оператора. "
                     "В конце дай короткий отчет о проделанных действиях и результате."
                 ),
                 "on_failure": "continue",
@@ -557,36 +550,36 @@ def build_docker_service_recovery_nodes(
             "id": "operator_input_2",
             "type": "logic/telegram_input",
             "position": {"x": 1080, "y": 2450},
-                "data": {
-                    "label": "Operator Input 2",
-                    "label_ru": "Вторая подсказка оператора",
-                    "tg_bot_token": "",
-                    "tg_chat_id": "",
-                    "parse_mode": "",
-                    "timeout_minutes": 90,
-                    "message": (
-                        "Нужна еще одна инструкция оператора: контейнер {container_name} все еще не восстановлен.\n\n"
-                        "Сервер: {server_name} ({server_host})\n"
-                        "Запуск: {run_id}\n\n"
-                        "Последняя проверка:\n"
-                        "{verify_after_guidance_1_output}\n"
-                        "{verify_after_guidance_1_error}\n\n"
-                        "Ответьте обычным текстом. Сообщение будет передано агенту как следующая инструкция."
-                    ),
-                    "on_failure": "continue",
-                },
+            "data": {
+                "label": "Operator Input 2",
+                "label_ru": "Вторая подсказка оператора",
+                "tg_bot_token": "",
+                "tg_chat_id": "",
+                "parse_mode": "",
+                "timeout_minutes": 90,
+                "message": (
+                    "Нужна еще одна инструкция оператора: контейнер {container_name} все еще не восстановлен.\n\n"
+                    "Сервер: {server_name} ({server_host})\n"
+                    "Запуск: {run_id}\n\n"
+                    "Последняя проверка:\n"
+                    "{verify_after_guidance_1_output}\n"
+                    "{verify_after_guidance_1_error}\n\n"
+                    "Ответьте обычным текстом. Сообщение будет передано агенту как следующая инструкция."
+                ),
+                "on_failure": "continue",
             },
+        },
         {
             "id": "guided_recovery_2",
             "type": "agent/react",
             "position": {"x": 1080, "y": 2610},
-                "data": {
-                    "label": "Guided Recovery 2",
-                    "label_ru": "Восстановление по второй подсказке",
-                    "server_ids": [server_id],
-                    "model": "gemini-2.0-flash-exp",
-                    "max_iterations": 4,
-                    "allowed_tools": list(RESTRICTED_AGENT_TOOLS),
+            "data": {
+                "label": "Guided Recovery 2",
+                "label_ru": "Восстановление по второй подсказке",
+                "server_ids": [server_id],
+                "model": "gemini-2.0-flash-exp",
+                "max_iterations": 4,
+                "allowed_tools": list(RESTRICTED_AGENT_TOOLS),
                 "goal": (
                     "Контейнер {container_name} не восстановился после первой подсказки оператора. Новая инструкция:\n"
                     "{operator_input_2_output}\n\n"
@@ -672,26 +665,26 @@ def build_docker_service_recovery_nodes(
             "id": "success_telegram",
             "type": "output/telegram",
             "position": {"x": 360, "y": 3180},
-                "data": {
-                    "label": "Success Telegram",
-                    "label_ru": "Отправить успешный отчет в Telegram",
-                    "bot_token": "",
-                    "chat_id": "",
-                    "parse_mode": "",
-                    "message": (
-                        "Контейнер восстановлен.\n\n"
-                        "Сервер: {server_name}\n"
-                        "Контейнер: {container_name}\n"
-                        "Запуск: {run_id}\n\n"
-                        "Финальная проверка:\n"
-                        "{verify_after_guidance_2_output}"
-                        "{verify_after_guidance_1_output}"
-                        "{verify_after_recovery_output}\n\n"
-                        "Сервис снова в рабочем состоянии."
-                    ),
-                    "on_failure": "continue",
-                },
+            "data": {
+                "label": "Success Telegram",
+                "label_ru": "Отправить успешный отчет в Telegram",
+                "bot_token": "",
+                "chat_id": "",
+                "parse_mode": "",
+                "message": (
+                    "Контейнер восстановлен.\n\n"
+                    "Сервер: {server_name}\n"
+                    "Контейнер: {container_name}\n"
+                    "Запуск: {run_id}\n\n"
+                    "Финальная проверка:\n"
+                    "{verify_after_guidance_2_output}"
+                    "{verify_after_guidance_1_output}"
+                    "{verify_after_recovery_output}\n\n"
+                    "Сервис снова в рабочем состоянии."
+                ),
+                "on_failure": "continue",
             },
+        },
         {
             "id": "failure_merge",
             "type": "logic/merge",
@@ -742,29 +735,29 @@ def build_docker_service_recovery_nodes(
             "id": "final_failure_telegram",
             "type": "output/telegram",
             "position": {"x": 1080, "y": 3320},
-                "data": {
-                    "label": "Failure Telegram",
-                    "label_ru": "Отправить финальную ошибку в Telegram",
-                    "bot_token": "",
-                    "chat_id": "",
-                    "parse_mode": "",
-                    "message": (
-                        "Автоматическое восстановление не завершено.\n\n"
-                        "Сервер: {server_name}\n"
-                        "Контейнер: {container_name}\n"
-                        "Запуск: {run_id}\n\n"
-                        "Последняя проверка:\n"
-                        "{verify_after_guidance_2_output}"
-                        "{verify_after_guidance_2_error}"
-                        "{verify_after_guidance_1_output}"
-                        "{verify_after_guidance_1_error}"
-                        "{verify_after_recovery_output}"
-                        "{verify_after_recovery_error}\n\n"
-                        "Нужна ручная диагностика или более широкий план действий."
-                    ),
-                    "on_failure": "continue",
-                },
+            "data": {
+                "label": "Failure Telegram",
+                "label_ru": "Отправить финальную ошибку в Telegram",
+                "bot_token": "",
+                "chat_id": "",
+                "parse_mode": "",
+                "message": (
+                    "Автоматическое восстановление не завершено.\n\n"
+                    "Сервер: {server_name}\n"
+                    "Контейнер: {container_name}\n"
+                    "Запуск: {run_id}\n\n"
+                    "Последняя проверка:\n"
+                    "{verify_after_guidance_2_output}"
+                    "{verify_after_guidance_2_error}"
+                    "{verify_after_guidance_1_output}"
+                    "{verify_after_guidance_1_error}"
+                    "{verify_after_recovery_output}"
+                    "{verify_after_recovery_error}\n\n"
+                    "Нужна ручная диагностика или более широкий план действий."
+                ),
+                "on_failure": "continue",
             },
+        },
     ]
 
 
@@ -830,7 +823,7 @@ def ensure_docker_service_recovery_pipeline(
     name: str | None = None,
 ) -> Pipeline:
     resolved_server_id = _resolve_server_id(user, server_id)
-    resolved_server_name = _resolve_server_name(resolved_server_id)
+    resolved_server_name = _resolve_server_name(user, resolved_server_id)
     container_label = str(container_name or "").strip()
     if not container_label:
         raise ValueError("container_name is required")

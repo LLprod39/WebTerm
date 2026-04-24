@@ -102,6 +102,7 @@ interface ServerForm {
   notes: string;
   group_id: number | null;
   is_active: boolean;
+  ai_read_only: boolean;
 }
 
 interface ServerGroupForm {
@@ -469,6 +470,7 @@ function initialForm(): ServerForm {
     notes: "",
     group_id: null,
     is_active: true,
+    ai_read_only: false,
   };
 }
 
@@ -494,6 +496,7 @@ function asPayload(form: ServerForm) {
     notes: form.notes,
     group_id: form.group_id,
     is_active: form.is_active,
+    ai_read_only: form.ai_read_only,
   };
 }
 
@@ -1013,6 +1016,7 @@ export default function Servers() {
       notes: details.notes || "",
       group_id: details.group_id,
       is_active: details.is_active,
+      ai_read_only: details.ai_read_only ?? false,
     });
     setDialogOpen(true);
   };
@@ -2486,6 +2490,23 @@ export default function Servers() {
                 <Label className="text-xs text-muted-foreground">{t("srv.notes")}</Label>
                 <Input placeholder="..." value={form.notes} onChange={(e) => setForm((s) => ({ ...s, notes: e.target.value }))} className="bg-secondary/50" />
               </div>
+              {editingServer && (
+                <div className="flex items-center gap-3 md:col-span-2 pt-2">
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={form.ai_read_only}
+                    onClick={() => setForm((s) => ({ ...s, ai_read_only: !s.ai_read_only }))}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${form.ai_read_only ? "bg-primary" : "bg-input"}`}
+                  >
+                    <span className={`pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform ${form.ai_read_only ? "translate-x-4" : "translate-x-0"}`} />
+                  </button>
+                  <div>
+                    <span className="text-sm font-medium">{t("srv.ai_read_only")}</span>
+                    <p className="text-xs text-muted-foreground">{t("srv.ai_read_only_hint")}</p>
+                  </div>
+                </div>
+              )}
             </div>
           </DialogBody>
 

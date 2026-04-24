@@ -2,24 +2,30 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   Bot,
+  Brain,
   Check,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  CircleDot,
   Clock,
   Copy,
   FileText,
   Footprints,
   HelpCircle,
+  ListTodo,
   Loader2,
+  Pause,
   RotateCcw,
   Send,
+  Server as ServerIcon,
   Settings2,
   Sparkles,
   Square,
   Terminal as TerminalIcon,
   Trash2,
   Wand2,
+  Wrench,
   X,
   Zap,
 } from "lucide-react";
@@ -36,50 +42,16 @@ import {
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { riskBadgeClass, useAiCommandRisk } from "@/hooks/useAiCommandRisk";
-import type { AiAssistantSettings, AiChatMode, AiExecutionMode } from "./XTerminal";
-
-export interface AiCommand {
-  id: number;
-  cmd: string;
-  why: string;
-  requires_confirm: boolean;
-  status?: "pending" | "running" | "done" | "skipped" | "cancelled" | "confirmed";
-  exit_code?: number;
-  blocked?: boolean;
-  reason?: "" | "forbidden" | "outside_allowlist" | "dangerous" | "ask_mode";
-  risk_categories?: string[];
-  risk_reasons?: string[];
-  exec_mode?: "pty" | "direct";
-  // F2-8 v2: output captured from a non-PTY channel. Only populated when
-  // the command was executed via ``exec_mode=direct`` — we render it inline
-  // in the AI panel because the terminal did not receive this output.
-  direct_output?: string;
-  // A6: human-readable explanation of the command + its output. Populated
-  // when the user clicks "Объяснить" and the backend replies with
-  // ``ai_explanation`` keyed by the same ``id``.
-  explanation?: string;
-  explaining?: boolean;
-}
-
-export interface AiMessage {
-  id: string;
-  role: "user" | "assistant" | "system";
-  type?: "text" | "commands" | "report" | "question" | "progress" | "recovery";
-  content: string;
-  commands?: AiCommand[];
-  mode?: "execute" | "answer" | "ask";
-  reportStatus?: "ok" | "warning" | "error";
-  qId?: string;
-  question?: string;
-  questionCmd?: string;
-  questionExitCode?: number;
-  progressCmd?: string;
-  progressElapsed?: number;
-  progressTail?: string;
-  recoveryOriginal?: string;
-  recoveryNew?: string;
-  recoveryWhy?: string;
-}
+import { AiQuestionCard } from "./AiQuestionCard";
+import type {
+  AiAssistantSettings,
+  AiChatMode,
+  AiCommand,
+  AiExecutionMode,
+  AiMessage,
+} from "./ai-types";
+import { NovaContextCard } from "./nova/NovaContextCard";
+import { NovaContextSettings } from "./nova/NovaContextSettings";
 
 interface AiPanelProps {
   onClose: () => void;
@@ -103,28 +75,35 @@ interface AiPanelProps {
   executionMode: AiExecutionMode;
   settings: AiAssistantSettings;
   onModeChange: (mode: AiExecutionMode) => void;
+  // Nova: full server list (from bootstrap) for the extra-targets picker.
+  // Optional because the panel is usable without multi-target granting.
+  availableServers?: ReadonlyArray<{ id: number; name: string; host: string; server_type?: string | null }>;
+  currentServerId?: number;
 }
 
 const quickPrompts = ["Объясни вывод", "Предложи команду", "Проверь синтаксис", "Что означает ошибка"];
 
-const modeConfig: Record<AiExecutionMode, { icon: typeof Zap; label: string; desc: string; color: string }> = {
-  auto: { icon: Wand2, label: "Авто", desc: "AI сам решает", color: "text-primary" },
-  fast: { icon: Zap, label: "Fast", desc: "Быстрый ответ без лишних шагов", color: "text-warning" },
-  step: { icon: Footprints, label: "Step", desc: "Пошаговый и более подробный режим", color: "text-success" },
+const modeConfig: Record<AiExecutionMode, { icon: typeof Zap; label: string; desc: string }> = {
+  auto: { icon: Wand2, label: "Авто", desc: "AI сам решает" },
+  fast: { icon: Zap, label: "Fast", desc: "Быстрый ответ без лишних шагов" },
+  step: { icon: Footprints, label: "Step", desc: "Пошаговый и более подробный режим" },
+  // Nova: ReAct agent — no pre-plan, picks tools one at a time. Can
+  // operate on extra servers (see settings → Agent → Extra targets).
+  agent: {
+    icon: Sparkles,
+    label: "Nova",
+    desc: "Агент: сам выбирает инструменты, делает todo-лист, может работать с несколькими серверами",
+  },
 };
 
-const chatModeConfig: Record<AiChatMode, { label: string; desc: string; tone: string; badge: string }> = {
+const chatModeConfig: Record<AiChatMode, { label: string; desc: string }> = {
   ask: {
     label: "Ask",
     desc: "Объясняет и предлагает команды. Запуск только после вашего подтверждения.",
-    tone: "text-primary",
-    badge: "border-primary/30 bg-primary/10 text-primary",
   },
   agent: {
     label: "Agent",
     desc: "Сразу запускает безопасные команды в терминале. Опасные действия требуют подтверждения.",
-    tone: "text-warning",
-    badge: "border-warning/30 bg-warning/10 text-warning",
   },
 };
 
@@ -146,10 +125,20 @@ function isExecutedCommandStatus(status?: AiCommand["status"]) {
   return status === "running" || status === "done" || status === "skipped" || status === "cancelled";
 }
 
+// Which execution modes are currently exposed to end users in the
+// segmented control. Keep `modeConfig` comprehensive so we can re-enable
+// hidden modes without duplicating labels/descriptions — just update
+// this list. The `useEffect` in `AiPanel` normalises any out-of-list
+// value persisted in settings back into the first exposed mode.
+const EXPOSED_EXECUTION_MODES: AiExecutionMode[] = ["fast", "agent"];
+
+// Linear-style segmented control: flat neutral surface, active segment
+// raised with a subtle inner shadow + 1px hairline ring. No per-item
+// colour — the active state is conveyed by surface contrast alone.
 function ModeSelector({ mode, onChange }: { mode: AiExecutionMode; onChange: (mode: AiExecutionMode) => void }) {
   return (
-    <div className="flex items-center gap-1 rounded-xl border border-border/70 bg-secondary/60 p-1">
-      {(["auto", "fast", "step"] as AiExecutionMode[]).map((item) => {
+    <div className="inline-flex items-center rounded-md border border-border/70 bg-background/40 p-0.5">
+      {EXPOSED_EXECUTION_MODES.map((item) => {
         const cfg = modeConfig[item];
         const active = item === mode;
         return (
@@ -158,11 +147,14 @@ function ModeSelector({ mode, onChange }: { mode: AiExecutionMode; onChange: (mo
             type="button"
             onClick={() => onChange(item)}
             title={cfg.desc}
-            className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
-              active ? `bg-card text-foreground ${cfg.color}` : "text-muted-foreground hover:text-foreground"
+            aria-pressed={active}
+            className={`inline-flex items-center gap-1 rounded-[5px] px-2 py-1 text-[11px] font-medium transition-colors ${
+              active
+                ? "bg-secondary/80 text-foreground shadow-[inset_0_0_0_1px_hsl(var(--border))]"
+                : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            <cfg.icon className="h-3 w-3" />
+            <cfg.icon className="h-3 w-3 opacity-80" />
             {cfg.label}
           </button>
         );
@@ -179,7 +171,7 @@ function ChatModeSelector({
   onChange: (mode: AiChatMode) => void;
 }) {
   return (
-    <div className="flex items-center gap-1 rounded-xl border border-border/70 bg-secondary/60 p-1">
+    <div className="inline-flex items-center rounded-md border border-border/70 bg-background/40 p-0.5">
       {(["ask", "agent"] as AiChatMode[]).map((item) => {
         const cfg = chatModeConfig[item];
         const active = item === mode;
@@ -189,8 +181,11 @@ function ChatModeSelector({
             type="button"
             onClick={() => onChange(item)}
             title={cfg.desc}
-            className={`rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
-              active ? `bg-card text-foreground ${cfg.tone}` : "text-muted-foreground hover:text-foreground"
+            aria-pressed={active}
+            className={`rounded-[5px] px-2.5 py-1 text-[11px] font-medium transition-colors ${
+              active
+                ? "bg-secondary/80 text-foreground shadow-[inset_0_0_0_1px_hsl(var(--border))]"
+                : "text-muted-foreground hover:text-foreground"
             }`}
           >
             {cfg.label}
@@ -236,14 +231,16 @@ function MD({ content }: { content: string }) {
           const match = /language-(\w+)/.exec(className || "");
           const code = String(children).replace(/\n$/, "");
           if (match || code.includes("\n")) return <CodeBlock language={match?.[1]}>{code}</CodeBlock>;
-          return <code className="rounded bg-muted px-1 py-0.5 text-xs font-mono text-primary">{children}</code>;
+          // Inline code reads as a semantic highlight, not an accent —
+          // foreground text on a subtle surface keeps prose legible.
+          return <code className="rounded border border-border/40 bg-muted/80 px-1 py-0.5 text-[12px] font-mono text-foreground">{children}</code>;
         },
         p: ({ children }) => <p className="mb-1.5 text-sm leading-relaxed last:mb-0">{children}</p>,
         ul: ({ children }) => <ul className="mb-1.5 list-disc space-y-0.5 pl-4 text-sm">{children}</ul>,
         ol: ({ children }) => <ol className="mb-1.5 list-decimal space-y-0.5 pl-4 text-sm">{children}</ol>,
         li: ({ children }) => <li>{children}</li>,
         h1: ({ children }) => <h1 className="mb-1 text-sm font-bold text-foreground">{children}</h1>,
-        h2: ({ children }) => <h2 className="mb-1 text-sm font-semibold text-primary">{children}</h2>,
+        h2: ({ children }) => <h2 className="mb-1 text-sm font-semibold text-foreground">{children}</h2>,
         h3: ({ children }) => <h3 className="mb-1 text-sm font-semibold text-foreground">{children}</h3>,
         strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
         table: ({ children }) => (
@@ -359,7 +356,7 @@ function CommandsMsg({
               {visibleCommands.map((cmd) => (
                 <div key={cmd.id} className="space-y-1.5 px-3 py-2">
                   <div className="flex items-start justify-between gap-2">
-                    <code className="flex-1 break-all font-mono text-xs leading-relaxed text-primary">{cmd.cmd}</code>
+                    <code className="flex-1 break-all font-mono text-xs leading-relaxed text-foreground">{cmd.cmd}</code>
                     <div className="flex shrink-0 items-center gap-1 pt-0.5">
                       {/* F2-5 / F2-8: expose risk categories / exec_mode hint */}
                       <CmdRiskBadge command={cmd} />
@@ -398,7 +395,7 @@ function CommandsMsg({
                     </div>
                   ) : null}
                   {cmd.explanation ? (
-                    <div className="rounded-md border border-primary/30 bg-primary/5 px-2 py-1.5 text-[12px] leading-relaxed">
+                    <div className="rounded-md border border-border/50 bg-secondary/20 px-2 py-1.5 text-[12px] leading-relaxed text-secondary-foreground">
                       <ReactMarkdown>{cmd.explanation}</ReactMarkdown>
                     </div>
                   ) : null}
@@ -487,54 +484,6 @@ function ReportMsg({ msg }: { msg: AiMessage }) {
   );
 }
 
-function QuestionMsg({ msg, onReply }: { msg: AiMessage; onReply?: (qId: string, text: string) => void }) {
-  const [answer, setAnswer] = useState("");
-  const [answered, setAnswered] = useState(false);
-
-  const doReply = (text: string) => {
-    if (!text.trim() || !msg.qId) return;
-    onReply?.(msg.qId, text.trim());
-    setAnswered(true);
-  };
-
-  return (
-    <div className="overflow-hidden rounded-2xl border border-primary/30 bg-primary/5">
-      <div className="flex items-center gap-2 bg-primary/10 px-4 py-3 text-sm font-medium text-primary">
-        <HelpCircle className="h-4 w-4" /> Вопрос от AI
-      </div>
-      <div className="space-y-2.5 px-4 py-3">
-        <p className="text-sm text-foreground">{msg.question || msg.content}</p>
-        {msg.questionCmd ? (
-          <code className="block rounded-lg bg-muted px-2.5 py-1.5 text-xs font-mono text-muted-foreground">
-            $ {msg.questionCmd}
-          </code>
-        ) : null}
-        {msg.questionExitCode !== undefined ? <p className="text-xs text-muted-foreground">Код выхода: {msg.questionExitCode}</p> : null}
-        {!answered ? (
-          <div className="flex gap-2">
-            <input
-              value={answer}
-              onChange={(event) => setAnswer(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") doReply(answer);
-              }}
-              placeholder="Ваш ответ..."
-              aria-label="Reply to AI question"
-              autoFocus
-              className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-            />
-            <Button size="sm" className="h-9 px-3 text-xs" onClick={() => doReply(answer)} disabled={!answer.trim()}>
-              <Send className="h-3 w-3" />
-            </Button>
-          </div>
-        ) : (
-          <p className="text-xs italic text-muted-foreground">Ответ отправлен</p>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function ProgressMsg({ msg }: { msg: AiMessage }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-border">
@@ -553,6 +502,276 @@ function ProgressMsg({ msg }: { msg: AiMessage }) {
           {msg.progressTail}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+// ── Nova agent message renderers ────────────────────────────────────────
+
+// Compact Timeline: узкая однострочная шапка, без большой карточки.
+// Показывает primary + extras бейджами; goal показываем tooltip'ом.
+// Run-started marker — intentionally subdued so it reads as a
+// boundary, not a hero banner. "Nova" is the brand word, primary
+// target is a muted monospace chip.
+function AgentStartMsg({ msg }: { msg: AiMessage }) {
+  const extras = msg.agentExtras ?? [];
+  return (
+    <div className="space-y-2">
+      <div
+        className="flex flex-wrap items-center gap-1.5 rounded-md border border-border/50 bg-background/40 px-2.5 py-1.5 text-[11px] text-muted-foreground"
+        title={msg.content || undefined}
+      >
+        <Sparkles className="h-3 w-3 text-primary/80" />
+        <span className="font-medium text-foreground">Nova</span>
+        <span className="opacity-40">·</span>
+        <ServerIcon className="h-2.5 w-2.5 opacity-60" />
+        <code className="rounded border border-border/50 bg-secondary/40 px-1 py-0 font-mono text-foreground/80">
+          {msg.agentPrimary || "primary"}
+        </code>
+        {extras.length > 0 ? (
+          <>
+            <span className="opacity-40">+</span>
+            {extras.slice(0, 3).map((name) => (
+              <code
+                key={name}
+                className="rounded border border-border/50 bg-secondary/40 px-1 py-0 font-mono text-[10px] text-muted-foreground"
+              >
+                {name}
+              </code>
+            ))}
+            {extras.length > 3 ? (
+              <span className="text-[10px] text-muted-foreground">+{extras.length - 3}</span>
+            ) : null}
+          </>
+        ) : null}
+      </div>
+      <NovaContextCard context={msg.agentContext} />
+    </div>
+  );
+}
+
+// Compact inline "thinking" line — barely noticeable by default, click to
+// expand. Meant to read like a subtle side-note between tool rows, not a
+// full-width card. Keeps the timeline dense.
+function AgentThinkingMsg({ msg }: { msg: AiMessage }) {
+  const [expanded, setExpanded] = useState(false);
+  if (!msg.content.trim()) return null;
+  const preview = msg.content.split("\n")[0].slice(0, 120);
+  return (
+    <button
+      type="button"
+      onClick={() => setExpanded((v) => !v)}
+      className="group flex w-full items-start gap-1.5 px-2 py-0.5 text-left text-[11px] italic leading-snug text-muted-foreground/70 transition-colors hover:text-foreground"
+      title={expanded ? undefined : msg.content}
+    >
+      <Brain className="h-3 w-3 mt-0.5 shrink-0 opacity-60" />
+      <span className={`min-w-0 flex-1 ${expanded ? "whitespace-pre-wrap" : "truncate"}`}>
+        {expanded ? msg.content : preview}
+      </span>
+    </button>
+  );
+}
+
+function formatDuration(ms?: number): string {
+  if (ms === undefined || ms < 0) return "";
+  if (ms < 1000) return `${ms}ms`;
+  const sec = ms / 1000;
+  if (sec < 60) return `${sec.toFixed(sec < 10 ? 1 : 0)}s`;
+  const min = Math.floor(sec / 60);
+  return `${min}m${Math.round(sec - min * 60)}s`;
+}
+
+// Collapsed-by-default tool call row. Shows a single-line summary so the
+// timeline stays dense; click to expand args + output + error details.
+// Short commands are shown inline in the header so the user sees *what*
+// was run without having to expand.
+function AgentToolMsg({ msg }: { msg: AiMessage }) {
+  const [expanded, setExpanded] = useState(false);
+  const tool = msg.agentToolName || "tool";
+  const ok = msg.agentToolOk !== false;
+  const running = msg.agentToolOutput === undefined && msg.agentToolError === undefined;
+  const args = msg.agentToolArgs || {};
+  const target =
+    typeof (args as Record<string, unknown>).target === "string"
+      ? (args as Record<string, string>).target
+      : "";
+  // Show the command itself on the collapsed row for shell-like tools so
+  // the user instantly sees the intent without clicking.
+  const cmdPreview =
+    typeof (args as Record<string, unknown>).cmd === "string"
+      ? (args as Record<string, string>).cmd
+      : typeof (args as Record<string, unknown>).command === "string"
+        ? (args as Record<string, string>).command
+        : "";
+  const duration = formatDuration(msg.agentDurationMs);
+  const exitCode = msg.agentToolExitCode;
+  const nonZeroExit = typeof exitCode === "number" && exitCode !== 0;
+  const statusIcon = running ? (
+    <Loader2 className="h-3 w-3 shrink-0 animate-spin text-warning" />
+  ) : ok && !nonZeroExit ? (
+    <CheckCircle2 className="h-3 w-3 shrink-0 text-success" />
+  ) : (
+    <AlertTriangle className="h-3 w-3 shrink-0 text-destructive" />
+  );
+  // Shell tool prefixes its output with "Target: X\nExit: N\n" for the
+  // LLM. We already surface target/exit as structured badges, so strip
+  // that prefix from the user-facing preview to kill noise.
+  const rawOutput = msg.agentToolOutput || "";
+  const output = rawOutput.replace(
+    /^Target:\s*\S+\s*\n(?:Exit:\s*-?\d+\s*\n)?/,
+    "",
+  );
+  const outputLines = output ? output.split("\n") : [];
+  const errorState = !ok || nonZeroExit;
+  return (
+    <div className={`overflow-hidden rounded-lg border ${errorState ? "border-destructive/40" : "border-border/50"}`}>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className={`flex w-full items-center gap-1.5 px-2 py-1 text-left text-[11px] transition-colors hover:bg-secondary/30 ${
+          errorState ? "bg-destructive/5 text-destructive" : "bg-secondary/15 text-foreground"
+        }`}
+        title={cmdPreview || tool}
+      >
+        {statusIcon}
+        <Wrench className="h-3 w-3 shrink-0 text-muted-foreground" />
+        <span className="shrink-0 font-mono text-[10px] text-muted-foreground">{tool}</span>
+        {target ? (
+          <span className="shrink-0 font-mono text-[10px] text-muted-foreground/80">·{target}</span>
+        ) : null}
+        {cmdPreview ? (
+          <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground">
+            {cmdPreview}
+          </code>
+        ) : (
+          <span className="flex-1" />
+        )}
+        {nonZeroExit ? (
+          <span
+            className="shrink-0 rounded border border-destructive/40 bg-destructive/10 px-1 font-mono text-[9px] font-semibold uppercase tracking-wide text-destructive"
+            title={`exit code ${exitCode}`}
+          >
+            exit {exitCode}
+          </span>
+        ) : null}
+        {duration ? (
+          <span className="shrink-0 text-[10px] text-muted-foreground">{duration}</span>
+        ) : null}
+        {expanded ? (
+          <ChevronUp className="h-3 w-3 shrink-0 opacity-40" />
+        ) : (
+          <ChevronDown className="h-3 w-3 shrink-0 opacity-40" />
+        )}
+      </button>
+      {expanded ? (
+        <div className="space-y-1.5 border-t border-border/30 bg-background/40 px-2 py-1.5 text-[11px]">
+          {Object.keys(args).length > 0 ? (
+            <details className="group">
+              <summary className="cursor-pointer text-[10px] text-muted-foreground hover:text-foreground">
+                аргументы ({Object.keys(args).length})
+              </summary>
+              <pre className="mt-1 max-h-32 overflow-auto rounded bg-secondary/40 p-1.5 font-mono text-[10px] leading-snug text-muted-foreground">
+                {JSON.stringify(args, null, 2)}
+              </pre>
+            </details>
+          ) : null}
+          {output ? (
+            <pre className="max-h-80 overflow-auto rounded border border-border/30 bg-terminal-bg/80 p-1.5 font-mono text-[10px] leading-snug text-secondary-foreground">
+              {output}
+            </pre>
+          ) : null}
+          {!output && outputLines.length === 0 && running ? (
+            <p className="text-[10px] italic text-muted-foreground">выполняется…</p>
+          ) : null}
+          {msg.agentToolError ? (
+            <p className="rounded border border-destructive/30 bg-destructive/5 px-1.5 py-1 text-[10px] text-destructive">
+              {msg.agentToolError}
+            </p>
+          ) : null}
+        </div>
+      ) : output ? (
+        // Collapsed inline preview — up to 2 lines of output so the user
+        // sees immediate feedback without expanding.
+        <div className="border-t border-border/20 bg-background/30 px-2 py-0.5 font-mono text-[10px] leading-snug text-muted-foreground/80">
+          <div className="max-h-8 overflow-hidden">
+            {outputLines.slice(0, 2).map((line, idx) => (
+              <div key={idx} className="truncate">
+                {line || "\u00a0"}
+              </div>
+            ))}
+          </div>
+          {outputLines.length > 2 ? (
+            <div className="text-[9px] italic text-muted-foreground/60">
+              +{outputLines.length - 2} строк — кликните чтобы раскрыть
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function AgentTodoMsg({ msg }: { msg: AiMessage }) {
+  const todos = msg.agentTodos || [];
+  if (todos.length === 0) return null;
+  const completed = todos.filter((t) => t.status === "completed").length;
+  return (
+    <div className="overflow-hidden rounded-md border border-border/60 bg-card/70">
+      <div className="flex items-center gap-2 border-b border-border/50 px-3 py-1.5 text-[11px] font-medium text-foreground">
+        <ListTodo className="h-3 w-3 text-muted-foreground" />
+        <span>Todo</span>
+        <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+          {completed}/{todos.length}
+        </span>
+      </div>
+      <ul className="space-y-1 px-3 py-2 text-[12px]">
+        {todos.map((t) => {
+          const icon =
+            t.status === "completed" ? (
+              <CheckCircle2 className="h-3 w-3 shrink-0 text-success" />
+            ) : t.status === "in_progress" ? (
+              <Loader2 className="h-3 w-3 shrink-0 animate-spin text-warning" />
+            ) : t.status === "cancelled" ? (
+              <X className="h-3 w-3 shrink-0 text-muted-foreground" />
+            ) : (
+              <CircleDot className="h-3 w-3 shrink-0 text-muted-foreground" />
+            );
+          return (
+            <li
+              key={t.id}
+              className={`flex items-start gap-2 ${
+                t.status === "completed"
+                  ? "text-muted-foreground line-through"
+                  : t.status === "cancelled"
+                    ? "text-muted-foreground/60 line-through"
+                    : "text-foreground"
+              }`}
+            >
+              <span className="pt-0.5">{icon}</span>
+              <span className="min-w-0 break-words">{t.content}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function AgentStoppedMsg({ msg }: { msg: AiMessage }) {
+  const reasonLabel =
+    {
+      max_iterations: "лимит шагов исчерпан",
+      total_timeout: "превышено общее время",
+      llm_timeout: "LLM не ответил вовремя",
+      llm_error: "ошибка LLM",
+      user_stop: "остановлено пользователем",
+      fatal_tool_error: "критическая ошибка инструмента",
+      cancelled: "отменено",
+    }[msg.agentStopReason || ""] || msg.agentStopReason || "остановлен";
+  return (
+    <div className="flex items-center gap-2 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-[12px] text-warning">
+      <Pause className="h-3.5 w-3.5" />
+      <span>Nova остановлен: {reasonLabel}</span>
     </div>
   );
 }
@@ -578,6 +797,75 @@ function RecoveryMsg({ msg }: { msg: AiMessage }) {
   );
 }
 
+// Timeline wrapper — renders a vertical line + coloured dot on the left
+// of an agent message so consecutive agent rows read as a connected
+// sequence. Non-agent messages break the line naturally because they
+// don't use this wrapper.
+function TimelineRow({
+  children,
+  dot,
+  first = false,
+  last = false,
+}: {
+  children: React.ReactNode;
+  dot: "start" | "think" | "tool-ok" | "tool-err" | "tool-run" | "todo" | "stop";
+  first?: boolean;
+  last?: boolean;
+}) {
+  const dotClass = {
+    start: "bg-primary",
+    think: "bg-muted-foreground/40",
+    "tool-ok": "bg-success",
+    "tool-err": "bg-destructive",
+    "tool-run": "bg-warning animate-pulse",
+    todo: "bg-primary/70",
+    stop: "bg-warning",
+  }[dot];
+  return (
+    <div className="relative pl-4">
+      {/* Two separate line segments around the dot so the timeline
+          bridges the ``space-y-3`` gap between messages (the default
+          sibling margin would otherwise cut the line). Segments are
+          omitted on first / last messages so the line doesn't extend
+          past the sequence. */}
+      {!first ? (
+        <span
+          className="absolute left-[5px] -top-3 h-[18px] w-px bg-muted-foreground/30"
+          aria-hidden="true"
+        />
+      ) : null}
+      {!last ? (
+        <span
+          className="absolute left-[5px] top-[14px] -bottom-3 w-px bg-muted-foreground/30"
+          aria-hidden="true"
+        />
+      ) : null}
+      <span
+        className={`absolute left-[2px] top-1.5 h-2 w-2 rounded-full ring-2 ring-background ${dotClass}`}
+        aria-hidden="true"
+      />
+      <div className="min-w-0">{children}</div>
+    </div>
+  );
+}
+
+function dotKindForMsg(msg: AiMessage): "start" | "think" | "tool-ok" | "tool-err" | "tool-run" | "todo" | "stop" {
+  const type = msg.type || "text";
+  if (type === "agent_start") return "start";
+  if (type === "agent_thinking") return "think";
+  if (type === "agent_todo") return "todo";
+  if (type === "agent_stopped") return "stop";
+  if (type === "agent_tool") {
+    const running = msg.agentToolOutput === undefined && msg.agentToolError === undefined;
+    if (running) return "tool-run";
+    // Non-zero exit code is a failure even if the tool itself ran fine.
+    const nonZeroExit =
+      typeof msg.agentToolExitCode === "number" && msg.agentToolExitCode !== 0;
+    return msg.agentToolOk !== false && !nonZeroExit ? "tool-ok" : "tool-err";
+  }
+  return "think";
+}
+
 function MsgRenderer({
   msg,
   settings,
@@ -585,6 +873,8 @@ function MsgRenderer({
   onCancel,
   onReply,
   onExplainCommand,
+  isFirstAgent,
+  isLastAgent,
 }: {
   msg: AiMessage;
   settings: AiAssistantSettings;
@@ -592,20 +882,36 @@ function MsgRenderer({
   onCancel?: (id: number) => void;
   onReply?: (qId: string, text: string) => void;
   onExplainCommand?: (cmd: AiCommand) => void;
+  isFirstAgent?: boolean;
+  isLastAgent?: boolean;
 }) {
   const type = msg.type || "text";
 
   if (type === "commands") return <div className="w-full"><CommandsMsg msg={msg} settings={settings} onConfirm={onConfirm} onCancel={onCancel} onExplainCommand={onExplainCommand} /></div>;
   if (type === "report") return <div className="w-full"><ReportMsg msg={msg} /></div>;
-  if (type === "question") return <div className="w-full"><QuestionMsg msg={msg} onReply={onReply} /></div>;
+  if (type === "question") return <div className="w-full"><AiQuestionCard msg={msg} onReply={onReply} /></div>;
   if (type === "progress") return <div className="w-full"><ProgressMsg msg={msg} /></div>;
   if (type === "recovery") return <div className="w-full"><RecoveryMsg msg={msg} /></div>;
 
+  // Agent messages share a vertical timeline on the left.
+  if (type === "agent_start") return <div className="w-full"><TimelineRow dot="start" first={isFirstAgent} last={isLastAgent}><AgentStartMsg msg={msg} /></TimelineRow></div>;
+  if (type === "agent_thinking") return <div className="w-full"><TimelineRow dot="think" first={isFirstAgent} last={isLastAgent}><AgentThinkingMsg msg={msg} /></TimelineRow></div>;
+  if (type === "agent_tool") return <div className="w-full"><TimelineRow dot={dotKindForMsg(msg)} first={isFirstAgent} last={isLastAgent}><AgentToolMsg msg={msg} /></TimelineRow></div>;
+  if (type === "agent_todo") return <div className="w-full"><TimelineRow dot="todo" first={isFirstAgent} last={isLastAgent}><AgentTodoMsg msg={msg} /></TimelineRow></div>;
+  if (type === "agent_stopped") return <div className="w-full"><TimelineRow dot="stop" first={isFirstAgent} last={isLastAgent}><AgentStoppedMsg msg={msg} /></TimelineRow></div>;
+
   if (msg.role === "user") {
+    // Linear/Vercel style: no colored bubble. Right-aligned neutral
+    // card with a thin left accent rail so the user's turn is
+    // unmistakable without screaming colour at the operator.
     return (
       <div className="flex justify-end">
-        <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-primary px-3.5 py-2.5 text-sm leading-relaxed text-primary-foreground">
-          {msg.content}
+        <div className="relative max-w-[85%] rounded-md border border-border/60 bg-secondary/30 px-3 py-2 text-[13px] leading-relaxed text-foreground">
+          <span
+            aria-hidden="true"
+            className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-primary/70"
+          />
+          <div className="pl-1.5">{msg.content}</div>
         </div>
       </div>
     );
@@ -613,20 +919,18 @@ function MsgRenderer({
 
   if (msg.role === "system") {
     return (
-      <div className="flex items-start gap-2">
-        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
-        <div className="flex-1 rounded-2xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive/90">
-          {msg.content}
-        </div>
+      <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-[13px] text-destructive/90">
+        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <div className="flex-1 leading-relaxed">{msg.content}</div>
       </div>
     );
   }
 
+  // Assistant free-form reply — no chat-bubble tail, just a clean
+  // document-like surface so prose and markdown read well.
   return (
-    <div className="flex justify-start">
-      <div className="max-w-[95%] rounded-2xl rounded-tl-sm border border-border/60 bg-secondary/65 px-3.5 py-3 text-secondary-foreground">
-        <MD content={msg.content} />
-      </div>
+    <div className="rounded-md border border-border/50 bg-card/60 px-3.5 py-2.5 text-[13px] leading-relaxed text-foreground">
+      <MD content={msg.content} />
     </div>
   );
 }
@@ -700,6 +1004,8 @@ export function AiPanel({
   executionMode,
   settings,
   onModeChange,
+  availableServers,
+  currentServerId,
 }: AiPanelProps) {
   const [input, setInput] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -710,10 +1016,45 @@ export function AiPanel({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isGenerating]);
 
+  // Product decision: Ask/Agent are both exposed. Execution-mode is
+  // restricted to Fast + Nova (agent) for now — Auto and Step are
+  // hidden from the UI (see EXPOSED_EXECUTION_MODES) until they are
+  // ready for users. If a saved setting picked auto/step, fall back
+  // to fast so the segmented control still reflects the live mode.
+  useEffect(() => {
+    if (executionMode !== "fast" && executionMode !== "agent") {
+      onModeChange("fast");
+    }
+  }, [executionMode, onModeChange]);
+
+  // Sticky-todo logic: find the latest agent_todo message and show it
+  // pinned to the top of the scroll area while an agent run is active
+  // (between agent_start and agent_stopped / agent_done). After the run
+  // finishes, we stop pinning so the chronological position in the
+  // timeline remains visible during scroll-back.
+  const { stickyTodo, stickyTodoId } = useMemo(() => {
+    let runActive = false;
+    let latestTodo: AiMessage | null = null;
+    for (let i = 0; i < messages.length; i += 1) {
+      const t = messages[i].type;
+      if (t === "agent_start") {
+        runActive = true;
+        latestTodo = null; // reset — each run has its own todo
+      } else if (t === "agent_stopped") {
+        runActive = false;
+      } else if (t === "agent_todo") {
+        latestTodo = messages[i];
+      }
+    }
+    return {
+      stickyTodo: runActive ? latestTodo : null,
+      stickyTodoId: runActive ? latestTodo?.id : null,
+    };
+  }, [messages]);
+
   const whitelistText = useMemo(() => settings.whitelistPatterns.join("\n"), [settings.whitelistPatterns]);
   const blacklistText = useMemo(() => settings.blacklistPatterns.join("\n"), [settings.blacklistPatterns]);
   const canGenerateReport = messages.length > 0 && !isGenerating;
-  const currentChatMode = chatModeConfig[chatMode];
 
   const updateSettings = (patch: Partial<AiAssistantSettings>) => {
     onSettingsChange({
@@ -751,7 +1092,7 @@ export function AiPanel({
         <DialogContent className="max-h-[85vh] max-w-2xl overflow-hidden rounded-xl border-border/60">
           <DialogHeader className="pb-0">
             <DialogTitle className="flex items-center gap-2 text-base">
-              <Settings2 className="h-4 w-4 text-primary" />
+              <Settings2 className="h-4 w-4 text-muted-foreground" />
               Настройки AI
             </DialogTitle>
             <DialogDescription className="text-[11px]">
@@ -762,7 +1103,7 @@ export function AiPanel({
           <DialogBody className="max-h-[calc(85vh-8rem)] space-y-5 overflow-y-auto py-2">
             <SettingsSection
               title="Режим"
-              description="Выберите как AI будет отвечать и выполнять команды."
+              description="Как AI ведёт диалог и исполняет команды."
             >
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-3">
@@ -869,6 +1210,70 @@ export function AiPanel({
               </div>
             </SettingsSection>
 
+            {/* Nova: extra-target picker — only makes sense when the
+                 agent mode is selected; render it always so the user
+                 can prepare the list before switching to Nova. */}
+            <SettingsSection
+              title="Nova: дополнительные серверы"
+              description="Разрешить агенту работать с другими серверами в этой сессии. Только те, к которым у вас уже есть доступ. Вступает в силу при следующем запросе в Nova-режиме."
+            >
+              {(() => {
+                const others = (availableServers || []).filter(
+                  (s) => s.id !== currentServerId,
+                );
+                if (others.length === 0) {
+                  return (
+                    <p className="text-[11px] text-muted-foreground">
+                      Нет других доступных серверов.
+                    </p>
+                  );
+                }
+                const selected = new Set(settings.extraTargetServerIds);
+                const toggle = (id: number) => {
+                  const next = new Set(selected);
+                  if (next.has(id)) {
+                    next.delete(id);
+                  } else {
+                    if (next.size >= 10) return; // Nova hard cap: 10 extras
+                    next.add(id);
+                  }
+                  updateSettings({ extraTargetServerIds: Array.from(next) });
+                };
+                return (
+                  <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                    {others.map((srv) => (
+                      <label
+                        key={srv.id}
+                        className={`flex cursor-pointer items-center gap-2 rounded-md border px-2 py-1.5 text-[12px] transition-colors ${
+                          selected.has(srv.id)
+                            ? "border-primary/40 bg-primary/5 text-foreground"
+                            : "border-border/40 bg-transparent text-muted-foreground hover:bg-secondary/30"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected.has(srv.id)}
+                          onChange={() => toggle(srv.id)}
+                          className="h-3 w-3 accent-primary"
+                        />
+                        <span className="truncate font-medium">{srv.name}</span>
+                        <span className="truncate text-[10px] text-muted-foreground">
+                          {srv.host}
+                        </span>
+                        {selected.has(srv.id) ? (
+                          <span className="ml-auto rounded border border-primary/30 bg-primary/10 px-1 py-0 font-mono text-[9px] text-primary">
+                            srv-{srv.id}
+                          </span>
+                        ) : null}
+                      </label>
+                    ))}
+                  </div>
+                );
+              })()}
+            </SettingsSection>
+
+            <NovaContextSettings settings={settings} onChange={updateSettings} />
+
             <SettingsSection
               title="Отображение"
               description="Какие элементы показывать в чате."
@@ -904,21 +1309,25 @@ export function AiPanel({
       </Dialog>
 
       <div className="flex h-full flex-col bg-card">
-        {/* Header */}
-        <div className="shrink-0 border-b border-border px-3.5 py-3">
+        {/* Header — neutral status dot + workspace label. No loud pills. */}
+        <div className="shrink-0 border-b border-border px-3.5 py-2.5">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <div className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${
-                isGenerating ? "bg-primary/15" : "bg-secondary"
-              }`}>
-                <Bot className="h-3.5 w-3.5 text-primary" />
+              <div className="flex h-6 w-6 items-center justify-center rounded-md border border-border/50 bg-background/60">
+                <Bot className="h-3 w-3 text-muted-foreground" />
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm font-medium text-foreground">AI</span>
-                <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${
-                  isGenerating ? "border-warning/20 bg-warning/10 text-warning" : "border-success/20 bg-success/10 text-success"
-                }`}>
-                  {isGenerating ? "думает..." : "готов"}
+              <div className="flex items-center gap-2">
+                <span className="text-[13px] font-medium text-foreground">Assistant</span>
+                <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <span
+                    aria-hidden="true"
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      isGenerating
+                        ? "bg-warning animate-pulse"
+                        : "bg-success"
+                    }`}
+                  />
+                  {isGenerating ? "думает…" : "готов"}
                 </span>
               </div>
             </div>
@@ -955,7 +1364,9 @@ export function AiPanel({
           </div>
         </div>
 
-        {/* Compact mode bar */}
+        {/* Compact mode bar — chat behaviour (Ask/Agent) on the left,
+            execution style (Fast/Nova) on the right. Dry-run badge sits
+            between them only when the safety toggle is on. */}
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/50 px-3.5 py-2">
           <ChatModeSelector mode={chatMode} onChange={onChatModeChange} />
           <div className="flex items-center gap-1.5">
@@ -969,14 +1380,21 @@ export function AiPanel({
         </div>
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3">
+          {stickyTodo ? (
+            <div className="sticky top-0 z-10 -mx-3 -mt-3 mb-1 border-b border-border/40 bg-background/95 px-3 pt-2 pb-2 backdrop-blur">
+              <AgentTodoMsg msg={stickyTodo} />
+            </div>
+          ) : null}
           {messages.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center space-y-4 py-8 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-secondary">
-                <Sparkles className="h-6 w-6 text-primary" />
+            <div className="flex h-full flex-col items-center justify-center space-y-5 py-8 text-center">
+              <div className="flex h-10 w-10 items-center justify-center rounded-md border border-border/60 bg-background/40">
+                <Sparkles className="h-4 w-4 text-muted-foreground" />
               </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">Чем могу помочь?</p>
-                <p className="mt-1 text-sm text-muted-foreground">Задайте вопрос о терминале, сервере или текущем выводе.</p>
+              <div className="space-y-1">
+                <p className="text-[13px] font-medium text-foreground">Чем могу помочь?</p>
+                <p className="text-[12px] leading-relaxed text-muted-foreground">
+                  Задайте вопрос о терминале, сервере или текущем выводе.
+                </p>
               </div>
               <div className="flex flex-wrap justify-center gap-1.5">
                 {quickPrompts.map((prompt) => (
@@ -984,7 +1402,7 @@ export function AiPanel({
                     key={prompt}
                     type="button"
                     onClick={() => handleSend(prompt)}
-                    className="rounded-xl border border-border/60 px-3 py-2 text-sm text-muted-foreground transition-colors hover:border-primary/30 hover:bg-secondary hover:text-foreground"
+                    className="rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5 text-[12px] text-muted-foreground transition-colors hover:border-border hover:bg-secondary/60 hover:text-foreground"
                   >
                     {prompt}
                   </button>
@@ -992,29 +1410,51 @@ export function AiPanel({
               </div>
             </div>
           ) : (
-            messages.map((message) => (
-              <MsgRenderer
-                key={message.id}
-                msg={message}
-                settings={settings}
-                onConfirm={onConfirm}
-                onCancel={onCancel}
-                onReply={onReply}
-                onExplainCommand={onExplainCommand}
-              />
-            ))
+            (() => {
+              // Hide the currently-sticky todo from the inline list so
+              // it doesn't render twice. Keep prev/next neighbour
+              // detection correct by computing flags against the
+              // filtered list.
+              const visible = stickyTodoId
+                ? messages.filter((m) => m.id !== stickyTodoId)
+                : messages;
+              return visible.map((message, idx) => {
+                // Mark first/last in a contiguous run of agent messages
+                // so the TimelineRow clips the vertical line at the ends.
+                const isAgent = (message.type || "").startsWith("agent_");
+                const prev = idx > 0 ? visible[idx - 1] : null;
+                const next = idx < visible.length - 1 ? visible[idx + 1] : null;
+                const prevIsAgent = !!prev && (prev.type || "").startsWith("agent_");
+                const nextIsAgent = !!next && (next.type || "").startsWith("agent_");
+                return (
+                  <MsgRenderer
+                    key={message.id}
+                    msg={message}
+                    settings={settings}
+                    onConfirm={onConfirm}
+                    onCancel={onCancel}
+                    onReply={onReply}
+                    onExplainCommand={onExplainCommand}
+                    isFirstAgent={isAgent && !prevIsAgent}
+                    isLastAgent={isAgent && !nextIsAgent}
+                  />
+                );
+              });
+            })()
           )}
 
           {isGenerating ? (
-            <div className="flex justify-start">
-              <div className="flex items-center gap-2.5 rounded-2xl rounded-tl-sm border border-border/60 bg-secondary/70 px-3.5 py-3">
-                <div className="flex gap-0.5">
-                  {[0, 150, 300].map((delay) => (
-                    <span key={delay} className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary" style={{ animationDelay: `${delay}ms` }} />
-                  ))}
-                </div>
-                <span className="text-xs text-muted-foreground">AI думает...</span>
+            <div className="flex items-center gap-2 px-0.5 py-1 text-[11px] text-muted-foreground">
+              <div className="flex gap-1">
+                {[0, 150, 300].map((delay) => (
+                  <span
+                    key={delay}
+                    className="h-1 w-1 animate-bounce rounded-full bg-muted-foreground/60"
+                    style={{ animationDelay: `${delay}ms` }}
+                  />
+                ))}
               </div>
+              <span>думает…</span>
             </div>
           ) : null}
 
@@ -1023,7 +1463,7 @@ export function AiPanel({
 
         <div className="shrink-0 border-t border-border p-2">
           {messages.length > 0 ? (
-            <div className="mb-1.5 flex items-center justify-between gap-2 rounded-xl border border-border/60 bg-secondary/20 px-2.5 py-2">
+            <div className="mb-1.5 flex items-center justify-between gap-2 rounded-md border border-border/50 bg-background/40 px-2.5 py-1.5">
               <span className="text-[11px] text-muted-foreground">Сформировать отчёт</span>
               <Button type="button" size="sm" variant="ghost" onClick={() => onGenerateReport?.(false)} disabled={!canGenerateReport} className="h-7 gap-1 px-2 text-[11px]">
                 <FileText className="h-3 w-3" />
@@ -1039,11 +1479,18 @@ export function AiPanel({
               onChange={handleInput}
               onKeyDown={handleKeyDown}
               aria-label="AI message"
-              placeholder="Сообщение... (Enter — отправить)"
+              placeholder="Сообщение… (Enter — отправить)"
               rows={1}
-              className="min-h-[38px] max-h-[120px] flex-1 resize-none rounded-xl border border-border bg-secondary/40 px-3 py-2.5 text-[13px] text-foreground transition-colors placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none"
+              className="min-h-[36px] max-h-[120px] flex-1 resize-none rounded-md border border-border bg-background/60 px-3 py-2 text-[13px] text-foreground transition-colors placeholder:text-muted-foreground/50 focus:border-primary/60 focus:bg-background focus:outline-none"
             />
-            <Button type="button" size="sm" onClick={() => handleSend()} disabled={!input.trim() || isGenerating} className="h-[38px] w-[38px] shrink-0 p-0" aria-label="Send">
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => handleSend()}
+              disabled={!input.trim() || isGenerating}
+              className="h-[36px] w-[36px] shrink-0 rounded-md p-0"
+              aria-label="Send"
+            >
               <Send className="h-3.5 w-3.5" />
             </Button>
           </div>

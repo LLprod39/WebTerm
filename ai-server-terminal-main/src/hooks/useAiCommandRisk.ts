@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { AiCommand } from "@/components/terminal/AiPanel";
+import type { AiCommand } from "@/components/terminal/ai-types";
 
 /**
  * Risk summary derived from backend F2-5 / F2-8 signals.

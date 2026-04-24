@@ -183,6 +183,12 @@ class Server(models.Model):
     requires_vpn = models.BooleanField(default=False, help_text="Требуется VPN для подключения")
     behind_firewall = models.BooleanField(default=True, help_text="Сервер за корпоративным файрволлом")
 
+    # AI policy
+    ai_read_only = models.BooleanField(
+        default=False,
+        help_text="AI-агент может только читать состояние сервера, но не выполнять изменяющие команды.",
+    )
+
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1263,3 +1269,46 @@ class AgentRunEvent(models.Model):
 
     def __str__(self):
         return f"run={self.run_id} {self.event_type}"
+
+
+class CommandSnapshot(models.Model):
+    """Pre-execution snapshot of a file captured before AI modifies it.
+
+    When the terminal AI is about to run a file-modifying command
+    (``sed -i``, redirect ``>``, ``tee``, etc.) the system reads the
+    target file via SSH and stores the content here.  The user can later
+    view past snapshots and generate a restore command.
+    """
+
+    server = models.ForeignKey(
+        "servers.Server",
+        on_delete=models.CASCADE,
+        related_name="command_snapshots",
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="command_snapshots",
+    )
+    command = models.TextField(help_text="Shell command that triggered the snapshot")
+    file_path = models.CharField(max_length=1024, help_text="Absolute path on remote server")
+    content = models.TextField(blank=True, help_text="File content before modification")
+    content_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text="SHA-256 hex digest for dedup / integrity",
+    )
+    byte_size = models.PositiveIntegerField(default=0, help_text="Original file size in bytes")
+    created_at = models.DateTimeField(auto_now_add=True)
+    restored_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["server", "-created_at"]),
+            models.Index(fields=["user", "-created_at"]),
+            models.Index(fields=["server", "file_path", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"snapshot server={self.server_id} {self.file_path} @ {self.created_at}"

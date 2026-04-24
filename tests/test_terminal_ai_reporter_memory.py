@@ -96,6 +96,23 @@ class TestSanitizeMemoryLine:
         assert sanitize_memory_line("") == ""
         assert sanitize_memory_line(None) == ""  # type: ignore[arg-type]
 
+    # B3: secrets must be redacted before storage in ServerKnowledge.
+    def test_redacts_connection_string(self):
+        text = "DB: postgres://admin:s3cret@db.prod:5432/mydb"
+        result = sanitize_memory_line(text)
+        assert "s3cret" not in result
+        assert "[REDACTED:" in result
+
+    def test_redacts_gitlab_pat(self):
+        text = "token: glpat-abcdefghijklmnopqrstuv"
+        result = sanitize_memory_line(text)
+        assert "glpat-" not in result
+        assert "[REDACTED:" in result
+
+    def test_safe_fact_unchanged(self):
+        text = "nginx 1.24 running on port 443"
+        assert sanitize_memory_line(text) == text
+
 
 class TestDedupCleanList:
     def test_case_insensitive_dedup(self):
