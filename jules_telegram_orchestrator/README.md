@@ -98,6 +98,7 @@ CODEX_CLI_TIMEOUT_SECONDS=1800
 CODEX_CLI_SANDBOX=danger-full-access
 CODEX_CLI_APPROVAL=never
 CODEX_CLI_SEARCH=false
+DEFAULT_ORCHESTRATOR=codex
 PROJECT_ROOT=C:\WebTrerm
 GIT_BRANCH_PREFIX=codex/
 GIT_REMOTE=origin
@@ -124,7 +125,8 @@ The bot also shows a persistent Telegram keyboard:
 - `Gemini` - Gemini CLI status/auth check.
 - `Jules` - Jules sources when configured.
 - `Policy` - autonomy policy.
-- `Новый чат Codex` - reset the stored chief thread.
+- `Оркестратор` - switch between Codex and Gemini CLI as the chief message handler.
+- `Новый чат` - reset the stored chief thread.
 
 - `/start` - help and current config summary.
 - `/policy` - show autonomy policy.
@@ -177,6 +179,16 @@ Examples:
 You can talk to the bot without commands. Plain Telegram messages are forwarded to the stored chief Codex CLI thread, and the final Codex answer is sent back to Telegram.
 
 For manual project management, `/task`, `/gemini_task`, and `/delegate_task` still exist. This preserves a stable project task id when several agent runs are needed.
+
+## Orchestrator Switching
+
+The bot supports switching between Codex CLI and Gemini CLI as the chief orchestrator for handling plain Telegram messages.
+
+- Tap the **Оркестратор** keyboard button to see and change the active orchestrator.
+- When **Codex** is active (default), messages go through the Codex CLI chief session with plan approval if configured.
+- When **Gemini CLI** is active, messages go directly to Gemini CLI with full edit permissions.
+- The choice persists across bot restarts (stored in SQLite).
+- Set `DEFAULT_ORCHESTRATOR=codex` or `DEFAULT_ORCHESTRATOR=gemini` in `.env` to control the initial default.
 
 ## Autonomy Model
 

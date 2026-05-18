@@ -90,9 +90,37 @@ class Storage:
                 value TEXT NOT NULL,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE TABLE IF NOT EXISTS chief_runs (
+                run_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                message TEXT NOT NULL,
+                response TEXT NOT NULL DEFAULT '',
+                thread_id TEXT NOT NULL DEFAULT '',
+                status_message_id INTEGER,
+                error TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS pending_plans (
+                plan_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                message TEXT NOT NULL,
+                plan_text TEXT NOT NULL,
+                chief_run_id INTEGER,
+                task_id INTEGER,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
             """
         )
         self._ensure_column("sessions", "task_id", "INTEGER")
+        self._ensure_column("pending_plans", "task_id", "INTEGER")
         self.connection.commit()
 
     def _ensure_column(self, table: str, column: str, definition: str) -> None:
@@ -161,6 +189,29 @@ class Storage:
             (limit,),
         ).fetchall()
         return [dict(row) for row in rows]
+
+    def list_task_sessions(self, task_id: int, *, limit: int = 10) -> list[dict[str, Any]]:
+        rows = self.connection.execute(
+            """
+            SELECT * FROM sessions
+            WHERE task_id = ?
+            ORDER BY updated_at DESC
+            LIMIT ?
+            """,
+            (task_id, limit),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def unwatch_task_sessions(self, task_id: int) -> None:
+        self.connection.execute(
+            """
+            UPDATE sessions
+            SET is_watched = 0, updated_at = CURRENT_TIMESTAMP
+            WHERE task_id = ?
+            """,
+            (task_id,),
+        )
+        self.connection.commit()
 
     def list_watched_sessions(self) -> list[dict[str, Any]]:
         rows = self.connection.execute(
@@ -340,3 +391,165 @@ class Storage:
     def delete_state(self, key: str) -> None:
         self.connection.execute("DELETE FROM app_state WHERE key = ?", (key,))
         self.connection.commit()
+
+    def list_state_prefix(self, prefix: str) -> list[dict[str, str]]:
+        rows = self.connection.execute(
+            """
+            SELECT key, value, updated_at FROM app_state
+            WHERE key LIKE ?
+            ORDER BY key ASC
+            """,
+            (f"{prefix}%",),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def list_completed_sessions_needing_sync(self, *, sync_key_prefix: str) -> list[dict[str, Any]]:
+        rows = self.connection.execute(
+            """
+            SELECT sessions.*
+            FROM sessions
+            LEFT JOIN app_state
+                ON app_state.key = ? || sessions.session_id
+            WHERE sessions.is_watched = 1
+                AND sessions.state = 'COMPLETED'
+                AND app_state.key IS NULL
+            ORDER BY sessions.updated_at ASC
+            """,
+            (sync_key_prefix,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def cancel_running_agent_runs(self, task_id: int) -> None:
+        self.connection.execute(
+            """
+            UPDATE agent_runs
+            SET status = 'CANCELLED', updated_at = CURRENT_TIMESTAMP
+            WHERE task_id = ? AND status IN ('RUNNING', 'RETRYING')
+            """,
+            (task_id,),
+        )
+        self.connection.commit()
+
+    def create_chief_run(
+        self,
+        *,
+        chat_id: int,
+        user_id: int,
+        message: str,
+        status_message_id: int | None = None,
+        thread_id: str = "",
+    ) -> int:
+        cursor = self.connection.execute(
+            """
+            INSERT INTO chief_runs (chat_id, user_id, status, message, status_message_id, thread_id)
+            VALUES (?, ?, 'RUNNING', ?, ?, ?)
+            """,
+            (chat_id, user_id, message, status_message_id, thread_id),
+        )
+        run_id = int(cursor.lastrowid)
+        self.connection.commit()
+        return run_id
+
+    def update_chief_run(
+        self,
+        run_id: int,
+        *,
+        status: str,
+        response: str = "",
+        thread_id: str = "",
+        error: str = "",
+    ) -> None:
+        self.connection.execute(
+            """
+            UPDATE chief_runs
+            SET status = ?,
+                response = COALESCE(NULLIF(?, ''), response),
+                thread_id = COALESCE(NULLIF(?, ''), thread_id),
+                error = COALESCE(NULLIF(?, ''), error),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE run_id = ?
+            """,
+            (status, response, thread_id, error, run_id),
+        )
+        self.connection.commit()
+
+    def get_chief_run(self, run_id: int) -> dict[str, Any] | None:
+        row = self.connection.execute("SELECT * FROM chief_runs WHERE run_id = ?", (run_id,)).fetchone()
+        return dict(row) if row else None
+
+    def list_chief_runs(self, *, limit: int = 5) -> list[dict[str, Any]]:
+        rows = self.connection.execute(
+            """
+            SELECT * FROM chief_runs
+            ORDER BY run_id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def list_active_chief_runs(self) -> list[dict[str, Any]]:
+        rows = self.connection.execute(
+            """
+            SELECT * FROM chief_runs
+            WHERE status IN ('RUNNING', 'RETRYING')
+            ORDER BY run_id DESC
+            """
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def create_pending_plan(
+        self,
+        *,
+        chat_id: int,
+        user_id: int,
+        message: str,
+        plan_text: str,
+        status: str = "PENDING",
+    ) -> int:
+        cursor = self.connection.execute(
+            """
+            INSERT INTO pending_plans (chat_id, user_id, status, message, plan_text)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (chat_id, user_id, status, message, plan_text),
+        )
+        plan_id = int(cursor.lastrowid)
+        self.connection.commit()
+        return plan_id
+
+    def get_pending_plan(self, plan_id: int) -> dict[str, Any] | None:
+        row = self.connection.execute("SELECT * FROM pending_plans WHERE plan_id = ?", (plan_id,)).fetchone()
+        return dict(row) if row else None
+
+    def update_pending_plan(
+        self,
+        plan_id: int,
+        *,
+        status: str,
+        chief_run_id: int | None = None,
+        task_id: int | None = None,
+    ) -> None:
+        self.connection.execute(
+            """
+            UPDATE pending_plans
+            SET status = ?,
+                chief_run_id = COALESCE(?, chief_run_id),
+                task_id = COALESCE(?, task_id),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE plan_id = ?
+            """,
+            (status, chief_run_id, task_id, plan_id),
+        )
+        self.connection.commit()
+
+    def list_pending_plans(self, *, limit: int = 10) -> list[dict[str, Any]]:
+        rows = self.connection.execute(
+            """
+            SELECT * FROM pending_plans
+            ORDER BY plan_id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        return [dict(row) for row in rows]

@@ -40,6 +40,9 @@ class Config:
     jules_default_branch: str
     jules_require_plan_approval: bool
     jules_auto_create_pr: bool
+    jules_auto_sync_local: bool
+    jules_auto_pull_local: bool
+    jules_auto_commit_local: bool
     gemini_cli_enabled: bool
     gemini_cli_command: str
     gemini_cli_model: str
@@ -53,6 +56,8 @@ class Config:
     codex_cli_sandbox: str
     codex_cli_approval: str
     codex_cli_search: bool
+    codex_require_plan_approval: bool
+    default_orchestrator: str
     project_root: Path
     git_branch_prefix: str
     git_remote: str
@@ -75,6 +80,9 @@ class Config:
             jules_default_branch=os.getenv("JULES_DEFAULT_BRANCH", "main").strip() or "main",
             jules_require_plan_approval=_as_bool(os.getenv("JULES_REQUIRE_PLAN_APPROVAL"), default=True),
             jules_auto_create_pr=_as_bool(os.getenv("JULES_AUTO_CREATE_PR"), default=False),
+            jules_auto_sync_local=_as_bool(os.getenv("JULES_AUTO_SYNC_LOCAL"), default=True),
+            jules_auto_pull_local=_as_bool(os.getenv("JULES_AUTO_PULL_LOCAL"), default=True),
+            jules_auto_commit_local=_as_bool(os.getenv("JULES_AUTO_COMMIT_LOCAL"), default=True),
             gemini_cli_enabled=_as_bool(os.getenv("GEMINI_CLI_ENABLED"), default=True),
             gemini_cli_command=os.getenv("GEMINI_CLI_COMMAND", "gemini").strip() or "gemini",
             gemini_cli_model=os.getenv("GEMINI_CLI_MODEL", "").strip(),
@@ -88,6 +96,8 @@ class Config:
             codex_cli_sandbox=os.getenv("CODEX_CLI_SANDBOX", "danger-full-access").strip() or "danger-full-access",
             codex_cli_approval=os.getenv("CODEX_CLI_APPROVAL", "never").strip() or "never",
             codex_cli_search=_as_bool(os.getenv("CODEX_CLI_SEARCH"), default=False),
+            codex_require_plan_approval=_as_bool(os.getenv("CODEX_REQUIRE_PLAN_APPROVAL"), default=True),
+            default_orchestrator=os.getenv("DEFAULT_ORCHESTRATOR", "codex").strip().lower() or "codex",
             project_root=Path(os.getenv("PROJECT_ROOT", ".")).resolve(),
             git_branch_prefix=os.getenv("GIT_BRANCH_PREFIX", "codex/").strip() or "codex/",
             git_remote=os.getenv("GIT_REMOTE", "origin").strip() or "origin",

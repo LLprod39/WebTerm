@@ -59,6 +59,39 @@ class GitOps:
         self._run(["git", "push", "-u", self.remote, branch])
         return branch
 
+    def pull_branch_ff_only(self, branch: str) -> str:
+        if self.status().is_dirty:
+            raise GitOpsError("Local git tree is dirty. Commit/stash local changes before auto-pull.")
+        current = self.status().branch
+        if current != branch:
+            self._run(["git", "switch", branch])
+        self._run(["git", "fetch", self.remote, branch])
+        self._run(["git", "pull", "--ff-only", self.remote, branch])
+        return self._run(["git", "rev-parse", "--short", "HEAD"]).strip()
+
+    def checkout_pull_request(self, pr_url: str) -> str:
+        if self.status().is_dirty:
+            raise GitOpsError("Local git tree is dirty. Commit/stash local changes before checking out Jules PR.")
+        self._run(["gh", "pr", "checkout", pr_url])
+        return self.status().branch
+
+    def apply_patch_and_commit(self, patch: str, *, message: str, commit: bool) -> str:
+        if self.status().is_dirty:
+            raise GitOpsError("Local git tree is dirty. Commit/stash local changes before applying Jules patch.")
+        files = self._files_from_patch(patch)
+        if not files:
+            raise GitOpsError("Jules patch did not contain changed files.")
+        self._run(["git", "apply", "--check", "-"], stdin=patch)
+        self._run(["git", "apply", "--whitespace=nowarn", "-"], stdin=patch)
+        if not commit:
+            return "Applied Jules patch locally without commit."
+        self._run(["git", "add", "--", *files])
+        if not self.status().is_dirty:
+            return "Jules patch applied, but no local diff remained."
+        self._run(["git", "commit", "-m", message])
+        sha = self._run(["git", "rev-parse", "--short", "HEAD"]).strip()
+        return f"Committed {sha}: {', '.join(files)}"
+
     def diff_for_review(self, *, max_chars: int = 30000) -> str:
         status = self._run(["git", "status", "--short"]).strip()
         stat = self._run(["git", "diff", "--stat"]).strip()
@@ -78,6 +111,27 @@ class GitOps:
         if len(combined) > max_chars:
             return f"{combined[: max_chars - 1]}..."
         return combined
+
+    def list_branches(self, *, limit: int = 40) -> list[str]:
+        output = self._run(["git", "branch", "--all", "--no-color"])
+        branches: list[str] = []
+        seen: set[str] = set()
+        for line in output.splitlines():
+            branch = line.strip().lstrip("*+").strip()
+            if not branch or " -> " in branch:
+                continue
+            if branch.startswith("remotes/"):
+                parts = branch.split("/", 2)
+                if len(parts) < 3:
+                    continue
+                branch = parts[2]
+            if branch in seen:
+                continue
+            seen.add(branch)
+            branches.append(branch)
+            if len(branches) >= limit:
+                break
+        return branches
 
     def create_pull_request(self, *, title: str, body: str, base_branch: str) -> str:
         branch = self.status().branch
@@ -100,11 +154,12 @@ class GitOps:
         )
         return output.strip()
 
-    def _run(self, args: list[str]) -> str:
+    def _run(self, args: list[str], *, stdin: str | None = None) -> str:
         try:
             result = subprocess.run(
                 args,
                 cwd=self.project_root,
+                input=stdin,
                 check=True,
                 capture_output=True,
                 text=True,
@@ -117,6 +172,19 @@ class GitOps:
             output = (exc.stderr or exc.stdout or "").strip()
             raise GitOpsError(output or f"Git command failed: {' '.join(args)}") from exc
         return result.stdout
+
+    @staticmethod
+    def _files_from_patch(patch: str) -> list[str]:
+        files: list[str] = []
+        seen: set[str] = set()
+        for match in re.finditer(r"^diff --git a/(.*?) b/(.*?)$", patch, flags=re.MULTILINE):
+            path = match.group(2).strip()
+            if path == "/dev/null":
+                path = match.group(1).strip()
+            if path and path not in seen:
+                seen.add(path)
+                files.append(path)
+        return files
 
     @staticmethod
     def _slugify(value: str) -> str:

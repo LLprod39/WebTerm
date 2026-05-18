@@ -11,6 +11,13 @@ def test_build_chief_prompt_contains_telegram_message() -> None:
     assert "1041149302" in prompt
 
 
+def test_build_plan_prompt_is_approval_first() -> None:
+    prompt = CodexCli._build_plan_prompt("Сделай задачу", user_id=1, chat_id=2)
+    assert "Do not change files" in prompt
+    assert "Which worker" in prompt
+    assert "Exact prompt/task text" in prompt
+
+
 def test_extracts_thread_id_from_jsonl() -> None:
     stdout = '{"type":"thread.started","thread_id":"019e3a7d-b5ef"}\n{"type":"turn.completed"}'
     assert CodexCli._extract_thread_id(stdout) == "019e3a7d-b5ef"

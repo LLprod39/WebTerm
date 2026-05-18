@@ -155,6 +155,8 @@ class Coordinator:
             [
                 "Work as an autonomous coding agent on this repository.",
                 "Follow the repository AGENTS.md instructions if present.",
+                "Use any tools, MCP servers, skills, or repository automation available in your Jules environment when they help.",
+                "If a needed tool or permission is missing, report the blocker instead of guessing.",
                 "Keep the change scoped to the task. Add or update focused tests when behavior changes.",
                 "Run the most relevant checks you can. If a check cannot run, explain the blocker.",
                 "",

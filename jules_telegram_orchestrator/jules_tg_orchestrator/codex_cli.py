@@ -83,6 +83,39 @@ class CodexCli:
             with contextlib.suppress(OSError):
                 output_path.unlink(missing_ok=True)
 
+    def build_delegation_plan(self, telegram_message: str, *, user_id: int, chat_id: int) -> CodexResult:
+        prompt = self._build_plan_prompt(telegram_message, user_id=user_id, chat_id=chat_id)
+        with tempfile.NamedTemporaryFile("w+", encoding="utf-8", suffix=".txt", delete=False) as handle:
+            output_path = Path(handle.name)
+        try:
+            args = [
+                self.command,
+                "exec",
+                "--cd",
+                str(self.cwd),
+                "--sandbox",
+                "read-only",
+                "--json",
+                "--output-last-message",
+                str(output_path),
+                "-",
+            ]
+            args.extend(["-c", 'approval_policy="never"'])
+            if self.model:
+                args.extend(["--model", self.model])
+            result = self._run(args, timeout=min(self.timeout_seconds, 600), stdin=prompt)
+            response = output_path.read_text(encoding="utf-8", errors="replace").strip()
+            return CodexResult(
+                response=response,
+                stdout=result.stdout,
+                stderr=result.stderr,
+                returncode=result.returncode,
+                thread_id=self._extract_thread_id(result.stdout),
+            )
+        finally:
+            with contextlib.suppress(OSError):
+                output_path.unlink(missing_ok=True)
+
     def _append_common_options(self, args: list[str]) -> None:
         if self.approval:
             args.extend(["-c", f'approval_policy="{self.approval}"'])
@@ -179,7 +212,39 @@ class CodexCli:
                 "6. Do not blindly delegate. First decide whether the task is clear enough and which worker fits.",
                 "7. Report progress, blockers, verification, and final status in concise Russian suitable for Telegram.",
                 "8. If you need user input, ask the user directly in Russian.",
+                "Tooling policy:",
+                "- Use all MCP servers, plugins, connectors, and skills that are available in your current Codex environment when they materially help.",
+                "- Discover and load relevant skills before using specialized workflows.",
+                "- If a needed skill/plugin/MCP server is missing but the environment supports installing or enabling it, do that when allowed by the user's approved plan.",
+                "- If installation requires permissions you do not have, report the exact blocker and the next action needed from the user.",
+                "- When delegating to Jules or Gemini, include the relevant repository instructions, verification expectations, and tool/skill assumptions in the worker prompt.",
                 "Do not mention that this is a separate CLI run unless it matters.",
+                "",
+                f"Telegram user id: {user_id}",
+                f"Telegram chat id: {chat_id}",
+                "",
+                "Customer message:",
+                telegram_message.strip(),
+            ]
+        )
+
+    @staticmethod
+    def _build_plan_prompt(telegram_message: str, *, user_id: int, chat_id: int) -> str:
+        return "\n".join(
+            [
+                "You are the chief Codex project orchestrator for this repository.",
+                "The customer sent a Telegram message. Do not change files. Do not delegate yet.",
+                "Prepare an approval plan in Russian before any work starts.",
+                "The plan must clearly say:",
+                "1. What you understood.",
+                "2. Clarifying questions if required.",
+                "3. Whether the task is ready to execute.",
+                "4. Which worker you would use: Codex chief, Gemini CLI, Jules, or a combination.",
+                "5. Exact prompt/task text that will be sent to each worker.",
+                "6. What checks/verification you will run.",
+                "7. What git actions, if any, may happen.",
+                "8. Which MCP servers/plugins/skills/tools you expect to use or install, and why.",
+                "Keep it concise and Telegram-readable.",
                 "",
                 f"Telegram user id: {user_id}",
                 f"Telegram chat id: {chat_id}",

@@ -19,12 +19,16 @@ class AutonomyPolicy:
     codex_cli_timeout_seconds: int
     codex_cli_sandbox: str
     codex_cli_approval: str
+    codex_require_plan_approval: bool
     auto_create_branch: bool
     auto_commit: bool
     auto_push: bool
     auto_pr: bool
     require_jules_plan_approval: bool
     jules_auto_create_pr: bool
+    jules_auto_sync_local: bool
+    jules_auto_pull_local: bool
+    jules_auto_commit_local: bool
 
     @classmethod
     def from_config(cls, config: Config) -> AutonomyPolicy:
@@ -41,12 +45,16 @@ class AutonomyPolicy:
             codex_cli_timeout_seconds=config.codex_cli_timeout_seconds,
             codex_cli_sandbox=config.codex_cli_sandbox,
             codex_cli_approval=config.codex_cli_approval,
+            codex_require_plan_approval=config.codex_require_plan_approval,
             auto_create_branch=config.git_auto_create_branch,
             auto_commit=config.git_auto_commit,
             auto_push=config.git_auto_push,
             auto_pr=config.git_auto_pr,
             require_jules_plan_approval=config.jules_require_plan_approval,
             jules_auto_create_pr=config.jules_auto_create_pr,
+            jules_auto_sync_local=config.jules_auto_sync_local,
+            jules_auto_pull_local=config.jules_auto_pull_local,
+            jules_auto_commit_local=config.jules_auto_commit_local,
         )
 
     def render(self) -> str:
@@ -65,11 +73,15 @@ class AutonomyPolicy:
                 f"Codex CLI timeout seconds: {self.codex_cli_timeout_seconds}",
                 f"Codex CLI sandbox: {self.codex_cli_sandbox}",
                 f"Codex CLI approval: {self.codex_cli_approval}",
+                f"Codex requires plan approval: {self.codex_require_plan_approval}",
                 f"Auto-create branch: {self.auto_create_branch}",
                 f"Auto-commit: {self.auto_commit}",
                 f"Auto-push: {self.auto_push}",
                 f"Auto-create PR: {self.auto_pr}",
                 f"Jules requires plan approval: {self.require_jules_plan_approval}",
                 f"Jules auto-create PR: {self.jules_auto_create_pr}",
+                f"Jules auto-sync local: {self.jules_auto_sync_local}",
+                f"Jules auto-pull local: {self.jules_auto_pull_local}",
+                f"Jules auto-commit local: {self.jules_auto_commit_local}",
             ]
         )

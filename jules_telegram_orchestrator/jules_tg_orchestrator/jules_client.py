@@ -60,6 +60,12 @@ class JulesClient:
 
         raise JulesApiError(f"Could not resolve Jules source: {source_hint}")
 
+    @staticmethod
+    def source_default_branch(source: dict) -> str:
+        repo = source.get("githubRepo") or {}
+        branch = repo.get("defaultBranch") or {}
+        return branch.get("displayName") or branch.get("name") or ""
+
     async def create_session(
         self,
         *,
@@ -90,6 +96,10 @@ class JulesClient:
     async def get_session(self, session_id: str) -> dict[str, Any]:
         session_id = session_id.removeprefix("sessions/")
         return await self._request("GET", f"/sessions/{session_id}")
+
+    async def delete_session(self, session_id: str) -> None:
+        session_id = session_id.removeprefix("sessions/")
+        await self._request("DELETE", f"/sessions/{session_id}")
 
     async def list_activities(self, session_id: str, *, page_size: int = 50) -> list[dict[str, Any]]:
         session_id = session_id.removeprefix("sessions/")
