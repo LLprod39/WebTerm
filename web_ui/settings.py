@@ -21,6 +21,7 @@ from django.core.exceptions import ImproperlyConfigured
 # Загрузка .env до чтения os.getenv (для POSTGRES_*, CELERY_* и т.д.)
 try:
     from dotenv import load_dotenv
+
     load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 except ImportError:
     pass
@@ -84,7 +85,7 @@ _RENDER_EXTERNAL_HOSTNAME = (os.getenv("RENDER_EXTERNAL_HOSTNAME", "") or "").st
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = _env_bool("DJANGO_DEBUG", _env_bool("DEBUG", True))
+DEBUG = _env_bool("DJANGO_DEBUG", _env_bool("DEBUG", False))
 
 # SECURITY WARNING: keep the secret key used in production secret!
 _DEV_SECRET_KEY_FALLBACK = "django-insecure-@b9idj_4skbcph+21q6^bc0qbs*$qs&@7r2sqfn*1#)z5_i%my"
@@ -93,38 +94,31 @@ if not SECRET_KEY:
     if DEBUG:
         SECRET_KEY = _DEV_SECRET_KEY_FALLBACK
     else:
-        raise ImproperlyConfigured(
-            "DJANGO_SECRET_KEY or SECRET_KEY must be set when DJANGO_DEBUG=false."
-        )
-if not DEBUG and (
-    SECRET_KEY.startswith("django-insecure-")
-    or len(SECRET_KEY) < 50
-    or len(set(SECRET_KEY)) < 5
-):
-    raise ImproperlyConfigured(
-        "Set a long random DJANGO_SECRET_KEY for production."
-    )
+        raise ImproperlyConfigured("DJANGO_SECRET_KEY or SECRET_KEY must be set when DJANGO_DEBUG=false.")
+if not DEBUG and (SECRET_KEY.startswith("django-insecure-") or len(SECRET_KEY) < 50 or len(set(SECRET_KEY)) < 5):
+    raise ImproperlyConfigured("Set a long random DJANGO_SECRET_KEY for production.")
 
 SITE_URL = (
-    os.getenv("SITE_URL")
-    or _RENDER_EXTERNAL_URL
-    or ("http://localhost:9000" if DEBUG else "")
-).strip().rstrip("/")
+    (os.getenv("SITE_URL") or _RENDER_EXTERNAL_URL or ("http://localhost:9000" if DEBUG else "")).strip().rstrip("/")
+)
 
 FRONTEND_APP_URL = (
-    os.getenv(
-        "FRONTEND_APP_URL",
-        "http://127.0.0.1:8080" if DEBUG and not _RENDER_EXTERNAL_URL else "",
+    (
+        os.getenv(
+            "FRONTEND_APP_URL",
+            "http://127.0.0.1:8080" if DEBUG and not _RENDER_EXTERNAL_URL else "",
+        )
+        or ""
     )
-    or ""
-).strip().rstrip("/")
+    .strip()
+    .rstrip("/")
+)
 
 _SITE_ORIGIN = _origin_from_url(SITE_URL)
 _FRONTEND_ORIGIN = _origin_from_url(FRONTEND_APP_URL)
 _RENDER_ORIGIN = _origin_from_url(_RENDER_EXTERNAL_URL)
 _PRODUCTION_HTTPS = (not DEBUG) and any(
-    origin.startswith("https://")
-    for origin in (_SITE_ORIGIN, _FRONTEND_ORIGIN, _RENDER_ORIGIN)
+    origin.startswith("https://") for origin in (_SITE_ORIGIN, _FRONTEND_ORIGIN, _RENDER_ORIGIN)
 )
 
 # Р”РѕРјРµРЅ Рё IP СЃРµСЂРІРµСЂР° вЂ” РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ, С‡С‚РѕР±С‹ СЂР°Р±РѕС‚Р°Р»Рѕ РїРѕ weuai.site Рё РїРѕ IP
@@ -180,59 +174,59 @@ if DEBUG:
 # Application definition
 
 INSTALLED_APPS = [
-    'daphne',
-    'channels',
-    'corsheaders',
-    'core_ui',
-    'servers',
-    'studio',
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
+    "daphne",
+    "channels",
+    "corsheaders",
+    "core_ui",
+    "servers",
+    "studio",
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
 ]
 
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.locale.LocaleMiddleware',
-    'core_ui.middleware.CsrfTrustNgrokMiddleware',  # до CSRF: доверяет ngrok-домены
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'core_ui.domain_auth.DomainAutoLoginMiddleware',
-    'core_ui.middleware.RequestAuditMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'core_ui.middleware.AdminRussianMiddleware',
-    'core_ui.middleware.MobileDetectionMiddleware',
+    "django.middleware.security.SecurityMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.locale.LocaleMiddleware",
+    "core_ui.middleware.CsrfTrustNgrokMiddleware",  # до CSRF: доверяет ngrok-домены
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "core_ui.domain_auth.DomainAutoLoginMiddleware",
+    "core_ui.middleware.RequestAuditMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "core_ui.middleware.AdminRussianMiddleware",
+    "core_ui.middleware.MobileDetectionMiddleware",
 ]
 
-ROOT_URLCONF = 'web_ui.urls'
+ROOT_URLCONF = "web_ui.urls"
 
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [
-            BASE_DIR / 'core_ui' / 'templates',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [
+            BASE_DIR / "core_ui" / "templates",
         ],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
-                'core_ui.context_processors.app_permissions',
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
+                "core_ui.context_processors.app_permissions",
             ],
         },
     },
 ]
 
-WSGI_APPLICATION = 'web_ui.wsgi.application'
-ASGI_APPLICATION = 'web_ui.asgi.application'
+WSGI_APPLICATION = "web_ui.wsgi.application"
+ASGI_APPLICATION = "web_ui.asgi.application"
 
 # =============================================================================
 # Channels (WebSocket) Configuration
@@ -267,6 +261,7 @@ else:
 # Р—Р°РґР°Р№С‚Рµ POSTGRES_HOST (РёР»Рё POSTGRES_DB) РІ .env вЂ” Р±СѓРґРµС‚ РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊСЃСЏ PostgreSQL.
 # РРЅР°С‡Рµ вЂ” SQLite РґР»СЏ Р»РѕРєР°Р»СЊРЅРѕРіРѕ СЃС‚Р°СЂС‚Р° Р±РµР· Docker.
 
+
 def _get_database_config():
     use_postgres = os.getenv("POSTGRES_HOST") or os.getenv("POSTGRES_DB")
     if use_postgres:
@@ -300,16 +295,16 @@ DATABASES = {"default": _get_database_config()}
 
 AUTH_PASSWORD_VALIDATORS = [
     {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
 ]
 
@@ -317,9 +312,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = "UTC"
 
 USE_I18N = True
 
@@ -327,19 +322,15 @@ USE_TZ = True
 
 
 # Auth
-LOGIN_URL = 'login'
-LOGIN_REDIRECT_URL = 'servers:server_list'
-LOGOUT_REDIRECT_URL = 'login'
-AUTHENTICATION_BACKENDS = ['django.contrib.auth.backends.ModelBackend']
+LOGIN_URL = "login"
+LOGIN_REDIRECT_URL = "servers:server_list"
+LOGOUT_REDIRECT_URL = "login"
+AUTHENTICATION_BACKENDS = ["django.contrib.auth.backends.ModelBackend"]
 
 # External SPA frontend (React/Vite)
 SERVE_STATIC_FILES = _env_bool("SERVE_STATIC_FILES", not DEBUG)
 USE_X_FORWARDED_HOST = _env_bool("USE_X_FORWARDED_HOST", True)
-SECURE_PROXY_SSL_HEADER = (
-    ("HTTP_X_FORWARDED_PROTO", "https")
-    if _env_bool("TRUST_X_FORWARDED_PROTO", True)
-    else None
-)
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https") if _env_bool("TRUST_X_FORWARDED_PROTO", True) else None
 SECURE_SSL_REDIRECT = _env_bool("SECURE_SSL_REDIRECT", _PRODUCTION_HTTPS)
 SECURE_HSTS_SECONDS = _env_int(
     "SECURE_HSTS_SECONDS",
@@ -355,12 +346,10 @@ SECURE_HSTS_PRELOAD = _env_bool(
 )
 SECURE_CONTENT_TYPE_NOSNIFF = _env_bool("SECURE_CONTENT_TYPE_NOSNIFF", True)
 SECURE_REFERRER_POLICY = (
-    os.getenv("SECURE_REFERRER_POLICY", "strict-origin-when-cross-origin")
-    or "strict-origin-when-cross-origin"
+    os.getenv("SECURE_REFERRER_POLICY", "strict-origin-when-cross-origin") or "strict-origin-when-cross-origin"
 ).strip()
 SECURE_CROSS_ORIGIN_OPENER_POLICY = (
-    os.getenv("SECURE_CROSS_ORIGIN_OPENER_POLICY", "same-origin")
-    or "same-origin"
+    os.getenv("SECURE_CROSS_ORIGIN_OPENER_POLICY", "same-origin") or "same-origin"
 ).strip()
 
 _cross_site_auth = _env_bool("CROSS_SITE_AUTH", CORS_ALLOW_CREDENTIALS and not DEBUG)
@@ -475,15 +464,15 @@ if LDAP_ENABLED:
 # SMTP settings for sending emails (invitations, notifications, etc.)
 # For development, use console backend. For production, configure SMTP.
 EMAIL_BACKEND = os.getenv(
-    'EMAIL_BACKEND',
-    'django.core.mail.backends.console.EmailBackend' if DEBUG else 'django.core.mail.backends.smtp.EmailBackend'
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend" if DEBUG else "django.core.mail.backends.smtp.EmailBackend",
 )
-EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
-EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
-EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() in ('true', '1', 'yes')
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'WEU Platform <noreply@weuai.site>')
+EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True").lower() in ("true", "1", "yes")
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "WEU Platform <noreply@weuai.site>")
 
 # Site URL for email links and approval callbacks
 SITE_URL = SITE_URL or (_RENDER_EXTERNAL_URL or "http://localhost:9000")
@@ -492,31 +481,31 @@ SITE_URL = SITE_URL or (_RENDER_EXTERNAL_URL or "http://localhost:9000")
 # Pipeline Notifications — global defaults (used when nodes don't override)
 # =============================================================================
 # Who receives pipeline notifications (approvals, reports, alerts)
-PIPELINE_NOTIFY_EMAIL = os.getenv('PIPELINE_NOTIFY_EMAIL', EMAIL_HOST_USER)
+PIPELINE_NOTIFY_EMAIL = os.getenv("PIPELINE_NOTIFY_EMAIL", EMAIL_HOST_USER)
 
 # Telegram Bot — used by output/telegram and logic/human_approval nodes globally
-TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
-TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '')
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [
-    BASE_DIR / 'core_ui' / 'static',
+    BASE_DIR / "core_ui" / "static",
 ]
 
 # Media files (uploaded files)
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
-UPLOADED_FILES_DIR = MEDIA_ROOT / 'uploads'
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+UPLOADED_FILES_DIR = MEDIA_ROOT / "uploads"
 
 # Create upload directory if it doesn't exist
 UPLOADED_FILES_DIR.mkdir(parents=True, exist_ok=True)
 
 # Agent projects directory
-AGENT_PROJECTS_DIR = BASE_DIR / 'agent_projects'
+AGENT_PROJECTS_DIR = BASE_DIR / "agent_projects"
 AGENT_PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # File upload settings
@@ -615,6 +604,7 @@ STUDIO_SKILLS_DIRS = _parse_path_list_env(
     [BASE_DIR / "studio" / "skills"],
 )
 
+
 # CLI runtime configuration for external agents
 def _cli_command(env_var: str, default_name: str) -> str:
     return os.getenv(env_var) or shutil.which(default_name) or default_name
@@ -624,8 +614,16 @@ def _cli_command(env_var: str, default_name: str) -> str:
 # РСЃС‚РѕС‡РЅРёРє: https://docs.cursor.com/models
 CURSOR_AVAILABLE_MODELS = [
     {"id": "auto", "name": "Auto", "description": "РђРІС‚РѕРјР°С‚РёС‡РµСЃРєРёР№ РІС‹Р±РѕСЂ Р»СѓС‡С€РµР№ РјРѕРґРµР»Рё"},
-    {"id": "claude-4.5-sonnet", "name": "Claude 4.5 Sonnet", "description": "РЎР±Р°Р»Р°РЅСЃРёСЂРѕРІР°РЅРЅР°СЏ, 200k РєРѕРЅС‚РµРєСЃС‚"},
-    {"id": "claude-4.5-opus", "name": "Claude 4.5 Opus", "description": "РЎР°РјР°СЏ РјРѕС‰РЅР°СЏ, 200k РєРѕРЅС‚РµРєСЃС‚"},
+    {
+        "id": "claude-4.5-sonnet",
+        "name": "Claude 4.5 Sonnet",
+        "description": "РЎР±Р°Р»Р°РЅСЃРёСЂРѕРІР°РЅРЅР°СЏ, 200k РєРѕРЅС‚РµРєСЃС‚",
+    },
+    {
+        "id": "claude-4.5-opus",
+        "name": "Claude 4.5 Opus",
+        "description": "РЎР°РјР°СЏ РјРѕС‰РЅР°СЏ, 200k РєРѕРЅС‚РµРєСЃС‚",
+    },
     {"id": "gpt-5.2", "name": "GPT-5.2", "description": "OpenAI, 272k РєРѕРЅС‚РµРєСЃС‚"},
     {"id": "gpt-5.2-codex", "name": "GPT-5.2 Codex", "description": "OpenAI Codex, 272k РєРѕРЅС‚РµРєСЃС‚"},
     {"id": "gemini-3-flash", "name": "Gemini 3 Flash", "description": "Google, Р±С‹СЃС‚СЂР°СЏ, 200k РєРѕРЅС‚РµРєСЃС‚"},
@@ -637,10 +635,10 @@ CURSOR_AVAILABLE_MODELS = [
 
 # Р РµРєРѕРјРµРЅРґР°С†РёРё РјРѕРґРµР»РµР№ РїРѕ С‚РёРїСѓ Р·Р°РґР°С‡Рё (РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ SmartTaskAnalyzer)
 MODEL_RECOMMENDATIONS = {
-    "simple": "gemini-3-flash",       # Р РµС„Р°РєС‚РѕСЂРёРЅРі, lint-fix, С„РѕСЂРјР°С‚РёСЂРѕРІР°РЅРёРµ - Р±С‹СЃС‚СЂР°СЏ РјРѕРґРµР»СЊ
+    "simple": "gemini-3-flash",  # Р РµС„Р°РєС‚РѕСЂРёРЅРі, lint-fix, С„РѕСЂРјР°С‚РёСЂРѕРІР°РЅРёРµ - Р±С‹СЃС‚СЂР°СЏ РјРѕРґРµР»СЊ
     "standard": "claude-4.5-sonnet",  # РќРѕРІС‹Р№ РєРѕРґ, С„РёС‡Рё, СЃС‚Р°РЅРґР°СЂС‚РЅС‹Рµ Р·Р°РґР°С‡Рё
-    "complex": "claude-4.5-opus",     # РђСЂС…РёС‚РµРєС‚СѓСЂР°, РґРёР·Р°Р№РЅ, СЃР»РѕР¶РЅР°СЏ Р»РѕРіРёРєР°
-    "debug": "gpt-5.2",               # Р”РµР±Р°Рі, Р°РЅР°Р»РёР· РѕС€РёР±РѕРє
+    "complex": "claude-4.5-opus",  # РђСЂС…РёС‚РµРєС‚СѓСЂР°, РґРёР·Р°Р№РЅ, СЃР»РѕР¶РЅР°СЏ Р»РѕРіРёРєР°
+    "debug": "gpt-5.2",  # Р”РµР±Р°Рі, Р°РЅР°Р»РёР· РѕС€РёР±РѕРє
 }
 
 
@@ -651,7 +649,15 @@ CLI_RUNTIME_CONFIG = {
         # --output-format stream-json: СЃС‚СЂРёРјРёРЅРі РґР»СЏ РґРµС‚Р°Р»СЊРЅС‹С… Р»РѕРіРѕРІ РїРѕ С€Р°РіР°Рј
         # --stream-partial-output: РїСЂРѕРіСЂРµСЃСЃ РїРѕ С€Р°РіР°Рј
         # РњРѕРґРµР»СЊ С‚РµРїРµСЂСЊ РїРµСЂРµРґР°С‘С‚СЃСЏ РґРёРЅР°РјРёС‡РµСЃРєРё С‡РµСЂРµР· allowed_args
-        "args": ["-p", "--force", "--output-format", "stream-json", "--stream-partial-output", "--workspace", "{workspace}"],
+        "args": [
+            "-p",
+            "--force",
+            "--output-format",
+            "stream-json",
+            "--stream-partial-output",
+            "--workspace",
+            "{workspace}",
+        ],
         "prompt_style": "positional",
         # model: РІС‹Р±РѕСЂ РјРѕРґРµР»Рё (auto, gpt-5, sonnet-4, sonnet-4-thinking, opus-4)
         # sandbox: enabled|disabled, approve-mcps: bool, browser: bool
@@ -664,7 +670,17 @@ CLI_RUNTIME_CONFIG = {
         "command": _cli_command("CURSOR_CLI_PATH", "agent"),
         # РќР•Рў --force: Р°РіРµРЅС‚ РЅРµ РјРѕР¶РµС‚ РјРµРЅСЏС‚СЊ С„Р°Р№Р»С‹ Р»РѕРєР°Р»СЊРЅРѕ
         # --sandbox enabled: РїСЂРёРЅСѓРґРёС‚РµР»СЊРЅР°СЏ РёР·РѕР»СЏС†РёСЏ filesystem
-        "args": ["-p", "--trust", "--output-format", "stream-json", "--stream-partial-output", "--workspace", "{workspace}", "--sandbox", "enabled"],
+        "args": [
+            "-p",
+            "--trust",
+            "--output-format",
+            "stream-json",
+            "--stream-partial-output",
+            "--workspace",
+            "{workspace}",
+            "--sandbox",
+            "enabled",
+        ],
         "prompt_style": "positional",
         "allowed_args": ["model", "approve-mcps"],
     },
@@ -687,14 +703,23 @@ CLI_RUNTIME_CONFIG = {
         # --model: РІС‹Р±РѕСЂ РјРѕРґРµР»Рё claude (sonnet, opus, haiku)
         # Р”РѕРєСѓРјРµРЅС‚Р°С†РёСЏ: https://docs.anthropic.com/en/docs/claude-code
         # --debug mcp С‚СЂРµР±СѓРµС‚СЃСЏ РґР»СЏ РєРѕСЂСЂРµРєС‚РЅРѕР№ СЂР°Р±РѕС‚С‹ СЃ MCP СЃРµСЂРІРµСЂР°РјРё (Р±РµР· РЅРµРіРѕ CLI Р·Р°РІРёСЃР°РµС‚)
-        "args": ["-p", "--verbose", "--output-format", "stream-json", "--include-partial-messages", "--dangerously-skip-permissions", "--debug", "mcp"],
+        "args": [
+            "-p",
+            "--verbose",
+            "--output-format",
+            "stream-json",
+            "--include-partial-messages",
+            "--dangerously-skip-permissions",
+            "--debug",
+            "mcp",
+        ],
         "prompt_style": "positional",
         "allowed_args": [
-            "model",            # Р’С‹Р±РѕСЂ РјРѕРґРµР»Рё Claude
-            "mcp-config",       # РџСѓС‚СЊ Рє MCP РєРѕРЅС„РёРіСѓ (РґР»СЏ server_execute Рё РґСЂ.)
-            "allowedTools",     # Р Р°Р·СЂРµС€С‘РЅРЅС‹Рµ РёРЅСЃС‚СЂСѓРјРµРЅС‚С‹
-            "agent",            # РљР°СЃС‚РѕРјРЅС‹Р№ Р°РіРµРЅС‚
-            "continue",         # -c РґР»СЏ РїСЂРѕРґРѕР»Р¶РµРЅРёСЏ СЃРµСЃСЃРёРё
+            "model",  # Р’С‹Р±РѕСЂ РјРѕРґРµР»Рё Claude
+            "mcp-config",  # РџСѓС‚СЊ Рє MCP РєРѕРЅС„РёРіСѓ (РґР»СЏ server_execute Рё РґСЂ.)
+            "allowedTools",  # Р Р°Р·СЂРµС€С‘РЅРЅС‹Рµ РёРЅСЃС‚СЂСѓРјРµРЅС‚С‹
+            "agent",  # РљР°СЃС‚РѕРјРЅС‹Р№ Р°РіРµРЅС‚
+            "continue",  # -c РґР»СЏ РїСЂРѕРґРѕР»Р¶РµРЅРёСЏ СЃРµСЃСЃРёРё
         ],
         "timeout_seconds": 1800,  # 30 РјРёРЅСѓС‚ РґР»СЏ РіР»СѓР±РѕРєРёС… РѕРїРµСЂР°С†РёР№
     },
@@ -713,7 +738,7 @@ CLI_RUNTIME_CONFIG = {
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # =============================================================================
 # Celery Configuration
