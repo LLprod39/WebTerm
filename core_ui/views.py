@@ -1303,12 +1303,23 @@ def _apply_access_profile(user, profile: str) -> None:
             user.save(update_fields=["is_staff"])
 
     with transaction.atomic():
+        existing_permissions = {p.feature: p for p in UserAppPermission.objects.filter(user=user)}
+        to_create = []
+        to_update = []
+
         for feature, allowed in target.items():
-            UserAppPermission.objects.update_or_create(
-                user=user,
-                feature=feature,
-                defaults={"allowed": allowed},
-            )
+            if feature in existing_permissions:
+                perm = existing_permissions[feature]
+                if perm.allowed != allowed:
+                    perm.allowed = allowed
+                    to_update.append(perm)
+            else:
+                to_create.append(UserAppPermission(user=user, feature=feature, allowed=allowed))
+
+        if to_create:
+            UserAppPermission.objects.bulk_create(to_create)
+        if to_update:
+            UserAppPermission.objects.bulk_update(to_update, fields=["allowed"])
 
 
 def _apply_user_explicit_permissions(user, permissions: dict | None) -> None:
