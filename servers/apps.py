@@ -6,4 +6,4 @@ class ServersConfig(AppConfig):
     name = "servers"
 
     def ready(self):
-        from . import signals  # noqa: F401
+        import servers.signals  # noqa: F401
