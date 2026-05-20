@@ -4,6 +4,10 @@ import UserDashboard from "./UserDashboard";
 import AdminDashboard from "./AdminDashboard";
 import { QueryStateBlock } from "@/components/ui/page-shell";
 
+function isAdminUser(user: { is_staff?: boolean; is_superuser?: boolean } | null | undefined): boolean {
+  return Boolean(user?.is_staff || user?.is_superuser);
+}
+
 export default function DashboardRouter() {
   const { data, isLoading } = useQuery({
     queryKey: ["auth", "session"],
@@ -16,7 +20,7 @@ export default function DashboardRouter() {
     return <QueryStateBlock loading className="p-6">{null}</QueryStateBlock>;
   }
 
-  if (data?.user?.is_staff) {
+  if (isAdminUser(data?.user)) {
     return <AdminDashboard />;
   }
 

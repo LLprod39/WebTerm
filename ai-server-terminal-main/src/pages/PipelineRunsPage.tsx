@@ -502,19 +502,19 @@ export default function PipelineRunsPage() {
       {/* Left: runs list */}
       <div className={`flex flex-col border-r border-border ${selectedRunId ? "w-80 shrink-0" : "flex-1"}`}>
         {/* Filters */}
-        <div className="px-5 py-3 border-b border-border bg-card shrink-0">
+        <div className="px-4 py-2.5 border-b border-border/60 bg-secondary/10 shrink-0">
           <div className="flex gap-1 flex-wrap">
             {STATUS_FILTERS.map((s) => (
               <button
                 key={s}
                 onClick={() => setStatusFilter(s)}
-                className={`px-2 py-0.5 rounded text-xs border transition-colors ${
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all duration-150 ${
                   statusFilter === s
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "border-border text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                    ? "bg-primary/15 text-primary border-primary/30 shadow-sm"
+                    : "border-border/50 text-muted-foreground hover:text-foreground hover:bg-secondary/40"
                 }`}
               >
-                {s === "all" ? `Все (${runs.length})` : s}
+                {s === "all" ? `All (${runs.length})` : s}
               </button>
             ))}
           </div>
@@ -542,27 +542,32 @@ export default function PipelineRunsPage() {
             <button
               key={run.id}
               onClick={() => setSelectedRunId(run.id === selectedRunId ? null : run.id)}
-              className={`w-full text-left px-4 py-3 border-b border-border hover:bg-muted/30 transition-colors ${
-                selectedRunId === run.id ? "bg-muted/40 border-l-2 border-l-primary" : ""
+              className={`group relative w-full text-left px-4 py-3 border-b border-border/50 transition-all duration-150 ${
+                selectedRunId === run.id
+                  ? "bg-primary/6 border-l-2 border-l-primary"
+                  : "hover:bg-secondary/25 border-l-2 border-l-transparent"
               }`}
             >
-              <div className="flex items-center justify-between gap-2 mb-1">
-                <span className="font-medium text-sm truncate">{run.pipeline_name}</span>
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <span className="text-sm font-medium truncate text-foreground">{run.pipeline_name}</span>
                 <StatusBadge status={run.status} />
               </div>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span>Run #{run.id}</span>
-                <span>·</span>
+              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
+                <span className="font-mono">#{run.id}</span>
+                <span className="text-border">·</span>
                 <span>{fmtDate(run.started_at || run.created_at)}</span>
                 {run.duration_seconds && (
                   <>
-                    <span>·</span>
+                    <span className="text-border">·</span>
                     <span>{fmtDuration(run.duration_seconds)}</span>
                   </>
                 )}
               </div>
               {run.error && (
-                <div className="mt-1 text-xs text-red-400 truncate">{run.error}</div>
+                <div className="mt-1.5 flex items-center gap-1 text-[11px] text-red-400">
+                  <span className="h-1 w-1 rounded-full bg-red-400 shrink-0" />
+                  <span className="truncate">{run.error}</span>
+                </div>
               )}
             </button>
           ))}

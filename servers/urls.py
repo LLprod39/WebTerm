@@ -14,6 +14,8 @@ urlpatterns = [
     path('api/create/', views.server_create, name='server_create'),
     path('api/<int:server_id>/update/', views.server_update, name='server_update'),
     path('api/<int:server_id>/test/', views.server_test_connection, name='server_test'),
+    path('api/<int:server_id>/detect-os/', views.server_detect_os, name='server_detect_os'),
+    path('api/detect-os/batch/', views.server_detect_os_batch, name='server_detect_os_batch'),
     path('api/<int:server_id>/execute/', views.server_execute_command, name='server_execute'),
     path('api/<int:server_id>/ui/capabilities/', views.server_linux_ui_capabilities, name='server_linux_ui_capabilities'),
     path('api/<int:server_id>/ui/settings/', views.server_linux_ui_settings, name='server_linux_ui_settings'),
@@ -78,6 +80,8 @@ urlpatterns = [
 
     # Monitoring
     path('api/monitoring/dashboard/', views.monitoring_dashboard, name='monitoring_dashboard'),
+    path('api/monitoring/status/', views.monitoring_status, name='monitoring_status'),
+    path('api/monitoring/refresh/', views.monitoring_refresh, name='monitoring_refresh'),
     path('api/<int:server_id>/health/', views.server_health_history, name='server_health_history'),
     path('api/<int:server_id>/health/check/', views.server_health_check_now, name='server_health_check_now'),
     path('api/alerts/', views.server_alerts_list, name='server_alerts_list'),

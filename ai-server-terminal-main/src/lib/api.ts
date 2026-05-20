@@ -84,7 +84,7 @@ function fallbackToDemoOrThrow<T>(path: string, options: RequestInit, errorMessa
   if (enableDemoMode()) {
     return demoFallback<T>(path, options);
   }
-  throw new Error(errorMessage);
+  throw new Error(`${errorMessage}. Start Django or set VITE_ENABLE_DEMO_MODE=true to use demo data.`);
 }
 
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -850,6 +850,19 @@ function demoFallback<T>(path: string, _options: RequestInit = {}): T {
     summary: { total_servers: 3, healthy: 2, warning: 0, critical: 0, unreachable: 1, unknown: 0, active_alerts: 0, avg_cpu: 25, avg_memory: 40, avg_disk: 35 },
     recent_activity: [],
   } as T;
+  if (path.includes("/servers/api/monitoring/status")) return {
+    success: true,
+    servers: [],
+    summary: { total_servers: 0, healthy: 0, warning: 0, critical: 0, unreachable: 0, unknown: 0, stale: 0 },
+    meta: { stale_after_seconds: 300, latest_checked_at: null, has_stale: false },
+  } as T;
+  if (path.includes("/servers/api/monitoring/refresh")) return {
+    success: true,
+    servers: [],
+    summary: { total_servers: 0, healthy: 0, warning: 0, critical: 0, unreachable: 0, unknown: 0, stale: 0 },
+    meta: { stale_after_seconds: 300, latest_checked_at: null, has_stale: false },
+    refreshed: true,
+  } as T;
 
   // Agents
   if (path.includes("/servers/api/agents/dashboard")) return { success: true, active: [], recent: [] } as T;
@@ -1134,6 +1147,7 @@ export interface AuthUser {
   username: string;
   email: string;
   is_staff: boolean;
+  is_superuser?: boolean;
   access_profile?: string;
   permission_sources?: Record<string, string>;
   features: Record<FeatureFlag, boolean> & Partial<Record<string, boolean>>;
@@ -1169,6 +1183,9 @@ export interface FrontendServer {
   terminal_path: string;
   minimal_terminal_path: string;
   last_connected: string | null;
+  detected_os?: string;
+  detected_os_pretty?: string;
+  detected_os_meta?: Record<string, unknown>;
 }
 
 export interface ServerDetailsResponse {
@@ -3016,6 +3033,56 @@ export async function fetchMonitoringDashboard() {
   return apiFetch<MonitoringDashboard>("/servers/api/monitoring/dashboard/");
 }
 
+export type FleetHealthStatus = ServerHealth["status"];
+
+export interface MonitoringStatusItem {
+  server_id: number;
+  server_name: string;
+  host: string;
+  server_type: string;
+  status: FleetHealthStatus;
+  checked_at: string | null;
+  age_seconds: number | null;
+  is_stale: boolean;
+  response_time_ms: number | null;
+  cpu_percent: number | null;
+  memory_percent: number | null;
+  disk_percent: number | null;
+  is_lite: boolean;
+}
+
+export interface MonitoringStatusResponse {
+  success: boolean;
+  servers: MonitoringStatusItem[];
+  summary: {
+    total_servers: number;
+    healthy: number;
+    warning: number;
+    critical: number;
+    unreachable: number;
+    unknown: number;
+    stale: number;
+  };
+  meta: {
+    stale_after_seconds: number;
+    latest_checked_at: string | null;
+    has_stale: boolean;
+  };
+  cached?: boolean;
+  queued?: boolean;
+  refreshed?: boolean;
+}
+
+export async function fetchMonitoringStatus() {
+  return apiFetch<MonitoringStatusResponse>("/servers/api/monitoring/status/");
+}
+
+export async function refreshMonitoringFleet() {
+  return apiFetch<MonitoringStatusResponse>("/servers/api/monitoring/refresh/", {
+    method: "POST",
+  });
+}
+
 export interface HealthCheck {
   id: number;
   status: string;
@@ -3953,6 +4020,10 @@ export interface StudioPipelineAssistantPayload {
   edges: PipelineEdge[];
   selected_node?: PipelineNode | null;
   user_message: string;
+  intent?: "create" | "edit" | "validate" | "fix_run";
+  last_validation_errors?: string[];
+  last_run_summary?: Record<string, unknown>;
+  draft_mode?: boolean;
   history?: Array<{
     role: "user" | "assistant";
     content: string;
@@ -3994,6 +4065,26 @@ export interface StudioPipelineAssistantResponse {
   node_patch: Record<string, unknown>;
   graph_patch: StudioPipelineGraphPatch;
   warnings: string[];
+  patch_summary?: string;
+  validation?: {
+    ok: boolean;
+    errors: string[];
+    warnings: string[];
+  };
+  risk?: {
+    level: "safe" | "dangerous" | string;
+    items: Array<{
+      node_id: string;
+      node_label?: string;
+      stage?: string;
+      command?: string;
+      level?: string;
+      categories?: string[];
+      matched_patterns?: string[];
+      reasons?: string[];
+    }>;
+  };
+  suggested_next_actions?: string[];
 }
 
 // Pipelines

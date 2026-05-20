@@ -39,7 +39,7 @@ export function PolicyCard({
   return (
     <label
       className={cn(
-        "flex cursor-pointer gap-3 rounded-2xl border px-3 py-3 transition-colors",
+        "flex cursor-pointer gap-3 rounded-lg border px-3 py-3 transition-colors",
         checked
           ? "border-primary/50 bg-primary/10"
           : "border-border/70 bg-background/70 hover:border-primary/30 hover:bg-muted/30",

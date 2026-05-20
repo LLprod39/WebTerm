@@ -36,12 +36,12 @@ export function PoliciesTab({
             {selectedAgent
               ? t(
                   lang,
-                  "Node-level политики будут объединены с правилами выбранного Agent Config во время выполнения.",
+                "Политики этой ноды будут объединены с правилами выбранного конфига агента во время выполнения.",
                   "Node-level policies will be merged with the selected Agent Config at runtime.",
                 )
               : t(
                   lang,
-                  "Подключайте playbooks, guardrails и runtime-политики прямо к этой ноде.",
+                "Подключайте playbooks, ограничения и runtime-политики прямо к этой ноде.",
                   "Attach playbooks, guardrails, and runtime policies directly to this node.",
                 )}
           </p>
@@ -71,7 +71,7 @@ export function PoliciesTab({
           ))}
         </div>
       ) : (
-        <div className="rounded-2xl border border-dashed border-border/70 px-4 py-6 text-center text-sm text-muted-foreground">
+        <div className="rounded-lg border border-dashed border-border/70 px-4 py-6 text-center text-sm text-muted-foreground">
           {t(lang, "Каталог политик пока пуст.", "The policy catalog is empty right now.")}
         </div>
       )}

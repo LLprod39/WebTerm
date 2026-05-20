@@ -10,6 +10,7 @@ import {
   Play,
   Plus,
   Search,
+  AlertTriangle,
   Trash2,
   Workflow,
   XCircle,
@@ -18,9 +19,14 @@ import {
   Server,
   Bot,
   Clock,
+  MessageSquare,
+  Route,
+  ShieldCheck,
+  Wand2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -49,11 +55,13 @@ import {
   type PipelineListItem,
   type PipelineDetail,
   type PipelineTrigger,
+  type StudioPipelineAssistantResponse,
 } from "@/lib/api";
 import { StudioNav } from "@/components/StudioNav";
 import { hasFeatureAccess } from "@/lib/featureAccess";
 import { getPipelineActivityState } from "@/components/pipeline/pipelineActivity";
-import { EmptyState, MetricCard, QueryStateBlock } from "@/components/ui/page-shell";
+import { applyAssistantGraphPatch, getAssistantPatchStats } from "@/components/pipeline/assistantPatch";
+import { EmptyState, QueryStateBlock } from "@/components/ui/page-shell";
 
 type ManualTriggerOption = {
   nodeId: string;
@@ -126,26 +134,26 @@ function RunStatusBadge({ status }: { status: string }) {
   const normalized = status.toLowerCase();
   if (normalized === "completed") {
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] text-primary">
-        <CheckCircle2 className="h-3 w-3" /> Completed
+      <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-400">
+        <CheckCircle2 className="h-2.5 w-2.5" /> Completed
       </span>
     );
   }
   if (normalized === "failed") {
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] text-destructive">
-        <XCircle className="h-3 w-3" /> Failed
+      <span className="inline-flex items-center gap-1 rounded-md border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-red-400">
+        <XCircle className="h-2.5 w-2.5" /> Failed
       </span>
     );
   }
   if (normalized === "running") {
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] text-primary">
-        <Loader2 className="h-3 w-3 animate-spin" /> Running
+      <span className="inline-flex items-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+        <Loader2 className="h-2.5 w-2.5 animate-spin" /> Running
       </span>
     );
   }
-  return <span className="text-[11px] text-muted-foreground">{status}</span>;
+  return <span className="rounded-md border border-border/50 bg-secondary/40 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">{status}</span>;
 }
 
 function StatCard({
@@ -160,15 +168,35 @@ function StatCard({
   sub?: string;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
-      <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
-        <Icon className="h-3.5 w-3.5" />
-        {label}
+    <div className="relative overflow-hidden rounded-xl border border-border bg-card px-4 py-4 shadow-sm">
+      <div className="absolute left-0 top-0 h-full w-0.5 bg-primary/40" />
+      <div className="mb-2 flex items-center gap-2">
+        <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10">
+          <Icon className="h-3.5 w-3.5 text-primary" />
+        </div>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/70">{label}</span>
       </div>
-      <div className="text-2xl font-semibold text-foreground">{value}</div>
-      {sub && <div className="mt-1 text-xs text-muted-foreground">{sub}</div>}
+      <div className="text-2xl font-bold tracking-tight text-foreground">{value}</div>
+      {sub && <div className="mt-1 text-xs text-muted-foreground/80">{sub}</div>}
     </div>
   );
+}
+
+function formatAiDiagnostic(message: string): string {
+  const text = String(message || "").trim();
+  const cycleMatch = text.match(/^AI edge '([^']+)->([^']+)' would create a cycle and was dropped\.$/);
+  if (cycleMatch) {
+    return `Удалена связь ${cycleMatch[1]} -> ${cycleMatch[2]}: она создавала цикл в DAG.`;
+  }
+  const missingMatch = text.match(/^AI edge '([^']+)->([^']+)' referenced a missing node and was dropped\.$/);
+  if (missingMatch) {
+    return `Удалена связь ${missingMatch[1]} -> ${missingMatch[2]}: одна из нод не найдена.`;
+  }
+  const repairedMatch = text.match(/^AI graph repair added edge '([^']+)->([^']+)' \(([^)]+)\)\.$/);
+  if (repairedMatch) {
+    return `Добавлена связь ${repairedMatch[1]} -> ${repairedMatch[2]}: автоматический ремонт графа.`;
+  }
+  return text;
 }
 
 function PipelineCard({
@@ -220,10 +248,10 @@ function PipelineCard({
   return (
     <article
       className={cn(
-        "group cursor-pointer rounded-lg border bg-card p-4 transition-colors hover:bg-secondary/20",
+        "group cursor-pointer overflow-hidden rounded-xl border bg-card p-4 shadow-sm transition-all duration-150 hover:shadow-md",
         isRunning
-          ? "border-primary/40 hover:border-primary/60"
-          : "border-border hover:border-primary/30"
+          ? "border-primary/30 hover:border-primary/50 bg-primary/3"
+          : "border-border hover:border-primary/25 hover:bg-secondary/15"
       )}
       onClick={onOpen}
     >
@@ -294,6 +322,9 @@ function PipelineCard({
               </Button>
             </div>
           </div>
+          <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-muted-foreground">
+            {activityState.detail}
+          </p>
 
           {cloning && <p className="mt-2 text-[11px] text-primary">Creating a copy...</p>}
         </div>
@@ -370,6 +401,9 @@ export default function StudioPage() {
   const [runTriggerError, setRunTriggerError] = useState("");
   const [preparingRunPipelineId, setPreparingRunPipelineId] = useState<number | null>(null);
   const [triggerInfoTarget, setTriggerInfoTarget] = useState<TriggerInfoTarget | null>(null);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiDraft, setAiDraft] = useState<StudioPipelineAssistantResponse | null>(null);
+  const [aiDraftName, setAiDraftName] = useState("AI Automation Draft");
 
   const { data: session } = useQuery({
     queryKey: ["auth", "session"],
@@ -492,6 +526,101 @@ export default function StudioPage() {
     },
   });
 
+  const aiBuilderMutation = useMutation({
+    mutationFn: (message: string) =>
+      studioPipelines.assistant({
+        pipeline_id: null,
+        pipeline_name: aiDraftName.trim() || "AI Automation Draft",
+        nodes: [],
+        edges: [],
+        selected_node: null,
+        user_message: message,
+        intent: "create",
+        last_validation_errors: aiDraft?.validation?.errors || [],
+        draft_mode: true,
+        history: aiDraft
+          ? [
+              {
+                role: "assistant",
+                content: [aiDraft.reply, aiDraft.patch_summary, ...(aiDraft.validation?.errors || [])]
+                  .filter(Boolean)
+                  .join("\n"),
+              },
+            ]
+          : [],
+      }),
+    onSuccess: (response) => {
+      setAiDraft(response);
+      toast({
+        description: response.validation?.ok === false
+          ? "AI draft needs fixes before it can be created."
+          : "AI draft is ready for review.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({ variant: "destructive", description: error.message });
+    },
+  });
+
+  const createAiDraftMutation = useMutation({
+    mutationFn: async ({ openEditor }: { openEditor: boolean }) => {
+      if (!aiDraft) {
+        throw new Error("No AI draft to apply.");
+      }
+      const result = applyAssistantGraphPatch({
+        nodes: [],
+        edges: [],
+        response: aiDraft,
+      });
+      if (!result.stats.hasChanges) {
+        throw new Error("AI draft does not contain graph changes.");
+      }
+      const pipeline = await studioPipelines.create({
+        name: aiDraftName.trim() || "AI Automation Draft",
+        description: aiPrompt.trim() || aiDraft.reply || "",
+        icon: "W",
+        tags: ["ai-builder"],
+        nodes: result.nodes,
+        edges: result.edges,
+      });
+      return { pipeline, openEditor };
+    },
+    onSuccess: ({ pipeline, openEditor }) => {
+      queryClient.invalidateQueries({ queryKey: ["studio", "pipelines"] });
+      setAiDraft(null);
+      if (openEditor) {
+        navigate(`/studio/pipeline/${pipeline.id}`);
+        return;
+      }
+      toast({ description: `Pipeline "${pipeline.name}" created.` });
+    },
+    onError: (error: Error) => {
+      toast({ variant: "destructive", description: error.message });
+    },
+  });
+
+  function handleAiBuilderSubmit(messageOverride?: string) {
+    const message = (messageOverride || aiPrompt).trim();
+    if (!message) {
+      toast({ variant: "destructive", description: "Describe the automation first." });
+      return;
+    }
+    aiBuilderMutation.mutate(message);
+  }
+
+  function handleCreateAiDraft(openEditor: boolean) {
+    if (!aiDraft) return;
+    if (aiDraft.validation?.ok === false) {
+      toast({ variant: "destructive", description: "Fix AI draft validation errors before creating a pipeline." });
+      return;
+    }
+    if (aiDraft.risk?.level === "dangerous") {
+      toast({ variant: "destructive", description: "This draft contains a dangerous SSH command. Ask AI to add approval or rewrite it safely." });
+      return;
+    }
+    createAiDraftMutation.mutate({ openEditor });
+  }
+
   async function handleRunPipeline(pipeline: PipelineListItem) {
     setRunTriggerError("");
     setPreparingRunPipelineId(pipeline.id);
@@ -541,6 +670,24 @@ export default function StudioPage() {
     }
   }
 
+  const aiDraftStats = aiDraft ? getAssistantPatchStats(aiDraft) : null;
+  const recentFailedRuns = canRuns ? runs.filter((run) => run.status === "failed").slice(0, 3) : [];
+  const aiDraftCanApply =
+    Boolean(aiDraft && aiDraftStats?.hasChanges) &&
+    aiDraft?.validation?.ok !== false &&
+    aiDraft?.risk?.level !== "dangerous";
+  const aiDraftErrors = aiDraft?.validation?.errors || [];
+  const aiDraftWarnings = [...(aiDraft?.warnings || []), ...(aiDraft?.validation?.warnings || [])].slice(0, 4);
+  const aiDraftNodePreview = aiDraft?.graph_patch?.nodes || [];
+  const aiDraftStatus = !aiDraft
+    ? { label: "Ожидает запроса", className: "border-border bg-secondary/40 text-muted-foreground", icon: MessageSquare }
+    : aiDraft.validation?.ok === false
+      ? { label: "Нужна правка", className: "border-red-500/25 bg-red-500/10 text-red-300", icon: AlertTriangle }
+      : aiDraft.risk?.level === "dangerous"
+        ? { label: "Опасная команда", className: "border-amber-500/25 bg-amber-500/10 text-amber-300", icon: AlertTriangle }
+        : { label: "DAG проверен", className: "border-emerald-500/25 bg-emerald-500/10 text-emerald-300", icon: ShieldCheck };
+  const AiDraftStatusIcon = aiDraftStatus.icon;
+
   return (
     <div className="flex h-full flex-col">
       <StudioNav />
@@ -585,6 +732,257 @@ export default function StudioPage() {
       />
 
       <div className="flex-1 px-6 pb-8 space-y-5">
+        {canPipelines && (
+          <section className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm">
+            <div className="flex flex-col gap-3 border-b border-border/70 bg-gradient-to-r from-primary/10 via-transparent to-transparent px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10">
+                  <Wand2 className="h-5 w-5 text-primary" />
+                </span>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-base font-semibold text-foreground">AI Automation Agent</h2>
+                    <Badge variant="outline" className={cn("gap-1", aiDraftStatus.className)}>
+                      <AiDraftStatusIcon className="h-3 w-3" />
+                      {aiDraftStatus.label}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">
+                    Опиши цель обычным языком. Агент соберет DAG, нормализует ноды, проверит связи и не даст сохранить битый граф.
+                  </p>
+                </div>
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-1.5 text-[10px] font-medium text-muted-foreground">
+                {[
+                  ["Понять", MessageSquare],
+                  ["Собрать DAG", Route],
+                  ["Проверить", ShieldCheck],
+                  ["Сохранить", CheckCircle2],
+                ].map(([label, Icon]) => (
+                  <span key={label as string} className="inline-flex items-center gap-1 rounded-md border border-border/70 bg-background/40 px-2 py-1">
+                    <Icon className="h-3 w-3 text-primary" />
+                    {label as string}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_430px]">
+              <div className="min-w-0 space-y-4 p-5">
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-[240px_minmax(0,1fr)]">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Имя пайплайна</label>
+                    <Input
+                      value={aiDraftName}
+                      onChange={(event) => setAiDraftName(event.target.value)}
+                      placeholder="Pipeline name"
+                      className="h-10 bg-background/70"
+                      aria-label="AI draft pipeline name"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Задача для агента</label>
+                    <Textarea
+                      value={aiPrompt}
+                      onChange={(event) => setAiPrompt(event.target.value)}
+                      placeholder="Например: каждый день собрать логи по серверам, кратко отправить в Telegram и предусмотреть отдельный вход для задач оператора"
+                      className="min-h-[128px] resize-none bg-background/70 text-[15px] leading-6"
+                      aria-label="AI automation request"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    "Ежедневный health-check серверов с Telegram-отчетом",
+                    "Отдельный Telegram/webhook вход для задач оператора",
+                    "Проверить граф и исправить DAG ошибки",
+                    "Docker monitoring с approval перед опасными действиями",
+                  ].map((prompt) => (
+                    <Button
+                      key={prompt}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 rounded-md border-border/80 bg-background/40 text-xs"
+                      disabled={aiBuilderMutation.isPending}
+                      onClick={() => {
+                        setAiPrompt(prompt);
+                        handleAiBuilderSubmit(prompt);
+                      }}
+                    >
+                      {prompt}
+                    </Button>
+                  ))}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    className="h-10 gap-2 px-4"
+                    disabled={aiBuilderMutation.isPending || !aiPrompt.trim()}
+                    onClick={() => handleAiBuilderSubmit()}
+                  >
+                    {aiBuilderMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                    Собрать и проверить DAG
+                  </Button>
+                  {aiDraft?.validation?.ok === false ? (
+                    <Button
+                      variant="outline"
+                      className="h-10 gap-2"
+                      disabled={aiBuilderMutation.isPending}
+                      onClick={() =>
+                        handleAiBuilderSubmit(
+                          `Пересобери черновик заново как валидный DAG. Исправь ошибки: ${aiDraftErrors.join("; ")}. Не создавай циклы и не делай Telegram Input триггером.`,
+                        )
+                      }
+                    >
+                      <Route className="h-4 w-4" />
+                      Пересобрать без циклов
+                    </Button>
+                  ) : null}
+                  {aiDraft ? (
+                    <Button variant="ghost" className="h-10" onClick={() => setAiDraft(null)}>
+                      Сбросить
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+
+              <aside className="border-t border-border/70 bg-background/35 p-5 xl:border-l xl:border-t-0">
+                {aiDraft ? (
+                  <div className="flex h-full flex-col gap-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="text-sm font-semibold text-foreground">Проверенный черновик</h3>
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">{aiDraft.patch_summary || aiDraft.reply}</p>
+                      </div>
+                      <Badge variant="outline" className={cn("shrink-0 gap-1", aiDraftStatus.className)}>
+                        <AiDraftStatusIcon className="h-3 w-3" />
+                        {aiDraftStatus.label}
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 text-center text-[10px]">
+                      {[
+                        ["нод", aiDraftStats?.addedNodes || 0],
+                        ["связей", aiDraftStats?.addedEdges || 0],
+                        ["правок", aiDraftStats?.updatedNodes || 0],
+                      ].map(([label, value]) => (
+                        <div key={label as string} className="rounded-lg border border-border/70 bg-card/70 px-2 py-2">
+                          <div className="text-base font-semibold text-foreground">{value as number}</div>
+                          <div className="text-muted-foreground">{label as string}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {aiDraftNodePreview.length ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                          <Route className="h-3.5 w-3.5" />
+                          План графа
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {aiDraftNodePreview.slice(0, 6).map((node, index) => (
+                            <span
+                              key={node.ref}
+                              className="inline-flex max-w-full items-center gap-1 rounded-md border border-border/70 bg-card/70 px-2 py-1 text-[10px] text-muted-foreground"
+                            >
+                              <span className="max-w-[140px] truncate">{node.label || node.type}</span>
+                              {index < Math.min(aiDraftNodePreview.length, 6) - 1 ? <ChevronRight className="h-2.5 w-2.5 shrink-0" /> : null}
+                            </span>
+                          ))}
+                          {aiDraftNodePreview.length > 6 ? (
+                            <span className="text-[10px] text-muted-foreground">+{aiDraftNodePreview.length - 6}</span>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {aiDraftWarnings.length ? (
+                      <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[11px] leading-5 text-amber-100">
+                        {aiDraftWarnings.map((warning) => (
+                          <div key={warning} className="flex gap-2">
+                            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                            <span>{formatAiDiagnostic(warning)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {aiDraftErrors.length ? (
+                      <div className="rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-[11px] leading-5 text-red-100">
+                        {aiDraftErrors.slice(0, 4).map((error) => (
+                          <div key={error} className="flex gap-2">
+                            <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                            <span>{formatAiDiagnostic(error)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {aiDraft.risk?.level === "dangerous" ? (
+                      <div className="rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-[11px] leading-5 text-red-100">
+                        Обнаружена опасная SSH-команда. Нужен approval или безопасная замена команды.
+                      </div>
+                    ) : null}
+
+                    <div className="mt-auto grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <Button
+                        size="sm"
+                        className="h-9 gap-1.5"
+                        disabled={!aiDraftCanApply || createAiDraftMutation.isPending}
+                        onClick={() => handleCreateAiDraft(false)}
+                      >
+                        {createAiDraftMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                        Создать пайплайн
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-9 gap-1.5"
+                        disabled={!aiDraftCanApply || createAiDraftMutation.isPending}
+                        onClick={() => handleCreateAiDraft(true)}
+                      >
+                        <Route className="h-3.5 w-3.5" />
+                        Открыть canvas
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex h-full min-h-[260px] flex-col justify-between gap-4">
+                    <div>
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-primary/20 bg-primary/10">
+                        <MessageSquare className="h-5 w-5 text-primary" />
+                      </div>
+                      <h3 className="mt-3 text-sm font-semibold text-foreground">Черновик появится здесь</h3>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                        После генерации здесь будет статус проверки, список нод, предупреждения и действия сохранения.
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {stats.slice(0, 4).map((stat) => (
+                        <div key={stat.label} className="rounded-lg border border-border/70 bg-card/70 px-3 py-2">
+                          <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+                            <stat.icon className="h-3.5 w-3.5 text-primary" />
+                            {stat.label}
+                          </div>
+                          <div className="mt-1 text-lg font-semibold text-foreground">{stat.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </aside>
+            </div>
+
+            {recentFailedRuns.length ? (
+              <div className="border-t border-red-500/20 bg-red-500/5 px-5 py-2 text-xs text-red-200">
+                Recent failed runs: {recentFailedRuns.map((run) => `#${run.id} ${run.pipeline_name}`).join(" · ")}
+              </div>
+            ) : null}
+          </section>
+        )}
+
         {canPipelines && (
           <div className="flex items-center gap-4 rounded-2xl border border-border/70 bg-background/30 p-2 pl-4 backdrop-blur-md">
             <Search className="h-4 w-4 text-muted-foreground shrink-0" />

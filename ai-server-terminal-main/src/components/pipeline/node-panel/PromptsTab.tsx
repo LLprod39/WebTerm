@@ -27,7 +27,7 @@ export function PromptsTab({
       <VariableHighlighter
         id="node-goal"
         lang={lang}
-        label={t(lang, "Goal", "Goal")}
+        label={t(lang, "Цель", "Goal")}
         description={t(
           lang,
           "Опишите, чего агент должен добиться. Runtime подставляет значения контекста через {variable}.",
@@ -43,16 +43,16 @@ export function PromptsTab({
         onChange={onGoalChange}
       />
 
-      <div className="rounded-2xl border border-border/60 bg-muted/20 px-4 py-3">
+      <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
         <VariableHighlighter
           id="node-system-prompt"
           lang={lang}
-          label={t(lang, "System Prompt", "System Prompt")}
+          label={t(lang, "Системный промпт", "System prompt")}
           description={
             selectedAgent
               ? t(
                   lang,
-                  "Для этой ноды выбран сохранённый Agent Config, поэтому system prompt берётся из него и доступен здесь только для просмотра.",
+                  "Для этой ноды выбран сохранённый конфиг агента, поэтому системный промпт берётся из него и доступен здесь только для просмотра.",
                   "This node uses a saved Agent Config, so the system prompt is inherited from it and is shown here as read-only.",
                 )
               : t(

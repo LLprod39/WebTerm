@@ -827,6 +827,14 @@ def test_monitoring_alerts_and_ai_analyze_endpoints(monkeypatch):
     assert dashboard.status_code == 200
     assert dashboard.json()["success"] is True
 
+    status = client.get("/servers/api/monitoring/status/")
+    assert status.status_code == 200
+    body = status.json()
+    assert body["success"] is True
+    assert len(body["servers"]) == 1
+    assert body["servers"][0]["server_id"] == server.id
+    assert body["servers"][0]["status"] == ServerHealthCheck.STATUS_WARNING
+
     history = client.get(f"/servers/api/{server.id}/health/?hours=24")
     assert history.status_code == 200
     assert history.json()["success"] is True

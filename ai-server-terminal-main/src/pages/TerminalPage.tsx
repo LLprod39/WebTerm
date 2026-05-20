@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
+  type MutableRefObject,
 } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -287,6 +288,7 @@ export default function TerminalPage() {
   const requestedId = useMemo(() => Number(id || 0), [id]);
   const terminalRefs = useRef<Record<string, TerminalHandle | null>>({});
   const sftpRefs = useRef<Record<string, SftpPanelHandle | null>>({});
+  const tabCwdRefs = useRef<Record<string, MutableRefObject<string>>>({});
   const activeTabIdRef = useRef("");
 
   const { data, isLoading, error } = useQuery({
@@ -309,7 +311,7 @@ export default function TerminalPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const { t } = useI18n();
-  const { editorState, closeEditor, handleWsEvent: handleEditorWsEvent } = useEditorInterceptor();
+  const { editorState, closeEditor, openFileAtPath, handleWsEvent: handleEditorWsEvent } = useEditorInterceptor();
   const { prefs: termPrefs, update: updateTermPrefs } = useTerminalPreferences();
   const resolvedTheme = useMemo(
     () => resolveTheme(termPrefs.theme_name, termPrefs.theme_colors),
@@ -350,6 +352,24 @@ export default function TerminalPage() {
     if (!tabId) return;
     updateTabAiPreferences(tabId, updater);
   }, [updateTabAiPreferences]);
+
+  const getTabCwdRef = useCallback((tabId: string): MutableRefObject<string> => {
+    if (!tabCwdRefs.current[tabId]) {
+      tabCwdRefs.current[tabId] = { current: "/" };
+    }
+    return tabCwdRefs.current[tabId];
+  }, []);
+
+  const handleTerminalFileClick = useCallback(
+    (_tabId: string, serverId: number, absolutePath: string) => {
+      openFileAtPath(serverId, absolutePath);
+      toast({
+        title: t("terminal.fileLinkOpened"),
+        description: absolutePath,
+      });
+    },
+    [openFileAtPath, t],
+  );
 
   useEffect(() => {
     if (!defaultServer || tabs.length > 0) return;
@@ -563,6 +583,14 @@ export default function TerminalPage() {
     if (handleEditorWsEvent(serverId, payload)) return;
 
     const type = String(payload.type || "");
+
+    if (type === "terminal_session") {
+      const cwd = String(payload.cwd || "").trim();
+      if (cwd) {
+        getTabCwdRef(tabId).current = cwd;
+      }
+      return;
+    }
 
     if (type === "ai_status") {
       const status = String(payload.status || "");
@@ -958,7 +986,7 @@ export default function TerminalPage() {
         isGenerating: false,
       }));
     }
-  }, [revealAiPanelForTab, updateTabAiState, handleEditorWsEvent]);
+  }, [revealAiPanelForTab, updateTabAiState, handleEditorWsEvent, getTabCwdRef]);
 
   useEffect(() => {
     if (!activeTabId) return;
@@ -1309,6 +1337,8 @@ export default function TerminalPage() {
                   onFilesDrop={(files) => handleTabFileDrop(tab.id, files)}
                   onEvent={(payload) => handleTabWsEvent(tab.id, tab.serverId, payload)}
                   onInterceptInput={tab.id === activeTabId ? inputBuf.interceptInput : undefined}
+                  cwdRef={getTabCwdRef(tab.id)}
+                  onFileClick={(absolutePath) => handleTerminalFileClick(tab.id, tab.serverId, absolutePath)}
                 />
               </div>
             ))}

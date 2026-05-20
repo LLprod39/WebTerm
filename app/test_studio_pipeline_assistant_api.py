@@ -22,7 +22,7 @@ def test_pipeline_assistant_returns_reply_and_patch(monkeypatch):
     client = Client()
     client.force_login(user)
 
-    async def fake_stream_chat(self, prompt: str, model: str = "auto", purpose: str = "chat"):
+    async def fake_stream_chat(self, prompt: str, model: str = "auto", purpose: str = "chat", **kwargs):
         yield json.dumps(
             {
                 "reply": "Use the upstream node as the condition source and check for the word error.",

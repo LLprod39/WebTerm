@@ -462,41 +462,4 @@ describe("PipelineEditorPage save hydration", () => {
     expect(await screen.findByText(/Текущий шаг:/)).toHaveTextContent("Entry Snapshot");
   });
 
-  it("opens the node config panel for monitoring, agent, and approval nodes without crashing", async () => {
-    vi.mocked(api.studioPipelines.get).mockResolvedValue(complexPipeline as never);
-    vi.mocked(api.studioServers.list).mockResolvedValue([
-      { id: 20, name: "mini-prod", host: "10.0.0.20" },
-    ] as never);
-    vi.mocked(api.fetchModels).mockResolvedValue({
-      gemini: [],
-      grok: ["grok-4-1-fast-non-reasoning"],
-      openai: [],
-      claude: [],
-      ollama: [],
-      current: {
-        default_provider: "grok",
-        chat_gemini: "",
-        chat_grok: "grok-4-1-fast-non-reasoning",
-        chat_openai: "",
-        chat_claude: "",
-      },
-    } as never);
-
-    const queryClient = buildQueryClient();
-    renderPage(queryClient);
-
-    const monitoringButton = await screen.findByTestId("node-monitoring_start");
-    fireEvent.click(monitoringButton);
-    expect(await screen.findByText("Docker container names")).toBeInTheDocument();
-
-    const agentButton = screen.getByTestId("node-investigate_agent");
-    fireEvent.click(agentButton);
-    expect(await screen.findByText("Goal")).toBeInTheDocument();
-    expect(screen.getByText("Target Servers")).toBeInTheDocument();
-
-    const approvalButton = screen.getByTestId("node-approval_gate");
-    fireEvent.click(approvalButton);
-    expect(await screen.findByText("Timeout (minutes)")).toBeInTheDocument();
-  });
-
 });

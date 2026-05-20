@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Trash2 } from "lucide-react";
+import { CheckCircle2, Info, Trash2 } from "lucide-react";
 
 import type { AgentConfig, MCPServer, PipelineNode, StudioSkill } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,8 @@ type AgentNodePanelProps = {
   data: Record<string, unknown>;
   title: string;
   breadcrumb: string;
+  guidanceSummary: string;
+  guidanceChecklist: string[];
   icon: ReactNode;
   agents: AgentConfig[];
   selectedAgent: AgentConfig | null;
@@ -46,6 +48,8 @@ export function AgentNodePanel({
   data,
   title,
   breadcrumb,
+  guidanceSummary,
+  guidanceChecklist,
   icon,
   agents,
   selectedAgent,
@@ -79,6 +83,23 @@ export function AgentNodePanel({
         onDuplicate={onDuplicate}
         onClose={onClose}
       />
+
+      <div className="border-b border-border/70 bg-muted/10 px-4 py-3">
+        <div className="flex items-start gap-2">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+          <p className="text-xs leading-relaxed text-muted-foreground">{guidanceSummary}</p>
+        </div>
+        {guidanceChecklist.length ? (
+          <div className="mt-2 grid gap-1">
+            {guidanceChecklist.slice(0, 3).map((item) => (
+              <div key={item} className="flex items-start gap-2 text-[11px] leading-5 text-muted-foreground">
+                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                <span>{item}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
 
       <NodePanelTabs lang={lang} value={activeTab} onValueChange={setActiveTab}>
         <NodePanelTabContent value="settings" className="mt-0 min-h-0 flex-1">
@@ -140,7 +161,7 @@ export function AgentNodePanel({
         <Button
           type="button"
           variant="outline"
-          className="w-full justify-start gap-2 rounded-2xl border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+          className="w-full justify-start gap-2 rounded-lg border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
           onClick={onDelete}
         >
           <Trash2 className="h-4 w-4" />

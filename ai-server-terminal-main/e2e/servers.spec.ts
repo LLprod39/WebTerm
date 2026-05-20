@@ -411,7 +411,7 @@ test("uses advanced server actions for sharing, knowledge, context, security and
 
   await advancedDialog.getByRole("button", { name: "Server Rules" }).click();
   await page.getByPlaceholder("Instructions specific to this server").fill("Prefer canary rollout for nginx restarts");
-  await page.getByPlaceholder('{\"env_vars\": {\"KEY\": \"value\"}}').fill('{\"env_vars\":{\"ROLE\":\"edge\"}}');
+  await page.getByPlaceholder('{"env_vars": {"KEY": "value"}}').fill('{"env_vars":{"ROLE":"edge"}}');
   await page.getByRole("button", { name: "Save server override" }).click();
   await expect.poll(() => harness.getCalls("/servers/api/1/update/", "POST").length).toBe(1);
   await expect

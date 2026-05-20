@@ -10,7 +10,7 @@ import { useI18n } from "@/lib/i18n";
 import { getAccessProfileLabel } from "@/lib/accessUiText";
 
 const SELECT_CLASS =
-  "h-9 w-full rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 text-sm text-foreground outline-none ring-0 transition-all focus:border-primary/40 focus:ring-1 focus:ring-primary/30";
+  "h-9 w-full rounded-lg border border-border bg-secondary/30 px-3 text-sm text-foreground outline-none ring-0 transition-all focus:border-primary/40 focus:ring-1 focus:ring-primary/30";
 
 function FieldLabel({ htmlFor, children }: { htmlFor?: string; children: React.ReactNode }) {
   return (
@@ -25,16 +25,21 @@ function FieldHint({ children }: { children: React.ReactNode }) {
 }
 
 function StatusIndicator({ active }: { active: boolean }) {
+  const { t } = useI18n();
   return (
-    <div className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-medium ${active ? "bg-emerald-500/10 text-emerald-400" : "bg-white/[0.04] text-muted-foreground/60"}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-semibold ${
+      active
+        ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+        : "border-border/50 bg-secondary/40 text-muted-foreground"
+    }`}>
       {active ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
-      {active ? "Активен" : "Выключен"}
-    </div>
+      {active ? t("sso.active") : t("sso.inactive")}
+    </span>
   );
 }
 
 export default function SettingsSSOPage() {
-  const { lang } = useI18n();
+  const { t, lang } = useI18n();
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -93,37 +98,34 @@ export default function SettingsSSOPage() {
   }
 
   if (error || !config) {
-    return <div className="p-6 text-sm text-destructive">Не удалось загрузить настройки</div>;
+    return <div className="p-6 text-sm text-destructive">{t("sso.load_error")}</div>;
   }
 
   return (
     <div className="space-y-6 pb-10">
       {/* ── Header ── */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            {lang === "ru" ? "Доменная авторизация" : "Domain Authentication"}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground/70">
-            {lang === "ru"
-              ? "Настройка SSO через HTTP-заголовок от реверс-прокси (Nginx, Apache, Keycloak, ADFS)"
-              : "Configure SSO via HTTP header from reverse proxy (Nginx, Apache, Keycloak, ADFS)"}
-          </p>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
+            <Globe className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-base font-semibold tracking-tight text-foreground">{t("sso.title")}</h1>
+            <p className="text-[11px] text-muted-foreground">{t("sso.description")}</p>
+          </div>
         </div>
         <StatusIndicator active={currentForm.domain_auth_enabled} />
       </div>
 
       {/* ── How it works ── */}
-      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-5 py-4">
+      <div className="rounded-xl border border-primary/10 bg-primary/4 px-5 py-4">
         <div className="flex items-start gap-3">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/12 text-blue-400 mt-0.5">
             <Info className="h-4 w-4" />
           </div>
           <div className="text-sm leading-relaxed text-muted-foreground/70">
             <p>
-              {lang === "ru"
-                ? "Доменная авторизация позволяет автоматически входить пользователям, которые уже прошли аутентификацию через корпоративный SSO-провайдер. Реверс-прокси передает имя пользователя в HTTP-заголовке, и система автоматически находит или создает аккаунт."
-                : "Domain authentication allows automatic login for users already authenticated via a corporate SSO provider. The reverse proxy passes the username in an HTTP header, and the system automatically finds or creates the account."}
+              {t("sso.how_it_works")}
             </p>
             <p className="mt-2 text-xs text-muted-foreground/50">
               Поддерживаемые сценарии: Nginx + Kerberos, Apache + mod_auth_kerb, Keycloak proxy, ADFS + WAP, Traefik + ForwardAuth
@@ -135,24 +137,22 @@ export default function SettingsSSOPage() {
       {/* ── Main settings ── */}
       <div className="space-y-1">
         <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">
-          {lang === "ru" ? "Основные параметры" : "Core settings"}
+          {t("sso.core_settings")}
         </h2>
 
-        <div className="space-y-4 rounded-xl border border-white/[0.06] bg-white/[0.015] p-5">
+        <div className="space-y-4 rounded-xl border border-border bg-card p-5 shadow-sm">
           {/* Enable toggle */}
-          <div className="flex items-center justify-between gap-4 rounded-lg border border-white/[0.04] bg-white/[0.02] px-4 py-3.5">
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-border/50 bg-secondary/20 px-4 py-3.5">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/12 text-emerald-400">
                 <ShieldCheck className="h-4 w-4" />
               </div>
               <div>
                 <div className="text-sm font-medium text-foreground/90">
-                  {lang === "ru" ? "Включить доменную авторизацию" : "Enable domain authentication"}
+                  {t("sso.enable")}
                 </div>
                 <div className="text-[11px] text-muted-foreground/50">
-                  {lang === "ru"
-                    ? "Автовход через HTTP-заголовок от реверс-прокси"
-                    : "Auto-login via HTTP header from reverse proxy"}
+                  {t("sso.enable_desc")}
                 </div>
               </div>
             </div>
@@ -167,7 +167,7 @@ export default function SettingsSSOPage() {
             <FieldLabel htmlFor="sso-header">
               <div className="flex items-center gap-2">
                 <Server className="h-3 w-3" />
-                {lang === "ru" ? "HTTP-заголовок" : "HTTP Header"}
+                {t("sso.http_header")}
               </div>
             </FieldLabel>
             <Input
@@ -175,12 +175,10 @@ export default function SettingsSSOPage() {
               value={currentForm.domain_auth_header}
               onChange={(e) => update("domain_auth_header", e.target.value)}
               placeholder="REMOTE_USER"
-              className="h-9 bg-white/[0.03] border-white/[0.06] font-mono text-sm"
+              className="h-9 bg-secondary/30 border-border font-mono text-sm"
             />
             <FieldHint>
-              {lang === "ru"
-                ? "Имя HTTP-заголовка, который будет содержать логин пользователя. Типовые: REMOTE_USER, X-Forwarded-User, X-Remote-User, HTTP_X_REMOTE_USER"
-                : "HTTP header name containing the username. Common values: REMOTE_USER, X-Forwarded-User, X-Remote-User"}
+              {t("sso.http_header_hint")}
             </FieldHint>
           </div>
 
@@ -189,7 +187,7 @@ export default function SettingsSSOPage() {
             <FieldLabel htmlFor="sso-profile">
               <div className="flex items-center gap-2">
                 <KeyRound className="h-3 w-3" />
-                {lang === "ru" ? "Профиль для новых пользователей" : "Default profile for new users"}
+                {t("sso.default_profile")}
               </div>
             </FieldLabel>
             <select
@@ -203,9 +201,7 @@ export default function SettingsSSOPage() {
               <option value="custom">{getAccessProfileLabel(lang, "custom")}</option>
             </select>
             <FieldHint>
-              {lang === "ru"
-                ? "Какой профиль доступа назначить автоматически созданным через SSO пользователям"
-                : "Which access profile to assign to users auto-created via SSO"}
+              {t("sso.default_profile_hint")}
             </FieldHint>
           </div>
         </div>
@@ -214,24 +210,22 @@ export default function SettingsSSOPage() {
       {/* ── Behavior settings ── */}
       <div className="space-y-1">
         <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">
-          {lang === "ru" ? "Поведение" : "Behavior"}
+          {t("sso.behavior")}
         </h2>
 
-        <div className="space-y-3 rounded-xl border border-white/[0.06] bg-white/[0.015] p-5">
+        <div className="space-y-3 rounded-xl border border-border bg-card p-5 shadow-sm">
           {/* Auto-create */}
-          <div className="flex items-center justify-between gap-4 rounded-lg border border-white/[0.04] bg-white/[0.02] px-4 py-3.5">
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-border/50 bg-secondary/20 px-4 py-3.5">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-500/12 text-violet-400">
                 <UserPlus className="h-4 w-4" />
               </div>
               <div>
                 <div className="text-sm font-medium text-foreground/90">
-                  {lang === "ru" ? "Автоматическое создание пользователя" : "Auto-create users"}
+                  {t("sso.auto_create")}
                 </div>
                 <div className="text-[11px] text-muted-foreground/50">
-                  {lang === "ru"
-                    ? "Если пользователь не найден в базе, создать аккаунт автоматически"
-                    : "If user is not found in DB, create account automatically"}
+                  {t("sso.auto_create_desc")}
                 </div>
               </div>
             </div>
@@ -242,19 +236,17 @@ export default function SettingsSSOPage() {
           </div>
 
           {/* Lowercase */}
-          <div className="flex items-center justify-between gap-4 rounded-lg border border-white/[0.04] bg-white/[0.02] px-4 py-3.5">
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-border/50 bg-secondary/20 px-4 py-3.5">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/12 text-amber-400">
                 <ArrowDownAZ className="h-4 w-4" />
               </div>
               <div>
                 <div className="text-sm font-medium text-foreground/90">
-                  {lang === "ru" ? "Приводить логин к нижнему регистру" : "Lowercase usernames"}
+                  {t("sso.lowercase")}
                 </div>
                 <div className="text-[11px] text-muted-foreground/50">
-                  {lang === "ru"
-                    ? "Нормализация имён (DOMAIN\\User → domain\\user)"
-                    : "Normalize usernames (DOMAIN\\User → domain\\user)"}
+                  {t("sso.lowercase_desc")}
                 </div>
               </div>
             </div>
@@ -269,11 +261,11 @@ export default function SettingsSSOPage() {
       {/* ── Typical configs reference ── */}
       <div className="space-y-1">
         <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">
-          {lang === "ru" ? "Примеры конфигурации прокси" : "Proxy config examples"}
+          {t("sso.proxy_examples")}
         </h2>
 
         <div className="grid gap-3 lg:grid-cols-2">
-          <div className="rounded-xl border border-white/[0.06] bg-white/[0.015] p-4">
+          <div className="rounded-xl border border-border/60 bg-secondary/10 p-4 shadow-sm">
             <div className="flex items-center gap-2 mb-3">
               <div className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-500/12 text-emerald-400">
                 <Globe className="h-3.5 w-3.5" />
@@ -290,7 +282,7 @@ export default function SettingsSSOPage() {
             </pre>
           </div>
 
-          <div className="rounded-xl border border-white/[0.06] bg-white/[0.015] p-4">
+          <div className="rounded-xl border border-border/60 bg-secondary/10 p-4 shadow-sm">
             <div className="flex items-center gap-2 mb-3">
               <div className="flex h-7 w-7 items-center justify-center rounded-md bg-blue-500/12 text-blue-400">
                 <Globe className="h-3.5 w-3.5" />
@@ -308,7 +300,7 @@ export default function SettingsSSOPage() {
             <p className="mt-2 text-[10px] text-muted-foreground/40">Заголовок: X-Forwarded-User</p>
           </div>
 
-          <div className="rounded-xl border border-white/[0.06] bg-white/[0.015] p-4">
+          <div className="rounded-xl border border-border/60 bg-secondary/10 p-4 shadow-sm">
             <div className="flex items-center gap-2 mb-3">
               <div className="flex h-7 w-7 items-center justify-center rounded-md bg-amber-500/12 text-amber-400">
                 <Globe className="h-3.5 w-3.5" />
@@ -325,7 +317,7 @@ export default function SettingsSSOPage() {
             </pre>
           </div>
 
-          <div className="rounded-xl border border-white/[0.06] bg-white/[0.015] p-4">
+          <div className="rounded-xl border border-border/60 bg-secondary/10 p-4 shadow-sm">
             <div className="flex items-center gap-2 mb-3">
               <div className="flex h-7 w-7 items-center justify-center rounded-md bg-violet-500/12 text-violet-400">
                 <Globe className="h-3.5 w-3.5" />
@@ -346,16 +338,14 @@ export default function SettingsSSOPage() {
       {dirty && (
         <div className="sticky bottom-4 flex items-center justify-between gap-4 rounded-xl border border-primary/20 bg-background/95 backdrop-blur-lg px-5 py-3 shadow-lg">
           <p className="text-sm text-muted-foreground/70">
-            {lang === "ru" ? "Есть несохранённые изменения" : "You have unsaved changes"}
+            {t("sso.unsaved")}
           </p>
           <div className="flex items-center gap-2">
             <Button size="sm" variant="ghost" onClick={handleReset} disabled={saving}>
-              {lang === "ru" ? "Сбросить" : "Reset"}
+              {t("sso.reset")}
             </Button>
             <Button size="sm" onClick={handleSave} disabled={saving}>
-              {saving
-                ? (lang === "ru" ? "Сохранение..." : "Saving...")
-                : (lang === "ru" ? "Сохранить" : "Save")}
+              {saving ? t("sso.saving") : t("sso.save")}
             </Button>
           </div>
         </div>

@@ -2,7 +2,7 @@ import { type NodeProps } from "@xyflow/react";
 import { UserCheck } from "lucide-react";
 import { NodeBase } from "./NodeBase";
 import { useI18n } from "@/lib/i18n";
-import { getNodeTypeInfo, localize } from "./nodeMeta";
+import { getNodeBranchLabel, getNodeTypeInfo, localize } from "./nodeMeta";
 import { getNodeRuntimeProps } from "./runtimeProps";
 
 export function HumanApprovalNode({ data, selected }: NodeProps) {
@@ -13,9 +13,9 @@ export function HumanApprovalNode({ data, selected }: NodeProps) {
   const timeout = d?.timeout_minutes as number | undefined;
 
   const desc = [
-    toEmail && `✉️ ${toEmail}`,
-    tgChatId && `📱 TG`,
-    timeout && localize(lang, `⏰ ${timeout} мин.`, `⏰ ${timeout}min timeout`),
+    toEmail && `Email: ${toEmail}`,
+    tgChatId && "Telegram",
+    timeout && localize(lang, `${timeout} мин.`, `${timeout}min timeout`),
   ]
     .filter(Boolean)
     .join(" · ") || localize(lang, "Настройте email / Telegram", "Configure email / Telegram");
@@ -29,9 +29,9 @@ export function HumanApprovalNode({ data, selected }: NodeProps) {
       accentColor="border-yellow-500/40"
       categoryColor="#f97316"
       sourcePorts={[
-        { id: "approved", label: localize(lang, "OK", "APPROVED"), className: "!bg-green-500/70 hover:!bg-green-500", labelClassName: "text-green-500" },
-        { id: "rejected", label: localize(lang, "НЕТ", "REJECTED"), className: "!bg-red-500/70 hover:!bg-red-500", labelClassName: "text-red-500" },
-        { id: "timeout", label: localize(lang, "TIME", "TIMEOUT"), className: "!bg-amber-500/70 hover:!bg-amber-500", labelClassName: "text-amber-500" },
+        { id: "approved", label: getNodeBranchLabel("approved", lang), className: "!bg-green-500/70 hover:!bg-green-500", labelClassName: "text-green-500" },
+        { id: "rejected", label: getNodeBranchLabel("rejected", lang), className: "!bg-red-500/70 hover:!bg-red-500", labelClassName: "text-red-500" },
+        { id: "timeout", label: getNodeBranchLabel("timeout", lang), className: "!bg-amber-500/70 hover:!bg-amber-500", labelClassName: "text-amber-500" },
       ]}
       {...getNodeRuntimeProps(d)}
     />

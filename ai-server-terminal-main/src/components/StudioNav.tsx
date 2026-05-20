@@ -44,8 +44,9 @@ export function StudioNav() {
   });
 
   return (
-    <nav className="flex items-center gap-0 overflow-x-auto border-b border-border bg-card/60 px-4">
-      <span className="mr-4 shrink-0 text-[10px] font-semibold uppercase tracking-widest text-primary">
+    <nav className="flex items-center gap-0 overflow-x-auto border-b border-border/60 bg-card/40 backdrop-blur-sm px-4">
+      <span className="mr-5 shrink-0 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-primary/80">
+        <span className="h-1 w-1 rounded-full bg-primary/60 animate-pulse" />
         Studio
       </span>
       {items.map((item) => {
@@ -57,14 +58,18 @@ export function StudioNav() {
             key={item.path}
             onClick={() => navigate(item.path)}
             className={cn(
-              "relative flex shrink-0 items-center gap-1.5 border-b-2 px-4 pb-3 pt-2.5 text-sm font-medium transition-colors",
+              "group relative flex shrink-0 items-center gap-1.5 px-3.5 pb-3 pt-2.5 text-xs font-medium transition-all duration-150",
               active
-                ? "border-primary text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground"
+                ? "text-foreground"
+                : "text-muted-foreground/70 hover:text-foreground"
             )}
           >
-            <Icon className="h-3.5 w-3.5" />
+            <Icon className={cn("h-3.5 w-3.5 transition-colors", active ? "text-primary" : "group-hover:text-foreground/80")} />
             {item.label}
+            <span className={cn(
+              "absolute bottom-0 left-0 h-0.5 w-full rounded-full transition-all duration-200",
+              active ? "bg-primary scale-x-100" : "bg-transparent scale-x-0 group-hover:bg-border group-hover:scale-x-100"
+            )} />
           </button>
         );
       })}

@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { settingsNavGroups, type SettingsNavItem } from "./settings-nav-items";
 import { useState } from "react";
+import { useI18n } from "@/lib/i18n";
 
 function NavItem({ item, isActive }: { item: SettingsNavItem; isActive: boolean }) {
   const Icon = item.icon;
@@ -50,6 +51,7 @@ function NavItem({ item, isActive }: { item: SettingsNavItem; isActive: boolean 
 
 function SettingsSidebar({ isAdmin, onNavigate }: { isAdmin: boolean; onNavigate?: () => void }) {
   const location = useLocation();
+  const { t } = useI18n();
 
   return (
     <div className="flex h-full flex-col">
@@ -61,8 +63,8 @@ function SettingsSidebar({ isAdmin, onNavigate }: { isAdmin: boolean; onNavigate
             <div className="absolute inset-0 rounded-2xl bg-primary/10 blur-xl -z-10" />
           </div>
           <div>
-            <h1 className="text-lg font-bold tracking-tight text-foreground/90">Настройки</h1>
-            <p className="text-xs font-medium text-muted-foreground">Системные параметры</p>
+            <h1 className="text-lg font-bold tracking-tight text-foreground/90">{t("nav.settings")}</h1>
+            <p className="text-xs font-medium text-muted-foreground">{t("settings.subtitle")}</p>
           </div>
         </div>
       </div>
@@ -108,7 +110,7 @@ function SettingsSidebar({ isAdmin, onNavigate }: { isAdmin: boolean; onNavigate
         <div className="relative rounded-xl overflow-hidden p-3 border border-primary/10 bg-primary/5">
           <div className="absolute top-0 right-0 -mt-2 -mr-2 h-8 w-8 rounded-full bg-primary/20 blur-xl" />
           <p className="relative z-10 text-[11.5px] font-medium leading-relaxed text-foreground/70">
-            Начинай с AI-схемы и доступов. Логирование и журнал для контроля.
+            {t("settings.hint")}
           </p>
         </div>
       </div>
@@ -118,7 +120,7 @@ function SettingsSidebar({ isAdmin, onNavigate }: { isAdmin: boolean; onNavigate
 
 export default function SettingsLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  
+  const { t } = useI18n();
   const { data: authData } = useQuery({
     queryKey: ["auth", "session"],
     queryFn: fetchAuthSession,
@@ -150,7 +152,7 @@ export default function SettingsLayout() {
           </Sheet>
           <div className="flex items-center gap-2">
             <Settings className="h-5 w-5 text-primary" />
-            <span className="font-semibold">Настройки</span>
+            <span className="font-semibold">{t("nav.settings")}</span>
           </div>
         </header>
 

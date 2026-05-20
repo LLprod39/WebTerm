@@ -2,7 +2,7 @@ import { type NodeProps } from "@xyflow/react";
 import { BrainCircuit, Zap } from "lucide-react";
 import { NodeBase } from "./NodeBase";
 import { useI18n } from "@/lib/i18n";
-import { getNodeTypeInfo } from "./nodeMeta";
+import { getNodeBranchLabel, getNodeTypeInfo } from "./nodeMeta";
 import { getNodeRuntimeProps } from "./runtimeProps";
 
 export function LLMQueryNode({ data, selected }: NodeProps) {
@@ -21,8 +21,8 @@ export function LLMQueryNode({ data, selected }: NodeProps) {
       accentColor="border-cyan-500/40"
       categoryColor="#8b5cf6"
       sourcePorts={[
-        { id: "success", label: "SUCCESS", className: "!bg-green-500/70 hover:!bg-green-500", labelClassName: "text-green-500" },
-        { id: "error", label: "ERROR", className: "!bg-red-500/70 hover:!bg-red-500", labelClassName: "text-red-500" },
+        { id: "success", label: getNodeBranchLabel("success", lang), className: "!bg-green-500/70 hover:!bg-green-500", labelClassName: "text-green-500" },
+        { id: "error", label: getNodeBranchLabel("error", lang), className: "!bg-red-500/70 hover:!bg-red-500", labelClassName: "text-red-500" },
       ]}
       {...getNodeRuntimeProps(d)}
     >

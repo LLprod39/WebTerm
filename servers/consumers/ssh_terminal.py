@@ -601,6 +601,10 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                 server_id=getattr(self.server, "id", None),
             )
 
+    async def _emit_terminal_session(self) -> None:
+        cwd = str((getattr(self, "_nova_session_context", None) or {}).get("cwd") or "").strip()
+        await self._safe_send_json({"type": "terminal_session", "cwd": cwd})
+
     @staticmethod
     def _terminal_session_heartbeat_interval() -> int:
         try:
@@ -753,6 +757,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
 
                 self._nova_session_context = await self._probe_nova_session_context(merged_env)
                 self._nova_recent_activity = []
+                await self._emit_terminal_session()
 
             except Exception as e:
                 logger.exception("SSH terminal connect failed")
@@ -3821,11 +3826,16 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             exit_code=int(exit_code),
             source="live_session",
         )
+        context_before = getattr(self, "_nova_session_context", {}) or dict(item.get("context_before") or {})
+        old_cwd = str(context_before.get("cwd") or item.get("cwd") or "")
         self._nova_session_context = apply_successful_command_context(
-            getattr(self, "_nova_session_context", {}) or dict(item.get("context_before") or {}),
+            context_before,
             command=str(item.get("command") or ""),
             exit_code=int(exit_code),
         )
+        new_cwd = str((self._nova_session_context or {}).get("cwd") or "")
+        if new_cwd and new_cwd != old_cwd:
+            await self._emit_terminal_session()
 
         self._manual_pending_commands = [entry for entry in pending if int(entry.get("id") or 0) != int(cmd_id)]
         if int(getattr(self, "_manual_active_cmd_id", 0) or 0) == int(cmd_id):
@@ -3978,6 +3988,9 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             actor_user_id=user_id,
             force_compact=True,
         )
+        from servers.os_detect_service import schedule_os_detect_for_server_ids
+
+        schedule_os_detect_for_server_ids([server_id])
 
     @database_sync_to_async
     def _touch_server_connection(self, connection_id: str) -> None:

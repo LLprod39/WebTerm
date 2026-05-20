@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Loader2 } from "lucide-react";
+import { AlertCircle, Languages, Loader2, LockKeyhole, Server, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authLogin, fetchAuthSession } from "@/lib/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useI18n } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -32,7 +32,7 @@ export default function Login() {
 
   useEffect(() => {
     if (!localOnly && session?.authenticated) {
-      navigate(nextFromUrl || "/servers", { replace: true });
+      navigate(nextFromUrl || "/dashboard", { replace: true });
     }
   }, [localOnly, session?.authenticated, navigate, nextFromUrl]);
 
@@ -47,7 +47,7 @@ export default function Login() {
         user: result.user,
       });
       await queryClient.invalidateQueries({ queryKey: ["auth", "session"] });
-      const nextUrl = nextFromUrl || result.next_url || "/servers";
+      const nextUrl = nextFromUrl || result.next_url || "/dashboard";
       navigate(nextUrl, { replace: true });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Login failed";
@@ -58,87 +58,154 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <div className="w-full max-w-sm">
-        {/* Logo */}
-        <div className="mb-10 text-center">
-          <div className="flex items-center justify-center gap-2 mb-6">
-            <div className="h-10 w-10 rounded-lg bg-primary/15 flex items-center justify-center">
-              <span className="text-base font-bold text-primary">W</span>
+    <div className="min-h-dvh bg-background text-foreground">
+      <div className="grid min-h-dvh lg:grid-cols-[minmax(0,0.9fr)_minmax(380px,520px)]">
+        <section className="hidden border-r border-border bg-secondary/20 px-10 py-10 lg:flex lg:flex-col lg:justify-between">
+          <div>
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-primary/25 bg-primary/10 text-sm font-semibold text-primary">
+                W
+              </div>
+              <div>
+                <div className="text-sm font-semibold">WebTermAI</div>
+                <div className="text-xs text-muted-foreground">Ops workspace</div>
+              </div>
+            </div>
+
+            <div className="mt-24 max-w-xl">
+              <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">Secure operations</p>
+              <h1 className="mt-4 text-4xl font-semibold leading-tight text-foreground">
+                {lang === "ru" ? "Единая консоль для серверов, агентов и Studio." : "One console for servers, agents, and Studio."}
+              </h1>
+              <p className="mt-4 max-w-lg text-sm leading-6 text-muted-foreground">
+                {lang === "ru"
+                  ? "Вход открывает рабочее пространство с терминалами, мониторингом, автоматизациями и доступом по ролям."
+                  : "Sign in to access terminals, monitoring, automations, and role-based controls from one workspace."}
+              </p>
             </div>
           </div>
-          <h1 className="text-xl font-semibold text-foreground">
-            {t("login.title")}
-          </h1>
-          <p className="text-sm text-muted-foreground mt-2">{t("login.subtitle")}</p>
-        </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="username" className="text-sm text-muted-foreground">{t("login.username")}</Label>
-            <Input
-              id="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="admin"
-              className="h-10 bg-card border-border"
-              autoComplete="username"
-            />
+          <div className="grid gap-3 text-sm text-muted-foreground">
+            <div className="flex items-center gap-3">
+              <Server className="h-4 w-4 text-primary" />
+              <span>{lang === "ru" ? "SSH, RDP и файловые операции" : "SSH, RDP, and file operations"}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <ShieldCheck className="h-4 w-4 text-primary" />
+              <span>{lang === "ru" ? "Локальный вход или SSO через домен" : "Local login or domain SSO"}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <LockKeyhole className="h-4 w-4 text-primary" />
+              <span>{lang === "ru" ? "Сессия Django, CSRF и WebSocket токены" : "Django session, CSRF, and WebSocket tokens"}</span>
+            </div>
           </div>
+        </section>
 
-          <div className="space-y-2">
-            <Label htmlFor="password" className="text-sm text-muted-foreground">{t("login.password")}</Label>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="h-10 bg-card border-border"
-              autoComplete="current-password"
-            />
+        <main className="flex min-h-dvh items-center justify-center px-5 py-8">
+          <div className="w-full max-w-[400px]">
+            <div className="mb-8 flex items-start justify-between gap-4">
+              <div>
+                <div className="mb-5 flex h-10 w-10 items-center justify-center rounded-lg border border-primary/25 bg-primary/10 text-sm font-semibold text-primary lg:hidden">
+                  W
+                </div>
+                <p className="text-xs font-medium uppercase tracking-[0.16em] text-primary">
+                  {lang === "ru" ? "Вход" : "Sign in"}
+                </p>
+                <h1 className="mt-2 text-2xl font-semibold text-foreground">{t("login.title")}</h1>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{t("login.subtitle")}</p>
+              </div>
+              <div className="inline-flex overflow-hidden rounded-lg border border-border text-xs font-medium">
+                <button
+                  type="button"
+                  onClick={() => setLang("en")}
+                  className={cn("px-3 py-1.5 transition-colors", lang === "en" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground")}
+                  aria-pressed={lang === "en"}
+                >
+                  EN
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLang("ru")}
+                  className={cn("px-3 py-1.5 transition-colors", lang === "ru" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground")}
+                  aria-pressed={lang === "ru"}
+                >
+                  RU
+                </button>
+              </div>
+            </div>
+
+            <div className="mb-5 grid grid-cols-2 rounded-lg border border-border bg-secondary/25 p-1">
+              <button
+                type="button"
+                onClick={() => setLocalOnly(true)}
+                className={cn(
+                  "rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  localOnly ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                )}
+                aria-pressed={localOnly}
+              >
+                {lang === "ru" ? "Локально" : "Local"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setLocalOnly(false)}
+                className={cn(
+                  "rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  !localOnly ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                )}
+                aria-pressed={!localOnly}
+              >
+                {lang === "ru" ? "SSO / auto" : "SSO / auto"}
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="username" className="text-sm text-muted-foreground">{t("login.username")}</Label>
+                <Input
+                  id="username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="admin"
+                  className="h-11 bg-card border-border"
+                  autoComplete="username"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-sm text-muted-foreground">{t("login.password")}</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="h-11 bg-card border-border"
+                  autoComplete="current-password"
+                />
+              </div>
+
+              {error && (
+                <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <Button type="submit" className="h-11 w-full" disabled={loading || (localOnly && (!username.trim() || !password.trim()))}>
+                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {t("login.submit")}
+              </Button>
+            </form>
+
+            <div className="mt-6 flex items-center justify-between gap-3 border-t border-border pt-5 text-xs text-muted-foreground">
+              <span>{t("login.footer")}</span>
+              <span className="inline-flex items-center gap-1.5">
+                <Languages className="h-3.5 w-3.5" />
+                {lang.toUpperCase()}
+              </span>
+            </div>
           </div>
-
-          <label className="flex cursor-pointer items-center gap-2 py-1 text-sm text-muted-foreground">
-            <Checkbox
-              checked={localOnly}
-              onCheckedChange={(checked) => setLocalOnly(checked === true)}
-            />
-            <span>{lang === "ru" ? "Локальный вход" : "Local login"}</span>
-          </label>
-
-          {error && (
-            <p className="text-sm text-destructive">{error}</p>
-          )}
-
-          <Button type="submit" className="w-full h-10" disabled={loading}>
-            {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-            {t("login.submit")}
-          </Button>
-        </form>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between mt-8">
-          <p className="text-xs text-muted-foreground">
-            {t("login.footer")}
-          </p>
-          <div className="inline-flex rounded-lg border border-border overflow-hidden text-xs font-medium">
-            <button
-              type="button"
-              onClick={() => setLang("en")}
-              className={`px-3 py-1 transition-colors ${lang === "en" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              EN
-            </button>
-            <button
-              type="button"
-              onClick={() => setLang("ru")}
-              className={`px-3 py-1 transition-colors ${lang === "ru" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              RU
-            </button>
-          </div>
-        </div>
+        </main>
       </div>
     </div>
   );

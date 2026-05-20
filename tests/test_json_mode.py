@@ -123,6 +123,43 @@ class TestOpenAIJsonMode:
             payload = call_args.kwargs.get("json") or (call_args.args[1] if len(call_args.args) > 1 else {})
             assert payload.get("response_format") == {"type": "json_object"}
 
+    @pytest.mark.asyncio
+    async def test_responses_api_json_mode_adds_input_json_hint(self, llm):
+        """gpt-5 Responses API keeps json format and injects JSON hint into input."""
+        fake_response = AsyncMock()
+        fake_response.status = 200
+        fake_response.content.__aiter__ = AsyncMock(return_value=iter([
+            b'data: {"type":"response.output_text.delta","delta":"{\\"ok\\":true}"}\n',
+            b'data: {"type":"response.completed"}\n',
+        ]))
+
+        fake_session = AsyncMock()
+        fake_session.__aenter__ = AsyncMock(return_value=fake_session)
+        fake_session.__aexit__ = AsyncMock(return_value=False)
+        fake_session.post = MagicMock()
+        fake_session.post.return_value.__aenter__ = AsyncMock(return_value=fake_response)
+        fake_session.post.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("app.core.llm.model_manager") as mm,
+            patch("aiohttp.ClientSession", return_value=fake_session),
+        ):
+            mm.config.openai_enabled = True
+            mm.get_chat_model.return_value = "gpt-5-nano"
+            mm.resolve_purpose.return_value = ("openai", "gpt-5-nano")
+            mm.config.openai_reasoning_effort = ""
+
+            async for _ in llm.stream_chat(
+                "test prompt", model="openai", json_mode=True
+            ):
+                pass
+
+        call_args = fake_session.post.call_args
+        if call_args:
+            payload = call_args.kwargs.get("json") or (call_args.args[1] if len(call_args.args) > 1 else {})
+            assert payload.get("text") == {"format": {"type": "json_object"}}
+            assert "json" in str(payload.get("input", "")).lower()
+
 
 class TestProviderJsonModeSignature:
     """Verify json_mode parameter exists and defaults to False."""

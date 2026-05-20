@@ -1,48 +1,54 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  deleteAgent,
   fetchAgentDashboardRuns,
-  fetchAgents,
   fetchFrontendBootstrap,
-  runAgent,
-  stopAgent,
-  type AgentItem,
+  fetchAuthSession,
+  fetchMonitoringDashboard,
+  studioRuns,
   type DashboardRunItem,
+  type FrontendServer,
+  type PipelineRun,
+  type ServerHealth,
 } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { canAccessStudio, hasFeatureAccess } from "@/lib/featureAccess";
 import {
   Activity,
+  AlertTriangle,
+  ArrowRight,
   Bot,
   CheckCircle2,
   Clock,
   ExternalLink,
   Eye,
-  FileText,
-  Plus,
   RefreshCw,
   Server,
-  Shield,
-  Square,
   Terminal,
-  Trash2,
-  X,
+  Workflow,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import ReactMarkdown from "react-markdown";
 import { Link, useNavigate } from "react-router-dom";
-import { useState, type ElementType } from "react";
-import { QueryStateBlock } from "@/components/ui/page-shell";
+import {
+  EmptyState,
+  MetricCard,
+  MetricGrid,
+  PageHero,
+  PageShell,
+  QueryStateBlock,
+  SectionCard,
+  StatusBadge,
+} from "@/components/ui/page-shell";
 
-function relativeTime(iso: string | null): string {
-  if (!iso) return "now";
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 6) return "🌙";
+  if (h < 12) return "☀️";
+  if (h < 18) return "🌤";
+  return "🌙";
+}
+
+function relativeTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60_000);
   if (mins < 1) return "now";
@@ -53,104 +59,93 @@ function relativeTime(iso: string | null): string {
 }
 
 function formatDuration(ms: number): string {
-  if (!ms) return "0ms";
-  if (ms < 1000) return `${ms}ms`;
+  if (!ms) return "0s";
   const secs = Math.floor(ms / 1000);
   if (secs < 60) return `${secs}s`;
   const mins = Math.floor(secs / 60);
-  return `${mins}m ${secs % 60}s`;
+  return `${mins}m`;
 }
 
-const AGENT_ICONS: Record<string, ElementType> = {
-  security_audit: Shield,
-  security_patrol: Shield,
-  log_analyzer: FileText,
-  log_investigator: Eye,
-  performance: Activity,
-  disk_report: Server,
-  docker_status: Server,
-  service_health: CheckCircle2,
-  deploy_manager: ExternalLink,
-  health_checker: Activity,
-  backup_manager: FileText,
-  custom: Bot,
-};
-
-function statusColor(status: string): string {
-  if (status === "completed" || status === "healthy" || status === "running") return "text-green-400";
-  if (status === "warning" || status === "paused" || status === "waiting") return "text-yellow-400";
-  if (status === "failed" || status === "critical" || status === "unreachable") return "text-red-400";
-  return "text-muted-foreground";
+function healthTone(status: string): "success" | "warning" | "danger" | "neutral" | "info" {
+  if (status === "healthy" || status === "online") return "success";
+  if (status === "warning") return "warning";
+  if (status === "critical" || status === "unreachable" || status === "offline") return "danger";
+  if (status === "running") return "info";
+  return "neutral";
 }
+
+function runTone(status: string): "success" | "warning" | "danger" | "neutral" | "info" {
+  if (status === "completed" || status === "success") return "success";
+  if (status === "running" || status === "in_progress") return "info";
+  if (status === "failed" || status === "error") return "danger";
+  if (status === "waiting" || status === "paused") return "warning";
+  return "neutral";
+}
+
+function terminalPath(server: FrontendServer): string {
+  return server.server_type === "rdp" ? `/servers/${server.id}/rdp` : `/servers/${server.id}/terminal`;
+}
+
+const QUICK_LINKS = [
+  { key: "servers", to: "/servers", icon: Server, feature: null as string | null },
+  { key: "terminal", to: "/servers/hub", icon: Terminal, feature: null },
+  { key: "agents", to: "/agents", icon: Bot, feature: "agents" },
+  { key: "studio", to: "/studio", icon: Workflow, feature: "studio" },
+] as const;
 
 export default function UserDashboard() {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [analysisResult, setAnalysisResult] = useState<{ name: string; text: string } | null>(null);
-  const [runningAgentId, setRunningAgentId] = useState<number | null>(null);
-  const [stoppingAgentId, setStoppingAgentId] = useState<number | null>(null);
-  const [reportOpen, setReportOpen] = useState<DashboardRunItem | null>(null);
 
-  const { data: bootstrapData, isLoading, error } = useQuery({
+  const { data: authData } = useQuery({
+    queryKey: ["auth", "session"],
+    queryFn: fetchAuthSession,
+    staleTime: 60_000,
+    retry: false,
+  });
+  const username = authData?.user?.username || "";
+  const studioEnabled = canAccessStudio(authData?.user);
+  const agentsEnabled = hasFeatureAccess(authData?.user, "agents");
+
+  const { data: bootstrapData, isLoading: bootstrapLoading, error: bootstrapError } = useQuery({
     queryKey: ["frontend", "bootstrap", "dashboard"],
     queryFn: fetchFrontendBootstrap,
     staleTime: 20_000,
   });
 
-  const { data: agentsData } = useQuery({
-    queryKey: ["agents", "list"],
-    queryFn: () => fetchAgents(),
-    staleTime: 15_000,
+  const { data: monitoringData, isLoading: monitoringLoading } = useQuery({
+    queryKey: ["monitoring", "dashboard", "user"],
+    queryFn: fetchMonitoringDashboard,
+    staleTime: 20_000,
+    refetchInterval: 30_000,
   });
 
   const { data: runsData } = useQuery({
     queryKey: ["agents", "dashboard-runs"],
     queryFn: () => fetchAgentDashboardRuns(),
-    refetchInterval: 5_000,
+    enabled: agentsEnabled,
+    refetchInterval: 10_000,
+  });
+
+  const { data: pipelineRuns } = useQuery({
+    queryKey: ["studio", "runs", "dashboard"],
+    queryFn: () => studioRuns.list(),
+    enabled: studioEnabled,
+    staleTime: 15_000,
   });
 
   const refresh = async () => {
-    await queryClient.invalidateQueries({ queryKey: ["frontend", "bootstrap"] });
-    await queryClient.invalidateQueries({ queryKey: ["agents"] });
-    await queryClient.invalidateQueries({ queryKey: ["agents", "dashboard-runs"] });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["frontend", "bootstrap"] }),
+      queryClient.invalidateQueries({ queryKey: ["monitoring", "dashboard"] }),
+      queryClient.invalidateQueries({ queryKey: ["agents", "dashboard-runs"] }),
+      queryClient.invalidateQueries({ queryKey: ["studio", "runs"] }),
+    ]);
   };
 
-  const onRunAgent = async (agent: AgentItem) => {
-    setRunningAgentId(agent.id);
-    try {
-      const result = await runAgent(agent.id);
-      if (agent.mode === "full" && result.run_id) {
-        navigate(`/agents/run/${result.run_id}`);
-        return;
-      }
-      if (result.runs?.length) {
-        setAnalysisResult({
-          name: result.runs[0].server_name || agent.name,
-          text: result.runs[0].ai_analysis || "Agent run completed.",
-        });
-      }
-      await refresh();
-    } finally {
-      setRunningAgentId(null);
-    }
-  };
-
-  const onStopAgent = async (agentId: number) => {
-    setStoppingAgentId(agentId);
-    try {
-      await stopAgent(agentId);
-      await refresh();
-    } finally {
-      setStoppingAgentId(null);
-    }
-  };
-
-  const onDeleteAgent = async (agentId: number) => {
-    if (!confirm(t("agent.delete_confirm"))) return;
-    await deleteAgent(agentId);
-    await refresh();
-  };
+  const isLoading = bootstrapLoading || monitoringLoading;
+  const error = bootstrapError;
 
   if (isLoading || error || !bootstrapData) {
     return (
@@ -165,278 +160,354 @@ export default function UserDashboard() {
   }
 
   const servers = bootstrapData.servers || [];
-  const agents = agentsData?.agents || [];
+  const summary = monitoringData?.summary;
+  const healthById = new Map<number, ServerHealth>(
+    (monitoringData?.servers || []).map((item) => [item.server_id, item]),
+  );
+  const alerts = (monitoringData?.alerts || []).filter((a) => !a.is_resolved).slice(0, 6);
   const activeRuns = runsData?.active || [];
-  const recentRuns = runsData?.recent || [];
-  const onlineServers = servers.filter((server) => server.status === "online").length;
-  const configuredServers = servers.length;
+  const recentAgentRuns = (runsData?.recent || []).slice(0, 4);
+  const recentPipelines = (pipelineRuns || [])
+    .slice()
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 4);
+  const recentActivity = (bootstrapData.recent_activity || []).slice(0, 6);
+
+  const recentServers = servers
+    .slice()
+    .sort((a, b) => {
+      const ta = a.last_connected ? new Date(a.last_connected).getTime() : 0;
+      const tb = b.last_connected ? new Date(b.last_connected).getTime() : 0;
+      return tb - ta;
+    })
+    .slice(0, 6);
+
+  const attentionServers = servers
+    .map((server) => ({ server, health: healthById.get(server.id) }))
+    .filter(({ health }) => health && health.status !== "healthy" && health.status !== "unknown")
+    .slice(0, 5);
+
+  const quickLinks = QUICK_LINKS.filter((item) => {
+    if (!item.feature) return true;
+    if (item.feature === "studio") return studioEnabled;
+    return hasFeatureAccess(authData?.user, item.feature);
+  });
+
+  const healthyCount = summary?.healthy ?? servers.filter((s) => s.status === "online").length;
+  const problemCount = (summary?.warning ?? 0) + (summary?.critical ?? 0) + (summary?.unreachable ?? 0);
+  const totalServers = summary?.total_servers ?? servers.length;
+  const activeAlerts = summary?.active_alerts ?? alerts.length;
+  const runningPipelines = recentPipelines.filter((r) => r.status === "running" || r.status === "in_progress").length;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 px-4 py-5 sm:px-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">{t("udash.title")}</h1>
-          <p className="text-sm text-muted-foreground">
-            {configuredServers} servers · {agents.length} agents · {activeRuns.length} active
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link to="/agents">
-            <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs">
-              <Plus className="h-3.5 w-3.5" />
-              Agents
-            </Button>
-          </Link>
-          <Button size="sm" variant="ghost" className="h-8 gap-1.5 text-xs" onClick={() => void refresh()}>
+    <PageShell width="6xl">
+      <PageHero
+        kicker={username ? `${getGreeting()} ${username}` : t("dashboard.user.kicker")}
+        title={t("dashboard.user.title")}
+        description={t("dashboard.user.subtitle")}
+        actions={
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => void refresh()}>
             <RefreshCw className="h-3.5 w-3.5" />
-            Refresh
+            {t("dashboard.user.refresh")}
           </Button>
-        </div>
-      </div>
+        }
+      />
 
-      <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
-        <div className="rounded-xl border border-border/60 bg-card p-3 flex items-center gap-3">
-          <Server className="h-4 w-4 text-primary shrink-0" />
-          <div>
-            <div className="text-lg font-semibold text-foreground leading-none">{configuredServers}</div>
-            <div className="text-[11px] text-muted-foreground mt-0.5">Servers</div>
-          </div>
-        </div>
-        <div className="rounded-xl border border-border/60 bg-card p-3 flex items-center gap-3">
-          <CheckCircle2 className="h-4 w-4 text-green-400 shrink-0" />
-          <div>
-            <div className="text-lg font-semibold text-foreground leading-none">{onlineServers}</div>
-            <div className="text-[11px] text-muted-foreground mt-0.5">Online</div>
-          </div>
-        </div>
-        <div className="rounded-xl border border-border/60 bg-card p-3 flex items-center gap-3">
-          <Bot className="h-4 w-4 text-primary shrink-0" />
-          <div>
-            <div className="text-lg font-semibold text-foreground leading-none">{agents.length}</div>
-            <div className="text-[11px] text-muted-foreground mt-0.5">Agents</div>
-          </div>
-        </div>
-        <div className="rounded-xl border border-border/60 bg-card p-3 flex items-center gap-3">
-          <Activity className="h-4 w-4 text-blue-400 shrink-0" />
-          <div>
-            <div className="text-lg font-semibold text-foreground leading-none">{activeRuns.length}</div>
-            <div className="text-[11px] text-muted-foreground mt-0.5">Active</div>
-          </div>
-        </div>
-      </div>
+      <MetricGrid>
+        <MetricCard
+          label={t("dashboard.user.metric_servers")}
+          value={totalServers}
+          description={`${healthyCount} ${t("udash.healthy_lc")} · ${problemCount} ${t("udash.problems")}`}
+          icon={<Server className="h-4 w-4" />}
+          tone={problemCount > 0 ? "warning" : "success"}
+        />
+        <MetricCard
+          label={t("dashboard.user.metric_alerts")}
+          value={activeAlerts}
+          description={activeAlerts > 0 ? t("dashboard.user.metric_alerts_active") : t("dashboard.user.metric_alerts_clear")}
+          icon={<AlertTriangle className="h-4 w-4" />}
+          tone={activeAlerts > 0 ? "danger" : "success"}
+        />
+        <MetricCard
+          label={t("dashboard.user.metric_agents")}
+          value={activeRuns.length}
+          description={agentsEnabled ? t("dashboard.user.metric_agents_desc") : t("dashboard.user.metric_agents_disabled")}
+          icon={<Bot className="h-4 w-4" />}
+          tone={activeRuns.length > 0 ? "info" : "default"}
+        />
+        <MetricCard
+          label={t("dashboard.user.metric_studio")}
+          value={runningPipelines}
+          description={studioEnabled ? t("dashboard.user.metric_studio_desc") : t("dashboard.user.metric_studio_disabled")}
+          icon={<Workflow className="h-4 w-4" />}
+          tone="default"
+        />
+      </MetricGrid>
 
-      {analysisResult && (
-        <section className="overflow-hidden rounded-2xl border border-primary/20 bg-card/95">
-          <div className="flex items-center justify-between border-b border-primary/10 bg-primary/5 px-4 py-3">
-            <div>
-              <div className="text-sm font-medium text-foreground">{analysisResult.name}</div>
-              <div className="text-sm text-muted-foreground">Latest AI analysis</div>
-            </div>
-            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setAnalysisResult(null)} aria-label="Close analysis">
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="prose prose-sm prose-invert max-w-none px-4 py-4 text-sm [&_p]:text-sm">
-            <ReactMarkdown>{analysisResult.text}</ReactMarkdown>
-          </div>
-        </section>
-      )}
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {quickLinks.map((item) => {
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.key}
+              to={item.to}
+              className="group flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3.5 transition-colors hover:border-primary/30 hover:bg-primary/5"
+            >
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Icon className="h-4 w-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium text-foreground">{t(`dashboard.user.quick_${item.key}`)}</div>
+                <p className="text-xs text-muted-foreground">{t(`dashboard.user.quick_${item.key}_hint`)}</p>
+              </div>
+              <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+            </Link>
+          );
+        })}
+      </section>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <section className="overflow-hidden rounded-xl border border-border bg-card">
-          <div className="flex items-center gap-2 px-4 py-3">
-            <Activity className="h-3.5 w-3.5 text-blue-400" />
-            <span className="text-sm font-medium text-foreground">Active Runs</span>
-            {activeRuns.length > 0 && <span className="text-xs text-muted-foreground">{activeRuns.length}</span>}
-          </div>
-          {activeRuns.length === 0 ? (
-            <div className="px-4 py-6 text-sm text-muted-foreground">No active agent runs.</div>
+        <SectionCard
+          title={t("dashboard.user.recent_servers")}
+          description={t("dashboard.user.recent_servers_desc")}
+          icon={<Server className="h-4 w-4" />}
+          actions={
+            <Link to="/servers">
+              <Button size="sm" variant="ghost" className="text-xs">
+                {t("dashboard.user.view_all_servers")}
+              </Button>
+            </Link>
+          }
+          bodyClassName="p-0"
+        >
+          {recentServers.length === 0 ? (
+            <EmptyState
+              icon={<Server className="h-5 w-5" />}
+              title={t("dashboard.user.no_servers")}
+              description={t("dashboard.user.no_servers_desc")}
+              className="m-5"
+            />
           ) : (
             <div className="divide-y divide-border/40">
-              {activeRuns.map((run: DashboardRunItem) => (
-                <div key={run.id} className="flex flex-col gap-3 px-4 py-3 md:flex-row md:items-center">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      {(() => {
-                        const AgentIcon = AGENT_ICONS[run.agent_type] || Bot;
-                        return <AgentIcon className="h-4 w-4 text-primary" aria-hidden="true" />;
-                      })()}
-                      <span className="truncate text-sm font-medium text-foreground">{run.agent_name}</span>
-                      <span className={`text-[11px] ${statusColor(run.status)}`}>{run.status}</span>
+              {recentServers.map((server) => {
+                const health = healthById.get(server.id);
+                const status = health?.status || server.status;
+                return (
+                  <div key={server.id} className="flex items-center gap-3 px-4 py-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="truncate text-sm font-medium">{server.name}</span>
+                        <StatusBadge label={status} tone={healthTone(status)} />
+                      </div>
+                      <p className="mt-1 truncate text-xs text-muted-foreground">
+                        {server.host}
+                        {server.last_connected ? ` · ${relativeTime(server.last_connected)}` : ""}
+                      </p>
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      {run.server_name} · {formatDuration(Date.now() - new Date(run.started_at).getTime())}
-                    </div>
-                    {run.pending_question ? (
-                      <div className="mt-1 text-sm text-orange-300">{run.pending_question}</div>
-                    ) : null}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => navigate(`/agents/run/${run.id}`)}>
-                      <Eye className="h-3 w-3" />
-                      Open
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="gap-1 text-xs text-destructive"
-                      disabled={stoppingAgentId === run.agent_id}
-                      onClick={() => void onStopAgent(run.agent_id)}
-                    >
-                      {stoppingAgentId === run.agent_id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Square className="h-3 w-3" />}
-                      Stop
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="overflow-hidden rounded-xl border border-border bg-card">
-          <div className="flex items-center gap-2 px-4 py-3">
-            <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-sm font-medium text-foreground">Recent Runs</span>
-            {recentRuns.length > 0 && <span className="text-xs text-muted-foreground">{recentRuns.length}</span>}
-          </div>
-          {recentRuns.length === 0 ? (
-            <div className="px-4 py-6 text-sm text-muted-foreground">No recent runs.</div>
-          ) : (
-            <div className="divide-y divide-border/40">
-              {recentRuns.map((run: DashboardRunItem) => (
-                <div key={run.id} className="flex flex-col gap-3 px-4 py-3 md:flex-row md:items-center">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      {run.status === "completed" ? (
-                        <CheckCircle2 className="h-4 w-4 text-green-400" />
-                      ) : run.status === "failed" ? (
-                        <X className="h-4 w-4 text-red-400" />
-                      ) : (
-                        <Square className="h-4 w-4 text-muted-foreground" />
-                      )}
-                      <span className="truncate text-sm font-medium text-foreground">{run.agent_name}</span>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {run.server_name} · {formatDuration(run.duration_ms)} · {relativeTime(run.completed_at || run.started_at)}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {(run.final_report || run.ai_analysis) ? (
-                      <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => setReportOpen(run)}>
-                        <FileText className="h-3 w-3" />
-                        Report
+                    <Link to={terminalPath(server)}>
+                      <Button size="sm" variant="outline" className="gap-1 text-xs">
+                        <Terminal className="h-3 w-3" />
+                        {t("udash.quick_connect")}
                       </Button>
-                    ) : null}
-                    <Button size="sm" variant="ghost" className="gap-1 text-xs" onClick={() => navigate(`/agents/run/${run.id}`)}>
-                      <ExternalLink className="h-3 w-3" />
-                      Open
-                    </Button>
+                    </Link>
                   </div>
+                );
+              })}
+            </div>
+          )}
+        </SectionCard>
+
+        <SectionCard
+          title={t("dashboard.user.alerts")}
+          description={activeAlerts > 0 ? `${activeAlerts} ${t("udash.active_alerts").toLowerCase()}` : t("udash.all_good")}
+          icon={<AlertTriangle className="h-4 w-4" />}
+          bodyClassName="p-0"
+        >
+          {alerts.length === 0 ? (
+            <EmptyState
+              icon={<CheckCircle2 className="h-5 w-5" />}
+              title={t("udash.all_good")}
+              description={t("udash.all_good_desc")}
+              className="m-5"
+            />
+          ) : (
+            <div className="divide-y divide-border/40">
+              {alerts.map((alert) => (
+                <div key={alert.id} className="px-4 py-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium">{alert.title}</span>
+                    <StatusBadge label={alert.severity} tone={healthTone(alert.severity)} />
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {alert.server_name} · {relativeTime(alert.created_at)}
+                  </p>
                 </div>
               ))}
             </div>
           )}
-        </section>
+        </SectionCard>
       </div>
 
-      <section className="overflow-hidden rounded-xl border border-border bg-card">
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-2">
-            <Bot className="h-4 w-4 text-primary" />
-            <span className="text-sm font-medium text-foreground">Agents</span>
-            <span className="text-xs text-muted-foreground">{agents.length}</span>
-          </div>
-          <Link to="/agents">
-            <Button size="sm" variant="ghost" className="gap-1 text-xs">
-              Manage all
-            </Button>
-          </Link>
-        </div>
-        {agents.length === 0 ? (
-          <div className="px-4 py-6 text-sm text-muted-foreground">No agents configured yet.</div>
-        ) : (
-          <div className="divide-y divide-border/40">
-            {agents.slice(0, 6).map((agent: AgentItem) => (
-              <div key={agent.id} className="flex flex-col gap-3 px-4 py-3 md:flex-row md:items-center">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    {(() => {
-                      const AgentIcon = AGENT_ICONS[agent.agent_type] || Bot;
-                      return <AgentIcon className="h-4 w-4 text-primary" aria-hidden="true" />;
-                    })()}
-                    <span className="truncate text-sm font-medium text-foreground">{agent.name}</span>
-                    <span className="text-[11px] text-muted-foreground">{agent.mode}</span>
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    {agent.server_count} servers
-                    {agent.last_run_at ? ` · last run ${relativeTime(agent.last_run_at)}` : ""}
-                    {agent.schedule_minutes ? ` · every ${agent.schedule_minutes}m` : ""}
-                  </div>
-                </div>
+      {attentionServers.length > 0 ? (
+        <SectionCard
+          title={t("udash.needs_attention")}
+          description={`${attentionServers.length} ${t("udash.problems").toLowerCase()}`}
+          icon={<AlertTriangle className="h-4 w-4" />}
+          bodyClassName="divide-y divide-border/40 p-0"
+        >
+          {attentionServers.map(({ server, health }) => (
+            <div key={server.id} className="flex items-center gap-3 px-4 py-3">
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  {agent.active_run_id ? (
-                    <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => navigate(`/agents/run/${agent.active_run_id}`)}>
-                      <Eye className="h-3 w-3" />
-                      Open
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="gap-1 text-xs"
-                      disabled={runningAgentId === agent.id}
-                      onClick={() => void onRunAgent(agent)}
-                    >
-                      {runningAgentId === agent.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Activity className="h-3 w-3" />}
-                      Run
-                    </Button>
-                  )}
-                  <Button size="sm" variant="ghost" className="gap-1 text-xs text-destructive" onClick={() => void onDeleteAgent(agent.id)}>
-                    <Trash2 className="h-3 w-3" />
-                    Delete
-                  </Button>
+                  <span className="truncate text-sm font-medium">{server.name}</span>
+                  {health ? <StatusBadge label={health.status} tone={healthTone(health.status)} /> : null}
                 </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {health?.cpu_percent != null ? `CPU ${Math.round(health.cpu_percent)}%` : server.host}
+                </p>
               </div>
-            ))}
-          </div>
-        )}
-      </section>
-      <Dialog open={!!reportOpen} onOpenChange={() => setReportOpen(null)}>
-        <DialogContent className="w-[95vw] max-w-3xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-primary" />
-              <span>{reportOpen?.agent_name || "Run Report"}</span>
-            </DialogTitle>
-          </DialogHeader>
-          <DialogBody className="max-h-[70vh] overflow-y-auto">
-            {reportOpen ? (
-              <>
-                <div className="mb-4 flex flex-wrap items-center gap-3 border-b border-border pb-3 text-xs text-muted-foreground">
-                  <span>{reportOpen.server_name}</span>
-                  <span>{reportOpen.status}</span>
-                  <span>{formatDuration(reportOpen.duration_ms)}</span>
-                  <span>{relativeTime(reportOpen.completed_at || reportOpen.started_at)}</span>
-                </div>
-                <div className="prose prose-sm prose-invert max-w-none [&_p]:text-sm">
-                  <ReactMarkdown>{reportOpen.final_report || reportOpen.ai_analysis || "No report available."}</ReactMarkdown>
-                </div>
-              </>
-            ) : null}
-          </DialogBody>
-          <DialogFooter>
-            {reportOpen ? (
-              <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => navigate(`/agents/run/${reportOpen.id}`)}>
-                <ExternalLink className="h-3 w-3" />
-                Open full run
+              <Link to={terminalPath(server)}>
+                <Button size="sm" variant="outline" className="text-xs">
+                  {t("udash.quick_connect")}
+                </Button>
+              </Link>
+            </div>
+          ))}
+        </SectionCard>
+      ) : null}
+
+      {agentsEnabled ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <SectionCard
+            title={t("agent.active_runs")}
+            description={activeRuns.length > 0 ? `${activeRuns.length}` : t("agent.no_active")}
+            icon={<Activity className="h-4 w-4" />}
+            actions={
+              <Link to="/agents">
+                <Button size="sm" variant="ghost" className="text-xs">
+                  {t("agent.view_all")}
+                </Button>
+              </Link>
+            }
+            bodyClassName="p-0"
+          >
+            {activeRuns.length === 0 ? (
+              <EmptyState icon={<Activity className="h-5 w-5" />} title={t("agent.no_active")} className="m-5" />
+            ) : (
+              <div className="divide-y divide-border/40">
+                {activeRuns.map((run: DashboardRunItem) => (
+                  <div key={run.id} className="flex items-center gap-3 px-4 py-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="truncate text-sm font-medium">{run.agent_name}</span>
+                        <StatusBadge label={run.status} tone={runTone(run.status)} />
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {run.server_name} · {formatDuration(Date.now() - new Date(run.started_at).getTime())}
+                      </p>
+                    </div>
+                    <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => navigate(`/agents/run/${run.id}`)}>
+                      <Eye className="h-3 w-3" />
+                      {t("agent.open")}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </SectionCard>
+
+          <SectionCard
+            title={t("agent.recent_runs")}
+            description={recentAgentRuns.length > 0 ? `${recentAgentRuns.length}` : t("agent.no_recent")}
+            icon={<Clock className="h-4 w-4" />}
+            bodyClassName="p-0"
+          >
+            {recentAgentRuns.length === 0 ? (
+              <EmptyState icon={<Clock className="h-5 w-5" />} title={t("agent.no_recent")} className="m-5" />
+            ) : (
+              <div className="divide-y divide-border/40">
+                {recentAgentRuns.map((run: DashboardRunItem) => (
+                  <div key={run.id} className="flex items-center gap-3 px-4 py-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="truncate text-sm font-medium">{run.agent_name}</span>
+                        <StatusBadge label={run.status} tone={runTone(run.status)} />
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {run.server_name} · {formatDuration(run.duration_ms)} · {relativeTime(run.completed_at || run.started_at)}
+                      </p>
+                    </div>
+                    <Button size="sm" variant="ghost" className="gap-1 text-xs" onClick={() => navigate(`/agents/run/${run.id}`)}>
+                      <ExternalLink className="h-3 w-3" />
+                      {t("agent.open")}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </SectionCard>
+        </div>
+      ) : null}
+
+      {studioEnabled ? (
+        <SectionCard
+          title={t("dashboard.user.pipeline_runs")}
+          description={t("dashboard.user.pipeline_runs_desc")}
+          icon={<Workflow className="h-4 w-4" />}
+          actions={
+            <Link to="/studio/runs">
+              <Button size="sm" variant="ghost" className="text-xs">
+                {t("dashboard.user.view_pipeline_runs")}
               </Button>
-            ) : null}
-            <Button size="sm" onClick={() => setReportOpen(null)}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+            </Link>
+          }
+          bodyClassName="p-0"
+        >
+          {recentPipelines.length === 0 ? (
+            <EmptyState icon={<Workflow className="h-5 w-5" />} title={t("dashboard.user.no_pipeline_runs")} className="m-5" />
+          ) : (
+            <div className="divide-y divide-border/40">
+              {recentPipelines.map((run: PipelineRun) => (
+                <div key={run.id} className="flex items-center gap-3 px-4 py-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="truncate text-sm font-medium">{run.pipeline_name}</span>
+                      <StatusBadge label={run.status} tone={runTone(run.status)} />
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {relativeTime(run.finished_at || run.started_at || run.created_at)}
+                    </p>
+                  </div>
+                  <Link to={`/studio/pipeline/${run.pipeline_id}`}>
+                    <Button size="sm" variant="ghost" className="gap-1 text-xs">
+                      <ExternalLink className="h-3 w-3" />
+                      {t("agent.open")}
+                    </Button>
+                  </Link>
+                </div>
+              ))}
+            </div>
+          )}
+        </SectionCard>
+      ) : null}
+
+      {recentActivity.length > 0 ? (
+        <SectionCard
+          title={t("udash.recent_activity")}
+          icon={<Clock className="h-4 w-4" />}
+          bodyClassName="divide-y divide-border/40 p-0"
+        >
+          {recentActivity.map((item) => (
+            <div key={item.id} className="px-4 py-3">
+              <p className="text-sm font-medium text-foreground">{item.description || item.action}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {item.entity_name} · {relativeTime(item.created_at)}
+              </p>
+            </div>
+          ))}
+        </SectionCard>
+      ) : null}
+
+    </PageShell>
   );
 }

@@ -16,6 +16,9 @@ import {
   executeServerCommand,
   fetchAuthSession,
   fetchFrontendBootstrap,
+  fetchMonitoringStatus,
+  refreshMonitoringFleet,
+  type MonitoringStatusItem,
   fetchServerDetails,
   getGlobalServerContext,
   getGroupServerContext,
@@ -41,7 +44,9 @@ import {
   type ServerDetailsResponse,
   type ServerGroupRole,
 } from "@/lib/api";
-import { StatusIndicator } from "@/components/StatusIndicator";
+import { FleetHealthIndicator, StatusIndicator } from "@/components/StatusIndicator";
+import { ServerOsBadge } from "@/components/servers/ServerOsBadge";
+import { resolveServerOs, serverOsLabelKey } from "@/lib/server-os";
 import { useI18n } from "@/lib/i18n";
 import {
   Terminal,
@@ -87,7 +92,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { QueryStateBlock } from "@/components/ui/page-shell";
+import { EmptyState, PageHero, PageShell, QueryStateBlock } from "@/components/ui/page-shell";
 
 interface ServerForm {
   name: string;
@@ -267,18 +272,18 @@ function memorySnapshotAudienceKind(item: MemorySnapshotItem): Exclude<UserKnowl
   return "summary";
 }
 
-function memorySnapshotAudienceLabel(item: MemorySnapshotItem) {
+function memorySnapshotAudienceLabel(item: MemorySnapshotItem, t: (key: string) => string) {
   switch (memorySnapshotAudienceKind(item)) {
     case "access":
-      return "Доступ";
+      return t("srv.knowledge_filter_access");
     case "risks":
-      return "Риск";
+      return t("srv.knowledge_filter_risks");
     case "changes":
-      return "Изменение";
+      return t("srv.knowledge_filter_changes");
     case "instructions":
-      return "Инструкция";
+      return t("srv.knowledge_filter_instructions");
     default:
-      return "Сводка";
+      return t("srv.knowledge_filter_summary");
   }
 }
 
@@ -590,7 +595,7 @@ function formatCommandOutput(output: unknown): string {
 }
 
 export default function Servers() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const tr = useCallback((key: string, vars?: Record<string, string | number>) => {
     let text = t(key);
     if (!vars) return text;
@@ -687,7 +692,6 @@ export default function Servers() {
 
   const [execCommand, setExecCommand] = useState("hostname");
   const [execResult, setExecResult] = useState("");
-
   const { data, isLoading, error } = useQuery({
     queryKey: ["frontend", "bootstrap"],
     queryFn: fetchFrontendBootstrap,
@@ -699,6 +703,20 @@ export default function Servers() {
     staleTime: 60_000,
     retry: false,
   });
+  const { data: monitoringStatus } = useQuery({
+    queryKey: ["monitoring", "status"],
+    queryFn: fetchMonitoringStatus,
+    staleTime: 60_000,
+    refetchInterval: 90_000,
+    refetchIntervalInBackground: true,
+  });
+  const fleetHealthByServerId = useMemo(() => {
+    const map = new Map<number, MonitoringStatusItem>();
+    for (const item of monitoringStatus?.servers ?? []) {
+      map.set(item.server_id, item);
+    }
+    return map;
+  }, [monitoringStatus]);
   const servers = useMemo(() => data?.servers ?? [], [data?.servers]);
   const groups = useMemo(() => data?.groups ?? [], [data?.groups]);
   const manageableGroups = useMemo(
@@ -741,11 +759,11 @@ export default function Servers() {
           return false;
         }
         return matchesKnowledgeQuery(
-          [item.title, item.content, memorySnapshotAudienceLabel(item)],
+          [item.title, item.content, memorySnapshotAudienceLabel(item, t)],
           normalizedKnowledgeSearch,
         );
       }),
-    [aiKnowledgeKindFilter, autoKnowledge, normalizedKnowledgeSearch],
+    [aiKnowledgeKindFilter, autoKnowledge, normalizedKnowledgeSearch, t],
   );
   const activeKnowledgeCategories = useMemo(() => {
     if (knowledgeCategories.length > 0) return knowledgeCategories;
@@ -793,6 +811,15 @@ export default function Servers() {
       setSelectedServerId(filtered[0].id);
     }
   }, [filtered, selectedServerId]);
+
+  const fleetRefreshRequested = useRef(false);
+  useEffect(() => {
+    if (!monitoringStatus?.meta?.has_stale || fleetRefreshRequested.current) return;
+    fleetRefreshRequested.current = true;
+    void refreshMonitoringFleet().then(() => {
+      void queryClient.invalidateQueries({ queryKey: ["monitoring", "status"] });
+    });
+  }, [monitoringStatus?.meta?.has_stale, queryClient]);
 
   const selectedRulesGroup = useMemo(
     () => manageableGroups.find((group) => group.id === rulesGroupId) ?? null,
@@ -1055,8 +1082,11 @@ export default function Servers() {
 
   const onTest = async (server: FrontendServer) => {
     const result = await testServer(server.id, {});
-    if (result.success) alert(tr("srv.connection_success", { name: server.name }));
-    else alert(tr("srv.connection_failed", { error: result.error || t("srv.unknown_error") }));
+    if (result.success) {
+      alert(tr("srv.connection_success", { name: server.name }));
+    } else {
+      alert(tr("srv.connection_failed", { error: result.error || t("srv.unknown_error") }));
+    }
     await reload();
   };
 
@@ -1432,8 +1462,8 @@ export default function Servers() {
   const onKnowledgeDelete = async (id: number) => {
     if (!advancedServer) return;
     const target = manualKnowledge.find((item) => item.id === id);
-    const label = target?.title?.trim() || "эту запись";
-    if (!confirm(`Удалить ${label}?`)) return;
+    const label = target?.title?.trim() || t("srv.this_entry");
+    if (!confirm(tr("srv.delete_knowledge_confirm", { name: label }))) return;
     setKnowledgeDeletingId(id);
     try {
       await deleteServerKnowledge(advancedServer.id, id);
@@ -1458,8 +1488,8 @@ export default function Servers() {
     const isAllManual = filteredManualKnowledge.length === manualKnowledge.length;
     const confirmed = confirm(
       isAllManual
-        ? `Удалить все ручные записи (${filteredManualKnowledge.length})?`
-        : `Удалить все ручные записи по текущему фильтру (${filteredManualKnowledge.length})?`,
+        ? tr("srv.delete_manual_all_confirm", { count: filteredManualKnowledge.length })
+        : tr("srv.delete_manual_filtered_confirm", { count: filteredManualKnowledge.length }),
     );
     if (!confirmed) return;
 
@@ -1513,7 +1543,7 @@ export default function Servers() {
   const onAiKnowledgeDelete = async (item: MemorySnapshotItem) => {
     if (!advancedServer) return;
     const label = item.title?.trim() || item.memory_key;
-    if (!confirm(`Удалить авто-заметку "${label}"?`)) return;
+    if (!confirm(tr("srv.delete_ai_note_confirm", { name: label }))) return;
 
     setAiKnowledgeDeletingId(item.id);
     try {
@@ -1533,8 +1563,8 @@ export default function Servers() {
     const isAllAi = filteredAiKnowledge.length === autoKnowledge.length;
     const confirmed = confirm(
       isAllAi
-        ? `Удалить все авто-заметки (${filteredAiKnowledge.length})?`
-        : `Удалить авто-заметки по текущему фильтру (${filteredAiKnowledge.length})?`,
+        ? tr("srv.delete_ai_all_confirm", { count: filteredAiKnowledge.length })
+        : tr("srv.delete_ai_filtered_confirm", { count: filteredAiKnowledge.length }),
     );
     if (!confirmed) return;
 
@@ -1554,9 +1584,7 @@ export default function Servers() {
 
   const onPurgeAiMemory = async () => {
     if (!advancedServer) return;
-    const confirmed = confirm(
-      "Полностью очистить всю автоматически собранную историю и авто-заметки по серверу?",
-    );
+    const confirmed = confirm(t("srv.purge_ai_memory_confirm"));
     if (!confirmed) return;
 
     setAiMemoryPurging(true);
@@ -1689,40 +1717,28 @@ export default function Servers() {
   }
 
   return (
-    <div className="p-5 max-w-6xl mx-auto space-y-4">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
-        <div>
-          <h1 className="text-lg font-semibold text-foreground">{t("srv.title")}</h1>
-          <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-            <span>{tr("srv.total_count", { count: servers.length })}</span>
-            <span className="text-border">·</span>
-            <span className="text-emerald-400">{tr("srv.online_count", { count: onlineCount })}</span>
-            {sharedCount > 0 && (
-              <>
-                <span className="text-border">·</span>
-                <span>{tr("srv.shared_count", { count: sharedCount })}</span>
-              </>
-            )}
-            <span className="text-border">·</span>
-            <span>{tr("srv.groups_count", { count: groupCount })}</span>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <div className="relative">
+    <PageShell width="full" className="max-w-[1500px]">
+      <PageHero
+        kicker="Inventory"
+        title={t("srv.title")}
+        description={t("srv.groups_description")}
+        actions={
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          <div className="relative w-full sm:w-auto">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
               placeholder={t("srv.search")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-8 h-8 w-48 bg-card border-border text-xs"
+              className="h-9 w-full border-border bg-background pl-8 text-xs sm:w-56"
             />
           </div>
-          <Button size="sm" className="gap-1.5 h-8 text-xs" onClick={openCreate}>
+          <Button size="sm" className="h-9 gap-1.5 text-xs" onClick={openCreate}>
             <Plus className="h-3.5 w-3.5" /> {t("srv.add")}
           </Button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as MainTab)} className="space-y-3">
         <TabsList className="w-full justify-start">
@@ -1744,16 +1760,22 @@ export default function Servers() {
           {Object.entries(grouped).map(([group, inGroup]) => {
             const isCollapsed = collapsed[group];
             return (
-              <div key={group} className="bg-card border border-border rounded-lg overflow-hidden">
+              <div key={group} className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
                 <button
                   onClick={() => toggleGroup(group)}
-                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-secondary/50 transition-colors text-left"
-                  aria-label={`Toggle ${group} group`}
+                  className="w-full flex items-center gap-3 px-4 py-3 transition-colors text-left hover:bg-secondary/30"
+                  aria-label={tr(isCollapsed ? "srv.expand_group" : "srv.collapse_group", { name: group })}
                 >
-                  {isCollapsed ? <ChevronRight className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-                  <Server className="h-4 w-4 text-primary" />
-                  <span className="font-medium text-foreground">{group}</span>
-                  <span className="text-xs text-muted-foreground ml-auto">{inGroup.length} {t("srv.servers_count")}</span>
+                  <span className={`flex h-5 w-5 items-center justify-center rounded-md transition-colors ${isCollapsed ? "bg-secondary/40" : "bg-primary/10"}`}>
+                    {isCollapsed
+                      ? <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                      : <ChevronDown className="h-3 w-3 text-primary" />}
+                  </span>
+                  <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10">
+                    <Server className="h-3.5 w-3.5 text-primary" />
+                  </div>
+                  <span className="text-sm font-semibold tracking-tight text-foreground">{group}</span>
+                  <span className="ml-auto rounded-md border border-border/50 bg-secondary/30 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">{inGroup.length} {t("srv.servers_count")}</span>
                 </button>
 
                 <AnimatePresence initial={false}>
@@ -1768,22 +1790,74 @@ export default function Servers() {
                       <div className="border-t border-border">
                         {inGroup.map((server, i) => {
                           const displayStatus = server.status;
+                          const fleetHealth = fleetHealthByServerId.get(server.id);
+                          const osKind = resolveServerOs(server);
+                          const connLabel =
+                            server.server_type === "rdp" || server.rdp
+                              ? t("srv.conn.rdp")
+                              : t("srv.conn.ssh");
                           return (
                             <div
                               key={server.id}
-                              className={`flex items-center gap-4 px-4 py-3 hover:bg-secondary/30 transition-colors ${
-                                i < inGroup.length - 1 ? "border-b border-border/50" : ""
+                              className={`group flex flex-col gap-3 px-4 py-3 transition-all duration-150 hover:bg-secondary/20 sm:flex-row sm:items-center ${
+                                i < inGroup.length - 1 ? "border-b border-border/40" : ""
                               }`}
                             >
-                              <StatusIndicator status={displayStatus} showLabel={false} />
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-foreground truncate">{server.name}</p>
-                                <p className="text-xs text-muted-foreground font-mono">
-                                  {server.host}:{server.port}
-                                </p>
+                              <div className="flex min-w-0 flex-1 items-start gap-3 sm:items-center">
+                                <ServerOsBadge kind={osKind} size="md" />
+                                <div className="min-w-0 flex-1 space-y-1">
+                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                    <p className="truncate text-sm font-semibold tracking-tight text-foreground">
+                                      {server.name}
+                                    </p>
+                                    {server.is_shared ? (
+                                      <span className="rounded-full border border-border bg-secondary/30 px-2 py-0.5 text-[10px] text-muted-foreground">
+                                        {t("srv.shared_badge")}
+                                      </span>
+                                    ) : null}
+                                    <span className="hidden rounded-md border border-border/60 bg-background/80 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline">
+                                      {connLabel}
+                                    </span>
+                                  </div>
+                                  <p className="font-mono text-[11px] text-muted-foreground">
+                                    {server.host}:{server.port}
+                                  </p>
+                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px]">
+                                    <span className="font-medium text-muted-foreground">
+                                      {t(serverOsLabelKey(osKind))}
+                                    </span>
+                                    <span className="text-border" aria-hidden>
+                                      ·
+                                    </span>
+                                    <span className="text-muted-foreground sm:hidden">{connLabel}</span>
+                                    <span className="hidden text-border sm:inline" aria-hidden>
+                                      ·
+                                    </span>
+                                    <span className="hidden sm:inline">
+                                      {fleetHealth ? (
+                                        <FleetHealthIndicator
+                                          status={fleetHealth.status}
+                                          stale={fleetHealth.is_stale}
+                                          showLabel
+                                        />
+                                      ) : (
+                                        <StatusIndicator status={displayStatus} showLabel />
+                                      )}
+                                    </span>
+                                  </div>
+                                </div>
                               </div>
-                              <StatusIndicator status={displayStatus} />
-                              <div className="flex gap-1.5 shrink-0">
+                              <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+                                <span className="sm:hidden">
+                                  {fleetHealth ? (
+                                    <FleetHealthIndicator
+                                      status={fleetHealth.status}
+                                      stale={fleetHealth.is_stale}
+                                    />
+                                  ) : (
+                                    <StatusIndicator status={displayStatus} />
+                                  )}
+                                </span>
                                 <Link to={`/servers/${server.id}/terminal`}>
                                   <Button size="sm" variant="outline" className="gap-1.5 text-xs h-7 border-border hover:border-primary hover:text-primary">
                                     <Terminal className="h-3 w-3" /> SSH
@@ -1796,15 +1870,15 @@ export default function Servers() {
                                     </Button>
                                   </Link>
                                 )}
-                                <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => openAdvanced(server)}>
+                                <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => openAdvanced(server)} aria-label={tr("srv.open_advanced_for", { name: server.name })} title={t("srv.advanced")}>
                                   <Sparkles className="h-3.5 w-3.5" />
                                 </Button>
                                 {server.can_edit && (
                                   <>
-                                    <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => openEdit(server)}>
+                                    <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => openEdit(server)} aria-label={tr("srv.edit_server_for", { name: server.name })} title={t("srv.edit_server")}>
                                       <Settings className="h-3.5 w-3.5" />
                                     </Button>
-                                    <Button size="sm" variant="destructive" className="h-7 px-2" onClick={() => requestDeleteServer(server)}>
+                                    <Button size="sm" variant="destructive" className="h-7 px-2" onClick={() => requestDeleteServer(server)} aria-label={tr("srv.delete_server_for", { name: server.name })} title={t("srv.delete")}>
                                       <Trash2 className="h-3.5 w-3.5" />
                                     </Button>
                                   </>
@@ -1820,6 +1894,25 @@ export default function Servers() {
               </div>
             );
           })}
+          {!filtered.length ? (
+            <EmptyState
+              icon={<Server className="h-5 w-5" />}
+              title={servers.length ? t("srv.empty_filtered_title") : t("srv.empty_title")}
+              description={servers.length ? t("srv.empty_filtered_text") : t("srv.empty_text")}
+              actions={
+                <>
+                {servers.length ? (
+                  <Button size="sm" variant="outline" className="h-9" onClick={() => setSearch("")}>
+                    {t("srv.clear_search")}
+                  </Button>
+                ) : null}
+                <Button size="sm" className="h-9 gap-1.5" onClick={openCreate}>
+                  <Plus className="h-3.5 w-3.5" /> {t("srv.add")}
+                </Button>
+                </>
+              }
+            />
+          ) : null}
         </TabsContent>
 
         <TabsContent value="groups" className="space-y-3">
@@ -2310,6 +2403,7 @@ export default function Servers() {
                           : "border-border bg-secondary/10 text-muted-foreground hover:text-foreground hover:border-border"
                       }`}
                     >
+                      <ServerOsBadge kind={resolveServerOs(srv)} size="sm" />
                       <StatusIndicator status={srv.status} showLabel={false} />
                       <span className="font-medium truncate">{srv.name}</span>
                       <span className="text-[10px] font-mono ml-auto opacity-60">{srv.host}</span>
@@ -2589,26 +2683,29 @@ export default function Servers() {
       </Dialog>
 
       <Dialog open={advancedOpen} onOpenChange={setAdvancedOpen}>
-        <DialogContent className="max-w-5xl h-[85vh] flex flex-col p-0">
+        <DialogContent className="flex h-[88vh] max-w-5xl flex-col p-0 sm:h-[85vh]">
           {/* Header */}
-          <div className="flex items-center gap-3 px-6 py-4 border-b border-border shrink-0">
-            <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
+          <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-4 sm:px-6">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
               <Server className="h-4 w-4 text-primary" />
             </div>
             <div className="min-w-0 flex-1">
               <DialogTitle className="text-sm font-semibold">{advancedServer?.name || t("srv.server")}</DialogTitle>
-              <DialogDescription className="text-xs font-mono mt-0">
+              <DialogDescription className="mt-0 text-xs font-mono">
                 {advancedServer?.host}:{advancedServer?.port} · {advancedServer?.group_name}
               </DialogDescription>
             </div>
           </div>
 
           {advancedLoading ? (
-            <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">{t("loading")}</div>
+            <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              {t("loading")}
+            </div>
           ) : (
-            <div className="flex flex-1 min-h-0">
+            <div className="flex min-h-0 flex-1 flex-col md:flex-row">
               {/* Sidebar tabs */}
-              <div className="w-44 shrink-0 border-r border-border bg-secondary/20 py-2">
+              <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-border bg-secondary/20 p-2 md:block md:w-44 md:border-b-0 md:border-r md:py-2">
                 {([
                   { key: "access", icon: <Sparkles className="h-3.5 w-3.5" />, label: t("srv.access") },
                   { key: "knowledge", icon: <Sparkles className="h-3.5 w-3.5" />, label: t("srv.knowledge") },
@@ -2619,9 +2716,9 @@ export default function Servers() {
                   <button
                     key={tab.key}
                     onClick={() => setAdvancedTab(tab.key)}
-                    className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-medium transition-colors text-left ${
+                    className={`flex shrink-0 items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-medium transition-colors md:w-full md:rounded-none md:px-4 md:py-2.5 ${
                       advancedTab === tab.key
-                        ? "bg-primary/10 text-primary border-r-2 border-primary"
+                        ? "bg-primary/10 text-primary md:border-r-2 md:border-primary"
                         : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
                     }`}
                   >
@@ -2632,7 +2729,7 @@ export default function Servers() {
               </div>
 
               {/* Content area */}
-              <div className="flex-1 overflow-y-auto p-6">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6">
                 {/* ACCESS TAB */}
                 {advancedTab === "access" && (
                   <div className="space-y-5">
@@ -2744,7 +2841,7 @@ export default function Servers() {
                         <div className="space-y-1">
                           <h3 className="text-sm font-semibold text-foreground">{t("srv.knowledge_title")}</h3>
                           <p className="text-xs text-muted-foreground">
-                            Текстовые заметки по серверу: особенности, инструкции и полезные наблюдения без системного шума.
+                            {t("srv.knowledge_intro")}
                           </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
@@ -2758,19 +2855,19 @@ export default function Servers() {
                     <div className="rounded-xl border border-border bg-card/40 px-4 py-4">
                       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_auto]">
                         <div className="space-y-1.5">
-                          <Label className="text-xs text-muted-foreground">Фильтр знаний</Label>
+                          <Label className="text-xs text-muted-foreground">{t("srv.knowledge_filter_label")}</Label>
                           <div className="relative">
                             <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                             <Input
                               value={knowledgeSearch}
                               onChange={(event) => setKnowledgeSearch(event.target.value)}
-                              placeholder="Поиск по заголовку и содержимому"
+                              placeholder={t("srv.knowledge_search_placeholder")}
                               className="h-9 bg-secondary/50 pl-9"
                             />
                           </div>
                         </div>
                         <div className="space-y-1.5">
-                          <Label className="text-xs text-muted-foreground">Что показать</Label>
+                          <Label className="text-xs text-muted-foreground">{t("srv.knowledge_kind_label")}</Label>
                           <select
                             value={aiKnowledgeKindFilter}
                             onChange={(event) =>
@@ -2780,12 +2877,12 @@ export default function Servers() {
                             }
                             className="flex h-9 w-full rounded-md border border-input bg-secondary/50 px-3 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                           >
-                            <option value="all">Все записи</option>
-                            <option value="summary">Сводка</option>
-                            <option value="access">Доступ</option>
-                            <option value="risks">Риски</option>
-                            <option value="changes">Изменения</option>
-                            <option value="instructions">Инструкции</option>
+                            <option value="all">{t("srv.knowledge_filter_all")}</option>
+                            <option value="summary">{t("srv.knowledge_filter_summary")}</option>
+                            <option value="access">{t("srv.knowledge_filter_access")}</option>
+                            <option value="risks">{t("srv.knowledge_filter_risks")}</option>
+                            <option value="changes">{t("srv.knowledge_filter_changes")}</option>
+                            <option value="instructions">{t("srv.knowledge_filter_instructions")}</option>
                           </select>
                         </div>
                         <div className="flex items-end">
@@ -2798,20 +2895,20 @@ export default function Servers() {
                               setAiKnowledgeKindFilter("all");
                             }}
                           >
-                            Сбросить фильтры
+                            {t("srv.reset_filters")}
                           </Button>
                         </div>
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
                         <span className="rounded-full border border-border px-2.5 py-1">
-                          Ручные: {filteredManualKnowledge.length}/{manualKnowledge.length}
+                          {tr("srv.manual_count", { filtered: filteredManualKnowledge.length, total: manualKnowledge.length })}
                         </span>
                         <span className="rounded-full border border-border px-2.5 py-1">
-                          AI: {filteredAiKnowledge.length}/{autoKnowledge.length}
+                          {tr("srv.ai_count", { filtered: filteredAiKnowledge.length, total: autoKnowledge.length })}
                         </span>
                         {normalizedKnowledgeSearch ? (
                           <span className="rounded-full border border-border px-2.5 py-1">
-                            Поиск: "{knowledgeSearch.trim()}"
+                            {tr("srv.search_term", { query: knowledgeSearch.trim() })}
                           </span>
                         ) : null}
                       </div>
@@ -2822,10 +2919,10 @@ export default function Servers() {
                         <div className="flex items-center justify-between gap-3">
                         <div>
                           <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                            Ручные записи: {filteredManualKnowledge.length}/{manualKnowledge.length}
+                            {tr("srv.manual_entries_count", { filtered: filteredManualKnowledge.length, total: manualKnowledge.length })}
                           </h4>
                           <p className="mt-1 text-[11px] text-muted-foreground">
-                              Здесь видны только ручные заметки. Авто-заметки показаны отдельным блоком ниже.
+                              {t("srv.manual_entries_help")}
                           </p>
                         </div>
                           {filteredManualKnowledge.length > 0 ? (
@@ -2840,8 +2937,8 @@ export default function Servers() {
                               {knowledgeBulkDeleting
                                 ? t("srv.saving")
                                 : filteredManualKnowledge.length === manualKnowledge.length
-                                  ? "Удалить все"
-                                  : "Удалить по фильтру"}
+                                  ? t("srv.delete_all")
+                                  : t("srv.delete_filtered")}
                             </Button>
                           ) : null}
                         </div>
@@ -2895,18 +2992,18 @@ export default function Servers() {
                           </div>
                         ) : (
                           <div className="rounded-xl border border-dashed border-border px-4 py-6 text-center">
-                            <p className="text-sm font-medium text-foreground">По текущему фильтру ручные записи не найдены</p>
+                            <p className="text-sm font-medium text-foreground">{t("srv.manual_empty_filtered_title")}</p>
                             <p className="mt-1 text-xs text-muted-foreground">
-                              Уточни поиск или сбрось фильтр, чтобы снова увидеть все ручные заметки.
+                              {t("srv.manual_empty_filtered_text")}
                             </p>
                           </div>
                         )}
                       </div>
                     ) : (
                       <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center">
-                        <p className="text-sm font-medium text-foreground">Пока нет ручных заметок</p>
+                        <p className="text-sm font-medium text-foreground">{t("srv.manual_empty_title")}</p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Добавь короткие текстовые знания по серверу: особенности, инструкции, known issues или проверенные команды.
+                          {t("srv.manual_empty_text")}
                         </p>
                         <Button size="sm" className="mt-4 h-8 px-4" onClick={openKnowledgeCreateDialog}>
                           {t("srv.add_entry")}
@@ -2919,10 +3016,10 @@ export default function Servers() {
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                            Авто-заметки: {filteredAiKnowledge.length}/{autoKnowledge.length}
+                            {tr("srv.ai_entries_count", { filtered: filteredAiKnowledge.length, total: autoKnowledge.length })}
                           </h4>
                           <p className="mt-1 text-[11px] text-muted-foreground">
-                            Короткие полезные заметки по серверу: сводка, доступ, риски, изменения и инструкции.
+                            {t("srv.ai_entries_help")}
                           </p>
                         </div>
                         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -2938,8 +3035,8 @@ export default function Servers() {
                               {aiKnowledgeBulkDeleting
                                 ? t("srv.saving")
                                 : filteredAiKnowledge.length === autoKnowledge.length
-                                  ? "Удалить все"
-                                  : "Удалить по фильтру"}
+                                  ? t("srv.delete_all")
+                                  : t("srv.delete_filtered")}
                             </Button>
                           ) : null}
                           <Button
@@ -2950,7 +3047,7 @@ export default function Servers() {
                             disabled={aiKnowledgeBulkDeleting || aiMemoryPurging}
                           >
                             <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                            {aiMemoryPurging ? t("srv.saving") : "Очистить всё"}
+                            {aiMemoryPurging ? t("srv.saving") : t("srv.purge_all")}
                           </Button>
                         </div>
                       </div>
@@ -2965,7 +3062,7 @@ export default function Servers() {
                                     <span
                                       className={`rounded px-1.5 py-0.5 text-[10px] uppercase ${memorySnapshotAudienceBadgeClass(item)}`}
                                     >
-                                      {memorySnapshotAudienceLabel(item)}
+                                      {memorySnapshotAudienceLabel(item, t)}
                                     </span>
                                     {item.updated_at ? (
                                       <span className="text-[10px] text-muted-foreground">
@@ -2998,12 +3095,12 @@ export default function Servers() {
                       ) : (
                         <div className="rounded-xl border border-dashed border-border px-4 py-6 text-center">
                           <p className="text-sm font-medium text-foreground">
-                            {autoKnowledge.length > 0 ? "По текущему фильтру записи не найдены" : "Пока нет авто-заметок"}
+                            {autoKnowledge.length > 0 ? t("srv.ai_empty_filtered_title") : t("srv.ai_empty_title")}
                           </p>
                           <p className="mt-1 text-xs text-muted-foreground">
                             {autoKnowledge.length > 0
-                              ? "Попробуй изменить поиск или выбрать другой тип полезных записей."
-                              : "Когда по серверу накопится достаточно полезной истории, здесь появятся короткие авто-заметки."}
+                              ? t("srv.ai_empty_filtered_text")
+                              : t("srv.ai_empty_text")}
                           </p>
                         </div>
                       )}
@@ -3190,7 +3287,7 @@ export default function Servers() {
               {knowledgeEditingId ? t("srv.edit") : t("srv.add_entry")}
             </DialogTitle>
             <DialogDescription>
-              Управляй только ручными текстовыми заметками. Автоматические подсказки по серверу показаны отдельно в упрощённом виде.
+              {t("srv.knowledge_manual_dialog_desc")}
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="space-y-4">
@@ -3271,10 +3368,10 @@ export default function Servers() {
         <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>
-              Редактирование AI-Записи
+              {t("srv.ai_knowledge_dialog_title")}
             </DialogTitle>
             <DialogDescription>
-              Эта память была извлечена автоматически. Вы можете отредактировать заголовок или содержимое, если ИИ ошибся или добавил лишнюю информацию.
+              {t("srv.ai_knowledge_dialog_desc")}
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="space-y-4">
@@ -3346,6 +3443,6 @@ export default function Servers() {
         onConfirm={onDeleteGroup}
         contentClassName="max-w-sm"
       />
-    </div>
+    </PageShell>
   );
 }

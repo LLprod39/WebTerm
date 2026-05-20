@@ -1,6 +1,6 @@
 /**
  * Demo / offline mode: provides mock data when the Django backend is unavailable.
- * Activated automatically when the first auth session request fails.
+ * Enabled only when VITE_ENABLE_DEMO_MODE=true.
  */
 
 import type {
@@ -13,13 +13,7 @@ import type {
 
 let _demoMode = false;
 const _demoModeFlag = String(import.meta.env.VITE_ENABLE_DEMO_MODE || "").toLowerCase();
-const _isLocalHost =
-  typeof window !== "undefined" &&
-  ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname.toLowerCase());
-const _isLovablePreview =
-  typeof window !== "undefined" && window.location.hostname.includes("lovable.app");
-const _demoModeAllowed =
-  _demoModeFlag === "true" || (_demoModeFlag !== "false" && (import.meta.env.DEV || _isLocalHost || _isLovablePreview));
+const _demoModeAllowed = _demoModeFlag === "true";
 
 export function isDemoMode(): boolean {
   return _demoMode;
@@ -34,7 +28,7 @@ export function enableDemoMode(): boolean {
     return false;
   }
   _demoMode = true;
-  console.info("[WebTermAI] Demo mode enabled — backend unavailable, using mock data");
+  console.info("[WebTermAI] Demo mode enabled by VITE_ENABLE_DEMO_MODE=true");
   return true;
 }
 

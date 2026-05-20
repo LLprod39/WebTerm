@@ -57,6 +57,9 @@ def ingest_command_history(sender, instance: ServerCommandHistory, created: bool
 
 def _should_capture_health_check(instance: ServerHealthCheck) -> bool:
     """Only capture health checks that represent a state transition or non-OK status."""
+    raw_output = instance.raw_output if isinstance(instance.raw_output, dict) else {}
+    if raw_output.get("lite") and instance.status == ServerHealthCheck.STATUS_HEALTHY:
+        return False
     if instance.status != ServerHealthCheck.STATUS_HEALTHY:
         return True
     # OK status → only if previous was not OK (recovery signal)

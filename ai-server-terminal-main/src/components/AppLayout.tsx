@@ -40,7 +40,7 @@ export default function AppLayout() {
                 <span className="text-xs font-medium text-foreground">{immersive.title}</span>
               </header>
             )}
-            <main className="min-h-0 flex-1 overflow-auto">
+            <main className="min-h-0 flex-1 overflow-auto animate-in fade-in duration-200">
               <Outlet />
             </main>
           </div>
@@ -55,7 +55,7 @@ export default function AppLayout() {
       <div className="flex min-h-screen w-full bg-background">
         <AppSidebar />
         <div className="flex min-w-0 flex-1 flex-col">
-          <main className="min-h-0 flex-1 overflow-auto">
+          <main className="min-h-0 flex-1 overflow-auto animate-in fade-in duration-200">
             <Outlet />
           </main>
         </div>

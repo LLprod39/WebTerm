@@ -2,7 +2,7 @@ import { type NodeProps } from "@xyflow/react";
 import { MessageCircle } from "lucide-react";
 import { NodeBase } from "./NodeBase";
 import { useI18n } from "@/lib/i18n";
-import { getNodeTypeInfo, localize } from "./nodeMeta";
+import { getNodeBranchLabel, getNodeTypeInfo, localize } from "./nodeMeta";
 import { getNodeRuntimeProps } from "./runtimeProps";
 
 export function TelegramInputNode({ data, selected }: NodeProps) {
@@ -13,8 +13,8 @@ export function TelegramInputNode({ data, selected }: NodeProps) {
 
   const desc =
     [
-      tgChatId && "📱 TG",
-      timeout && localize(lang, `⏰ ${timeout} мин.`, `⏰ ${timeout}min timeout`),
+      tgChatId && "Telegram",
+      timeout && localize(lang, `${timeout} мин.`, `${timeout}min timeout`),
     ]
       .filter(Boolean)
       .join(" · ") || localize(lang, "Ожидание текстового ответа оператора", "Waiting for operator text reply");
@@ -30,13 +30,13 @@ export function TelegramInputNode({ data, selected }: NodeProps) {
       sourcePorts={[
         {
           id: "received",
-          label: localize(lang, "ОТВЕТ", "REPLY"),
+          label: getNodeBranchLabel("received", lang),
           className: "!bg-cyan-500/70 hover:!bg-cyan-500",
           labelClassName: "text-cyan-500",
         },
         {
           id: "timeout",
-          label: localize(lang, "TIME", "TIMEOUT"),
+          label: getNodeBranchLabel("timeout", lang),
           className: "!bg-amber-500/70 hover:!bg-amber-500",
           labelClassName: "text-amber-500",
         },

@@ -261,7 +261,7 @@ class MultiAgentEngine:
         primary_server = self.servers[0] if self.servers else None
         if run_record is None:
             run = await sync_to_async(AgentRun.objects.create)(
-                agent=self.agent,
+                agent=self.agent if self.agent.pk else None,
                 server=primary_server,
                 user=self.user,
                 status=AgentRun.STATUS_RUNNING,
@@ -280,7 +280,7 @@ class MultiAgentEngine:
                 return run
             await sync_to_async(self._update_run)(
                 run,
-                agent=self.agent,
+                agent=self.agent if self.agent.pk else None,
                 server=primary_server,
                 user=self.user,
                 status=AgentRun.STATUS_RUNNING,

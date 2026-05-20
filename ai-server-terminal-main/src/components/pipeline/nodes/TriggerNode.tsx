@@ -2,7 +2,7 @@ import { type NodeProps } from "@xyflow/react";
 import { Play, Link2, Clock, Bell } from "lucide-react";
 import { NodeBase } from "./NodeBase";
 import { useI18n } from "@/lib/i18n";
-import { localize } from "./nodeMeta";
+import { getNodeBranchLabel, localize } from "./nodeMeta";
 import { getNodeRuntimeProps } from "./runtimeProps";
 
 const TRIGGER_ICON: Record<string, React.ReactNode> = {
@@ -40,7 +40,7 @@ export function TriggerNode({ data, selected, type }: NodeProps) {
                 : localize(lang, "Cron-выражение", "Cron expression")
       }
       hasTarget={false}
-      sourcePorts={[{ id: "out", label: "OUT" }]}
+      sourcePorts={[{ id: "out", label: getNodeBranchLabel("out", lang) }]}
       accentColor="border-amber-500/40"
       categoryColor="#38bdf8"
       {...getNodeRuntimeProps(d)}

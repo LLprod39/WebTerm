@@ -29,7 +29,7 @@ import ReactMarkdown from "react-markdown";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter,
 } from "@/components/ui/dialog";
-import { EmptyState, QueryStateBlock } from "@/components/ui/page-shell";
+import { EmptyState, MetricCard, MetricGrid, PageHero, PageShell, QueryStateBlock, SectionCard, StatusBadge } from "@/components/ui/page-shell";
 
 function formatDuration(ms: number): string {
   if (!ms) return "—";
@@ -93,7 +93,7 @@ function formatRoleLabel(role: string): string {
 }
 
 export default function AgentsPage() {
-  useI18n();
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [modeFilter, setModeFilter] = useState<"all" | "mini" | "full" | "multi">("all");
@@ -109,9 +109,13 @@ export default function AgentsPage() {
     refetchInterval: 10_000,
   });
 
-  const agents = (data?.agents || []).filter(
+  const allAgents = data?.agents || [];
+  const agents = allAgents.filter(
     (a) => modeFilter === "all" || a.mode === modeFilter,
   );
+  const activeAgents = allAgents.filter((agent) => agent.active_run_id).length;
+  const scheduledAgents = allAgents.filter((agent) => agent.schedule_minutes > 0).length;
+  const serverScopeCount = allAgents.reduce((sum, agent) => sum + agent.server_count, 0);
 
   const onRun = async (ag: AgentItem) => {
     setRunningId(ag.id);
@@ -140,38 +144,44 @@ export default function AgentsPage() {
   };
 
   const onDelete = async (id: number) => {
-    if (!confirm("Delete this agent?")) return;
+    if (!confirm(t("agent.delete_confirm"))) return;
     await deleteAgent(id);
     await queryClient.invalidateQueries({ queryKey: ["agents"] });
   };
 
-  if (isLoading) return <QueryStateBlock loading loadingText="Загрузка агентов..." className="p-6">{null}</QueryStateBlock>;
+  if (isLoading) return <QueryStateBlock loading loadingText={t("loading")} className="p-6">{null}</QueryStateBlock>;
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Bot className="h-5 w-5 text-primary" />
-          <h1 className="text-xl font-semibold text-foreground">Agents</h1>
-          <span className="text-xs text-muted-foreground bg-secondary px-2 py-0.5 rounded">{agents.length}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="inline-flex rounded-md border border-border overflow-hidden text-[11px] font-semibold">
+    <PageShell width="6xl">
+      <PageHero
+        kicker="Automation"
+        title={t("agent.title")}
+        description={`${allAgents.length} ${t("agent.title").toLowerCase()} · ${activeAgents} ${t("agent.active_runs").toLowerCase()} · ${scheduledAgents} scheduled`}
+        actions={
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <div className="inline-flex rounded-lg border border-border bg-secondary/20 p-0.5 text-[11px] font-semibold">
             {(["all", "mini", "full", "multi"] as const).map((m) => (
               <button key={m} onClick={() => setModeFilter(m)}
-                className={`px-2.5 py-1 transition-colors ${modeFilter === m ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}
-              >{m === "all" ? "All" : m === "mini" ? "Mini" : m === "full" ? "Full" : "Pipeline"}</button>
+                className={`rounded-md px-2.5 py-1 transition-all duration-150 ${modeFilter === m ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              >{m === "all" ? t("agent.all") : m === "mini" ? "Mini" : m === "full" ? "Full" : "Pipeline"}</button>
             ))}
           </div>
-          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => queryClient.invalidateQueries({ queryKey: ["agents"] })}>
-            <RefreshCw className="h-3 w-3" />
+          <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => queryClient.invalidateQueries({ queryKey: ["agents"] })} aria-label={t("udash.refresh")}>
+            <RefreshCw className="h-3.5 w-3.5" />
           </Button>
-          <Button size="sm" className="h-7 text-xs gap-1" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-3 w-3" /> New Agent
+          <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setCreateOpen(true)}>
+            <Plus className="h-3.5 w-3.5" /> {t("agent.new")}
           </Button>
-        </div>
-      </div>
+          </div>
+        }
+      />
+
+      <MetricGrid className="grid-cols-2 xl:grid-cols-4">
+        <MetricCard label={t("agent.title")} value={allAgents.length} description={t("agent.view_all")} icon={<Bot className="h-4 w-4" />} />
+        <MetricCard label={t("agent.active_runs")} value={activeAgents} description={activeAgents > 0 ? t("agent.working_on") : t("agent.manual")} icon={<Activity className="h-4 w-4" />} tone={activeAgents > 0 ? "info" : "default"} />
+        <MetricCard label={t("agent.schedule")} value={scheduledAgents} description={scheduledAgents > 0 ? t("agent.every") : t("agent.manual")} icon={<Clock className="h-4 w-4" />} />
+        <MetricCard label={t("nav.servers")} value={serverScopeCount} description={t("agent.servers_lc")} icon={<Server className="h-4 w-4" />} />
+      </MetricGrid>
 
       {result && !reportModalOpen && (
         <div className="bg-card border border-border rounded-lg px-4 py-3 flex items-center gap-3">
@@ -183,7 +193,7 @@ export default function AgentsPage() {
             <div className="text-xs text-muted-foreground">{result.status} · {formatDuration(result.duration_ms)}</div>
           </div>
           <Button size="sm" className="h-8 gap-1.5 shrink-0 text-xs" onClick={() => setReportModalOpen(true)}>
-            <FileText className="h-3.5 w-3.5" /> Report
+            <FileText className="h-3.5 w-3.5" /> {t("agent.report")}
           </Button>
           <Button size="sm" variant="ghost" className="h-8 px-1.5 shrink-0 text-muted-foreground" onClick={() => setResult(null)}>
             <X className="h-3.5 w-3.5" />
@@ -197,16 +207,16 @@ export default function AgentsPage() {
       {agents.length === 0 ? (
         <EmptyState
           icon={<Bot className="h-5 w-5" />}
-          title="No agents yet"
-          description={modeFilter !== "all" ? "No agents match this filter." : "Create an agent to automate tasks across your servers."}
+          title={t("agent.empty")}
+          description={modeFilter !== "all" ? t("agent.no_recent") : t("agent.custom_desc")}
           actions={
             <Button size="sm" onClick={() => setCreateOpen(true)} className="gap-1">
-              <Plus className="h-3 w-3" /> Create your first agent
+              <Plus className="h-3 w-3" /> {t("agent.create_first")}
             </Button>
           }
         />
       ) : (
-        <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <SectionCard title={t("agent.title")} description={`${agents.length} visible`} icon={<Bot className="h-4 w-4" />} bodyClassName="p-0">
           <div className="divide-y divide-border/40">
             {agents.map((ag) => {
               const AgentIcon = AGENT_ICONS[ag.agent_type] || Settings2;
@@ -214,23 +224,23 @@ export default function AgentsPage() {
               return (
                 <div
                   key={ag.id}
-                  className={`flex items-center gap-3 px-4 py-3 transition-colors ${
+                  className={`flex flex-col gap-3 px-4 py-3 transition-colors sm:flex-row sm:items-center ${
                     createdAgentId === ag.id
                       ? "bg-primary/8 ring-1 ring-inset ring-primary/25"
                       : "hover:bg-secondary/20"
                   }`}
                 >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-card/70">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-secondary/30 transition-colors group-hover:bg-secondary/60">
                     <AgentIcon className="h-4 w-4 text-primary" />
-                  </span>
+                  </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-sm font-medium text-foreground">{ag.name}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded font-semibold bg-secondary text-foreground`}>
+                      <span className="rounded-md border border-border/50 bg-secondary/40 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
                         {ag.mode === "multi" ? "Pipeline" : ag.mode}
                       </span>
                       {ag.active_run_id && (
-                        <span className="text-xs px-2 py-0.5 rounded bg-primary text-primary-foreground font-semibold">RUNNING</span>
+                        <StatusBadge label="running" tone="info" />
                       )}
                     </div>
                     <div className="flex items-center gap-3 text-[10px] text-muted-foreground mt-0.5">
@@ -240,7 +250,7 @@ export default function AgentsPage() {
                     </div>
                     {ag.goal && <p className="text-[10px] text-muted-foreground mt-0.5 truncate max-w-md">{ag.goal}</p>}
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex w-full flex-wrap items-center justify-end gap-1 sm:w-auto sm:shrink-0">
                     {ag.active_run_id ? (
                       <>
                         <Link to={`/agents/run/${ag.active_run_id}`}>
@@ -262,7 +272,7 @@ export default function AgentsPage() {
                           </Link>
                         )}
                         <Button size="sm" variant="outline" className="h-7 text-[10px] px-2 gap-1" disabled={isRunning} onClick={() => onRun(ag)}>
-                          {isRunning ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />} Run
+                          {isRunning ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />} {t("agent.run")}
                         </Button>
                       </>
                     )}
@@ -274,7 +284,7 @@ export default function AgentsPage() {
               );
             })}
           </div>
-        </div>
+        </SectionCard>
       )}
 
       <CreateAgentDialog open={createOpen} onClose={() => setCreateOpen(false)}
@@ -288,7 +298,7 @@ export default function AgentsPage() {
           }
           window.setTimeout(() => setCreatedAgentId((current) => (current === id ? null : current)), 8000);
         }} />
-    </div>
+    </PageShell>
   );
 }
 

@@ -2,7 +2,7 @@ import { type NodeProps } from "@xyflow/react";
 import { GitBranch } from "lucide-react";
 import { NodeBase } from "./NodeBase";
 import { useI18n } from "@/lib/i18n";
-import { getNodeTypeInfo, localize } from "./nodeMeta";
+import { getNodeBranchLabel, getNodeTypeInfo, localize } from "./nodeMeta";
 import { getNodeRuntimeProps } from "./runtimeProps";
 
 export function ConditionNode({ data, selected }: NodeProps) {
@@ -19,14 +19,14 @@ export function ConditionNode({ data, selected }: NodeProps) {
       icon={<GitBranch className="h-4 w-4 text-purple-400" />}
       description={desc}
       sourcePorts={[
-        { id: "true", label: localize(lang, "ДА", "TRUE"), className: "!bg-green-500/70 hover:!bg-green-500", labelClassName: "text-green-500" },
-        { id: "false", label: localize(lang, "НЕТ", "FALSE"), className: "!bg-red-500/70 hover:!bg-red-500", labelClassName: "text-red-500" },
+        { id: "true", label: getNodeBranchLabel("true", lang), className: "!bg-green-500/70 hover:!bg-green-500", labelClassName: "text-green-500" },
+        { id: "false", label: getNodeBranchLabel("false", lang), className: "!bg-red-500/70 hover:!bg-red-500", labelClassName: "text-red-500" },
       ]}
       accentColor="border-amber-500/40"
       categoryColor="#f97316"
       {...getNodeRuntimeProps(d)}
     >
-      <div className="text-[10px] text-muted-foreground">{localize(lang, "Явное ветвление true / false", "Explicit true / false branch")}</div>
+      <div className="text-[10px] text-muted-foreground">{localize(lang, "Ветвление Да / Нет", "Explicit true / false branch")}</div>
     </NodeBase>
   );
 }

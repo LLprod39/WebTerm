@@ -189,6 +189,24 @@ class Server(models.Model):
         help_text="AI-агент может только читать состояние сервера, но не выполнять изменяющие команды.",
     )
 
+    # Detected OS (SSH probe or RDP inference)
+    detected_os = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        help_text="Detected distro slug aligned with frontend ServerOsKind",
+    )
+    detected_os_meta = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="OS detection metadata: id, version, pretty_name, detected_at, uname, ...",
+    )
+    detected_os_attempted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Last automatic or manual OS detection attempt (cooldown for retries)",
+    )
+
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

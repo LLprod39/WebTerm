@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ElementType } from "react";
+import { useI18n } from "@/lib/i18n";
 import {
   Bot,
   RefreshCw,
@@ -44,19 +45,19 @@ const AUTO_REASONING_VALUE = "__auto__";
 const AUTO_OLLAMA_THINKING_VALUE = "__auto__";
 const LLM_PROVIDER_VALUES = LLM_PROVIDERS.map((provider) => provider.value);
 
-const OLLAMA_RUNTIME_OPTIONS = [
-  { value: "auto", label: "Авто" },
-  { value: "local", label: "Только локально" },
-  { value: "cloud", label: "Только облако" },
+const OLLAMA_RUNTIME_KEYS = [
+  { value: "auto", key: "ai.ollama_auto" },
+  { value: "local", key: "ai.ollama_local_only" },
+  { value: "cloud", key: "ai.ollama_cloud_only" },
 ];
 
-const OLLAMA_THINKING_OPTIONS = [
-  { value: AUTO_OLLAMA_THINKING_VALUE, label: "Авто" },
-  { value: "off", label: "Выкл" },
-  { value: "on", label: "Вкл" },
-  { value: "low", label: "Низкий" },
-  { value: "medium", label: "Средний" },
-  { value: "high", label: "Высокий" },
+const OLLAMA_THINKING_KEYS = [
+  { value: AUTO_OLLAMA_THINKING_VALUE, key: "ai.ollama_auto" },
+  { value: "off", key: "ai.thinking_off" },
+  { value: "on", key: "ai.thinking_on" },
+  { value: "low", key: "ai.thinking_low" },
+  { value: "medium", key: "ai.thinking_medium" },
+  { value: "high", key: "ai.thinking_high" },
 ];
 
 const PROVIDER_API_STATUS_KEY: Record<string, string> = {
@@ -99,11 +100,12 @@ function PurposeModelSelector({
   label, description, icon: Icon, provider, model, availableModels,
   onProviderChange, onModelChange, onRefresh, refreshing,
 }: {
-  label: string; description: string; icon: React.ElementType;
+  label: string; description: string; icon: ElementType;
   provider: string; model: string; availableModels: string[];
   onProviderChange: (p: string) => void; onModelChange: (m: string) => void;
   onRefresh: () => void; refreshing: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <div className="group/selector relative space-y-4 rounded-xl border border-primary/5 bg-background/50 p-5 shadow-sm transition-all duration-300 hover:border-primary/20 hover:bg-background/80 hover:shadow-md">
       <div className="flex items-center gap-3.5">
@@ -117,7 +119,7 @@ function PurposeModelSelector({
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/70">Провайдер</label>
+          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/70">{t("ai.provider_label")}</label>
           <Select value={provider} onValueChange={onProviderChange}>
             <SelectTrigger className="h-9 transition-colors group-hover/selector:border-primary/30"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -126,7 +128,7 @@ function PurposeModelSelector({
           </Select>
         </div>
         <div className="space-y-1.5">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/70">Модель</label>
+          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/70">{t("ai.model_label")}</label>
           {availableModels.length > 0 ? (
             <Select value={model} onValueChange={onModelChange}>
               <SelectTrigger className="h-9 transition-colors group-hover/selector:border-primary/30"><SelectValue /></SelectTrigger>
@@ -144,15 +146,7 @@ function PurposeModelSelector({
           )}
         </div>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/40 pt-3 text-[11px] font-medium text-muted-foreground">
-        <span className="flex items-center gap-1.5"><div className="h-1.5 w-1.5 rounded-full bg-primary/60" />{getProviderLabel(provider)}</span>
-        <span>{availableModels.length ? `${availableModels.length} моделей в каталоге` : "Ручной ввод модели"}</span>
-      </div>
-      {availableModels.length > 0 && (
-        <Button size="sm" variant="ghost" className="mt-1 h-8 w-full justify-center px-3 text-xs text-muted-foreground/80 transition-colors hover:bg-primary/5 hover:text-primary" onClick={onRefresh} disabled={refreshing}>
-          <RefreshCw className={cn("mr-2 h-3 w-3", refreshing && "animate-spin")} /> Обновить каталог
-        </Button>
-      )}
+      <PurposeModelSelectorFooter provider={provider} availableModels={availableModels} onRefresh={onRefresh} refreshing={refreshing} />
     </div>
   );
 }
@@ -161,8 +155,26 @@ function PurposeModelSelector({
 // Main Component
 // ─────────────────────────────────────────────────────────────────────────────
 
+function PurposeModelSelectorFooter({ provider, availableModels, onRefresh, refreshing }: { provider: string; availableModels: string[]; onRefresh: () => void; refreshing: boolean }) {
+  const { t } = useI18n();
+  return (
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/40 pt-3 text-[11px] font-medium text-muted-foreground">
+        <span className="flex items-center gap-1.5"><div className="h-1.5 w-1.5 rounded-full bg-primary/60" />{getProviderLabel(provider)}</span>
+        <span>{availableModels.length ? `${availableModels.length} ${t("ai.models_count").replace("{count}", "").trim()}` : t("ai.model_manual")}</span>
+      </div>
+      {availableModels.length > 0 && (
+        <Button size="sm" variant="ghost" className="mt-1 h-8 w-full justify-center px-3 text-xs text-muted-foreground/80 transition-colors hover:bg-primary/5 hover:text-primary" onClick={onRefresh} disabled={refreshing}>
+          <RefreshCw className={cn("mr-2 h-3 w-3", refreshing && "animate-spin")} /> {t("ai.refresh_catalog")}
+        </Button>
+      )}
+    </>
+  );
+}
+
 export default function SettingsAIPage() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const [saving, setSaving] = useState(false);
 
   const { data: authData } = useQuery({
@@ -390,16 +402,24 @@ export default function SettingsAIPage() {
   return (
     <div className="space-y-6 pb-10">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">AI конфигурация</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">Провайдеры, модели и маршрутизация</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
+            <Bot className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-base font-semibold tracking-tight text-foreground">AI конфигурация</h1>
+            <p className="text-[11px] text-muted-foreground">Провайдеры, модели и маршрутизация</p>
+          </div>
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
           {aiDraftDirty ? (
-            <span className="text-primary font-medium">Есть несохранённые изменения</span>
+            <span className="flex items-center gap-1.5 rounded-md border border-amber-500/25 bg-amber-500/10 px-2 py-1 text-amber-400">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />
+              Несохранённые изменения
+            </span>
           ) : (
-            <span>Сохранено</span>
+            <span className="text-muted-foreground/60">Сохранено</span>
           )}
           <span className="text-border">·</span>
           <span>{configuredProviderCount} провайдера</span>
@@ -416,30 +436,29 @@ export default function SettingsAIPage() {
                 type="button"
                 onClick={() => handleDefaultProviderChange(providerItem.value)}
                 className={cn(
-                  "group relative flex flex-col items-start rounded-lg border p-3 text-left transition-all",
+                  "group relative flex flex-col items-start rounded-xl border p-3 text-left shadow-sm transition-all duration-150",
                   providerItem.isSelected
-                    ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-                    : "border-border hover:border-primary/50 hover:bg-secondary/30"
+                    ? "border-primary/40 bg-primary/6 ring-1 ring-primary/20 shadow-md"
+                    : "border-border/60 hover:border-primary/30 hover:bg-secondary/30 hover:shadow-md"
                 )}
               >
                 <div className="flex w-full items-center justify-between">
-                  <span className="text-sm font-medium">{providerItem.label}</span>
-                  {providerItem.configured ? (
-                    <div className="h-2 w-2 rounded-full bg-emerald-500" />
-                  ) : (
-                    <div className="h-2 w-2 rounded-full bg-muted-foreground/30" />
-                  )}
+                  <span className="text-sm font-semibold text-foreground">{providerItem.label}</span>
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    {providerItem.configured && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-50" />}
+                    <span className={cn("relative inline-flex h-2 w-2 rounded-full", providerItem.configured ? "bg-emerald-400" : "bg-muted-foreground/25")} />
+                  </span>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1">
                   {providerItem.activeRoutes.length > 0 ? (
                     providerItem.activeRoutes.map((route) => (
-                      <Badge key={route} variant="secondary" className="text-[9px]">{route}</Badge>
+                      <span key={route} className="rounded border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold text-primary">{route}</span>
                     ))
                   ) : (
-                    <span className="text-[10px] text-muted-foreground">Не используется</span>
+                    <span className="text-[10px] text-muted-foreground/60">Не используется</span>
                   )}
                 </div>
-                <p className="mt-1.5 text-[10px] text-muted-foreground">
+                <p className="mt-1.5 text-[10px] text-muted-foreground/70">
                   {providerItem.catalogSize} моделей
                 </p>
               </button>
@@ -545,8 +564,8 @@ export default function SettingsAIPage() {
                 >
                   <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {OLLAMA_RUNTIME_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    {OLLAMA_RUNTIME_KEYS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>{t(option.key)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -610,8 +629,8 @@ export default function SettingsAIPage() {
               <Select value={ollamaThinkMode} onValueChange={setOllamaThinkMode}>
                 <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {OLLAMA_THINKING_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                  {OLLAMA_THINKING_KEYS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>{t(option.key)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -639,7 +658,7 @@ export default function SettingsAIPage() {
 
       {/* API Keys Status */}
       {apiKeys && isAdmin && (
-        <SectionCard title="API ключи" icon={Key} description="Статус подключения провайдеров">
+        <SectionCard title={t("ai.api_keys")} icon={Key} description={t("ai.api_keys_desc")}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
             {[
               { name: "Gemini", key: "gemini_set", enabled: config.gemini_enabled },
@@ -655,8 +674,8 @@ export default function SettingsAIPage() {
                   <div>
                     <p className="text-xs font-medium">{p.name}</p>
                     <p className="text-[10px] text-muted-foreground">
-                      {apiKeys[p.key] ? "Подключен" : "Не задан"}
-                      {p.enabled ? " - Активен" : ""}
+                      {apiKeys[p.key] ? t("ai.connected") : t("ai.not_set")}
+                      {p.enabled ? ` — ${t("ai.feat_enabled")}` : ""}
                     </p>
                   </div>
                 </div>
@@ -668,19 +687,19 @@ export default function SettingsAIPage() {
 
       {/* Domain Auth */}
       {isAdmin && config.domain_auth_enabled !== undefined && (
-        <SectionCard title="Доменная авторизация" icon={Globe} description="SSO через HTTP-заголовок">
+        <SectionCard title={t("ai.domain_auth")} icon={Globe} description={t("ai.domain_auth_desc")}>
           <div className="grid grid-cols-3 gap-3">
             <div className="rounded-lg border border-border px-3 py-2.5">
-              <p className="text-[10px] uppercase text-muted-foreground">Статус</p>
-              <p className="text-sm font-medium">{config.domain_auth_enabled ? "Включен" : "Выключен"}</p>
+              <p className="text-[10px] uppercase text-muted-foreground">{t("sso.active")}</p>
+              <p className="text-sm font-medium">{config.domain_auth_enabled ? t("ai.feat_enabled") : t("ai.feat_disabled")}</p>
             </div>
             <div className="rounded-lg border border-border px-3 py-2.5">
               <p className="text-[10px] uppercase text-muted-foreground">Header</p>
               <p className="font-mono text-sm">{config.domain_auth_header || "REMOTE_USER"}</p>
             </div>
             <div className="rounded-lg border border-border px-3 py-2.5">
-              <p className="text-[10px] uppercase text-muted-foreground">Авто-создание</p>
-              <p className="text-sm font-medium">{config.domain_auth_auto_create ? "Да" : "Нет"}</p>
+              <p className="text-[10px] uppercase text-muted-foreground">{t("ai.yes")}</p>
+              <p className="text-sm font-medium">{config.domain_auth_auto_create ? t("ai.yes") : t("ai.no")}</p>
             </div>
           </div>
         </SectionCard>

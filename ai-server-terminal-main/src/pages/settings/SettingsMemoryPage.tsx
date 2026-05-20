@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useI18n } from "@/lib/i18n";
 import { Navigate } from "react-router-dom";
 import {
   Bot,
@@ -38,6 +39,7 @@ import { QueryStateBlock } from "@/components/ui/page-shell";
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function SettingsMemoryPage() {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
 
   const { data: authData, isLoading: authLoading } = useQuery({
@@ -204,7 +206,7 @@ export default function SettingsMemoryPage() {
           ? "bg-destructive/10 text-destructive border-destructive/30"
           : "bg-secondary text-muted-foreground border-border";
     return (
-      <div key={`${label}-${state.worker_key}`} className="rounded-lg border border-border bg-secondary/10 px-3 py-3">
+      <div key={`${label}-${state.worker_key}`} className="rounded-xl border border-border/60 bg-secondary/10 px-3 py-3 shadow-sm">
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm font-medium text-foreground">{label}</p>
           <span className={cn("rounded border px-1.5 py-0.5 text-[10px] uppercase tracking-wide", statusTone)}>
@@ -278,16 +280,21 @@ export default function SettingsMemoryPage() {
   return (
     <div className="space-y-6 pb-10">
       {/* Page Header */}
-      <div>
-        <h1 className="text-xl font-semibold text-foreground">AI Memory</h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">Долговременная память, snapshots и паттерны агентов</p>
+      <div className="flex items-center gap-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
+          <ScrollText className="h-4 w-4 text-primary" />
+        </div>
+        <div>
+          <h1 className="text-base font-semibold tracking-tight text-foreground">AI Memory</h1>
+          <p className="text-[11px] text-muted-foreground">{t("mem.subtitle")}</p>
+        </div>
       </div>
 
       {/* Main Memory Section */}
       <SectionCard
         title="AI Memory и Dreams"
         icon={ScrollText}
-        description="Настройка снов, canonical snapshots и learned operational patterns"
+        description={t("mem.section_desc")}
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -298,7 +305,7 @@ export default function SettingsMemoryPage() {
               disabled={!selectedMemoryServerId || memoryLoading}
             >
               <RefreshCw className={cn("h-3 w-3", memoryLoading && "animate-spin")} />
-              Обновить
+              {t("mem.refresh")}
             </Button>
             <Button
               size="sm"
@@ -322,7 +329,7 @@ export default function SettingsMemoryPage() {
                 onValueChange={(value) => setSelectedMemoryServerId(Number(value))}
               >
                 <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Выбери сервер" />
+                  <SelectValue placeholder={t("mem.select_server")} />
                 </SelectTrigger>
                 <SelectContent>
                   {memoryServers.map((server: FrontendServer) => (
@@ -335,7 +342,7 @@ export default function SettingsMemoryPage() {
             </div>
             <div className="rounded-xl border border-border/60 bg-secondary/15 px-4 py-3">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline">{selectedMemoryServer?.name || "Сервер не выбран"}</Badge>
+                <Badge variant="outline">{selectedMemoryServer?.name || t("mem.no_server")}</Badge>
                 <Badge variant={memoryOverview?.daemon_state?.status === "running" ? "default" : "secondary"}>
                   Dreams daemon: {memoryOverview?.daemon_state?.status || "unknown"}
                 </Badge>
@@ -352,7 +359,7 @@ export default function SettingsMemoryPage() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-medium text-foreground">Dream Policy</p>
                 <Button size="sm" variant="outline" className="h-7" onClick={onSaveMemoryPolicy} disabled={memoryPolicySaving}>
-                  {memoryPolicySaving ? "Сохранение..." : "Сохранить"}
+                  {memoryPolicySaving ? t("mem.saving") : t("mem.save")}
                 </Button>
               </div>
 

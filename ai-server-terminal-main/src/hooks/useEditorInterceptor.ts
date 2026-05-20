@@ -29,6 +29,13 @@ export function useEditorInterceptor() {
     });
   }, []);
 
+  /** Open editor for a remote absolute path (terminal file link click). */
+  const openFileAtPath = useCallback((serverId: number, filePath: string) => {
+    const path = String(filePath || "").trim();
+    if (!path) return;
+    setState({ isOpen: true, serverId, filePath: path });
+  }, []);
+
   /** Close the editor modal. */
   const closeEditor = useCallback(() => {
     setState({ isOpen: false, serverId: null, filePath: null });
@@ -49,5 +56,5 @@ export function useEditorInterceptor() {
     [],
   );
 
-  return { editorState: state, openEditor, closeEditor, handleWsEvent } as const;
+  return { editorState: state, openEditor, openFileAtPath, closeEditor, handleWsEvent } as const;
 }

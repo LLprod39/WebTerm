@@ -745,6 +745,13 @@ class LLMProvider:
                 # 3.1: JSON mode — Responses API uses text.format.
                 if json_mode:
                     request_data["text"] = {"format": {"type": "json_object"}}
+                    if isinstance(request_data.get("input"), str):
+                        input_text = request_data["input"]
+                        if "json" not in input_text.lower():
+                            request_data["input"] = (
+                                f"{input_text}\n\n"
+                                "Return the answer as a valid JSON object."
+                            )
                 # Передаём reasoning.effort если задан
                 # "none" — отключить мышление полностью, "low"/"medium"/"high" — уровень
                 # "" — не передавать (модель решает сама)

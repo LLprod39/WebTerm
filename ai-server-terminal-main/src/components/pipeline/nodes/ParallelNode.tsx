@@ -2,7 +2,7 @@ import { type NodeProps } from "@xyflow/react";
 import { Zap } from "lucide-react";
 import { NodeBase } from "./NodeBase";
 import { useI18n } from "@/lib/i18n";
-import { getNodeTypeInfo, localize } from "./nodeMeta";
+import { getNodeBranchLabel, getNodeTypeInfo, localize } from "./nodeMeta";
 import { getNodeRuntimeProps } from "./runtimeProps";
 
 export function ParallelNode({ data, selected }: NodeProps) {
@@ -16,7 +16,7 @@ export function ParallelNode({ data, selected }: NodeProps) {
       description={localize(lang, "Следующие ветки пойдут параллельно", "Run next nodes in parallel")}
       accentColor="border-orange-500/40"
       categoryColor="#f97316"
-      sourcePorts={[{ id: "out", label: "OUT" }]}
+      sourcePorts={[{ id: "out", label: getNodeBranchLabel("out", lang) }]}
       {...getNodeRuntimeProps(d)}
     />
   );

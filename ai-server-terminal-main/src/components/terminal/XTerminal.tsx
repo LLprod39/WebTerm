@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type MutableRefObject } from "react";
 import { Terminal } from "@xterm/xterm";
 import type { ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
@@ -8,6 +8,7 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import "@xterm/xterm/css/xterm.css";
 import { getWsUrl, fetchWsToken } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { createTerminalFileLinkProvider, parsePromptCwd } from "@/lib/terminal-file-links";
 import { serializeAiSettings } from "./ai-preferences";
 import type { AiAssistantSettings, AiChatMode, AiExecutionMode } from "./ai-types";
 
@@ -55,6 +56,12 @@ interface XTerminalProps {
   onFilesDrop?: (files: File[]) => void;
   /** Called BEFORE sending data to pty. Return string to type instead, or null for pass-through. */
   onInterceptInput?: (data: string) => string | null;
+  /** Remote working directory for resolving relative file links. */
+  cwdRef?: MutableRefObject<string>;
+  /** Click on a text filename in terminal output. */
+  onFileClick?: (absolutePath: string, filename: string) => void;
+  /** Enable underline links for text filenames in output. */
+  clickableFiles?: boolean;
 }
 
 export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTerminal(
@@ -73,6 +80,9 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
     onEvent,
     onFilesDrop,
     onInterceptInput,
+    cwdRef,
+    onFileClick,
+    clickableFiles = true,
   }: XTerminalProps,
   ref,
 ) {
@@ -97,10 +107,16 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
   const onErrorRef = useRef(onError);
   const onEventRef = useRef(onEvent);
   const onInterceptRef = useRef(onInterceptInput);
+  const cwdRefProp = useRef(cwdRef);
+  const onFileClickRef = useRef(onFileClick);
+  const clickableFilesRef = useRef(clickableFiles);
   useEffect(() => { onStatusChangeRef.current = onStatusChange; });
   useEffect(() => { onErrorRef.current = onError; });
   useEffect(() => { onEventRef.current = onEvent; });
   useEffect(() => { onInterceptRef.current = onInterceptInput; });
+  useEffect(() => { cwdRefProp.current = cwdRef; });
+  useEffect(() => { onFileClickRef.current = onFileClick; });
+  useEffect(() => { clickableFilesRef.current = clickableFiles; });
   useEffect(() => { activeRef.current = active; }, [active]);
   useEffect(() => {
     mountedRef.current = true;
@@ -176,6 +192,16 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
     term.loadAddon(unicode11);
     term.unicode.activeVersion = "11";
     term.open(containerRef.current);
+
+    const fileLinkDisposable = term.registerLinkProvider(
+      createTerminalFileLinkProvider(term, {
+        getCwd: () => cwdRefProp.current?.current || "/",
+        onOpen: (absolutePath, filename) => {
+          onFileClickRef.current?.(absolutePath, filename);
+        },
+        enabled: () => Boolean(clickableFilesRef.current && onFileClickRef.current),
+      }),
+    );
 
     setTimeout(() => fit.fit(), 50);
     term.writeln("\x1b[36mWebTermAI\x1b[0m");
@@ -258,7 +284,18 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
           const type = String(payload.type || "");
           if (type === "output") {
             const chunk = String(payload.data || "");
+            const cwdFromPrompt = parsePromptCwd(chunk);
+            if (cwdFromPrompt && cwdRefProp.current) {
+              cwdRefProp.current.current = cwdFromPrompt;
+            }
             term.write(chunk);
+            return;
+          }
+          if (type === "terminal_session") {
+            const cwd = String(payload.cwd || "").trim();
+            if (cwd && cwdRefProp.current) {
+              cwdRefProp.current.current = cwd;
+            }
             return;
           }
           if (type === "status") {
@@ -367,6 +404,7 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
       fitRef.current = null;
       lastSizeRef.current = null;
       pendingMessagesRef.current = [];
+      fileLinkDisposable.dispose();
       term.dispose();
     };
   }, [serverId]); // callbacks are accessed via refs — no restart on prop change

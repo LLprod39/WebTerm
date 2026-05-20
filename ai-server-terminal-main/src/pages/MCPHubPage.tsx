@@ -425,24 +425,27 @@ export default function MCPHubPage() {
                         : "neutral";
 
                   return (
-                    <Card key={mcp.id} className="border-border/80">
-                      <CardHeader className="space-y-3 pb-3">
+                    <div key={mcp.id} className="group overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-all duration-150 hover:border-border/80 hover:shadow-md">
+                      <div className="space-y-3 p-4">
                         <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <CardTitle className="flex items-center gap-2 text-base">
-                              <span className="truncate">{mcp.name}</span>
-                              <Badge variant="secondary" className="text-[10px] font-mono">
-                                {mcp.transport}
-                              </Badge>
-                            </CardTitle>
-                            <CardDescription className="mt-1 text-xs">
-                              {mcp.description || "No description"}
-                            </CardDescription>
-                            <div className="mt-2 flex flex-wrap gap-1.5">
-                              {mcp.is_owner ? <Badge variant="secondary">Mine</Badge> : null}
-                              {!mcp.is_owner && mcp.owner_username ? <Badge variant="outline">Owner: {mcp.owner_username}</Badge> : null}
-                              {mcp.is_shared ? <Badge variant="outline">Shared</Badge> : null}
-                              {mcp.can_edit === false ? <Badge variant="outline">Read only</Badge> : null}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                                <Server className="h-4 w-4 text-primary" />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="truncate text-sm font-semibold text-foreground">{mcp.name}</span>
+                                  <span className="rounded border border-border/50 bg-secondary/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{mcp.transport}</span>
+                                </div>
+                                <p className="mt-0.5 text-xs text-muted-foreground">{mcp.description || "No description"}</p>
+                              </div>
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {mcp.is_owner ? <Badge variant="secondary" className="text-[10px]">Mine</Badge> : null}
+                              {!mcp.is_owner && mcp.owner_username ? <Badge variant="outline" className="text-[10px]">Owner: {mcp.owner_username}</Badge> : null}
+                              {mcp.is_shared ? <Badge variant="outline" className="text-[10px]">Shared</Badge> : null}
+                              {mcp.can_edit === false ? <Badge variant="outline" className="text-[10px]">Read only</Badge> : null}
                             </div>
                           </div>
 
@@ -489,38 +492,38 @@ export default function MCPHubPage() {
                             ) : null}
                           </div>
                         </div>
-                      </CardHeader>
+                      </div>
 
-                      <CardContent className="space-y-4 pt-0">
-                        <div className="rounded-2xl border border-border/70 bg-background/30 px-3 py-2 font-mono text-xs text-muted-foreground">
+                      <div className="border-t border-border/50 bg-secondary/10 px-4 py-3 space-y-2.5">
+                        <div className="rounded-lg border border-border/50 bg-background/40 px-3 py-2 font-mono text-[11px] text-muted-foreground">
                           {previewConnection(mcp) || "No connection data"}
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-2">
-                          <StatusBadge
-                            label={
-                              mcp.last_test_ok === true
-                                ? "Healthy"
-                                : mcp.last_test_ok === false
-                                  ? "Failed"
-                                  : "Not tested"
-                            }
-                            tone={tone}
-                          />
-                          {mcp.is_shared ? <Badge variant="outline">Shared</Badge> : null}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <StatusBadge
+                              label={
+                                mcp.last_test_ok === true
+                                  ? "Healthy"
+                                  : mcp.last_test_ok === false
+                                    ? "Failed"
+                                    : "Not tested"
+                              }
+                              tone={tone}
+                            />
+                            {mcp.last_test_at && (
+                              <span className="text-[10px] text-muted-foreground/60">
+                                {new Date(mcp.last_test_at).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
                         </div>
 
-                        {mcp.last_test_error ? (
-                          <p className="text-xs leading-5 text-muted-foreground">{mcp.last_test_error}</p>
-                        ) : null}
-
-                        {mcp.last_test_at ? (
-                          <p className="text-xs text-muted-foreground">
-                            Tested {new Date(mcp.last_test_at).toLocaleString()}
-                          </p>
-                        ) : null}
-                      </CardContent>
-                    </Card>
+                        {mcp.last_test_error && (
+                          <p className="text-[11px] leading-5 text-red-400/80">{mcp.last_test_error}</p>
+                        )}
+                      </div>
+                    </div>
                   );
                 })}
               </div>

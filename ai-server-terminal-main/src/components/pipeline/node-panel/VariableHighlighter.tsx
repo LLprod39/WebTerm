@@ -67,7 +67,7 @@ export function VariableHighlighter({
         rows={minRows}
         onChange={(event) => onChange(event.target.value)}
         className={cn(
-          "resize-none rounded-2xl border-border/70 bg-background/70 text-sm leading-relaxed",
+          "resize-none rounded-lg border-border/70 bg-background/70 text-sm leading-relaxed",
           minHeightClassName,
           readOnly && "cursor-text",
         )}

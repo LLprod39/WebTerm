@@ -106,13 +106,13 @@ export function NodeSettingsTab({
             value={(data.label as string) || ""}
             onChange={(event) => onSet("label", event.target.value)}
             placeholder={t(lang, "Например: AI Investigation", "Example: AI Investigation")}
-            className="h-11 rounded-2xl border-border/70 bg-background/70"
+            className="h-10 rounded-lg border-border/70 bg-background/70"
           />
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="agent-config" className="text-xs text-muted-foreground">
-            {t(lang, "Agent Config", "Agent Config")}
+            {t(lang, "Конфиг агента", "Agent config")}
           </Label>
           <Select
             value={data.agent_config_id ? String(data.agent_config_id) : "__none__"}
@@ -125,7 +125,7 @@ export function NodeSettingsTab({
               onSetMany({ agent_config_id: value, agent_name: agent?.name || "" });
             }}
           >
-            <SelectTrigger id="agent-config" className="h-11 rounded-2xl border-border/70 bg-background/70">
+            <SelectTrigger id="agent-config" className="h-10 rounded-lg border-border/70 bg-background/70">
               <SelectValue placeholder={t(lang, "Настроить прямо в ноде", "Configure directly in the node")} />
             </SelectTrigger>
             <SelectContent>
@@ -142,14 +142,14 @@ export function NodeSettingsTab({
         </div>
 
         {selectedAgent ? (
-          <div className="rounded-2xl border border-border/70 bg-muted/20 px-4 py-3">
+          <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-3">
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-foreground">{selectedAgent.name}</p>
                 <p className="text-xs leading-relaxed text-muted-foreground">
                   {t(
                     lang,
-                    "Сохранённый конфиг управляет prompt, model, tools и привязанными политиками этой ноды.",
+                    "Используется сохранённый конфиг: локальные поля модели скрыты, а промпты, инструменты и политики берутся из него.",
                     "The saved config controls this node's prompts, model, tools, and attached policies.",
                   )}
                 </p>
@@ -179,13 +179,13 @@ export function NodeSettingsTab({
 
         <div className="space-y-2">
           <Label htmlFor="on-failure" className="text-xs text-muted-foreground">
-            {t(lang, "On Failure", "On Failure")}
+            {t(lang, "При ошибке", "On failure")}
           </Label>
           <Select
             value={(data.on_failure as string) || "abort"}
             onValueChange={(value) => onSet("on_failure", value)}
           >
-            <SelectTrigger id="on-failure" className="h-11 rounded-2xl border-border/70 bg-background/70">
+            <SelectTrigger id="on-failure" className="h-10 rounded-lg border-border/70 bg-background/70">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -207,10 +207,10 @@ export function NodeSettingsTab({
         )}
       >
         {selectedAgent ? (
-          <div className="rounded-2xl border border-dashed border-border/70 px-4 py-4 text-sm text-muted-foreground">
+          <div className="rounded-lg border border-dashed border-border/70 px-4 py-4 text-sm text-muted-foreground">
             {t(
               lang,
-              "Параметры модели берутся из выбранного Agent Config. Снимите привязку, если хотите управлять ими прямо в ноде.",
+              "Используется сохранённый конфиг агента. Локальные поля модели скрыты, чтобы не было двух источников настроек.",
               "Model settings come from the selected Agent Config. Clear that binding if you want to manage them directly in the node.",
             )}
           </div>
@@ -232,7 +232,7 @@ export function NodeSettingsTab({
                 {t(lang, "Модель", "Model")}
               </Label>
               {provider === "auto" ? (
-                <div className="flex h-11 items-center rounded-2xl border border-border/70 bg-muted/20 px-3 text-sm text-muted-foreground">
+                <div className="flex h-10 items-center rounded-lg border border-border/70 bg-muted/20 px-3 text-sm text-muted-foreground">
                   {t(lang, "Используется глобальная модель агента.", "Uses the workspace default agent model.")}
                 </div>
               ) : (
@@ -241,7 +241,7 @@ export function NodeSettingsTab({
                   onValueChange={(value) => onSet("model", value)}
                   disabled={loadingModelsFor === provider}
                 >
-                  <SelectTrigger id="node-model" className="h-11 rounded-2xl border-border/70 bg-background/70">
+                  <SelectTrigger id="node-model" className="h-10 rounded-lg border-border/70 bg-background/70">
                     <SelectValue
                       placeholder={
                         loadingModelsFor === provider
@@ -269,7 +269,7 @@ export function NodeSettingsTab({
 
             <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">
-                {t(lang, "Max Iterations", "Max Iterations")}
+                {t(lang, "Максимум шагов", "Max iterations")}
               </Label>
               <IterationStepper
                 value={maxIterations}
@@ -280,7 +280,7 @@ export function NodeSettingsTab({
             {mcpList.length ? (
               <div className="space-y-3">
                 <Label className="text-xs text-muted-foreground">
-                  {t(lang, "MCP Servers", "MCP Servers")}
+                  {t(lang, "MCP-серверы", "MCP servers")}
                 </Label>
                 <div className="flex flex-wrap gap-2">
                   {selectedMcpServers.length ? (
@@ -316,7 +316,7 @@ export function NodeSettingsTab({
                   }}
                 >
                   <SelectTrigger
-                    className="h-11 rounded-2xl border-dashed border-border/70 bg-background/70"
+                    className="h-10 rounded-lg border-dashed border-border/70 bg-background/70"
                     disabled={mcpList.every((server) => selectedMcpServerIds.includes(server.id))}
                   >
                     <SelectValue
@@ -368,11 +368,11 @@ export function NodeSettingsTab({
         title={t(lang, "Политики", "Policies")}
         description={t(
           lang,
-          "Краткая сводка по node-level skills и переход в расширенную вкладку.",
+          "Краткая сводка по политикам этой ноды и переход в расширенную вкладку.",
           "A compact summary of node-level skills with a shortcut to the detailed policies tab.",
         )}
       >
-        <div className="rounded-2xl border border-border/70 bg-background/70 px-4 py-4">
+        <div className="rounded-lg border border-border/70 bg-background/70 px-4 py-4">
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-1">
               <p className="text-sm font-semibold text-foreground">
@@ -384,12 +384,12 @@ export function NodeSettingsTab({
                 {selectedAgent
                   ? t(
                       lang,
-                      "Node-level политики будут объединены с сохранённым Agent Config.",
+                      "Политики этой ноды будут объединены с сохранённым конфигом агента.",
                       "Node-level policies will be merged with the saved Agent Config.",
                     )
                   : t(
                       lang,
-                      "Выбранные policies дополняют prompt и runtime guardrails этой ноды.",
+                      "Выбранные политики дополняют промпт и runtime-ограничения этой ноды.",
                       "Selected policies extend this node's prompts and runtime guardrails.",
                     )}
               </p>

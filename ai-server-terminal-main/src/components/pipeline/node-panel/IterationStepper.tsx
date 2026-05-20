@@ -22,12 +22,12 @@ export function IterationStepper({
   const canIncrement = safeValue < max;
 
   return (
-    <div className="flex h-11 items-center rounded-2xl border border-border/70 bg-background/70 px-1">
+    <div className="flex h-10 items-center rounded-lg border border-border/70 bg-background/70 px-1">
       <Button
         type="button"
         variant="ghost"
         size="icon"
-        className="h-9 w-9 rounded-xl"
+        className="h-8 w-8 rounded-md"
         aria-label="Decrease iterations"
         onClick={() => canDecrement && onChange(safeValue - 1)}
         disabled={!canDecrement}
@@ -46,7 +46,7 @@ export function IterationStepper({
         type="button"
         variant="ghost"
         size="icon"
-        className="h-9 w-9 rounded-xl"
+        className="h-8 w-8 rounded-md"
         aria-label="Increase iterations"
         onClick={() => canIncrement && onChange(safeValue + 1)}
         disabled={!canIncrement}

@@ -27,7 +27,7 @@ export function ProviderSelector({
             aria-pressed={isActive}
             onClick={() => onChange(option.value)}
             className={cn(
-              "group flex min-h-[88px] flex-col justify-between rounded-2xl border px-3 py-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              "group flex min-h-[82px] flex-col justify-between rounded-lg border px-3 py-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               isActive
                 ? "border-primary/60 bg-primary/10 shadow-[0_10px_30px_rgba(0,0,0,0.14)]"
                 : "border-border/70 bg-background/70 hover:border-primary/30 hover:bg-muted/30",

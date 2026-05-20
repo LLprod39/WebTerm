@@ -1674,6 +1674,8 @@ async def _execute_output_telegram(node: dict, context: dict, node_outputs: dict
         token_keys=("bot_token", "tg_bot_token", "telegram_bot_token"),
         chat_keys=("chat_id", "tg_chat_id", "telegram_chat_id"),
     )
+    if not chat_id:
+        chat_id = str(context.get("tg_chat_id") or context.get("chat_id") or "").strip()
 
     if not bot_token:
         return {"status": "failed", "error": "bot_token not configured. Set TELEGRAM_BOT_TOKEN in .env or fill in the node."}
@@ -2024,6 +2026,8 @@ async def _execute_logic_telegram_input(
         token_keys=("tg_bot_token", "bot_token", "telegram_bot_token"),
         chat_keys=("tg_chat_id", "chat_id", "telegram_chat_id"),
     )
+    if not chat_id:
+        chat_id = str(context.get("tg_chat_id") or context.get("chat_id") or "").strip()
     parse_mode = str(config.get("parse_mode") or "Markdown").strip() or "Markdown"
 
     if not bot_token:

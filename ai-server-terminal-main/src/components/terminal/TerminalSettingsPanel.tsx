@@ -250,6 +250,7 @@ export const TerminalSettingsPanel: React.FC<TerminalSettingsPanelProps> = ({
               />
               {t("terminal.interceptEditors")}
             </label>
+            <p className="mt-2 text-[11px] text-zinc-500">{t("terminal.clickableFilesHint")}</p>
           </Section>
         </div>
       </div>

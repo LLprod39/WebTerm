@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useI18n } from "@/lib/i18n";
 import { Navigate } from "react-router-dom";
 import {
   Activity,
@@ -59,17 +60,17 @@ const DEFAULT_LOGGING_CONFIG = {
 
 const LOGGING_KEYS = Object.keys(DEFAULT_LOGGING_CONFIG);
 
-const LOGGING_ITEMS = [
-  { key: "log_terminal_commands", label: "Команды терминала", desc: "Записывать все SSH-команды пользователей", icon: Terminal },
-  { key: "log_ai_assistant", label: "AI ассистент", desc: "Записывать запросы и ответы AI помощника", icon: MessageSquare },
-  { key: "log_agent_runs", label: "Запуски агентов", desc: "Логировать все действия и итерации агентов", icon: Bot },
-  { key: "log_pipeline_runs", label: "Pipeline запуски", desc: "Логировать выполнение pipeline и результаты", icon: Workflow },
-  { key: "log_auth_events", label: "Авторизация", desc: "Входы, выходы, неудачные попытки", icon: Shield },
-  { key: "log_server_changes", label: "Изменения серверов", desc: "Создание, обновление, удаление серверов", icon: Database },
-  { key: "log_settings_changes", label: "Изменения настроек", desc: "Любые изменения в конфигурации платформы", icon: Key },
-  { key: "log_mcp_calls", label: "MCP вызовы", desc: "Все вызовы к MCP серверам и инструментам", icon: Cpu },
-  { key: "log_file_operations", label: "Файловые операции", desc: "Загрузки, скачивания и изменения файлов", icon: FileText },
-  { key: "log_http_requests", label: "HTTP/API запросы", desc: "Логировать каждый web/API запрос пользователя", icon: Globe },
+const LOGGING_ITEM_KEYS = [
+  { key: "log_terminal_commands", labelKey: "audit.terminal_label", descKey: "audit.terminal_desc", icon: Terminal },
+  { key: "log_ai_assistant", labelKey: "audit.ai_label", descKey: "audit.ai_desc", icon: MessageSquare },
+  { key: "log_agent_runs", labelKey: "audit.agents_label", descKey: "audit.agents_desc", icon: Bot },
+  { key: "log_pipeline_runs", labelKey: "audit.pipelines_label", descKey: "audit.pipelines_desc", icon: Workflow },
+  { key: "log_auth_events", labelKey: "audit.auth_label", descKey: "audit.auth_desc", icon: Shield },
+  { key: "log_server_changes", labelKey: "audit.servers_label", descKey: "audit.servers_desc", icon: Database },
+  { key: "log_settings_changes", labelKey: "audit.settings_label", descKey: "audit.settings_desc", icon: Key },
+  { key: "log_mcp_calls", labelKey: "audit.mcp_label", descKey: "audit.mcp_desc", icon: Cpu },
+  { key: "log_file_operations", labelKey: "audit.files_label", descKey: "audit.files_desc", icon: FileText },
+  { key: "log_http_requests", labelKey: "audit.http_label", descKey: "audit.http_desc", icon: Globe },
 ];
 
 const CATEGORY_ICONS: Record<string, React.ElementType> = {
@@ -82,12 +83,12 @@ const CATEGORY_ICONS: Record<string, React.ElementType> = {
   settings: Key,
 };
 
-const DATE_PRESETS = [
-  { label: "Сегодня", days: 0 },
-  { label: "Вчера", days: 1 },
-  { label: "7 дней", days: 7 },
-  { label: "14 дней", days: 14 },
-  { label: "30 дней", days: 30 },
+const DATE_PRESET_KEYS = [
+  { labelKey: "adash.preset_today", days: 0 },
+  { labelKey: "audit.yesterday", days: 1 },
+  { labelKey: "adash.preset_7d", days: 7 },
+  { labelKey: "adash.preset_14d", days: 14 },
+  { labelKey: "adash.preset_30d", days: 30 },
 ];
 
 function relativeTime(value: string): string {
@@ -103,6 +104,9 @@ function relativeTime(value: string): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function SettingsAuditPage() {
+  const { t } = useI18n();
+  const LOGGING_ITEMS = LOGGING_ITEM_KEYS.map((i) => ({ ...i, label: t(i.labelKey), desc: t(i.descKey) }));
+  const DATE_PRESETS = DATE_PRESET_KEYS.map((p) => ({ ...p, label: t(p.labelKey) }));
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [loggingSaved, setLoggingSaved] = useState(false);
@@ -206,9 +210,14 @@ export default function SettingsAuditPage() {
   return (
     <div className="space-y-6 pb-10">
       {/* Page Header */}
-      <div>
-        <h1 className="text-xl font-semibold text-foreground">Аудит и журнал</h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">Логирование и история действий пользователей</p>
+      <div className="flex items-center gap-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
+          <Activity className="h-4 w-4 text-primary" />
+        </div>
+        <div>
+          <h1 className="text-base font-semibold tracking-tight text-foreground">Аудит и журнал</h1>
+          <p className="text-[11px] text-muted-foreground">Логирование и история действий пользователей</p>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -230,13 +239,13 @@ export default function SettingsAuditPage() {
         {/* Logging Tab */}
         <TabsContent value="logging" className="mt-4 space-y-4">
           <SectionCard
-            title="Настройки логирования"
+            title={t("audit.log_settings")}
             icon={Eye}
-            description="Выберите какие действия пользователей записывать в журнал"
+            description={t("audit.log_settings_desc")}
             actions={
               <Button size="sm" className="h-7 gap-1.5" onClick={handleSaveLogging} disabled={saving}>
                 <Save className="h-3 w-3" />
-                {saving ? "Сохранение..." : loggingSaved ? "Сохранено" : "Сохранить"}
+                {saving ? t("audit.saving") : loggingSaved ? t("ai.saved") : t("audit.save")}
               </Button>
             }
           >
@@ -272,10 +281,10 @@ export default function SettingsAuditPage() {
             </div>
           </SectionCard>
 
-          <SectionCard title="Хранение и экспорт" icon={Database} description="Настройки ротации и формата логов">
+          <SectionCard title={t("audit.storage_title")} icon={Database} description={t("audit.storage_desc")}>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label className="text-xs">Хранить логи (дней)</Label>
+                <Label className="text-xs">{t("audit.retention_label")}</Label>
                 <Select
                   value={String(loggingConfig.retention_days)}
                   onValueChange={(v) => updateLogging("retention_days", Number(v))}
@@ -291,7 +300,7 @@ export default function SettingsAuditPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label className="text-xs">Формат экспорта</Label>
+                <Label className="text-xs">{t("audit.export_format")}</Label>
                 <Select
                   value={loggingConfig.export_format}
                   onValueChange={(v) => updateLogging("export_format", v)}
@@ -314,10 +323,12 @@ export default function SettingsAuditPage() {
           </SectionCard>
 
           {/* Active Categories Summary */}
-          <div className="rounded-lg border border-border bg-card px-5 py-4">
+          <div className="rounded-xl border border-border/60 bg-secondary/10 px-5 py-4 shadow-sm">
             <div className="mb-3 flex items-center gap-2">
-              <Eye className="h-4 w-4 text-primary" />
-              <span className="text-xs font-medium">Активные категории</span>
+              <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10">
+                <Eye className="h-3.5 w-3.5 text-primary" />
+              </div>
+              <span className="text-xs font-semibold text-foreground">{t("audit.filter_tab")}</span>
             </div>
             <div className="flex flex-wrap gap-2">
               {LOGGING_ITEMS.filter((i) => loggingConfig[i.key as keyof typeof loggingConfig]).map((i) => (
@@ -326,7 +337,7 @@ export default function SettingsAuditPage() {
                 </Badge>
               ))}
               {LOGGING_ITEMS.every((i) => !loggingConfig[i.key as keyof typeof loggingConfig]) && (
-                <p className="text-[11px] text-muted-foreground">Все категории отключены</p>
+                <p className="text-[11px] text-muted-foreground">{t("audit.log_settings")}</p>
               )}
             </div>
           </div>
@@ -334,7 +345,7 @@ export default function SettingsAuditPage() {
 
         {/* Activity Tab */}
         <TabsContent value="activity" className="mt-4 space-y-4">
-          <SectionCard title="Журнал действий" icon={Activity} description="Полная история действий пользователей на платформе">
+          <SectionCard title={t("audit.activity_log")} icon={Activity} description={t("audit.activity_desc")}>
             <div className="space-y-4">
               {/* Filters */}
               <div className="flex flex-wrap items-center gap-3">
@@ -343,7 +354,7 @@ export default function SettingsAuditPage() {
                   <Input
                     value={activitySearch}
                     onChange={(e) => setActivitySearch(e.target.value)}
-                    placeholder="Поиск по пользователю, действию..."
+                    placeholder={t("audit.search_placeholder")}
                     className="h-8 pl-9 text-xs"
                   />
                 </div>

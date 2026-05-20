@@ -26,14 +26,14 @@ export function NodePanelTabs({
       className="flex min-h-0 flex-1 flex-col"
     >
       <div className="px-4 pt-4">
-        <TabsList className="grid h-auto w-full grid-cols-3 rounded-2xl border border-border/70 bg-muted/30 p-1">
-          <TabsTrigger value="settings" className="rounded-xl px-3 py-2 text-xs">
+        <TabsList className="grid h-auto w-full grid-cols-3 rounded-lg border border-border/70 bg-muted/30 p-1">
+          <TabsTrigger value="settings" className="rounded-md px-3 py-2 text-xs">
             {t(lang, "Настройки", "Settings")}
           </TabsTrigger>
-          <TabsTrigger value="prompts" className="rounded-xl px-3 py-2 text-xs">
+          <TabsTrigger value="prompts" className="rounded-md px-3 py-2 text-xs">
             {t(lang, "Промпты", "Prompts")}
           </TabsTrigger>
-          <TabsTrigger value="policies" className="rounded-xl px-3 py-2 text-xs">
+          <TabsTrigger value="policies" className="rounded-md px-3 py-2 text-xs">
             {t(lang, "Политики", "Policies")}
           </TabsTrigger>
         </TabsList>

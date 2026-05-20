@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -78,8 +78,10 @@ import {
   type PipelineEdge,
   type PipelineRun,
   type PipelineTrigger,
+  type StudioPipelineAssistantResponse,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { applyAssistantGraphPatch, getAssistantPatchStats } from "@/components/pipeline/assistantPatch";
 import { getPipelineActivityState } from "@/components/pipeline/pipelineActivity";
 import { buildPipelineRunGraphState } from "@/components/pipeline/pipelineRunGraph";
 import { AgentNodePanel } from "@/components/pipeline/node-panel/AgentNodePanel";
@@ -101,7 +103,7 @@ import {
   NODE_PALETTE,
   type NodeType,
 } from "@/components/pipeline/nodes";
-import { getNodeCategoryLabel, getNodeTypeGuidance } from "@/components/pipeline/nodes/nodeMeta";
+import { getNodeCategoryLabel, getNodePaletteText, getNodeTypeGuidance, getNodeTypeInfo } from "@/components/pipeline/nodes/nodeMeta";
 
 // ---------------------------------------------------------------------------
 // React Flow node type map
@@ -131,26 +133,26 @@ const nodeTypes = {
 // ---------------------------------------------------------------------------
 // Node type friendly names
 // ---------------------------------------------------------------------------
-const NODE_TYPE_LABELS: Record<string, { label: string; icon: string }> = {
-  "trigger/manual":        { label: "Manual Trigger",   icon: "â¶ï¸" },
-  "trigger/webhook":       { label: "Webhook Trigger",  icon: "ð" },
-  "trigger/schedule":      { label: "Schedule Trigger", icon: "â°" },
-  "trigger/monitoring":    { label: "Monitoring Trigger", icon: "ð¨" },
-  "agent/react":           { label: "ReAct Agent",      icon: "ð¤" },
-  "agent/multi":           { label: "Multi-Agent",      icon: "ð¦¾" },
-  "agent/ssh_cmd":         { label: "SSH Command",      icon: "ð»" },
-  "agent/llm_query":       { label: "LLM Query",        icon: "ð§ " },
-  "agent/mcp_call":        { label: "MCP Call",         icon: "ð§©" },
-  "logic/condition":       { label: "Condition",        icon: "ð" },
-  "logic/parallel":        { label: "Parallel",         icon: "â¡" },
-  "logic/merge":           { label: "Merge",            icon: "ðª¢" },
-  "logic/wait":            { label: "Wait",             icon: "â±ï¸" },
-  "logic/human_approval":  { label: "Human Approval",  icon: "ð¤" },
-  "logic/telegram_input":  { label: "Telegram Input",  icon: "ð¬" },
-  "output/report":         { label: "Report",           icon: "ð" },
-  "output/webhook":        { label: "Send Webhook",     icon: "ð¤" },
-  "output/email":          { label: "Send Email",       icon: "âï¸" },
-  "output/telegram":       { label: "Telegram",         icon: "ð±" },
+const NODE_TYPE_LABELS: Record<string, { label: string }> = {
+  "trigger/manual":        { label: "Manual Trigger" },
+  "trigger/webhook":       { label: "Webhook Trigger" },
+  "trigger/schedule":      { label: "Schedule Trigger" },
+  "trigger/monitoring":    { label: "Monitoring Trigger" },
+  "agent/react":           { label: "ReAct Agent" },
+  "agent/multi":           { label: "Multi-Agent" },
+  "agent/ssh_cmd":         { label: "SSH Command" },
+  "agent/llm_query":       { label: "LLM Query" },
+  "agent/mcp_call":        { label: "MCP Call" },
+  "logic/condition":       { label: "Condition" },
+  "logic/parallel":        { label: "Parallel" },
+  "logic/merge":           { label: "Merge" },
+  "logic/wait":            { label: "Wait" },
+  "logic/human_approval":  { label: "Human Approval" },
+  "logic/telegram_input":  { label: "Telegram Input" },
+  "output/report":         { label: "Report" },
+  "output/webhook":        { label: "Send Webhook" },
+  "output/email":          { label: "Send Email" },
+  "output/telegram":       { label: "Telegram" },
 };
 
 const NODE_TYPE_LOOKUP = Object.fromEntries(
@@ -274,9 +276,9 @@ function RunMonitorPanel({
           <button
             className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded hover:bg-muted/40"
             onClick={() => navigate("/studio/runs")}
-            title="ÐÑÐµ Ð»Ð¾Ð³Ð¸"
+            title="Все логи"
           >
-            <ChevronRight className="h-3 w-3" /> ÐÐ¾Ð³Ð¸
+            <ChevronRight className="h-3 w-3" /> Логи
           </button>
           <button className="p-1 rounded hover:bg-muted/40 text-muted-foreground hover:text-foreground" onClick={onClose}>
             <X className="h-3.5 w-3.5" />
@@ -326,10 +328,10 @@ function RunMonitorPanel({
                 )}
               </button>
 
-              {/* Human Approval waiting state â always show links */}
+              {/* Human Approval waiting state - always show links */}
               {status === "awaiting_approval" && (
                 <div className="border-t border-border px-3 py-2 space-y-2">
-                  <p className="text-yellow-400 text-[11px] font-medium">â³ Waiting for your decision...</p>
+                  <p className="text-yellow-400 text-[11px] font-medium">Waiting for your decision...</p>
                   {typeof stateExtra.approve_url === "string" && (
                     <div className="flex gap-2">
                       <a
@@ -360,7 +362,7 @@ function RunMonitorPanel({
                   )}
                   {output && (
                     <pre className="text-muted-foreground whitespace-pre-wrap break-all max-h-48 overflow-auto leading-relaxed">
-                      {output.length > 2000 ? output.slice(0, 2000) + "\nâ¦[truncated]" : output}
+                      {output.length > 2000 ? output.slice(0, 2000) + "\n…[truncated]" : output}
                     </pre>
                   )}
                 </div>
@@ -371,7 +373,7 @@ function RunMonitorPanel({
 
         {!run && (
           <div className="flex items-center justify-center py-8 text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loadingâ¦
+            <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading…
           </div>
         )}
       </div>
@@ -394,10 +396,89 @@ const AGENT_PROVIDER_OPTIONS = [
 const DIRECT_LLM_PROVIDERS = AGENT_PROVIDER_OPTIONS.filter((item) => item.value !== "auto");
 
 const CRON_PRESETS = [
-  { label: "Every 5 min", value: "*/5 * * * *" },
-  { label: "Hourly", value: "0 * * * *" },
-  { label: "Daily 04:00", value: "0 4 * * *" },
+  {
+    id: "every_5_min",
+    labelRu: "Каждые 5 минут",
+    labelEn: "Every 5 minutes",
+    descriptionRu: "Для частых health-check и быстрых проверок.",
+    descriptionEn: "For frequent health checks and fast polling.",
+    value: "*/5 * * * *",
+  },
+  {
+    id: "hourly",
+    labelRu: "Каждый час",
+    labelEn: "Hourly",
+    descriptionRu: "Запуск в начале каждого часа.",
+    descriptionEn: "Runs at the top of every hour.",
+    value: "0 * * * *",
+  },
+  {
+    id: "daily",
+    labelRu: "Каждый день",
+    labelEn: "Daily",
+    descriptionRu: "Один раз в день в выбранное время.",
+    descriptionEn: "Runs once per day at the selected time.",
+    value: "0 4 * * *",
+  },
 ] as const;
+
+function parseCronExpression(value: unknown): string[] | null {
+  const parts = String(value || "").trim().split(/\s+/).filter(Boolean);
+  return parts.length === 5 ? parts : null;
+}
+
+function padCronNumber(value: string) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? String(numeric).padStart(2, "0") : value;
+}
+
+function getDailyTimeFromCron(value: unknown) {
+  const parts = parseCronExpression(value);
+  if (!parts || parts[2] !== "*" || parts[3] !== "*" || parts[4] !== "*") return "04:00";
+  const [minute, hour] = parts;
+  if (!/^\d+$/.test(minute) || !/^\d+$/.test(hour)) return "04:00";
+  return `${padCronNumber(hour)}:${padCronNumber(minute)}`;
+}
+
+function getMinuteIntervalFromCron(value: unknown) {
+  const parts = parseCronExpression(value);
+  if (!parts || parts[1] !== "*" || parts[2] !== "*" || parts[3] !== "*" || parts[4] !== "*") return 5;
+  const match = parts[0].match(/^\*\/(\d+)$/);
+  if (!match) return 5;
+  return Math.max(1, Math.min(59, Number(match[1]) || 5));
+}
+
+function dailyTimeToCron(value: string) {
+  const [hour = "4", minute = "0"] = value.split(":");
+  return `${Number(minute) || 0} ${Number(hour) || 0} * * *`;
+}
+
+function describeCronExpression(value: unknown, lang: "en" | "ru") {
+  const parts = parseCronExpression(value);
+  if (!parts) {
+    return localize(lang, "Расписание не настроено или cron заполнен неверно.", "Schedule is not set or the cron expression is invalid.");
+  }
+  const [minute, hour, day, month, weekday] = parts;
+  if (/^\*\/\d+$/.test(minute) && hour === "*" && day === "*" && month === "*" && weekday === "*") {
+    const interval = minute.replace("*/", "");
+    return localize(lang, `Запуск каждые ${interval} мин.`, `Runs every ${interval} min.`);
+  }
+  if (minute === "0" && hour === "*" && day === "*" && month === "*" && weekday === "*") {
+    return localize(lang, "Запуск каждый час в :00.", "Runs every hour at :00.");
+  }
+  if (/^\d+$/.test(minute) && /^\d+$/.test(hour) && day === "*" && month === "*" && weekday === "*") {
+    return localize(lang, `Запуск каждый день в ${padCronNumber(hour)}:${padCronNumber(minute)}.`, `Runs every day at ${padCronNumber(hour)}:${padCronNumber(minute)}.`);
+  }
+  if (/^\d+$/.test(minute) && /^\d+$/.test(hour) && day === "*" && month === "*" && weekday === "1-5") {
+    return localize(lang, `Запуск по будням в ${padCronNumber(hour)}:${padCronNumber(minute)}.`, `Runs on weekdays at ${padCronNumber(hour)}:${padCronNumber(minute)}.`);
+  }
+  return localize(lang, "Пользовательское cron-расписание.", "Custom cron schedule.");
+}
+
+function getCronPresetId(value: unknown) {
+  const cron = String(value || "").trim();
+  return CRON_PRESETS.find((preset) => preset.value === cron)?.id || "custom";
+}
 
 function toJsonEditorText(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return "{}";
@@ -759,6 +840,78 @@ function isNodeType(value: string): value is NodeType {
   return value in nodeTypes;
 }
 
+function NodeFormSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="space-y-3 rounded-lg border border-border/70 bg-background/55 px-3 py-3">
+      <div className="space-y-1">
+        <h4 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{title}</h4>
+        {description ? <p className="text-[11px] leading-relaxed text-muted-foreground">{description}</p> : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function FieldHint({ children }: { children: ReactNode }) {
+  return <p className="text-[10px] leading-relaxed text-muted-foreground">{children}</p>;
+}
+
+function AdvancedDisclosure({
+  title,
+  children,
+  defaultOpen = false,
+}: {
+  title: string;
+  children: ReactNode;
+  defaultOpen?: boolean;
+}) {
+  return (
+    <details
+      className="group rounded-lg border border-dashed border-border/70 bg-muted/10 px-3 py-2"
+      open={defaultOpen}
+    >
+      <summary className="flex cursor-pointer list-none items-center justify-between text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        {title}
+        <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="mt-3 space-y-3">{children}</div>
+    </details>
+  );
+}
+
+function FailureSelect({
+  lang,
+  value,
+  onChange,
+}: {
+  lang: "en" | "ru";
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs">{localize(lang, "При ошибке", "On failure")}</Label>
+      <Select value={value || "abort"} onValueChange={onChange}>
+        <SelectTrigger className="h-8 text-xs">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="abort">{localize(lang, "Остановить pipeline", "Abort pipeline")}</SelectItem>
+          <SelectItem value="continue">{localize(lang, "Продолжить", "Continue")}</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
 function NodeConfigPanel({
   node,
   pipelineId,
@@ -786,7 +939,6 @@ function NodeConfigPanel({
   const queryClient = useQueryClient();
   const { data: modelsData } = useQuery({ queryKey: ["api", "models"], queryFn: fetchModels });
   const [d, setD] = useState<Record<string, unknown>>(node.data || {});
-  const [guidanceOpen, setGuidanceOpen] = useState(false);
   const [loadingModelsFor, setLoadingModelsFor] = useState<string | null>(null);
   const [webhookMapText, setWebhookMapText] = useState(() => toJsonEditorText(node.data?.webhook_payload_map));
   const [mcpArgsText, setMcpArgsText] = useState(
@@ -847,6 +999,10 @@ function NodeConfigPanel({
   const selectedSkills = skillList.filter((skill) => selectedSkillSlugs.includes(skill.slug));
   const webhookState = parseJsonObjectText(webhookMapText);
   const mcpArgsState = parseJsonObjectText(mcpArgsText);
+  const scheduleCronExpression = String(d.cron_expression || trigger?.cron_expression || "");
+  const schedulePresetId = getCronPresetId(scheduleCronExpression);
+  const scheduleDailyTime = getDailyTimeFromCron(scheduleCronExpression);
+  const scheduleMinuteInterval = getMinuteIntervalFromCron(scheduleCronExpression);
 
   useEffect(() => {
     setD(node.data || {});
@@ -901,9 +1057,10 @@ function NodeConfigPanel({
       .finally(() => setLoadingModelsFor(null));
   }, [loadingModelsFor, modelProvider, modelsData, node.id, onUpdate, queryClient, type]);
 
-  const typeInfo = NODE_TYPE_LABELS[type] || { label: type, icon: "" };
+  const typeInfo = getNodeTypeInfo(type, uiLang);
   const TypeIcon = NODE_TYPE_LOOKUP[type as NodeType]?.icon;
   const typeIconClassName = NODE_TYPE_LOOKUP[type as NodeType]?.iconClassName || "text-foreground";
+  const nodeGuidance = getNodeTypeGuidance(type, uiLang);
   const triggerWebhookUrl = trigger?.webhook_url ? new URL(trigger.webhook_url, window.location.origin).toString() : "";
 
   const handleAgentProviderChange = useCallback((nextProvider: string) => {
@@ -963,7 +1120,6 @@ function NodeConfigPanel({
 
   if (type === "agent/react" || type === "agent/multi") {
     const displayLabel = typeof d.label === "string" && d.label.trim() ? d.label.trim() : typeInfo.label;
-    const guidance = getNodeTypeGuidance(type, uiLang);
 
     return (
       <AgentNodePanel
@@ -971,7 +1127,9 @@ function NodeConfigPanel({
         node={node}
         data={d}
         title={displayLabel}
-        breadcrumb={`${guidance.category} / ${typeInfo.label}`}
+        breadcrumb={`${nodeGuidance.category} / ${typeInfo.label}`}
+        guidanceSummary={nodeGuidance.summary}
+        guidanceChecklist={nodeGuidance.checklist}
         icon={
           TypeIcon
             ? <TypeIcon className={`h-5 w-5 ${typeIconClassName}`} />
@@ -1000,103 +1158,137 @@ function NodeConfigPanel({
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <h3 className="text-sm font-semibold flex items-center gap-2">
+    <div className="flex h-full flex-col bg-card">
+      <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
+        <div className="flex min-w-0 items-start gap-2">
           <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-border/70 bg-background/70">
             {TypeIcon ? <TypeIcon className={`h-4 w-4 ${typeIconClassName}`} /> : <span className="text-xs">#</span>}
           </span>
-          <span>{typeInfo.label}</span>
-        </h3>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-foreground">{(d.label as string) || typeInfo.label}</p>
+            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+              {nodeGuidance.category} / {typeInfo.label} · {node.id}
+            </p>
+          </div>
+        </div>
         <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onDelete(node.id)}>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7"
+            title={localize(uiLang, "Дублировать ноду", "Duplicate node")}
+            onClick={() => onDuplicate(node.id)}
+          >
+            <Copy className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7 text-destructive hover:text-destructive"
+            title={localize(uiLang, "Удалить ноду", "Delete node")}
+            onClick={() => onDelete(node.id)}
+          >
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
-          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onClose}>
+          <Button size="icon" variant="ghost" className="h-7 w-7" title={localize(uiLang, "Закрыть", "Close")} onClick={onClose}>
             <X className="h-3.5 w-3.5" />
           </Button>
         </div>
       </div>
 
       <div className="flex-1 overflow-auto p-4 space-y-4">
-        {/* Guidance â collapsible */}
-        {(() => {
-          const guidance = getNodeTypeGuidance(type, uiLang);
-          return (
-            <div className="rounded-lg border border-border/50 overflow-hidden">
-              <button
-                type="button"
-                className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-muted/30 transition-colors"
-                onClick={() => setGuidanceOpen((v) => !v)}
-              >
-                <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-                  <Info className="h-3 w-3" />
-                  {guidance.category} / {typeInfo.label}
-                </div>
-                {guidanceOpen
-                  ? <ChevronUp className="h-3 w-3 text-muted-foreground" />
-                  : <ChevronDown className="h-3 w-3 text-muted-foreground" />}
-              </button>
-              {guidanceOpen && (
-                <div className="px-3 pb-2.5 space-y-1.5 border-t border-border/40 bg-muted/10">
-                  <p className="text-[10px] text-muted-foreground leading-relaxed pt-2">{guidance.summary}</p>
-                  <ul className="space-y-0.5">
-                    {guidance.checklist.map((item, i) => (
-                      <li key={i} className="text-[10px] text-muted-foreground flex items-start gap-1.5">
-                        <span className="text-primary shrink-0 mt-px">-</span> {item}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+        <section className="rounded-xl border border-primary/15 bg-primary/5 px-3 py-3">
+          <div className="flex items-start gap-2">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-foreground">
+                {localize(uiLang, "Что делает эта нода", "What this node does")}
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{nodeGuidance.summary}</p>
             </div>
-          );
-        })()}
-
-        {/* Common: label */}
-        <div className="space-y-1.5">
-          <Label className="text-xs">Label (optional)</Label>
-          <Input value={(d.label as string) || ""} onChange={(e) => set("label", e.target.value)} placeholder="Node label" className="h-7 text-xs" />
-        </div>
-
-        {(type === "trigger/manual" || type === "trigger/webhook" || type === "trigger/schedule" || type === "trigger/monitoring") && (
-          <>
-            <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground">
-              Trigger settings are created from this node when you click <strong>Save</strong>. Each trigger launches only its own branch of the graph.
+          </div>
+          {nodeGuidance.checklist.length ? (
+            <div className="mt-3 space-y-1.5">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                {localize(uiLang, "Нужно настроить", "Required setup")}
+              </p>
+              {nodeGuidance.checklist.map((item) => (
+                <div key={item} className="flex items-start gap-2 text-[11px] leading-5 text-muted-foreground">
+                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                  <span>{item}</span>
+                </div>
+              ))}
             </div>
-            <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
-              <div>
-                <p className="text-xs font-medium">Trigger enabled</p>
-                <p className="text-[10px] text-muted-foreground">Disable the start without deleting the node</p>
+          ) : null}
+        </section>
+
+        <NodeFormSection
+          title={localize(uiLang, "Основное", "Basic")}
+          description={localize(uiLang, "Название и базовое поведение шага на схеме.", "Name and basic behavior for this graph step.")}
+        >
+          <div className="space-y-1.5">
+            <Label className="text-xs">{localize(uiLang, "Название в схеме", "Node label")}</Label>
+            <Input
+              value={(d.label as string) || ""}
+              onChange={(e) => set("label", e.target.value)}
+              placeholder={localize(uiLang, "Например: Проверить alert", "Example: Check alert")}
+              className="h-8 text-xs"
+            />
+          </div>
+
+          {(type === "trigger/manual" || type === "trigger/webhook" || type === "trigger/schedule" || type === "trigger/monitoring") && (
+            <>
+              <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground">
+                {localize(
+                  uiLang,
+                  "Настройки триггера сохраняются вместе с пайплайном. Каждый триггер запускает только свою ветку графа.",
+                  "Trigger settings are saved with the pipeline. Each trigger launches only its own graph branch.",
+                )}
               </div>
-              <Switch checked={(d.is_active as boolean) ?? true} onCheckedChange={(checked) => set("is_active", checked)} />
-            </div>
-          </>
-        )}
+              <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+                <div>
+                  <p className="text-xs font-medium">{localize(uiLang, "Триггер включён", "Trigger enabled")}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {localize(uiLang, "Можно выключить запуск, не удаляя ноду", "Disable the start without deleting the node")}
+                  </p>
+                </div>
+                <Switch checked={(d.is_active as boolean) ?? true} onCheckedChange={(checked) => set("is_active", checked)} />
+              </div>
+            </>
+          )}
+        </NodeFormSection>
 
         {type === "trigger/manual" && (
           <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 space-y-1">
-            <p className="text-xs font-medium">Manual start</p>
+            <p className="text-xs font-medium">{localize(uiLang, "Ручной запуск", "Manual start")}</p>
             <p className="text-[11px] text-muted-foreground">
-              Start this pipeline from the Studio <strong>Run</strong> dialog
-              {pipelineId ? ` or POST /api/studio/pipelines/${pipelineId}/run/.` : "."}
+              {localize(uiLang, "Запускается из кнопки ", "Start this pipeline from the Studio ")}
+              <strong>{localize(uiLang, "Запуск", "Run")}</strong>
+              {pipelineId
+                ? localize(uiLang, ` или через POST /api/studio/pipelines/${pipelineId}/run/.`, ` dialog or POST /api/studio/pipelines/${pipelineId}/run/.`)
+                : "."}
             </p>
             <p className="text-[11px] text-muted-foreground">
-              If the graph has multiple manual triggers, the operator chooses which trigger node starts the run.
+              {localize(
+                uiLang,
+                "Если в графе несколько ручных триггеров, оператор выбирает, с какой ноды начать run.",
+                "If the graph has multiple manual triggers, the operator chooses which trigger node starts the run.",
+              )}
             </p>
           </div>
         )}
 
         {type === "trigger/webhook" && (
-          <>
+          <NodeFormSection title={localize(uiLang, "Вход / условие", "Input / condition")}>
             <div className="space-y-1.5">
               <Label className="text-xs">Webhook URL</Label>
               <div className="text-xs text-muted-foreground bg-muted/30 rounded px-2 py-1.5 break-all">
-                {pipelineId && triggerWebhookUrl ? triggerWebhookUrl : "Save the pipeline once to generate the webhook URL"}
+                {pipelineId && triggerWebhookUrl ? triggerWebhookUrl : localize(uiLang, "Сохраните pipeline один раз, чтобы получить Webhook URL", "Save the pipeline once to generate the webhook URL")}
               </div>
             </div>
+            <AdvancedDisclosure title={localize(uiLang, "Дополнительно", "Advanced")}>
             <div className="space-y-1.5">
-              <Label className="text-xs">Payload mapping (JSON)</Label>
+              <Label className="text-xs">{localize(uiLang, "Маппинг payload (JSON)", "Payload mapping (JSON)")}</Label>
               <Textarea
                 value={webhookMapText}
                 onChange={(e) => {
@@ -1109,61 +1301,140 @@ function NodeConfigPanel({
                 className="text-xs font-mono resize-none"
                 rows={6}
               />
-              <p className="text-[10px] text-muted-foreground">
-                Map incoming payload fields into pipeline variables, for example <code>head_commit.id</code>.
-              </p>
+              <FieldHint>
+                {localize(uiLang, "Сопоставьте поля входящего payload с переменными pipeline, например", "Map incoming payload fields into pipeline variables, for example")} <code>head_commit.id</code>.
+              </FieldHint>
               {webhookState.error && <p className="text-[10px] text-red-400">{webhookState.error}</p>}
             </div>
+            </AdvancedDisclosure>
             {trigger && (
-              <p className="text-[10px] text-muted-foreground">Last webhook run: {formatStudioDateTime(trigger.last_triggered_at)}</p>
+              <FieldHint>{localize(uiLang, "Последний Webhook run:", "Last webhook run:")} {formatStudioDateTime(trigger.last_triggered_at)}</FieldHint>
             )}
-          </>
+          </NodeFormSection>
         )}
 
         {type === "trigger/schedule" && (
-          <>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Quick presets</Label>
-              <div className="flex flex-wrap gap-2">
-                {CRON_PRESETS.map((preset) => (
-                  <Button key={preset.value} type="button" size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => set("cron_expression", preset.value)}>
-                    {preset.label}
-                  </Button>
-                ))}
+          <NodeFormSection
+            title={localize(uiLang, "Расписание запуска", "Run schedule")}
+            description={localize(
+              uiLang,
+              "Выберите понятный режим запуска. Cron доступен ниже только для нестандартных расписаний.",
+              "Choose a readable schedule. Cron is below for advanced custom schedules.",
+            )}
+          >
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2">
+              <div className="flex items-start gap-2">
+                <Clock className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-foreground">
+                    {describeCronExpression(scheduleCronExpression, uiLang)}
+                  </div>
+                  <div className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
+                    {localize(uiLang, "Сохраните пайплайн, чтобы scheduler начал использовать это расписание.", "Save the pipeline so the scheduler starts using this schedule.")}
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Cron Expression</Label>
-              <Input
-                value={(d.cron_expression as string) || ""}
-                onChange={(e) => set("cron_expression", e.target.value)}
-                placeholder="*/5 * * * *"
-                className="h-7 text-xs font-mono"
-              />
-              <p className="text-[10px] text-muted-foreground">Examples: <code>0 * * * *</code> (hourly), <code>0 0 * * *</code> (daily)</p>
+
+            <div className="space-y-2">
+              <Label className="text-xs">{localize(uiLang, "Как часто запускать", "How often to run")}</Label>
+              <div className="grid grid-cols-1 gap-2">
+                {CRON_PRESETS.map((preset) => {
+                  const active = schedulePresetId === preset.id;
+                  return (
+                    <button
+                      key={preset.value}
+                      type="button"
+                      className={cn(
+                        "rounded-lg border px-3 py-2 text-left transition-colors",
+                        active
+                          ? "border-primary/50 bg-primary/15 text-foreground"
+                          : "border-border/70 bg-background/35 text-muted-foreground hover:border-primary/30 hover:bg-secondary/25",
+                      )}
+                      onClick={() => set("cron_expression", preset.value)}
+                    >
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold text-foreground">{localize(uiLang, preset.labelRu, preset.labelEn)}</span>
+                        {active ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-primary" /> : null}
+                      </span>
+                      <span className="mt-1 block text-[10px] leading-relaxed">{localize(uiLang, preset.descriptionRu, preset.descriptionEn)}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs">{localize(uiLang, "Интервал в минутах", "Minute interval")}</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={1}
+                    max={59}
+                    value={scheduleMinuteInterval}
+                    onChange={(event) => {
+                      const minutes = Math.max(1, Math.min(59, Number(event.target.value) || 5));
+                      set("cron_expression", `*/${minutes} * * * *`);
+                    }}
+                    className="h-8 text-xs"
+                  />
+                  <span className="text-[10px] text-muted-foreground">{localize(uiLang, "мин", "min")}</span>
+                </div>
+                <FieldHint>{localize(uiLang, "Для частых проверок. Например 5, 10 или 15 минут.", "For frequent checks, e.g. 5, 10, or 15 minutes.")}</FieldHint>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">{localize(uiLang, "Ежедневно в", "Daily at")}</Label>
+                <Input
+                  type="time"
+                  value={scheduleDailyTime}
+                  onChange={(event) => set("cron_expression", dailyTimeToCron(event.target.value || "04:00"))}
+                  className="h-8 text-xs"
+                />
+                <FieldHint>{localize(uiLang, "Удобно для ежедневных отчетов в Telegram.", "Useful for daily Telegram reports.")}</FieldHint>
+              </div>
+            </div>
+
+            <AdvancedDisclosure title={localize(uiLang, "Advanced: cron выражение", "Advanced: cron expression")}>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Cron</Label>
+                <Input
+                  value={scheduleCronExpression}
+                  onChange={(e) => set("cron_expression", e.target.value)}
+                  placeholder="*/5 * * * *"
+                  className="h-8 text-xs font-mono"
+                />
+                <FieldHint>
+                  {localize(uiLang, "Формат из 5 полей:", "5-field format:")} <code>minute hour day month weekday</code>.
+                  {" "}
+                  {localize(uiLang, "Пример:", "Example:")} <code>0 4 * * *</code> = {localize(uiLang, "каждый день в 04:00", "daily at 04:00")}.
+                </FieldHint>
+              </div>
+            </AdvancedDisclosure>
+
             {trigger && (
-              <p className="text-[10px] text-muted-foreground">Last schedule run: {formatStudioDateTime(trigger.last_triggered_at)}</p>
+              <FieldHint>{localize(uiLang, "Последний запуск по расписанию:", "Last scheduled run:")} {formatStudioDateTime(trigger.last_triggered_at)}</FieldHint>
             )}
-          </>
+          </NodeFormSection>
         )}
 
         {/* Agent nodes */}
         {(type === "agent/react" || type === "agent/multi") && (
           <>
             <div className="space-y-1.5">
-              <Label className="text-xs">Goal</Label>
+              <Label className="text-xs">{localize(uiLang, "Цель", "Goal")}</Label>
               <Textarea
                 value={(d.goal as string) || ""}
                 onChange={(e) => set("goal", e.target.value)}
-                placeholder="What should this agent accomplish?"
+                placeholder={localize(uiLang, "Что агент должен сделать?", "What should this agent accomplish?")}
                 className="text-xs resize-none"
                 rows={3}
               />
-              <p className="text-[10px] text-muted-foreground">Use {"{variable}"} for context substitution</p>
+              <p className="text-[10px] text-muted-foreground">{localize(uiLang, "Используйте", "Use")} {"{variable}"} {localize(uiLang, "для подстановки контекста", "for context substitution")}</p>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Agent Config</Label>
+              <Label className="text-xs">{localize(uiLang, "Конфиг агента", "Agent Config")}</Label>
               <Select
                 value={(d.agent_config_id as string) || "__none__"}
                 onValueChange={(v) => {
@@ -1176,10 +1447,10 @@ function NodeConfigPanel({
                 }}
               >
                 <SelectTrigger className="h-7 text-xs">
-                  <SelectValue placeholder="Configure directly in this pipeline" />
+                  <SelectValue placeholder={localize(uiLang, "Настроить прямо в пайплайне", "Configure directly in this pipeline")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none__">Configure directly in this pipeline</SelectItem>
+                  <SelectItem value="__none__">{localize(uiLang, "Настроить прямо в пайплайне", "Configure directly in this pipeline")}</SelectItem>
                   {agents.map((a) => (
                     <SelectItem key={a.id} value={String(a.id)}>{a.icon} {a.name}</SelectItem>
                   ))}
@@ -1195,7 +1466,11 @@ function NodeConfigPanel({
                   {selectedAgent.skills?.length > 0 && <Badge variant="secondary" className="text-[10px]">{selectedAgent.skills.length} skills</Badge>}
                 </div>
                 <p className="text-[10px] text-muted-foreground">
-                  Saved agent config controls prompt, model, tools, attached MCP servers, and skill policies. This agent can invoke those MCP tools directly during the run.
+                  {localize(
+                    uiLang,
+                    "Используется сохранённый конфиг: он управляет промптом, моделью, инструментами, MCP-серверами и политиками. Локальные поля модели скрыты.",
+                    "Saved agent config controls the prompt, model, tools, MCP servers, and skill policies. Local model fields are hidden.",
+                  )}
                 </p>
                 {selectedAgent.skill_errors?.length ? (
                   <div className="space-y-1">
@@ -1209,7 +1484,7 @@ function NodeConfigPanel({
             {!(d.agent_config_id) && (
               <>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">System Prompt</Label>
+                  <Label className="text-xs">{localize(uiLang, "Системный промпт", "System Prompt")}</Label>
                   <Textarea
                     value={(d.system_prompt as string) || ""}
                     onChange={(e) => set("system_prompt", e.target.value)}
@@ -1220,7 +1495,7 @@ function NodeConfigPanel({
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Provider</Label>
+                    <Label className="text-xs">{localize(uiLang, "Провайдер", "Provider")}</Label>
                     <Select
                       value={provider || "auto"}
                       onValueChange={(nextProvider) => {
@@ -1254,10 +1529,10 @@ function NodeConfigPanel({
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Model</Label>
+                    <Label className="text-xs">{localize(uiLang, "Модель", "Model")}</Label>
                     {provider === "auto" ? (
                       <div className="h-7 rounded-md border border-border bg-muted/30 px-2 flex items-center text-[11px] text-muted-foreground">
-                        Uses the global default agent model
+                        {localize(uiLang, "Используется модель агента по умолчанию", "Uses the global default agent model")}
                       </div>
                     ) : (
                       <Select value={(d.model as string) || ""} onValueChange={(v) => set("model", v)} disabled={loadingModelsFor === provider}>
@@ -1274,7 +1549,7 @@ function NodeConfigPanel({
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Max Iterations</Label>
+                  <Label className="text-xs">{localize(uiLang, "Максимум шагов", "Max Iterations")}</Label>
                   <Input
                     type="number"
                     value={(d.max_iterations as number) || 10}
@@ -1285,7 +1560,7 @@ function NodeConfigPanel({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">MCP Servers</Label>
+                  <Label className="text-xs">{localize(uiLang, "MCP-серверы", "MCP Servers")}</Label>
                   <div className="space-y-1">
                     {((d.mcp_server_ids as number[]) || []).map((mcpId) => {
                       const mcp = mcpList.find((item) => item.id === mcpId);
@@ -1311,7 +1586,7 @@ function NodeConfigPanel({
                       }}
                     >
                       <SelectTrigger className="h-7 text-xs">
-                        <SelectValue placeholder="Add MCP server..." />
+                        <SelectValue placeholder={localize(uiLang, "Добавить MCP-сервер...", "Add MCP server...")} />
                       </SelectTrigger>
                       <SelectContent>
                         {mcpList.map((mcp) => (
@@ -1323,13 +1598,13 @@ function NodeConfigPanel({
                     </Select>
                   </div>
                   <p className="text-[10px] text-muted-foreground">
-                    Attached MCP servers expose their tools directly to this agent at runtime.
+                    {localize(uiLang, "Подключённые MCP-серверы дают агенту доступ к своим инструментам во время выполнения.", "Attached MCP servers expose their tools directly to this agent at runtime.")}
                   </p>
                 </div>
               </>
             )}
             <div className="space-y-1.5">
-              <Label className="text-xs">Target Servers</Label>
+              <Label className="text-xs">{localize(uiLang, "Целевые серверы", "Target Servers")}</Label>
               <div className="space-y-1">
                 {((d.server_ids as number[]) || []).map((sid) => {
                   const srv = servers.find((s) => s.id === sid);
@@ -1355,7 +1630,7 @@ function NodeConfigPanel({
                   }}
                 >
                   <SelectTrigger className="h-7 text-xs">
-                    <SelectValue placeholder="Add server..." />
+                    <SelectValue placeholder={localize(uiLang, "Добавить сервер...", "Add server...")} />
                   </SelectTrigger>
                   <SelectContent>
                     {servers.map((s) => (
@@ -1368,7 +1643,7 @@ function NodeConfigPanel({
             {skillList.length > 0 && (
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
-                  <Label className="text-xs">{selectedAgent ? "Extra Skills" : "Skills / Policies"}</Label>
+                  <Label className="text-xs">{selectedAgent ? localize(uiLang, "Дополнительные skills", "Extra Skills") : localize(uiLang, "Skills / политики", "Skills / Policies")}</Label>
                   <Button
                     variant="outline"
                     size="sm"
@@ -1376,13 +1651,13 @@ function NodeConfigPanel({
                     onClick={() => navigate("/studio/skills")}
                   >
                     <BookOpen className="h-3 w-3" />
-                    Browse Catalog
+                    {localize(uiLang, "Каталог", "Browse Catalog")}
                   </Button>
                 </div>
                 <p className="text-[10px] text-muted-foreground">
                   {selectedAgent
-                    ? "These node-level skills are merged with the selected agent config at runtime."
-                    : "Attach service playbooks, guardrails, and runtime policy directly to this node."}
+                    ? localize(uiLang, "Политики этой ноды дополняют выбранный конфиг агента во время запуска.", "These node-level skills are merged with the selected agent config at runtime.")
+                    : localize(uiLang, "Подключите playbook, ограничения и runtime-политики прямо к этой ноде.", "Attach service playbooks, guardrails, and runtime policy directly to this node.")}
                 </p>
                 <div className="space-y-1">
                   {skillList.map((skill) => (
@@ -1406,7 +1681,7 @@ function NodeConfigPanel({
                           {skill.safety_level ? <Badge variant="outline" className="text-[9px]">{skill.safety_level}</Badge> : null}
                         </div>
                         {skill.guardrail_summary?.length ? (
-                          <p className="mt-1 text-[10px] text-muted-foreground">{skill.guardrail_summary.slice(0, 2).join(" â¢ ")}</p>
+                          <p className="mt-1 text-[10px] text-muted-foreground">{skill.guardrail_summary.slice(0, 2).join(" • ")}</p>
                         ) : null}
                       </div>
                     </label>
@@ -1424,7 +1699,7 @@ function NodeConfigPanel({
               </div>
             )}
             <div className="space-y-1.5">
-              <Label className="text-xs">On Failure</Label>
+              <Label className="text-xs">{localize(uiLang, "При ошибке", "On Failure")}</Label>
               <Select value={(d.on_failure as string) || "abort"} onValueChange={(v) => set("on_failure", v)}>
                 <SelectTrigger className="h-7 text-xs">
                   <SelectValue />
@@ -1440,12 +1715,15 @@ function NodeConfigPanel({
 
         {/* SSH Command */}
         {type === "agent/ssh_cmd" && (
-          <>
+          <NodeFormSection
+            title={localize(uiLang, "Исполнение", "Execution")}
+            description={localize(uiLang, "Команда будет выполнена напрямую по SSH без LLM-планирования.", "The command runs directly over SSH without LLM planning.")}
+          >
             <div className="space-y-1.5">
-              <Label className="text-xs">Target Server</Label>
+              <Label className="text-xs">{localize(uiLang, "Целевой сервер", "Target server")}</Label>
               <Select value={String(d.server_id || "")} onValueChange={(v) => set("server_id", parseInt(v))}>
-                <SelectTrigger className="h-7 text-xs">
-                  <SelectValue placeholder="Select server..." />
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder={localize(uiLang, "Выберите сервер...", "Select server...")} />
                 </SelectTrigger>
                 <SelectContent>
                   {servers.map((s) => (
@@ -1455,7 +1733,7 @@ function NodeConfigPanel({
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Command</Label>
+              <Label className="text-xs">{localize(uiLang, "Команда", "Command")}</Label>
               <Textarea
                 value={(d.command as string) || ""}
                 onChange={(e) => set("command", e.target.value)}
@@ -1464,48 +1742,58 @@ function NodeConfigPanel({
                 rows={3}
               />
             </div>
-          </>
+          </NodeFormSection>
         )}
 
         {/* Condition */}
         {type === "logic/condition" && (
-          <>
+          <NodeFormSection
+            title={localize(uiLang, "Вход / условие", "Input / condition")}
+            description={localize(uiLang, "Выберите правило, по которому пайплайн пойдёт в ветку Да или Нет.", "Choose the rule that routes the pipeline into True or False.")}
+          >
             <div className="space-y-1.5">
-              <Label className="text-xs">Check Type</Label>
+              <Label className="text-xs">{localize(uiLang, "Тип проверки", "Check type")}</Label>
               <Select value={(d.check_type as string) || "contains"} onValueChange={(v) => set("check_type", v)}>
-                <SelectTrigger className="h-7 text-xs">
+                <SelectTrigger className="h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="contains">Output contains</SelectItem>
-                  <SelectItem value="not_contains">Output does not contain</SelectItem>
-                  <SelectItem value="status_ok">Previous node succeeded</SelectItem>
-                  <SelectItem value="status_failed">Previous node failed</SelectItem>
-                  <SelectItem value="always_true">Always true</SelectItem>
+                  <SelectItem value="contains">{localize(uiLang, "Вывод содержит текст", "Output contains")}</SelectItem>
+                  <SelectItem value="not_contains">{localize(uiLang, "Вывод не содержит текст", "Output does not contain")}</SelectItem>
+                  <SelectItem value="status_ok">{localize(uiLang, "Предыдущая нода успешна", "Previous node succeeded")}</SelectItem>
+                  <SelectItem value="status_failed">{localize(uiLang, "Предыдущая нода упала", "Previous node failed")}</SelectItem>
+                  <SelectItem value="always_true">{localize(uiLang, "Всегда Да", "Always true")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             {((d.check_type as string) || "contains").includes("contains") && (
               <div className="space-y-1.5">
-                <Label className="text-xs">Check Value</Label>
+                <Label className="text-xs">{localize(uiLang, "Текст для проверки", "Check value")}</Label>
                 <Input
                   value={(d.check_value as string) || ""}
                   onChange={(e) => set("check_value", e.target.value)}
                   placeholder="error"
-                  className="h-7 text-xs"
+                  className="h-8 text-xs"
                 />
               </div>
             )}
-          </>
+          </NodeFormSection>
         )}
 
         {type === "trigger/monitoring" && (
-          <>
+          <NodeFormSection
+            title={localize(uiLang, "Вход / условие", "Input / condition")}
+            description={localize(uiLang, "Фильтры alert-ов, по которым мониторинг запустит эту ветку.", "Alert filters that start this branch from monitoring.")}
+          >
             <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-100">
-              Monitoring trigger waits for a server alert. It does not start from the Run dialog. Save the pipeline and let the monitor open a matching alert.
+              {localize(
+                uiLang,
+                "Monitoring-триггер ждёт alert от сервера и не запускается из диалога Run. Сохраните pipeline, чтобы он начал ждать подходящее событие.",
+                "Monitoring trigger waits for a server alert and does not start from the Run dialog. Save the pipeline to arm it.",
+              )}
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Target Servers</Label>
+              <Label className="text-xs">{localize(uiLang, "Целевые серверы", "Target servers")}</Label>
               <div className="space-y-1">
                 {((d.server_ids as number[]) || []).map((sid) => {
                   const srv = servers.find((s) => s.id === sid);
@@ -1531,8 +1819,8 @@ function NodeConfigPanel({
                     if (!ids.includes(nextId)) setMonitoringFilters({ server_ids: [...ids, nextId] });
                   }}
                 >
-                  <SelectTrigger className="h-7 text-xs">
-                    <SelectValue placeholder="Add server..." />
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder={localize(uiLang, "Добавить сервер...", "Add server...")} />
                   </SelectTrigger>
                   <SelectContent>
                     {servers.map((s) => (
@@ -1542,11 +1830,11 @@ function NodeConfigPanel({
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-[10px] text-muted-foreground">Leave empty to react to alerts from any accessible server.</p>
+                <FieldHint>{localize(uiLang, "Оставьте пустым, чтобы реагировать на alert-ы со всех доступных серверов.", "Leave empty to react to alerts from any accessible server.")}</FieldHint>
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Severity filters</Label>
+              <Label className="text-xs">{localize(uiLang, "Severity-фильтры", "Severity filters")}</Label>
               <div className="grid grid-cols-1 gap-2">
                 {[
                   { value: "info", label: "info" },
@@ -1574,7 +1862,7 @@ function NodeConfigPanel({
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Alert types</Label>
+              <Label className="text-xs">{localize(uiLang, "Типы alert-ов", "Alert types")}</Label>
               <div className="grid grid-cols-1 gap-2">
                 {[
                   "service",
@@ -1604,8 +1892,9 @@ function NodeConfigPanel({
                 })}
               </div>
             </div>
+            <AdvancedDisclosure title={localize(uiLang, "Дополнительно", "Advanced")}>
             <div className="space-y-1.5">
-              <Label className="text-xs">Docker container names</Label>
+              <Label className="text-xs">{localize(uiLang, "Имена Docker-контейнеров", "Docker container names")}</Label>
               <Textarea
                 value={((d.container_names as string[]) || []).join("\n")}
                 onChange={(e) =>
@@ -1620,62 +1909,69 @@ function NodeConfigPanel({
                 className="text-xs font-mono resize-none"
                 rows={3}
               />
-              <p className="text-[10px] text-muted-foreground">Optional. One container name per line.</p>
+              <FieldHint>{localize(uiLang, "Опционально. Одно имя контейнера на строку.", "Optional. One container name per line.")}</FieldHint>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Text match</Label>
+              <Label className="text-xs">{localize(uiLang, "Поиск по тексту", "Text match")}</Label>
               <Input
                 value={(d.match_text as string) || ""}
                 onChange={(e) => setMonitoringFilters({ match_text: e.target.value })}
-                placeholder="Optional substring to match in title/message/metadata"
-                className="h-7 text-xs"
+                placeholder={localize(uiLang, "Опциональная подстрока в title/message/metadata", "Optional substring to match in title/message/metadata")}
+                className="h-8 text-xs"
               />
             </div>
+            </AdvancedDisclosure>
             {trigger ? (
-              <p className="text-[10px] text-muted-foreground">
-                Last monitoring-triggered run: {formatStudioDateTime(trigger.last_triggered_at)}
-              </p>
+              <FieldHint>
+                {localize(uiLang, "Последний запуск мониторингом:", "Last monitoring-triggered run:")} {formatStudioDateTime(trigger.last_triggered_at)}
+              </FieldHint>
             ) : null}
-          </>
+          </NodeFormSection>
         )}
 
         {type === "logic/merge" && (
-          <>
+          <NodeFormSection
+            title={localize(uiLang, "Исполнение", "Execution")}
+            description={localize(uiLang, "Как несколько входящих веток снова сходятся в одну.", "How several incoming branches join back into one flow.")}
+          >
             <div className="space-y-1.5">
-              <Label className="text-xs">Merge Mode</Label>
+              <Label className="text-xs">{localize(uiLang, "Режим слияния", "Merge mode")}</Label>
               <Select value={(d.mode as string) || "all"} onValueChange={(value) => set("mode", value)}>
-                <SelectTrigger className="h-7 text-xs">
+                <SelectTrigger className="h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">all: wait for every activated branch</SelectItem>
-                  <SelectItem value="any">any: continue after the first completed branch</SelectItem>
+                  <SelectItem value="all">{localize(uiLang, "all: ждать все активные ветки", "all: wait for every activated branch")}</SelectItem>
+                  <SelectItem value="any">{localize(uiLang, "any: продолжить после первой готовой ветки", "any: continue after the first completed branch")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <p className="text-[10px] text-muted-foreground">
-              Use merge nodes instead of wiring multiple incoming edges directly into an action or output node.
-            </p>
-          </>
+            <FieldHint>
+              {localize(uiLang, "Используйте Merge вместо нескольких входящих связей прямо в action/output ноду.", "Use merge nodes instead of wiring multiple incoming edges directly into an action or output node.")}
+            </FieldHint>
+          </NodeFormSection>
         )}
 
         {/* Output/Webhook */}
         {type === "output/webhook" && (
+          <NodeFormSection title={localize(uiLang, "Доставка", "Delivery")}>
           <div className="space-y-1.5">
             <Label className="text-xs">Webhook URL</Label>
             <Input
               value={(d.url as string) || ""}
               onChange={(e) => set("url", e.target.value)}
               placeholder="https://hooks.example.com/..."
-              className="h-7 text-xs"
+              className="h-8 text-xs"
             />
           </div>
+          </NodeFormSection>
         )}
 
         {/* Output/Report */}
         {type === "output/report" && (
+          <NodeFormSection title={localize(uiLang, "Доставка", "Delivery")}>
           <div className="space-y-1.5">
-            <Label className="text-xs">Report Template (optional)</Label>
+            <Label className="text-xs">{localize(uiLang, "Шаблон отчёта", "Report template")}</Label>
             <Textarea
               value={(d.template as string) || ""}
               onChange={(e) => set("template", e.target.value)}
@@ -1683,13 +1979,18 @@ function NodeConfigPanel({
               className="text-xs font-mono resize-none"
               rows={4}
             />
-            <p className="text-[10px] text-muted-foreground">Leave empty for auto-generated report</p>
+            <FieldHint>{localize(uiLang, "Оставьте пустым для авто-сгенерированного отчёта.", "Leave empty for auto-generated report.")}</FieldHint>
           </div>
+          </NodeFormSection>
         )}
 
         {/* LLM Query */}
         {type === "agent/llm_query" && (
           <>
+            <NodeFormSection
+              title={localize(uiLang, "Вход / условие", "Input / condition")}
+              description={localize(uiLang, "Запрос к модели без автономных инструментов.", "Model prompt without autonomous tools.")}
+            >
             <div className="space-y-1.5">
               <Label className="text-xs">Prompt</Label>
               <Textarea
@@ -1699,10 +2000,12 @@ function NodeConfigPanel({
                 className="text-xs resize-none"
                 rows={5}
               />
-              <p className="text-[10px] text-muted-foreground">
-                Use <code>{"{all_outputs}"}</code> for all previous node outputs, or <code>{"{node_id}"}</code> for a specific node
-              </p>
+              <FieldHint>
+                {localize(uiLang, "Используйте", "Use")} <code>{"{all_outputs}"}</code> {localize(uiLang, "для всех предыдущих выводов или", "for all previous node outputs, or")} <code>{"{node_id}"}</code> {localize(uiLang, "для конкретной ноды.", "for a specific node.")}
+              </FieldHint>
             </div>
+            </NodeFormSection>
+            <NodeFormSection title={localize(uiLang, "Исполнение", "Execution")}>
             <div className="space-y-1.5">
               <Label className="text-xs">System Prompt</Label>
               <Textarea
@@ -1715,7 +2018,7 @@ function NodeConfigPanel({
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">Provider</Label>
+                <Label className="text-xs">{localize(uiLang, "Провайдер", "Provider")}</Label>
                 <Select
                   value={(d.provider as string) || "gemini"}
                   onValueChange={(nextProvider) => {
@@ -1734,7 +2037,7 @@ function NodeConfigPanel({
                       .finally(() => setLoadingModelsFor(null));
                   }}
                 >
-                  <SelectTrigger className="h-7 text-xs">
+                  <SelectTrigger className="h-8 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1745,32 +2048,34 @@ function NodeConfigPanel({
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Model</Label>
+                <Label className="text-xs">{localize(uiLang, "Модель", "Model")}</Label>
                 <Select value={(d.model as string) || ""} onValueChange={(v) => set("model", v)} disabled={loadingModelsFor === provider}>
-                  <SelectTrigger className="h-7 text-xs">
-                    <SelectValue placeholder={loadingModelsFor === provider ? "Loading models..." : "Select model"} />
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder={loadingModelsFor === provider ? localize(uiLang, "Загрузка моделей...", "Loading models...") : localize(uiLang, "Выберите модель", "Select model")} />
                   </SelectTrigger>
                   <SelectContent>
                     {modelList.length
                       ? modelList.map((model) => <SelectItem key={model} value={model}>{model}</SelectItem>)
-                      : <SelectItem value="_empty" disabled>No models available</SelectItem>}
+                      : <SelectItem value="_empty" disabled>{localize(uiLang, "Модели недоступны", "No models available")}</SelectItem>}
                   </SelectContent>
                 </Select>
               </div>
             </div>
-            <p className="text-[10px] text-muted-foreground">
-              Output is available for next nodes as <code>{`{${node.id}}`}</code> and <code>{`{${node.id}_output}`}</code>
-            </p>
+            <FieldHint>
+              {localize(uiLang, "Вывод доступен следующим нодам как", "Output is available for next nodes as")} <code>{`{${node.id}}`}</code> {localize(uiLang, "и", "and")} <code>{`{${node.id}_output}`}</code>
+            </FieldHint>
+            </NodeFormSection>
           </>
         )}
 
         {type === "agent/mcp_call" && (
           <>
-            <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground">
-              Use this node when the pipeline must call a specific MCP tool directly, without waiting for an LLM or agent to decide.
-            </div>
+            <NodeFormSection
+              title={localize(uiLang, "Исполнение", "Execution")}
+              description={localize(uiLang, "Прямой вызов конкретного MCP-инструмента без выбора со стороны агента.", "Direct MCP tool call without waiting for an agent to choose.")}
+            >
             <div className="space-y-1.5">
-              <Label className="text-xs">MCP Server</Label>
+              <Label className="text-xs">MCP-сервер</Label>
               <Select
                 value={selectedMcpId ? String(selectedMcpId) : "__none__"}
                 onValueChange={(value) => {
@@ -1783,11 +2088,11 @@ function NodeConfigPanel({
                   setMany({ mcp_server_id: Number(value), mcp_server_name: nextMcp?.name || "", tool_name: "" });
                 }}
               >
-                <SelectTrigger className="h-7 text-xs">
-                  <SelectValue placeholder="Select MCP server..." />
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder={localize(uiLang, "Выберите MCP-сервер...", "Select MCP server...")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none__">Select MCP server...</SelectItem>
+                  <SelectItem value="__none__">{localize(uiLang, "Выберите MCP-сервер...", "Select MCP server...")}</SelectItem>
                   {mcpList.map((mcp) => (
                     <SelectItem key={mcp.id} value={String(mcp.id)}>
                       {mcp.name} ({mcp.transport})
@@ -1796,13 +2101,17 @@ function NodeConfigPanel({
                 </SelectContent>
               </Select>
               {selectedMcp && (
-                <p className="text-[10px] text-muted-foreground">
-                  {selectedMcp.last_test_ok === true ? "Last connection test passed." : selectedMcp.last_test_ok === false ? "Last connection test failed." : "Server has not been tested yet."}
-                </p>
+                <FieldHint>
+                  {selectedMcp.last_test_ok === true
+                    ? localize(uiLang, "Последняя проверка подключения успешна.", "Last connection test passed.")
+                    : selectedMcp.last_test_ok === false
+                      ? localize(uiLang, "Последняя проверка подключения упала.", "Last connection test failed.")
+                      : localize(uiLang, "Сервер ещё не проверялся.", "Server has not been tested yet.")}
+                </FieldHint>
               )}
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Tool</Label>
+              <Label className="text-xs">{localize(uiLang, "Инструмент", "Tool")}</Label>
               <Select
                 value={(d.tool_name as string) || "__none__"}
                 onValueChange={(value) => {
@@ -1823,11 +2132,11 @@ function NodeConfigPanel({
                 }}
                 disabled={!selectedMcpId || isFetchingMcpTools}
               >
-                <SelectTrigger className="h-7 text-xs">
-                  <SelectValue placeholder={isFetchingMcpTools ? "Loading tools..." : "Select tool"} />
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder={isFetchingMcpTools ? localize(uiLang, "Загрузка инструментов...", "Loading tools...") : localize(uiLang, "Выберите инструмент", "Select tool")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none__" disabled>Select tool</SelectItem>
+                  <SelectItem value="__none__" disabled>{localize(uiLang, "Выберите инструмент", "Select tool")}</SelectItem>
                   {mcpTools.map((tool) => (
                     <SelectItem key={tool.name} value={tool.name}>{tool.name}</SelectItem>
                   ))}
@@ -1844,6 +2153,8 @@ function NodeConfigPanel({
                 )}
               </div>
             )}
+            </NodeFormSection>
+            <AdvancedDisclosure title={localize(uiLang, "Дополнительно", "Advanced")} defaultOpen>
             <div className="space-y-1.5">
               <Label className="text-xs">Arguments (JSON)</Label>
               <Textarea
@@ -1859,49 +2170,42 @@ function NodeConfigPanel({
                 className="text-xs font-mono resize-none"
                 rows={8}
               />
-              <p className="text-[10px] text-muted-foreground">
-                Arguments support pipeline variables like <code>{"{branch}"}</code> and <code>{"{node_2_output}"}</code>.
-              </p>
+              <FieldHint>
+                {localize(uiLang, "Аргументы поддерживают переменные pipeline вроде", "Arguments support pipeline variables like")} <code>{"{branch}"}</code> {localize(uiLang, "и", "and")} <code>{"{node_2_output}"}</code>.
+              </FieldHint>
               {mcpArgsState.error && <p className="text-[10px] text-red-400">{mcpArgsState.error}</p>}
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">On Failure</Label>
-              <Select value={(d.on_failure as string) || "abort"} onValueChange={(value) => set("on_failure", value)}>
-                <SelectTrigger className="h-7 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="abort">Abort pipeline</SelectItem>
-                  <SelectItem value="continue">Continue</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            </AdvancedDisclosure>
+            <NodeFormSection title={localize(uiLang, "Ошибки", "Errors")}>
+              <FailureSelect lang={uiLang} value={(d.on_failure as string) || "abort"} onChange={(value) => set("on_failure", value)} />
+            </NodeFormSection>
           </>
         )}
 
         {/* Email Output */}
         {type === "output/email" && (
           <>
+            <NodeFormSection title={localize(uiLang, "Доставка", "Delivery")}>
             <div className="space-y-1.5">
-              <Label className="text-xs">To Email(s)</Label>
+              <Label className="text-xs">{localize(uiLang, "Получатели email", "To email(s)")}</Label>
               <Input
                 value={(d.to_email as string) || ""}
                 onChange={(e) => set("to_email", e.target.value)}
                 placeholder="admin@example.com, team@example.com"
-                className="h-7 text-xs"
+                className="h-8 text-xs"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Subject</Label>
+              <Label className="text-xs">{localize(uiLang, "Тема письма", "Subject")}</Label>
               <Input
                 value={(d.subject as string) || ""}
                 onChange={(e) => set("subject", e.target.value)}
                 placeholder="Pipeline Report: {pipeline_name}"
-                className="h-7 text-xs"
+                className="h-8 text-xs"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Body Template (optional)</Label>
+              <Label className="text-xs">{localize(uiLang, "Шаблон тела письма", "Body template")}</Label>
               <Textarea
                 value={(d.body as string) || ""}
                 onChange={(e) => set("body", e.target.value)}
@@ -1909,127 +2213,138 @@ function NodeConfigPanel({
                 className="text-xs font-mono resize-none"
                 rows={3}
               />
-              <p className="text-[10px] text-muted-foreground">Leave empty for auto-generated body</p>
+              <FieldHint>{localize(uiLang, "Оставьте пустым для авто-сгенерированного текста.", "Leave empty for auto-generated body.")}</FieldHint>
             </div>
-            <div className="border-t border-border pt-3 space-y-1.5">
-              <Label className="text-xs text-muted-foreground uppercase">SMTP Settings (override Django settings)</Label>
+            </NodeFormSection>
+            <AdvancedDisclosure title={localize(uiLang, "Дополнительно", "Advanced")}>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground uppercase">{localize(uiLang, "SMTP настройки", "SMTP settings")}</Label>
               <Input
                 value={(d.smtp_host as string) || ""}
                 onChange={(e) => set("smtp_host", e.target.value)}
                 placeholder="smtp.gmail.com"
-                className="h-7 text-xs"
+                className="h-8 text-xs"
               />
               <div className="flex gap-2">
                 <Input
                   value={(d.smtp_user as string) || ""}
                   onChange={(e) => set("smtp_user", e.target.value)}
                   placeholder="user@gmail.com"
-                  className="h-7 text-xs flex-1"
+                  className="h-8 text-xs flex-1"
                 />
                 <Input
                   value={(d.smtp_password as string) || ""}
                   onChange={(e) => set("smtp_password", e.target.value)}
                   placeholder="app password"
                   type="password"
-                  className="h-7 text-xs w-28"
+                  className="h-8 text-xs w-28"
                 />
               </div>
             </div>
+            </AdvancedDisclosure>
           </>
         )}
 
         {/* Wait */}
         {type === "logic/wait" && (
+          <NodeFormSection title={localize(uiLang, "Исполнение", "Execution")}>
           <div className="space-y-1.5">
-            <Label className="text-xs">Wait Duration (minutes)</Label>
+            <Label className="text-xs">{localize(uiLang, "Длительность паузы (минуты)", "Wait duration (minutes)")}</Label>
             <Input
               type="number"
               value={(d.wait_minutes as number) ?? 20}
               onChange={(e) => set("wait_minutes", parseFloat(e.target.value) || 1)}
-              className="h-7 text-xs"
+              className="h-8 text-xs"
               min={0.1}
               max={1440}
               step={0.5}
             />
-            <p className="text-[10px] text-muted-foreground">Range: 0.1 â 1440 minutes (24h max)</p>
+            <FieldHint>{localize(uiLang, "Диапазон: 0.1-1440 минут, максимум 24 часа.", "Range: 0.1-1440 minutes, 24h max.")}</FieldHint>
           </div>
+          </NodeFormSection>
         )}
 
         {/* Human Approval */}
         {type === "logic/human_approval" && (
           <>
+            <NodeFormSection
+              title={localize(uiLang, "Доставка", "Delivery")}
+              description={localize(uiLang, "Куда отправить approve/reject запрос оператору.", "Where to send the operator approve/reject request.")}
+            >
             <div className="space-y-1.5">
-              <Label className="text-xs">ÐÐ¾Ð¼Ñ (email)</Label>
+              <Label className="text-xs">Кому (email)</Label>
               <Input
                 value={(d.to_email as string) || ""}
                 onChange={(e) => set("to_email", e.target.value)}
-                placeholder="Ð¸Ð»Ð¸ Ð¸Ð· Studio â Notifications"
-                className="h-7 text-xs"
+                placeholder="или из Studio → Notifications"
+                className="h-8 text-xs"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Ð¢ÐµÐ¼Ð° Ð¿Ð¸ÑÑÐ¼Ð° (ÑÐ°Ð±Ð»Ð¾Ð½)</Label>
+              <Label className="text-xs">Тема письма (шаблон)</Label>
               <Input
                 value={(d.email_subject as string) || ""}
                 onChange={(e) => set("email_subject", e.target.value)}
-                placeholder="ÐÑÑÑÐ¾ = ÑÐµÐ¼Ð° Ð¿Ð¾ ÑÐ¼Ð¾Ð»ÑÐ°Ð½Ð¸Ñ"
-                className="h-7 text-xs"
+                placeholder="Пусто = тема по умолчанию"
+                className="h-8 text-xs"
               />
-              <p className="text-[10px] text-muted-foreground">
-                ÐÐµÑÐµÐ¼ÐµÐ½Ð½ÑÐµ: {"{pipeline_name}"}, {"{run_id}"}
-              </p>
+              <FieldHint>
+                Переменные: {"{pipeline_name}"}, {"{run_id}"}
+              </FieldHint>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Ð¢ÐµÐºÑÑ Ð¿Ð¸ÑÑÐ¼Ð° (ÑÐ°Ð±Ð»Ð¾Ð½)</Label>
+              <Label className="text-xs">Текст письма (шаблон)</Label>
               <Textarea
                 value={(d.email_body as string) || ""}
                 onChange={(e) => set("email_body", e.target.value)}
-                placeholder="ÐÑÑÑÐ¾ = ÑÐµÐºÑÑ Ð¿Ð¾ ÑÐ¼Ð¾Ð»ÑÐ°Ð½Ð¸Ñ. ÐÐµÑÐµÐ¼ÐµÐ½Ð½ÑÐµ Ð½Ð¸Ð¶Ðµ."
+                placeholder="Пусто = текст по умолчанию. Переменные ниже."
                 className="text-xs resize-none"
                 rows={8}
               />
-              <p className="text-[10px] text-muted-foreground">
+              <FieldHint>
                 {"{approve_url}"}, {"{reject_url}"}, {"{all_outputs}"}, {"{timeout_minutes}"}
-              </p>
+              </FieldHint>
             </div>
-            <div className="border-t border-border pt-3 space-y-1.5">
+            <div className="space-y-1.5">
+              <Label className="text-xs">{localize(uiLang, "Timeout, минут", "Timeout (minutes)")}</Label>
+              <Input
+                type="number"
+                value={(d.timeout_minutes as number) ?? 120}
+                onChange={(e) => set("timeout_minutes", parseFloat(e.target.value) || 120)}
+                className="h-8 text-xs"
+                min={5}
+                max={10080}
+              />
+            </div>
+            </NodeFormSection>
+            <AdvancedDisclosure title={localize(uiLang, "Дополнительно", "Advanced")}>
+            <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground uppercase">Telegram</Label>
               <Input
                 value={(d.tg_bot_token as string) || ""}
                 onChange={(e) => set("tg_bot_token", e.target.value)}
                 placeholder="Bot Token (from @BotFather)"
-                className="h-7 text-xs font-mono"
+                className="h-8 text-xs font-mono"
               />
               <Input
                 value={(d.tg_chat_id as string) || ""}
                 onChange={(e) => set("tg_chat_id", e.target.value)}
                 placeholder="Chat ID (e.g. -100123456)"
-                className="h-7 text-xs font-mono"
+                className="h-8 text-xs font-mono"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Base URL (for approval links)</Label>
+              <Label className="text-xs">{localize(uiLang, "Base URL для approval-ссылок", "Base URL for approval links")}</Label>
               <Input
                 value={(d.base_url as string) || ""}
                 onChange={(e) => set("base_url", e.target.value)}
                 placeholder="https://your-server.example.com"
-                className="h-7 text-xs"
+                className="h-8 text-xs"
               />
-              <p className="text-[10px] text-muted-foreground">Used in approve/reject URLs sent in notifications</p>
+              <FieldHint>{localize(uiLang, "Используется в approve/reject ссылках из уведомлений.", "Used in approve/reject URLs sent in notifications.")}</FieldHint>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Timeout (minutes)</Label>
-              <Input
-                type="number"
-                value={(d.timeout_minutes as number) ?? 120}
-                onChange={(e) => set("timeout_minutes", parseFloat(e.target.value) || 120)}
-                className="h-7 text-xs"
-                min={5}
-                max={10080}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Ð¡Ð¾Ð¾Ð±ÑÐµÐ½Ð¸Ðµ Ð² Telegram (ÑÐ°Ð±Ð»Ð¾Ð½)</Label>
+              <Label className="text-xs">Сообщение в Telegram (шаблон)</Label>
               <Textarea
                 value={(d.message as string) || ""}
                 onChange={(e) => set("message", e.target.value)}
@@ -2038,45 +2353,76 @@ function NodeConfigPanel({
                 rows={4}
               />
             </div>
-            <div className="border-t border-border pt-3 space-y-1.5">
-              <Label className="text-xs text-muted-foreground uppercase">SMTP (for approval email)</Label>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground uppercase">{localize(uiLang, "SMTP для approval email", "SMTP for approval email")}</Label>
               <Input
                 value={(d.smtp_host as string) || ""}
                 onChange={(e) => set("smtp_host", e.target.value)}
                 placeholder="smtp.gmail.com"
-                className="h-7 text-xs"
+                className="h-8 text-xs"
               />
               <div className="flex gap-2">
                 <Input
                   value={(d.smtp_user as string) || ""}
                   onChange={(e) => set("smtp_user", e.target.value)}
                   placeholder="user@gmail.com"
-                  className="h-7 text-xs flex-1"
+                  className="h-8 text-xs flex-1"
                 />
                 <Input
                   value={(d.smtp_password as string) || ""}
                   onChange={(e) => set("smtp_password", e.target.value)}
                   placeholder="app password"
                   type="password"
-                  className="h-7 text-xs w-28"
+                  className="h-8 text-xs w-28"
                 />
               </div>
             </div>
+            </AdvancedDisclosure>
           </>
         )}
 
         {type === "logic/telegram_input" && (
           <>
+            <NodeFormSection
+              title={localize(uiLang, "Доставка", "Delivery")}
+              description={localize(uiLang, "Сообщение оператору и ожидание текстового ответа.", "Prompt the operator and wait for a plain text reply.")}
+            >
             <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-[11px] text-cyan-100">
-              Ð­ÑÐ¾Ñ ÑÐ·ÐµÐ» Ð¾ÑÐ¿ÑÐ°Ð²Ð»ÑÐµÑ ÑÐ¾Ð¾Ð±ÑÐµÐ½Ð¸Ðµ Ð² Telegram Ð¸ Ð¶Ð´ÑÑ Ð¾Ð±ÑÑÐ½ÑÐ¹ ÑÐµÐºÑÑÐ¾Ð²ÑÐ¹ reply Ð¾Ñ Ð¾Ð¿ÐµÑÐ°ÑÐ¾ÑÐ°.
+              Этот узел отправляет сообщение в Telegram и ждёт обычный текстовый reply от оператора.
             </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">{localize(uiLang, "Шаблон сообщения", "Message template")}</Label>
+              <Textarea
+                value={(d.message as string) || ""}
+                onChange={(e) => set("message", e.target.value)}
+                placeholder="Опишите, какой ответ вы ждёте от оператора"
+                className="text-xs resize-none"
+                rows={6}
+              />
+              <FieldHint>
+                Переменные: {"{pipeline_name}"}, {"{run_id}"}, {"{all_outputs}"}
+              </FieldHint>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">{localize(uiLang, "Timeout, минут", "Timeout (minutes)")}</Label>
+              <Input
+                type="number"
+                value={(d.timeout_minutes as number) ?? 120}
+                onChange={(e) => set("timeout_minutes", parseFloat(e.target.value) || 120)}
+                className="h-8 text-xs"
+                min={1}
+                max={10080}
+              />
+            </div>
+            </NodeFormSection>
+            <AdvancedDisclosure title={localize(uiLang, "Дополнительно", "Advanced")}>
             <div className="space-y-1.5">
               <Label className="text-xs">Bot Token</Label>
               <Input
                 value={(d.tg_bot_token as string) || ""}
                 onChange={(e) => set("tg_bot_token", e.target.value)}
-                placeholder="Ð¸Ð»Ð¸ Ð³Ð»Ð¾Ð±Ð°Ð»ÑÐ½Ð¾ Ð² Studio â Notifications"
-                className="h-7 text-xs font-mono"
+                placeholder="или глобально в Studio → Notifications"
+                className="h-8 text-xs font-mono"
               />
             </div>
             <div className="space-y-1.5">
@@ -2085,48 +2431,42 @@ function NodeConfigPanel({
                 value={(d.tg_chat_id as string) || ""}
                 onChange={(e) => set("tg_chat_id", e.target.value)}
                 placeholder="-100123456789"
-                className="h-7 text-xs font-mono"
+                className="h-8 text-xs font-mono"
               />
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Message Template</Label>
-              <Textarea
-                value={(d.message as string) || ""}
-                onChange={(e) => set("message", e.target.value)}
-                placeholder="ÐÐ¿Ð¸ÑÐ¸ÑÐµ, ÐºÐ°ÐºÐ¾Ð¹ Ð¾ÑÐ²ÐµÑ Ð²Ñ Ð¶Ð´ÑÑÐµ Ð¾Ñ Ð¾Ð¿ÐµÑÐ°ÑÐ¾ÑÐ°"
-                className="text-xs resize-none"
-                rows={6}
-              />
-              <p className="text-[10px] text-muted-foreground">
-                ÐÐµÑÐµÐ¼ÐµÐ½Ð½ÑÐµ: {"{pipeline_name}"}, {"{run_id}"}, {"{all_outputs}"}
-              </p>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Timeout (minutes)</Label>
-              <Input
-                type="number"
-                value={(d.timeout_minutes as number) ?? 120}
-                onChange={(e) => set("timeout_minutes", parseFloat(e.target.value) || 120)}
-                className="h-7 text-xs"
-                min={1}
-                max={10080}
-              />
-            </div>
+            </AdvancedDisclosure>
           </>
         )}
 
         {/* Telegram Output */}
         {type === "output/telegram" && (
           <>
+            <NodeFormSection title={localize(uiLang, "Доставка", "Delivery")}>
+            <div className="space-y-1.5">
+              <Label className="text-xs">{localize(uiLang, "Шаблон сообщения", "Message template")}</Label>
+              <Textarea
+                value={(d.message as string) || ""}
+                onChange={(e) => set("message", e.target.value)}
+                placeholder="*{pipeline_name}*\n\n{all_outputs}"
+                className="text-xs resize-none"
+                rows={4}
+              />
+              <FieldHint>
+                {localize(uiLang, "Поддерживает Markdown. Переменные:", "Supports Markdown. Variables:")} <code>{"{all_outputs}"}</code>,{" "}
+                <code>{"{node_id_output}"}</code>
+              </FieldHint>
+            </div>
+            </NodeFormSection>
+            <AdvancedDisclosure title={localize(uiLang, "Дополнительно", "Advanced")}>
             <div className="space-y-1.5">
               <Label className="text-xs">Bot Token</Label>
               <Input
                 value={(d.bot_token as string) || ""}
                 onChange={(e) => set("bot_token", e.target.value)}
                 placeholder="1234567890:AAF..."
-                className="h-7 text-xs font-mono"
+                className="h-8 text-xs font-mono"
               />
-              <p className="text-[10px] text-muted-foreground">Get from @BotFather on Telegram</p>
+              <FieldHint>{localize(uiLang, "Получите токен у @BotFather в Telegram.", "Get from @BotFather on Telegram.")}</FieldHint>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Chat ID</Label>
@@ -2134,26 +2474,11 @@ function NodeConfigPanel({
                 value={(d.chat_id as string) || ""}
                 onChange={(e) => set("chat_id", e.target.value)}
                 placeholder="-100123456789"
-                className="h-7 text-xs font-mono"
+                className="h-8 text-xs font-mono"
               />
-              <p className="text-[10px] text-muted-foreground">
-                Use @userinfobot or @getidsbot to find your chat ID
-              </p>
+              <FieldHint>{localize(uiLang, "Chat ID можно найти через @userinfobot или @getidsbot.", "Use @userinfobot or @getidsbot to find your chat ID.")}</FieldHint>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Message Template (optional)</Label>
-              <Textarea
-                value={(d.message as string) || ""}
-                onChange={(e) => set("message", e.target.value)}
-                placeholder="ð *{pipeline_name}*\n\n{all_outputs}"
-                className="text-xs resize-none"
-                rows={4}
-              />
-              <p className="text-[10px] text-muted-foreground">
-                Supports Markdown. Variables: <code>{"{all_outputs}"}</code>,{" "}
-                <code>{"{node_id_output}"}</code>
-              </p>
-            </div>
+            </AdvancedDisclosure>
           </>
         )}
       </div>
@@ -2179,12 +2504,11 @@ function NodePalette({ onAddNode, lang }: { onAddNode: (type: NodeType) => void;
 
   const filtered = NODE_PALETTE.map((cat) => ({
     ...cat,
-    nodes: cat.nodes.filter(
-      (n) =>
-        !search.trim() ||
-        n.label.toLowerCase().includes(search.toLowerCase()) ||
-        n.description.toLowerCase().includes(search.toLowerCase()),
-    ),
+    nodes: cat.nodes.filter((n) => {
+      const nodeText = getNodePaletteText(n.type, lang);
+      const query = search.trim().toLowerCase();
+      return !query || nodeText.label.toLowerCase().includes(query) || nodeText.description.toLowerCase().includes(query);
+    }),
   })).filter((cat) => cat.nodes.length > 0);
 
   return (
@@ -2223,6 +2547,7 @@ function NodePalette({ onAddNode, lang }: { onAddNode: (type: NodeType) => void;
                   cat.nodes.map((node) => {
                     const Icon = node.icon;
                     const guidance = getNodeTypeGuidance(node.type, lang);
+                    const nodeText = getNodePaletteText(node.type, lang);
                     return (
                       <Tooltip key={node.type}>
                         <TooltipTrigger asChild>
@@ -2239,8 +2564,8 @@ function NodePalette({ onAddNode, lang }: { onAddNode: (type: NodeType) => void;
                               <Icon className={`h-[18px] w-[18px] ${node.iconClassName || "text-foreground"}`} />
                             </span>
                             <div className="min-w-0 flex-1">
-                              <div className="truncate text-[12px] font-medium text-foreground">{node.label}</div>
-                              <div className="mt-0.5 truncate text-[10px] leading-tight text-muted-foreground">{node.description}</div>
+                              <div className="truncate text-[12px] font-medium text-foreground">{nodeText.label}</div>
+                              <div className="mt-0.5 truncate text-[10px] leading-tight text-muted-foreground">{nodeText.description}</div>
                             </div>
                             <Plus className="ml-auto h-3.5 w-3.5 shrink-0 text-primary opacity-0 transition-opacity group-hover:opacity-100" />
                           </button>
@@ -2252,7 +2577,7 @@ function NodePalette({ onAddNode, lang }: { onAddNode: (type: NodeType) => void;
                                 <Icon className={`h-4 w-4 ${node.iconClassName || "text-foreground"}`} />
                               </span>
                               <div className="min-w-0">
-                                <p className="text-sm font-semibold text-foreground">{node.label}</p>
+                                <p className="text-sm font-semibold text-foreground">{nodeText.label}</p>
                                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{guidance.category}</p>
                               </div>
                             </div>
@@ -2283,6 +2608,270 @@ function NodePalette({ onAddNode, lang }: { onAddNode: (type: NodeType) => void;
         <p className="text-center text-[9px] text-muted-foreground">
           {localize(lang, "Кликните по ноде или перетащите её на холст", "Click a node or drag it onto the canvas")}
         </p>
+      </div>
+    </div>
+  );
+}
+
+function AssistantProposalCard({
+  proposal,
+  onApply,
+  onApplyAndSave,
+  onDiscard,
+  applying,
+  lang,
+}: {
+  proposal: StudioPipelineAssistantResponse;
+  onApply: () => void;
+  onApplyAndSave: () => void;
+  onDiscard: () => void;
+  applying?: boolean;
+  lang: "en" | "ru";
+}) {
+  const stats = getAssistantPatchStats(proposal);
+  const validationOk = proposal.validation?.ok !== false;
+  const riskDangerous = proposal.risk?.level === "dangerous";
+  const canApply = stats.hasChanges && validationOk && !riskDangerous && !applying;
+
+  return (
+    <div className="rounded-xl border border-border bg-background/70 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-foreground">
+            {localize(lang, "Черновик изменений", "Draft proposal")}
+          </div>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            {proposal.patch_summary || proposal.reply || localize(lang, "ИИ подготовил изменения графа.", "The assistant proposed graph changes.")}
+          </p>
+        </div>
+        {validationOk ? (
+          <Badge className="border-emerald-500/25 bg-emerald-500/10 text-emerald-300" variant="outline">
+            <CheckCircle2 className="mr-1 h-3 w-3" />
+            OK
+          </Badge>
+        ) : (
+          <Badge className="border-red-500/25 bg-red-500/10 text-red-300" variant="outline">
+            <XCircle className="mr-1 h-3 w-3" />
+            Invalid
+          </Badge>
+        )}
+      </div>
+
+      <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[10px]">
+        <div className="rounded-lg border border-border/70 bg-card/60 px-2 py-1.5">
+          <div className="text-sm font-semibold text-foreground">{stats.addedNodes}</div>
+          <div className="text-muted-foreground">{localize(lang, "новых", "new")}</div>
+        </div>
+        <div className="rounded-lg border border-border/70 bg-card/60 px-2 py-1.5">
+          <div className="text-sm font-semibold text-foreground">{stats.updatedNodes}</div>
+          <div className="text-muted-foreground">{localize(lang, "правок", "edits")}</div>
+        </div>
+        <div className="rounded-lg border border-border/70 bg-card/60 px-2 py-1.5">
+          <div className="text-sm font-semibold text-foreground">{stats.removedNodes + stats.removedEdges}</div>
+          <div className="text-muted-foreground">{localize(lang, "удалить", "remove")}</div>
+        </div>
+      </div>
+
+      {proposal.warnings?.length ? (
+        <div className="mt-3 rounded-lg border border-amber-500/25 bg-amber-500/10 px-2.5 py-2 text-[11px] leading-5 text-amber-100">
+          {proposal.warnings.slice(0, 3).map((warning) => (
+            <div key={warning}>{warning}</div>
+          ))}
+        </div>
+      ) : null}
+
+      {proposal.validation?.errors?.length ? (
+        <div className="mt-3 rounded-lg border border-red-500/25 bg-red-500/10 px-2.5 py-2 text-[11px] leading-5 text-red-200">
+          <div className="mb-1 font-semibold">{localize(lang, "Нужно исправить перед применением", "Fix before applying")}</div>
+          {proposal.validation.errors.slice(0, 4).map((error) => (
+            <div key={error}>{error}</div>
+          ))}
+        </div>
+      ) : null}
+
+      {riskDangerous ? (
+        <div className="mt-3 rounded-lg border border-red-500/25 bg-red-500/10 px-2.5 py-2 text-[11px] leading-5 text-red-200">
+          <div className="mb-1 font-semibold">{localize(lang, "Опасная команда заблокировала apply", "Dangerous command blocks apply")}</div>
+          {proposal.risk?.items.slice(0, 3).map((item) => (
+            <div key={`${item.node_id}-${item.command}`}>{item.node_label || item.node_id}: {item.reasons?.join(", ") || item.command}</div>
+          ))}
+        </div>
+      ) : null}
+
+      {proposal.suggested_next_actions?.length ? (
+        <div className="mt-3 space-y-1 text-[11px] text-muted-foreground">
+          {proposal.suggested_next_actions.slice(0, 4).map((action) => (
+            <div key={action} className="flex items-center gap-1.5">
+              <ChevronRight className="h-3 w-3 text-primary/70" />
+              <span>{action}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <Button size="sm" className="h-8 gap-1.5" onClick={onApplyAndSave} disabled={!canApply}>
+          {applying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+          {localize(lang, "Применить и сохранить", "Apply & Save")}
+        </Button>
+        <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={onApply} disabled={!canApply}>
+          {applying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+          {localize(lang, "Применить локально", "Apply locally")}
+        </Button>
+        <Button size="sm" variant="ghost" className="col-span-2 h-8" onClick={onDiscard}>
+          {localize(lang, "Скрыть", "Discard")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function PipelineAssistantPanel({
+  lang,
+  selectedNode,
+  input,
+  history,
+  proposal,
+  isPending,
+  onInputChange,
+  onSend,
+  onApply,
+  onApplyAndSave,
+  onDiscard,
+  onClose,
+}: {
+  lang: "en" | "ru";
+  selectedNode: PipelineNode | null;
+  input: string;
+  history: Array<{ role: "user" | "assistant"; content: string }>;
+  proposal: StudioPipelineAssistantResponse | null;
+  isPending: boolean;
+  onInputChange: (value: string) => void;
+  onSend: (intent: "create" | "edit" | "validate" | "fix_run", message?: string) => void;
+  onApply: () => void;
+  onApplyAndSave: () => void;
+  onDiscard: () => void;
+  onClose: () => void;
+}) {
+  const selectedLabel = selectedNode ? getNodeDisplayLabel(selectedNode) : localize(lang, "Весь граф", "Whole graph");
+  const quickActions = [
+    {
+      intent: "create" as const,
+      label: localize(lang, "Build", "Build"),
+      prompt: localize(lang, "Собери рабочий pipeline по моему описанию. Если граф пустой, создай полный starter workflow.", "Build a working pipeline from my request. If the graph is empty, create a complete starter workflow."),
+    },
+    {
+      intent: "edit" as const,
+      label: localize(lang, "Improve", "Improve"),
+      prompt: localize(lang, "Улучши текущий граф: убери лишнее, добавь недостающие шаги и понятные labels.", "Improve the current graph: remove unnecessary parts, add missing steps, and make labels clear."),
+    },
+    {
+      intent: "validate" as const,
+      label: localize(lang, "Validate", "Validate"),
+      prompt: localize(lang, "Проверь текущий pipeline и предложи минимальные исправления, чтобы его можно было сохранить и запустить.", "Validate the current pipeline and propose the smallest fixes needed to save and run it."),
+    },
+    {
+      intent: "fix_run" as const,
+      label: localize(lang, "Fix errors", "Fix errors"),
+      prompt: localize(lang, "Исправь ошибки последней проверки или запуска и предложи безопасный patch.", "Fix the latest validation or run errors and propose a safe patch."),
+    },
+  ];
+
+  return (
+    <div className="flex h-full flex-col bg-card">
+      <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-primary/20 bg-primary/10">
+              <Wand2 className="h-4 w-4 text-primary" />
+            </span>
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">AI Builder</h3>
+              <p className="text-[11px] text-muted-foreground">{selectedLabel}</p>
+            </div>
+          </div>
+        </div>
+        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onClose} aria-label="Close AI Builder">
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="space-y-3 p-3">
+          <div className="grid grid-cols-2 gap-2">
+            {quickActions.map((action) => (
+              <Button
+                key={action.label}
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 justify-start gap-1.5 text-xs"
+                disabled={isPending}
+                onClick={() => onSend(action.intent, input.trim() ? `${action.prompt}\n\n${input.trim()}` : action.prompt)}
+              >
+                <Wand2 className="h-3.5 w-3.5 text-primary" />
+                {action.label}
+              </Button>
+            ))}
+          </div>
+
+          {history.length ? (
+            <div className="space-y-2">
+              {history.slice(-4).map((item, index) => (
+                <div
+                  key={`${item.role}-${index}-${item.content.slice(0, 12)}`}
+                  className={cn(
+                    "rounded-lg border px-3 py-2 text-xs leading-5",
+                    item.role === "user"
+                      ? "border-primary/20 bg-primary/10 text-primary-foreground"
+                      : "border-border bg-background/70 text-muted-foreground",
+                  )}
+                >
+                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    {item.role === "user" ? localize(lang, "Запрос", "Request") : "AI"}
+                  </div>
+                  <div className="whitespace-pre-wrap">{item.content}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-border px-3 py-4 text-xs leading-5 text-muted-foreground">
+              {localize(
+                lang,
+                "Опишите автоматизацию: что должно запускать pipeline, какие серверы или MCP использовать, где нужен approval и куда отправить результат.",
+                "Describe the automation: what should trigger it, which servers or MCPs it should use, where approval is required, and where to send the result.",
+              )}
+            </div>
+          )}
+
+          {proposal ? (
+            <AssistantProposalCard
+              proposal={proposal}
+              lang={lang}
+              onApply={onApply}
+              onApplyAndSave={onApplyAndSave}
+              onDiscard={onDiscard}
+              applying={isPending}
+            />
+          ) : null}
+        </div>
+      </ScrollArea>
+
+      <div className="space-y-2 border-t border-border p-3">
+        <Textarea
+          value={input}
+          onChange={(event) => onInputChange(event.target.value)}
+          placeholder={localize(lang, "Например: проверь Docker service, попроси approval и отправь отчёт в Telegram", "Example: check a Docker service, ask for approval, and send a Telegram report")}
+          className="min-h-24 resize-none text-xs"
+        />
+        <Button
+          className="h-9 w-full gap-1.5"
+          disabled={isPending || !input.trim()}
+          onClick={() => onSend("edit")}
+        >
+          {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
+          {localize(lang, "Получить черновик", "Get draft")}
+        </Button>
       </div>
     </div>
   );
@@ -2325,6 +2914,10 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
   const [runContextError, setRunContextError] = useState<string | null>(null);
   const [runEntryNodeId, setRunEntryNodeId] = useState("");
   const [runTriggerError, setRunTriggerError] = useState<string | null>(null);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantInput, setAssistantInput] = useState("");
+  const [assistantHistory, setAssistantHistory] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
+  const [assistantProposal, setAssistantProposal] = useState<StudioPipelineAssistantResponse | null>(null);
   const [hasHydratedPipeline, setHasHydratedPipeline] = useState(!pipelineId);
   const [hasLocalChanges, setHasLocalChanges] = useState(false);
   const nodeIdCounter = useRef(1);
@@ -2395,6 +2988,9 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     setHasHydratedPipeline(!pipelineId);
     setHasLocalChanges(false);
     setLastRun(null);
+    setAssistantInput("");
+    setAssistantHistory([]);
+    setAssistantProposal(null);
     clearGraphOverlay();
     if (pipelineId) {
       setSelectedNode(null);
@@ -2555,7 +3151,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     mutationFn: (data: { nodes: PipelineNode[]; edges: PipelineEdge[]; name: string }) =>
       pipelineId
         ? studioPipelines.update(pipelineId, data)
-        : studioPipelines.create({ ...data, icon: "â¡" }),
+        : studioPipelines.create({ ...data, icon: "W" }),
     onSuccess: (p) => {
       queryClient.setQueryData(["studio", "pipeline", p.id], p);
       queryClient.invalidateQueries({ queryKey: ["studio", "pipelines"] });
@@ -2600,7 +3196,50 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       setRunContextError(null);
       setRunEntryNodeId("");
       setRunTriggerError(null);
-      toast({ description: `Pipeline started â run #${run.id}` });
+      toast({ description: `Pipeline started — run #${run.id}` });
+    },
+    onError: (err: Error) => toast({ variant: "destructive", description: err.message }),
+  });
+
+  const assistantMutation = useMutation({
+    mutationFn: ({
+      intent,
+      message,
+      history,
+    }: {
+      intent: "create" | "edit" | "validate" | "fix_run";
+      message: string;
+      history: Array<{ role: "user" | "assistant"; content: string }>;
+    }) =>
+      studioPipelines.assistant({
+        pipeline_id: pipelineId,
+        pipeline_name: pipelineName || pipeline?.name || "Untitled",
+        nodes: nodes as unknown as PipelineNode[],
+        edges: edges as unknown as PipelineEdge[],
+        selected_node: selectedNode,
+        user_message: message,
+        intent,
+        draft_mode: true,
+        history,
+        last_validation_errors: assistantProposal?.validation?.errors || [],
+        last_run_summary: graphRunLive
+          ? {
+              id: graphRunLive.id,
+              status: graphRunLive.status,
+              error: graphRunLive.error,
+              summary: graphRunLive.summary,
+              node_states: graphRunLive.node_states,
+            }
+          : {},
+      }),
+    onSuccess: (response, variables) => {
+      setAssistantProposal(response);
+      setAssistantHistory((current) => [
+        ...current,
+        { role: "user", content: variables.message },
+        { role: "assistant", content: response.reply || response.patch_summary || "Draft ready." },
+      ].slice(-12));
+      toast({ description: response.validation?.ok === false ? "AI draft needs fixes before apply." : "AI draft is ready for review." });
     },
     onError: (err: Error) => toast({ variant: "destructive", description: err.message }),
   });
@@ -2611,7 +3250,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         variant: "destructive",
         description: localize(
           lang,
-          "Ð ÐµÐ´Ð°ÐºÑÐ¾Ñ ÐµÑÐµ Ð·Ð°Ð³ÑÑÐ¶Ð°ÐµÑ Ð°ÐºÑÑÐ°Ð»ÑÐ½ÑÑ Ð²ÐµÑÑÐ¸Ñ Ð³ÑÐ°ÑÐ°. ÐÐ¾Ð´Ð¾Ð¶Ð´Ð¸ÑÐµ ÑÐµÐºÑÐ½Ð´Ñ Ð¸ Ð¿Ð¾Ð¿ÑÐ¾Ð±ÑÐ¹ÑÐµ ÑÐ½Ð¾Ð²Ð°.",
+          "Редактор еще загружает актуальную версию графа. Подождите секунду и попробуйте снова.",
           "The editor is still loading the latest graph from the server. Wait a moment and try again.",
         ),
       });
@@ -2671,11 +3310,11 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
   const handleCopyWebhookUrl = async (webhookUrl: string) => {
     try {
       await navigator.clipboard.writeText(toAbsoluteWebhookUrl(webhookUrl));
-      toast({ description: localize(lang, "Webhook URL ÑÐºÐ¾Ð¿Ð¸ÑÐ¾Ð²Ð°Ð½.", "Webhook URL copied.") });
+      toast({ description: localize(lang, "Webhook URL скопирован.", "Webhook URL copied.") });
     } catch (error) {
       const message = error instanceof Error
         ? error.message
-        : localize(lang, "ÐÐµ ÑÐ´Ð°Ð»Ð¾ÑÑ ÑÐºÐ¾Ð¿Ð¸ÑÐ¾Ð²Ð°ÑÑ webhook URL.", "Failed to copy webhook URL.");
+        : localize(lang, "Не удалось скопировать webhook URL.", "Failed to copy webhook URL.");
       toast({ variant: "destructive", description: message });
     }
   };
@@ -2685,7 +3324,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       setRunTriggerError(
         localize(
           lang,
-          "Ð£ ÑÑÐ¾Ð³Ð¾ Ð¿Ð°Ð¹Ð¿Ð»Ð°Ð¹Ð½Ð° Ð½ÐµÑ ÑÑÑÐ½Ð¾Ð³Ð¾ trigger. ÐÑÐ¿Ð¾Ð»ÑÐ·ÑÐ¹ÑÐµ webhook Ð¸Ð»Ð¸ schedule trigger.",
+          "У этого пайплайна нет ручного trigger. Используйте webhook или schedule trigger.",
           "This pipeline has no manual trigger. Use its webhook or schedule trigger instead.",
         ),
       );
@@ -2709,7 +3348,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         ? manualTriggerOptions[0].node_id
         : runEntryNodeId.trim();
     if (!selectedEntryNodeId) {
-      setRunTriggerError(localize(lang, "ÐÑÐ±ÐµÑÐ¸ÑÐµ ÑÑÑÐ½Ð¾Ð¹ trigger Ð´Ð»Ñ Ð·Ð°Ð¿ÑÑÐºÐ°.", "Select the manual trigger that should start this run."));
+      setRunTriggerError(localize(lang, "Выберите ручной trigger для запуска.", "Select the manual trigger that should start this run."));
       return;
     }
     setRunTriggerError(null);
@@ -2729,6 +3368,77 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       // Error notifications are handled in mutation callbacks.
     }
   };
+
+  const handleAssistantSend = (
+    intent: "create" | "edit" | "validate" | "fix_run",
+    messageOverride?: string,
+  ) => {
+    const message = (messageOverride || assistantInput).trim();
+    if (!message) return;
+    setAssistantOpen(true);
+    const resolvedIntent = intent === "edit" && !(nodes as unknown as PipelineNode[]).length ? "create" : intent;
+    assistantMutation.mutate({
+      intent: resolvedIntent,
+      message,
+      history: assistantHistory.slice(-10),
+    });
+    if (!messageOverride) {
+      setAssistantInput("");
+    }
+  };
+
+  const applyAssistantProposal = (saveAfterApply: boolean) => {
+    if (!assistantProposal) return;
+    if (assistantProposal.validation?.ok === false) {
+      toast({ variant: "destructive", description: "Fix validation errors before applying this AI draft." });
+      return;
+    }
+    if (assistantProposal.risk?.level === "dangerous") {
+      toast({ variant: "destructive", description: "This draft contains a dangerous SSH command. Ask AI to add approval or rewrite it safely." });
+      return;
+    }
+
+    const result = applyAssistantGraphPatch({
+      nodes: nodes as unknown as PipelineNode[],
+      edges: edges as unknown as PipelineEdge[],
+      response: assistantProposal,
+      normalizeNodeData: (data) => normaliseAssistantPatch(data, { mcpList: [] }),
+    });
+    setNodes(result.nodes as never[]);
+    setEdges(result.edges as never[]);
+    setHasLocalChanges(true);
+    clearGraphOverlay();
+    setActiveRunId(null);
+
+    const firstNewId = Object.values(result.refToNodeId)[0];
+    const firstUpdatedId =
+      assistantProposal.target_node_id ||
+      assistantProposal.graph_patch.update_nodes?.[0]?.node_id ||
+      null;
+    const nextSelectedId = firstNewId || firstUpdatedId;
+    setSelectedNode(nextSelectedId ? result.nodes.find((node) => node.id === nextSelectedId) || null : null);
+    setAssistantProposal(null);
+
+    const maxNumericNodeId = result.nodes.reduce((max, node) => {
+      const num = parseInt(node.id.replace(/\D/g, "") || "0");
+      return Math.max(max, num);
+    }, 0);
+    nodeIdCounter.current = Math.max(nodeIdCounter.current, maxNumericNodeId + 1);
+    setTimeout(() => fitView({ padding: 0.22, duration: 250 }), 50);
+    if (saveAfterApply) {
+      saveMutation.mutate({
+        name: pipelineName || pipeline?.name || "Untitled",
+        nodes: result.nodes,
+        edges: result.edges,
+      });
+      return;
+    }
+    toast({ description: localize(lang, "AI draft применён локально. Нажмите Save, чтобы сохранить pipeline.", "AI draft applied locally. Click Save to persist the pipeline.") });
+  };
+
+  const handleApplyAssistantProposal = () => applyAssistantProposal(false);
+
+  const handleApplyAndSaveAssistantProposal = () => applyAssistantProposal(true);
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -3014,7 +3724,19 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
             {runMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
             {localize(lang, "Запуск", "Run")}
           </Button>
-          
+          <Button
+            size="sm"
+            variant={assistantOpen ? "default" : "outline"}
+            onClick={() => {
+              setAssistantOpen(true);
+              setActiveRunId(null);
+            }}
+            className="h-7 gap-1.5"
+          >
+            <Wand2 className="h-3 w-3" />
+            AI Builder
+          </Button>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="sm" variant="ghost" className="h-7 gap-1.5 rounded-md px-2 text-muted-foreground">
@@ -3212,13 +3934,28 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
           </div>
         </div>
 
-        {/* Right: Run monitor OR Node config panel */}
-        {(activeRunId || selectedNode) && (
-          <div className="w-80 shrink-0 border-l border-border bg-card flex flex-col">
+        {/* Right: Run monitor, AI Builder, or Node config panel */}
+        {(activeRunId || assistantOpen || selectedNode) && (
+          <div className={cn("shrink-0 border-l border-border bg-card flex flex-col", assistantOpen && !activeRunId ? "w-96" : "w-80")}>
             {activeRunId ? (
               <RunMonitorPanel
                 runId={activeRunId}
                 onClose={() => setActiveRunId(null)}
+              />
+            ) : assistantOpen ? (
+              <PipelineAssistantPanel
+                lang={lang}
+                selectedNode={selectedNode}
+                input={assistantInput}
+                history={assistantHistory}
+                proposal={assistantProposal}
+                isPending={assistantMutation.isPending || saveMutation.isPending}
+                onInputChange={setAssistantInput}
+                onSend={handleAssistantSend}
+                onApply={handleApplyAssistantProposal}
+                onApplyAndSave={handleApplyAndSaveAssistantProposal}
+                onDiscard={() => setAssistantProposal(null)}
+                onClose={() => setAssistantOpen(false)}
               />
             ) : selectedNode ? (
               <NodeConfigPanel
@@ -3276,10 +4013,10 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                       <SelectValue
                         placeholder={
                           manualTriggerOptions.length === 0
-                            ? localize(lang, "ÐÐµÑ Ð°ÐºÑÐ¸Ð²Ð½ÑÑ manual trigger Ð½Ð¾Ð´", "No active manual trigger nodes")
+                            ? localize(lang, "Нет активных manual trigger нод", "No active manual trigger nodes")
                             : manualTriggerOptions.length === 1
                               ? manualTriggerOptions[0].label
-                              : localize(lang, "ÐÑÐ±ÐµÑÐ¸ÑÐµ trigger", "Select a trigger")
+                              : localize(lang, "Выберите trigger", "Select a trigger")
                         }
                       />
                     </SelectTrigger>
@@ -3293,8 +4030,8 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                   </Select>
                   <p className="text-[11px] text-muted-foreground">
                     {manualTriggerOptions.length <= 1
-                      ? localize(lang, "ÐÑÐ»Ð¸ ÑÑÑÐ½Ð¾Ð¹ trigger Ð¾Ð´Ð¸Ð½, Ð¾Ð½ Ð±ÑÐ´ÐµÑ Ð²ÑÐ±ÑÐ°Ð½ Ð°Ð²ÑÐ¾Ð¼Ð°ÑÐ¸ÑÐµÑÐºÐ¸.", "When there is only one manual trigger, it is selected automatically.")
-                      : localize(lang, "Ð­ÑÐ¾Ñ trigger Ð·Ð°Ð¿ÑÑÑÐ¸Ñ ÑÐ¾Ð»ÑÐºÐ¾ ÑÐ²Ð¾Ñ Ð²ÐµÑÐºÑ Ð³ÑÐ°ÑÐ°.", "This trigger starts only its own branch of the graph.")}
+                      ? localize(lang, "Если ручной trigger один, он будет выбран автоматически.", "When there is only one manual trigger, it is selected automatically.")
+                      : localize(lang, "Этот trigger запустит только свою ветку графа.", "This trigger starts only its own branch of the graph.")}
                   </p>
                   {runTriggerError ? <p className="text-xs text-red-400">{runTriggerError}</p> : null}
                 </div>
@@ -3373,7 +4110,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                   <div className="rounded-xl border border-sky-500/25 bg-sky-500/10 px-3 py-2 text-xs text-sky-200">
                     {localize(
                       lang,
-                      "Trigger ÑÐ¶Ðµ armed Ð¸ Ð¶Ð´ÑÑ Ð²ÑÐ¾Ð´ÑÑÐ¸Ð¹ POST Ð·Ð°Ð¿ÑÐ¾Ñ. ÐÐ¾Ð²ÑÐ¹ run Ð¿Ð¾ÑÐ²Ð¸ÑÑÑ ÑÐ¾Ð»ÑÐºÐ¾ ÐºÐ¾Ð³Ð´Ð° webhook ÑÐµÐ°Ð»ÑÐ½Ð¾ Ð¿ÑÐ¸Ð´ÑÑ.",
+                      "Trigger уже armed и ждёт входящий POST запрос. Новый run появится только когда webhook реально придёт.",
                       "This trigger is already armed and waiting for an incoming POST request. A new run will appear only when the webhook actually arrives.",
                     )}
                   </div>
@@ -3381,7 +4118,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                   <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
                     {localize(
                       lang,
-                      "Ð¡Ð½Ð°ÑÐ°Ð»Ð° ÑÐ¾ÑÑÐ°Ð½Ð¸ÑÐµ Ð³ÑÐ°Ñ, ÑÑÐ¾Ð±Ñ arm webhook trigger Ð¸ Ð¿Ð¾Ð»ÑÑÐ¸ÑÑ URL.",
+                      "Сначала сохраните граф, чтобы arm webhook trigger и получить URL.",
                       "Save the graph first to arm the webhook trigger and generate its URL.",
                     )}
                   </div>
@@ -3396,7 +4133,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                         </div>
                         <Button size="sm" variant="outline" onClick={() => void handleCopyWebhookUrl(trigger.webhook_url)}>
                           <Copy className="mr-1.5 h-3.5 w-3.5" />
-                          {localize(lang, "Ð¡ÐºÐ¾Ð¿Ð¸ÑÐ¾Ð²Ð°ÑÑ URL", "Copy URL")}
+                          {localize(lang, "Скопировать URL", "Copy URL")}
                         </Button>
                       </div>
                       <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground break-all">
@@ -3404,8 +4141,8 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                       </div>
                       <p className="text-[11px] text-muted-foreground">
                         {trigger.last_triggered_at
-                          ? localize(lang, `ÐÐ¾ÑÐ»ÐµÐ´Ð½Ð¸Ð¹ trigger: ${formatStudioDateTime(trigger.last_triggered_at)}`, `Last trigger: ${formatStudioDateTime(trigger.last_triggered_at)}`)
-                          : localize(lang, "ÐÑÑ Ð½Ðµ Ð²ÑÐ·ÑÐ²Ð°Ð»ÑÑ.", "Has not been triggered yet.")}
+                          ? localize(lang, `Последний trigger: ${formatStudioDateTime(trigger.last_triggered_at)}`, `Last trigger: ${formatStudioDateTime(trigger.last_triggered_at)}`)
+                          : localize(lang, "Ещё не вызывался.", "Has not been triggered yet.")}
                       </p>
                     </div>
                   ))
@@ -3413,7 +4150,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                   <div className="rounded-xl border border-dashed border-border px-3 py-3 text-xs text-muted-foreground">
                     {localize(
                       lang,
-                      "Ð¡Ð½Ð°ÑÐ°Ð»Ð° ÑÐ¾ÑÑÐ°Ð½Ð¸ÑÐµ pipeline, ÑÑÐ¾Ð±Ñ ÑÐ³ÐµÐ½ÐµÑÐ¸ÑÐ¾Ð²Ð°ÑÑ webhook URL Ð´Ð»Ñ ÑÑÐ¾Ð¹ trigger Ð½Ð¾Ð´Ñ.",
+                      "Сначала сохраните pipeline, чтобы сгенерировать webhook URL для этой trigger ноды.",
                       "Save the pipeline first to generate a webhook URL for this trigger node.",
                     )}
                   </div>
@@ -3424,7 +4161,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                 <div className="rounded-xl border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
                   {localize(
                     lang,
-                    "Schedule trigger Ð·Ð°Ð¿ÑÑÐºÐ°ÐµÑÑÑ Ð¿Ð»Ð°Ð½Ð¸ÑÐ¾Ð²ÑÐ¸ÐºÐ¾Ð¼. Ð ÑÑÐ½Ð¾Ð¹ Run Ð´Ð»Ñ Ð½ÐµÐ³Ð¾ Ð½Ðµ Ð½ÑÐ¶ÐµÐ½.",
+                    "Schedule trigger запускается планировщиком. Ручной Run для него не нужен.",
                     "Schedule triggers are started by the scheduler. They do not need a manual Run.",
                   )}
                 </div>
@@ -3453,7 +4190,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                 <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
                   {localize(
                     lang,
-                    "Monitoring trigger ÑÐ¶Ðµ armed Ð¿Ð¾ÑÐ»Ðµ ÑÐ¾ÑÑÐ°Ð½ÐµÐ½Ð¸Ñ Ð¸ Ð¶Ð´ÑÑ alert Ð¾Ñ server monitoring. Run Ð¿Ð¾ÑÐ²Ð¸ÑÑÑ ÑÐ¾Ð»ÑÐºÐ¾ Ð¿ÑÐ¸ ÑÐµÐ°Ð»ÑÐ½Ð¾Ð¹ Ð¿ÑÐ¾Ð±Ð»ÐµÐ¼Ðµ.",
+                    "Monitoring trigger уже armed после сохранения и ждёт alert от server monitoring. Run появится только при реальной проблеме.",
                     "The monitoring trigger is armed after save and waits for a server monitoring alert. A run appears only when a real issue is detected.",
                   )}
                 </div>
@@ -3477,7 +4214,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                       <div>Severity: {Array.isArray((trigger.filters as Record<string, unknown>).severities) && ((trigger.filters as Record<string, unknown>).severities as unknown[]).length ? (((trigger.filters as Record<string, unknown>).severities as unknown[]).join(", ")) : "any"}</div>
                       <div>Alert type: {Array.isArray((trigger.filters as Record<string, unknown>).alert_types) && ((trigger.filters as Record<string, unknown>).alert_types as unknown[]).length ? (((trigger.filters as Record<string, unknown>).alert_types as unknown[]).join(", ")) : "any"}</div>
                       <div>Containers: {Array.isArray((trigger.filters as Record<string, unknown>).container_names) && ((trigger.filters as Record<string, unknown>).container_names as unknown[]).length ? (((trigger.filters as Record<string, unknown>).container_names as unknown[]).join(", ")) : "any"}</div>
-                      {trigger.lastTriggeredAt ? <div>{localize(lang, `ÐÐ¾ÑÐ»ÐµÐ´Ð½Ð¸Ð¹ trigger: ${formatStudioDateTime(trigger.lastTriggeredAt)}`, `Last trigger: ${formatStudioDateTime(trigger.lastTriggeredAt)}`)}</div> : null}
+                      {trigger.lastTriggeredAt ? <div>{localize(lang, `Последний trigger: ${formatStudioDateTime(trigger.lastTriggeredAt)}`, `Last trigger: ${formatStudioDateTime(trigger.lastTriggeredAt)}`)}</div> : null}
                     </div>
                   </div>
                 ))}
@@ -3496,7 +4233,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
             ) : (
               <Button onClick={handleSave} disabled={saveMutation.isPending || (Boolean(pipelineId) && !hasHydratedPipeline)}>
                 {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                {localize(lang, "Ð¡Ð¾ÑÑÐ°Ð½Ð¸ÑÑ trigger", "Save Trigger")}
+                {localize(lang, "Сохранить trigger", "Save Trigger")}
               </Button>
             )}
           </DialogFooter>

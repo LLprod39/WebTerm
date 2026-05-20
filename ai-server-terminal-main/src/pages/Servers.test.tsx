@@ -31,6 +31,8 @@ vi.mock("@/lib/api", () => ({
   fetchAuthSession: vi.fn(),
   fetchFrontendBootstrap: vi.fn(),
   fetchMonitoringDashboard: vi.fn(),
+  fetchMonitoringStatus: vi.fn(),
+  refreshMonitoringFleet: vi.fn(),
   fetchServerDetails: vi.fn(),
   getGlobalServerContext: vi.fn(),
   getGroupServerContext: vi.fn(),
@@ -195,6 +197,55 @@ describe("Servers page rules and translations", () => {
       },
     });
     vi.mocked(api.fetchFrontendBootstrap).mockResolvedValue(bootstrapResponse);
+    vi.mocked(api.fetchMonitoringStatus).mockResolvedValue({
+      success: true,
+      servers: [
+        {
+          server_id: 1,
+          server_name: "prod-web-01",
+          host: "10.0.0.5",
+          server_type: "ssh",
+          status: "healthy",
+          checked_at: "2026-04-06T12:00:00Z",
+          age_seconds: 30,
+          is_stale: false,
+          response_time_ms: 50,
+          cpu_percent: 12,
+          memory_percent: 34,
+          disk_percent: 56,
+          is_lite: true,
+        },
+      ],
+      summary: {
+        total_servers: 1,
+        healthy: 1,
+        warning: 0,
+        critical: 0,
+        unreachable: 0,
+        unknown: 0,
+        stale: 0,
+      },
+      meta: {
+        stale_after_seconds: 300,
+        latest_checked_at: "2026-04-06T12:00:00Z",
+        has_stale: false,
+      },
+    });
+    vi.mocked(api.refreshMonitoringFleet).mockResolvedValue({
+      success: true,
+      servers: [],
+      summary: {
+        total_servers: 0,
+        healthy: 0,
+        warning: 0,
+        critical: 0,
+        unreachable: 0,
+        unknown: 0,
+        stale: 0,
+      },
+      meta: { stale_after_seconds: 300, latest_checked_at: null, has_stale: false },
+      refreshed: true,
+    });
     vi.mocked(api.fetchMonitoringDashboard).mockResolvedValue({
       success: true,
       servers: [

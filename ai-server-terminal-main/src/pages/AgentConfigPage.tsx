@@ -550,104 +550,59 @@ export default function AgentConfigPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {agents.map((agent) => (
-            <Card key={agent.id} className="border-border/80">
-              <CardHeader className="space-y-3 pb-3">
+            <div key={agent.id} className="group overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-all duration-150 hover:shadow-md">
+              <div className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 items-start gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-border/70 bg-background/35 text-lg">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-lg font-semibold text-primary">
                       {agent.icon || "B"}
                     </div>
                     <div className="min-w-0">
-                      <CardTitle className="text-base">{agent.name}</CardTitle>
-                      <CardDescription className="mt-1 text-xs">
-                        {agent.description || "No description"}
-                      </CardDescription>
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {agent.is_owner ? <Badge variant="secondary">Mine</Badge> : null}
-                        {!agent.is_owner && agent.owner_username ? <Badge variant="outline">Owner: {agent.owner_username}</Badge> : null}
-                        {agent.is_shared ? <Badge variant="outline">Shared</Badge> : null}
-                        {agent.can_edit === false ? <Badge variant="outline">Read only</Badge> : null}
+                      <p className="text-sm font-semibold text-foreground">{agent.name}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{agent.description || "No description"}</p>
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {agent.is_owner ? <Badge variant="secondary" className="text-[10px]">Mine</Badge> : null}
+                        {!agent.is_owner && agent.owner_username ? <Badge variant="outline" className="text-[10px]">Owner: {agent.owner_username}</Badge> : null}
+                        {agent.is_shared ? <Badge variant="outline" className="text-[10px]">Shared</Badge> : null}
+                        {agent.can_edit === false ? <Badge variant="outline" className="text-[10px]">Read only</Badge> : null}
                       </div>
                     </div>
                   </div>
-
-                  <div className="flex gap-1">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8 rounded-xl"
-                      onClick={() => setEditAgent(agent)}
-                      title={agent.can_edit === false ? "View agent" : "Edit agent"}
-                    >
-                      <Pencil className="h-4 w-4" />
+                  <div className="flex gap-1 shrink-0">
+                    <Button size="icon" variant="ghost" className="h-8 w-8 rounded-lg" onClick={() => setEditAgent(agent)} title={agent.can_edit === false ? "View agent" : "Edit agent"}>
+                      <Pencil className="h-3.5 w-3.5" />
                     </Button>
                     {agent.can_edit !== false ? (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 rounded-xl text-destructive hover:text-destructive"
-                        onClick={() => setDeleteTarget(agent)}
-                      >
-                        <Trash2 className="h-4 w-4" />
+                      <Button size="icon" variant="ghost" className="h-8 w-8 rounded-lg text-destructive hover:text-destructive" onClick={() => setDeleteTarget(agent)}>
+                        <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     ) : null}
                   </div>
                 </div>
-              </CardHeader>
+              </div>
 
-              <CardContent className="space-y-4 pt-0">
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="outline" className="text-[10px]">
-                    {agent.model}
-                  </Badge>
-                  <Badge variant="secondary" className="text-[10px]">
-                    {agent.max_iterations} iter
-                  </Badge>
-                  {agent.mcp_servers?.length ? (
-                    <Badge variant="secondary" className="text-[10px]">
-                      {agent.mcp_servers.length} MCP
-                    </Badge>
-                  ) : null}
-                  {agent.skill_slugs?.length ? (
-                    <Badge variant="secondary" className="text-[10px]">
-                      {agent.skill_slugs.length} skills
-                    </Badge>
-                  ) : null}
-                  {agent.server_scope?.length ? (
-                    <Badge variant="outline" className="text-[10px]">
-                      {agent.server_scope.length} scoped
-                    </Badge>
-                  ) : null}
+              <div className="border-t border-border/50 bg-secondary/10 px-4 py-3 space-y-2.5">
+                <div className="flex flex-wrap gap-1.5">
+                  <span className="rounded border border-border/50 bg-secondary/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{agent.model}</span>
+                  <span className="rounded border border-border/50 bg-secondary/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">{agent.max_iterations} iter</span>
+                  {agent.mcp_servers?.length ? <span className="rounded border border-border/50 bg-secondary/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">{agent.mcp_servers.length} MCP</span> : null}
+                  {agent.skill_slugs?.length ? <span className="rounded border border-border/50 bg-secondary/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">{agent.skill_slugs.length} skills</span> : null}
+                  {agent.server_scope?.length ? <span className="rounded border border-border/50 bg-secondary/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">{agent.server_scope.length} scoped</span> : null}
                 </div>
-
-                {agent.skills?.length ? (
-                  <div className="flex flex-wrap gap-1.5">
-                    {agent.skills.slice(0, 4).map((skill) => (
-                      <Badge key={skill.slug} variant="outline" className="text-[10px]">
-                        {skill.name}
-                      </Badge>
-                    ))}
-                  </div>
-                ) : null}
-
                 {agent.allowed_tools?.length ? (
-                  <div className="text-xs text-muted-foreground">
-                    Tools: {agent.allowed_tools.slice(0, 4).join(", ")}
-                    {agent.allowed_tools.length > 4 ? ` +${agent.allowed_tools.length - 4} more` : ""}
-                  </div>
+                  <p className="text-[11px] text-muted-foreground/70">
+                    {agent.allowed_tools.slice(0, 4).join(", ")}{agent.allowed_tools.length > 4 ? ` +${agent.allowed_tools.length - 4}` : ""}
+                  </p>
                 ) : null}
-
                 {agent.skill_errors?.length ? (
-                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2">
-                    {agent.skill_errors.slice(0, 2).map((error) => (
-                      <p key={error} className="text-xs text-amber-100">
-                        {error}
-                      </p>
+                  <div className="rounded-lg border border-amber-500/25 bg-amber-500/8 px-2.5 py-1.5">
+                    {agent.skill_errors.slice(0, 1).map((error) => (
+                      <p key={error} className="text-[11px] text-amber-300">{error}</p>
                     ))}
                   </div>
                 ) : null}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ))}
         </div>
       )}

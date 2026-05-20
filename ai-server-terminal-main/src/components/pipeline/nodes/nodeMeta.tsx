@@ -1,13 +1,9 @@
-import * as React from 'react';
-import { Settings, Play, Link2, Clock, Bell, Bot, Users, Terminal, BrainCircuit, Puzzle, GitBranch, Zap, Merge, Timer, UserCheck, MessageCircle, FileText, Send, Mail } from 'lucide-react';
-
 export type PipelineEditorLang = "en" | "ru";
 
 type LocalizedText = Record<PipelineEditorLang, string>;
 type LocalizedList = Record<PipelineEditorLang, string[]>;
 
 type NodeTypeMeta = {
-  icon: React.ReactNode;
   label: LocalizedText;
   paletteDescription: LocalizedText;
 };
@@ -24,97 +20,78 @@ export function localize(lang: PipelineEditorLang, ru: string, en: string) {
 
 export const NODE_TYPE_META: Record<string, NodeTypeMeta> = {
   "trigger/manual": {
-    icon: "▶️",
     label: { ru: "Ручной запуск", en: "Manual Trigger" },
     paletteDescription: { ru: "Запуск вручную из Studio", en: "Start the pipeline manually from Studio" },
   },
   "trigger/webhook": {
-    icon: "🔗",
     label: { ru: "Webhook", en: "Webhook Trigger" },
     paletteDescription: { ru: "Запуск по HTTP POST", en: "Start the pipeline via HTTP POST" },
   },
   "trigger/schedule": {
-    icon: "⏰",
     label: { ru: "Расписание", en: "Schedule Trigger" },
     paletteDescription: { ru: "Автозапуск по cron", en: "Run the pipeline on a cron schedule" },
   },
   "trigger/monitoring": {
-    icon: "🚨",
     label: { ru: "Мониторинг", en: "Monitoring Trigger" },
     paletteDescription: { ru: "Запуск по alert из server monitoring", en: "Start from a server monitoring alert" },
   },
   "agent/react": {
-    icon: "🤖",
     label: { ru: "ReAct-агент", en: "ReAct Agent" },
     paletteDescription: { ru: "Агент сам выбирает инструменты и шаги", en: "Agent reasons and chooses tools during execution" },
   },
   "agent/multi": {
-    icon: "🦾",
     label: { ru: "Мультиагент", en: "Multi-Agent" },
     paletteDescription: { ru: "Координация нескольких агентов или целей", en: "Coordinate multiple agents or execution targets" },
   },
   "agent/ssh_cmd": {
-    icon: "💻",
     label: { ru: "SSH-команда", en: "SSH Command" },
     paletteDescription: { ru: "Точная команда по SSH без LLM-планирования", en: "Run one explicit SSH command without LLM planning" },
   },
   "agent/llm_query": {
-    icon: "🧠",
     label: { ru: "LLM-запрос", en: "LLM Query" },
     paletteDescription: { ru: "Аналитический шаг без серверных действий", en: "Pure reasoning or analysis step" },
   },
   "agent/mcp_call": {
-    icon: "🧩",
     label: { ru: "MCP-вызов", en: "MCP Call" },
     paletteDescription: { ru: "Прямой вызов конкретного MCP-инструмента", en: "Force one exact MCP tool call" },
   },
   "logic/condition": {
-    icon: "🔀",
     label: { ru: "Условие", en: "Condition" },
     paletteDescription: { ru: "Разветвление if / else", en: "Branch execution with if / else logic" },
   },
   "logic/parallel": {
-    icon: "⚡",
     label: { ru: "Параллель", en: "Parallel" },
     paletteDescription: { ru: "Запуск нескольких веток параллельно", en: "Fan out into parallel branches" },
   },
   "logic/merge": {
-    icon: "🪢",
     label: { ru: "Слияние", en: "Merge" },
     paletteDescription: { ru: "Явное объединение веток all / any", en: "Explicitly join branches with all / any semantics" },
   },
   "logic/wait": {
-    icon: "⏱️",
     label: { ru: "Пауза", en: "Wait" },
     paletteDescription: { ru: "Пауза на заданное время", en: "Pause the pipeline for a fixed duration" },
   },
   "logic/human_approval": {
-    icon: "👤",
     label: { ru: "Подтверждение", en: "Human Approval" },
     paletteDescription: { ru: "Ожидание решения оператора", en: "Pause and wait for operator approval" },
   },
   "logic/telegram_input": {
-    icon: "💬",
     label: { ru: "Ответ в Telegram", en: "Telegram Input" },
     paletteDescription: { ru: "Ожидание обычного текстового ответа оператора", en: "Wait for a plain-text operator reply in Telegram" },
   },
   "output/report": {
-    icon: "📋",
     label: { ru: "Отчёт", en: "Report" },
     paletteDescription: { ru: "Финальный markdown-отчёт", en: "Generate a final markdown report" },
   },
   "output/webhook": {
-    icon: "📤",
     label: { ru: "Исходящий webhook", en: "Send Webhook" },
     paletteDescription: { ru: "Отправка результата во внешний HTTP endpoint", en: "POST the result to an external endpoint" },
   },
   "output/email": {
-    icon: "✉️",
     label: { ru: "Письмо", en: "Send Email" },
     paletteDescription: { ru: "Отправка результата по email", en: "Email the pipeline result" },
   },
   "output/telegram": {
-    icon: "📱",
     label: { ru: "Telegram", en: "Telegram" },
     paletteDescription: { ru: "Отправка результата в Telegram", en: "Send the result to Telegram" },
   },
@@ -342,8 +319,8 @@ export const NODE_CATEGORY_LABELS: Record<string, LocalizedText> = {
 
 export function getNodeTypeInfo(type: string, lang: PipelineEditorLang) {
   const meta = NODE_TYPE_META[type];
-  if (!meta) return { label: type, icon: "🔧" };
-  return { label: meta.label[lang], icon: meta.icon };
+  if (!meta) return { label: type };
+  return { label: meta.label[lang] };
 }
 
 export function getNodeTypeGuidance(type: string, lang: PipelineEditorLang) {
@@ -373,4 +350,20 @@ export function getNodePaletteText(type: string, lang: PipelineEditorLang) {
 
 export function getNodeCategoryLabel(category: string, lang: PipelineEditorLang) {
   return NODE_CATEGORY_LABELS[category]?.[lang] || category;
+}
+
+export function getNodeBranchLabel(branchId: string, lang: PipelineEditorLang) {
+  const labels: Record<string, LocalizedText> = {
+    out: { ru: "Далее", en: "Next" },
+    success: { ru: "Готово", en: "Success" },
+    error: { ru: "Ошибка", en: "Error" },
+    true: { ru: "Да", en: "True" },
+    false: { ru: "Нет", en: "False" },
+    approved: { ru: "Да", en: "Approved" },
+    rejected: { ru: "Нет", en: "Rejected" },
+    timeout: { ru: "Timeout", en: "Timeout" },
+    received: { ru: "Ответ", en: "Reply" },
+    done: { ru: "Готово", en: "Done" },
+  };
+  return labels[branchId]?.[lang] || branchId;
 }

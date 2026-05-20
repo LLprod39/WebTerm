@@ -69,7 +69,7 @@ export function ServerTagsInput({
         <div className="relative">
           <Plus className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <SelectTrigger
-            className="h-11 rounded-2xl border-dashed border-border/70 bg-background/70 pl-9 text-sm"
+            className="h-10 rounded-lg border-dashed border-border/70 bg-background/70 pl-9 text-sm"
             disabled={!remainingServers.length}
           >
             <SelectValue

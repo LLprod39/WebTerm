@@ -2,7 +2,7 @@ import { type NodeProps } from "@xyflow/react";
 import { Bot, Users } from "lucide-react";
 import { NodeBase } from "./NodeBase";
 import { useI18n } from "@/lib/i18n";
-import { getNodeTypeInfo, localize } from "./nodeMeta";
+import { getNodeBranchLabel, getNodeTypeInfo, localize } from "./nodeMeta";
 import { getNodeRuntimeProps } from "./runtimeProps";
 
 export function AgentNode({ data, selected, type }: NodeProps) {
@@ -30,8 +30,8 @@ export function AgentNode({ data, selected, type }: NodeProps) {
       accentColor="border-violet-500/40"
       categoryColor="#8b5cf6"
       sourcePorts={[
-        { id: "success", label: localize(lang, "OK", "SUCCESS"), className: "!bg-green-500/70 hover:!bg-green-500", labelClassName: "text-green-500" },
-        { id: "error", label: localize(lang, "ERR", "ERROR"), className: "!bg-red-500/70 hover:!bg-red-500", labelClassName: "text-red-500" },
+        { id: "success", label: getNodeBranchLabel("success", lang), className: "!bg-green-500/70 hover:!bg-green-500", labelClassName: "text-green-500" },
+        { id: "error", label: getNodeBranchLabel("error", lang), className: "!bg-red-500/70 hover:!bg-red-500", labelClassName: "text-red-500" },
       ]}
       {...getNodeRuntimeProps(d)}
     >

@@ -41,8 +41,11 @@ function RouteLoader() {
   const { t } = useI18n();
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-6">
-      <div className="enterprise-panel flex min-w-[260px] items-center gap-3 rounded-xl px-4 py-3 text-sm text-muted-foreground">
-        <div className="h-2.5 w-2.5 animate-pulse rounded-full bg-primary" />
+      <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-5 py-3.5 text-sm text-muted-foreground shadow-sm">
+        <span className="relative flex h-2.5 w-2.5">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />
+          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
+        </span>
         {t("app.loading_workspace")}
       </div>
     </div>
@@ -135,6 +138,8 @@ const App = () => (
                     </FeatureGate>
                   )}
                 />
+                <Route path="/admin" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/dashboard/admin" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/servers" element={<Servers />} />
                 <Route path="/servers/hub" element={<TerminalPage />} />
                 <Route path="/servers/:id/terminal" element={<TerminalPage />} />

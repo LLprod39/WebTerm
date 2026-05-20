@@ -12,7 +12,7 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.core.cache import cache
-from django.db.models import Q
+from django.db.models import Max, Q
 from django.http import FileResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
@@ -160,6 +160,16 @@ def _frontend_status_for_server(server: Server, connected_server_ids: set[int], 
     return "unknown"
 
 
+def _serialize_detected_os_fields(server: Server) -> dict:
+    meta = server.detected_os_meta if isinstance(server.detected_os_meta, dict) else {}
+    pretty = (meta.get("pretty_name") or "").strip()
+    return {
+        "detected_os": (server.detected_os or "").strip(),
+        "detected_os_pretty": pretty,
+        "detected_os_meta": meta,
+    }
+
+
 @login_required
 @require_feature('servers')
 @require_http_methods(["GET"])
@@ -249,6 +259,7 @@ def frontend_bootstrap(request):
             "terminal_path": f"/servers/{server.id}/terminal/",
             "minimal_terminal_path": f"/servers/{server.id}/terminal/minimal/",
             "last_connected": server.last_connected.isoformat() if server.last_connected else None,
+            **_serialize_detected_os_fields(server),
         }
         servers_payload.append(item)
 
@@ -264,6 +275,10 @@ def frontend_bootstrap(request):
     )
     for row in recent_activity:
         row["created_at"] = row["created_at"].isoformat() if row.get("created_at") else None
+
+    from servers.os_detect_service import schedule_os_detect_after_bootstrap
+
+    schedule_os_detect_after_bootstrap(servers)
 
     return JsonResponse(
         {
@@ -733,6 +748,10 @@ def server_create(request):
             },
         )
 
+        from servers.os_detect_service import schedule_os_detect_for_server_ids
+
+        schedule_os_detect_for_server_ids([server.id], force=True)
+
         return JsonResponse({
             'success': True,
             'server_id': server.id,
@@ -925,6 +944,9 @@ def server_test_connection(request, server_id):
         if result['success']:
             server.last_connected = timezone.now()
             server.save(update_fields=['last_connected'])
+            from servers.os_detect_service import schedule_os_detect_for_server_ids
+
+            schedule_os_detect_for_server_ids([server.id])
             log_user_activity(
                 user=request.user,
                 request=request,
@@ -2937,6 +2959,48 @@ def server_memory_snapshot_promote_skill(request, server_id, snapshot_id):
 # ---------------------------------------------------------------------------
 
 
+def _monitoring_stale_seconds() -> int:
+    return max(60, int(getattr(settings, "MONITORING_STATUS_STALE_SECONDS", 300) or 300))
+
+
+def _latest_health_checks_by_server_id(server_ids: list[int]) -> dict[int, ServerHealthCheck]:
+    if not server_ids:
+        return {}
+    latest_rows = (
+        ServerHealthCheck.objects.filter(server_id__in=server_ids)
+        .values("server_id")
+        .annotate(last_id=Max("id"))
+    )
+    latest_ids = [row["last_id"] for row in latest_rows if row.get("last_id")]
+    if not latest_ids:
+        return {}
+    checks = ServerHealthCheck.objects.filter(id__in=latest_ids)
+    return {hc.server_id: hc for hc in checks}
+
+
+def _serialize_monitoring_status_item(server: Server, hc: ServerHealthCheck | None, now) -> dict:
+    stale_seconds = _monitoring_stale_seconds()
+    checked_at = hc.checked_at if hc and hc.checked_at else None
+    age_seconds = int((now - checked_at).total_seconds()) if checked_at else None
+    is_stale = age_seconds is None or age_seconds > stale_seconds
+    raw_output = hc.raw_output if hc and isinstance(hc.raw_output, dict) else {}
+    return {
+        "server_id": server.id,
+        "server_name": server.name,
+        "host": server.host,
+        "server_type": server.server_type or "ssh",
+        "status": hc.status if hc else "unknown",
+        "checked_at": checked_at.isoformat() if checked_at else None,
+        "age_seconds": age_seconds,
+        "is_stale": is_stale,
+        "response_time_ms": hc.response_time_ms if hc else None,
+        "cpu_percent": hc.cpu_percent if hc else None,
+        "memory_percent": hc.memory_percent if hc else None,
+        "disk_percent": hc.disk_percent if hc else None,
+        "is_lite": bool(raw_output.get("lite")),
+    }
+
+
 def _serialize_health_check(hc: ServerHealthCheck) -> dict:
     return {
         "id": getattr(hc, "id", None),
@@ -3102,6 +3166,9 @@ def monitoring_dashboard(request):
         "success": True,
         "servers": server_health,
         "alerts": alerts_data,
+        "meta": {
+            "stale_after_seconds": _monitoring_stale_seconds(),
+        },
         "summary": {
             "total_servers": len(server_ids),
             "healthy": status_counts.get("healthy", 0),
@@ -3116,6 +3183,87 @@ def monitoring_dashboard(request):
         },
         "recent_activity": activity_data,
     })
+
+
+def _build_monitoring_status_payload(user) -> dict:
+    now = timezone.now()
+    servers = list(_accessible_servers_queryset(user))
+    server_ids = [server.id for server in servers]
+    latest_by_id = _latest_health_checks_by_server_id(server_ids)
+
+    items = [_serialize_monitoring_status_item(server, latest_by_id.get(server.id), now) for server in servers]
+    checked_items = [item for item in items if item["checked_at"]]
+    latest_checked_at = max((item["checked_at"] for item in checked_items), default=None)
+    stale_count = sum(1 for item in items if item["is_stale"])
+
+    status_counts: dict[str, int] = {}
+    for item in items:
+        if item["status"] != "unknown":
+            status_counts[item["status"]] = status_counts.get(item["status"], 0) + 1
+
+    return {
+        "success": True,
+        "servers": items,
+        "summary": {
+            "total_servers": len(server_ids),
+            "healthy": status_counts.get("healthy", 0),
+            "warning": status_counts.get("warning", 0),
+            "critical": status_counts.get("critical", 0),
+            "unreachable": status_counts.get("unreachable", 0),
+            "unknown": sum(1 for item in items if item["status"] == "unknown"),
+            "stale": stale_count,
+        },
+        "meta": {
+            "stale_after_seconds": _monitoring_stale_seconds(),
+            "latest_checked_at": latest_checked_at,
+            "has_stale": stale_count > 0,
+        },
+    }
+
+
+@login_required
+@require_feature("servers")
+@require_http_methods(["GET"])
+def monitoring_status(request):
+    """Cached fleet health statuses (read-only, no SSH)."""
+    return JsonResponse(_build_monitoring_status_payload(request.user))
+
+
+@login_required
+@require_feature("servers")
+@require_http_methods(["POST"])
+def monitoring_refresh(request):
+    """Debounced lite fleet reachability check (TCP only)."""
+    from servers.monitor import check_all_servers
+
+    cooldown_seconds = max(
+        30,
+        int(getattr(settings, "MONITORING_FLEET_REFRESH_COOLDOWN_SECONDS", 120) or 120),
+    )
+    lock_timeout_seconds = max(30, cooldown_seconds)
+    lock_key = f"monitoring:fleet-refresh:lock:{request.user.id}"
+    recent_key = f"monitoring:fleet-refresh:recent:{request.user.id}"
+
+    payload = _build_monitoring_status_payload(request.user)
+
+    if cache.get(recent_key):
+        payload["cached"] = True
+        return JsonResponse(payload)
+
+    if not cache.add(lock_key, "1", timeout=lock_timeout_seconds):
+        payload["queued"] = True
+        return JsonResponse(payload, status=202)
+
+    server_ids = list(_accessible_servers_queryset(request.user).values_list("id", flat=True))
+    try:
+        async_to_sync(check_all_servers)(lite=True, deep=False, server_ids=server_ids)
+    finally:
+        cache.delete(lock_key)
+
+    cache.set(recent_key, "1", timeout=cooldown_seconds)
+    payload = _build_monitoring_status_payload(request.user)
+    payload["refreshed"] = True
+    return JsonResponse(payload)
 
 
 @login_required
@@ -3229,6 +3377,118 @@ def server_health_check_now(request, server_id):
         "success": True,
         "check": _serialize_health_check(hc),
     })
+
+
+@login_required
+@require_feature("servers")
+@require_http_methods(["POST"])
+def server_detect_os(request, server_id):
+    """SSH (or RDP) OS detection for a single server (API/internal; not used by SPA UI)."""
+    from servers.os_detect_service import detect_os_for_server
+
+    server = _accessible_servers_queryset(request.user).filter(id=server_id).first()
+    if not server:
+        return JsonResponse({"success": False, "error": "Server not found"}, status=404)
+
+    try:
+        result = detect_os_for_server(server.id)
+    except Exception as exc:
+        return JsonResponse({"success": False, "error": str(exc)}, status=500)
+
+    server.refresh_from_db(fields=["detected_os", "detected_os_meta", "detected_os_attempted_at"])
+    if result.get("success") and not result.get("cached"):
+        log_user_activity(
+            user=request.user,
+            request=request,
+            category="servers",
+            action="server_detect_os",
+            status=UserActivityLog.STATUS_SUCCESS,
+            description=f'OS detected for "{server.name}": {result.get("detected_os", "unknown")}',
+            entity_type="server",
+            entity_id=server.id,
+            entity_name=server.name,
+        )
+    else:
+        log_user_activity(
+            user=request.user,
+            request=request,
+            category="servers",
+            action="server_detect_os",
+            status=UserActivityLog.STATUS_ERROR,
+            description=f'OS detection failed for "{server.name}": {result.get("error", "unknown")}',
+            entity_type="server",
+            entity_id=server.id,
+            entity_name=server.name,
+        )
+
+    fields = _serialize_detected_os_fields(server)
+    status_code = 200 if result.get("success") else 500
+    return JsonResponse(
+        {
+            **result,
+            **fields,
+        },
+        status=status_code,
+    )
+
+
+@login_required
+@require_feature("servers")
+@require_http_methods(["POST"])
+def server_detect_os_batch(request):
+    """Batch OS detection for accessible SSH servers (concurrency-limited)."""
+    from servers.os_detect import detect_os_batch, detection_is_stale
+
+    try:
+        data = json.loads(request.body) if request.body else {}
+    except Exception:
+        data = {}
+
+    only_stale = bool(data.get("only_stale", False))
+    server_ids = data.get("server_ids")
+    concurrency = max(1, min(int(data.get("concurrency", 4) or 4), 5))
+
+    servers = list(_accessible_servers_queryset(request.user).filter(is_active=True))
+    if server_ids:
+        wanted = {int(x) for x in server_ids}
+        servers = [s for s in servers if s.id in wanted]
+    if only_stale:
+        servers = [s for s in servers if detection_is_stale(s)]
+
+    if not servers:
+        return JsonResponse({"success": True, "results": [], "count": 0})
+
+    batch_lock = "servers:os-detect:batch:lock"
+    if not cache.add(batch_lock, "1", timeout=max(60, concurrency * 20)):
+        return JsonResponse({"success": False, "error": "Batch detection already running"}, status=429)
+
+    try:
+        results = async_to_sync(detect_os_batch)(servers, concurrency=concurrency)
+    except Exception as exc:
+        return JsonResponse({"success": False, "error": str(exc)}, status=500)
+    finally:
+        cache.delete(batch_lock)
+
+    ok_count = sum(1 for item in results if item.get("success"))
+    log_user_activity(
+        user=request.user,
+        request=request,
+        category="servers",
+        action="server_detect_os_batch",
+        status=UserActivityLog.STATUS_SUCCESS if ok_count else UserActivityLog.STATUS_ERROR,
+        description=f"Batch OS detection: {ok_count}/{len(results)} succeeded",
+        entity_type="server",
+        metadata={"count": len(results), "ok": ok_count},
+    )
+
+    return JsonResponse(
+        {
+            "success": ok_count > 0,
+            "count": len(results),
+            "ok": ok_count,
+            "results": results,
+        }
+    )
 
 
 @login_required

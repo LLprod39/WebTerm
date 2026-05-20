@@ -109,32 +109,42 @@
 @layer components {
   /* Panel styles */
   .enterprise-panel {
-    @apply rounded-lg border border-border bg-card shadow-sm;
+    @apply rounded-xl border border-border bg-card shadow-sm;
   }
 
   .workspace-panel {
-    @apply rounded-lg border border-border bg-card shadow-sm;
+    @apply rounded-xl border border-border bg-card shadow-sm;
   }
 
   .workspace-subtle {
-    @apply border border-border bg-secondary/30;
+    @apply border border-border/60 bg-secondary/20;
   }
 
   .workspace-empty {
-    @apply flex flex-col gap-4 rounded-lg border border-dashed border-border bg-secondary/20 px-6 py-8;
+    @apply flex flex-col gap-4 rounded-xl border border-dashed border-border/50 bg-secondary/10 px-6 py-8;
   }
 
   .enterprise-kicker {
-    @apply text-xs font-semibold uppercase tracking-wider text-primary;
+    @apply text-[10px] font-bold uppercase tracking-[0.16em] text-primary;
   }
 
   /* Card styles */
   .corp-card {
-    @apply bg-card border border-border rounded-lg;
+    @apply rounded-xl border border-border bg-card shadow-sm;
   }
 
   .corp-surface {
-    @apply transition-colors hover:bg-secondary/40;
+    @apply transition-colors duration-150 hover:bg-secondary/40;
+  }
+
+  /* Row hover — for list items inside cards */
+  .row-hover {
+    @apply transition-colors duration-100 hover:bg-secondary/30;
+  }
+
+  /* Data row */
+  .data-row {
+    @apply flex items-center gap-3 px-4 py-3 transition-colors duration-100 hover:bg-secondary/25;
   }
 
   /* Status indicators */
@@ -153,4 +163,34 @@
   .status-dot-unknown {
     @apply status-dot bg-muted;
   }
+
+  /* Icon container variants */
+  .icon-box {
+    @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-lg;
+  }
+
+  .icon-box-primary {
+    @apply icon-box bg-primary/10 text-primary;
+  }
+
+  .icon-box-muted {
+    @apply icon-box bg-secondary/60 text-muted-foreground;
+  }
+
+  /* Section divider */
+  .section-divider {
+    @apply border-b border-border/60;
+  }
+}
+
+/* SSH terminal: clickable text filenames in ls output */
+.xterm .xterm-link {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+
+.xterm .xterm-link:hover {
+  color: hsl(var(--primary));
 }

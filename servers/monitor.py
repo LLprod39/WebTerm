@@ -380,6 +380,59 @@ async def _create_alerts(server: Server, metrics: dict, deep_data: dict | None =
         await _resolve_stale_docker_alerts(active_docker_fingerprints)
 
 
+async def probe_server_lite(server: Server) -> ServerHealthCheck | None:
+    """TCP reachability probe (no SSH login, no metrics)."""
+    if not server.is_active:
+        return None
+
+    host = (server.host or "").strip()
+    if not host:
+        return await _save_unreachable(server, "Empty host", 0)
+
+    if server.server_type == "rdp":
+        port = int(server.port or 3389)
+    else:
+        port = int(server.port or 22)
+
+    timeout = max(1.0, float(getattr(settings, "MONITORING_LITE_CHECK_TIMEOUT_SECONDS", 5) or 5))
+    t0 = time.monotonic()
+    try:
+        _reader, writer = await asyncio.wait_for(
+            asyncio.open_connection(host, port),
+            timeout=timeout,
+        )
+        writer.close()
+        with contextlib.suppress(Exception):
+            await writer.wait_closed()
+    except Exception as exc:
+        elapsed = int((time.monotonic() - t0) * 1000)
+        logger.debug("Monitor lite: {}:{} unreachable: {}", host, port, exc)
+        return await _save_unreachable(server, str(exc), elapsed)
+
+    elapsed = int((time.monotonic() - t0) * 1000)
+
+    def _reuse_recent_ok_check() -> ServerHealthCheck | None:
+        latest = ServerHealthCheck.objects.filter(server=server).order_by("-checked_at").first()
+        if not latest or latest.status == ServerHealthCheck.STATUS_UNREACHABLE:
+            return None
+        stale_seconds = max(60, int(getattr(settings, "MONITORING_STATUS_STALE_SECONDS", 300) or 300))
+        if latest.checked_at and (timezone.now() - latest.checked_at).total_seconds() <= stale_seconds:
+            return latest
+        return None
+
+    existing = await sync_to_async(_reuse_recent_ok_check)()
+    if existing:
+        return existing
+
+    return await sync_to_async(ServerHealthCheck.objects.create)(
+        server=server,
+        status=ServerHealthCheck.STATUS_HEALTHY,
+        response_time_ms=elapsed,
+        is_deep=False,
+        raw_output={"lite": True, "probe": "tcp", "port": port},
+    )
+
+
 async def check_server(server: Server, deep: bool = False) -> ServerHealthCheck | None:
     """Run health check on a single server. Returns the created HealthCheck or None on error."""
     if server.server_type != "ssh":
@@ -446,6 +499,15 @@ async def check_server(server: Server, deep: bool = False) -> ServerHealthCheck 
 
     await _create_alerts(server, metrics, deep_data)
 
+    from servers.os_detect_service import (
+        os_detect_cooldown_allows,
+        schedule_os_detect_for_server_ids,
+        server_needs_os_detect,
+    )
+
+    if server_needs_os_detect(server) and os_detect_cooldown_allows(server):
+        schedule_os_detect_for_server_ids([server.id])
+
     logger.info(
         "Monitor: {} -> {} (cpu={}, mem={}, disk={}, {}ms)",
         server.name, status,
@@ -486,14 +548,22 @@ async def _save_unreachable(server: Server, error_msg: str, elapsed_ms: int = 0)
 
 async def check_all_servers(
     deep: bool = False,
+    lite: bool = False,
     concurrency: int = 5,
     server_ids: list[int] | None = None,
 ) -> list[ServerHealthCheck]:
-    """Check all active SSH servers with limited concurrency."""
+    """Check active servers with limited concurrency.
+
+    lite=True runs TCP reachability only (quick fleet sweep).
+    deep=True runs full SSH metrics + optional deep diagnostics.
+    """
     normalized_ids = sorted({int(item) for item in (server_ids or []) if str(item).strip().isdigit()})
+    use_lite = bool(lite and not deep)
 
     def _load_servers() -> list[Server]:
-        qs = Server.objects.filter(is_active=True, server_type="ssh")
+        qs = Server.objects.filter(is_active=True)
+        if not use_lite:
+            qs = qs.filter(server_type="ssh")
         if normalized_ids:
             qs = qs.filter(id__in=normalized_ids)
         return list(qs.order_by("id"))
@@ -501,7 +571,8 @@ async def check_all_servers(
     servers = await sync_to_async(_load_servers)()
 
     if not servers:
-        logger.info("Monitor: no active SSH servers to check")
+        scope = "active servers" if use_lite else "active SSH servers"
+        logger.info("Monitor: no {} to check", scope)
         return []
 
     sem = asyncio.Semaphore(concurrency)
@@ -509,7 +580,10 @@ async def check_all_servers(
 
     async def _check(srv: Server):
         async with sem:
-            hc = await check_server(srv, deep=deep)
+            if use_lite:
+                hc = await probe_server_lite(srv)
+            else:
+                hc = await check_server(srv, deep=deep)
             if hc:
                 results.append(hc)
 

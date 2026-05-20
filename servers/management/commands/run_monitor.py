@@ -21,7 +21,7 @@ from servers.monitor import check_all_servers, cleanup_old_data
 
 
 class Command(BaseCommand):
-    help = "Run background server health monitoring (quick every 5 min, deep every 10 min)"
+    help = "Run background server health monitoring (lite TCP every 5 min, deep SSH every 10 min)"
 
     def add_arguments(self, parser):
         parser.add_argument("--quick-interval", type=int, default=300, help="Quick check interval in seconds (default 300)")
@@ -30,7 +30,12 @@ class Command(BaseCommand):
         parser.add_argument("--concurrency", type=int, default=5, help="Max concurrent SSH connections (default 5)")
         parser.add_argument("--server-id", dest="server_ids", action="append", type=int, help="Restrict checks to one or more server IDs (repeatable)")
         parser.add_argument("--once", action="store_true", help="Run a single check and exit")
-        parser.add_argument("--deep", action="store_true", help="Force deep check (with --once)")
+        parser.add_argument("--deep", action="store_true", help="Force deep SSH check (with --once)")
+        parser.add_argument(
+            "--full-quick",
+            action="store_true",
+            help="Use full SSH quick check instead of lite TCP for quick cycles",
+        )
 
     def handle(self, *args, **options):
         quick_interval = options["quick_interval"]
@@ -40,11 +45,20 @@ class Command(BaseCommand):
         server_ids = options["server_ids"] or []
         once = options["once"]
         deep = options["deep"]
-        scope_text = f"servers={','.join(str(item) for item in server_ids)}" if server_ids else "all active SSH servers"
+        lite_quick = not options.get("full_quick")
+        scope_text = f"servers={','.join(str(item) for item in server_ids)}" if server_ids else "all active servers"
 
         if once:
-            self.stdout.write(f"Running {'deep' if deep else 'quick'} check for {scope_text}...")
-            results = asyncio.run(check_all_servers(deep=deep, concurrency=concurrency, server_ids=server_ids))
+            mode = "deep" if deep else ("lite" if lite_quick else "quick")
+            self.stdout.write(f"Running {mode} check for {scope_text}...")
+            results = asyncio.run(
+                check_all_servers(
+                    deep=deep,
+                    lite=lite_quick and not deep,
+                    concurrency=concurrency,
+                    server_ids=server_ids,
+                )
+            )
             self.stdout.write(self.style.SUCCESS(f"Checked {len(results)} servers"))
             return
 
@@ -53,7 +67,16 @@ class Command(BaseCommand):
         ))
 
         try:
-            asyncio.run(self._run_loop(quick_interval, deep_interval, cleanup_interval, concurrency, server_ids))
+            asyncio.run(
+                self._run_loop(
+                    quick_interval,
+                    deep_interval,
+                    cleanup_interval,
+                    concurrency,
+                    server_ids,
+                    lite_quick,
+                )
+            )
         except KeyboardInterrupt:
             self.stdout.write(self.style.WARNING("\nMonitor stopped by user"))
 
@@ -64,6 +87,7 @@ class Command(BaseCommand):
         cleanup_interval: int,
         concurrency: int,
         server_ids: list[int] | None = None,
+        lite_quick: bool = True,
     ):
         stop = asyncio.Event()
 
@@ -84,9 +108,14 @@ class Command(BaseCommand):
             is_deep = quick_counter % deep_every_n == 0
 
             try:
-                check_type = "deep" if is_deep else "quick"
+                check_type = "deep" if is_deep else ("lite" if lite_quick else "quick")
                 logger.info("Monitor: starting {} check (cycle {})", check_type, quick_counter)
-                results = await check_all_servers(deep=is_deep, concurrency=concurrency, server_ids=server_ids)
+                results = await check_all_servers(
+                    deep=is_deep,
+                    lite=lite_quick and not is_deep,
+                    concurrency=concurrency,
+                    server_ids=server_ids,
+                )
                 logger.info("Monitor: {} check done, {} servers checked", check_type, len(results))
             except Exception as exc:
                 logger.error("Monitor: check cycle failed: {}", exc)
