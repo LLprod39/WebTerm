@@ -10,6 +10,9 @@ import {
   Database,
   MessageSquare,
   Workflow,
+  Brain,
+  Lock,
+  Network,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,7 +33,7 @@ import { SettingsSectionCard as SectionCard } from "@/components/settings/Settin
 import { QueryStateBlock } from "@/components/ui/page-shell";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Constants
+// Constants & Metadata
 // ─────────────────────────────────────────────────────────────────────────────
 
 const LLM_PROVIDERS = [
@@ -68,6 +71,70 @@ const PROVIDER_API_STATUS_KEY: Record<string, string> = {
   ollama: "ollama_set",
 };
 
+// Professional business metadata for providers
+const PROVIDER_METADATA: Record<string, {
+  accentColor: string;
+  textColor: string;
+  badge: string;
+  brand: string;
+  slogan: string;
+}> = {
+  grok: {
+    accentColor: "bg-amber-500",
+    textColor: "text-amber-500",
+    badge: "Высокая производительность",
+    brand: "xAI",
+    slogan: "Анализ текстовых данных на высокой скорости инференса.",
+  },
+  gemini: {
+    accentColor: "bg-violet-500",
+    textColor: "text-violet-500",
+    badge: "Широкий контекст",
+    brand: "Google",
+    slogan: "Модели общего назначения с поддержкой широкого окна контекста.",
+  },
+  openai: {
+    accentColor: "bg-emerald-500",
+    textColor: "text-emerald-500",
+    badge: "Логические операции",
+    brand: "OpenAI",
+    slogan: "Стандарт индустрии для решения логических задач и вызова внешних функций.",
+  },
+  claude: {
+    accentColor: "bg-orange-500",
+    textColor: "text-orange-500",
+    badge: "Работа с кодом",
+    brand: "Anthropic",
+    slogan: "Специализированные модели для анализа кода и проведения рефакторинга.",
+  },
+  ollama: {
+    accentColor: "bg-sky-500",
+    textColor: "text-sky-500",
+    badge: "Локальное исполнение",
+    brand: "Ollama",
+    slogan: "Исполнение моделей на вычислительных ресурсах предприятия без отправки внешних запросов.",
+  },
+};
+
+// Features supported by each routing role
+const ROLE_FEATURES: Record<string, { label: string; tooltip: string }[]> = {
+  "Чат / Терминальный AI": [
+    { label: "Streaming", tooltip: "Потоковый моментальный вывод ответов в консоль." },
+    { label: "Fast Response", tooltip: "Минимальная задержка перед ответом." },
+    { label: "Context Aware", tooltip: "Учет предыстории сессии и настроек сервера." },
+  ],
+  "Агенты (ReAct)": [
+    { label: "Tool Calling", tooltip: "Надежный вызов внешних SSH и системных инструментов." },
+    { label: "Long Context", tooltip: "Анализ больших файлов конфигураций и системных логов." },
+    { label: "Self-Correction", tooltip: "Корректировка действий при ошибках выполнения." },
+  ],
+  "Оркестратор (Pipeline)": [
+    { label: "JSON Output", tooltip: "Строгая генерация структурированных данных." },
+    { label: "Consistency", tooltip: "Стабильное выполнение шагов автоматизации." },
+    { label: "State Control", tooltip: "Передача состояния между шагами выполнения сценария." },
+  ],
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper Functions
 // ─────────────────────────────────────────────────────────────────────────────
@@ -93,60 +160,161 @@ function getSavedModelForProvider(config: SettingsConfig, provider: string): str
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Purpose Model Selector Component
+// Sub-components
 // ─────────────────────────────────────────────────────────────────────────────
+
+function PurposeModelSelectorFooter({ provider, availableModels, onRefresh, refreshing }: { provider: string; availableModels: string[]; onRefresh: () => void; refreshing: boolean }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-2 text-[10px] font-medium text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <div className="h-1.5 w-1.5 rounded-full bg-primary/70" />
+          {getProviderLabel(provider)}
+        </span>
+        {availableModels.length > 0 ? (
+          <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 dark:text-emerald-400">
+            Каталог активен ({availableModels.length} мод.)
+          </span>
+        ) : (
+          <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 border border-amber-500/20 dark:text-amber-400">
+            Ручной ввод
+          </span>
+        )}
+      </div>
+      {availableModels.length > 0 && (
+        <Button 
+          size="sm" 
+          variant="ghost" 
+          className="h-8 w-full justify-center text-xs text-muted-foreground hover:text-primary hover:bg-secondary transition-all duration-200" 
+          onClick={onRefresh} 
+          disabled={refreshing}
+        >
+          <RefreshCw className={cn("mr-2 h-3.5 w-3.5", refreshing && "animate-spin")} /> 
+          Обновить каталог моделей
+        </Button>
+      )}
+    </div>
+  );
+}
 
 function PurposeModelSelector({
   label, description, icon: Icon, provider, model, availableModels,
-  onProviderChange, onModelChange, onRefresh, refreshing,
+  onProviderChange, onModelChange, onRefresh, refreshing, features,
 }: {
   label: string; description: string; icon: ElementType;
   provider: string; model: string; availableModels: string[];
   onProviderChange: (p: string) => void; onModelChange: (m: string) => void;
   onRefresh: () => void; refreshing: boolean;
+  features?: { label: string; tooltip: string }[];
 }) {
-  const { t } = useI18n();
+  const providerColors: Record<string, string> = {
+    grok: "bg-amber-500",
+    gemini: "bg-violet-500",
+    openai: "bg-emerald-500",
+    claude: "bg-orange-500",
+    ollama: "bg-sky-500",
+  };
+  const activeDotColor = providerColors[provider] || "bg-primary";
+
   return (
-    <div className="group/selector relative space-y-4 rounded-xl border border-primary/5 bg-background/50 p-5 shadow-sm transition-all duration-300 hover:border-primary/20 hover:bg-background/80 hover:shadow-md">
-      <div className="flex items-center gap-3.5">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary shadow-inner transition-colors group-hover/selector:bg-primary group-hover/selector:text-primary-foreground">
-          <Icon className="h-5 w-5" />
+    <div className="group/selector relative flex flex-col justify-between space-y-4 rounded-xl border border-border/60 bg-card/40 p-5 shadow-sm transition-all duration-200 hover:border-border hover:bg-card/60">
+      <div>
+        <div className="flex items-start justify-between gap-3.5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-foreground border border-border">
+              <Icon className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-sm tracking-tight text-foreground">{label}</h3>
+              <p className="text-[11px] text-muted-foreground mt-0.5 leading-normal">{description}</p>
+            </div>
+          </div>
         </div>
-        <div>
-          <p className="font-semibold tracking-tight text-foreground/90">{label}</p>
-          <p className="text-xs text-muted-foreground/80">{description}</p>
-        </div>
-      </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/70">{t("ai.provider_label")}</label>
-          <Select value={provider} onValueChange={onProviderChange}>
-            <SelectTrigger className="h-9 transition-colors group-hover/selector:border-primary/30"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {LLM_PROVIDERS.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/70">{t("ai.model_label")}</label>
-          {availableModels.length > 0 ? (
-            <Select value={model} onValueChange={onModelChange}>
-              <SelectTrigger className="h-9 transition-colors group-hover/selector:border-primary/30"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {availableModels.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+
+        {/* Features Row */}
+        {features && features.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-3">
+            {features.map((f) => (
+              <span
+                key={f.label}
+                title={f.tooltip}
+                className="cursor-help rounded bg-muted px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground transition-all hover:bg-muted-foreground/15"
+              >
+                {f.label}
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 mt-4">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Провайдер</label>
+            <Select value={provider} onValueChange={onProviderChange}>
+              <SelectTrigger className="h-9 transition-colors hover:border-primary/20 bg-background/50 hover:bg-background">
+                <span className="flex items-center gap-2 truncate text-xs">
+                  <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", activeDotColor)} />
+                  <SelectValue />
+                </span>
+              </SelectTrigger>
+              <SelectContent className="text-xs">
+                {LLM_PROVIDERS.map((p) => (
+                  <SelectItem key={p.value} value={p.value}>
+                    <span className="flex items-center gap-2">
+                      <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", providerColors[p.value] || "bg-muted-foreground/30")} />
+                      {p.label}
+                    </span>
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
-          ) : (
-            <div className="flex gap-1.5">
-              <Input value={model} onChange={(e) => onModelChange(e.target.value)} placeholder="Model name" className="h-9 text-xs" />
-              <Button size="icon" variant="outline" className="h-9 w-9 shrink-0 transition-colors hover:bg-primary/5 hover:text-primary" onClick={onRefresh} disabled={refreshing}>
-                <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
-              </Button>
-            </div>
-          )}
+          </div>
+          
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Модель</label>
+            {availableModels.length > 0 ? (
+              <Select value={model} onValueChange={onModelChange}>
+                <SelectTrigger className="h-9 transition-colors hover:border-primary/20 bg-background/50 hover:bg-background text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="text-xs">
+                  {availableModels.map((m) => (
+                    <SelectItem key={m} value={m}>
+                      {m}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="flex gap-1.5">
+                <Input 
+                  value={model} 
+                  onChange={(e) => onModelChange(e.target.value)} 
+                  placeholder="Например, gpt-4o" 
+                  className="h-9 text-xs transition-colors hover:border-primary/20 bg-background/50" 
+                />
+                <Button 
+                  size="icon" 
+                  variant="outline" 
+                  className="h-9 w-9 shrink-0 transition-colors hover:bg-secondary bg-background/50" 
+                  onClick={onRefresh} 
+                  disabled={refreshing}
+                >
+                  <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-      <PurposeModelSelectorFooter provider={provider} availableModels={availableModels} onRefresh={onRefresh} refreshing={refreshing} />
+
+      <div className="mt-4 pt-3 border-t border-border/30">
+        <PurposeModelSelectorFooter 
+          provider={provider} 
+          availableModels={availableModels} 
+          onRefresh={onRefresh} 
+          refreshing={refreshing} 
+        />
+      </div>
     </div>
   );
 }
@@ -154,23 +322,6 @@ function PurposeModelSelector({
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Component
 // ─────────────────────────────────────────────────────────────────────────────
-
-function PurposeModelSelectorFooter({ provider, availableModels, onRefresh, refreshing }: { provider: string; availableModels: string[]; onRefresh: () => void; refreshing: boolean }) {
-  const { t } = useI18n();
-  return (
-    <>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/40 pt-3 text-[11px] font-medium text-muted-foreground">
-        <span className="flex items-center gap-1.5"><div className="h-1.5 w-1.5 rounded-full bg-primary/60" />{getProviderLabel(provider)}</span>
-        <span>{availableModels.length ? `${availableModels.length} ${t("ai.models_count").replace("{count}", "").trim()}` : t("ai.model_manual")}</span>
-      </div>
-      {availableModels.length > 0 && (
-        <Button size="sm" variant="ghost" className="mt-1 h-8 w-full justify-center px-3 text-xs text-muted-foreground/80 transition-colors hover:bg-primary/5 hover:text-primary" onClick={onRefresh} disabled={refreshing}>
-          <RefreshCw className={cn("mr-2 h-3 w-3", refreshing && "animate-spin")} /> {t("ai.refresh_catalog")}
-        </Button>
-      )}
-    </>
-  );
-}
 
 export default function SettingsAIPage() {
   const queryClient = useQueryClient();
@@ -199,7 +350,7 @@ export default function SettingsAIPage() {
   
   const currentConfig = settingsData?.config;
 
-  // AI model state
+  // Form states
   const [provider, setProvider] = useState<string>("grok");
   const [model, setModel] = useState<string>("");
   const [chatProvider, setChatProvider] = useState("grok");
@@ -404,73 +555,117 @@ export default function SettingsAIPage() {
       {/* Page Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
-            <Bot className="h-4 w-4 text-primary" />
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary text-foreground border border-border">
+            <Bot className="h-4 w-4" />
           </div>
           <div>
-            <h1 className="text-base font-semibold tracking-tight text-foreground">AI конфигурация</h1>
-            <p className="text-[11px] text-muted-foreground">Провайдеры, модели и маршрутизация</p>
+            <h1 className="text-base font-semibold tracking-tight text-foreground">Панель управления AI</h1>
+            <p className="text-[11px] text-muted-foreground">Настройки провайдеров языковых моделей, конфигурация локального выполнения и маршрутизация.</p>
           </div>
         </div>
         <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
           {aiDraftDirty ? (
-            <span className="flex items-center gap-1.5 rounded-md border border-amber-500/25 bg-amber-500/10 px-2 py-1 text-amber-400">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />
-              Несохранённые изменения
+            <span className="flex items-center gap-1.5 rounded-md border border-amber-500/25 bg-amber-500/10 px-2 py-1 text-amber-600">
+              Несохраненные изменения
             </span>
           ) : (
-            <span className="text-muted-foreground/60">Сохранено</span>
+            <span className="text-muted-foreground/60">Все настройки сохранены</span>
           )}
           <span className="text-border">·</span>
-          <span>{configuredProviderCount} провайдера</span>
+          <span>{configuredProviderCount} активных API</span>
         </div>
       </div>
 
       {/* Default Provider */}
-      <SectionCard title="Провайдер по умолчанию" icon={Bot} description="Выбор основного провайдера и модели">
+      <SectionCard 
+        title="Провайдер по умолчанию" 
+        icon={Bot} 
+        description="Выбор провайдера и базовой модели по умолчанию для стандартных запросов в системе."
+      >
         <div className="space-y-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            {providerOverview.map((providerItem) => (
-              <button
-                key={providerItem.value}
-                type="button"
-                onClick={() => handleDefaultProviderChange(providerItem.value)}
-                className={cn(
-                  "group relative flex flex-col items-start rounded-xl border p-3 text-left shadow-sm transition-all duration-150",
-                  providerItem.isSelected
-                    ? "border-primary/40 bg-primary/6 ring-1 ring-primary/20 shadow-md"
-                    : "border-border/60 hover:border-primary/30 hover:bg-secondary/30 hover:shadow-md"
-                )}
-              >
-                <div className="flex w-full items-center justify-between">
-                  <span className="text-sm font-semibold text-foreground">{providerItem.label}</span>
-                  <span className="relative flex h-2 w-2 shrink-0">
-                    {providerItem.configured && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-50" />}
-                    <span className={cn("relative inline-flex h-2 w-2 rounded-full", providerItem.configured ? "bg-emerald-400" : "bg-muted-foreground/25")} />
-                  </span>
-                </div>
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {providerItem.activeRoutes.length > 0 ? (
-                    providerItem.activeRoutes.map((route) => (
-                      <span key={route} className="rounded border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold text-primary">{route}</span>
-                    ))
-                  ) : (
-                    <span className="text-[10px] text-muted-foreground/60">Не используется</span>
+            {providerOverview.map((providerItem) => {
+              const meta = PROVIDER_METADATA[providerItem.value as keyof typeof PROVIDER_METADATA] || PROVIDER_METADATA.grok;
+              return (
+                <button
+                  key={providerItem.value}
+                  type="button"
+                  onClick={() => handleDefaultProviderChange(providerItem.value)}
+                  className={cn(
+                    "group relative flex flex-col justify-between rounded-xl border p-4 text-left transition-all duration-200 active:scale-[0.99] outline-none",
+                    providerItem.isSelected
+                      ? "bg-primary/[0.02] border-primary shadow-sm"
+                      : "border-border/60 bg-card/40 hover:border-border/80 hover:bg-card/70"
                   )}
-                </div>
-                <p className="mt-1.5 text-[10px] text-muted-foreground/70">
-                  {providerItem.catalogSize} моделей
-                </p>
-              </button>
-            ))}
+                >
+                  <div className="flex w-full items-start justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{meta.brand}</span>
+                      <h3 className="text-sm font-bold tracking-tight text-foreground mt-0.5">{providerItem.label.split(" ")[0]}</h3>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="relative flex h-2 w-2 shrink-0">
+                        <span className={cn("relative inline-flex h-2 w-2 rounded-full transition-all duration-300", 
+                          providerItem.configured ? meta.accentColor : "bg-muted-foreground/30"
+                        )} />
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-4 w-full space-y-2">
+                    <p className="text-[10px] text-muted-foreground leading-snug">{meta.slogan}</p>
+                    <span className={cn("inline-flex rounded px-1.5 py-0.5 text-[9px] font-semibold tracking-wide border bg-background/50", 
+                      providerItem.isSelected ? "border-primary/20 text-primary" : "border-border/40 text-muted-foreground"
+                    )}>
+                      {meta.badge}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-border/30 w-full flex items-center justify-between">
+                    <div className="flex flex-wrap gap-1">
+                      {providerItem.activeRoutes.length > 0 ? (
+                        providerItem.activeRoutes.map((route) => {
+                          const routeLabels: Record<string, string> = {
+                            "Chat": "Чат",
+                            "Agent": "Агент",
+                            "Pipeline": "Пайплайн"
+                          };
+                          return (
+                            <span key={route} className="rounded bg-muted px-1.5 py-0.5 text-[9px] font-semibold text-muted-foreground border border-border/50">
+                              {routeLabels[route] || route}
+                            </span>
+                          );
+                        })
+                      ) : (
+                        <span className="text-[9px] text-muted-foreground/50 italic">Не назначен</span>
+                      )}
+                    </div>
+                    <span className="text-[9px] font-medium text-muted-foreground shrink-0">
+                      {providerItem.catalogSize > 0 ? `${providerItem.catalogSize} мод.` : "Ручной"}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={applyDefaultToAll}>
-              Применить ко всем ролям
+          <div className="flex flex-wrap gap-3 mt-4">
+            <Button 
+              size="sm" 
+              variant="outline" 
+              onClick={applyDefaultToAll}
+              className="font-medium bg-background/40 border-border hover:bg-secondary transition-all duration-200 text-xs"
+            >
+              Синхронизировать все роли
             </Button>
-            <Button size="sm" variant="outline" onClick={resetAiDraft} disabled={!aiDraftDirty}>
-              Сбросить черновик
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              onClick={resetAiDraft} 
+              disabled={!aiDraftDirty}
+              className="text-muted-foreground hover:text-foreground hover:bg-secondary transition-all duration-200 text-xs"
+            >
+              Сбросить изменения
             </Button>
           </div>
         </div>
@@ -478,20 +673,34 @@ export default function SettingsAIPage() {
 
       {/* Purpose Routing */}
       <SectionCard
-        title="Маршрутизация по ролям"
+        title="Маршрутизация моделей по ролям"
         icon={Workflow}
-        description="Разные модели для разных типов задач"
+        description="Назначение специализированных моделей для решения конкретных системных и прикладных задач."
         actions={
-          <Button size="sm" onClick={onSavePurpose} disabled={saving || !aiDraftDirty}>
-            <Save className="mr-1.5 h-3.5 w-3.5" />
-            {saving ? "Сохранение..." : "Сохранить маршруты"}
+          <Button 
+            size="sm" 
+            onClick={onSavePurpose} 
+            disabled={saving || !aiDraftDirty}
+            className="shadow-sm font-medium text-xs transition-all duration-200 bg-primary text-primary-foreground hover:bg-primary/90"
+          >
+            {saving ? (
+              <>
+                <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                Сохранение конфигурации...
+              </>
+            ) : (
+              <>
+                <Save className="mr-1.5 h-3.5 w-3.5" />
+                Сохранить настройки ролей
+              </>
+            )}
           </Button>
         }
       >
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
           <PurposeModelSelector
             label="Чат / Терминальный AI"
-            description="Интерактивный помощник"
+            description="Интерактивный помощник пользователя в окне терминала."
             icon={MessageSquare}
             provider={chatProvider}
             model={chatModel}
@@ -503,10 +712,11 @@ export default function SettingsAIPage() {
             onModelChange={setChatModel}
             onRefresh={() => onRefreshPurpose(chatProvider)}
             refreshing={refreshingPurpose === chatProvider}
+            features={ROLE_FEATURES["Чат / Терминальный AI"]}
           />
           <PurposeModelSelector
             label="Агенты (ReAct)"
-            description="Инструменты и итерации"
+            description="Запуск фоновых автономных агентов для решения системных задач."
             icon={Bot}
             provider={agentProvider}
             model={agentModel}
@@ -518,10 +728,11 @@ export default function SettingsAIPage() {
             onModelChange={setAgentModel}
             onRefresh={() => onRefreshPurpose(agentProvider)}
             refreshing={refreshingPurpose === agentProvider}
+            features={ROLE_FEATURES["Агенты (ReAct)"]}
           />
           <PurposeModelSelector
             label="Оркестратор (Pipeline)"
-            description="Координация multi-step"
+            description="Исполнение структурированных шагов в сценариях автоматизации."
             icon={Workflow}
             provider={orchProvider}
             model={orchModel}
@@ -533,28 +744,40 @@ export default function SettingsAIPage() {
             onModelChange={setOrchModel}
             onRefresh={() => onRefreshPurpose(orchProvider)}
             refreshing={refreshingPurpose === orchProvider}
+            features={ROLE_FEATURES["Оркестратор (Pipeline)"]}
           />
         </div>
       </SectionCard>
 
       {/* Runtime & Advanced */}
-      <SectionCard title="Runtime и расширенные опции" icon={Database} description="Ollama local/cloud runtime и reasoning">
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          {/* Ollama Runtime */}
-          <div className="space-y-4 rounded-xl border border-border p-4">
+      <SectionCard 
+        title="Локальный инференс и параметры рассуждений" 
+        icon={Database} 
+        description="Настройка локального и облачного выполнения моделей Ollama и параметров обдумывания."
+      >
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          {/* Ollama Runtime Control Panel */}
+          <div className="relative space-y-4 rounded-xl border border-border/60 bg-card/40 p-5 shadow-sm">
+            {/* Header */}
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-medium">Ollama Runtime</p>
-                <p className="text-[11px] text-muted-foreground">Локальный и облачный runtime</p>
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary text-foreground border border-border">
+                  <Cpu className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-sm text-foreground">Настройка инференса Ollama</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">Параметры подключения к локальным и облачным узлам выполнения моделей.</p>
+                </div>
               </div>
-              <Badge variant={ollamaRoutingActive ? "default" : "secondary"}>
-                {ollamaRoutingActive ? `Активен - ${ollamaRuntimeSummary}` : `Готов - ${ollamaRuntimeSummary}`}
+              <Badge variant={ollamaRoutingActive ? "default" : "secondary"} className="px-2.5 py-0.5 text-[10px] font-semibold">
+                {ollamaRoutingActive ? `Активен — ${ollamaRuntimeSummary}` : `Готов — ${ollamaRuntimeSummary}`}
               </Badge>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {/* Config Fields */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-medium uppercase text-muted-foreground">Режим runtime</label>
+                <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Режим выполнения</label>
                 <Select
                   value={ollamaRuntimeMode}
                   onValueChange={(value) => {
@@ -562,144 +785,282 @@ export default function SettingsAIPage() {
                     if (value === "cloud") setOllamaCloudEnabled(true);
                   }}
                 >
-                  <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {OLLAMA_RUNTIME_KEYS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>{t(option.key)}</SelectItem>
-                    ))}
+                  <SelectTrigger className="h-9 text-xs bg-background/50 hover:bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="text-xs">
+                    {OLLAMA_RUNTIME_KEYS.map((option) => {
+                      const runtimeLabels: Record<string, string> = {
+                        "auto": "Автоматический выбор (Auto)",
+                        "local": "Только локальный сервер",
+                        "cloud": "Только облачный хаб"
+                      };
+                      return (
+                        <SelectItem key={option.value} value={option.value}>
+                          {runtimeLabels[option.value] || t(option.key)}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
+                <p className="text-[10px] text-muted-foreground leading-normal mt-1">
+                  {ollamaRuntimeMode === "auto" && "Автоматическое переключение в зависимости от доступности узлов."}
+                  {ollamaRuntimeMode === "local" && "Использовать только локально запущенный сервер Ollama."}
+                  {ollamaRuntimeMode === "cloud" && "Использовать облачный реестр Ollama Hub API."}
+                </p>
               </div>
-              <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
-                <div>
-                  <p className="text-xs font-medium">Ollama Cloud</p>
-                  <p className="text-[10px] text-muted-foreground">ollama.com/api</p>
+              
+              <div className="flex flex-col justify-between rounded-xl border border-border/50 bg-background/30 p-3 hover:border-border transition-colors">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-semibold text-foreground">Облачные модели Ollama</h4>
+                    <p className="text-[10px] text-muted-foreground">ollama.com/api</p>
+                  </div>
+                  <Switch
+                    checked={ollamaCloudEnabled}
+                    onCheckedChange={(checked) => {
+                      setOllamaCloudEnabled(checked);
+                      if (!checked && ollamaRuntimeMode === "cloud") setOllamaRuntimeMode("auto");
+                    }}
+                  />
                 </div>
-                <Switch
-                  checked={ollamaCloudEnabled}
-                  onCheckedChange={(checked) => {
-                    setOllamaCloudEnabled(checked);
-                    if (!checked && ollamaRuntimeMode === "cloud") setOllamaRuntimeMode("auto");
-                  }}
-                />
+                <p className="text-[10px] text-muted-foreground mt-2 leading-snug">
+                  Использование удаленного API Ollama Cloud для выполнения.
+                </p>
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-medium uppercase text-muted-foreground">Local Base URL</label>
-              <Input value={ollamaBaseUrl} onChange={(e) => setOllamaBaseUrl(e.target.value)} placeholder="http://127.0.0.1:11434" className="h-9" />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Адрес локального сервера</label>
+                <div className="relative">
+                  <Globe className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground/60" />
+                  <Input 
+                    value={ollamaBaseUrl} 
+                    onChange={(e) => setOllamaBaseUrl(e.target.value)} 
+                    placeholder="http://127.0.0.1:11434" 
+                    className="h-9 pl-9 text-xs font-mono transition-colors hover:border-primary/20 focus-visible:ring-primary/20" 
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Адрес облачного сервера</label>
+                <div className="relative">
+                  <Globe className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground/60" />
+                  <Input 
+                    value={ollamaCloudBaseUrl} 
+                    onChange={(e) => setOllamaCloudBaseUrl(e.target.value)} 
+                    placeholder="https://ollama.com" 
+                    className="h-9 pl-9 text-xs font-mono transition-colors hover:border-primary/20 focus-visible:ring-primary/20" 
+                    disabled={!ollamaCloudEnabled} 
+                  />
+                </div>
+              </div>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-medium uppercase text-muted-foreground">Cloud API URL</label>
-              <Input value={ollamaCloudBaseUrl} onChange={(e) => setOllamaCloudBaseUrl(e.target.value)} placeholder="https://ollama.com" className="h-9" disabled={!ollamaCloudEnabled} />
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" className="gap-1.5" onClick={onSaveOllama} disabled={saving}>
-                <Save className="h-3.5 w-3.5" /> {saving ? "Сохранение..." : "Сохранить runtime"}
+            <div className="flex flex-wrap gap-2.5 pt-2 border-t border-border/30">
+              <Button 
+                size="sm" 
+                variant="outline" 
+                className="gap-1.5 text-xs bg-background/50 hover:bg-secondary transition-all duration-200" 
+                onClick={onSaveOllama} 
+                disabled={saving}
+              >
+                <Save className="h-3.5 w-3.5" /> 
+                {saving ? "Сохранение..." : "Сохранить параметры"}
               </Button>
-              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => onRefreshPurpose("ollama")} disabled={refreshingPurpose === "ollama"}>
+              <Button 
+                size="sm" 
+                variant="outline" 
+                className="gap-1.5 text-xs bg-background/50 hover:bg-secondary transition-all duration-200" 
+                onClick={() => onRefreshPurpose("ollama")} 
+                disabled={refreshingPurpose === "ollama"}
+              >
                 <RefreshCw className={cn("h-3.5 w-3.5", refreshingPurpose === "ollama" && "animate-spin")} />
-                Проверить модели
+                Сканировать модели
               </Button>
             </div>
 
-            <div className="rounded-lg border border-dashed border-border px-4 py-3">
+            {/* Model catalogs stats breakdown */}
+            <div className="rounded-xl border border-dashed border-border/60 bg-background/10 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap gap-2">
-                <Badge variant="secondary">{ollamaLocalModels.length} local</Badge>
-                <Badge variant="secondary">{ollamaCloudModels.length} cloud</Badge>
-                <Badge variant="outline">{ollamaCatalogModels.length} всего</Badge>
+                <Badge variant="secondary" className="bg-secondary text-foreground hover:bg-secondary/80 text-[10px] font-medium border border-border">{ollamaLocalModels.length} локально</Badge>
+                <Badge variant="secondary" className="bg-secondary text-foreground hover:bg-secondary/80 text-[10px] font-medium border border-border">{ollamaCloudModels.length} облако</Badge>
               </div>
+              <span className="text-[10px] font-medium text-muted-foreground">Всего в каталоге: {ollamaCatalogModels.length}</span>
             </div>
           </div>
 
-          {/* Reasoning Controls */}
-          <div className="space-y-4 rounded-xl border border-border p-4">
-            <div>
-              <p className="text-sm font-medium">Reasoning Controls</p>
-              <p className="text-[11px] text-muted-foreground">Настройки thinking-моделей</p>
+          {/* Reasoning Control Panel */}
+          <div className="relative space-y-4 rounded-xl border border-border/60 bg-card/40 p-5 shadow-sm">
+            {/* Header */}
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary text-foreground border border-border">
+                <Brain className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-sm text-foreground">Параметры рассуждений моделей</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Настройки вывода размышлений для логических моделей (Reasoning / Thinking).</p>
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <div>
-                <p className="text-xs font-medium">Ollama Thinking</p>
-                <p className="text-[11px] text-muted-foreground">Для thinking-моделей</p>
+            {/* Ollama Thinking Option */}
+            <div className="space-y-2 rounded-xl border border-border/40 bg-background/20 p-3 hover:border-border transition-colors">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-semibold text-foreground">Вывод рассуждений Ollama</h4>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Отображение тегов &lt;think&gt; для локальных моделей (например, DeepSeek-R1).</p>
+                </div>
               </div>
               <Select value={ollamaThinkMode} onValueChange={setOllamaThinkMode}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {OLLAMA_THINKING_KEYS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>{t(option.key)}</SelectItem>
-                  ))}
+                <SelectTrigger className="h-9 text-xs transition-colors hover:border-primary/20 bg-background/50 hover:bg-background">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="text-xs">
+                  {OLLAMA_THINKING_KEYS.map((option) => {
+                    const thinkLabels: Record<string, string> = {
+                      [AUTO_OLLAMA_THINKING_VALUE]: "Автоматически (Auto)",
+                      "off": "Скрывать размышления полностью",
+                      "on": "Показывать размышления полностью",
+                      "low": "Краткие размышления (Low)",
+                      "medium": "Средняя глубина (Medium)",
+                      "high": "Максимальная глубина (High)"
+                    };
+                    return (
+                      <SelectItem key={option.value} value={option.value}>
+                        {thinkLabels[option.value] || t(option.key)}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <div>
-                <p className="text-xs font-medium">OpenAI Reasoning</p>
-                <p className="text-[11px] text-muted-foreground">Глубина reasoning для Responses API</p>
+            {/* OpenAI Reasoning Effort Option */}
+            <div className="space-y-2 rounded-xl border border-border/40 bg-background/20 p-3 hover:border-border transition-colors">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-semibold text-foreground">Глубина рассуждений OpenAI (o-серия)</h4>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Параметр reasoning_effort для моделей OpenAI o1 и o3-mini.</p>
+                </div>
               </div>
               <Select value={reasoningEffort} onValueChange={setReasoningEffort}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={AUTO_REASONING_VALUE}>Auto</SelectItem>
-                  <SelectItem value="none">None</SelectItem>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
+                <SelectTrigger className="h-9 text-xs transition-colors hover:border-primary/20 bg-background/50 hover:bg-background">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="text-xs">
+                  <SelectItem value={AUTO_REASONING_VALUE}>Автоматически (Auto)</SelectItem>
+                  <SelectItem value="none">Без рассуждений (None)</SelectItem>
+                  <SelectItem value="low">Краткие размышления (Low)</SelectItem>
+                  <SelectItem value="medium">Сбалансированная глубина (Medium)</SelectItem>
+                  <SelectItem value="high">Глубокие рассуждения (High)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+            
+            <p className="text-[10px] text-muted-foreground leading-normal italic bg-background/30 p-2.5 rounded-lg border border-border/30">
+              * Выбор более глубоких рассуждений может увеличить задержку первого токена (TTFT), но повышает качество решения сложных логических задач.
+            </p>
           </div>
         </div>
       </SectionCard>
 
       {/* API Keys Status */}
       {apiKeys && isAdmin && (
-        <SectionCard title={t("ai.api_keys")} icon={Key} description={t("ai.api_keys_desc")}>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        <SectionCard 
+          title="Статус подключения API-ключей" 
+          icon={Lock} 
+          description="Мониторинг доступности внешних провайдеров на основе загруженных в конфигурацию ключей."
+        >
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {[
-              { name: "Gemini", key: "gemini_set", enabled: config.gemini_enabled },
-              { name: "Grok", key: "grok_set", enabled: config.grok_enabled },
-              { name: "OpenAI", key: "openai_set", enabled: config.openai_enabled },
-              { name: "Claude", key: "claude_set", enabled: config.claude_enabled },
-              { name: "Ollama Local", key: "ollama_local_set", enabled: config.ollama_enabled && ollamaRuntimeMode !== "cloud" },
-              { name: "Ollama Cloud", key: "ollama_cloud_set", enabled: config.ollama_enabled && ollamaCloudEnabled },
-            ].map((p) => (
-              <div key={p.name} className="rounded-lg border border-border px-3 py-3">
-                <div className="flex items-center gap-3">
-                  <div className={cn("h-2.5 w-2.5 rounded-full", apiKeys[p.key] ? "bg-emerald-500" : "bg-red-500")} />
-                  <div>
-                    <p className="text-xs font-medium">{p.name}</p>
-                    <p className="text-[10px] text-muted-foreground">
-                      {apiKeys[p.key] ? t("ai.connected") : t("ai.not_set")}
-                      {p.enabled ? ` — ${t("ai.feat_enabled")}` : ""}
-                    </p>
+              { name: "Gemini Pro", key: "gemini_set", enabled: config.gemini_enabled, desc: "Google AI Studio / Vertex AI" },
+              { name: "Grok xAI", key: "grok_set", enabled: config.grok_enabled, desc: "xAI API" },
+              { name: "OpenAI GPT", key: "openai_set", enabled: config.openai_enabled, desc: "OpenAI API (GPT & o-series)" },
+              { name: "Claude Anthropic", key: "claude_set", enabled: config.claude_enabled, desc: "Anthropic API (Claude)" },
+              { name: "Ollama Local Node", key: "ollama_local_set", enabled: config.ollama_enabled && ollamaRuntimeMode !== "cloud", desc: "Локальный адрес Ollama" },
+              { name: "Ollama Cloud Hub", key: "ollama_cloud_set", enabled: config.ollama_enabled && ollamaCloudEnabled, desc: "Удаленный API-адрес Ollama" },
+            ].map((p) => {
+              const active = apiKeys[p.key];
+              return (
+                <div 
+                  key={p.name} 
+                  className={cn(
+                    "relative overflow-hidden rounded-xl border p-4 transition-all duration-200 bg-card/40 border-border/60",
+                    active ? "hover:border-emerald-500/30" : "hover:border-border/85"
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs font-semibold text-foreground">{p.name}</h4>
+                        {!p.enabled && (
+                          <span className="rounded bg-muted-foreground/10 px-1 py-0.2 text-[8px] font-semibold text-muted-foreground">Откл.</span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground/80 leading-normal">{p.desc}</p>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0 text-[10px] font-medium">
+                      <span className={cn(
+                        "h-1.5 w-1.5 rounded-full shrink-0",
+                        active ? "bg-emerald-500" : "bg-muted-foreground/30"
+                      )} />
+                      <span className="text-muted-foreground">{active ? "Подключен" : "Не настроен"}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </SectionCard>
       )}
 
       {/* Domain Auth */}
       {isAdmin && config.domain_auth_enabled !== undefined && (
-        <SectionCard title={t("ai.domain_auth")} icon={Globe} description={t("ai.domain_auth_desc")}>
-          <div className="grid grid-cols-3 gap-3">
-            <div className="rounded-lg border border-border px-3 py-2.5">
-              <p className="text-[10px] uppercase text-muted-foreground">{t("sso.active")}</p>
-              <p className="text-sm font-medium">{config.domain_auth_enabled ? t("ai.feat_enabled") : t("ai.feat_disabled")}</p>
+        <SectionCard 
+          title="Доменная SSO-авторизация" 
+          icon={Network} 
+          description="Настройки сквозной аутентификации пользователей через прокси-сервер организации."
+        >
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="rounded-xl border border-border/50 bg-card/25 p-4 transition-all hover:border-border">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Интеграция SSO</p>
+              <div className="flex items-center gap-2 mt-1.5">
+                <span className={cn(
+                  "h-1.5 w-1.5 rounded-full",
+                  config.domain_auth_enabled ? "bg-emerald-500" : "bg-amber-500"
+                )} />
+                <p className="text-sm font-semibold text-foreground">
+                  {config.domain_auth_enabled ? "Активно" : "Отключено"}
+                </p>
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-2 leading-snug">
+                {config.domain_auth_enabled 
+                  ? "Авторизация через корпоративный прокси включена." 
+                  : "Требуется стандартный ввод логина и пароля."}
+              </p>
             </div>
-            <div className="rounded-lg border border-border px-3 py-2.5">
-              <p className="text-[10px] uppercase text-muted-foreground">Header</p>
-              <p className="font-mono text-sm">{config.domain_auth_header || "REMOTE_USER"}</p>
+            
+            <div className="rounded-xl border border-border/50 bg-card/25 p-4 transition-all hover:border-border">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">HTTP-заголовок</p>
+              <p className="font-mono text-sm font-semibold text-foreground mt-1.5">
+                {config.domain_auth_header || "REMOTE_USER"}
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-2 leading-snug">
+                HTTP-заголовок, передающий имя пользователя из upstream-прокси (Nginx/Authelia/OAuth2).
+              </p>
             </div>
-            <div className="rounded-lg border border-border px-3 py-2.5">
-              <p className="text-[10px] uppercase text-muted-foreground">{t("ai.yes")}</p>
-              <p className="text-sm font-medium">{config.domain_auth_auto_create ? t("ai.yes") : t("ai.no")}</p>
+            
+            <div className="rounded-xl border border-border/50 bg-card/25 p-4 transition-all hover:border-border">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Автоматическое создание профилей</p>
+              <p className="text-sm font-semibold text-foreground mt-1.5">
+                {config.domain_auth_auto_create ? "Разрешено" : "Запрещено"}
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-2 leading-snug">
+                Создание локального профиля при первом входе нового доменного пользователя.
+              </p>
             </div>
           </div>
         </SectionCard>

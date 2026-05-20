@@ -32,13 +32,12 @@ class AccessPermissionsTests(TestCase):
         self.assertFalse(features["agents"])
         self.assertTrue(features["studio"])
 
-    def test_dashboard_stays_hidden_for_non_staff_even_with_explicit_allow(self):
+    def test_dashboard_is_available_for_non_staff_but_admin_dashboard_stays_forbidden(self):
         user = self.create_user("observer")
-        UserAppPermission.objects.create(user=user, feature="dashboard", allowed=True)
 
         features = self.auth_features(user)
 
-        self.assertFalse(features["dashboard"])
+        self.assertTrue(features["dashboard"])
         dashboard_response = self.client.get(reverse("api_admin_dashboard"))
         self.assertEqual(dashboard_response.status_code, 403)
 

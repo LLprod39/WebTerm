@@ -74,8 +74,8 @@ FEATURE_CHOICES = [
 
 # Features allowed by default for non-staff users.
 # Settings remain opt-in, and the admin dashboard stays staff-only.
-DEFAULT_ALLOWED_FEATURES = {"servers", "agents", "knowledge_base"}
-STAFF_ONLY_FEATURES = {"dashboard"}
+DEFAULT_ALLOWED_FEATURES = {"servers", "agents", "knowledge_base", "dashboard"}
+STAFF_ONLY_FEATURES = set()
 
 
 class UserAppPermission(models.Model):
@@ -294,3 +294,36 @@ class TerminalPreference(models.Model):
 
     def __str__(self):
         return f"{self.user.username}: {self.theme_name} {self.font_size}px"
+
+
+# -----------------------------------------
+# Dashboard Layouts
+# -----------------------------------------
+
+
+class DashboardLayout(models.Model):
+    """Stores user-specific dashboard layouts and widget configurations."""
+
+    DASHBOARD_TYPES = [
+        ("admin", "Admin Dashboard"),
+        ("user", "User Dashboard"),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="dashboard_layouts")
+    dashboard_type = models.CharField(max_length=20, choices=DASHBOARD_TYPES)
+    layout_data = models.JSONField(
+        default=dict,
+        help_text="JSON mapping of widget IDs to their grid positions and sizes.",
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ["user", "dashboard_type"]
+        indexes = [
+            models.Index(fields=["user", "dashboard_type"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.dashboard_type} layout"

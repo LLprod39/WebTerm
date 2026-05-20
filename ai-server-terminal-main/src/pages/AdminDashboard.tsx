@@ -1,427 +1,477 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 import {
   fetchAdminDashboard,
-  fetchAdminUsersSessions,
-  type AdminDashboardData,
 } from "@/lib/api";
+import { PageShell, PageHero, MetricGrid, MetricCard, SectionCard, StatusBadge, QueryStateBlock } from "@/components/ui/page-shell";
+import { Users, Bot, Terminal as TerminalIcon, ShieldCheck, Activity, Server, AlertTriangle, Clock, Maximize2, Minimize2 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
-import {
-  Users,
-  Server,
-  Bot,
-  Terminal,
-  DollarSign,
-  RefreshCw,
-  TrendingUp,
-  CalendarIcon,
-  AlertTriangle,
-  Activity,
-  CheckCircle2,
-} from "lucide-react";
-import { format, subDays } from "date-fns";
+import { relativeTime } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { CustomizableDashboard, type WidgetDefinition } from "@/components/dashboard/CustomizableDashboard";
+import { 
+  AreaChart, 
+  Area, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer 
+} from "recharts";
 import { cn } from "@/lib/utils";
-import { EmptyState, MetricCard, MetricGrid, PageHero, PageShell, QueryStateBlock, SectionCard, StatusBadge } from "@/components/ui/page-shell";
 
-function relativeTime(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return "now";
-  if (mins < 60) return `${mins}m`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
-}
-
-const DATE_PRESET_KEYS = [
-  { labelKey: "adash.preset_today", days: 0 },
-  { labelKey: "adash.preset_7d", days: 7 },
-  { labelKey: "adash.preset_14d", days: 14 },
-  { labelKey: "adash.preset_30d", days: 30 },
-];
-
-function severityTone(severity: string): "success" | "warning" | "danger" | "neutral" {
-  const normalized = severity.toLowerCase();
-  if (normalized.includes("critical") || normalized.includes("error")) return "danger";
-  if (normalized.includes("warn")) return "warning";
-  if (normalized.includes("ok") || normalized.includes("healthy")) return "success";
-  return "neutral";
-}
+const sectionToneStyles: Record<string, string> = {
+  default: "",
+  info: "border-primary/30 shadow-sm bg-card/65",
+  success: "border-emerald-500/25 bg-emerald-950/5 dark:bg-emerald-950/10 shadow-emerald-500/5",
+  warning: "border-amber-500/25 bg-amber-950/5 dark:bg-amber-950/10 shadow-amber-500/5",
+  danger: "border-red-500/25 bg-red-950/5 dark:bg-red-950/10 shadow-red-500/5",
+};
 
 export default function AdminDashboard() {
   const { t } = useI18n();
-  const DATE_PRESETS = DATE_PRESET_KEYS.map((p) => ({ label: t(p.labelKey), days: p.days }));
-  const queryClient = useQueryClient();
-  const [tab, setTab] = useState<"activity" | "users" | "api">("activity");
-  const [activityPreset, setActivityPreset] = useState(0);
-  const [dateFrom, setDateFrom] = useState<Date | undefined>(new Date());
-  const [dateTo, setDateTo] = useState<Date | undefined>(new Date());
+  const [isFullWidth, setIsFullWidth] = useState(() => {
+    return localStorage.getItem("admin_dashboard_full_width") === "true";
+  });
 
-  const { data: dashData, isLoading } = useQuery({
+  const toggleWidth = () => {
+    setIsFullWidth(prev => {
+      const next = !prev;
+      localStorage.setItem("admin_dashboard_full_width", String(next));
+      return next;
+    });
+  };
+
+  const { data: dashResponse, isLoading, error, refetch } = useQuery({
     queryKey: ["admin", "dashboard"],
     queryFn: fetchAdminDashboard,
-    refetchInterval: 15_000,
+    refetchInterval: 30000,
   });
 
-  const { data: sessionsData } = useQuery({
-    queryKey: ["admin", "sessions"],
-    queryFn: fetchAdminUsersSessions,
-    refetchInterval: 30_000,
-  });
+  const d = dashResponse?.data;
 
-  // Filter activity by date
-  const filteredActivity = useMemo(() => {
-    if (!dashData?.data) return [];
-    let items = dashData.data.recent_activity || [];
-    if (dateFrom) {
-      const from = dateFrom.getTime();
-      items = items.filter((a) => a.time && new Date(a.time).getTime() >= from);
-    }
-    if (dateTo) {
-      const to = dateTo.getTime() + 86400000;
-      items = items.filter((a) => a.time && new Date(a.time).getTime() <= to);
-    }
-    return items;
-  }, [dashData, dateFrom, dateTo]);
+  const availableWidgets = useMemo<WidgetDefinition[]>(() => {
+    if (!d) return [];
 
-  if (isLoading || !dashData?.data) {
-    return <QueryStateBlock loading={isLoading} className="p-6">{null}</QueryStateBlock>;
-  }
+    return [
+      {
+        id: "fleet_metrics",
+        title: "Метрики флота",
+        icon: <Server className="h-4 w-4" />,
+        defaultSize: { w: 12, h: 1 },
+        render: (config) => {
+          const tone = config.props?.tone ?? "default";
+          const title = config.props?.customTitle ?? "Метрики флота";
 
-  const d: AdminDashboardData = dashData.data;
-  const sessions = sessionsData?.sessions || [];
-  const totalCost = Object.values(d.api_usage).reduce((s, u) => s + (u.cost_usd || 0), 0);
+          return (
+            <SectionCard title={title} icon={<Server className="h-4 w-4" />} className={sectionToneStyles[tone]}>
+              <MetricGrid>
+                <MetricCard
+                  label="Серверы"
+                  value={d?.servers?.total || 0}
+                  description={`${d?.servers?.active || 0} активно`}
+                  icon={<Server className="h-5 w-5" />}
+                />
+                <MetricCard
+                  label="Fleet CPU"
+                  value={`${d?.fleet_health?.avg_cpu || 0}%`}
+                  description="Средняя нагрузка"
+                  icon={<Activity className="h-5 w-5" />}
+                  tone={(d?.fleet_health?.avg_cpu || 0) > 80 ? "danger" : (d?.fleet_health?.avg_cpu || 0) > 60 ? "warning" : "default"}
+                />
+                <MetricCard
+                  label="Агенты"
+                  value={d?.agents?.running || 0}
+                  description={`${d?.agents?.today || 0} запусков сегодня`}
+                  icon={<Bot className="h-5 w-5" />}
+                />
+                <MetricCard
+                  label="Алерты"
+                  value={d?.active_alerts_count || 0}
+                  description="Требуют внимания"
+                  icon={<AlertTriangle className="h-5 w-5" />}
+                  tone={(d?.active_alerts_count || 0) > 0 ? "danger" : "default"}
+                />
+              </MetricGrid>
+            </SectionCard>
+          );
+        }
+      },
+      {
+        id: "hourly_activity_chart",
+        title: "Часовой график активности",
+        icon: <Activity className="h-4 w-4" />,
+        defaultSize: { w: 8, h: 1 },
+        render: (config) => {
+          const tone = config.props?.tone ?? "default";
+          const title = config.props?.customTitle ?? "Активность системы (по часам)";
+          const chartData = d?.hourly_activity ?? [];
 
-  const hourlyData = (d.hourly_activity || []).map((h) => ({
-    hour: new Date(h.hour).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    count: h.count,
-  }));
+          return (
+            <SectionCard title={title} icon={<Activity className="h-4 w-4" />} className={sectionToneStyles[tone]}>
+              <div className="h-[200px] w-full mt-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.35}/>
+                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" />
+                    <XAxis dataKey="hour" className="text-[9px] font-medium fill-muted-foreground" />
+                    <YAxis className="text-[9px] font-medium fill-muted-foreground" />
+                    <Tooltip 
+                      contentStyle={{ 
+                        background: "hsl(var(--background))", 
+                        borderColor: "hsl(var(--border))", 
+                        borderRadius: "8px",
+                        fontSize: "11px",
+                        boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)"
+                      }} 
+                    />
+                    <Area type="monotone" dataKey="count" name="Действия" stroke="hsl(var(--primary))" strokeWidth={2} fillOpacity={1} fill="url(#colorCount)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </SectionCard>
+          );
+        }
+      },
+      {
+        id: "ai_cost_tokens",
+        title: "Расходы и Использование AI",
+        icon: <ShieldCheck className="h-4 w-4" />,
+        defaultSize: { w: 8, h: 1 },
+        render: (config) => {
+          const tone = config.props?.tone ?? "default";
+          const title = config.props?.customTitle ?? "Анализ вызовов AI & Провайдеры";
+          const usageEntries = Object.entries(d?.api_usage || {});
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["admin"] });
+          return (
+            <SectionCard title={title} icon={<ShieldCheck className="h-4 w-4" />} className={sectionToneStyles[tone]}>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                  <thead>
+                    <tr className="border-b border-border/60 text-muted-foreground text-[10px] uppercase font-bold tracking-wider">
+                      <th className="py-2.5">Провайдер</th>
+                      <th className="py-2.5 text-right font-semibold">Вызовы</th>
+                      <th className="py-2.5 text-right font-semibold">Входные токен</th>
+                      <th className="py-2.5 text-right font-semibold">Выходные токен</th>
+                      <th className="py-2.5 text-right font-semibold">Ошибки</th>
+                      <th className="py-2.5 text-right font-bold text-primary">Стоимость (USD)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/40">
+                    {usageEntries.map(([provider, usage]) => {
+                      const errRate = usage.calls > 0 ? ((usage.errors / usage.calls) * 100).toFixed(1) : "0.0";
+                      return (
+                        <tr key={provider} className="hover:bg-secondary/10 transition-colors">
+                          <td className="py-3 font-bold capitalize text-foreground/90">{provider}</td>
+                          <td className="py-3 text-right font-mono">{usage.calls.toLocaleString()}</td>
+                          <td className="py-3 text-right font-mono text-muted-foreground/80">{usage.input_tokens.toLocaleString()}</td>
+                          <td className="py-3 text-right font-mono text-muted-foreground/80">{usage.output_tokens.toLocaleString()}</td>
+                          <td className="py-3 text-right font-mono">
+                            <span className={cn(usage.errors > 0 ? "text-red-500 font-bold" : "text-muted-foreground/80")}>
+                              {usage.errors} ({errRate}%)
+                            </span>
+                          </td>
+                          <td className="py-3 text-right font-bold font-mono text-emerald-500">${usage.cost_usd.toFixed(4)}</td>
+                        </tr>
+                      );
+                    })}
+                    {usageEntries.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="py-6 text-center text-muted-foreground">Нет зарегистрированных данных по API AI</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </SectionCard>
+          );
+        }
+      },
+      {
+        id: "active_providers",
+        title: "Модели AI и Статус",
+        icon: <ShieldCheck className="h-4 w-4" />,
+        defaultSize: { w: 4, h: 1 },
+        render: (config) => {
+          const tone = config.props?.tone ?? "default";
+          const title = config.props?.customTitle ?? "Модели AI и Провайдеры";
+          const providerEntries = Object.entries(d?.providers || {});
 
-  const METRICS = [
-    {
-      label: t("adash.users_online"),
-      value: d.online_users.count,
-      description: `${d.online_users.total_registered} ${t("adash.registered")}`,
-      icon: <Users className="h-4 w-4" />,
-      tone: "info" as const,
-    },
-    {
-      label: t("adash.servers"),
-      value: d.servers.active,
-      description: `${d.servers.total} ${t("adash.total")}`,
-      icon: <Server className="h-4 w-4" />,
-      tone: d.active_alerts_count > 0 ? "warning" as const : "default" as const,
-    },
-    {
-      label: t("adash.ai_requests"),
-      value: d.ai.requests_today,
-      description: t("adash.today"),
-      icon: <Bot className="h-4 w-4" />,
-      tone: "default" as const,
-    },
-    {
-      label: t("adash.terminals"),
-      value: d.terminals.active,
-      description: t("adash.active_now"),
-      icon: <Terminal className="h-4 w-4" />,
-      tone: d.terminals.active > 0 ? "success" as const : "default" as const,
-    },
-    {
-      label: t("adash.api_cost"),
-      value: `$${totalCost.toFixed(2)}`,
-      description: `${d.api_calls_today} ${t("adash.calls")}`,
-      icon: <DollarSign className="h-4 w-4" />,
-      tone: "default" as const,
-    },
-  ];
+          return (
+            <SectionCard title={title} icon={<ShieldCheck className="h-4 w-4" />} className={sectionToneStyles[tone]}>
+              <div className="space-y-3">
+                {providerEntries.map(([provider, info]) => (
+                  <div key={provider} className="flex items-center justify-between p-2.5 rounded-xl border border-border/80 bg-secondary/5 text-xs hover:border-primary/30 transition-all">
+                    <div className="flex items-center gap-2">
+                      <div className={cn("h-2 w-2 rounded-full shrink-0", info.enabled ? "bg-emerald-500" : "bg-muted-foreground/30")} />
+                      <span className="font-semibold capitalize text-foreground/95">{provider}</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-muted-foreground bg-card border rounded-md px-2 py-0.5 max-w-[150px] truncate shadow-sm">
+                      {info.model || "n/a"}
+                    </span>
+                  </div>
+                ))}
+                {providerEntries.length === 0 && (
+                  <div className="py-4 text-center text-xs text-muted-foreground">Провайдеры отсутствуют</div>
+                )}
+              </div>
+            </SectionCard>
+          );
+        }
+      },
+      {
+        id: "online_users",
+        title: "Пользователи онлайн",
+        icon: <Users className="h-4 w-4" />,
+        defaultSize: { w: 6, h: 1 },
+        render: (config) => {
+          const limit = config.props?.limit ?? 5;
+          const tone = config.props?.tone ?? "default";
+          const title = config.props?.customTitle ?? "Пользователи онлайн";
+          const displayUsers = d?.online_users?.users?.slice(0, limit) ?? [];
+
+          return (
+            <SectionCard title={title} icon={<Users className="h-4 w-4" />} className={sectionToneStyles[tone]}>
+              <div className="space-y-3.5">
+                {displayUsers.map((user, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-xs p-1.5 rounded-lg hover:bg-secondary/10 transition-colors">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+                      <span className="font-semibold text-foreground/90 truncate">{user.username}</span>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0 ml-3">
+                      <span className="text-[11px] text-muted-foreground">{user.action}</span>
+                      <span className="text-[9px] text-muted-foreground/50 font-mono">{relativeTime(user.time)}</span>
+                    </div>
+                  </div>
+                ))}
+                {displayUsers.length === 0 && (
+                  <div className="py-6 text-center text-xs text-muted-foreground border border-dashed rounded-lg">Нет активных пользователей</div>
+                )}
+              </div>
+            </SectionCard>
+          );
+        }
+      },
+      {
+        id: "top_users",
+        title: "Топ активных пользователей",
+        icon: <Users className="h-4 w-4" />,
+        defaultSize: { w: 6, h: 1 },
+        render: (config) => {
+          const limit = config.props?.limit ?? 5;
+          const tone = config.props?.tone ?? "default";
+          const title = config.props?.customTitle ?? "Лидеры по активности";
+          const displayUsers = d?.top_users?.slice(0, limit) ?? [];
+
+          return (
+            <SectionCard title={title} icon={<Users className="h-4 w-4" />} className={sectionToneStyles[tone]}>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                  <thead>
+                    <tr className="border-b border-border/60 text-muted-foreground text-[10px] uppercase font-bold tracking-wider">
+                      <th className="py-2">Пользователь</th>
+                      <th className="py-2 text-right">Всего операций</th>
+                      <th className="py-2 text-right">AI Запросы</th>
+                      <th className="py-2 text-right">Терминалы</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/40">
+                    {displayUsers.map((u, idx) => (
+                      <tr key={idx} className="hover:bg-secondary/10 transition-colors">
+                        <td className="py-3 flex items-center gap-2">
+                          <div className="flex h-6.5 w-6.5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-[10px] uppercase border border-primary/20 shadow-sm">
+                            {u.username.substring(0, 2)}
+                          </div>
+                          <span className="font-semibold text-foreground/95">{u.username}</span>
+                        </td>
+                        <td className="py-3 text-right font-mono font-bold text-foreground/90">{u.total.toLocaleString()}</td>
+                        <td className="py-3 text-right font-mono text-muted-foreground">{u.ai_requests.toLocaleString()}</td>
+                        <td className="py-3 text-right font-mono text-muted-foreground">{u.terminal_sessions.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                    {displayUsers.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="py-4 text-center text-muted-foreground">Нет данных по активности пользователей</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </SectionCard>
+          );
+        }
+      },
+      {
+        id: "active_terminals",
+        title: "Активные терминалы",
+        icon: <TerminalIcon className="h-4 w-4" />,
+        defaultSize: { w: 6, h: 1 },
+        render: (config) => {
+          const limit = config.props?.limit ?? 5;
+          const tone = config.props?.tone ?? "default";
+          const title = config.props?.customTitle ?? "Активные сессии терминала";
+          const displayConnections = d?.terminals?.connections?.slice(0, limit) ?? [];
+
+          return (
+            <SectionCard title={title} icon={<TerminalIcon className="h-4 w-4" />} className={sectionToneStyles[tone]}>
+              <div className="space-y-3">
+                {displayConnections.map((c, idx) => (
+                  <div key={idx} className="flex items-center gap-3 rounded-xl border border-border/60 bg-secondary/5 p-3 text-xs hover:border-primary/30 transition-all">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-card border shadow-inner">
+                      <TerminalIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-foreground/95">{c.user}</span>
+                        <span className="text-[10px] text-muted-foreground">connected to</span>
+                      </div>
+                      <p className="mt-0.5 truncate text-[11px] font-semibold text-primary font-mono">{c.server}</p>
+                    </div>
+                    <span className="ml-auto text-[9px] font-mono text-muted-foreground/50 shrink-0">{relativeTime(c.connected_at)}</span>
+                  </div>
+                ))}
+                {displayConnections.length === 0 && (
+                  <div className="py-8 text-center text-xs text-muted-foreground border border-dashed rounded-xl bg-secondary/5">Нет активных терминальных сессий</div>
+                )}
+              </div>
+            </SectionCard>
+          );
+        }
+      },
+      {
+        id: "system_alerts_list",
+        title: "Инфраструктурные алерты",
+        icon: <AlertTriangle className="h-4 w-4" />,
+        defaultSize: { w: 6, h: 1 },
+        render: (config) => {
+          const limit = config.props?.limit ?? 5;
+          const tone = config.props?.tone ?? "default";
+          const title = config.props?.customTitle ?? "Инфраструктурные алерты";
+          const displayAlerts = d?.alerts?.slice(0, limit) ?? [];
+
+          return (
+            <SectionCard title={title} icon={<AlertTriangle className="h-4 w-4" />} className={sectionToneStyles[tone]}>
+              <div className="space-y-3">
+                {displayAlerts.map((a, idx) => {
+                  const alertTone = a.severity === "critical" ? "danger" : a.severity === "warning" ? "warning" : "info";
+                  return (
+                    <div key={idx} className="flex items-start gap-3 p-3 rounded-xl border border-border/80 bg-secondary/5 hover:border-primary/30 transition-all text-xs">
+                      <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-destructive text-[10px] font-bold">
+                        !
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <strong className="font-semibold text-foreground/95 truncate">{a.title}</strong>
+                          <StatusBadge label={a.severity} tone={alertTone as any} />
+                        </div>
+                        <p className="mt-1 text-muted-foreground text-[11px] leading-relaxed">{a.type}</p>
+                        <p className="mt-1 text-[9px] text-muted-foreground/60">
+                          сервер: <strong>{a.server}</strong> • {relativeTime(a.time)}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+                {displayAlerts.length === 0 && (
+                  <div className="py-8 text-center text-xs text-muted-foreground border border-dashed rounded-xl bg-secondary/5">
+                    Инфраструктурных алертов нет
+                  </div>
+                )}
+              </div>
+            </SectionCard>
+          );
+        }
+      },
+      {
+        id: "recent_activity",
+        title: "Последние действия (Глобально)",
+        icon: <Clock className="h-4 w-4" />,
+        defaultSize: { w: 12, h: 1 },
+        render: (config) => {
+          const limit = config.props?.limit ?? 5;
+          const tone = config.props?.tone ?? "default";
+          const title = config.props?.customTitle ?? "Лог активности системы";
+          const displayActivity = d?.recent_activity?.slice(0, limit) ?? [];
+
+          return (
+            <SectionCard title={title} icon={<Activity className="h-4 w-4" />} className={sectionToneStyles[tone]}>
+              <div className="space-y-4">
+                {displayActivity.map((a, idx) => (
+                  <div key={idx} className="flex items-start gap-3 text-xs group">
+                    <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-secondary/80 text-[10px] font-bold border shadow-inner">
+                      {a.user[0].toUpperCase()}
+                    </div>
+                    <div className="flex-1 space-y-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-foreground/90">{a.user}</span>
+                        <span className="text-[9px] font-mono text-muted-foreground/50 shrink-0">{relativeTime(a.time)}</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        <span className="font-semibold text-muted-foreground/70 uppercase text-[9px] tracking-wider bg-secondary/50 border px-1 py-0.2 rounded mr-1.5">{a.category}</span>
+                        <span className="text-foreground/80">{a.action}</span>
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                {displayActivity.length === 0 && (
+                  <div className="py-6 text-center text-xs text-muted-foreground">Действий в логе нет</div>
+                )}
+              </div>
+            </SectionCard>
+          );
+        }
+      }
+    ];
+  }, [d]);
 
   return (
-    <PageShell width="7xl">
+    <PageShell width={isFullWidth ? "full" : "7xl"}>
       <PageHero
-        kicker={`WEU AI · v${d.app_version}`}
-        title={t("dashboard.admin.title")}
-        description={t("dashboard.admin.subtitle")}
+        kicker="System Overview"
+        title="Admin Control Center"
+        description="Мониторинг всей инфраструктуры, активности пользователей и работы AI-агентов в реальном времени."
         actions={
-          <>
-            <StatusBadge
-              label={d.active_alerts_count > 0 ? `${d.active_alerts_count} ${t("adash.alerts")}` : t("adash.no_alerts")}
-              tone={d.active_alerts_count > 0 ? "warning" : "success"}
-            />
-            <Button size="sm" variant="outline" className="gap-1.5" onClick={refresh}>
-              <RefreshCw className="h-3.5 w-3.5" /> {t("udash.refresh")}
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleWidth}
+              className="h-8 gap-1.5 text-xs font-semibold hover:border-primary/50 shadow-sm transition-all"
+            >
+              {isFullWidth ? (
+                <>
+                  <Minimize2 className="h-3.5 w-3.5" />
+                  <span>Обычный экран</span>
+                </>
+              ) : (
+                <>
+                  <Maximize2 className="h-3.5 w-3.5" />
+                  <span>На весь экран</span>
+                </>
+              )}
             </Button>
-          </>
+            <div className="flex items-center gap-3 px-3 py-1.5 rounded-xl bg-card border border-border/80 shadow-sm h-8 shrink-0">
+              <ShieldCheck className="h-4 w-4 text-emerald-500" />
+              <span className="text-xs font-semibold text-foreground/90">System Secure</span>
+              <div className="h-3.5 w-px bg-border mx-1" />
+              <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">v{d?.app_version || "2.0.0"}</span>
+            </div>
+          </div>
         }
       />
 
-      <MetricGrid className="xl:grid-cols-5">
-        {METRICS.map((m) => (
-          <MetricCard key={m.label} label={m.label} value={m.value} description={m.description} icon={m.icon} tone={m.tone} />
-        ))}
-      </MetricGrid>
-
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
-        <SectionCard
-          title={t("adash.fleet_health")}
-          description={`${t("adash.avg_cpu")}: ${Math.round(d.fleet_health.avg_cpu)}% · ${t("adash.avg_memory")}: ${Math.round(d.fleet_health.avg_memory)}% · ${t("adash.avg_disk")}: ${Math.round(d.fleet_health.avg_disk)}%`}
-          icon={<Activity className="h-4 w-4" />}
-          bodyClassName="grid gap-3 sm:grid-cols-4"
-        >
-          {[
-            { label: t("udash.healthy"), value: d.fleet_health.healthy, tone: "success" as const, icon: CheckCircle2 },
-            { label: t("udash.warning"), value: d.fleet_health.warning, tone: "warning" as const, icon: AlertTriangle },
-            { label: t("udash.critical"), value: d.fleet_health.critical, tone: "danger" as const, icon: AlertTriangle },
-            { label: t("udash.unreachable"), value: d.fleet_health.unreachable, tone: "default" as const, icon: Server },
-          ].map((item) => (
-            <MetricCard
-              key={item.label}
-              label={item.label}
-              value={item.value}
-              description={item.value === 1 ? "server" : "servers"}
-              icon={<item.icon className="h-4 w-4" />}
-              tone={item.tone}
-            />
-          ))}
-        </SectionCard>
-
-        <SectionCard
-          title={t("adash.online_users")}
-          description={`${sessions.length} active · ${sessionsData?.active_today || 0} today`}
-          icon={<Users className="h-4 w-4" />}
-          bodyClassName="space-y-2"
-        >
-          {sessions.length === 0 ? (
-            <EmptyState
-              icon={<Users className="h-5 w-5" />}
-              title={t("adash.no_users_online")}
-              description="Новые сессии появятся здесь после входа пользователей."
-              className="py-8"
-            />
-          ) : (
-            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-              {sessions.map((s) => (
-                <div key={s.user_id} className="flex items-center gap-3 rounded-lg border border-border/60 bg-secondary/30 px-3 py-2">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-xs font-semibold text-primary">
-                    {s.username.slice(0, 1).toUpperCase()}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-sm font-medium">{s.username}</span>
-                      {s.is_staff ? <StatusBadge label="admin" tone="info" dot={false} /> : null}
-                    </div>
-                    <div className="truncate text-xs text-muted-foreground">{s.last_action || s.last_category || "active"}</div>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-                    {s.active_terminals > 0 ? <StatusBadge label={`${s.active_terminals} tty`} tone="success" /> : null}
-                    <span>{relativeTime(s.last_activity)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </SectionCard>
-      </div>
-
-      {hourlyData.length > 0 && (
-        <SectionCard title={t("adash.hourly_activity")} icon={<TrendingUp className="h-4 w-4" />} bodyClassName="pt-4">
-          <div className="h-44">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={hourlyData}>
-                <XAxis dataKey="hour" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} width={28} />
-                <Tooltip
-                  contentStyle={{
-                    background: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "8px",
-                    fontSize: "12px",
-                    padding: "6px 10px",
-                  }}
-                />
-                <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </SectionCard>
-      )}
-
-      <SectionCard
-        title={tab === "activity" ? t("adash.activity_feed") : tab === "users" ? t("adash.top_users") : t("adash.api_usage")}
-        icon={tab === "activity" ? <Activity className="h-4 w-4" /> : tab === "users" ? <Users className="h-4 w-4" /> : <DollarSign className="h-4 w-4" />}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex rounded-lg border border-border bg-background p-1">
-              {(["activity", "users", "api"] as const).map((t2) => (
-                <button
-                  key={t2}
-                  type="button"
-                  onClick={() => setTab(t2)}
-                  className={cn(
-                    "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-                    tab === t2 ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {t2 === "activity" ? t("adash.activity_feed") : t2 === "users" ? t("adash.top_users") : t("adash.api_usage")}
-                </button>
-              ))}
-            </div>
-            {tab === "activity" ? (
-              <div className="flex flex-wrap items-center gap-1.5">
-                {DATE_PRESETS.map((preset) => (
-                  <Button
-                    key={preset.days}
-                    size="sm"
-                    variant={activityPreset === preset.days ? "default" : "outline"}
-                    className="h-8 text-xs"
-                    onClick={() => {
-                      setActivityPreset(preset.days);
-                      setDateFrom(subDays(new Date(), preset.days));
-                      setDateTo(new Date());
-                    }}
-                  >
-                    {preset.label}
-                  </Button>
-                ))}
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-8 gap-1 text-xs">
-                      <CalendarIcon className="h-3.5 w-3.5" />
-                      {dateFrom ? format(dateFrom, "dd.MM") : "От"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="end">
-                    <Calendar mode="single" selected={dateFrom} onSelect={setDateFrom} disabled={(d) => d > new Date()} className="p-3 pointer-events-auto" />
-                  </PopoverContent>
-                </Popover>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-8 gap-1 text-xs">
-                      <CalendarIcon className="h-3.5 w-3.5" />
-                      {dateTo ? format(dateTo, "dd.MM") : "До"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="end">
-                    <Calendar mode="single" selected={dateTo} onSelect={setDateTo} disabled={(d) => d > new Date()} className="p-3 pointer-events-auto" />
-                  </PopoverContent>
-                </Popover>
-              </div>
-            ) : null}
-          </div>
-        }
-        bodyClassName="p-0"
-      >
-        <div className="max-h-96 overflow-y-auto">
-          {tab === "activity" && (
-            <table className="w-full text-sm">
-              <tbody className="divide-y divide-border/50">
-                {filteredActivity.length === 0 ? (
-                  <tr><td className="px-5 py-8 text-center text-muted-foreground">Нет событий за выбранный период</td></tr>
-                ) : (
-                  filteredActivity.map((item, i) => (
-                    <tr key={`${item.user}-${item.time}-${i}`} className="hover:bg-secondary/30">
-                      <td className="px-5 py-3 align-top">
-                        <div className="font-medium text-foreground">{item.user}</div>
-                        <div className="text-xs text-muted-foreground">{item.category || "activity"}</div>
-                      </td>
-                      <td className="px-3 py-3 text-muted-foreground">{item.action}</td>
-                      <td className="px-5 py-3 text-right text-xs text-muted-foreground">{relativeTime(item.time)}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          )}
-
-          {tab === "users" && (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-secondary/20 text-xs text-muted-foreground">
-                  <th className="px-5 py-3 text-left font-medium">{t("adash.user")}</th>
-                  <th className="px-3 py-3 text-right font-medium">{t("adash.actions")}</th>
-                  <th className="px-3 py-3 text-right font-medium">{t("adash.ai_req")}</th>
-                  <th className="px-5 py-3 text-right font-medium">{t("adash.term_sessions")}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/50">
-                {d.top_users.map((u) => (
-                  <tr key={u.username} className="hover:bg-secondary/30">
-                    <td className="px-5 py-3 font-medium">{u.username}</td>
-                    <td className="px-3 py-3 text-right text-muted-foreground">{u.total}</td>
-                    <td className="px-3 py-3 text-right text-muted-foreground">{u.ai_requests}</td>
-                    <td className="px-5 py-3 text-right text-muted-foreground">{u.terminal_sessions}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-
-          {tab === "api" && (
-            <div className="grid gap-3 p-5 sm:grid-cols-2 xl:grid-cols-4">
-              {Object.entries(d.api_usage).map(([provider, usage]) => {
-                const enabled = d.providers[provider]?.enabled;
-                return (
-                  <div key={provider} className={`relative overflow-hidden rounded-xl border p-4 space-y-3 ${enabled ? "border-primary/20 bg-primary/4" : "border-border bg-card"}`}>
-                    <div className={`absolute left-0 top-0 h-full w-0.5 ${enabled ? "bg-primary" : "bg-border"}`} />
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="truncate text-xs font-bold uppercase tracking-[0.12em] text-foreground">{provider}</span>
-                      <StatusBadge label={enabled ? "ON" : "OFF"} tone={enabled ? "success" : "neutral"} dot={false} />
-                    </div>
-                    <div className="text-3xl font-bold tracking-tight">{usage.calls}</div>
-                    <div className="space-y-1 text-[11px] text-muted-foreground">
-                      <p>{(usage.input_tokens || 0).toLocaleString()} in / {(usage.output_tokens || 0).toLocaleString()} out</p>
-                      <p className={usage.errors ? "text-red-400" : ""}>{usage.errors || 0} errors</p>
-                      <p className="font-semibold text-primary">${(usage.cost_usd || 0).toFixed(4)}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </SectionCard>
-
-      {d.alerts.length > 0 ? (
-        <SectionCard title={t("adash.alert_center")} icon={<AlertTriangle className="h-4 w-4" />} bodyClassName="divide-y divide-border/50 p-0">
-          {d.alerts.map((alert, index) => (
-            <div key={`${alert.server}-${alert.title}-${index}`} className="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="truncate text-sm font-medium">{alert.title}</span>
-                  <StatusBadge label={alert.severity} tone={severityTone(alert.severity)} />
-                </div>
-                <div className="text-xs text-muted-foreground">{alert.server} · {alert.type}</div>
-              </div>
-              <span className="shrink-0 text-xs text-muted-foreground">{relativeTime(alert.time)}</span>
-            </div>
-          ))}
-        </SectionCard>
-      ) : null}
-
-      {d.terminals.connections.length > 0 && (
-        <SectionCard title={`${t("adash.active_terminals")} (${d.terminals.active})`} icon={<Terminal className="h-4 w-4" />}>
-          <div className="flex flex-wrap gap-2">
-            {d.terminals.connections.map((c, i) => (
-              <div key={`${c.user}-${c.server}-${i}`} className="flex items-center gap-2 rounded-xl border border-primary/15 bg-primary/5 px-3 py-2 text-xs">
-                <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/15">
-                  <Terminal className="h-3.5 w-3.5 text-primary" />
-                </div>
-                <span className="font-semibold text-foreground">{c.user}</span>
-                <span className="text-muted-foreground/60">→</span>
-                <span className="font-medium text-muted-foreground">{c.server}</span>
-                <span className="ml-auto text-muted-foreground/50">{relativeTime(c.connected_at)}</span>
-              </div>
-            ))}
-          </div>
-        </SectionCard>
-      )}
+      <QueryStateBlock loading={isLoading} error={error} onRetry={() => refetch()}>
+        <CustomizableDashboard
+          type="admin"
+          availableWidgets={availableWidgets}
+        />
+      </QueryStateBlock>
     </PageShell>
   );
 }

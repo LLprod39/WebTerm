@@ -30,10 +30,10 @@ export default function SettingsAccessPage() {
       </div>
 
       {/* Info */}
-      <div className="rounded-xl border border-primary/10 bg-primary/4 px-5 py-4">
+      <div className="rounded-xl border border-border/60 bg-secondary/10 px-5 py-4">
         <p className="text-sm leading-relaxed text-muted-foreground/70">
-          Базовую модель прав лучше собирать через <strong className="text-foreground/80 font-medium">профили</strong> и <strong className="text-foreground/80 font-medium">группы</strong>.
-          Раздел <strong className="text-foreground/80 font-medium">разрешений</strong> используй только там, где действительно нужно сделать точечное исключение.
+          Базовую модель прав рекомендуется строить через <strong className="text-foreground/80 font-medium">профили</strong> и <strong className="text-foreground/80 font-medium">группы</strong>.
+          Раздел <strong className="text-foreground/80 font-medium">разрешений</strong> используйте только при необходимости точечного исключения.
         </p>
       </div>
 

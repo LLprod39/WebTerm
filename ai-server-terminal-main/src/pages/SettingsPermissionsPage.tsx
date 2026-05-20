@@ -25,7 +25,7 @@ import {
 } from "@/lib/accessUiText";
 
 const SELECT_CLASS =
-  "h-9 w-full rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 text-sm text-foreground outline-none ring-0 transition-all focus:border-primary/40 focus:ring-1 focus:ring-primary/30";
+  "h-9 w-full rounded-lg border border-border bg-secondary/30 px-3 text-sm text-foreground outline-none ring-0 transition-all focus:border-primary/40 focus:ring-1 focus:ring-primary/30";
 
 const FALLBACK_FEATURES = ACCESS_FEATURE_OPTIONS;
 
@@ -60,7 +60,7 @@ function RuleRow({
   deleteTitle: string;
 }) {
   return (
-    <div className="group/rule flex items-center gap-3 rounded-lg border border-white/[0.04] bg-white/[0.015] px-4 py-3 transition-all hover:bg-white/[0.03] hover:border-white/[0.08]">
+    <div className="group/rule flex items-center gap-3 rounded-lg border border-border/40 bg-secondary/10 px-4 py-3 transition-all hover:bg-secondary/20 hover:border-border">
       <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${allowed ? "bg-emerald-500/10" : "bg-red-500/10"}`}>
         {allowed
           ? <ShieldCheck className="h-4 w-4 text-emerald-400" />
@@ -81,7 +81,7 @@ function RuleRow({
       <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover/rule:opacity-100">
         <button
           onClick={onToggle}
-          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/50 transition-colors hover:bg-white/[0.06] hover:text-foreground"
+          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/50 transition-colors hover:bg-secondary/40 hover:text-foreground"
           title={toggleTitle}
         >
           <ArrowLeftRight className="h-3.5 w-3.5" />
@@ -226,19 +226,24 @@ export default function SettingsPermissionsPage() {
   return (
     <div className="space-y-6 pb-10">
       {/* ── Header ── */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">{copy.title}</h1>
-        <p className="mt-1 text-sm text-muted-foreground/70">{copy.subtitle}</p>
+      <div className="flex items-center gap-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
+          <Shield className="h-4 w-4 text-primary" />
+        </div>
+        <div>
+          <h1 className="text-base font-semibold tracking-tight text-foreground">{copy.title}</h1>
+          <p className="text-[11px] text-muted-foreground">{copy.subtitle}</p>
+        </div>
       </div>
 
       {/* ── Stats row ── */}
-      <div className="flex flex-wrap items-center gap-5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-5 py-3">
+      <div className="flex flex-wrap items-center gap-5 rounded-xl border border-border/60 bg-secondary/10 px-5 py-3 shadow-sm">
         <div className="flex items-center gap-2">
           <Shield className="h-4 w-4 text-muted-foreground/50" />
           <span className="text-sm font-medium text-foreground">{permissions.length}</span>
           <span className="text-xs text-muted-foreground/60">{lang === "ru" ? "пользовательских" : "user rules"}</span>
         </div>
-        <div className="h-4 w-px bg-white/[0.06]" />
+        <div className="h-4 w-px bg-border/60" />
         <div className="flex items-center gap-1.5">
           <div className="h-2 w-2 rounded-full bg-amber-400/80" />
           <span className="text-sm font-medium text-foreground">{groupPermissions.length}</span>
@@ -249,8 +254,8 @@ export default function SettingsPermissionsPage() {
       {/* ── Creation forms — side by side ── */}
       <div className="grid gap-4 lg:grid-cols-2">
         {/* User override creator */}
-        <div className="rounded-xl border border-white/[0.06] bg-white/[0.015]">
-          <div className="flex items-center gap-3 border-b border-white/[0.06] px-5 py-3.5">
+        <div className="rounded-xl border border-border bg-card shadow-sm">
+          <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/12 text-blue-400">
               <Shield className="h-4 w-4" />
             </div>
@@ -267,7 +272,7 @@ export default function SettingsPermissionsPage() {
               </select>
             </div>
             <div>
-              <FieldLabel htmlFor="permission-feature-select">{lang === "ru" ? "Фича" : "Feature"}</FieldLabel>
+              <FieldLabel htmlFor="permission-feature-select">{lang === "ru" ? "Модуль" : "Feature"}</FieldLabel>
               <select id="permission-feature-select" value={userForm.feature} onChange={(e) => setUserForm((c) => ({ ...c, feature: e.target.value }))} className={SELECT_CLASS}>
                 {features.map((f) => (<option key={f.value} value={f.value}>{f.label}</option>))}
               </select>
@@ -288,8 +293,8 @@ export default function SettingsPermissionsPage() {
         </div>
 
         {/* Group policy creator */}
-        <div className="rounded-xl border border-white/[0.06] bg-white/[0.015]">
-          <div className="flex items-center gap-3 border-b border-white/[0.06] px-5 py-3.5">
+        <div className="rounded-xl border border-border bg-card shadow-sm">
+          <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/12 text-amber-400">
               <Shield className="h-4 w-4" />
             </div>
@@ -306,7 +311,7 @@ export default function SettingsPermissionsPage() {
               </select>
             </div>
             <div>
-              <FieldLabel htmlFor="group-permission-feature-select">{lang === "ru" ? "Фича" : "Feature"}</FieldLabel>
+              <FieldLabel htmlFor="group-permission-feature-select">{lang === "ru" ? "Модуль" : "Feature"}</FieldLabel>
               <select id="group-permission-feature-select" value={groupForm.feature} onChange={(e) => setGroupForm((c) => ({ ...c, feature: e.target.value }))} className={SELECT_CLASS}>
                 {features.map((f) => (<option key={f.value} value={f.value}>{f.label}</option>))}
               </select>

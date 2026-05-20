@@ -29,7 +29,7 @@ import {
 type PermissionMode = "inherit" | "allow" | "deny";
 
 const SELECT_CLASS =
-  "h-9 w-full rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 text-sm text-foreground outline-none ring-0 transition-all focus:border-primary/40 focus:ring-1 focus:ring-primary/30";
+  "h-9 w-full rounded-lg border border-border bg-secondary/30 px-3 text-sm text-foreground outline-none ring-0 transition-all focus:border-primary/40 focus:ring-1 focus:ring-primary/30";
 
 const FALLBACK_FEATURES = ACCESS_FEATURE_OPTIONS;
 
@@ -72,7 +72,7 @@ function UserAvatar({ name, active }: { name: string; active: boolean }) {
       className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold tracking-wide transition-colors ${
         active
           ? "bg-primary/15 text-primary ring-1 ring-primary/20"
-          : "bg-muted/40 text-muted-foreground ring-1 ring-border/20"
+          : "bg-muted/40 text-muted-foreground ring-1 ring-border/40"
       }`}
     >
       {initials}
@@ -97,7 +97,7 @@ function PermissionModeField({
 }) {
   const t = ACCESS_UI_TEXT[lang].common;
   return (
-    <div className="group/perm flex items-center justify-between gap-3 rounded-lg border border-white/[0.04] bg-white/[0.02] px-3 py-2.5 transition-colors hover:bg-white/[0.04]">
+    <div className="group/perm flex items-center justify-between gap-3 rounded-lg border border-border/40 bg-secondary/10 px-3 py-2.5 transition-colors hover:bg-secondary/20">
       <div className="min-w-0 flex-1">
         <div className="text-[13px] font-medium text-foreground/90">{label}</div>
         <div className="mt-0.5 text-[11px] text-muted-foreground/60">
@@ -108,7 +108,7 @@ function PermissionModeField({
       <select
         value={mode}
         onChange={(e) => onChange(e.target.value as PermissionMode)}
-        className="h-7 rounded-md border border-white/[0.06] bg-white/[0.03] px-2 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary/30"
+        className="h-7 rounded-md border border-border bg-secondary/30 px-2 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary/30"
         aria-label={`${label} mode`}
       >
         <option value="inherit">{t.inherit}</option>
@@ -140,7 +140,7 @@ function GroupPicker({
             className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-all ${
               active
                 ? "bg-primary/15 text-primary ring-1 ring-primary/25"
-                : "bg-white/[0.03] text-muted-foreground ring-1 ring-white/[0.06] hover:bg-white/[0.06] hover:text-foreground"
+                : "bg-secondary/20 text-muted-foreground ring-1 ring-border/40 hover:bg-secondary/40 hover:text-foreground"
             }`}
           >
             {group.name}
@@ -284,31 +284,36 @@ export default function SettingsUsersPage() {
   return (
     <div className="space-y-6 pb-10">
       {/* ── Header ── */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">{copy.title}</h1>
-        <p className="mt-1 text-sm text-muted-foreground/70">{copy.subtitle}</p>
+      <div className="flex items-center gap-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
+          <UsersIcon className="h-4 w-4 text-primary" />
+        </div>
+        <div>
+          <h1 className="text-base font-semibold tracking-tight text-foreground">{copy.title}</h1>
+          <p className="text-[11px] text-muted-foreground">{copy.subtitle}</p>
+        </div>
       </div>
 
       {/* ── Stats row ── */}
-      <div className="flex flex-wrap items-center gap-5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-5 py-3">
+      <div className="flex flex-wrap items-center gap-5 rounded-xl border border-border/60 bg-secondary/10 px-5 py-3 shadow-sm">
         <div className="flex items-center gap-2">
           <UsersIcon className="h-4 w-4 text-muted-foreground/50" />
           <span className="text-sm font-medium text-foreground">{users.length}</span>
           <span className="text-xs text-muted-foreground/60">{lang === "ru" ? "всего" : "total"}</span>
         </div>
-        <div className="h-4 w-px bg-white/[0.06]" />
+        <div className="h-4 w-px bg-border/60" />
         <div className="flex items-center gap-1.5">
           <div className="h-2 w-2 rounded-full bg-emerald-400/80" />
           <span className="text-sm font-medium text-foreground">{activeUsers}</span>
           <span className="text-xs text-muted-foreground/60">{common.active.toLowerCase()}</span>
         </div>
-        <div className="h-4 w-px bg-white/[0.06]" />
+        <div className="h-4 w-px bg-border/60" />
         <div className="flex items-center gap-1.5">
           <div className="h-2 w-2 rounded-full bg-blue-400/80" />
           <span className="text-sm font-medium text-foreground">{staffUsers}</span>
           <span className="text-xs text-muted-foreground/60">staff</span>
         </div>
-        <div className="h-4 w-px bg-white/[0.06]" />
+        <div className="h-4 w-px bg-border/60" />
         <div className="flex items-center gap-1.5">
           <div className="h-2 w-2 rounded-full bg-violet-400/80" />
           <span className="text-sm font-medium text-foreground">{groups.length}</span>
@@ -346,8 +351,8 @@ export default function SettingsUsersPage() {
                 key={user.id}
                 className={`rounded-xl border transition-all duration-200 ${
                   isEditing
-                    ? "border-primary/30 bg-white/[0.03] shadow-[0_0_0_1px_rgba(var(--primary-rgb),0.1)]"
-                    : "border-white/[0.06] bg-white/[0.015] hover:bg-white/[0.03] hover:border-white/[0.1]"
+                    ? "border-primary/30 bg-primary/[0.03] shadow-sm"
+                    : "border-border/60 bg-card hover:bg-secondary/20 hover:border-border"
                 }`}
               >
                 {/* Card head — always visible */}
@@ -375,14 +380,14 @@ export default function SettingsUsersPage() {
                   <div className="flex shrink-0 items-center gap-1">
                     <button
                       onClick={() => (isEditing ? cancelEdit() : startEdit(user))}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/50 transition-colors hover:bg-white/[0.06] hover:text-foreground"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/50 transition-colors hover:bg-secondary/40 hover:text-foreground"
                       title={isEditing ? common.cancel : copy.editAction}
                     >
                       {isEditing ? <ChevronUp className="h-4 w-4" /> : <Pencil className="h-3.5 w-3.5" />}
                     </button>
                     <button
                       onClick={() => void resetPassword(user)}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/50 transition-colors hover:bg-white/[0.06] hover:text-foreground"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/50 transition-colors hover:bg-secondary/40 hover:text-foreground"
                       title={common.password}
                     >
                       <KeyRound className="h-3.5 w-3.5" />
@@ -399,7 +404,7 @@ export default function SettingsUsersPage() {
 
                 {/* Effective access summary — always visible */}
                 {!isEditing && (user.effective_permissions && Object.keys(user.effective_permissions).length > 0) && (
-                  <div className="border-t border-white/[0.04] px-4 py-2.5">
+                  <div className="border-t border-border/40 px-4 py-2.5">
                     <div className="flex flex-wrap gap-1.5">
                       {Object.entries(user.effective_permissions || {}).map(([feat, allowed]) => (
                         <span
@@ -431,7 +436,7 @@ export default function SettingsUsersPage() {
                           spellCheck={false}
                           value={draft.username || ""}
                           onChange={(e) => setEditing((s) => ({ ...s, username: e.target.value }))}
-                          className="h-9 bg-white/[0.03] border-white/[0.06]"
+                          className="h-9 bg-secondary/20 border-border/60"
                         />
                       </div>
                       <div>
@@ -444,7 +449,7 @@ export default function SettingsUsersPage() {
                           spellCheck={false}
                           value={draft.email || ""}
                           onChange={(e) => setEditing((s) => ({ ...s, email: e.target.value }))}
-                          className="h-9 bg-white/[0.03] border-white/[0.06]"
+                          className="h-9 bg-secondary/20 border-border/60"
                         />
                       </div>
                       <div>
@@ -468,7 +473,7 @@ export default function SettingsUsersPage() {
                     <div className="flex flex-wrap gap-6">
                       <label className="flex items-center gap-2.5 text-sm text-foreground/80 cursor-pointer select-none">
                         <Switch checked={!!draft.is_staff} onCheckedChange={(v) => setEditing((s) => ({ ...s, is_staff: v }))} />
-                        Staff
+                        Администратор
                       </label>
                       <label className="flex items-center gap-2.5 text-sm text-foreground/80 cursor-pointer select-none">
                         <Switch checked={!!draft.is_active} onCheckedChange={(v) => setEditing((s) => ({ ...s, is_active: v }))} />
@@ -535,8 +540,8 @@ export default function SettingsUsersPage() {
         </div>
 
         {/* ── Create user sidebar ── */}
-        <div className="xl:sticky xl:top-4 h-fit rounded-xl border border-white/[0.06] bg-white/[0.015]">
-          <div className="flex items-center gap-3 border-b border-white/[0.06] px-5 py-4">
+        <div className="xl:sticky xl:top-4 h-fit rounded-xl border border-border bg-card shadow-sm">
+          <div className="flex items-center gap-3 border-b border-border/60 px-5 py-4">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 text-primary">
               <UserPlus className="h-4 w-4" />
             </div>
@@ -556,7 +561,7 @@ export default function SettingsUsersPage() {
                 placeholder={copy.username}
                 value={createForm.username}
                 onChange={(e) => setCreateForm((s) => ({ ...s, username: e.target.value }))}
-                className="h-9 bg-white/[0.03] border-white/[0.06]"
+                className="h-9 bg-secondary/20 border-border/60"
               />
             </div>
             <div>
@@ -570,7 +575,7 @@ export default function SettingsUsersPage() {
                 placeholder={copy.email}
                 value={createForm.email}
                 onChange={(e) => setCreateForm((s) => ({ ...s, email: e.target.value }))}
-                className="h-9 bg-white/[0.03] border-white/[0.06]"
+                className="h-9 bg-secondary/20 border-border/60"
               />
             </div>
             <div>
@@ -583,7 +588,7 @@ export default function SettingsUsersPage() {
                 placeholder={copy.passwordPlaceholder}
                 value={createForm.password}
                 onChange={(e) => setCreateForm((s) => ({ ...s, password: e.target.value }))}
-                className="h-9 bg-white/[0.03] border-white/[0.06]"
+                className="h-9 bg-secondary/20 border-border/60"
               />
             </div>
             <div>
@@ -602,13 +607,13 @@ export default function SettingsUsersPage() {
               </select>
             </div>
 
-            <div className="flex flex-wrap gap-5 rounded-lg border border-white/[0.04] bg-white/[0.02] px-4 py-3">
+            <div className="flex flex-wrap gap-5 rounded-lg border border-border/40 bg-secondary/10 px-4 py-3">
               <label className="flex items-center gap-2.5 text-sm text-foreground/80 cursor-pointer select-none">
                 <Switch
                   checked={createForm.is_staff}
                   onCheckedChange={(v) => setCreateForm((s) => ({ ...s, is_staff: v }))}
                 />
-                Staff
+                Администратор
               </label>
               <label className="flex items-center gap-2.5 text-sm text-foreground/80 cursor-pointer select-none">
                 <Switch

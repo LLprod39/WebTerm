@@ -518,7 +518,7 @@ def monitor_view(request):
 @login_required
 def dashboard_view(request):
     """Dashboard entry for mini build: staff monitoring page."""
-    if not user_can_feature(request.user, "dashboard"):
+    if not user_can_feature(request.user, "dashboard") or not request.user.is_staff:
         return redirect("servers:server_list")
 
     return _admin_dashboard_view(request)
@@ -527,7 +527,7 @@ def dashboard_view(request):
 @login_required
 def api_dashboard_stats(request):
     """Backward-compat alias to admin dashboard API in mini build."""
-    if not user_can_feature(request.user, "dashboard"):
+    if not user_can_feature(request.user, "dashboard") or not request.user.is_staff:
         return JsonResponse({"error": "Forbidden"}, status=403)
 
     return api_admin_dashboard(request)
@@ -1083,7 +1083,7 @@ def _collect_admin_dashboard_data(include_version: bool = False) -> dict:
 
 def _admin_dashboard_view(request):
     """Render admin monitoring dashboard."""
-    if not user_can_feature(request.user, "dashboard"):
+    if not user_can_feature(request.user, "dashboard") or not request.user.is_staff:
         return redirect("servers:server_list")
 
     context = _collect_admin_dashboard_data(include_version=True)
@@ -1095,7 +1095,7 @@ def _admin_dashboard_view(request):
 @require_http_methods(["GET"])
 def api_admin_dashboard(request):
     """JSON API for admin dashboard auto-refresh."""
-    if not user_can_feature(request.user, "dashboard"):
+    if not user_can_feature(request.user, "dashboard") or not request.user.is_staff:
         return JsonResponse({"error": "Forbidden"}, status=403)
 
     data = _collect_admin_dashboard_data(include_version=True)
@@ -1106,7 +1106,7 @@ def api_admin_dashboard(request):
 @require_http_methods(["GET"])
 def api_admin_users_activity(request):
     """Detailed user activity logs for admin dashboard with filtering."""
-    if not user_can_feature(request.user, "dashboard"):
+    if not user_can_feature(request.user, "dashboard") or not request.user.is_staff:
         return JsonResponse({"error": "Forbidden"}, status=403)
 
     from django.db.models import Q as QQ
@@ -1165,7 +1165,7 @@ def api_admin_users_activity(request):
 @require_http_methods(["GET"])
 def api_admin_users_sessions(request):
     """Active user sessions - who's online now and what they're doing."""
-    if not user_can_feature(request.user, "dashboard"):
+    if not user_can_feature(request.user, "dashboard") or not request.user.is_staff:
         return JsonResponse({"error": "Forbidden"}, status=403)
 
     from django.contrib.auth.models import User as AuthUser

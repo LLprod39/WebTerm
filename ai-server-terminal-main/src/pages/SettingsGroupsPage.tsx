@@ -269,7 +269,7 @@ export default function SettingsGroupsPage() {
         <div className="flex items-center gap-1.5">
           <div className="h-2 w-2 rounded-full bg-amber-400/80" />
           <span className="text-sm font-medium text-foreground">{features.length}</span>
-          <span className="text-xs text-muted-foreground/60">{lang === "ru" ? "фич" : "features"}</span>
+          <span className="text-xs text-muted-foreground/60">{lang === "ru" ? "модулей" : "features"}</span>
         </div>
       </div>
 
@@ -484,7 +484,7 @@ export default function SettingsGroupsPage() {
           <div className="xl:sticky xl:top-4 h-fit rounded-xl border border-dashed border-border/50 bg-secondary/5 px-5 py-8 text-center">
             <p className="text-xs text-muted-foreground/50">
               {lang === "ru"
-                ? "Заверши редактирование группы, чтобы создать новую."
+                ? "Завершите редактирование группы, чтобы создать новую."
                 : "Finish editing the current group to create a new one."}
             </p>
           </div>

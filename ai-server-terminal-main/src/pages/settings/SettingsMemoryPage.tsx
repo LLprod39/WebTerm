@@ -160,19 +160,19 @@ export default function SettingsMemoryPage() {
       <div className="flex flex-wrap items-center gap-2">
         <span className="rounded bg-secondary px-1.5 py-0.5">{item.source_kind}</span>
         {item.source_ref ? <span className="rounded bg-secondary/60 px-1.5 py-0.5">{item.source_ref}</span> : null}
-        <span>confidence {Math.round((item.confidence || 0) * 100)}%</span>
-        <span>importance {item.importance_score}</span>
-        <span>stability {item.stability_score}</span>
-        {item.created_by_username ? <span>by {item.created_by_username}</span> : null}
+        <span>достоверность {Math.round((item.confidence || 0) * 100)}%</span>
+        <span>важность {item.importance_score}</span>
+        <span>стабильность {item.stability_score}</span>
+        {item.created_by_username ? <span>автор: {item.created_by_username}</span> : null}
         {item.updated_at ? <span>{new Date(item.updated_at).toLocaleString()}</span> : null}
       </div>
       {item.action_summary ? <p className="text-[11px] text-foreground/80">{item.action_summary}</p> : null}
-      {item.rewrite_reason ? <p>Reason: {item.rewrite_reason}</p> : null}
-      {item.prior_version ? <p>Prior version: v{item.prior_version}</p> : null}
+      {item.rewrite_reason ? <p>Причина изменения: {item.rewrite_reason}</p> : null}
+      {item.prior_version ? <p>Предыдущая версия: v{item.prior_version}</p> : null}
       {item.history.length > 1 ? (
         <details className="rounded-md border border-border/60 bg-background/30 px-3 py-2">
           <summary className="cursor-pointer text-[11px] font-medium text-foreground">
-            Version history ({item.history.length})
+            История версий ({item.history.length})
           </summary>
           <div className="mt-2 space-y-2">
             {item.history.map((historyItem) => (
@@ -181,11 +181,11 @@ export default function SettingsMemoryPage() {
                   <Badge variant={historyItem.is_active ? "secondary" : "outline"}>v{historyItem.version}</Badge>
                   {historyItem.source_kind ? <span>{historyItem.source_kind}</span> : null}
                   {historyItem.source_ref ? <span>{historyItem.source_ref}</span> : null}
-                  {historyItem.created_by_username ? <span>by {historyItem.created_by_username}</span> : null}
+                  {historyItem.created_by_username ? <span>автор: {historyItem.created_by_username}</span> : null}
                   {historyItem.updated_at ? <span>{new Date(historyItem.updated_at).toLocaleString()}</span> : null}
                 </div>
                 {historyItem.action_summary ? <p className="mt-1 text-[11px] text-foreground/80">{historyItem.action_summary}</p> : null}
-                {historyItem.rewrite_reason ? <p className="mt-1">Reason: {historyItem.rewrite_reason}</p> : null}
+                {historyItem.rewrite_reason ? <p className="mt-1">Причина изменения: {historyItem.rewrite_reason}</p> : null}
                 {historyItem.content_preview ? (
                   <p className="mt-1 whitespace-pre-wrap text-[11px] leading-relaxed">{historyItem.content_preview}</p>
                 ) : null}
@@ -244,7 +244,7 @@ export default function SettingsMemoryPage() {
         disabled={memoryActionKey === `note:${item.id}`}
         onClick={() => void onPromoteMemorySnapshotToNote(item.id)}
       >
-        {memoryActionKey === `note:${item.id}` ? "Promoting..." : "Promote Note"}
+        {memoryActionKey === `note:${item.id}` ? "Утверждение..." : "Утвердить заметку"}
       </Button>
       {item.memory_key.startsWith("skill_draft:") ? (
         <Button
@@ -254,7 +254,7 @@ export default function SettingsMemoryPage() {
           disabled={memoryActionKey === `skill:${item.id}`}
           onClick={() => void onPromoteMemorySnapshotToSkill(item.id)}
         >
-          {memoryActionKey === `skill:${item.id}` ? "Promoting..." : "Promote Skill"}
+          {memoryActionKey === `skill:${item.id}` ? "Преобразование..." : "Преобразовать в навык"}
         </Button>
       ) : null}
       <Button
@@ -264,7 +264,7 @@ export default function SettingsMemoryPage() {
         disabled={memoryActionKey === `archive:${item.id}`}
         onClick={() => void onArchiveMemorySnapshot(item.id)}
       >
-        {memoryActionKey === `archive:${item.id}` ? "Archiving..." : "Archive"}
+        {memoryActionKey === `archive:${item.id}` ? "Архивация..." : "Архивировать"}
       </Button>
     </div>
   ), [memoryActionKey, onArchiveMemorySnapshot, onPromoteMemorySnapshotToNote, onPromoteMemorySnapshotToSkill]);
@@ -285,14 +285,14 @@ export default function SettingsMemoryPage() {
           <ScrollText className="h-4 w-4 text-primary" />
         </div>
         <div>
-          <h1 className="text-base font-semibold tracking-tight text-foreground">AI Memory</h1>
+          <h1 className="text-base font-semibold tracking-tight text-foreground">Долговременная память AI</h1>
           <p className="text-[11px] text-muted-foreground">{t("mem.subtitle")}</p>
         </div>
       </div>
 
       {/* Main Memory Section */}
       <SectionCard
-        title="AI Memory и Dreams"
+        title="Панели долгосрочной памяти"
         icon={ScrollText}
         description={t("mem.section_desc")}
         actions={
@@ -313,8 +313,8 @@ export default function SettingsMemoryPage() {
               onClick={() => void onRunMemoryDreams()}
               disabled={!selectedMemoryServerId || memoryDreamRunning}
             >
-              <Sparkles className={cn("h-3 w-3", memoryDreamRunning && "animate-spin")} />
-              {memoryDreamRunning ? "Dreaming..." : "Run Dreams Now"}
+              <RefreshCw className={cn("h-3 w-3", memoryDreamRunning && "animate-spin")} />
+              {memoryDreamRunning ? "Консолидация..." : "Запустить консолидацию"}
             </Button>
           </div>
         }
@@ -344,10 +344,10 @@ export default function SettingsMemoryPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline">{selectedMemoryServer?.name || t("mem.no_server")}</Badge>
                 <Badge variant={memoryOverview?.daemon_state?.status === "running" ? "default" : "secondary"}>
-                  Dreams daemon: {memoryOverview?.daemon_state?.status || "unknown"}
+                  Служба консолидации: {memoryOverview?.daemon_state?.status === "running" ? "активна" : memoryOverview?.daemon_state?.status || "неизвестно"}
                 </Badge>
                 {memoryOverview?.daemon_state?.is_stale ? (
-                  <Badge variant="destructive">stale heartbeat</Badge>
+                  <Badge variant="destructive">таймаут активности</Badge>
                 ) : null}
               </div>
             </div>
@@ -357,7 +357,7 @@ export default function SettingsMemoryPage() {
           {memoryPolicyDraft ? (
             <div className="space-y-4 rounded-xl border border-border bg-secondary/10 px-4 py-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-medium text-foreground">Dream Policy</p>
+                <p className="text-sm font-medium text-foreground">Правила долгосрочной памяти</p>
                 <Button size="sm" variant="outline" className="h-7" onClick={onSaveMemoryPolicy} disabled={memoryPolicySaving}>
                   {memoryPolicySaving ? t("mem.saving") : t("mem.save")}
                 </Button>
@@ -367,7 +367,7 @@ export default function SettingsMemoryPage() {
                 <label className="flex cursor-pointer items-center justify-between rounded-lg border border-border px-3 py-3 transition-colors hover:bg-secondary/30">
                   <div>
                     <p className="text-xs font-medium">AI Memory</p>
-                    <p className="text-[10px] text-muted-foreground">Включить систему памяти</p>
+                    <p className="text-[10px] text-muted-foreground">Включить долгосрочную память</p>
                   </div>
                   <Switch
                     checked={memoryPolicyDraft.ai_memory_enabled}
@@ -388,8 +388,8 @@ export default function SettingsMemoryPage() {
 
                 <label className="flex cursor-pointer items-center justify-between rounded-lg border border-border px-3 py-3 transition-colors hover:bg-secondary/30">
                   <div>
-                    <p className="text-xs font-medium">RDP семантика</p>
-                    <p className="text-[10px] text-muted-foreground">RDP semantic capture</p>
+                    <p className="text-xs font-medium">Анализ RDP-активности</p>
+                    <p className="text-[10px] text-muted-foreground">Фиксация событий RDP-сессий</p>
                   </div>
                   <Switch
                     checked={memoryPolicyDraft.rdp_semantic_enabled}
@@ -405,13 +405,13 @@ export default function SettingsMemoryPage() {
             <>
               <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-7">
                 {[
-                  { label: "Canonical", value: memoryOverview.stats.canonical },
-                  { label: "Patterns", value: memoryOverview.stats.patterns },
-                  { label: "Automation", value: memoryOverview.stats.automation_candidates },
-                  { label: "Skill Drafts", value: memoryOverview.stats.skill_drafts },
-                  { label: "Revalidation", value: memoryOverview.stats.revalidation_open },
-                  { label: "Episodes", value: memoryOverview.stats.episodes },
-                  { label: "Archive", value: memoryOverview.stats.archive },
+                  { label: "Канонические", value: memoryOverview.stats.canonical },
+                  { label: "Паттерны", value: memoryOverview.stats.patterns },
+                  { label: "Автоматизация", value: memoryOverview.stats.automation_candidates },
+                  { label: "Навыки", value: memoryOverview.stats.skill_drafts },
+                  { label: "Верификация", value: memoryOverview.stats.revalidation_open },
+                  { label: "Эпизоды", value: memoryOverview.stats.episodes },
+                  { label: "Архив", value: memoryOverview.stats.archive },
                 ].map((stat) => (
                   <div key={stat.label} className="group/stat relative overflow-hidden rounded-xl border border-primary/5 bg-background/50 px-4 py-4 shadow-sm transition-all hover:border-primary/20 hover:bg-background/80 hover:shadow-md">
                     <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 transition-opacity group-hover/stat:opacity-100" />
@@ -422,17 +422,17 @@ export default function SettingsMemoryPage() {
               </div>
 
               {/* Workers Status */}
-              <SectionCard title="Worker status" icon={Activity} description="Состояние фоновых workers">
+              <SectionCard title="Состояние фоновых служб" icon={Activity} description="Мониторинг фоновых процессов анализа и выполнения">
                 <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
-                  {renderWorkerStateCard("Memory dreams", memoryOverview.worker_states?.memory_dreams || memoryOverview.daemon_state)}
-                  {renderWorkerStateCard("Agent execution", memoryOverview.worker_states?.agent_execution)}
-                  {renderWorkerStateCard("Watchers", memoryOverview.worker_states?.watchers)}
+                  {renderWorkerStateCard("Консолидация памяти", memoryOverview.worker_states?.memory_dreams || memoryOverview.daemon_state)}
+                  {renderWorkerStateCard("Выполнение агентов", memoryOverview.worker_states?.agent_execution)}
+                  {renderWorkerStateCard("Службы наблюдения (Watchers)", memoryOverview.worker_states?.watchers)}
                 </div>
               </SectionCard>
 
               {/* Canonical Snapshots */}
               {memoryOverview.canonical.length > 0 ? (
-                <SectionCard title="Canonical snapshots" icon={Database} description="Активная память сервера">
+                <SectionCard title="Канонические записи" icon={Database} description="Подтвержденные и структурированные факты о сервере">
                   <div className="space-y-2">
                     {memoryOverview.canonical.map((item) => (
                       <div key={item.id} className="rounded-lg border border-border bg-secondary/10 px-3 py-3">
@@ -451,7 +451,7 @@ export default function SettingsMemoryPage() {
 
               {/* Learned Candidates */}
               {memoryOverview.patterns.length > 0 || memoryOverview.automation_candidates.length > 0 || memoryOverview.skill_drafts.length > 0 ? (
-                <SectionCard title="Learned candidates" icon={Bot} description="Предложения для operational knowledge">
+                <SectionCard title="Выявленные паттерны и предложения" icon={Bot} description="Кандидаты для пополнения базы знаний">
                   <div className="space-y-3">
                     {[...memoryOverview.patterns, ...memoryOverview.automation_candidates, ...memoryOverview.skill_drafts].map((item) => (
                       <div key={item.id} className="rounded-lg border border-border bg-secondary/10 px-3 py-3">
@@ -471,7 +471,7 @@ export default function SettingsMemoryPage() {
 
               {/* Revalidation Queue */}
               {memoryOverview.revalidation.length > 0 ? (
-                <SectionCard title="Revalidation queue" icon={RefreshCw} description="Факты для перепроверки">
+                <SectionCard title="Очередь верификации" icon={RefreshCw} description="Записи и утверждения, требующие повторного подтверждения">
                   <div className="space-y-2">
                     {memoryOverview.revalidation.map((item) => (
                       <div key={item.id} className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-3">
@@ -488,14 +488,14 @@ export default function SettingsMemoryPage() {
 
               {/* Recent Episodes */}
               {memoryOverview.episodes.length > 0 ? (
-                <SectionCard title="Recent episodes" icon={Clock} description="Последние схлопнутые эпизоды">
+                <SectionCard title="Недавние сессии активности" icon={Clock} description="Сводная хроника сессий и выполненных операций">
                   <div className="space-y-2">
                     {memoryOverview.episodes.slice(0, 6).map((item) => (
                       <div key={item.id} className="rounded-lg border border-border bg-secondary/10 px-3 py-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="text-sm font-medium text-foreground">{item.title}</p>
                           <Badge variant="secondary">{item.episode_kind}</Badge>
-                          <Badge variant="outline">{item.event_count} events</Badge>
+                          <Badge variant="outline">{item.event_count} событий</Badge>
                         </div>
                         <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">{item.summary}</p>
                       </div>
@@ -506,7 +506,7 @@ export default function SettingsMemoryPage() {
 
               {/* Archive */}
               {memoryOverview.archive.length > 0 ? (
-                <SectionCard title="Archive" icon={FolderOpen} description="Старые и superseded artefacts">
+                <SectionCard title="Архив памяти" icon={FolderOpen} description="Устаревшие версии канонических записей и деактивированные артефакты">
                   <div className="space-y-2">
                     {memoryOverview.archive.slice(0, 6).map((item) => (
                       <div key={`${item.kind}-${item.id}`} className="rounded-lg border border-border/60 bg-secondary/5 px-3 py-3">
@@ -526,7 +526,7 @@ export default function SettingsMemoryPage() {
           ) : (
             <QueryStateBlock loading={!!(selectedMemoryServerId && memoryLoading)}>
               <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-                Выбери сервер, чтобы увидеть AI memory.
+                Выберите сервер в списке слева для просмотра сведений долгосрочной памяти.
               </div>
             </QueryStateBlock>
           )}

@@ -67,4 +67,6 @@ urlpatterns = [
     ),
     # Terminal preferences
     path("api/terminal/preferences/", views.api_terminal_preferences, name="api_terminal_preferences"),
+    # Dashboard layout (Distinct path to avoid conflicts)
+    path("api/dashboard-custom/layout/<str:dashboard_type>/", views.api_dashboard_layout, name="api_dashboard_layout"),
 ]

@@ -13,3 +13,4 @@ core_ui/urls.py imports `from . import views` which resolves to this package.
 """
 from core_ui.views._views_all import *  # noqa: F401, F403, F405
 from core_ui.views.terminal_preferences import api_terminal_preferences  # noqa: F401
+from core_ui.views.dashboard_layout import api_dashboard_layout  # noqa: F401

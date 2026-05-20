@@ -3202,6 +3202,35 @@ export async function fetchAdminUsersSessions() {
 }
 
 // ---------------------------------------------------------------------------
+// Dashboard Layout API
+// ---------------------------------------------------------------------------
+
+export interface DashboardWidgetConfig {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  visible?: boolean;
+  props?: Record<string, any>;
+}
+
+export interface DashboardLayoutData {
+  widgets: DashboardWidgetConfig[];
+}
+
+export async function fetchDashboardLayout(type: "admin" | "user") {
+  return apiFetch<{ success: boolean; layout: DashboardLayoutData | null }>(`/api/dashboard-custom/layout/${type}/`);
+}
+
+export async function saveDashboardLayout(type: "admin" | "user", layout: DashboardLayoutData) {
+  return apiFetch<{ success: boolean; created: boolean }>(`/api/dashboard-custom/layout/${type}/`, {
+    method: "POST",
+    body: JSON.stringify({ layout }),
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Monitoring Config API
 // ---------------------------------------------------------------------------
 

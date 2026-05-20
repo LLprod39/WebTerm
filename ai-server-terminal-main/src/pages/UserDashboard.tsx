@@ -1,513 +1,442 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import {
   fetchAgentDashboardRuns,
   fetchFrontendBootstrap,
-  fetchAuthSession,
   fetchMonitoringDashboard,
-  studioRuns,
-  type DashboardRunItem,
-  type FrontendServer,
-  type PipelineRun,
-  type ServerHealth,
 } from "@/lib/api";
-import { useI18n } from "@/lib/i18n";
-import { canAccessStudio, hasFeatureAccess } from "@/lib/featureAccess";
-import {
-  Activity,
-  AlertTriangle,
-  ArrowRight,
-  Bot,
-  CheckCircle2,
-  Clock,
-  ExternalLink,
-  Eye,
-  RefreshCw,
-  Server,
-  Terminal,
-  Workflow,
+import { PageShell, PageHero, MetricGrid, MetricCard, SectionCard, StatusBadge, QueryStateBlock } from "@/components/ui/page-shell";
+import { 
+  Activity, 
+  Bot, 
+  Terminal as TerminalIcon, 
+  Clock, 
+  Server, 
+  Play, 
+  Settings,
+  Workflow
 } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
+import { relativeTime, cn } from "@/lib/utils";
+import { CustomizableDashboard, type WidgetDefinition } from "@/components/dashboard/CustomizableDashboard";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Link, useNavigate } from "react-router-dom";
-import {
-  EmptyState,
-  MetricCard,
-  MetricGrid,
-  PageHero,
-  PageShell,
-  QueryStateBlock,
-  SectionCard,
-  StatusBadge,
-} from "@/components/ui/page-shell";
 
-function getGreeting(): string {
-  const h = new Date().getHours();
-  if (h < 6) return "🌙";
-  if (h < 12) return "☀️";
-  if (h < 18) return "🌤";
-  return "🌙";
-}
-
-function relativeTime(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return "now";
-  if (mins < 60) return `${mins}m`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
-}
-
-function formatDuration(ms: number): string {
-  if (!ms) return "0s";
-  const secs = Math.floor(ms / 1000);
-  if (secs < 60) return `${secs}s`;
-  const mins = Math.floor(secs / 60);
-  return `${mins}m`;
-}
-
-function healthTone(status: string): "success" | "warning" | "danger" | "neutral" | "info" {
-  if (status === "healthy" || status === "online") return "success";
-  if (status === "warning") return "warning";
-  if (status === "critical" || status === "unreachable" || status === "offline") return "danger";
-  if (status === "running") return "info";
-  return "neutral";
-}
-
-function runTone(status: string): "success" | "warning" | "danger" | "neutral" | "info" {
-  if (status === "completed" || status === "success") return "success";
-  if (status === "running" || status === "in_progress") return "info";
-  if (status === "failed" || status === "error") return "danger";
-  if (status === "waiting" || status === "paused") return "warning";
-  return "neutral";
-}
-
-function terminalPath(server: FrontendServer): string {
-  return server.server_type === "rdp" ? `/servers/${server.id}/rdp` : `/servers/${server.id}/terminal`;
-}
-
-const QUICK_LINKS = [
-  { key: "servers", to: "/servers", icon: Server, feature: null as string | null },
-  { key: "terminal", to: "/servers/hub", icon: Terminal, feature: null },
-  { key: "agents", to: "/agents", icon: Bot, feature: "agents" },
-  { key: "studio", to: "/studio", icon: Workflow, feature: "studio" },
-] as const;
+const sectionToneStyles: Record<string, string> = {
+  default: "",
+  info: "border-primary/30 shadow-sm bg-card/65",
+  success: "border-emerald-500/25 bg-emerald-950/5 dark:bg-emerald-950/10 shadow-emerald-500/5",
+  warning: "border-amber-500/25 bg-amber-950/5 dark:bg-amber-950/10 shadow-amber-500/5",
+  danger: "border-red-500/25 bg-red-950/5 dark:bg-red-950/10 shadow-red-500/5",
+};
 
 export default function UserDashboard() {
   const { t } = useI18n();
-  const queryClient = useQueryClient();
-  const navigate = useNavigate();
 
-  const { data: authData } = useQuery({
-    queryKey: ["auth", "session"],
-    queryFn: fetchAuthSession,
-    staleTime: 60_000,
-    retry: false,
-  });
-  const username = authData?.user?.username || "";
-  const studioEnabled = canAccessStudio(authData?.user);
-  const agentsEnabled = hasFeatureAccess(authData?.user, "agents");
-
-  const { data: bootstrapData, isLoading: bootstrapLoading, error: bootstrapError } = useQuery({
-    queryKey: ["frontend", "bootstrap", "dashboard"],
+  const { data: bootstrapResponse, isLoading: bootLoading } = useQuery({
+    queryKey: ["bootstrap"],
     queryFn: fetchFrontendBootstrap,
-    staleTime: 20_000,
   });
 
-  const { data: monitoringData, isLoading: monitoringLoading } = useQuery({
-    queryKey: ["monitoring", "dashboard", "user"],
+  const { data: runsResponse, isLoading: runsLoading } = useQuery({
+    queryKey: ["agent-dashboard-runs"],
+    queryFn: fetchAgentDashboardRuns,
+    refetchInterval: 10000,
+  });
+
+  const { data: monitoringResponse, isLoading: monLoading } = useQuery({
+    queryKey: ["monitoring-dashboard"],
     queryFn: fetchMonitoringDashboard,
-    staleTime: 20_000,
-    refetchInterval: 30_000,
   });
 
-  const { data: runsData } = useQuery({
-    queryKey: ["agents", "dashboard-runs"],
-    queryFn: () => fetchAgentDashboardRuns(),
-    enabled: agentsEnabled,
-    refetchInterval: 10_000,
-  });
+  const boot = bootstrapResponse;
+  const runs = runsResponse;
+  const mon = monitoringResponse;
 
-  const { data: pipelineRuns } = useQuery({
-    queryKey: ["studio", "runs", "dashboard"],
-    queryFn: () => studioRuns.list(),
-    enabled: studioEnabled,
-    staleTime: 15_000,
-  });
+  const isLoading = bootLoading || runsLoading || monLoading;
 
-  const refresh = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["frontend", "bootstrap"] }),
-      queryClient.invalidateQueries({ queryKey: ["monitoring", "dashboard"] }),
-      queryClient.invalidateQueries({ queryKey: ["agents", "dashboard-runs"] }),
-      queryClient.invalidateQueries({ queryKey: ["studio", "runs"] }),
-    ]);
-  };
+  const availableWidgets = useMemo<WidgetDefinition[]>(() => {
+    if (!boot && !runs && !mon) return [];
 
-  const isLoading = bootstrapLoading || monitoringLoading;
-  const error = bootstrapError;
+    return [
+      {
+        id: "quick_stats",
+        title: "Краткая сводка",
+        icon: <Activity className="h-4 w-4" />,
+        defaultSize: { w: 12, h: 1 },
+        render: (config) => {
+          const tone = config.props?.tone ?? "default";
+          const title = config.props?.customTitle ?? "Краткая сводка";
 
-  if (isLoading || error || !bootstrapData) {
-    return (
-      <QueryStateBlock
-        loading={isLoading}
-        error={error || (!isLoading && !bootstrapData ? new Error(t("dash.error")) : undefined)}
-        className="p-6"
-      >
-        {null}
-      </QueryStateBlock>
-    );
-  }
+          return (
+            <SectionCard title={title} icon={<Activity className="h-4 w-4" />} className={sectionToneStyles[tone]}>
+              <MetricGrid>
+                <MetricCard
+                  label="Мои серверы"
+                  value={boot?.servers?.length || 0}
+                  description="Доступно для управления"
+                  icon={<Server className="h-5 w-5" />}
+                />
+                <MetricCard
+                  label="Активные агенты"
+                  value={runs?.active?.length || 0}
+                  description="Выполняются сейчас"
+                  icon={<Bot className="h-5 w-5" />}
+                  tone={runs?.active?.length ? "info" : "default"}
+                />
+                <MetricCard
+                  label="Fleet Health"
+                  value={mon?.summary?.healthy ?? 0}
+                  description="Стабильных узлов"
+                  icon={<Activity className="h-5 w-5" />}
+                  tone="success"
+                />
+                <MetricCard
+                  label="Алерты"
+                  value={mon?.summary?.active_alerts ?? 0}
+                  description="Требуют внимания"
+                  icon={<Play className="h-5 w-5" />}
+                  tone={mon?.summary?.active_alerts ? "warning" : "default"}
+                />
+              </MetricGrid>
+            </SectionCard>
+          );
+        }
+      },
+      {
+        id: "active_runs",
+        title: "Запуски агентов (Активные)",
+        icon: <Bot className="h-4 w-4" />,
+        defaultSize: { w: 6, h: 1 },
+        render: (config) => {
+          const limit = config.props?.limit ?? 5;
+          const tone = config.props?.tone ?? "default";
+          const title = config.props?.customTitle ?? "Активные запуски";
+          const displayRuns = runs?.active?.slice(0, limit) ?? [];
 
-  const servers = bootstrapData.servers || [];
-  const summary = monitoringData?.summary;
-  const healthById = new Map<number, ServerHealth>(
-    (monitoringData?.servers || []).map((item) => [item.server_id, item]),
-  );
-  const alerts = (monitoringData?.alerts || []).filter((a) => !a.is_resolved).slice(0, 6);
-  const activeRuns = runsData?.active || [];
-  const recentAgentRuns = (runsData?.recent || []).slice(0, 4);
-  const recentPipelines = (pipelineRuns || [])
-    .slice()
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .slice(0, 4);
-  const recentActivity = (bootstrapData.recent_activity || []).slice(0, 6);
+          return (
+            <SectionCard title={title} icon={<Bot className="h-4 w-4" />} className={sectionToneStyles[tone]}>
+              <div className="space-y-3">
+                {displayRuns.map((run) => (
+                  <Link
+                    key={run.id}
+                    to={`/agents/run/${run.id}`}
+                    className="flex items-center justify-between rounded-lg border border-border/60 bg-secondary/5 p-3 transition-all hover:bg-secondary/15 hover:border-primary/30"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold truncate text-xs">{run.agent_name}</span>
+                        <StatusBadge label={run.status} tone="info" />
+                      </div>
+                      <p className="mt-1 truncate text-[10px] text-muted-foreground">
+                        на сервере: {run.server_name}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0 ml-3">
+                      <div className="text-[10px] text-muted-foreground font-mono">{relativeTime(run.started_at)}</div>
+                    </div>
+                  </Link>
+                ))}
+                {displayRuns.length === 0 && (
+                  <div className="py-8 text-center text-xs text-muted-foreground border border-dashed rounded-xl bg-secondary/5">
+                    Нет активных агентов
+                  </div>
+                )}
+              </div>
+            </SectionCard>
+          );
+        }
+      },
+      {
+        id: "recent_runs",
+        title: "Запуски агентов (История)",
+        icon: <Clock className="h-4 w-4" />,
+        defaultSize: { w: 6, h: 1 },
+        render: (config) => {
+          const limit = config.props?.limit ?? 5;
+          const tone = config.props?.tone ?? "default";
+          const title = config.props?.customTitle ?? "История запусков агентов";
+          const displayRuns = runs?.recent?.slice(0, limit) ?? [];
 
-  const recentServers = servers
-    .slice()
-    .sort((a, b) => {
-      const ta = a.last_connected ? new Date(a.last_connected).getTime() : 0;
-      const tb = b.last_connected ? new Date(b.last_connected).getTime() : 0;
-      return tb - ta;
-    })
-    .slice(0, 6);
+          return (
+            <SectionCard title={title} icon={<Clock className="h-4 w-4" />} className={sectionToneStyles[tone]}>
+              <div className="space-y-3">
+                {displayRuns.map((r) => {
+                  const isSuccess = r.status === "succeeded" || r.status === "success";
+                  const isFailed = r.status === "failed" || r.status === "error";
+                  const runTone = isSuccess ? "success" : isFailed ? "danger" : "info";
+                  
+                  return (
+                    <Link
+                      key={r.id}
+                      to={`/agents/run/${r.id}`}
+                      className="flex items-center justify-between rounded-lg border border-border/40 bg-secondary/5 p-2.5 transition-all hover:bg-secondary/15 hover:border-primary/30"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold truncate text-xs">{r.agent_name}</span>
+                          <StatusBadge label={r.status} tone={runTone as any} />
+                        </div>
+                        <p className="mt-1 truncate text-[10px] text-muted-foreground">
+                          сервер: <span className="text-foreground/80">{r.server_name}</span> • итераций: {r.total_iterations}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0 ml-3">
+                        <div className="text-[10px] font-mono font-medium text-foreground">{r.duration_ms ? `${(r.duration_ms / 1000).toFixed(1)}s` : "n/a"}</div>
+                        <div className="text-[9px] text-muted-foreground/60 mt-0.5">{relativeTime(r.started_at)}</div>
+                      </div>
+                    </Link>
+                  );
+                })}
+                {displayRuns.length === 0 && (
+                  <div className="py-8 text-center text-xs text-muted-foreground border border-dashed rounded-xl bg-secondary/5">
+                    История запусков пуста
+                  </div>
+                )}
+              </div>
+            </SectionCard>
+          );
+        }
+      },
+      {
+        id: "servers_health",
+        title: "Состояние серверов",
+        icon: <Server className="h-4 w-4" />,
+        defaultSize: { w: 8, h: 1 },
+        render: (config) => {
+          const limit = config.props?.limit ?? 5;
+          const tone = config.props?.tone ?? "default";
+          const title = config.props?.customTitle ?? "Состояние Fleet серверов";
+          const displayServers = mon?.servers?.slice(0, limit) ?? [];
 
-  const attentionServers = servers
-    .map((server) => ({ server, health: healthById.get(server.id) }))
-    .filter(({ health }) => health && health.status !== "healthy" && health.status !== "unknown")
-    .slice(0, 5);
+          return (
+            <SectionCard title={title} icon={<Server className="h-4 w-4" />} className={sectionToneStyles[tone]}>
+              <div className="space-y-2.5">
+                {displayServers.map((s) => {
+                  const statusTone = s.status === "healthy" ? "success" : s.status === "warning" ? "warning" : s.status === "critical" ? "danger" : s.status === "unreachable" ? "danger" : "neutral";
+                  return (
+                    <div key={s.server_id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl border border-border/80 bg-secondary/5 hover:border-primary/40 hover:bg-secondary/10 transition-all text-xs">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-card border shadow-sm">
+                          <Server className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        </div>
+                        <div className="truncate">
+                          <span className="font-semibold text-foreground/95">{s.server_name}</span>
+                          <span className="text-[10px] text-muted-foreground/50 ml-2 font-mono">({s.host})</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3.5 shrink-0 flex-wrap sm:flex-nowrap">
+                        <StatusBadge label={s.status} tone={statusTone as any} />
+                        {s.cpu_percent !== null && (
+                          <div className="text-[10px] text-muted-foreground shrink-0 bg-card border rounded px-1.5 py-0.5 font-medium">
+                            CPU: <span className={cn("font-bold", s.cpu_percent > 80 ? "text-red-500" : s.cpu_percent > 60 ? "text-amber-500" : "text-emerald-500")}>{s.cpu_percent}%</span>
+                          </div>
+                        )}
+                        {s.memory_percent !== null && (
+                          <div className="text-[10px] text-muted-foreground shrink-0 bg-card border rounded px-1.5 py-0.5 font-medium">
+                            RAM: <span className="text-foreground/90 font-bold">{s.memory_percent}%</span>
+                          </div>
+                        )}
+                        {s.response_time_ms !== null && (
+                          <span className="text-[10px] text-muted-foreground/50 font-mono shrink-0">
+                            {s.response_time_ms}ms
+                          </span>
+                        )}
+                        <Button size="xs" variant="outline" asChild className="h-6 px-2.5 text-[10px] shrink-0 font-semibold shadow-sm hover:border-primary/50">
+                          <Link to={`/servers/${s.server_id}/terminal`}>Terminal</Link>
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {displayServers.length === 0 && (
+                  <div className="py-6 text-center text-xs text-muted-foreground">Нет данных по серверам</div>
+                )}
+              </div>
+            </SectionCard>
+          );
+        }
+      },
+      {
+        id: "recent_servers",
+        title: "Недавние серверы",
+        icon: <TerminalIcon className="h-4 w-4" />,
+        defaultSize: { w: 4, h: 1 },
+        render: (config) => {
+          const tone = config.props?.tone ?? "default";
+          const title = config.props?.customTitle ?? "Недавние подключенные";
+          const displayServers = boot?.servers?.slice(0, 5) ?? [];
 
-  const quickLinks = QUICK_LINKS.filter((item) => {
-    if (!item.feature) return true;
-    if (item.feature === "studio") return studioEnabled;
-    return hasFeatureAccess(authData?.user, item.feature);
-  });
+          return (
+            <SectionCard title={title} icon={<Clock className="h-4 w-4" />} className={sectionToneStyles[tone]}>
+              <div className="space-y-2">
+                {displayServers.map((s) => (
+                  <Link
+                    key={s.id}
+                    to={`/servers/${s.id}/terminal`}
+                    className="flex items-center gap-3 rounded-xl border border-border/50 bg-card/40 p-2.5 text-xs hover:border-primary/50 hover:bg-secondary/10 hover:shadow-sm transition-all"
+                  >
+                    <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-secondary/50">
+                      <TerminalIcon className="h-3 w-3 text-muted-foreground" />
+                    </div>
+                    <span className="font-semibold truncate text-foreground/95">{s.name}</span>
+                    <span className="ml-auto text-[10px] font-mono text-muted-foreground/50">{s.host}</span>
+                  </Link>
+                ))}
+                {displayServers.length === 0 && (
+                  <div className="py-6 text-center text-xs text-muted-foreground">Нет недавних серверов</div>
+                )}
+              </div>
+            </SectionCard>
+          );
+        }
+      },
+      {
+        id: "user_alerts",
+        title: "Предупреждения и алерты",
+        icon: <Play className="h-4 w-4" />,
+        defaultSize: { w: 6, h: 1 },
+        render: (config) => {
+          const limit = config.props?.limit ?? 5;
+          const tone = config.props?.tone ?? "default";
+          const title = config.props?.customTitle ?? "Предупреждения и алерты";
+          const displayAlerts = mon?.alerts?.slice(0, limit) ?? [];
 
-  const healthyCount = summary?.healthy ?? servers.filter((s) => s.status === "online").length;
-  const problemCount = (summary?.warning ?? 0) + (summary?.critical ?? 0) + (summary?.unreachable ?? 0);
-  const totalServers = summary?.total_servers ?? servers.length;
-  const activeAlerts = summary?.active_alerts ?? alerts.length;
-  const runningPipelines = recentPipelines.filter((r) => r.status === "running" || r.status === "in_progress").length;
+          return (
+            <SectionCard title={title} icon={<Play className="h-4 w-4" />} className={sectionToneStyles[tone]}>
+              <div className="space-y-3">
+                {displayAlerts.map((a) => {
+                  const alertTone = a.severity === "critical" ? "danger" : a.severity === "warning" ? "warning" : "info";
+                  return (
+                    <div key={a.id} className="flex items-start gap-3 p-3 rounded-xl border border-border/80 bg-secondary/5 hover:border-primary/30 transition-all text-xs">
+                      <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-destructive text-[10px] font-bold">
+                        !
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <strong className="font-semibold text-foreground/95 truncate">{a.title}</strong>
+                          <StatusBadge label={a.severity} tone={alertTone as any} />
+                        </div>
+                        <p className="mt-1 text-muted-foreground text-[11px] leading-relaxed">{a.message}</p>
+                        <p className="mt-1 text-[9px] text-muted-foreground/60">
+                          сервер: <strong>{a.server_name}</strong> • {relativeTime(a.created_at)}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+                {displayAlerts.length === 0 && (
+                  <div className="py-8 text-center text-xs text-muted-foreground border border-dashed rounded-xl bg-secondary/5">
+                    Активных предупреждений нет
+                  </div>
+                )}
+              </div>
+            </SectionCard>
+          );
+        }
+      },
+      {
+        id: "recent_activity",
+        title: "Моя активность",
+        icon: <Activity className="h-4 w-4" />,
+        defaultSize: { w: 6, h: 1 },
+        render: (config) => {
+          const limit = config.props?.limit ?? 5;
+          const tone = config.props?.tone ?? "default";
+          const title = config.props?.customTitle ?? "История действий";
+          const displayActivity = boot?.recent_activity?.slice(0, limit) ?? [];
+
+          return (
+            <SectionCard title={title} icon={<Clock className="h-4 w-4" />} className={sectionToneStyles[tone]}>
+              <div className="space-y-4">
+                {displayActivity.map((a, idx) => (
+                  <div key={idx} className="flex items-start gap-3 text-xs group">
+                    <div className="mt-1.5 h-2 w-2 rounded-full bg-primary/45 shrink-0 transition-transform group-hover:scale-125" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold truncate text-foreground/90">{a.action}</span>
+                        <span className="text-[10px] text-muted-foreground/40 font-mono shrink-0">{relativeTime(a.created_at)}</span>
+                      </div>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground/70 leading-relaxed truncate">{a.description}</p>
+                    </div>
+                  </div>
+                ))}
+                {displayActivity.length === 0 && (
+                  <div className="py-6 text-center text-xs text-muted-foreground">Нет недавних действий</div>
+                )}
+              </div>
+            </SectionCard>
+          );
+        }
+      },
+      {
+        id: "quick_tools",
+        title: "Быстрые действия",
+        icon: <Settings className="h-4 w-4" />,
+        defaultSize: { w: 4, h: 1 },
+        render: (config) => {
+          const tone = config.props?.tone ?? "default";
+          const title = config.props?.customTitle ?? "Быстрые действия";
+
+          return (
+            <SectionCard title={title} icon={<Settings className="h-4 w-4" />} className={sectionToneStyles[tone]}>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <Link to="/servers/hub" className="flex flex-col items-center justify-center p-3 rounded-xl border border-border/80 bg-card hover:border-primary/50 hover:bg-secondary/20 hover:shadow-sm transition-all text-center group">
+                  <Server className="h-5 w-5 text-primary/80 mb-2 transition-transform group-hover:scale-110" />
+                  <span className="font-semibold text-foreground/90">Хаб серверов</span>
+                  <span className="text-[9px] text-muted-foreground/60 mt-0.5">Все узлы</span>
+                </Link>
+                <Link to="/studio" className="flex flex-col items-center justify-center p-3 rounded-xl border border-border/80 bg-card hover:border-primary/50 hover:bg-secondary/20 hover:shadow-sm transition-all text-center group">
+                  <Workflow className="h-5 w-5 text-primary/80 mb-2 transition-transform group-hover:scale-110" />
+                  <span className="font-semibold text-foreground/90">Студия</span>
+                  <span className="text-[9px] text-muted-foreground/60 mt-0.5">Пайплайны</span>
+                </Link>
+                <Link to="/studio/skills" className="flex flex-col items-center justify-center p-3 rounded-xl border border-border/80 bg-card hover:border-primary/50 hover:bg-secondary/20 hover:shadow-sm transition-all text-center group">
+                  <Bot className="h-5 w-5 text-primary/80 mb-2 transition-transform group-hover:scale-110" />
+                  <span className="font-semibold text-foreground/90">Создать агента</span>
+                  <span className="text-[9px] text-muted-foreground/60 mt-0.5">AI Скиллы</span>
+                </Link>
+                <Link to="/settings" className="flex flex-col items-center justify-center p-3 rounded-xl border border-border/80 bg-card hover:border-primary/50 hover:bg-secondary/20 hover:shadow-sm transition-all text-center group">
+                  <Settings className="h-5 w-5 text-primary/80 mb-2 transition-transform group-hover:scale-110" />
+                  <span className="font-semibold text-foreground/90">Настройки</span>
+                  <span className="text-[9px] text-muted-foreground/60 mt-0.5">Параметры</span>
+                </Link>
+              </div>
+            </SectionCard>
+          );
+        }
+      }
+    ];
+  }, [boot, runs, mon]);
 
   return (
-    <PageShell width="6xl">
+    <PageShell>
       <PageHero
-        kicker={username ? `${getGreeting()} ${username}` : t("dashboard.user.kicker")}
-        title={t("dashboard.user.title")}
-        description={t("dashboard.user.subtitle")}
+        kicker="Dashboard"
+        title="Мой воркспейс"
+        description="Обзор активных задач, доступных серверов и последних событий в вашей рабочей среде."
         actions={
-          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => void refresh()}>
-            <RefreshCw className="h-3.5 w-3.5" />
-            {t("dashboard.user.refresh")}
-          </Button>
+          <div className="flex items-center gap-2">
+             <Button variant="outline" size="sm" asChild className="h-8 text-xs">
+                <Link to="/servers/hub">
+                  <Server className="mr-1.5 h-3.5 w-3.5" /> Хаб серверов
+                </Link>
+             </Button>
+             <Button size="sm" asChild className="h-8 text-xs">
+                <Link to="/studio">
+                  <Workflow className="mr-1.5 h-3.5 w-3.5" /> Студия
+                </Link>
+             </Button>
+          </div>
         }
       />
 
-      <MetricGrid>
-        <MetricCard
-          label={t("dashboard.user.metric_servers")}
-          value={totalServers}
-          description={`${healthyCount} ${t("udash.healthy_lc")} · ${problemCount} ${t("udash.problems")}`}
-          icon={<Server className="h-4 w-4" />}
-          tone={problemCount > 0 ? "warning" : "success"}
+      <QueryStateBlock loading={isLoading}>
+        <CustomizableDashboard
+          type="user"
+          availableWidgets={availableWidgets}
         />
-        <MetricCard
-          label={t("dashboard.user.metric_alerts")}
-          value={activeAlerts}
-          description={activeAlerts > 0 ? t("dashboard.user.metric_alerts_active") : t("dashboard.user.metric_alerts_clear")}
-          icon={<AlertTriangle className="h-4 w-4" />}
-          tone={activeAlerts > 0 ? "danger" : "success"}
-        />
-        <MetricCard
-          label={t("dashboard.user.metric_agents")}
-          value={activeRuns.length}
-          description={agentsEnabled ? t("dashboard.user.metric_agents_desc") : t("dashboard.user.metric_agents_disabled")}
-          icon={<Bot className="h-4 w-4" />}
-          tone={activeRuns.length > 0 ? "info" : "default"}
-        />
-        <MetricCard
-          label={t("dashboard.user.metric_studio")}
-          value={runningPipelines}
-          description={studioEnabled ? t("dashboard.user.metric_studio_desc") : t("dashboard.user.metric_studio_disabled")}
-          icon={<Workflow className="h-4 w-4" />}
-          tone="default"
-        />
-      </MetricGrid>
-
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {quickLinks.map((item) => {
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.key}
-              to={item.to}
-              className="group flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3.5 transition-colors hover:border-primary/30 hover:bg-primary/5"
-            >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <Icon className="h-4 w-4" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-foreground">{t(`dashboard.user.quick_${item.key}`)}</div>
-                <p className="text-xs text-muted-foreground">{t(`dashboard.user.quick_${item.key}_hint`)}</p>
-              </div>
-              <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
-            </Link>
-          );
-        })}
-      </section>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <SectionCard
-          title={t("dashboard.user.recent_servers")}
-          description={t("dashboard.user.recent_servers_desc")}
-          icon={<Server className="h-4 w-4" />}
-          actions={
-            <Link to="/servers">
-              <Button size="sm" variant="ghost" className="text-xs">
-                {t("dashboard.user.view_all_servers")}
-              </Button>
-            </Link>
-          }
-          bodyClassName="p-0"
-        >
-          {recentServers.length === 0 ? (
-            <EmptyState
-              icon={<Server className="h-5 w-5" />}
-              title={t("dashboard.user.no_servers")}
-              description={t("dashboard.user.no_servers_desc")}
-              className="m-5"
-            />
-          ) : (
-            <div className="divide-y divide-border/40">
-              {recentServers.map((server) => {
-                const health = healthById.get(server.id);
-                const status = health?.status || server.status;
-                return (
-                  <div key={server.id} className="flex items-center gap-3 px-4 py-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="truncate text-sm font-medium">{server.name}</span>
-                        <StatusBadge label={status} tone={healthTone(status)} />
-                      </div>
-                      <p className="mt-1 truncate text-xs text-muted-foreground">
-                        {server.host}
-                        {server.last_connected ? ` · ${relativeTime(server.last_connected)}` : ""}
-                      </p>
-                    </div>
-                    <Link to={terminalPath(server)}>
-                      <Button size="sm" variant="outline" className="gap-1 text-xs">
-                        <Terminal className="h-3 w-3" />
-                        {t("udash.quick_connect")}
-                      </Button>
-                    </Link>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </SectionCard>
-
-        <SectionCard
-          title={t("dashboard.user.alerts")}
-          description={activeAlerts > 0 ? `${activeAlerts} ${t("udash.active_alerts").toLowerCase()}` : t("udash.all_good")}
-          icon={<AlertTriangle className="h-4 w-4" />}
-          bodyClassName="p-0"
-        >
-          {alerts.length === 0 ? (
-            <EmptyState
-              icon={<CheckCircle2 className="h-5 w-5" />}
-              title={t("udash.all_good")}
-              description={t("udash.all_good_desc")}
-              className="m-5"
-            />
-          ) : (
-            <div className="divide-y divide-border/40">
-              {alerts.map((alert) => (
-                <div key={alert.id} className="px-4 py-3">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium">{alert.title}</span>
-                    <StatusBadge label={alert.severity} tone={healthTone(alert.severity)} />
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {alert.server_name} · {relativeTime(alert.created_at)}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </SectionCard>
-      </div>
-
-      {attentionServers.length > 0 ? (
-        <SectionCard
-          title={t("udash.needs_attention")}
-          description={`${attentionServers.length} ${t("udash.problems").toLowerCase()}`}
-          icon={<AlertTriangle className="h-4 w-4" />}
-          bodyClassName="divide-y divide-border/40 p-0"
-        >
-          {attentionServers.map(({ server, health }) => (
-            <div key={server.id} className="flex items-center gap-3 px-4 py-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="truncate text-sm font-medium">{server.name}</span>
-                  {health ? <StatusBadge label={health.status} tone={healthTone(health.status)} /> : null}
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {health?.cpu_percent != null ? `CPU ${Math.round(health.cpu_percent)}%` : server.host}
-                </p>
-              </div>
-              <Link to={terminalPath(server)}>
-                <Button size="sm" variant="outline" className="text-xs">
-                  {t("udash.quick_connect")}
-                </Button>
-              </Link>
-            </div>
-          ))}
-        </SectionCard>
-      ) : null}
-
-      {agentsEnabled ? (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <SectionCard
-            title={t("agent.active_runs")}
-            description={activeRuns.length > 0 ? `${activeRuns.length}` : t("agent.no_active")}
-            icon={<Activity className="h-4 w-4" />}
-            actions={
-              <Link to="/agents">
-                <Button size="sm" variant="ghost" className="text-xs">
-                  {t("agent.view_all")}
-                </Button>
-              </Link>
-            }
-            bodyClassName="p-0"
-          >
-            {activeRuns.length === 0 ? (
-              <EmptyState icon={<Activity className="h-5 w-5" />} title={t("agent.no_active")} className="m-5" />
-            ) : (
-              <div className="divide-y divide-border/40">
-                {activeRuns.map((run: DashboardRunItem) => (
-                  <div key={run.id} className="flex items-center gap-3 px-4 py-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="truncate text-sm font-medium">{run.agent_name}</span>
-                        <StatusBadge label={run.status} tone={runTone(run.status)} />
-                      </div>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {run.server_name} · {formatDuration(Date.now() - new Date(run.started_at).getTime())}
-                      </p>
-                    </div>
-                    <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => navigate(`/agents/run/${run.id}`)}>
-                      <Eye className="h-3 w-3" />
-                      {t("agent.open")}
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </SectionCard>
-
-          <SectionCard
-            title={t("agent.recent_runs")}
-            description={recentAgentRuns.length > 0 ? `${recentAgentRuns.length}` : t("agent.no_recent")}
-            icon={<Clock className="h-4 w-4" />}
-            bodyClassName="p-0"
-          >
-            {recentAgentRuns.length === 0 ? (
-              <EmptyState icon={<Clock className="h-5 w-5" />} title={t("agent.no_recent")} className="m-5" />
-            ) : (
-              <div className="divide-y divide-border/40">
-                {recentAgentRuns.map((run: DashboardRunItem) => (
-                  <div key={run.id} className="flex items-center gap-3 px-4 py-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="truncate text-sm font-medium">{run.agent_name}</span>
-                        <StatusBadge label={run.status} tone={runTone(run.status)} />
-                      </div>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {run.server_name} · {formatDuration(run.duration_ms)} · {relativeTime(run.completed_at || run.started_at)}
-                      </p>
-                    </div>
-                    <Button size="sm" variant="ghost" className="gap-1 text-xs" onClick={() => navigate(`/agents/run/${run.id}`)}>
-                      <ExternalLink className="h-3 w-3" />
-                      {t("agent.open")}
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </SectionCard>
-        </div>
-      ) : null}
-
-      {studioEnabled ? (
-        <SectionCard
-          title={t("dashboard.user.pipeline_runs")}
-          description={t("dashboard.user.pipeline_runs_desc")}
-          icon={<Workflow className="h-4 w-4" />}
-          actions={
-            <Link to="/studio/runs">
-              <Button size="sm" variant="ghost" className="text-xs">
-                {t("dashboard.user.view_pipeline_runs")}
-              </Button>
-            </Link>
-          }
-          bodyClassName="p-0"
-        >
-          {recentPipelines.length === 0 ? (
-            <EmptyState icon={<Workflow className="h-5 w-5" />} title={t("dashboard.user.no_pipeline_runs")} className="m-5" />
-          ) : (
-            <div className="divide-y divide-border/40">
-              {recentPipelines.map((run: PipelineRun) => (
-                <div key={run.id} className="flex items-center gap-3 px-4 py-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="truncate text-sm font-medium">{run.pipeline_name}</span>
-                      <StatusBadge label={run.status} tone={runTone(run.status)} />
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {relativeTime(run.finished_at || run.started_at || run.created_at)}
-                    </p>
-                  </div>
-                  <Link to={`/studio/pipeline/${run.pipeline_id}`}>
-                    <Button size="sm" variant="ghost" className="gap-1 text-xs">
-                      <ExternalLink className="h-3 w-3" />
-                      {t("agent.open")}
-                    </Button>
-                  </Link>
-                </div>
-              ))}
-            </div>
-          )}
-        </SectionCard>
-      ) : null}
-
-      {recentActivity.length > 0 ? (
-        <SectionCard
-          title={t("udash.recent_activity")}
-          icon={<Clock className="h-4 w-4" />}
-          bodyClassName="divide-y divide-border/40 p-0"
-        >
-          {recentActivity.map((item) => (
-            <div key={item.id} className="px-4 py-3">
-              <p className="text-sm font-medium text-foreground">{item.description || item.action}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {item.entity_name} · {relativeTime(item.created_at)}
-              </p>
-            </div>
-          ))}
-        </SectionCard>
-      ) : null}
-
+      </QueryStateBlock>
     </PageShell>
   );
 }

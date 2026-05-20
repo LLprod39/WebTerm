@@ -88,7 +88,7 @@ export const settingsNavGroups: SettingsNavGroup[] = [
       {
         id: "memory",
         label: "AI Memory",
-        description: "Dreams, snapshots, patterns",
+        description: "Долгосрочная память серверов",
         icon: ScrollText,
         path: "/settings/memory",
         adminOnly: true,
