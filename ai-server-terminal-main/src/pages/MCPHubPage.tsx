@@ -6,7 +6,6 @@ import {
   Pencil,
   Plus,
   RefreshCw,
-  Save,
   Server,
   Trash2,
   Zap,
@@ -28,16 +27,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { EmptyState, PageShell, SectionCard, StatusBadge } from "@/components/ui/page-shell";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { EmptyState, SectionCard, StatusBadge } from "@/components/ui/page-shell";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
-import { ShareAccessEditor } from "@/components/studio/ShareAccessEditor";
+import { MCPForm } from "@/components/studio/MCPForm";
 import { useToast } from "@/hooks/use-toast";
 import { StudioHero, HeroStatChip, HeroActionButton } from "@/components/studio/StudioHero";
 import { fetchAuthSession, studioMCP, studioShareUsers, type MCPServer, type MCPTemplate } from "@/lib/api";
+import { localize, useI18n } from "@/lib/i18n";
 
 function previewConnection(server: Pick<MCPServer, "transport" | "command" | "args" | "url">) {
   if (server.transport === "stdio") {
@@ -47,198 +43,8 @@ function previewConnection(server: Pick<MCPServer, "transport" | "command" | "ar
   return server.url || "https://...";
 }
 
-function MCPForm({
-  initial,
-  onSave,
-  onCancel,
-  isPending,
-  shareUsers,
-  isAdmin,
-  canEdit,
-}: {
-  initial: Partial<MCPServer>;
-  onSave: (data: Partial<MCPServer>) => void;
-  onCancel: () => void;
-  isPending: boolean;
-  shareUsers: Array<{ id: number; username: string; email?: string }>;
-  isAdmin: boolean;
-  canEdit: boolean;
-}) {
-  const [form, setForm] = useState<Partial<MCPServer>>({
-    name: "",
-    description: "",
-    transport: "stdio",
-    command: "",
-    args: [],
-    env: {},
-    url: "",
-    is_shared: false,
-    shared_user_ids: [],
-    ...initial,
-  });
-  const readOnly = !canEdit;
-  const [argsText, setArgsText] = useState((initial.args || []).join("\n"));
-  const [envText, setEnvText] = useState(
-    Object.entries(initial.env || {})
-      .map(([key, value]) => `${key}=${value}`)
-      .join("\n"),
-  );
-
-  const setField = (key: keyof MCPServer, value: unknown) => {
-    setForm((current) => ({ ...current, [key]: value }));
-  };
-  const sharedUserIds = form.shared_user_ids || [];
-
-  const handleSave = () => {
-    const args = argsText
-      .split("\n")
-      .map((item) => item.trim())
-      .filter(Boolean);
-    const env: Record<string, string> = {};
-
-    for (const line of envText.split("\n").map((item) => item.trim()).filter(Boolean)) {
-      const separatorIndex = line.indexOf("=");
-      if (separatorIndex > 0) {
-        env[line.slice(0, separatorIndex)] = line.slice(separatorIndex + 1);
-      }
-    }
-
-    onSave({ ...form, args, env });
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex gap-3">
-        <div className="flex-1 space-y-1.5">
-          <Label className="text-xs">Name</Label>
-          <Input
-            value={form.name || ""}
-            onChange={(event) => setField("name", event.target.value)}
-            placeholder="GitHub MCP"
-            disabled={readOnly}
-          />
-        </div>
-        <div className="w-36 space-y-1.5">
-          <Label className="text-xs">Transport</Label>
-          <Select
-            value={form.transport || "stdio"}
-            onValueChange={(value) => setField("transport", value)}
-          >
-            <SelectTrigger className="h-9 text-sm" disabled={readOnly}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="stdio">stdio</SelectItem>
-              <SelectItem value="sse">SSE</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      <div className="space-y-1.5">
-        <Label className="text-xs">Description</Label>
-        <Input
-          value={form.description || ""}
-          onChange={(event) => setField("description", event.target.value)}
-          placeholder="What this MCP provides"
-          disabled={readOnly}
-        />
-      </div>
-
-      {form.transport === "stdio" ? (
-        <>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Command</Label>
-            <Input
-              value={form.command || ""}
-              onChange={(event) => setField("command", event.target.value)}
-              placeholder="npx"
-              className="font-mono text-sm"
-              disabled={readOnly}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs">Arguments (one per line)</Label>
-            <Textarea
-              value={argsText}
-              onChange={(event) => setArgsText(event.target.value)}
-              placeholder="-y&#10;@modelcontextprotocol/server-github"
-              rows={5}
-              className="font-mono text-xs"
-              disabled={readOnly}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs">Environment variables (KEY=value)</Label>
-            <Textarea
-              value={envText}
-              onChange={(event) => setEnvText(event.target.value)}
-              placeholder="GITHUB_PERSONAL_ACCESS_TOKEN=..."
-              rows={4}
-              className="font-mono text-xs"
-              disabled={readOnly}
-            />
-          </div>
-        </>
-      ) : (
-        <div className="space-y-1.5">
-          <Label className="text-xs">SSE URL</Label>
-          <Input
-            value={form.url || ""}
-            onChange={(event) => setField("url", event.target.value)}
-            placeholder="https://mcp.example.com/sse"
-            className="font-mono text-sm"
-            disabled={readOnly}
-          />
-        </div>
-      )}
-
-      {isAdmin ? (
-        <ShareAccessEditor
-          title="Visibility"
-          description="Admin can expose this MCP server to everyone or only selected users."
-          isShared={Boolean(form.is_shared)}
-          sharedUserIds={sharedUserIds}
-          users={shareUsers}
-          disabled={readOnly}
-          onSharedChange={(value) => setField("is_shared", value)}
-          onToggleUser={(userId) =>
-            setField(
-              "shared_user_ids",
-              sharedUserIds.includes(userId)
-                ? sharedUserIds.filter((id) => id !== userId)
-                : [...sharedUserIds, userId],
-            )
-          }
-        />
-      ) : null}
-
-      <div className="rounded-2xl border border-border/70 bg-background/30 px-4 py-3 text-sm text-muted-foreground">
-        Templates are the fastest way to start. After loading one, you can still edit the command,
-        args, URL, or environment variables before saving.
-      </div>
-
-      <div className="flex justify-end gap-2 pt-2">
-        <Button variant="outline" size="sm" onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button
-          size="sm"
-          onClick={handleSave}
-          disabled={readOnly || !form.name?.trim() || isPending}
-          className="gap-1.5"
-        >
-          {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-          Save
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 export default function MCPHubPage() {
+  const { lang } = useI18n();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [editorOpen, setEditorOpen] = useState(false);
@@ -276,7 +82,7 @@ export default function MCPHubPage() {
       queryClient.invalidateQueries({ queryKey: ["studio", "mcp"] });
       setEditorOpen(false);
       setEditMcp(null);
-      toast({ description: "MCP server added." });
+      toast({ description: localize(lang, "MCP-сервер добавлен.", "MCP server added.") });
     },
     onError: (error: Error) => {
       toast({ variant: "destructive", description: error.message });
@@ -290,7 +96,7 @@ export default function MCPHubPage() {
       queryClient.invalidateQueries({ queryKey: ["studio", "mcp"] });
       setEditorOpen(false);
       setEditMcp(null);
-      toast({ description: "MCP server updated." });
+      toast({ description: localize(lang, "MCP-сервер обновлён.", "MCP server updated.") });
     },
     onError: (error: Error) => {
       toast({ variant: "destructive", description: error.message });
@@ -302,7 +108,7 @@ export default function MCPHubPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["studio", "mcp"] });
       setDeleteTarget(null);
-      toast({ description: "MCP server removed." });
+      toast({ description: localize(lang, "MCP-сервер удалён.", "MCP server removed.") });
     },
     onError: (error: Error) => {
       toast({ variant: "destructive", description: error.message });
@@ -315,11 +121,11 @@ export default function MCPHubPage() {
       queryClient.invalidateQueries({ queryKey: ["studio", "mcp"] });
       setTestingId(null);
       if (result.ok) {
-        toast({ description: "Connection OK." });
+        toast({ description: localize(lang, "Подключение работает.", "Connection OK.") });
       } else {
         toast({
           variant: "destructive",
-          description: result.error || "Connection test failed.",
+          description: result.error || localize(lang, "Проверка подключения не прошла.", "Connection test failed."),
         });
       }
     },
@@ -371,20 +177,24 @@ export default function MCPHubPage() {
       <div className="flex-1 overflow-auto flex flex-col">
       <StudioHero
         kicker="Studio / MCP"
-        title="MCP Registry"
+        title={localize(lang, "MCP-серверы", "MCP Registry")}
         titleIcon={<Server className="h-7 w-7 text-primary" />}
-        description="Manage Model Context Protocol servers used by Studio agents and pipelines."
+        description={localize(
+          lang,
+          "Подключайте инструменты для OPS-пайплайнов Studio. UI/code skills здесь не хранятся.",
+          "Manage tools for Studio OPS pipelines. UI/code skills are not stored here.",
+        )}
         stats={
           <>
-            <HeroStatChip icon={<Server className="h-3.5 w-3.5" />} label={`${mcpList.length} servers`} />
-            <HeroStatChip icon={<Zap className="h-3.5 w-3.5" />} label={`${templates.length} templates`} />
+            <HeroStatChip icon={<Server className="h-3.5 w-3.5" />} label={localize(lang, `${mcpList.length} серверов`, `${mcpList.length} servers`)} />
+            <HeroStatChip icon={<Zap className="h-3.5 w-3.5" />} label={localize(lang, `${templates.length} шаблонов`, `${templates.length} templates`)} />
           </>
         }
         actions={
           <HeroActionButton
             onClick={openCreateDialog}
             icon={<Plus className="h-4 w-4" />}
-            label="Add server"
+            label={localize(lang, "Добавить MCP", "Add server")}
             primary
           />
         }
@@ -392,25 +202,25 @@ export default function MCPHubPage() {
       <div className="flex-1 px-6 pb-8 space-y-5">
         <Tabs defaultValue="mine" className="space-y-5">
           <TabsList>
-            <TabsTrigger value="mine">My servers ({mcpList.length})</TabsTrigger>
-            <TabsTrigger value="templates">Templates ({templates.length})</TabsTrigger>
+            <TabsTrigger value="mine">{localize(lang, "Подключения", "My servers")} ({mcpList.length})</TabsTrigger>
+            <TabsTrigger value="templates">{localize(lang, "Шаблоны", "Templates")} ({templates.length})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="mine" className="space-y-4">
             {isLoading ? (
               <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Loading MCP servers...
+                {localize(lang, "Загружаем MCP-серверы...", "Loading MCP servers...")}
               </div>
             ) : mcpList.length === 0 ? (
                 <EmptyState
                   icon={<Server className="h-5 w-5" />}
-                  title="No MCP servers yet"
-                  description="Add a custom server or start from one of the templates."
+                  title={localize(lang, "MCP-серверы ещё не подключены", "No MCP servers yet")}
+                  description={localize(lang, "Выберите шаблон или добавьте stdio/SSE endpoint для OPS-автоматизаций.", "Start from a template or add a stdio/SSE endpoint for OPS automations.")}
                   actions={
                     <Button type="button" className="gap-1.5" onClick={openCreateDialog}>
                       <Plus className="h-4 w-4" />
-                      Add server
+                      {localize(lang, "Добавить MCP", "Add server")}
                     </Button>
                   }
                 />
@@ -438,24 +248,26 @@ export default function MCPHubPage() {
                                   <span className="truncate text-sm font-semibold text-foreground">{mcp.name}</span>
                                   <span className="rounded border border-border/50 bg-secondary/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{mcp.transport}</span>
                                 </div>
-                                <p className="mt-0.5 text-xs text-muted-foreground">{mcp.description || "No description"}</p>
+                                <p className="mt-0.5 text-xs text-muted-foreground">{mcp.description || localize(lang, "Описание не заполнено", "No description")}</p>
                               </div>
                             </div>
                             <div className="mt-2 flex flex-wrap gap-1">
-                              {mcp.is_owner ? <Badge variant="secondary" className="text-[10px]">Mine</Badge> : null}
-                              {!mcp.is_owner && mcp.owner_username ? <Badge variant="outline" className="text-[10px]">Owner: {mcp.owner_username}</Badge> : null}
-                              {mcp.is_shared ? <Badge variant="outline" className="text-[10px]">Shared</Badge> : null}
-                              {mcp.can_edit === false ? <Badge variant="outline" className="text-[10px]">Read only</Badge> : null}
+                              {mcp.is_owner ? <Badge variant="secondary" className="text-[10px]">{localize(lang, "Мой", "Mine")}</Badge> : null}
+                              {!mcp.is_owner && mcp.owner_username ? <Badge variant="outline" className="text-[10px]">{localize(lang, "Владелец", "Owner")}: {mcp.owner_username}</Badge> : null}
+                              {mcp.is_shared ? <Badge variant="outline" className="text-[10px]">{localize(lang, "Общий", "Shared")}</Badge> : null}
+                              {mcp.can_edit === false ? <Badge variant="outline" className="text-[10px]">{localize(lang, "Только чтение", "Read only")}</Badge> : null}
                             </div>
                           </div>
 
-                          <div className="flex gap-1">
+                          <div className="flex gap-2">
                             {mcp.can_edit !== false ? (
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                className="h-8 w-8 rounded-xl"
+                                className="h-10 w-10 rounded-xl"
                                 type="button"
+                                aria-label={localize(lang, `Проверить ${mcp.name}`, `Test ${mcp.name}`)}
+                                title={localize(lang, "Проверить подключение", "Test connection")}
                                 onClick={() => {
                                   setTestingId(mcp.id);
                                   testMutation.mutate(mcp.id);
@@ -473,9 +285,10 @@ export default function MCPHubPage() {
                               type="button"
                               size="icon"
                               variant="ghost"
-                              className="h-8 w-8 rounded-xl"
+                              className="h-10 w-10 rounded-xl"
                               onClick={() => openEditDialog(mcp)}
-                              title={mcp.can_edit === false ? "View server" : "Edit server"}
+                              aria-label={mcp.can_edit === false ? localize(lang, `Открыть ${mcp.name}`, `View ${mcp.name}`) : localize(lang, `Изменить ${mcp.name}`, `Edit ${mcp.name}`)}
+                              title={mcp.can_edit === false ? localize(lang, "Открыть сервер", "View server") : localize(lang, "Изменить сервер", "Edit server")}
                             >
                               <Pencil className="h-4 w-4" />
                             </Button>
@@ -483,8 +296,10 @@ export default function MCPHubPage() {
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                className="h-8 w-8 rounded-xl text-destructive hover:text-destructive"
+                                className="h-10 w-10 rounded-xl text-destructive hover:text-destructive"
                                 type="button"
+                                aria-label={localize(lang, `Удалить ${mcp.name}`, `Delete ${mcp.name}`)}
+                                title={localize(lang, "Удалить сервер", "Delete server")}
                                 onClick={() => setDeleteTarget(mcp)}
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -496,7 +311,7 @@ export default function MCPHubPage() {
 
                       <div className="border-t border-border/50 bg-secondary/10 px-4 py-3 space-y-2.5">
                         <div className="rounded-lg border border-border/50 bg-background/40 px-3 py-2 font-mono text-[11px] text-muted-foreground">
-                          {previewConnection(mcp) || "No connection data"}
+                          {previewConnection(mcp) || localize(lang, "Команда или URL не указаны", "No connection data")}
                         </div>
 
                         <div className="flex items-center justify-between gap-2">
@@ -504,10 +319,10 @@ export default function MCPHubPage() {
                             <StatusBadge
                               label={
                                 mcp.last_test_ok === true
-                                  ? "Healthy"
+                                  ? localize(lang, "Проверен", "Healthy")
                                   : mcp.last_test_ok === false
-                                    ? "Failed"
-                                    : "Not tested"
+                                    ? localize(lang, "Ошибка", "Failed")
+                                    : localize(lang, "Не проверялся", "Not tested")
                               }
                               tone={tone}
                             />
@@ -534,8 +349,8 @@ export default function MCPHubPage() {
             {templates.length === 0 ? (
               <EmptyState
                 icon={<Zap className="h-5 w-5" />}
-                title="No templates available"
-                description="Template suggestions will appear here when the backend provides them."
+                title={localize(lang, "Шаблонов пока нет", "No templates available")}
+                description={localize(lang, "Они появятся здесь, когда backend отдаст список готовых подключений.", "Template suggestions will appear here when the backend provides them.")}
               />
             ) : (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -549,12 +364,12 @@ export default function MCPHubPage() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-start gap-3">
                           <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-border/70 bg-background/35 text-xl">
-                            {template.icon || "Z"}
+                            {template.icon || <Zap className="h-5 w-5" />}
                           </div>
                           <div>
                             <CardTitle className="text-base">{template.name}</CardTitle>
                             <CardDescription className="mt-1 text-xs">
-                              {template.description || "No description"}
+                              {template.description || localize(lang, "Описание не заполнено", "No description")}
                             </CardDescription>
                           </div>
                         </div>
@@ -580,7 +395,7 @@ export default function MCPHubPage() {
                         }}
                       >
                         <Zap className="h-4 w-4" />
-                        Use template
+                        {localize(lang, "Использовать шаблон", "Use template")}
                       </Button>
                     </CardContent>
                   </Card>
@@ -595,11 +410,11 @@ export default function MCPHubPage() {
           title={
             (editMcp as MCPServer | null)?.id
               ? (editMcp as MCPServer | null)?.can_edit === false
-                ? "View MCP server"
-                : "Edit MCP server"
-              : "Add MCP server"
+                ? localize(lang, "Просмотр MCP-сервера", "View MCP server")
+                : localize(lang, "Редактировать MCP-сервер", "Edit MCP server")
+              : localize(lang, "Добавить MCP-сервер", "Add MCP server")
           }
-          description="Configure either a local stdio command or a remote SSE endpoint."
+          description={localize(lang, "Укажите локальную stdio-команду или удалённый SSE endpoint.", "Configure either a local stdio command or a remote SSE endpoint.")}
           icon={<Pencil className="h-5 w-5" />}
         >
           <MCPForm
@@ -620,14 +435,16 @@ export default function MCPHubPage() {
       <Dialog open={deleteTarget !== null} onOpenChange={(nextOpen) => !nextOpen && setDeleteTarget(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete MCP server</DialogTitle>
+            <DialogTitle>{localize(lang, "Удалить MCP-сервер", "Delete MCP server")}</DialogTitle>
             <DialogDescription>
-              {deleteTarget ? `Delete "${deleteTarget.name}"? This cannot be undone.` : ""}
+              {deleteTarget
+                ? localize(lang, `Удалить "${deleteTarget.name}"? Действие нельзя отменить.`, `Delete "${deleteTarget.name}"? This cannot be undone.`)
+                : ""}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>
-              Cancel
+              {localize(lang, "Отмена", "Cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -635,7 +452,7 @@ export default function MCPHubPage() {
               disabled={deleteMutation.isPending}
             >
               {deleteMutation.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
-              Delete
+              {localize(lang, "Удалить", "Delete")}
             </Button>
           </DialogFooter>
         </DialogContent>

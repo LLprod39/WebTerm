@@ -11,11 +11,6 @@ from typing import Any
 
 import asyncssh
 from asgiref.sync import sync_to_async as _s2a
-
-
-def sync_to_async(func, thread_sensitive=False):
-    """Wrapper that defaults thread_sensitive=False to avoid CurrentThreadExecutor conflicts."""
-    return _s2a(func, thread_sensitive=thread_sensitive)
 from django.utils import timezone
 from loguru import logger
 
@@ -24,6 +19,11 @@ from core_ui.activity import log_user_activity
 from core_ui.audit import audit_context
 from servers.models import AgentRun, Server, ServerAgent
 from servers.monitor import _build_connect_kwargs
+
+
+def sync_to_async(func, thread_sensitive=False):
+    """Wrapper that defaults thread_sensitive=False to avoid CurrentThreadExecutor conflicts."""
+    return _s2a(func, thread_sensitive=thread_sensitive)
 
 COMMAND_TIMEOUT = 30
 
@@ -380,7 +380,7 @@ async def run_agent(agent: ServerAgent, server: Server, user) -> AgentRun:
 
     # P3-4: Ingest mini-agent run into memory system
     try:
-        from app.agent_kernel.memory.store import DjangoServerMemoryStore
+        from servers.adapters.memory_store import DjangoServerMemoryStore
         _mem_store = DjangoServerMemoryStore()
         summary_parts = [f"Mini-agent '{agent.name}' ({agent.agent_type}) -> {run.status}"]
         for out in outputs[:5]:

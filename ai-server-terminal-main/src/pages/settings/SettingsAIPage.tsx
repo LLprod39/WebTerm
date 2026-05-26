@@ -71,7 +71,7 @@ const PROVIDER_API_STATUS_KEY: Record<string, string> = {
   ollama: "ollama_set",
 };
 
-// Professional business metadata for providers
+// Plain operational metadata for provider cards.
 const PROVIDER_METADATA: Record<string, {
   accentColor: string;
   textColor: string;
@@ -82,56 +82,56 @@ const PROVIDER_METADATA: Record<string, {
   grok: {
     accentColor: "bg-amber-500",
     textColor: "text-amber-500",
-    badge: "Высокая производительность",
+    badge: "Быстрые ответы",
     brand: "xAI",
-    slogan: "Анализ текстовых данных на высокой скорости инференса.",
+    slogan: "Подходит для коротких проверок, сводок и быстрых ответов.",
   },
   gemini: {
     accentColor: "bg-violet-500",
     textColor: "text-violet-500",
     badge: "Широкий контекст",
     brand: "Google",
-    slogan: "Модели общего назначения с поддержкой широкого окна контекста.",
+    slogan: "Удобен для длинных логов, документов и больших контекстов.",
   },
   openai: {
     accentColor: "bg-emerald-500",
     textColor: "text-emerald-500",
-    badge: "Логические операции",
+    badge: "Инструменты и логика",
     brand: "OpenAI",
-    slogan: "Стандарт индустрии для решения логических задач и вызова внешних функций.",
+    slogan: "Хороший выбор для tool calling, проверок и структурированных ответов.",
   },
   claude: {
     accentColor: "bg-orange-500",
     textColor: "text-orange-500",
-    badge: "Работа с кодом",
+    badge: "Анализ текста",
     brand: "Anthropic",
-    slogan: "Специализированные модели для анализа кода и проведения рефакторинга.",
+    slogan: "Полезен для разборов, аккуратных отчётов и сложных инструкций.",
   },
   ollama: {
     accentColor: "bg-sky-500",
     textColor: "text-sky-500",
     badge: "Локальное исполнение",
     brand: "Ollama",
-    slogan: "Исполнение моделей на вычислительных ресурсах предприятия без отправки внешних запросов.",
+    slogan: "Запускает локальные модели, когда данные не должны уходить наружу.",
   },
 };
 
 // Features supported by each routing role
 const ROLE_FEATURES: Record<string, { label: string; tooltip: string }[]> = {
   "Чат / Терминальный AI": [
-    { label: "Streaming", tooltip: "Потоковый моментальный вывод ответов в консоль." },
-    { label: "Fast Response", tooltip: "Минимальная задержка перед ответом." },
-    { label: "Context Aware", tooltip: "Учет предыстории сессии и настроек сервера." },
+    { label: "Потоковый вывод", tooltip: "Ответ появляется по мере генерации, без ожидания полного текста." },
+    { label: "Быстрый ответ", tooltip: "Лучше выбирать модель с небольшой задержкой первого токена." },
+    { label: "Контекст сессии", tooltip: "Учитывает историю терминала и настройки сервера." },
   ],
   "Агенты (ReAct)": [
-    { label: "Tool Calling", tooltip: "Надежный вызов внешних SSH и системных инструментов." },
-    { label: "Long Context", tooltip: "Анализ больших файлов конфигураций и системных логов." },
-    { label: "Self-Correction", tooltip: "Корректировка действий при ошибках выполнения." },
+    { label: "Инструменты", tooltip: "Должна стабильно вызывать SSH и системные инструменты." },
+    { label: "Большой контекст", tooltip: "Полезно для логов, конфигураций и длинных выводов." },
+    { label: "Самопроверка", tooltip: "Модель должна корректировать план после ошибок выполнения." },
   ],
   "Оркестратор (Pipeline)": [
-    { label: "JSON Output", tooltip: "Строгая генерация структурированных данных." },
-    { label: "Consistency", tooltip: "Стабильное выполнение шагов автоматизации." },
-    { label: "State Control", tooltip: "Передача состояния между шагами выполнения сценария." },
+    { label: "JSON", tooltip: "Нужны строгие структурированные ответы." },
+    { label: "Стабильность", tooltip: "Важно одинаково выполнять повторяющиеся шаги автоматизации." },
+    { label: "Состояние", tooltip: "Передаёт состояние между шагами сценария." },
   ],
 };
 
@@ -505,7 +505,7 @@ export default function SettingsAIPage() {
       : "grok";
 
   const routeConfigs = [
-    { key: "chat", shortLabel: "Chat", label: "Чат / Терминальный AI", description: "Интерактивный помощник", icon: MessageSquare, provider: chatProvider, model: chatModel },
+    { key: "chat", shortLabel: "Chat", label: "Чат / Терминальный AI", description: "Быстрые ответы в терминале", icon: MessageSquare, provider: chatProvider, model: chatModel },
     { key: "agent", shortLabel: "Agent", label: "Агенты (ReAct)", description: "Длинные задачи и итерации", icon: Bot, provider: agentProvider, model: agentModel },
     { key: "orchestrator", shortLabel: "Pipeline", label: "Оркестратор (Pipeline)", description: "Координация пайплайнов", icon: Workflow, provider: orchProvider, model: orchModel },
   ];
@@ -559,8 +559,8 @@ export default function SettingsAIPage() {
             <Bot className="h-4 w-4" />
           </div>
           <div>
-            <h1 className="text-base font-semibold tracking-tight text-foreground">Панель управления AI</h1>
-            <p className="text-[11px] text-muted-foreground">Настройки провайдеров языковых моделей, конфигурация локального выполнения и маршрутизация.</p>
+            <h1 className="text-base font-semibold tracking-tight text-foreground">Настройки AI</h1>
+            <p className="text-[11px] text-muted-foreground">Провайдеры, модели по ролям, Ollama и безопасная маршрутизация запросов.</p>
           </div>
         </div>
         <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
@@ -580,7 +580,7 @@ export default function SettingsAIPage() {
       <SectionCard 
         title="Провайдер по умолчанию" 
         icon={Bot} 
-        description="Выбор провайдера и базовой модели по умолчанию для стандартных запросов в системе."
+        description="Эта модель используется там, где отдельная роль не задана."
       >
         <div className="space-y-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -675,7 +675,7 @@ export default function SettingsAIPage() {
       <SectionCard
         title="Маршрутизация моделей по ролям"
         icon={Workflow}
-        description="Назначение специализированных моделей для решения конкретных системных и прикладных задач."
+        description="Отдельные модели для чата, автономных агентов и pipeline-оркестратора."
         actions={
           <Button 
             size="sm" 
@@ -686,12 +686,12 @@ export default function SettingsAIPage() {
             {saving ? (
               <>
                 <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                Сохранение конфигурации...
+                Сохраняем...
               </>
             ) : (
               <>
                 <Save className="mr-1.5 h-3.5 w-3.5" />
-                Сохранить настройки ролей
+                Сохранить роли
               </>
             )}
           </Button>
@@ -700,7 +700,7 @@ export default function SettingsAIPage() {
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
           <PurposeModelSelector
             label="Чат / Терминальный AI"
-            description="Интерактивный помощник пользователя в окне терминала."
+            description="Короткие ответы и пояснения рядом с SSH-сессией."
             icon={MessageSquare}
             provider={chatProvider}
             model={chatModel}
@@ -716,7 +716,7 @@ export default function SettingsAIPage() {
           />
           <PurposeModelSelector
             label="Агенты (ReAct)"
-            description="Запуск фоновых автономных агентов для решения системных задач."
+            description="Фоновые OPS-задачи с инструментами и проверками."
             icon={Bot}
             provider={agentProvider}
             model={agentModel}
@@ -732,7 +732,7 @@ export default function SettingsAIPage() {
           />
           <PurposeModelSelector
             label="Оркестратор (Pipeline)"
-            description="Исполнение структурированных шагов в сценариях автоматизации."
+            description="Структурированные шаги, состояние и строгий JSON."
             icon={Workflow}
             provider={orchProvider}
             model={orchModel}
@@ -750,10 +750,10 @@ export default function SettingsAIPage() {
       </SectionCard>
 
       {/* Runtime & Advanced */}
-      <SectionCard 
-        title="Локальный инференс и параметры рассуждений" 
-        icon={Database} 
-        description="Настройка локального и облачного выполнения моделей Ollama и параметров обдумывания."
+      <SectionCard
+        title="Ollama и режим рассуждений"
+        icon={Database}
+        description="Где запускать Ollama и как показывать reasoning/thinking у моделей."
       >
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           {/* Ollama Runtime Control Panel */}
@@ -765,8 +765,8 @@ export default function SettingsAIPage() {
                   <Cpu className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-sm text-foreground">Настройка инференса Ollama</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">Параметры подключения к локальным и облачным узлам выполнения моделей.</p>
+                  <h3 className="font-semibold text-sm text-foreground">Подключение Ollama</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">Локальный адрес, облачный endpoint и режим выбора модели.</p>
                 </div>
               </div>
               <Badge variant={ollamaRoutingActive ? "default" : "secondary"} className="px-2.5 py-0.5 text-[10px] font-semibold">
@@ -806,14 +806,14 @@ export default function SettingsAIPage() {
                 <p className="text-[10px] text-muted-foreground leading-normal mt-1">
                   {ollamaRuntimeMode === "auto" && "Автоматическое переключение в зависимости от доступности узлов."}
                   {ollamaRuntimeMode === "local" && "Использовать только локально запущенный сервер Ollama."}
-                  {ollamaRuntimeMode === "cloud" && "Использовать облачный реестр Ollama Hub API."}
+                  {ollamaRuntimeMode === "cloud" && "Использовать облачный API Ollama."}
                 </p>
               </div>
               
               <div className="flex flex-col justify-between rounded-xl border border-border/50 bg-background/30 p-3 hover:border-border transition-colors">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-xs font-semibold text-foreground">Облачные модели Ollama</h4>
+                    <h4 className="text-xs font-semibold text-foreground">Ollama Cloud</h4>
                     <p className="text-[10px] text-muted-foreground">ollama.com/api</p>
                   </div>
                   <Switch
@@ -825,7 +825,7 @@ export default function SettingsAIPage() {
                   />
                 </div>
                 <p className="text-[10px] text-muted-foreground mt-2 leading-snug">
-                  Использование удаленного API Ollama Cloud для выполнения.
+                  Разрешить запросы к удалённому API Ollama.
                 </p>
               </div>
             </div>
@@ -878,7 +878,7 @@ export default function SettingsAIPage() {
                 disabled={refreshingPurpose === "ollama"}
               >
                 <RefreshCw className={cn("h-3.5 w-3.5", refreshingPurpose === "ollama" && "animate-spin")} />
-                Сканировать модели
+                Обновить модели
               </Button>
             </div>
 
@@ -900,8 +900,8 @@ export default function SettingsAIPage() {
                 <Brain className="h-5 w-5" />
               </div>
               <div>
-                <h3 className="font-semibold text-sm text-foreground">Параметры рассуждений моделей</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">Настройки вывода размышлений для логических моделей (Reasoning / Thinking).</p>
+                <h3 className="font-semibold text-sm text-foreground">Режим рассуждений</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Управляет тем, показывать ли reasoning/thinking пользователю.</p>
               </div>
             </div>
 
@@ -909,8 +909,8 @@ export default function SettingsAIPage() {
             <div className="space-y-2 rounded-xl border border-border/40 bg-background/20 p-3 hover:border-border transition-colors">
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="text-xs font-semibold text-foreground">Вывод рассуждений Ollama</h4>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">Отображение тегов &lt;think&gt; для локальных моделей (например, DeepSeek-R1).</p>
+                  <h4 className="text-xs font-semibold text-foreground">Рассуждения Ollama</h4>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Показывать или скрывать блоки &lt;think&gt; у reasoning-моделей.</p>
                 </div>
               </div>
               <Select value={ollamaThinkMode} onValueChange={setOllamaThinkMode}>
@@ -921,9 +921,9 @@ export default function SettingsAIPage() {
                   {OLLAMA_THINKING_KEYS.map((option) => {
                     const thinkLabels: Record<string, string> = {
                       [AUTO_OLLAMA_THINKING_VALUE]: "Автоматически (Auto)",
-                      "off": "Скрывать размышления полностью",
-                      "on": "Показывать размышления полностью",
-                      "low": "Краткие размышления (Low)",
+                      "off": "Скрывать reasoning",
+                      "on": "Показывать reasoning полностью",
+                      "low": "Краткий reasoning (Low)",
                       "medium": "Средняя глубина (Medium)",
                       "high": "Максимальная глубина (High)"
                     };
@@ -941,8 +941,8 @@ export default function SettingsAIPage() {
             <div className="space-y-2 rounded-xl border border-border/40 bg-background/20 p-3 hover:border-border transition-colors">
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="text-xs font-semibold text-foreground">Глубина рассуждений OpenAI (o-серия)</h4>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">Параметр reasoning_effort для моделей OpenAI o1 и o3-mini.</p>
+                  <h4 className="text-xs font-semibold text-foreground">Reasoning effort OpenAI</h4>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Передаётся в модели o-серии как параметр reasoning_effort.</p>
                 </div>
               </div>
               <Select value={reasoningEffort} onValueChange={setReasoningEffort}>
@@ -951,16 +951,16 @@ export default function SettingsAIPage() {
                 </SelectTrigger>
                 <SelectContent className="text-xs">
                   <SelectItem value={AUTO_REASONING_VALUE}>Автоматически (Auto)</SelectItem>
-                  <SelectItem value="none">Без рассуждений (None)</SelectItem>
-                  <SelectItem value="low">Краткие размышления (Low)</SelectItem>
+                  <SelectItem value="none">Без reasoning (None)</SelectItem>
+                  <SelectItem value="low">Краткий reasoning (Low)</SelectItem>
                   <SelectItem value="medium">Сбалансированная глубина (Medium)</SelectItem>
-                  <SelectItem value="high">Глубокие рассуждения (High)</SelectItem>
+                  <SelectItem value="high">Глубокий reasoning (High)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             
             <p className="text-[10px] text-muted-foreground leading-normal italic bg-background/30 p-2.5 rounded-lg border border-border/30">
-              * Выбор более глубоких рассуждений может увеличить задержку первого токена (TTFT), но повышает качество решения сложных логических задач.
+              Более глубокий reasoning может увеличить задержку первого токена. Включайте его для сложных задач, а не для быстрых терминальных ответов.
             </p>
           </div>
         </div>
@@ -971,7 +971,7 @@ export default function SettingsAIPage() {
         <SectionCard 
           title="Статус подключения API-ключей" 
           icon={Lock} 
-          description="Мониторинг доступности внешних провайдеров на основе загруженных в конфигурацию ключей."
+          description="Показывает, какие ключи доступны. Значения ключей здесь не выводятся."
         >
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {[
@@ -1022,7 +1022,7 @@ export default function SettingsAIPage() {
         <SectionCard 
           title="Доменная SSO-авторизация" 
           icon={Network} 
-          description="Настройки сквозной аутентификации пользователей через прокси-сервер организации."
+          description="Вход через корпоративный proxy/header вместо ручного логина."
         >
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="rounded-xl border border-border/50 bg-card/25 p-4 transition-all hover:border-border">

@@ -625,9 +625,9 @@ export default function StudioSkillsPage() {
                   className="h-10 border-0 bg-transparent shadow-none focus-visible:ring-0 text-sm px-0"
                 />
               </div>
-              <div className="flex items-center gap-3 shrink-0">
+              <div className="flex w-full flex-wrap items-center gap-3 md:w-auto md:justify-end">
                 <Select value={serviceFilter} onValueChange={setServiceFilter}>
-                  <SelectTrigger className="h-9 w-[180px] text-xs bg-background/50 border-border/50 rounded-lg">
+                  <SelectTrigger className="h-10 w-full rounded-lg border-border/50 bg-background/50 text-xs sm:w-[180px]">
                     <SelectValue placeholder={tr("Все сервисы", "All services")} />
                   </SelectTrigger>
                   <SelectContent>
@@ -641,7 +641,7 @@ export default function StudioSkillsPage() {
                 <span className="text-[11px] font-medium text-muted-foreground whitespace-nowrap bg-muted/40 px-2 py-1 rounded-md">
                   {tr(`${filteredSkills.length} найдено`, `${filteredSkills.length} found`)}
                 </span>
-                <Button size="sm" variant="outline" className="h-9 gap-1.5 rounded-lg px-3" onClick={() => openCreateDialog()}>
+                <Button size="sm" variant="outline" className="h-10 gap-1.5 rounded-lg px-3" onClick={() => openCreateDialog()}>
                   <Sparkles className="h-3.5 w-3.5" />
                   {tr("Создать", "Create")}
                 </Button>
@@ -675,7 +675,7 @@ export default function StudioSkillsPage() {
           {/* MASTER BACK BAR */}
           <div className="px-6 py-3 flex items-center justify-between gap-4 border-b border-border/40 bg-background/70 backdrop-blur-md sticky top-0 z-20 shrink-0 shadow-sm">
             <div className="flex min-w-0 items-center gap-3">
-              <Button variant="ghost" size="sm" onClick={() => setSelectedSlug("")} className="h-8 gap-2 rounded-lg text-muted-foreground hover:text-foreground shrink-0">
+              <Button variant="ghost" size="sm" onClick={() => setSelectedSlug("")} className="h-10 shrink-0 gap-2 rounded-lg text-muted-foreground hover:text-foreground">
                 <ArrowLeft className="h-4 w-4" />
                 {tr("Каталог", "Catalog")}
               </Button>
@@ -728,11 +728,11 @@ export default function StudioSkillsPage() {
                     </div>
                     
                     <div className="mt-6">
-                      <TabsList className="bg-transparent h-auto p-0 border-b border-border/50 w-full flex justify-start rounded-none gap-1">
-                        <TabsTrigger value="overview" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none border-b-2 border-transparent data-[state=active]:border-primary px-5 pb-3 pt-2 text-sm font-medium inline-flex items-center gap-1.5 text-muted-foreground data-[state=active]:text-foreground"><BookOpen className="h-4 w-4"/> {tr("Обзор", "Overview")}</TabsTrigger>
-                        <TabsTrigger value="playbook" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none border-b-2 border-transparent data-[state=active]:border-primary px-5 pb-3 pt-2 text-sm font-medium inline-flex items-center gap-1.5 text-muted-foreground data-[state=active]:text-foreground"><BookMarked className="h-4 w-4"/> {tr("Плейбук", "Playbook")}</TabsTrigger>
-                        <TabsTrigger value="workspace" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none border-b-2 border-transparent data-[state=active]:border-primary px-5 pb-3 pt-2 text-sm font-medium inline-flex items-center gap-1.5 text-muted-foreground data-[state=active]:text-foreground"><FileCode2 className="h-4 w-4"/> {tr("Файлы", "Workspace")}</TabsTrigger>
-                        <TabsTrigger value="settings" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none border-b-2 border-transparent data-[state=active]:border-primary px-5 pb-3 pt-2 text-sm font-medium inline-flex items-center gap-1.5 text-muted-foreground data-[state=active]:text-foreground"><Settings2 className="h-4 w-4"/> {tr("Настройки", "Settings")}</TabsTrigger>
+                      <TabsList className="flex h-auto w-full justify-start gap-1 overflow-x-auto rounded-none border-b border-border/50 bg-transparent p-0">
+                        <TabsTrigger value="overview" className="inline-flex min-h-11 items-center gap-1.5 rounded-none border-b-2 border-transparent px-5 text-sm font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"><BookOpen className="h-4 w-4"/> {tr("Обзор", "Overview")}</TabsTrigger>
+                        <TabsTrigger value="playbook" className="inline-flex min-h-11 items-center gap-1.5 rounded-none border-b-2 border-transparent px-5 text-sm font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"><BookMarked className="h-4 w-4"/> {tr("Плейбук", "Playbook")}</TabsTrigger>
+                        <TabsTrigger value="workspace" className="inline-flex min-h-11 items-center gap-1.5 rounded-none border-b-2 border-transparent px-5 text-sm font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"><FileCode2 className="h-4 w-4"/> {tr("Файлы", "Workspace")}</TabsTrigger>
+                        <TabsTrigger value="settings" className="inline-flex min-h-11 items-center gap-1.5 rounded-none border-b-2 border-transparent px-5 text-sm font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"><Settings2 className="h-4 w-4"/> {tr("Настройки", "Settings")}</TabsTrigger>
                       </TabsList>
                     </div>
                   </div>
@@ -760,7 +760,7 @@ export default function StudioSkillsPage() {
                            <p className="text-base font-semibold">{tr("Путь в системе", "System Path")}</p>
                            <div className="mt-3 flex items-center gap-2 rounded-lg border border-border/60 bg-background/40 p-2 pl-3">
                              <div className="flex-1 break-all font-mono text-[12px] text-foreground">{selectedSkill.path}</div>
-                             <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md shrink-0 focus:outline-none focus:ring-2 focus:ring-primary/20 hover:bg-background/80" onClick={() => {
+                             <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0 rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20 hover:bg-background/80" aria-label={tr("Путь скопирован", "Copy path")} onClick={() => {
                                navigator.clipboard.writeText(selectedSkill.path);
                                toast({description: tr("Путь скопирован", "Path copied")});
                              }}>
@@ -844,18 +844,18 @@ export default function StudioSkillsPage() {
                          </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <Button variant="secondary" size="sm" className="h-8 gap-1.5 rounded-md px-3 text-[11px]" onClick={() => setCreateFileOpen(true)} disabled={!canEditSkill}>
+                        <Button variant="secondary" size="sm" className="h-9 gap-1.5 rounded-md px-3 text-xs" onClick={() => setCreateFileOpen(true)} disabled={!canEditSkill}>
                           <FolderPlus className="h-3.5 w-3.5" />
                           {tr("Новый файл", "New File")}
                         </Button>
-                        <Button size="sm" className="h-8 gap-1.5 rounded-md px-3 text-[11px] shadow-sm bg-primary hover:bg-primary/90 text-primary-foreground transition-all" onClick={saveCurrentFile} disabled={!selectedFilePath || !isEditorDirty || updateFileMutation.isPending || !canEditSelectedFile}>
+                        <Button size="sm" className="h-9 gap-1.5 rounded-md px-3 text-xs shadow-sm bg-primary hover:bg-primary/90 text-primary-foreground transition-all" onClick={saveCurrentFile} disabled={!selectedFilePath || !isEditorDirty || updateFileMutation.isPending || !canEditSelectedFile}>
                           {updateFileMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                           {tr("Сохранить", "Save")}
                         </Button>
 
                         <div className="w-px h-5 bg-border/80 mx-1"></div>
 
-                        <Button variant="ghost" size="sm" className="h-8 gap-1.5 rounded-md px-3 text-[11px] text-destructive hover:bg-destructive/10 hover:text-destructive transition-colors" onClick={removeCurrentFile} disabled={!selectedFilePath || selectedFilePath === "SKILL.md" || deleteFileMutation.isPending || !canEditSelectedFile}>
+                        <Button variant="ghost" size="sm" className="h-9 gap-1.5 rounded-md px-3 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive transition-colors" onClick={removeCurrentFile} disabled={!selectedFilePath || selectedFilePath === "SKILL.md" || deleteFileMutation.isPending || !canEditSelectedFile}>
                           {deleteFileMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                           {tr("Удалить", "Delete")}
                         </Button>

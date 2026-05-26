@@ -26,19 +26,24 @@ from asgiref.sync import sync_to_async as _s2a
 from django.utils import timezone
 from loguru import logger
 
+from app.agent_kernel import mcp_runtime_registry, skill_provider_registry
 from app.agent_kernel.domain.roles import ROLE_SPECS, get_role_spec
+from app.agent_kernel.domain.specs import MCPRuntimeProvider, SkillProvider
 from app.agent_kernel.hooks.manager import HookManager
+from app.agent_kernel.mcp_runtime import describe_mcp_bindings, execute_mcp_binding, load_mcp_bindings
 from app.agent_kernel.memory.compaction import build_run_summary_payload
 from app.agent_kernel.memory.server_cards import render_server_cards_prompt
-from app.agent_kernel.memory.store import DjangoServerMemoryStore
 from app.agent_kernel.permissions.engine import PermissionEngine
 from app.agent_kernel.runtime.context import build_ops_prompt_context
+from app.agent_kernel.runtime.parsing import parse_action as _parse_action  # noqa: F401
+from app.agent_kernel.runtime.parsing import parse_response
 from app.agent_kernel.runtime.subagents import build_task_subagent_spec
 from app.agent_kernel.sandbox.manager import SandboxManager
 from app.agent_kernel.tools.registry import ToolRegistry
 from app.core.llm import LLMProvider
 from app.core.model_utils import resolve_provider_and_model
 from core_ui.audit import audit_context
+from servers.adapters.memory_store import DjangoServerMemoryStore
 from servers.agent_runtime import (
     build_runtime_control_state,
     is_runtime_stop_requested,
@@ -49,28 +54,17 @@ from servers.agent_runtime import (
 )
 from servers.agent_sessions import AgentSessionManager
 from servers.agent_tools import get_enabled_tools, get_tools_description
-from servers.mcp_tool_runtime import build_mcp_tools_description, execute_bound_mcp_tool, load_mcp_tool_bindings
 from servers.models import AgentRun, Server, ServerAgent
-from app.agent_kernel import skill_provider_registry
-from app.agent_kernel.domain.specs import SkillProvider
 
 
 def sync_to_async(func, thread_sensitive=False):
     return _s2a(func, thread_sensitive=thread_sensitive)
-
-
-from app.agent_kernel.runtime.parsing import parse_action as _parse_action  # noqa: F401
-from app.agent_kernel.runtime.parsing import parse_response
 
 MAX_PLAN_TASKS = 15
 MAX_TASK_ITERATIONS = 7
 SESSION_TIMEOUT_DEFAULT = 900
 CONTROL_POLL_INTERVAL = 0.5
 
-
-# ---------------------------------------------------------------------------
-# Data helpers
-# ---------------------------------------------------------------------------
 
 def _make_task(
     task_id: int,
@@ -129,6 +123,7 @@ class MultiAgentEngine:
         skills: list | None = None,
         skill_errors: list[str] | None = None,
         skill_provider: SkillProvider | None = None,
+        mcp_runtime_provider: MCPRuntimeProvider | None = None,
     ):
         self.agent = agent
         self.servers = servers
@@ -153,6 +148,7 @@ class MultiAgentEngine:
         self.mcp_tools = {}
         self.disabled_mcp_tools: set[str] = set()
         self.mcp_tool_errors: list[str] = []
+        self._mcp_runtime_provider: MCPRuntimeProvider | None = mcp_runtime_provider or mcp_runtime_registry.get()
         self.skills = list(skills or [])
         self.skill_errors = list(skill_errors or [])
         self._skill_provider: SkillProvider | None = skill_provider or skill_provider_registry.get()
@@ -332,7 +328,7 @@ class MultiAgentEngine:
                 else:
                     await self.session.open(primary_server)
 
-            loaded_mcp_tools, self.mcp_tool_errors = await load_mcp_tool_bindings(self.mcp_servers)
+            loaded_mcp_tools, self.mcp_tool_errors = await load_mcp_bindings(self._mcp_runtime_provider, self.mcp_servers)
             if self.allowed_tool_names is None:
                 self.mcp_tools = loaded_mcp_tools
                 self.disabled_mcp_tools = set()
@@ -1006,7 +1002,7 @@ Attached skills:
         servers_desc = "\n".join(f"- {c['server_name']} (id: {c['server_id']})" for c in connected) or "- Нет активных SSH подключений"
         tools_desc = get_tools_description(task_tool_names)
         local_mcp_tools = {name: binding for name, binding in self.mcp_tools.items() if name in task_tool_names}
-        mcp_tools_desc = build_mcp_tools_description(local_mcp_tools)
+        mcp_tools_desc = describe_mcp_bindings(self._mcp_runtime_provider, local_mcp_tools)
         skills_desc = self._skill_provider.build_skill_catalog_description(self.skills) if self._skill_provider else ""
         if mcp_tools_desc:
             tools_desc = f"{tools_desc}\n\n{mcp_tools_desc}" if tools_desc else mcp_tools_desc
@@ -1544,7 +1540,7 @@ ACTION: tool_name {{"param1": "val1"}}
                 prepared_args, policy_messages, policy_error = args, [], None
             if policy_error:
                 return policy_error
-            result = await execute_bound_mcp_tool(self.mcp_tools, name, prepared_args)
+            result = await execute_mcp_binding(self._mcp_runtime_provider, self.mcp_tools, name, prepared_args)
             if not result.startswith("MCP tool error"):
                 self._executed_mcp_tools.add(binding.tool_name)
                 if spec:

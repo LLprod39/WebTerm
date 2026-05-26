@@ -21,6 +21,10 @@ independently unit-testable. The SSH consumer should import from here
 instead of embedding f-string prompts inline.
 """
 
+from servers.services.terminal_ai.decision import (  # noqa: F401
+    decide_recovery,
+    decide_step_next,
+)
 from servers.services.terminal_ai.history import (  # noqa: F401
     append_message,
     append_message_sync,
@@ -36,11 +40,38 @@ from servers.services.terminal_ai.memory import (  # noqa: F401
     select_memory_candidate_commands,
     should_extract_memory,
 )
+from servers.services.terminal_ai.memory_extraction import (  # noqa: F401
+    extract_server_memory,
+    run_memory_extraction,
+    save_extracted_server_memory,
+)
+from servers.services.terminal_ai.output_explanation import explain_command_output  # noqa: F401
+from servers.services.terminal_ai.plan_items import (  # noqa: F401
+    build_plan_item,
+    normalize_command_text,
+    normalize_execution_mode,
+    resolve_auto_execution_mode,
+)
+from servers.services.terminal_ai.planning import (  # noqa: F401
+    extract_json_object,
+    plan_terminal_commands,
+)
 from servers.services.terminal_ai.policy import (  # noqa: F401
     CommandPolicy,
     choose_exec_mode,
     decide_command_policy,
     match_patterns,
+)
+from servers.services.terminal_ai.preferences import (  # noqa: F401
+    DEFAULT_AI_SETTINGS,
+    clone_ai_settings,
+    default_ai_settings,
+    is_auto_report_enabled,
+    normalize_ai_chat_mode,
+    normalize_ai_settings,
+    normalize_int_list,
+    normalize_pattern_list,
+    parse_bool,
 )
 from servers.services.terminal_ai.prompts import (  # noqa: F401
     build_dry_run_block,
@@ -52,6 +83,10 @@ from servers.services.terminal_ai.prompts import (  # noqa: F401
     build_report_prompt,
     build_step_decision_prompt,
     sanitize_for_prompt,
+)
+from servers.services.terminal_ai.report_generation import (  # noqa: F401
+    generate_ai_report_text,
+    make_ai_report,
 )
 from servers.services.terminal_ai.reporter import (  # noqa: F401
     build_fallback_report,

@@ -167,3 +167,57 @@ class SkillProvider(Protocol):
     ) -> tuple[dict[str, Any], list[str], str | None]: ...
 
     def build_skill_catalog_description(self, skills: list[Any]) -> str: ...
+
+
+@runtime_checkable
+class MCPRuntimeProvider(Protocol):
+    """Loads and executes MCP tools without servers importing studio.*."""
+
+    async def load_mcp_tool_bindings(self, mcp_servers: list[Any]) -> tuple[dict[str, Any], list[str]]: ...
+
+    def build_mcp_tools_description(self, bindings: dict[str, Any]) -> str: ...
+
+    async def execute_bound_mcp_tool(
+        self,
+        bindings: dict[str, Any],
+        action_name: str,
+        args: dict[str, Any],
+    ) -> str: ...
+
+
+@dataclass(frozen=True)
+class SkillPromotionRequest:
+    server_name: str
+    server_host: str
+    snapshot_title: str
+    snapshot_content: str
+    memory_key: str
+    metadata: dict[str, Any]
+    actor_user_id: int
+    is_mutating: bool = False
+
+
+@dataclass(frozen=True)
+class PromotedSkill:
+    slug: str
+    name: str
+    path: str
+    detail: dict[str, Any]
+
+    def to_detail_dict(self) -> dict[str, Any]:
+        return dict(self.detail)
+
+
+@dataclass(frozen=True)
+class SkillPromotionResult:
+    skill: PromotedSkill
+    metadata: dict[str, Any]
+    validation: dict[str, Any]
+    created: bool = False
+
+
+@runtime_checkable
+class SkillPromotionGateway(Protocol):
+    """Creates or resolves Studio skills without servers importing studio.*."""
+
+    def promote_skill_draft(self, request: SkillPromotionRequest) -> SkillPromotionResult: ...

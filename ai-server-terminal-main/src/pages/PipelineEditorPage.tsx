@@ -84,6 +84,7 @@ import { cn } from "@/lib/utils";
 import { applyAssistantGraphPatch, getAssistantPatchStats } from "@/components/pipeline/assistantPatch";
 import { getPipelineActivityState } from "@/components/pipeline/pipelineActivity";
 import { buildPipelineRunGraphState } from "@/components/pipeline/pipelineRunGraph";
+import { getRunDialogCopy } from "@/components/studio/PipelineEditorCopy";
 import { AgentNodePanel } from "@/components/pipeline/node-panel/AgentNodePanel";
 import {
   TriggerNode,
@@ -2757,22 +2758,22 @@ function PipelineAssistantPanel({
   const quickActions = [
     {
       intent: "create" as const,
-      label: localize(lang, "Build", "Build"),
+      label: localize(lang, "Собрать", "Build"),
       prompt: localize(lang, "Собери рабочий pipeline по моему описанию. Если граф пустой, создай полный starter workflow.", "Build a working pipeline from my request. If the graph is empty, create a complete starter workflow."),
     },
     {
       intent: "edit" as const,
-      label: localize(lang, "Improve", "Improve"),
+      label: localize(lang, "Улучшить", "Improve"),
       prompt: localize(lang, "Улучши текущий граф: убери лишнее, добавь недостающие шаги и понятные labels.", "Improve the current graph: remove unnecessary parts, add missing steps, and make labels clear."),
     },
     {
       intent: "validate" as const,
-      label: localize(lang, "Validate", "Validate"),
+      label: localize(lang, "Проверить", "Validate"),
       prompt: localize(lang, "Проверь текущий pipeline и предложи минимальные исправления, чтобы его можно было сохранить и запустить.", "Validate the current pipeline and propose the smallest fixes needed to save and run it."),
     },
     {
       intent: "fix_run" as const,
-      label: localize(lang, "Fix errors", "Fix errors"),
+      label: localize(lang, "Исправить", "Fix errors"),
       prompt: localize(lang, "Исправь ошибки последней проверки или запуска и предложи безопасный patch.", "Fix the latest validation or run errors and propose a safe patch."),
     },
   ];
@@ -2786,12 +2787,12 @@ function PipelineAssistantPanel({
               <Wand2 className="h-4 w-4 text-primary" />
             </span>
             <div>
-              <h3 className="text-sm font-semibold text-foreground">AI Builder</h3>
+              <h3 className="text-sm font-semibold text-foreground">{localize(lang, "Помощник pipeline", "Pipeline Assistant")}</h3>
               <p className="text-[11px] text-muted-foreground">{selectedLabel}</p>
             </div>
           </div>
         </div>
-        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onClose} aria-label="Close AI Builder">
+        <Button size="icon" variant="ghost" className="h-9 w-9" onClick={onClose} aria-label={localize(lang, "Закрыть помощник", "Close assistant")}>
           <X className="h-4 w-4" />
         </Button>
       </div>
@@ -2805,7 +2806,7 @@ function PipelineAssistantPanel({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-8 justify-start gap-1.5 text-xs"
+                className="h-9 justify-start gap-1.5 text-xs"
                 disabled={isPending}
                 onClick={() => onSend(action.intent, input.trim() ? `${action.prompt}\n\n${input.trim()}` : action.prompt)}
               >
@@ -2828,7 +2829,7 @@ function PipelineAssistantPanel({
                   )}
                 >
                   <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    {item.role === "user" ? localize(lang, "Запрос", "Request") : "AI"}
+                    {item.role === "user" ? localize(lang, "Запрос", "Request") : localize(lang, "Помощник", "Assistant")}
                   </div>
                   <div className="whitespace-pre-wrap">{item.content}</div>
                 </div>
@@ -2865,12 +2866,12 @@ function PipelineAssistantPanel({
           className="min-h-24 resize-none text-xs"
         />
         <Button
-          className="h-9 w-full gap-1.5"
+          className="h-10 w-full gap-1.5"
           disabled={isPending || !input.trim()}
           onClick={() => onSend("edit")}
         >
           {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
-          {localize(lang, "Получить черновик", "Get draft")}
+          {localize(lang, "Подготовить правку", "Prepare change")}
         </Button>
       </div>
     </div>
@@ -2968,6 +2969,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         : monitoringTriggerNodes.length
           ? "monitoring"
           : "manual";
+  const runDialogCopy = getRunDialogCopy(runDialogMode, lang);
   const { data: graphRunData } = useQuery({
     queryKey: ["studio", "run", graphRunId],
     queryFn: () => (graphRunId ? studioRuns.get(graphRunId) : null),
@@ -3677,21 +3679,23 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
   return (
     <div className="flex flex-col h-full">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-card z-10">
-        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => navigate("/studio")}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+      <div className="z-10 flex flex-col gap-2 border-b border-border bg-card px-3 py-3 lg:flex-row lg:items-center lg:px-4">
+        <div className="flex min-w-0 items-center gap-2">
+          <Button size="icon" variant="ghost" className="h-9 w-9 shrink-0" onClick={() => navigate("/studio")} aria-label={localize(lang, "Вернуться в Studio", "Back to Studio")}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         <Input
           value={pipelineName}
           onChange={(e) => {
             setPipelineName(e.target.value);
             setHasLocalChanges(true);
           }}
-          className="h-7 text-sm font-medium w-64 border-0 shadow-none focus-visible:ring-0 px-0"
-          placeholder="Pipeline name..."
+          className="h-9 min-w-0 flex-1 border-0 px-0 text-sm font-medium shadow-none focus-visible:ring-0 sm:w-72"
+          placeholder={localize(lang, "Название pipeline…", "Pipeline name…")}
         />
-        <div className="ml-auto flex items-center gap-2">
+        </div>
+        <div className="flex flex-wrap items-center gap-2 lg:ml-auto lg:justify-end">
           {resolvedLastRun && (
             <button
               type="button"
@@ -3699,7 +3703,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                 setGraphRunId(resolvedLastRun.id);
                 setActiveRunId(resolvedLastRun.id);
               }}
-              className="hidden items-center gap-2 rounded-md border border-border/70 bg-background/35 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-border hover:bg-background/50 hover:text-foreground sm:flex"
+              className="hidden min-h-9 items-center gap-2 rounded-md border border-border/70 bg-background/35 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-border hover:bg-background/50 hover:text-foreground sm:flex"
             >
               {resolvedLastRun.status === "running" && <Loader2 className="h-2.5 w-2.5 animate-spin mr-1" />}
               Run #{resolvedLastRun.id}: {resolvedLastRun.status}
@@ -3709,7 +3713,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
             size="sm"
             onClick={handleSave}
             disabled={saveMutation.isPending || (Boolean(pipelineId) && !hasHydratedPipeline)}
-            className="h-7 gap-1.5"
+            className="h-9 gap-1.5"
           >
             {saveMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
             {localize(lang, "Сохранить", "Save")}
@@ -3719,7 +3723,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
             variant="secondary"
             onClick={handleOpenRunDialog}
             disabled={runMutation.isPending || saveMutation.isPending || (Boolean(pipelineId) && !hasHydratedPipeline)}
-            className="h-7 gap-1.5"
+            className="h-9 gap-1.5"
           >
             {runMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
             {localize(lang, "Запуск", "Run")}
@@ -3731,15 +3735,15 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
               setAssistantOpen(true);
               setActiveRunId(null);
             }}
-            className="h-7 gap-1.5"
+            className="h-9 gap-1.5"
           >
             <Wand2 className="h-3 w-3" />
-            AI Builder
+            {localize(lang, "Помощник", "Assistant")}
           </Button>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="ghost" className="h-7 gap-1.5 rounded-md px-2 text-muted-foreground">
+              <Button size="icon" variant="ghost" className="h-9 w-9 rounded-md text-muted-foreground" aria-label={localize(lang, "Ещё действия", "More actions")}>
                 <MoreHorizontal className="h-3.5 w-3.5" />
               </Button>
             </DropdownMenuTrigger>
@@ -3755,14 +3759,14 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         </div>
       </div>
 
-      <div className="flex items-center gap-3 border-b border-border/80 bg-[#15191f] px-4 py-2.5 text-xs">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border/80 bg-[#15191f] px-4 py-2.5 text-xs lg:gap-3">
         <div className={`flex items-center gap-2 rounded-full border px-2.5 py-1.5 ${toolbarActivityToneClass}`}>
           <ToolbarActivityIcon
             className={`h-3.5 w-3.5 ${pipelineActivityState.icon === "running" ? "animate-spin" : ""}`}
           />
           <span className="font-medium">{pipelineActivityState.label}</span>
         </div>
-        <p className="min-w-0 flex-1 truncate text-muted-foreground/90">{pipelineActivityState.detail}</p>
+        <p className="min-w-[220px] flex-1 truncate text-muted-foreground/90">{pipelineActivityState.detail}</p>
         {graphRunId && highlightedNode ? (
           <div className="inline-flex items-center gap-2 rounded-full border border-sky-500/25 bg-sky-500/10 px-2.5 py-1 text-sky-200">
             {isLivePipelineRunStatus(graphRunLive?.status) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Info className="h-3.5 w-3.5" />}
@@ -3832,12 +3836,13 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
               items.push(
                 <span key={n.id} className="flex shrink-0 items-center gap-1.5">
                   <button
+                    type="button"
                     onClick={() => {
                       setSelectedNode(n);
                       setActiveRunId(null);
                     }}
                     className={cn(
-                      "inline-flex max-w-[190px] items-center gap-1.5 rounded-lg border px-2 py-1 text-[10px] transition-colors",
+                      "inline-flex min-h-8 max-w-[190px] items-center gap-1.5 rounded-lg border px-2 py-1 text-[10px] transition-colors",
                       graphState.currentNodeId === n.id
                         ? "border-blue-500/40 bg-blue-500/10 text-blue-200 shadow-[0_0_16px_rgba(59,130,246,0.18)]"
                         : graphState.traversedNodeIds.has(n.id)
@@ -3876,7 +3881,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       {/* Main area */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left: Node palette */}
-        <div className="w-64 shrink-0">
+        <div className="hidden w-64 shrink-0 lg:block">
           <NodePalette onAddNode={handleAddNode} lang={lang} />
         </div>
 
@@ -3923,9 +3928,11 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
               <Panel position="top-center" style={{ pointerEvents: "none", marginTop: "25%" }}>
                 <div className="text-center select-none space-y-3">
                   <Zap className="h-12 w-12 text-primary/20 mx-auto" />
-                  <p className="text-sm text-muted-foreground/70 font-medium">Build your automation pipeline</p>
+                  <p className="text-sm text-muted-foreground/70 font-medium">
+                    {localize(lang, "Соберите OPS pipeline", "Build an OPS pipeline")}
+                  </p>
                   <p className="text-xs text-muted-foreground/50 max-w-xs mx-auto">
-                    Click or drag nodes from the palette on the left. Connect them to define the execution flow.
+                    {localize(lang, "Добавьте шаги из палитры и соедините их в порядок выполнения.", "Add steps from the palette and connect them into an execution flow.")}
                   </p>
                 </div>
               </Panel>
@@ -3934,9 +3941,12 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
           </div>
         </div>
 
-        {/* Right: Run monitor, AI Builder, or Node config panel */}
+        {/* Right: run monitor, assistant, or node config panel */}
         {(activeRunId || assistantOpen || selectedNode) && (
-          <div className={cn("shrink-0 border-l border-border bg-card flex flex-col", assistantOpen && !activeRunId ? "w-96" : "w-80")}>
+          <div className={cn(
+            "fixed inset-x-3 bottom-3 top-32 z-30 flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl lg:static lg:inset-auto lg:shrink-0 lg:rounded-none lg:border-y-0 lg:border-r-0 lg:shadow-none",
+            assistantOpen && !activeRunId ? "lg:w-96" : "lg:w-80",
+          )}>
             {activeRunId ? (
               <RunMonitorPanel
                 runId={activeRunId}
@@ -3975,32 +3985,16 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       </div>
 
       <Dialog open={runDialogOpen} onOpenChange={setRunDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-h-[88vh] max-w-2xl overflow-hidden">
           <DialogHeader>
-            <DialogTitle>
-              {runDialogMode === "manual"
-                ? "Run Pipeline"
-                : runDialogMode === "webhook"
-                  ? "Webhook Trigger"
-                  : runDialogMode === "schedule"
-                    ? "Scheduled Trigger"
-                    : "Monitoring Trigger"}
-            </DialogTitle>
-            <DialogDescription>
-              {runDialogMode === "manual"
-                ? "Choose the manual trigger that should start this run, then add optional task text and JSON context."
-                : runDialogMode === "webhook"
-                  ? "Webhook pipelines do not start from Run. Save the graph, then send an HTTP POST request to the webhook URL."
-                  : runDialogMode === "schedule"
-                    ? "Scheduled pipelines do not start from Run. Save the graph and let the scheduler create runs from the cron trigger."
-                    : "Monitoring pipelines do not start from Run. Save the graph and let server monitoring open a matching alert."}
-            </DialogDescription>
+            <DialogTitle>{runDialogCopy.title}</DialogTitle>
+            <DialogDescription>{runDialogCopy.description}</DialogDescription>
           </DialogHeader>
           <DialogBody className="space-y-4">
             {runDialogMode === "manual" ? (
               <>
                 <div className="space-y-2">
-                  <Label htmlFor="run-entry-trigger">Manual trigger</Label>
+                  <Label htmlFor="run-entry-trigger">{localize(lang, "Manual trigger", "Manual trigger")}</Label>
                   <Select
                     value={runEntryNodeId}
                     onValueChange={(value) => {
@@ -4042,7 +4036,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                     id="run-task"
                     value={runTaskText}
                     onChange={(event) => setRunTaskText(event.target.value)}
-                    placeholder="e.g. Check staging, apply updates, and report blockers"
+                    placeholder={localize(lang, "Например: проверить staging, применить updates и сообщить blockers", "Example: check staging, apply updates, and report blockers")}
                     rows={4}
                   />
                 </div>
@@ -4054,8 +4048,8 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                     onClick={() => setRunAdvancedOpen((open) => !open)}
                   >
                     <div>
-                      <p className="text-xs font-medium">Advanced context</p>
-                      <p className="text-[11px] text-muted-foreground">Optional requester metadata and extra JSON fields.</p>
+                      <p className="text-xs font-medium">{localize(lang, "Расширенный context", "Advanced context")}</p>
+                      <p className="text-[11px] text-muted-foreground">{localize(lang, "Необязательные requester metadata и дополнительные JSON fields.", "Optional requester metadata and extra JSON fields.")}</p>
                     </div>
                     {runAdvancedOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
                   </button>
@@ -4063,7 +4057,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                     <div className="space-y-4 border-t border-border px-3 py-3">
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-2">
-                          <Label htmlFor="run-requester">Requester</Label>
+                          <Label htmlFor="run-requester">{localize(lang, "Requester", "Requester")}</Label>
                           <Input
                             id="run-requester"
                             value={runRequester}
@@ -4072,7 +4066,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="run-ticket-id">Ticket or reference ID</Label>
+                          <Label htmlFor="run-ticket-id">{localize(lang, "Ticket или reference ID", "Ticket or reference ID")}</Label>
                           <Input
                             id="run-ticket-id"
                             value={runTicketId}
@@ -4083,7 +4077,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="run-context">Run context (JSON object)</Label>
+                        <Label htmlFor="run-context">{localize(lang, "Run context (JSON object)", "Run context (JSON object)")}</Label>
                         <Textarea
                           id="run-context"
                           value={runContextText}
@@ -4096,7 +4090,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                           className="font-mono text-xs"
                         />
                         <p className="text-[11px] text-muted-foreground">
-                          These fields are merged with the task text before the run starts.
+                          {localize(lang, "Эти поля объединяются с задачей перед стартом run.", "These fields are merged with the task text before the run starts.")}
                         </p>
                         {runContextError ? <p className="text-xs text-red-400">{runContextError}</p> : null}
                       </div>
@@ -4131,7 +4125,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
                           <div className="text-sm font-medium text-foreground">{trigger.name || "Webhook trigger"}</div>
                           <div className="text-[11px] text-muted-foreground">Node `{trigger.node_id}`</div>
                         </div>
-                        <Button size="sm" variant="outline" onClick={() => void handleCopyWebhookUrl(trigger.webhook_url)}>
+                        <Button size="sm" variant="outline" className="h-9" onClick={() => void handleCopyWebhookUrl(trigger.webhook_url)}>
                           <Copy className="mr-1.5 h-3.5 w-3.5" />
                           {localize(lang, "Скопировать URL", "Copy URL")}
                         </Button>
@@ -4222,16 +4216,16 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
             )}
           </DialogBody>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRunDialogOpen(false)}>
-              {runDialogMode === "manual" ? "Cancel" : "Close"}
+            <Button variant="outline" className="h-10" onClick={() => setRunDialogOpen(false)}>
+              {runDialogMode === "manual" ? localize(lang, "Отмена", "Cancel") : localize(lang, "Закрыть", "Close")}
             </Button>
             {runDialogMode === "manual" ? (
-              <Button onClick={handleRunSubmit} disabled={runMutation.isPending || saveMutation.isPending}>
+              <Button className="h-10" onClick={handleRunSubmit} disabled={runMutation.isPending || saveMutation.isPending}>
                 {runMutation.isPending || saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                Run
+                {localize(lang, "Запустить", "Run")}
               </Button>
             ) : (
-              <Button onClick={handleSave} disabled={saveMutation.isPending || (Boolean(pipelineId) && !hasHydratedPipeline)}>
+              <Button className="h-10" onClick={handleSave} disabled={saveMutation.isPending || (Boolean(pipelineId) && !hasHydratedPipeline)}>
                 {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 {localize(lang, "Сохранить trigger", "Save Trigger")}
               </Button>

@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/sidebar";
 import { authLogout, fetchAuthSession } from "@/lib/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useI18n } from "@/lib/i18n";
+import { localize, useI18n } from "@/lib/i18n";
 import { canAccessStudio, hasFeatureAccess } from "@/lib/featureAccess";
 
 export function AppSidebar() {
@@ -48,6 +48,18 @@ export function AppSidebar() {
 
   const roleLabel = data?.user?.is_staff ? t("nav.admin") : t("nav.operator");
   const CollapseIcon = collapsed ? PanelLeftOpen : PanelLeftClose;
+  const navSections = [
+    {
+      id: "workspace",
+      label: t("nav.workspace_label"),
+      items: allowedItems.filter((item) => item.titleKey !== "nav.settings"),
+    },
+    {
+      id: "control",
+      label: localize(lang, "Управление", "Control"),
+      items: allowedItems.filter((item) => item.titleKey === "nav.settings"),
+    },
+  ].filter((section) => section.items.length > 0);
 
   const handleLogout = async () => {
     await authLogout();
@@ -58,13 +70,13 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar">
       {/* Logo area */}
-      <div className="flex h-14 items-center gap-3 border-b border-sidebar-border px-3">
+      <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-3">
         <button
           type="button"
           onClick={toggleSidebar}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-sidebar-border bg-sidebar-primary/10 transition-colors hover:bg-sidebar-primary/20"
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sidebar-border bg-sidebar-primary/10 transition-colors hover:bg-sidebar-primary/20"
+          aria-label={collapsed ? localize(lang, "Развернуть меню", "Expand sidebar") : localize(lang, "Свернуть меню", "Collapse sidebar")}
+          title={collapsed ? localize(lang, "Развернуть меню", "Expand sidebar") : localize(lang, "Свернуть меню", "Collapse sidebar")}
         >
           {collapsed ? <span className="text-xs font-bold text-sidebar-primary">W</span> : <CollapseIcon className="h-4 w-4 text-sidebar-primary" />}
         </button>
@@ -78,33 +90,35 @@ export function AppSidebar() {
 
       {/* Navigation */}
       <SidebarContent className="px-3 py-4">
-        <SidebarGroup>
-          {!collapsed ? (
-            <div className="mb-2 px-3 text-[11px] font-medium uppercase tracking-[0.14em] text-sidebar-foreground/40">
-              {t("nav.workspace_label")}
-            </div>
-          ) : null}
-          <SidebarGroupContent>
-            <SidebarMenu className="space-y-0.5">
-              {allowedItems.map((item) => (
-                <SidebarMenuItem key={item.titleKey}>
-                  <SidebarMenuButton asChild>
-                    <NavLink
-                      to={item.url}
-                      end={item.url === "/dashboard"}
-                      className="group flex min-h-10 items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-sidebar-foreground/70 transition-all duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                      activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-semibold"
-                      title={collapsed ? t(item.titleKey) : undefined}
-                    >
-                      <item.icon className="h-4 w-4 shrink-0 transition-colors" />
-                      {!collapsed && <span className="truncate">{t(item.titleKey)}</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {navSections.map((section) => (
+          <SidebarGroup key={section.id} className={collapsed ? "mb-2" : "mb-4"}>
+            {!collapsed ? (
+              <div className="mb-2 px-3 text-[11px] font-medium uppercase tracking-[0.14em] text-sidebar-foreground/40">
+                {section.label}
+              </div>
+            ) : null}
+            <SidebarGroupContent>
+              <SidebarMenu className="space-y-1">
+                {section.items.map((item) => (
+                  <SidebarMenuItem key={item.titleKey}>
+                    <SidebarMenuButton asChild>
+                      <NavLink
+                        to={item.url}
+                        end={item.url === "/dashboard"}
+                        className="group relative flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm text-sidebar-foreground/70 transition-all duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                        activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-sm before:absolute before:left-0 before:top-1/2 before:h-6 before:w-0.5 before:-translate-y-1/2 before:rounded-r before:bg-sidebar-primary"
+                        title={collapsed ? t(item.titleKey) : undefined}
+                      >
+                        <item.icon className="h-4 w-4 shrink-0 transition-colors" />
+                        {!collapsed && <span className="truncate">{t(item.titleKey)}</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
 
       {/* Footer */}
@@ -114,7 +128,7 @@ export function AppSidebar() {
             <button
               type="button"
               onClick={() => setLang("en")}
-              className={`rounded-md px-2 py-1.5 transition-colors ${lang === "en" ? "bg-sidebar text-sidebar-primary" : "text-sidebar-foreground/60 hover:text-sidebar-foreground"}`}
+              className={`min-h-9 rounded-md px-2 py-1.5 transition-colors ${lang === "en" ? "bg-sidebar text-sidebar-primary" : "text-sidebar-foreground/60 hover:text-sidebar-foreground"}`}
               aria-pressed={lang === "en"}
             >
               EN
@@ -122,7 +136,7 @@ export function AppSidebar() {
             <button
               type="button"
               onClick={() => setLang("ru")}
-              className={`rounded-md px-2 py-1.5 transition-colors ${lang === "ru" ? "bg-sidebar text-sidebar-primary" : "text-sidebar-foreground/60 hover:text-sidebar-foreground"}`}
+              className={`min-h-9 rounded-md px-2 py-1.5 transition-colors ${lang === "ru" ? "bg-sidebar text-sidebar-primary" : "text-sidebar-foreground/60 hover:text-sidebar-foreground"}`}
               aria-pressed={lang === "ru"}
             >
               RU
@@ -132,16 +146,16 @@ export function AppSidebar() {
           <button
             type="button"
             onClick={() => setLang(lang === "ru" ? "en" : "ru")}
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-sidebar-foreground transition-colors hover:bg-sidebar-accent"
-            aria-label="Switch language"
-            title="Switch language"
+            className="flex h-10 w-10 items-center justify-center rounded-lg text-sidebar-foreground transition-colors hover:bg-sidebar-accent"
+            aria-label={localize(lang, "Переключить язык", "Switch language")}
+            title={localize(lang, "Переключить язык", "Switch language")}
           >
             <Languages className="h-4 w-4" />
           </button>
         )}
 
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-sidebar-border bg-primary/15 text-xs font-bold text-primary">
+        <div className={collapsed ? "flex flex-col items-center gap-2" : "flex items-center gap-2.5"}>
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-sidebar-border bg-primary/15 text-xs font-bold text-primary">
             {(data?.user?.username || "U").slice(0, 1).toUpperCase()}
           </div>
           {!collapsed && (
@@ -155,12 +169,24 @@ export function AppSidebar() {
           )}
           {!collapsed && (
             <button
-              className="ml-auto flex h-7 w-7 items-center justify-center rounded-md text-sidebar-foreground/40 transition-colors hover:bg-sidebar-accent hover:text-destructive"
+              type="button"
+              className="ml-auto flex h-9 w-9 items-center justify-center rounded-lg text-sidebar-foreground/50 transition-colors hover:bg-sidebar-accent hover:text-destructive"
               aria-label={t("nav.signout")}
               onClick={handleLogout}
               title={t("nav.signout")}
             >
               <LogOut className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {collapsed && (
+            <button
+              type="button"
+              className="flex h-10 w-10 items-center justify-center rounded-lg text-sidebar-foreground/50 transition-colors hover:bg-sidebar-accent hover:text-destructive"
+              aria-label={t("nav.signout")}
+              onClick={handleLogout}
+              title={t("nav.signout")}
+            >
+              <LogOut className="h-4 w-4" />
             </button>
           )}
         </div>

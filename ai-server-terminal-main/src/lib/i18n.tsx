@@ -71,3 +71,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 export function useI18n() {
   return useContext(I18nContext);
 }
+
+export function localize(lang: string, ru: string, en: string) {
+  return lang === "ru" ? ru : en;
+}

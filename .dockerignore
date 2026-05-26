@@ -59,3 +59,6 @@ db.sqlite3-wal
 *.sqlite3-shm
 *.sqlite3-wal
 ai-server-terminal-main/.vite
+ai-server-terminal-main/playwright-report
+ai-server-terminal-main/test-results
+.import_linter_cache

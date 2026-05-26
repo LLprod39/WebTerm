@@ -496,7 +496,7 @@ def test_share_master_password_and_knowledge_endpoints(monkeypatch):
 
 @pytest.mark.django_db
 def test_server_memory_purge_user_clears_ai_memory_everywhere():
-    from app.agent_kernel.memory.store import DjangoServerMemoryStore
+    from servers.adapters.memory_store import DjangoServerMemoryStore
 
     owner = User.objects.create_user(username="purge-owner", password="x")
     owner.is_staff = True
@@ -1583,8 +1583,8 @@ def test_agent_control_paths_do_not_require_live_engine(monkeypatch):
         status=AgentRun.STATUS_RUNNING,
     )
 
-    monkeypatch.setattr("servers.views.get_engine_for_run", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("servers.views.get_engine_for_agent", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("servers.agent_service.get_engine_for_run", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("servers.agent_service.get_engine_for_agent", lambda *_args, **_kwargs: None)
 
     reply = client.post(
         f"/servers/api/agents/runs/{waiting_run.id}/reply/",

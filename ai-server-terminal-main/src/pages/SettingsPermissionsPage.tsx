@@ -25,7 +25,7 @@ import {
 } from "@/lib/accessUiText";
 
 const SELECT_CLASS =
-  "h-9 w-full rounded-lg border border-border bg-secondary/30 px-3 text-sm text-foreground outline-none ring-0 transition-all focus:border-primary/40 focus:ring-1 focus:ring-primary/30";
+  "h-10 w-full rounded-lg border border-border bg-secondary/30 px-3 text-sm text-foreground outline-none ring-0 transition-all focus:border-primary/40 focus:ring-1 focus:ring-primary/30";
 
 const FALLBACK_FEATURES = ACCESS_FEATURE_OPTIONS;
 
@@ -78,18 +78,20 @@ function RuleRow({
         </div>
         <div className="mt-0.5 text-xs text-muted-foreground/60">{feature}</div>
       </div>
-      <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover/rule:opacity-100">
+      <div className="flex shrink-0 items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover/rule:opacity-100 sm:group-focus-within/rule:opacity-100">
         <button
           onClick={onToggle}
-          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/50 transition-colors hover:bg-secondary/40 hover:text-foreground"
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground/60 transition-colors hover:bg-secondary/40 hover:text-foreground"
           title={toggleTitle}
+          aria-label={toggleTitle}
         >
           <ArrowLeftRight className="h-3.5 w-3.5" />
         </button>
         <button
           onClick={onDelete}
-          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/50 transition-colors hover:bg-red-500/10 hover:text-red-400"
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground/60 transition-colors hover:bg-red-500/10 hover:text-red-400"
           title={deleteTitle}
+          aria-label={deleteTitle}
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
@@ -285,7 +287,7 @@ export default function SettingsPermissionsPage() {
               </select>
             </div>
             <div className="flex items-end">
-              <Button size="sm" onClick={() => void createUserPermission()} disabled={!users.length || !features.length}>
+              <Button className="h-10" onClick={() => void createUserPermission()} disabled={!users.length || !features.length}>
                 {common.save}
               </Button>
             </div>
@@ -324,7 +326,7 @@ export default function SettingsPermissionsPage() {
               </select>
             </div>
             <div className="flex items-end">
-              <Button size="sm" onClick={() => void createGroupPermission()} disabled={!groups.length || !features.length}>
+              <Button className="h-10" onClick={() => void createGroupPermission()} disabled={!groups.length || !features.length}>
                 {common.save}
               </Button>
             </div>

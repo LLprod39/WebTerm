@@ -1,0 +1,34 @@
+# .pre-commit-config.yaml
+# Enforces the architecture fitness checks defined in ARCHITECTURE_CONTRACT.md.
+#
+# Install:
+#   pip install pre-commit
+#   pre-commit install
+#
+# Run manually on all files:
+#   pre-commit run --all-files
+#
+# The two local hooks below match the CI checks in
+# .github/workflows/architecture-fitness.yml exactly.
+
+repos:
+  - repo: local
+    hooks:
+      - id: architecture-sizes
+        name: Architecture god-file prevention
+        language: python
+        entry: python scripts/check_architecture_sizes.py --strict-new
+        pass_filenames: false
+        always_run: true
+        additional_dependencies:
+          - tomli
+          - import-linter
+
+      - id: import-linter
+        name: Import boundary contracts
+        language: python
+        entry: lint-imports --no-cache
+        pass_filenames: false
+        always_run: true
+        additional_dependencies:
+          - import-linter

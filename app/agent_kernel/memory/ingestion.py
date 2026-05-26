@@ -26,13 +26,13 @@ Migration plan:
 3. Remove methods from store.py class body
 4. Ensure tests still pass after each step
 
-Constants shared with ingestion (re-exported from store for backward compat):
+Constants shared with ingestion:
 """
-from app.agent_kernel.memory.store import (  # noqa: F401
+from app.agent_kernel.memory.types import (  # noqa: F401
+    AUTOMATION_CANDIDATE_PREFIX,
     CANONICAL_MEMORY_KEYS,
     PATTERN_CANDIDATE_PREFIX,
-    AUTOMATION_CANDIDATE_PREFIX,
     SKILL_DRAFT_PREFIX,
-    SNAPSHOT_TITLES,
     SNAPSHOT_FALLBACKS,
+    SNAPSHOT_TITLES,
 )

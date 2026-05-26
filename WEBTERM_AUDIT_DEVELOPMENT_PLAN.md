@@ -264,6 +264,8 @@ Acceptance:
 
 Task type: implementation
 
+Status 2026-05-26: done. Production server agents now use app-level `MCPRuntimeProvider`; `studio` registers `StudioMCPRuntimeProvider`; MCP runtime tests import `studio.mcp_tool_runtime` directly; `servers/mcp_tool_runtime.py` was deleted.
+
 Scope:
 
 - `servers/mcp_tool_runtime.py`
@@ -275,14 +277,15 @@ Scope:
 
 Implementation:
 
-1. Change imports from `servers.mcp_tool_runtime` to `studio.mcp_tool_runtime`.
-2. Update monkeypatch targets in tests.
-3. Run targeted tests.
-4. Delete `servers/mcp_tool_runtime.py`.
+1. Route production agent imports through app-level `MCPRuntimeProvider`, not direct `studio` imports.
+2. Change MCP runtime tests from `servers.mcp_tool_runtime` to `studio.mcp_tool_runtime`.
+3. Update monkeypatch targets in tests.
+4. Run targeted tests.
+5. Delete `servers/mcp_tool_runtime.py`.
 
 Acceptance:
 
-- `rg "servers\\.mcp_tool_runtime"` returns nothing.
+- `rg "servers\\.mcp_tool_runtime" --glob "*.py"` returns nothing.
 - MCP-bound agent tests pass.
 - No behavior change in tool description/execution.
 
@@ -746,4 +749,3 @@ Kubernetes сразу с `kubectl apply/delete` создаст большой р
 - Dangerous operations share one policy/audit contract.
 - K8s/Git/CI integrations start read-only or PR-based before mutating production.
 - Settings/Memory/Workers have one clear UI and deploy story.
-

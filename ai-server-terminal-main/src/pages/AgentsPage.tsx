@@ -13,21 +13,21 @@ import {
   type AgentTemplate,
   type AgentRunResult,
 } from "@/lib/api";
-import { useI18n } from "@/lib/i18n";
+import { localize, useI18n } from "@/lib/i18n";
 import {
   Bot, Plus, Play, Trash2, RefreshCw, Clock, Zap, Eye,
   FileText, Server, X, Square,
-  Brain, Target, Settings2, Layers, Terminal, CheckCircle2,
+  Brain, Target, Settings2, Layers, CheckCircle2,
   AlertTriangle, Activity,
   Shield,
   type LucideIcon,
 } from "lucide-react";
+import { AgentReportModal } from "@/components/studio/AgentReportModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import ReactMarkdown from "react-markdown";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogBody, DialogFooter,
 } from "@/components/ui/dialog";
 import { EmptyState, MetricCard, MetricGrid, PageHero, PageShell, QueryStateBlock, SectionCard, StatusBadge } from "@/components/ui/page-shell";
 
@@ -93,7 +93,7 @@ function formatRoleLabel(role: string): string {
 }
 
 export default function AgentsPage() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [modeFilter, setModeFilter] = useState<"all" | "mini" | "full" | "multi">("all");
@@ -132,7 +132,14 @@ export default function AgentsPage() {
       }
       await queryClient.invalidateQueries({ queryKey: ["agents"] });
     } catch {
-      setResult({ run_id: 0, server_name: "Error", status: "failed", ai_analysis: "Run failed.", duration_ms: 0, commands_output: [] });
+      setResult({
+        run_id: 0,
+        server_name: localize(lang, "Ошибка запуска", "Run error"),
+        status: "failed",
+        ai_analysis: localize(lang, "Агент не запустился. Проверьте доступ к серверу и настройки агента.", "The agent did not start. Check server access and agent settings."),
+        duration_ms: 0,
+        commands_output: [],
+      });
     } finally {
       setRunningId(null);
     }
@@ -156,22 +163,30 @@ export default function AgentsPage() {
       <PageHero
         kicker="Automation"
         title={t("agent.title")}
-        description={`${allAgents.length} ${t("agent.title").toLowerCase()} · ${activeAgents} ${t("agent.active_runs").toLowerCase()} · ${scheduledAgents} scheduled`}
+        description={localize(
+          lang,
+          `${allAgents.length} настроено · ${activeAgents} выполняется · ${scheduledAgents} по расписанию`,
+          `${allAgents.length} configured · ${activeAgents} running · ${scheduledAgents} scheduled`,
+        )}
         actions={
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-          <div className="inline-flex rounded-lg border border-border bg-secondary/20 p-0.5 text-[11px] font-semibold">
-            {(["all", "mini", "full", "multi"] as const).map((m) => (
-              <button key={m} onClick={() => setModeFilter(m)}
-                className={`rounded-md px-2.5 py-1 transition-all duration-150 ${modeFilter === m ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-              >{m === "all" ? t("agent.all") : m === "mini" ? "Mini" : m === "full" ? "Full" : "Pipeline"}</button>
-            ))}
-          </div>
-          <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => queryClient.invalidateQueries({ queryKey: ["agents"] })} aria-label={t("udash.refresh")}>
-            <RefreshCw className="h-3.5 w-3.5" />
-          </Button>
-          <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-3.5 w-3.5" /> {t("agent.new")}
-          </Button>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
+            <div className="inline-flex min-h-10 rounded-lg border border-border bg-secondary/20 p-0.5 text-xs font-semibold">
+              {(["all", "mini", "full", "multi"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  aria-pressed={modeFilter === m}
+                  onClick={() => setModeFilter(m)}
+                  className={`rounded-md px-3 py-1.5 transition-all duration-150 ${modeFilter === m ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                >{m === "all" ? t("agent.all") : m === "mini" ? "Mini" : m === "full" ? "Full" : "Pipeline"}</button>
+              ))}
+            </div>
+            <Button size="icon" variant="ghost" className="h-10 w-10" onClick={() => queryClient.invalidateQueries({ queryKey: ["agents"] })} aria-label={t("udash.refresh")}>
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+            <Button size="sm" className="h-10 gap-1.5 text-sm" onClick={() => setCreateOpen(true)}>
+              <Plus className="h-4 w-4" /> {t("agent.new")}
+            </Button>
           </div>
         }
       />
@@ -192,17 +207,23 @@ export default function AgentsPage() {
             <div className="text-sm font-medium text-foreground">{result.server_name}</div>
             <div className="text-xs text-muted-foreground">{result.status} · {formatDuration(result.duration_ms)}</div>
           </div>
-          <Button size="sm" className="h-8 gap-1.5 shrink-0 text-xs" onClick={() => setReportModalOpen(true)}>
+          <Button size="sm" className="h-9 shrink-0 gap-1.5 text-xs" onClick={() => setReportModalOpen(true)}>
             <FileText className="h-3.5 w-3.5" /> {t("agent.report")}
           </Button>
-          <Button size="sm" variant="ghost" className="h-8 px-1.5 shrink-0 text-muted-foreground" onClick={() => setResult(null)}>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-9 w-9 shrink-0 text-muted-foreground"
+            onClick={() => setResult(null)}
+            aria-label={localize(lang, "Скрыть результат запуска", "Dismiss run result")}
+          >
             <X className="h-3.5 w-3.5" />
           </Button>
         </div>
       )}
 
       {result && (
-        <ReportModal result={result} open={reportModalOpen} onClose={() => setReportModalOpen(false)} />
+        <AgentReportModal result={result} open={reportModalOpen} onClose={() => setReportModalOpen(false)} />
       )}
       {agents.length === 0 ? (
         <EmptyState
@@ -216,7 +237,7 @@ export default function AgentsPage() {
           }
         />
       ) : (
-        <SectionCard title={t("agent.title")} description={`${agents.length} visible`} icon={<Bot className="h-4 w-4" />} bodyClassName="p-0">
+        <SectionCard title={t("agent.title")} description={localize(lang, `Показано: ${agents.length}`, `${agents.length} visible`)} icon={<Bot className="h-4 w-4" />} bodyClassName="p-0">
           <div className="divide-y divide-border/40">
             {agents.map((ag) => {
               const AgentIcon = AGENT_ICONS[ag.agent_type] || Settings2;
@@ -250,33 +271,39 @@ export default function AgentsPage() {
                     </div>
                     {ag.goal && <p className="text-[10px] text-muted-foreground mt-0.5 truncate max-w-md">{ag.goal}</p>}
                   </div>
-                  <div className="flex w-full flex-wrap items-center justify-end gap-1 sm:w-auto sm:shrink-0">
+                  <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:shrink-0">
                     {ag.active_run_id ? (
                       <>
-                        <Link to={`/agents/run/${ag.active_run_id}`}>
-                          <Button size="sm" variant="outline" className="h-7 text-[10px] px-2 gap-1">
-                            <Eye className="h-3 w-3" /> Watch
-                          </Button>
-                        </Link>
-                        <Button size="sm" variant="outline" className="h-7 text-[10px] px-2 gap-1 text-red-400" onClick={() => onStop(ag)}>
-                          <Square className="h-3 w-3" /> Stop
+                        <Button asChild size="xs" variant="outline" className="gap-1">
+                          <Link to={`/agents/run/${ag.active_run_id}`}>
+                            <Eye className="h-3 w-3" /> {localize(lang, "Следить", "Watch")}
+                          </Link>
+                        </Button>
+                        <Button size="xs" variant="outline" className="gap-1 text-red-400" onClick={() => onStop(ag)}>
+                          <Square className="h-3 w-3" /> {t("agent.stop")}
                         </Button>
                       </>
                     ) : (
                       <>
                         {ag.last_run_id && (
-                          <Link to={`/agents/run/${ag.last_run_id}`}>
-                            <Button size="sm" variant="ghost" className="h-7 text-[10px] px-2 gap-1 text-muted-foreground hover:text-foreground">
-                              <FileText className="h-3 w-3" /> Report
-                            </Button>
-                          </Link>
+                          <Button asChild size="xs" variant="ghost" className="gap-1 text-muted-foreground hover:text-foreground">
+                            <Link to={`/agents/run/${ag.last_run_id}`}>
+                              <FileText className="h-3 w-3" /> {t("agent.report")}
+                            </Link>
+                          </Button>
                         )}
-                        <Button size="sm" variant="outline" className="h-7 text-[10px] px-2 gap-1" disabled={isRunning} onClick={() => onRun(ag)}>
+                        <Button size="xs" variant="outline" className="gap-1" disabled={isRunning} onClick={() => onRun(ag)}>
                           {isRunning ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />} {t("agent.run")}
                         </Button>
                       </>
                     )}
-                    <Button size="sm" variant="ghost" className="h-7 px-1 text-muted-foreground hover:text-red-400" onClick={() => onDelete(ag.id)}>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-muted-foreground hover:text-red-400"
+                      onClick={() => onDelete(ag.id)}
+                      aria-label={localize(lang, `Удалить ${ag.name}`, `Delete ${ag.name}`)}
+                    >
                       <Trash2 className="h-3 w-3" />
                     </Button>
                   </div>
@@ -301,7 +328,6 @@ export default function AgentsPage() {
     </PageShell>
   );
 }
-
 // ---------------------------------------------------------------------------
 
 function CreateAgentDialog({
@@ -313,6 +339,7 @@ function CreateAgentDialog({
   onClose: () => void;
   onCreated: (created: { id: number; mode: "mini" | "full" | "multi" }) => Promise<void> | void;
 }) {
+  const { t, lang } = useI18n();
   const [step, setStep] = useState<"template" | "config">("template");
   const [mode, setMode] = useState<"mini" | "full" | "multi">("mini");
   const [selectedType, setSelectedType] = useState("");
@@ -356,7 +383,7 @@ function CreateAgentDialog({
     try {
       const cmdList = commands.split("\n").map((c) => c.trim()).filter(Boolean);
       const created = await createAgent({
-        name: name || "Custom Agent",
+        name: name || localize(lang, "Новый агент", "Custom Agent"),
         mode,
         agent_type: selectedType || "custom",
         server_ids: selectedServers,
@@ -391,39 +418,70 @@ function CreateAgentDialog({
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{step === "template" ? "Create Agent" : `Configure ${mode === "multi" ? "Pipeline" : mode === "full" ? "Full" : "Mini"} Agent`}</DialogTitle>
+          <DialogTitle>
+            {step === "template"
+              ? t("agent.create")
+              : localize(
+                lang,
+                `Настроить ${mode === "multi" ? "пайплайн" : mode === "full" ? "полного агента" : "mini-агента"}`,
+                `Configure ${mode === "multi" ? "Pipeline" : mode === "full" ? "Full" : "Mini"} Agent`,
+              )}
+          </DialogTitle>
+          <DialogDescription>
+            {step === "template"
+              ? localize(lang, "Выберите тип агента или начните с ручной настройки.", "Choose an agent type or start with a custom setup.")
+              : localize(lang, "Настройте цель, лимиты, доступ к инструментам и серверы для запуска.", "Set the goal, limits, tool access, and servers for this run.")}
+          </DialogDescription>
         </DialogHeader>
         <DialogBody className="max-h-[70vh] overflow-y-auto">
           {step === "template" ? (
             <div className="space-y-4">
               {/* Mode selector */}
               <div className="flex gap-3 flex-wrap">
-                <button onClick={() => setMode("mini")} className={`flex-1 min-w-[140px] text-left border rounded-lg p-4 transition-colors ${mode === "mini" ? "border-primary bg-primary/10" : "border-border hover:border-primary/40"}`}>
+                <button
+                  type="button"
+                  aria-pressed={mode === "mini"}
+                  onClick={() => setMode("mini")}
+                  className={`flex-1 min-w-[140px] text-left border rounded-lg p-4 transition-colors ${mode === "mini" ? "border-primary bg-primary/10" : "border-border hover:border-primary/40"}`}
+                >
                   <div className="flex items-center gap-2 mb-2">
                     <Zap className="h-4 w-4 text-primary" />
-                    <span className="text-sm font-semibold">Mini Agent</span>
+                    <span className="text-sm font-semibold">{localize(lang, "Mini-агент", "Mini Agent")}</span>
                   </div>
-                  <p className="text-xs text-muted-foreground">Run commands and get AI analysis</p>
+                  <p className="text-xs text-muted-foreground">{localize(lang, "Выполняет список команд и готовит краткий разбор.", "Runs commands and returns a short analysis.")}</p>
                 </button>
-                <button onClick={() => setMode("full")} className={`flex-1 min-w-[140px] text-left border rounded-lg p-4 transition-colors ${mode === "full" ? "border-primary bg-primary/10" : "border-border hover:border-primary/40"}`}>
+                <button
+                  type="button"
+                  aria-pressed={mode === "full"}
+                  onClick={() => setMode("full")}
+                  className={`flex-1 min-w-[140px] text-left border rounded-lg p-4 transition-colors ${mode === "full" ? "border-primary bg-primary/10" : "border-border hover:border-primary/40"}`}
+                >
                   <div className="flex items-center gap-2 mb-2">
                     <Brain className="h-4 w-4 text-primary" />
-                    <span className="text-sm font-semibold">Full Agent</span>
+                    <span className="text-sm font-semibold">{localize(lang, "Полный агент", "Full Agent")}</span>
                   </div>
-                  <p className="text-xs text-muted-foreground">Autonomous with goal and reasoning</p>
+                  <p className="text-xs text-muted-foreground">{localize(lang, "Сам выбирает шаги, инструменты и проверки.", "Chooses steps, tools, and checks.")}</p>
                 </button>
-                <button onClick={() => setMode("multi")} className={`flex-1 min-w-[140px] text-left border rounded-lg p-4 transition-colors ${mode === "multi" ? "border-primary bg-primary/10" : "border-border hover:border-primary/40"}`}>
+                <button
+                  type="button"
+                  aria-pressed={mode === "multi"}
+                  onClick={() => setMode("multi")}
+                  className={`flex-1 min-w-[140px] text-left border rounded-lg p-4 transition-colors ${mode === "multi" ? "border-primary bg-primary/10" : "border-border hover:border-primary/40"}`}
+                >
                   <div className="flex items-center gap-2 mb-2">
                     <Layers className="h-4 w-4 text-primary" />
                     <span className="text-sm font-semibold">Pipeline</span>
                   </div>
-                  <p className="text-xs text-muted-foreground">Multi-agent orchestration</p>
+                  <p className="text-xs text-muted-foreground">{localize(lang, "Координирует несколько агентов и серверов.", "Coordinates multiple agents and servers.")}</p>
                 </button>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 {templates.map((tpl) => (
-                  <button key={tpl.type} onClick={() => onSelectTemplate(tpl)}
+                  <button
+                    key={tpl.type}
+                    type="button"
+                    onClick={() => onSelectTemplate(tpl)}
                     className="text-left bg-secondary/40 border border-border rounded-lg p-4 hover:border-primary/50 transition-colors">
                     <div className="flex items-center gap-3 mb-2">
                       <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-background text-muted-foreground">
@@ -436,81 +494,83 @@ function CreateAgentDialog({
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {tpl.mode === "full"
-                        ? ((tpl.goal || "Autonomous agent").slice(0, 80))
-                        : `${tpl.command_count} commands`}
+                        ? ((tpl.goal || localize(lang, "Автономная OPS-задача", "Autonomous OPS task")).slice(0, 80))
+                        : localize(lang, `${tpl.command_count} команд`, `${tpl.command_count} commands`)}
                     </p>
                   </button>
                 ))}
-                <button onClick={() => { setSelectedType("custom"); setStep("config"); }}
+                <button
+                  type="button"
+                  onClick={() => { setSelectedType("custom"); setStep("config"); }}
                   className="text-left bg-secondary/40 border border-dashed border-border rounded-lg p-4 hover:border-primary/50 transition-colors">
                   <div className="flex items-center gap-3 mb-2">
                     <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-background text-muted-foreground">
                       <Settings2 className="h-4 w-4" />
                     </span>
-                    <span className="text-sm font-semibold text-foreground">Custom Agent</span>
+                    <span className="text-sm font-semibold text-foreground">{localize(lang, "Настроить вручную", "Custom Agent")}</span>
                   </div>
-                  <p className="text-xs text-muted-foreground">Build from scratch</p>
+                  <p className="text-xs text-muted-foreground">{localize(lang, "Задайте команды, цель и серверы сами.", "Define commands, goal, and servers yourself.")}</p>
                 </button>
               </div>
             </div>
           ) : (
             <div className="space-y-5">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Name</label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="My Agent" className="bg-secondary/30 h-10" />
+                <label className="text-sm font-medium text-foreground">{localize(lang, "Название", "Name")}</label>
+                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={localize(lang, "Проверка места на диске", "Disk space check")} className="bg-secondary/30 h-10" />
               </div>
 
               {(mode === "full" || mode === "multi") && (
                 <>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground flex items-center gap-2">
-                      <Target className="h-4 w-4 text-primary" /> Goal
+                      <Target className="h-4 w-4 text-primary" /> {localize(lang, "Цель", "Goal")}
                     </label>
                     <Textarea value={goal} onChange={(e) => setGoal(e.target.value)} rows={3} className="bg-secondary/30 text-sm"
-                      placeholder={mode === "multi" ? "Describe your goal. The orchestrator will break it into tasks." : "What should this agent achieve?"} />
+                      placeholder={mode === "multi" ? localize(lang, "Что нужно проверить или исправить. Оркестратор разложит цель на шаги.", "What to check or fix. The orchestrator will split it into steps.") : localize(lang, "Что должен сделать агент и какой результат вернуть.", "What the agent should do and report back.")} />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground flex items-center gap-2"><Settings2 className="h-4 w-4 text-muted-foreground" /> System Prompt</label>
+                    <label className="text-sm font-medium text-foreground flex items-center gap-2"><Settings2 className="h-4 w-4 text-muted-foreground" /> {localize(lang, "Системные инструкции", "System instructions")}</label>
                     <Textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} rows={2} className="bg-secondary/30 text-sm"
-                      placeholder="Custom role or personality (optional)" />
+                      placeholder={localize(lang, "Роль, ограничения, формат отчёта. Необязательно.", "Role, limits, report format. Optional.")} />
                   </div>
-                  <div className="flex gap-4">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     <div className="flex-1 space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">Max Iterations</label>
+                      <label className="text-xs font-medium text-muted-foreground">{localize(lang, "Макс. итераций", "Max iterations")}</label>
                       <Input type="number" min={1} max={100} value={maxIter} onChange={(e) => setMaxIter(Number(e.target.value))} className="bg-secondary/50 h-8 text-sm" />
                     </div>
                     <div className="flex-1 space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">Session Timeout (sec)</label>
+                      <label className="text-xs font-medium text-muted-foreground">{localize(lang, "Таймаут сессии, сек.", "Session timeout, sec")}</label>
                       <Input type="number" min={30} max={3600} value={sessionTimeoutSeconds} onChange={(e) => setSessionTimeoutSeconds(Number(e.target.value))} className="bg-secondary/50 h-8 text-sm" />
                     </div>
                     <div className="flex-1 space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">Max Connections</label>
+                      <label className="text-xs font-medium text-muted-foreground">{localize(lang, "Макс. подключений", "Max connections")}</label>
                       <Input type="number" min={1} max={10} value={maxConnections} onChange={(e) => setMaxConnections(Number(e.target.value))} className="bg-secondary/50 h-8 text-sm" />
                     </div>
-                    <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer pt-5">
+                    <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer rounded-lg border border-border/50 bg-secondary/30 px-3 py-2 xl:mt-5">
                       <input type="checkbox" checked={multiServer} onChange={(e) => setMultiServer(e.target.checked)} className="rounded" />
-                      Multi-server
+                      {localize(lang, "Несколько серверов", "Multi-server")}
                     </label>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-muted-foreground">Stop Conditions</label>
+                    <label className="text-xs font-medium text-muted-foreground">{localize(lang, "Условия остановки", "Stop conditions")}</label>
                     <Textarea
                       value={stopConditionsText}
                       onChange={(e) => setStopConditionsText(e.target.value)}
                       rows={3}
                       className="bg-secondary/50 text-xs"
-                      placeholder="One condition per line. Example: Health checks are green"
+                      placeholder={localize(lang, "По одному условию на строку. Например: health checks зелёные", "One condition per line. Example: health checks are green")}
                     />
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-medium text-muted-foreground">Tool Access</label>
+                      <label className="text-xs font-medium text-muted-foreground">{localize(lang, "Доступ к инструментам", "Tool access")}</label>
                       <button
                         type="button"
-                        className="text-[10px] text-primary hover:underline"
+                        className="min-h-8 rounded-md px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
                         onClick={() => setToolsConfig(buildDefaultToolsConfig())}
                       >
-                        Enable all
+                        {localize(lang, "Включить все", "Enable all")}
                       </button>
                     </div>
                     <div className="grid grid-cols-2 gap-2 rounded-lg border border-border/70 bg-secondary/20 p-3">
@@ -533,25 +593,29 @@ function CreateAgentDialog({
 
               {mode === "mini" && (
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-muted-foreground">Commands (one per line)</label>
+                  <label className="text-xs font-medium text-muted-foreground">{t("agent.commands_label")}</label>
                   <Textarea value={commands} onChange={(e) => setCommands(e.target.value)} rows={5} className="bg-secondary/50 font-mono text-[11px]"
                     placeholder="hostname&#10;uptime&#10;free -m" />
                 </div>
               )}
 
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">AI Prompt</label>
+                <label className="text-xs font-medium text-muted-foreground">{localize(lang, "Инструкции к анализу", "Analysis instructions")}</label>
                 <Textarea value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} rows={2} className="bg-secondary/50 text-xs"
-                  placeholder="Extra instructions for AI analysis" />
+                  placeholder={localize(lang, "На что обратить внимание в выводе команд. Необязательно.", "What to focus on in command output. Optional.")} />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Servers</label>
-                <div className="flex flex-wrap gap-1.5">
-                  <button onClick={selectAll} className={`px-2 py-1 text-[10px] rounded border transition-colors ${selectedServers.length === servers.length ? "border-primary text-primary" : "border-border text-muted-foreground"}`}>All</button>
+                <label className="text-xs font-medium text-muted-foreground">{t("nav.servers")}</label>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={selectAll} className={`min-h-8 rounded-md border px-3 py-1 text-xs font-medium transition-colors ${selectedServers.length === servers.length ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>{t("agent.all")}</button>
                   {servers.map((s) => (
-                    <button key={s.id} onClick={() => toggleServer(s.id)}
-                      className={`px-2 py-1 text-[10px] rounded border transition-colors ${selectedServers.includes(s.id) ? "border-primary text-primary bg-primary/10" : "border-border text-muted-foreground"}`}>
+                    <button
+                      key={s.id}
+                      type="button"
+                      aria-pressed={selectedServers.includes(s.id)}
+                      onClick={() => toggleServer(s.id)}
+                      className={`min-h-8 rounded-md border px-3 py-1 text-xs font-medium transition-colors ${selectedServers.includes(s.id) ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>
                       {s.name}
                     </button>
                   ))}
@@ -560,8 +624,8 @@ function CreateAgentDialog({
 
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-medium text-muted-foreground">Schedule</label>
-                  <span className="text-xs font-mono text-foreground">{schedule === 0 ? "Manual" : `${schedule} min`}</span>
+                  <label className="text-xs font-medium text-muted-foreground">{t("agent.schedule")}</label>
+                  <span className="text-xs font-mono text-foreground">{schedule === 0 ? t("agent.manual") : `${schedule} min`}</span>
                 </div>
                 <input type="range" min={0} max={1440} step={5} value={schedule} onChange={(e) => setSchedule(Number(e.target.value))}
                   className="w-full h-1.5 bg-secondary rounded-full appearance-none cursor-pointer accent-primary" />
@@ -571,123 +635,12 @@ function CreateAgentDialog({
         </DialogBody>
         {step === "config" && (
           <DialogFooter>
-            <Button size="sm" variant="outline" onClick={() => setStep("template")}>Back</Button>
-            <Button size="sm" onClick={onSave} disabled={saving || !selectedServers.length}>
-              {saving ? "Creating..." : "Create Agent"}
+            <Button size="sm" variant="outline" className="min-w-24" onClick={() => setStep("template")}>{t("agent.back")}</Button>
+            <Button size="sm" className="min-w-32" onClick={onSave} disabled={saving || !selectedServers.length}>
+              {saving ? localize(lang, "Создаём...", "Creating...") : t("agent.create")}
             </Button>
           </DialogFooter>
         )}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Full-screen Report Modal
-// ---------------------------------------------------------------------------
-
-function ReportModal({ result, open, onClose }: { result: AgentRunResult; open: boolean; onClose: () => void }) {
-  const [activeTab, setActiveTab] = useState<"report" | "console">("report");
-  const report = result.final_report || result.ai_analysis || "";
-  const hasConsole = result.commands_output.length > 0;
-  const isCompleted = result.status === "completed";
-
-  return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="flex h-[90vh] w-[95vw] max-w-5xl flex-col gap-0 rounded-[1.75rem] p-0">
-        <div className="flex shrink-0 items-center gap-3 border-b border-border bg-card px-5 py-3">
-          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${isCompleted ? "bg-green-500/10" : "bg-red-500/10"}`}>
-            {isCompleted ? <CheckCircle2 className="h-4 w-4 text-green-400" /> : <AlertTriangle className="h-4 w-4 text-red-400" />}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="truncate text-sm font-semibold text-foreground">Agent Report — {result.server_name}</p>
-            <div className="mt-0.5 flex items-center gap-3 text-[10px] text-muted-foreground">
-              <span className={`font-bold uppercase ${isCompleted ? "text-green-400" : "text-red-400"}`}>{result.status}</span>
-              <span className="flex items-center gap-0.5"><Activity className="h-2.5 w-2.5" />{formatDuration(result.duration_ms)}</span>
-              {hasConsole && <span className="flex items-center gap-0.5"><Terminal className="h-2.5 w-2.5" />{result.commands_output.length} commands</span>}
-            </div>
-          </div>
-          <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        {hasConsole && (
-          <div className="flex shrink-0 border-b border-border bg-card/50 px-5">
-            <button
-              onClick={() => setActiveTab("report")}
-              className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${activeTab === "report" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
-            >
-              <FileText className="inline h-3 w-3 mr-1" />Report
-            </button>
-            <button
-              onClick={() => setActiveTab("console")}
-              className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${activeTab === "console" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
-            >
-              <Terminal className="inline h-3 w-3 mr-1" />Console ({result.commands_output.length})
-            </button>
-          </div>
-        )}
-
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          {activeTab === "report" ? (
-            <div className="py-8 px-8 max-w-[720px] mx-auto font-sans">
-              {report ? (
-                <div
-                  className="
-                    [&_h1]:text-[22px] [&_h1]:font-bold [&_h1]:text-foreground [&_h1]:leading-snug [&_h1]:mb-3 [&_h1]:mt-0
-                    [&_h2]:text-[13px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-widest [&_h2]:text-muted-foreground [&_h2]:mt-9 [&_h2]:mb-3 [&_h2]:pb-2 [&_h2]:border-b [&_h2]:border-border/30
-                    [&_h3]:text-base [&_h3]:font-semibold [&_h3]:text-foreground [&_h3]:mt-6 [&_h3]:mb-2
-                    [&_p]:text-[15px] [&_p]:text-foreground/80 [&_p]:leading-[1.8] [&_p]:mb-4
-                    [&_ul]:mb-5 [&_ul]:pl-5 [&_ul]:space-y-1.5 [&_ul]:list-disc [&_ul]:marker:text-muted-foreground/60
-                    [&_ol]:mb-5 [&_ol]:pl-5 [&_ol]:space-y-1.5 [&_ol]:list-decimal [&_ol]:marker:text-muted-foreground/60
-                    [&_li]:text-[15px] [&_li]:text-foreground/80 [&_li]:leading-[1.8]
-                    [&_strong]:font-semibold [&_strong]:text-foreground
-                    [&_em]:italic [&_em]:text-foreground/65
-                    [&_blockquote]:border-l-4 [&_blockquote]:border-primary/40 [&_blockquote]:pl-5 [&_blockquote]:py-2 [&_blockquote]:my-5 [&_blockquote]:bg-secondary/10 [&_blockquote]:rounded-r-lg [&_blockquote]:text-[15px] [&_blockquote]:text-foreground/70
-                    [&_code]:text-[13px] [&_code]:font-mono [&_code]:bg-secondary/40 [&_code]:text-foreground/85 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded
-                    [&_pre]:bg-secondary/20 [&_pre]:border [&_pre]:border-border/30 [&_pre]:rounded-xl [&_pre]:p-5 [&_pre]:overflow-x-auto [&_pre]:text-[12px] [&_pre]:font-mono [&_pre]:text-foreground/75 [&_pre]:my-5
-                    [&_hr]:border-border/25 [&_hr]:my-8
-                    [&_table]:w-full [&_table]:text-sm [&_table]:my-6 [&_table]:border-collapse [&_table]:border [&_table]:border-border/40 [&_table]:rounded-lg [&_table]:overflow-hidden
-                    [&_thead]:bg-secondary/40
-                    [&_th]:text-left [&_th]:px-4 [&_th]:py-2.5 [&_th]:text-[11px] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted-foreground [&_th]:border [&_th]:border-border/30
-                    [&_td]:px-4 [&_td]:py-3 [&_td]:text-[13px] [&_td]:text-foreground/80 [&_td]:border [&_td]:border-border/20 [&_td]:align-top [&_td]:leading-snug
-                    [&_tr:nth-child(even)_td]:bg-secondary/10
-                    [&_tr:hover_td]:bg-primary/5
-                  "
-                >
-                  <ReactMarkdown>{report}</ReactMarkdown>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <FileText className="h-10 w-10 text-muted-foreground/30 mb-3" />
-                  <p className="text-sm text-muted-foreground">No report available</p>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="p-4 space-y-3">
-              {result.commands_output.map((cmd, i) => (
-                <div key={i} className="bg-[#0d1117] rounded-lg overflow-hidden border border-border/30">
-                  <div className="flex items-center gap-2 px-3 py-2 bg-secondary/10 border-b border-border/20">
-                    <span className="text-green-400 font-mono text-[11px]">$</span>
-                    <span className="font-mono text-xs text-foreground flex-1">{cmd.cmd}</span>
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${cmd.exit_code === 0 ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>
-                      exit {cmd.exit_code}
-                    </span>
-                    <span className="text-[9px] text-muted-foreground">{cmd.duration_ms}ms</span>
-                  </div>
-                  {cmd.stdout && (
-                    <pre className="px-3 py-2.5 text-[11px] text-foreground/80 font-mono whitespace-pre-wrap overflow-x-auto">{cmd.stdout}</pre>
-                  )}
-                  {cmd.stderr && (
-                    <pre className="px-3 py-2.5 text-[11px] text-red-400/80 font-mono whitespace-pre-wrap border-t border-red-500/10">{cmd.stderr}</pre>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
       </DialogContent>
     </Dialog>
   );

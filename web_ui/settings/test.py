@@ -12,8 +12,11 @@ Overrides vs development:
   - MEDIA_ROOT: temp dir to avoid polluting dev media/
 """
 import tempfile
+from pathlib import Path
 
 from web_ui.settings.development import *  # noqa: F401, F403
+
+TEST_ARTIFACT_ROOT = Path(tempfile.mkdtemp(prefix="weu_test_"))
 
 # Speed up password hashing in tests
 PASSWORD_HASHERS = [
@@ -35,4 +38,15 @@ CHANNEL_LAYERS = {
 }
 
 # Isolate uploaded files from dev workspace
-MEDIA_ROOT = tempfile.mkdtemp(prefix="weu_test_media_")
+MEDIA_ROOT = TEST_ARTIFACT_ROOT / "media"
+
+# Keep tests self-contained even when .env points development at PostgreSQL.
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": TEST_ARTIFACT_ROOT / "db.sqlite3",
+        "OPTIONS": {
+            "timeout": 60,
+        },
+    }
+}

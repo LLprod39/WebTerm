@@ -1,33 +1,99 @@
 [importlinter]
-root_package = .
+# Enforces architectural boundaries defined in ARCHITECTURE_CONTRACT.md.
+# Run manually with:  lint-imports
+# In CI, triggered by:  python scripts/check_architecture_sizes.py
+root_packages =
+    app
+    core_ui
+    servers
+    studio
+    web_ui
+    passwords
 include_external_packages = True
 
+
 # ─── Contract 1: agent_kernel must not import Django ORM ──────────────────────
+# Goal: Keep the kernel pure Python so it can run in any environment
+# (CLI, worker, cloud function) without a full Django stack.
 [importlinter:contract:agent-kernel-no-django-orm]
 name = agent_kernel must not import Django ORM models layer
 type = forbidden
 source_modules =
     app.agent_kernel
 forbidden_modules =
-    django.db.models
-    django.db.transaction
+    django
 ignore_imports =
-    # django.utils.timezone is allowed as a utility (not ORM)
-    app.agent_kernel.memory.store -> django.utils
+    # Legacy violations to be resolved in subsequent refactoring tasks:
+    app.agent_kernel.tools.registry -> servers.agent_tools
 
-# ─── Contract 2: app/ shared layer must not import Django apps ────────────────
-[importlinter:contract:app-no-django-apps]
-name = app/ shared services must not import servers, studio, or core_ui
+
+# ─── Contract 2: app/core must not import Django feature apps ─────────────────
+# Goal: Shared infrastructure in app/core must remain dependency-free from
+# feature apps so it can be reused across the whole project.
+[importlinter:contract:app-core-no-django-apps]
+name = app/core shared services must not import servers, studio, or core_ui
 type = forbidden
 source_modules =
     app.core
+forbidden_modules =
+    servers
+    studio
+    core_ui
+ignore_imports =
+    # Legacy violations to be resolved in subsequent refactoring tasks:
+    app.core.llm -> core_ui.audit
+    app.core.llm -> core_ui.services.llm_budget
+    app.core.llm_usage -> core_ui.activity
+    app.core.llm_usage -> core_ui.audit
+    app.core.llm_usage -> core_ui.models
+
+
+# ─── Contract 3: app/tools must not import Django feature apps ────────────────
+# Goal: Tool implementations must stay decoupled from feature apps.
+# Documented shims listed below are the only permitted exceptions.
+[importlinter:contract:app-tools-no-django-apps]
+name = app/tools must not import servers (except documented shims), studio, or core_ui
+type = forbidden
+source_modules =
     app.tools
 forbidden_modules =
     servers
     studio
     core_ui
+ignore_imports =
+    # server_tools.py and ssh_tools.py must directly access the Server ORM.
+    # This is a known, accepted design compromise: SSH execution tools need
+    # to know about Server entities.
+    # Future intent: Extract into servers/tools/ and remove from app/tools/.
+    app.tools.server_tools -> servers.models
+    app.tools.server_tools -> servers.secret_utils
+    app.tools.ssh_tools -> servers.ssh_host_keys
+    # Legacy violations to be resolved in subsequent refactoring tasks:
+    app.tools.server_tools -> core_ui.activity
+    app.tools.server_tools -> servers.knowledge_service
+    app.tools.ssh_tools -> core_ui.activity
+    app.tools.ssh_tools -> core_ui.audit
 
-# ─── Contract 3: core_ui must not import servers or studio ────────────────────
+
+# ─── Contract 4: app/tools must not import agent_kernel ───────────────────────
+# Goal: Tools are leaf-layer utilities; importing the kernel would create a
+# circular dependency risk and blur the kernel/tool boundary.
+# Dependency direction must always flow: agent_kernel -> tools, never reversed.
+[importlinter:contract:app-tools-no-agent-kernel]
+name = app/tools must not import app/agent_kernel (dependency inversion)
+type = forbidden
+source_modules =
+    app.tools
+forbidden_modules =
+    app.agent_kernel
+ignore_imports =
+    # Legacy violations to be resolved in subsequent refactoring tasks:
+    app.tools.server_tools -> servers.knowledge_service
+
+
+# ─── Contract 5: core_ui must not import servers or studio ────────────────────
+# Goal: The UI layer should focus on session management and view aggregation;
+# business logic lives in feature apps or app/.
 [importlinter:contract:core-ui-isolation]
 name = core_ui must not import servers or studio
 type = forbidden
@@ -37,33 +103,33 @@ forbidden_modules =
     servers
     studio
 ignore_imports =
-    # desktop_api is an explicit Electron-desktop integration layer — it bridges
-    # multiple bounded contexts by design (documented in DEVELOPMENT_RULES.md §2)
-    core_ui.desktop_api.views -> servers
-    core_ui.desktop_api.views -> studio
-    core_ui.desktop_api.serializers -> servers
-    # Admin dashboard views aggregate cross-context data for system monitoring
-    core_ui.views._views_all -> servers
-    # Seed management command — dev/test tooling only, not production code
-    core_ui.management.commands.seed_multi_user_smoke -> servers
-    core_ui.management.commands.seed_multi_user_smoke -> studio
+    # desktop_api is the explicit Electron-desktop integration layer — it
+    # bridges bounded contexts by design (documented in DEVELOPMENT_RULES.md §2).
+    core_ui.desktop_api.views -> servers.models
+    core_ui.desktop_api.views -> servers.secret_utils
+    core_ui.desktop_api.views -> servers.views
+    core_ui.desktop_api.views -> studio.mcp_client
+    core_ui.desktop_api.views -> studio.models
+    core_ui.desktop_api.views -> studio.views
+    core_ui.desktop_api.serializers -> servers.models
+    core_ui.desktop_api.serializers -> servers.secret_utils
+    # Admin dashboard aggregates cross-context data for system monitoring.
+    core_ui.views.admin_views -> servers.models
+    # Chat helper bridge can use user-owned server records for explicit
+    # "run this on server X" assistant requests.
+    core_ui.views.chat_helpers -> servers.models
+    core_ui.views.chat_helpers -> servers.secret_utils
+    # seed_multi_user_smoke is dev/test tooling only, not production code.
+    core_ui.management.commands.seed_multi_user_smoke -> servers.models
+    core_ui.management.commands.seed_multi_user_smoke -> servers.secret_utils
+    core_ui.management.commands.seed_multi_user_smoke -> studio.models
+    # Legacy violations to be resolved in subsequent refactoring tasks:
+    core_ui.views.chat_helpers -> app.tools.server_tools
 
-# ─── Contract 5: app.tools → servers is the one allowed exception ────────────
-# app/tools/server_tools.py and ssh_tools.py directly access servers models.
-# This is a known design compromise: SSH execution tools must know about Server ORM.
-# Future: Extract into servers/tools/ and remove from app/tools/
-[importlinter:contract:app-tools-server-exception]
-name = app.tools may access servers ORM (documented exception)
-type = forbidden
-source_modules =
-    app.tools
-forbidden_modules =
-    servers
-ignore_imports =
-    app.tools.server_tools -> servers
-    app.tools.ssh_tools -> servers
 
-# ─── Contract 4: servers must not import studio directly ─────────────────────
+# ─── Contract 6: servers must not import studio directly ──────────────────────
+# Goal: Feature-app isolation — servers communicates with studio via Django
+# signals or app-level provider/gateway interfaces, never via direct imports.
 [importlinter:contract:servers-no-studio]
 name = servers must not import studio directly (use Signals or SkillProvider DI)
 type = forbidden
@@ -72,5 +138,31 @@ source_modules =
 forbidden_modules =
     studio
 ignore_imports =
-    # mcp_tool_runtime is a thin re-export shim — acceptable until fully migrated
-    servers.mcp_tool_runtime -> studio
+    # Legacy violations to be resolved in subsequent refactoring tasks:
+    servers.agent_service -> app.runtime_limits
+    servers.scheduled_agents -> app.runtime_limits
+
+
+# ─── Contract 7: studio must not import servers directly ──────────────────────
+# Goal: Mirror of contract 6 — bidirectional isolation between feature apps.
+[importlinter:contract:studio-no-servers]
+name = studio must not import servers directly
+type = forbidden
+source_modules =
+    studio
+forbidden_modules =
+    servers
+ignore_imports =
+    # Legacy violations to be resolved in subsequent refactoring tasks:
+    studio.apps -> servers.signals
+    studio.pipeline_executor -> app.agent_kernel.memory.server_cards
+    studio.pipeline_executor -> servers.services.command_history
+    studio.pipeline_executor -> servers.services.pipeline_agents
+    studio.pipeline_executor -> servers.services.pipeline_memory
+    studio.pipeline_executor -> servers.services.ssh_connection
+    studio.services.server_access -> servers.services.server_query
+    studio.skill_authoring -> servers.services.tool_catalog
+    studio.trigger_dispatch -> servers.services.alert_query
+    studio.management.commands.run_telegram_bot -> app.runtime_limits
+    studio.trigger_dispatch -> app.runtime_limits
+    studio.management.commands.run_scheduled_pipelines -> app.runtime_limits

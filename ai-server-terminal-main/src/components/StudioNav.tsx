@@ -11,19 +11,21 @@ import {
 import { cn } from "@/lib/utils";
 import { fetchAuthSession } from "@/lib/api";
 import { canAccessStudio, hasFeatureAccess } from "@/lib/featureAccess";
+import { localize, useI18n } from "@/lib/i18n";
 
 const NAV_ITEMS = [
-  { path: "/studio", label: "Overview", icon: LayoutGrid, exact: true },
-  { path: "/studio/skills", label: "Skills", icon: BookOpen, feature: "studio_skills" },
-  { path: "/studio/mcp", label: "MCP", icon: Server, feature: "studio_mcp" },
-  { path: "/studio/agents", label: "Agents", icon: Bot, feature: "studio_agents" },
-  { path: "/studio/runs", label: "Runs", icon: Clock, feature: "studio_runs" },
-  { path: "/studio/notifications", label: "Alerts", icon: Bell, feature: "studio_notifications" },
+  { path: "/studio", labelRu: "Обзор", labelEn: "Overview", icon: LayoutGrid, exact: true },
+  { path: "/studio/skills", labelRu: "OPS skills", labelEn: "OPS Skills", icon: BookOpen, feature: "studio_skills" },
+  { path: "/studio/mcp", labelRu: "MCP tools", labelEn: "MCP Tools", icon: Server, feature: "studio_mcp" },
+  { path: "/studio/agents", labelRu: "Агенты", labelEn: "Agents", icon: Bot, feature: "studio_agents" },
+  { path: "/studio/runs", labelRu: "Запуски", labelEn: "Runs", icon: Clock, feature: "studio_runs" },
+  { path: "/studio/notifications", labelRu: "Оповещения", labelEn: "Alerts", icon: Bell, feature: "studio_notifications" },
 ] as const;
 
 export function StudioNav() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { lang } = useI18n();
   const { data } = useQuery({
     queryKey: ["auth", "session"],
     queryFn: fetchAuthSession,
@@ -44,30 +46,32 @@ export function StudioNav() {
   });
 
   return (
-    <nav className="flex items-center gap-0 overflow-x-auto border-b border-border/60 bg-card/40 backdrop-blur-sm px-4">
-      <span className="mr-5 shrink-0 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-primary/80">
-        <span className="h-1 w-1 rounded-full bg-primary/60 animate-pulse" />
+    <nav className="flex min-h-14 items-center gap-1 overflow-x-auto border-b border-border/60 bg-card/70 py-0 pl-16 pr-4 sm:px-4">
+      <span className="mr-4 flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-1 text-[11px] font-bold uppercase tracking-[0.14em] text-primary/80">
+        <span className="h-1.5 w-1.5 rounded-full bg-primary/70" />
         Studio
       </span>
       {items.map((item) => {
         const active = isActive(item.path, "exact" in item ? item.exact : undefined);
         const Icon = item.icon;
+        const label = localize(lang, item.labelRu, item.labelEn);
         return (
           <button
             type="button"
             key={item.path}
             onClick={() => navigate(item.path)}
+            aria-current={active ? "page" : undefined}
             className={cn(
-              "group relative flex shrink-0 items-center gap-1.5 px-3.5 pb-3 pt-2.5 text-xs font-medium transition-all duration-150",
+              "group relative flex min-h-10 shrink-0 items-center gap-2 rounded-lg px-3.5 text-xs font-medium transition-all duration-150",
               active
-                ? "text-foreground"
-                : "text-muted-foreground/70 hover:text-foreground"
+                ? "bg-secondary text-foreground shadow-sm"
+                : "text-muted-foreground/70 hover:bg-secondary/60 hover:text-foreground"
             )}
           >
             <Icon className={cn("h-3.5 w-3.5 transition-colors", active ? "text-primary" : "group-hover:text-foreground/80")} />
-            {item.label}
+            {label}
             <span className={cn(
-              "absolute bottom-0 left-0 h-0.5 w-full rounded-full transition-all duration-200",
+              "absolute bottom-0 left-2 right-2 h-0.5 rounded-full transition-all duration-200",
               active ? "bg-primary scale-x-100" : "bg-transparent scale-x-0 group-hover:bg-border group-hover:scale-x-100"
             )} />
           </button>

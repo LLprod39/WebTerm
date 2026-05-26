@@ -1,30 +1,57 @@
 """
 servers/views — Views package.
 
-Current state: all views are in _views_all.py (transition step).
+Current state: server view logic is split into focused modules. `_views_all.py`
+is now only a compatibility shim for historical imports.
 Target structure (split progressively, one PR per domain):
-  server_crud.py      — CRUD: create, update, delete, get, test_connection
+  server_pages.py     — SSR page views and SPA bootstrap
+  server_helpers.py   — Shared access, share, OS serialization, and secret helpers
+  server_crud.py      — Server create/update/delete/get/reveal
+  server_ops.py       — Connection test, command execute, OS detect
+  server_auth_session.py — Session master-password helper endpoints
   server_groups.py    — Group CRUD + members + subscribe
+  server_shares.py    — Server share list/create/revoke
+  server_context.py   — Global and group rules/context
   server_files.py     — SFTP: file_list, read, write, chmod, upload, download
-  server_linux_ui.py  — Linux UI: services, processes, logs, disk, docker
-  server_knowledge.py — Knowledge base + memory snapshots
+  server_linux_ui.py  — Linux UI read-only snapshots: overview, logs, disk, network, packages
+  server_linux_ui_workloads.py — Linux UI services, processes, docker, and actions
+  server_knowledge.py — Knowledge base
+  server_memory.py    — Layered memory snapshots, policy, promotions
   server_monitoring.py — Health, alerts, watchers, ai_analyze
-  server_agents.py    — Agent CRUD + runs + approve + task editing
-  server_misc.py      — bootstrap, terminal pages, master_password, bulk_update
+  server_agents.py    — Agent CRUD + schedules + launch
+  server_agent_runs.py — Agent runs + approve + task editing
 
-servers/urls.py imports `from . import views` which resolves to this package.
-__init__.py re-exports everything so urls.py stays untouched.
+servers/urls.py imports focused modules directly.
 """
-from servers.views._views_all import *  # noqa: F401, F403, F405
+
+from servers.encryption import PasswordEncryption  # noqa: F401
 from servers.views.command_history import api_command_suggestions  # noqa: F401
+from servers.views.server_agent_runs import *  # noqa: F401, F403
+from servers.views.server_agents import *  # noqa: F401, F403
+from servers.views.server_auth_session import *  # noqa: F401, F403
+from servers.views.server_context import *  # noqa: F401, F403
+from servers.views.server_crud import *  # noqa: F401, F403
+from servers.views.server_files import *  # noqa: F401, F403
+from servers.views.server_groups import *  # noqa: F401, F403
 
 # Explicit re-exports of private helpers consumed by core_ui.desktop_api.views
-from servers.views._views_all import (  # noqa: F401
+from servers.views.server_helpers import (  # noqa: F401
     _accessible_servers_queryset,
     _active_server_share,
     _active_share_q,
+    _effective_master_password,
     _get_group_role,
     _require_ssh_server,
     _resolve_server_secret,
+    _serialize_detected_os_fields,
     _shared_server_context_allowed,
 )
+from servers.views.server_knowledge import *  # noqa: F401, F403
+from servers.views.server_linux_ui import *  # noqa: F401, F403
+from servers.views.server_linux_ui_workloads import *  # noqa: F401, F403
+from servers.views.server_memory import *  # noqa: F401, F403
+from servers.views.server_monitoring import *  # noqa: F401, F403
+from servers.views.server_monitoring_actions import *  # noqa: F401, F403
+from servers.views.server_ops import *  # noqa: F401, F403
+from servers.views.server_pages import *  # noqa: F401, F403
+from servers.views.server_shares import *  # noqa: F401, F403

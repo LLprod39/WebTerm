@@ -9,6 +9,7 @@ from django.conf import settings as django_settings
 from google import genai
 from loguru import logger
 
+from app.core.llm_usage import log_llm_usage as _log_llm_usage
 from app.core.model_config import model_manager
 
 # Таймаут для стрима Gemini (сек), экспоненциальная задержка при retry
@@ -71,77 +72,6 @@ def _is_ollama_connect_error(e: Exception) -> bool:
     return "cannot connect to host" in s or "failed to connect" in s or "connection refused" in s
 
 
-def _log_llm_usage(
-    provider: str,
-    model_name: str,
-    input_text: str,
-    output_text: str,
-    duration_ms: int,
-    status: str = "success",
-    *,
-    purpose: str = "",
-    metadata: dict[str, Any] | None = None,
-):
-    """Log LLM API usage for monitoring. Never raises — errors are silently logged.
-
-    Safe to call from both sync and async contexts.
-    """
-    try:
-        from core_ui.audit import get_audit_context
-
-        captured_audit_ctx = get_audit_context()
-    except Exception:
-        captured_audit_ctx = {}
-
-    def _do_log():
-        try:
-            from core_ui.activity import log_llm_activity
-            from core_ui.audit import audit_context, get_audit_context, maybe_apply_log_retention, should_log_llm
-            from core_ui.models import LLMUsageLog
-
-            with audit_context(**captured_audit_ctx):
-                if not should_log_llm():
-                    return
-
-                maybe_apply_log_retention()
-                audit_ctx = get_audit_context()
-                LLMUsageLog.objects.create(
-                    provider=provider,
-                    model_name=model_name,
-                    user_id=audit_ctx.get("user_id"),
-                    input_tokens=len(input_text) // 4,
-                    output_tokens=len(output_text) // 4,
-                    duration_ms=duration_ms,
-                    status=status,
-                )
-                log_llm_activity(
-                    provider=provider,
-                    model_name=model_name,
-                    prompt=input_text,
-                    response=output_text,
-                    duration_ms=duration_ms,
-                    status=status,
-                    purpose=purpose,
-                    metadata=metadata,
-                )
-        except Exception as e:
-            logger.debug(f"Failed to log LLM usage: {e}")
-
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
-
-    if loop and loop.is_running():
-        # Detached background logging must not inherit asgiref's thread-sensitive
-        # executor context, otherwise later ASGI requests can fail with a broken
-        # CurrentThreadExecutor after this task outlives the originating request.
-        loop.run_in_executor(None, _do_log)
-        return
-
-    _do_log()
-
-
 def _is_retryable_error(e: Exception) -> bool:
     """Проверка на 429 (rate limit), 5xx или таймаут — повторять с backoff."""
     if _is_timeout_error(e):
@@ -149,6 +79,7 @@ def _is_retryable_error(e: Exception) -> bool:
     # aiohttp таймауты
     try:
         import aiohttp
+
         if isinstance(e, (aiohttp.ServerTimeoutError, aiohttp.ClientConnectorError)):
             return True
     except ImportError:
@@ -316,6 +247,7 @@ class LLMProvider:
         if self._anthropic_client is None and self.anthropic_api_key:
             try:
                 import anthropic
+
                 self._anthropic_client = anthropic.AsyncAnthropic(api_key=self.anthropic_api_key)
                 logger.info("Configured Anthropic client")
             except Exception as e:
@@ -363,6 +295,7 @@ class LLMProvider:
             json_mode: When True, activates provider-native JSON output mode
                 (3.1) so the LLM is constrained to produce valid JSON.
         """
+
         def _has_key(p: str) -> bool:
             """Провайдер доступен по ключу (без учёта глобального *_enabled)."""
             if p == "grok":
@@ -405,8 +338,7 @@ class LLMProvider:
                     if _enabled(candidate):
                         model = candidate
                         logger.warning(
-                            f"[{purpose}] provider '{preferred}' is disabled/unconfigured, "
-                            f"falling back to '{model}'"
+                            f"[{purpose}] provider '{preferred}' is disabled/unconfigured, falling back to '{model}'"
                         )
                         break
                 else:
@@ -454,6 +386,7 @@ class LLMProvider:
 
             for attempt in range(max_attempts):
                 try:
+
                     async def consume():
                         out = []
                         # generate_content_stream возвращает корутину; нужен await перед async for
@@ -469,9 +402,7 @@ class LLMProvider:
                             _gemini_config["response_mime_type"] = "application/json"
                         if _gemini_config:
                             _gemini_kwargs["config"] = _gemini_config
-                        stream = await self.gemini_client.aio.models.generate_content_stream(
-                            **_gemini_kwargs
-                        )
+                        stream = await self.gemini_client.aio.models.generate_content_stream(**_gemini_kwargs)
                         async for chunk in stream:
                             if chunk.text:
                                 out.append(chunk.text)
@@ -537,15 +468,12 @@ class LLMProvider:
 
             import aiohttp
 
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.grok_api_key}"
-            }
+            headers = {"Content-Type": "application/json", "Authorization": f"Bearer {self.grok_api_key}"}
             grok_model = specific_model or model_manager.get_chat_model("grok")
             data: dict[str, Any] = {
                 "messages": [
                     {"role": "system", "content": system_prompt or "You are a helpful assistant."},
-                    {"role": "user", "content": prompt}
+                    {"role": "user", "content": prompt},
                 ],
                 "model": grok_model,
                 "stream": True,
@@ -560,51 +488,53 @@ class LLMProvider:
 
             for attempt in range(max_attempts):
                 try:
-                    async with aiohttp.ClientSession(timeout=timeout) as session:
-                        async with session.post("https://api.x.ai/v1/chat/completions", headers=headers, json=data) as response:
-                            if response.status == 200:
-                                _output = ""
-                                async for line_bytes in response.content:
-                                    line = line_bytes.decode('utf-8').strip()
-                                    if line.startswith("data: "):
-                                        chunk_str = line[6:]
-                                        if chunk_str == "[DONE]":
-                                            break
-                                        try:
-                                            chunk_json = json.loads(chunk_str)
-                                            content = chunk_json.get("choices", [{}])[0].get("delta", {}).get("content", "")
-                                            if content:
-                                                _output += content
-                                                yield content
-                                        except json.JSONDecodeError:
-                                            continue
-                                _log_llm_usage(
-                                    "grok",
-                                    grok_model,
-                                    prompt,
-                                    _output,
-                                    int((time.monotonic() - _t0) * 1000),
-                                    purpose=purpose,
-                                )
-                                return
-                            error_text = await response.text()
-                            is_retryable = response.status == 429 or (500 <= response.status < 600)
-                            if is_retryable and attempt < max_attempts - 1:
-                                yield "[Повтор попытки...]"
-                                delay = RETRY_BACKOFF[min(attempt, len(RETRY_BACKOFF) - 1)]
-                                await asyncio.sleep(delay)
-                            else:
-                                _log_llm_usage(
-                                    "grok",
-                                    grok_model,
-                                    prompt,
-                                    "",
-                                    int((time.monotonic() - _t0) * 1000),
-                                    "error",
-                                    purpose=purpose,
-                                )
-                                yield f"Error from Grok API: {response.status} - {error_text}"
-                                return
+                    async with (
+                        aiohttp.ClientSession(timeout=timeout) as session,
+                        session.post("https://api.x.ai/v1/chat/completions", headers=headers, json=data) as response,
+                    ):
+                        if response.status == 200:
+                            _output = ""
+                            async for line_bytes in response.content:
+                                line = line_bytes.decode("utf-8").strip()
+                                if line.startswith("data: "):
+                                    chunk_str = line[6:]
+                                    if chunk_str == "[DONE]":
+                                        break
+                                    try:
+                                        chunk_json = json.loads(chunk_str)
+                                        content = chunk_json.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                                        if content:
+                                            _output += content
+                                            yield content
+                                    except json.JSONDecodeError:
+                                        continue
+                            _log_llm_usage(
+                                "grok",
+                                grok_model,
+                                prompt,
+                                _output,
+                                int((time.monotonic() - _t0) * 1000),
+                                purpose=purpose,
+                            )
+                            return
+                        error_text = await response.text()
+                        is_retryable = response.status == 429 or (500 <= response.status < 600)
+                        if is_retryable and attempt < max_attempts - 1:
+                            yield "[Повтор попытки...]"
+                            delay = RETRY_BACKOFF[min(attempt, len(RETRY_BACKOFF) - 1)]
+                            await asyncio.sleep(delay)
+                        else:
+                            _log_llm_usage(
+                                "grok",
+                                grok_model,
+                                prompt,
+                                "",
+                                int((time.monotonic() - _t0) * 1000),
+                                "error",
+                                purpose=purpose,
+                            )
+                            yield f"Error from Grok API: {response.status} - {error_text}"
+                            return
                 except Exception as e:
                     err_retryable = _is_retryable_error(e) and attempt < max_attempts - 1
                     if err_retryable:
@@ -720,12 +650,8 @@ class LLMProvider:
             # - старые codex/instruct/davinci → Legacy Completions (/v1/completions)
             # - остальное → Chat Completions (/v1/chat/completions)
             _model_lower = target_model.lower()
-            _USE_RESPONSES_API = (
-                _model_lower.startswith("gpt-5")
-                or (
-                    "codex" in _model_lower
-                    and any(_model_lower.startswith(p) for p in ("gpt-4", "o1", "o3", "o4"))
-                )
+            _USE_RESPONSES_API = _model_lower.startswith("gpt-5") or (
+                "codex" in _model_lower and any(_model_lower.startswith(p) for p in ("gpt-4", "o1", "o3", "o4"))
             )
             _LEGACY_COMPLETIONS = (
                 not _USE_RESPONSES_API
@@ -748,10 +674,7 @@ class LLMProvider:
                     if isinstance(request_data.get("input"), str):
                         input_text = request_data["input"]
                         if "json" not in input_text.lower():
-                            request_data["input"] = (
-                                f"{input_text}\n\n"
-                                "Return the answer as a valid JSON object."
-                            )
+                            request_data["input"] = f"{input_text}\n\nReturn the answer as a valid JSON object."
                 # Передаём reasoning.effort если задан
                 # "none" — отключить мышление полностью, "low"/"medium"/"high" — уровень
                 # "" — не передавать (модель решает сама)
@@ -799,78 +722,84 @@ class LLMProvider:
             for attempt in range(max_attempts):
                 logger.debug(f"OpenAI: attempt {attempt + 1}/{max_attempts} → POST {api_url}")
                 try:
-                    async with aiohttp.ClientSession(timeout=timeout) as session:
-                        async with session.post(api_url, headers=headers, json=request_data) as response:
-                            logger.debug(f"OpenAI: HTTP status={response.status}")
-                            if response.status == 200:
-                                _output = ""
-                                _chunks = 0
-                                async for line_bytes in response.content:
-                                    line = line_bytes.decode("utf-8").strip()
-                                    if not line or line.startswith("event:"):
-                                        # SSE event-type lines (Responses API) — пропускаем
-                                        continue
-                                    if not line.startswith("data: "):
-                                        continue
-                                    chunk_str = line[6:]
-                                    if chunk_str == "[DONE]":
-                                        logger.debug(f"OpenAI: stream done, chunks={_chunks}, chars={len(_output)}")
+                    async with (
+                        aiohttp.ClientSession(timeout=timeout) as session,
+                        session.post(api_url, headers=headers, json=request_data) as response,
+                    ):
+                        logger.debug(f"OpenAI: HTTP status={response.status}")
+                        if response.status == 200:
+                            _output = ""
+                            _chunks = 0
+                            async for line_bytes in response.content:
+                                line = line_bytes.decode("utf-8").strip()
+                                if not line or line.startswith("event:"):
+                                    # SSE event-type lines (Responses API) — пропускаем
+                                    continue
+                                if not line.startswith("data: "):
+                                    continue
+                                chunk_str = line[6:]
+                                if chunk_str == "[DONE]":
+                                    logger.debug(f"OpenAI: stream done, chunks={_chunks}, chars={len(_output)}")
+                                    break
+                                try:
+                                    chunk_json = json.loads(chunk_str)
+                                except json.JSONDecodeError as je:
+                                    logger.warning(f"OpenAI: JSON decode error: {je} | raw={chunk_str[:120]}")
+                                    continue
+
+                                if endpoint_name == "responses":
+                                    # Responses API: event type = response.output_text.delta → {"delta":"..."}
+                                    event_type = chunk_json.get("type", "")
+                                    if event_type == "response.output_text.delta":
+                                        content = chunk_json.get("delta", "")
+                                    elif event_type == "response.completed":
+                                        logger.debug(
+                                            f"OpenAI Responses: completed, chunks={_chunks}, chars={len(_output)}"
+                                        )
                                         break
-                                    try:
-                                        chunk_json = json.loads(chunk_str)
-                                    except json.JSONDecodeError as je:
-                                        logger.warning(f"OpenAI: JSON decode error: {je} | raw={chunk_str[:120]}")
-                                        continue
-
-                                    if endpoint_name == "responses":
-                                        # Responses API: event type = response.output_text.delta → {"delta":"..."}
-                                        event_type = chunk_json.get("type", "")
-                                        if event_type == "response.output_text.delta":
-                                            content = chunk_json.get("delta", "")
-                                        elif event_type == "response.completed":
-                                            logger.debug(f"OpenAI Responses: completed, chunks={_chunks}, chars={len(_output)}")
-                                            break
-                                        else:
-                                            continue
-                                    elif endpoint_name == "completions":
-                                        content = chunk_json.get("choices", [{}])[0].get("text", "")
                                     else:
-                                        content = chunk_json.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                                        continue
+                                elif endpoint_name == "completions":
+                                    content = chunk_json.get("choices", [{}])[0].get("text", "")
+                                else:
+                                    content = chunk_json.get("choices", [{}])[0].get("delta", {}).get("content", "")
 
-                                    if content:
-                                        _chunks += 1
-                                        _output += content
-                                        yield content
+                                if content:
+                                    _chunks += 1
+                                    _output += content
+                                    yield content
 
-                                _log_llm_usage(
-                                    "openai",
-                                    target_model,
-                                    prompt,
-                                    _output,
-                                    int((time.monotonic() - _t0) * 1000),
-                                    purpose=purpose,
-                                )
-                                return
+                            _log_llm_usage(
+                                "openai",
+                                target_model,
+                                prompt,
+                                _output,
+                                int((time.monotonic() - _t0) * 1000),
+                                purpose=purpose,
+                            )
+                            return
 
-                            error_text = await response.text()
-                            is_retryable = response.status == 429 or (500 <= response.status < 600)
-                            logger.error(f"OpenAI: HTTP error {response.status}, retryable={is_retryable}, body={error_text[:500]}")
-                            if is_retryable and attempt < max_attempts - 1:
-                                yield "[Повтор попытки...]"
-                                delay = RETRY_BACKOFF[min(attempt, len(RETRY_BACKOFF) - 1)]
-                                await asyncio.sleep(delay)
-                            else:
-                                _log_llm_usage(
-                                    "openai",
-                                    target_model,
-                                    prompt,
-                                    "",
-                                    int((time.monotonic() - _t0) * 1000),
-                                    "error",
-                                    purpose=purpose,
-                                )
-                                yield f"Error from OpenAI API: {response.status} - {error_text}"
-                                return
+                        error_text = await response.text()
+                        is_retryable = response.status == 429 or (500 <= response.status < 600)
+                        logger.error(
+                            f"OpenAI: HTTP error {response.status}, retryable={is_retryable}, body={error_text[:500]}"
+                        )
+                        if is_retryable and attempt < max_attempts - 1:
+                            yield "[Повтор попытки...]"
+                            delay = RETRY_BACKOFF[min(attempt, len(RETRY_BACKOFF) - 1)]
+                            await asyncio.sleep(delay)
+                        else:
+                            _log_llm_usage(
+                                "openai",
+                                target_model,
+                                prompt,
+                                "",
+                                int((time.monotonic() - _t0) * 1000),
+                                "error",
+                                purpose=purpose,
+                            )
+                            yield f"Error from OpenAI API: {response.status} - {error_text}"
+                            return
                 except Exception as e:
                     err_retryable = _is_retryable_error(e) and attempt < max_attempts - 1
                     logger.error(f"OpenAI: exception attempt={attempt + 1}: {type(e).__name__}: {e}", exc_info=True)
@@ -941,99 +870,102 @@ class LLMProvider:
                 payload["model"] = request_target["model"]
                 for attempt in range(max_attempts):
                     try:
-                        async with aiohttp.ClientSession(timeout=timeout) as session:
-                            async with session.post(f"{base_url}/api/chat", headers=headers, json=payload) as response:
-                                if response.status == 200:
-                                    _output = ""
-                                    pending = ""
-                                    async for chunk_bytes in response.content.iter_any():
-                                        pending += chunk_bytes.decode("utf-8")
-                                        while "\n" in pending:
-                                            raw_line, pending = pending.split("\n", 1)
-                                            line = raw_line.strip()
-                                            if not line:
-                                                continue
-                                            try:
-                                                chunk_json = json.loads(line)
-                                            except json.JSONDecodeError:
-                                                logger.debug(f"Ollama: failed to parse stream line: {line[:160]}")
-                                                continue
-                                            content = ((chunk_json.get("message") or {}).get("content") or "")
-                                            if content:
-                                                _output += content
-                                                yield content
-                                            if chunk_json.get("done"):
-                                                break
-                                        else:
+                        async with (
+                            aiohttp.ClientSession(timeout=timeout) as session,
+                            session.post(f"{base_url}/api/chat", headers=headers, json=payload) as response,
+                        ):
+                            if response.status == 200:
+                                _output = ""
+                                pending = ""
+                                async for chunk_bytes in response.content.iter_any():
+                                    pending += chunk_bytes.decode("utf-8")
+                                    while "\n" in pending:
+                                        raw_line, pending = pending.split("\n", 1)
+                                        line = raw_line.strip()
+                                        if not line:
                                             continue
-                                        break
-
-                                    if pending.strip():
                                         try:
-                                            chunk_json = json.loads(pending.strip())
-                                            content = ((chunk_json.get("message") or {}).get("content") or "")
-                                            if content:
-                                                _output += content
-                                                yield content
+                                            chunk_json = json.loads(line)
                                         except json.JSONDecodeError:
-                                            logger.debug(f"Ollama: trailing stream fragment ignored: {pending[:160]}")
-
-                                    if request_target["kind"] == "local" and base_url != model_manager.config.ollama_base_url:
-                                        logger.warning(
-                                            f"Ollama chat fallback: configured={model_manager.config.ollama_base_url or 'unset'} -> using {base_url}"
-                                        )
-                                    if request_target["kind"] == "local":
-                                        model_manager.config.ollama_base_url = base_url
-                                    _log_llm_usage(
-                                        "ollama",
-                                        payload["model"],
-                                        prompt,
-                                        _output,
-                                        int((time.monotonic() - _t0) * 1000),
-                                        purpose=purpose,
-                                        metadata={
-                                            "base_url": base_url,
-                                            "request_targets": [target["base_url"] for target in request_targets],
-                                            "source": request_target["kind"],
-                                            "think": payload.get("think"),
-                                        },
-                                    )
-                                    return
-
-                                error_text = await response.text()
-                                is_retryable = response.status == 429 or (500 <= response.status < 600)
-                                if is_retryable and attempt < max_attempts - 1:
-                                    yield "[Повтор попытки...]"
-                                    delay = RETRY_BACKOFF[min(attempt, len(RETRY_BACKOFF) - 1)]
-                                    await asyncio.sleep(delay)
-                                else:
-                                    _log_llm_usage(
-                                        "ollama",
-                                        payload["model"],
-                                        prompt,
-                                        "",
-                                        int((time.monotonic() - _t0) * 1000),
-                                        "error",
-                                        purpose=purpose,
-                                        metadata={
-                                            "base_url": base_url,
-                                            "request_targets": [target["base_url"] for target in request_targets],
-                                            "source": request_target["kind"],
-                                            "think": payload.get("think"),
-                                        },
-                                    )
-                                    if request_target["kind"] == "cloud":
-                                        yield f"Error from Ollama Cloud API: {response.status} - {error_text}"
+                                            logger.debug(f"Ollama: failed to parse stream line: {line[:160]}")
+                                            continue
+                                        content = (chunk_json.get("message") or {}).get("content") or ""
+                                        if content:
+                                            _output += content
+                                            yield content
+                                        if chunk_json.get("done"):
+                                            break
                                     else:
-                                        yield f"Error from Ollama API: {response.status} - {error_text}"
-                                    return
+                                        continue
+                                    break
+
+                                if pending.strip():
+                                    try:
+                                        chunk_json = json.loads(pending.strip())
+                                        content = (chunk_json.get("message") or {}).get("content") or ""
+                                        if content:
+                                            _output += content
+                                            yield content
+                                    except json.JSONDecodeError:
+                                        logger.debug(f"Ollama: trailing stream fragment ignored: {pending[:160]}")
+
+                                if (
+                                    request_target["kind"] == "local"
+                                    and base_url != model_manager.config.ollama_base_url
+                                ):
+                                    logger.warning(
+                                        f"Ollama chat fallback: configured={model_manager.config.ollama_base_url or 'unset'} -> using {base_url}"
+                                    )
+                                if request_target["kind"] == "local":
+                                    model_manager.config.ollama_base_url = base_url
+                                _log_llm_usage(
+                                    "ollama",
+                                    payload["model"],
+                                    prompt,
+                                    _output,
+                                    int((time.monotonic() - _t0) * 1000),
+                                    purpose=purpose,
+                                    metadata={
+                                        "base_url": base_url,
+                                        "request_targets": [target["base_url"] for target in request_targets],
+                                        "source": request_target["kind"],
+                                        "think": payload.get("think"),
+                                    },
+                                )
+                                return
+
+                            error_text = await response.text()
+                            is_retryable = response.status == 429 or (500 <= response.status < 600)
+                            if is_retryable and attempt < max_attempts - 1:
+                                yield "[Повтор попытки...]"
+                                delay = RETRY_BACKOFF[min(attempt, len(RETRY_BACKOFF) - 1)]
+                                await asyncio.sleep(delay)
+                            else:
+                                _log_llm_usage(
+                                    "ollama",
+                                    payload["model"],
+                                    prompt,
+                                    "",
+                                    int((time.monotonic() - _t0) * 1000),
+                                    "error",
+                                    purpose=purpose,
+                                    metadata={
+                                        "base_url": base_url,
+                                        "request_targets": [target["base_url"] for target in request_targets],
+                                        "source": request_target["kind"],
+                                        "think": payload.get("think"),
+                                    },
+                                )
+                                if request_target["kind"] == "cloud":
+                                    yield f"Error from Ollama Cloud API: {response.status} - {error_text}"
+                                else:
+                                    yield f"Error from Ollama API: {response.status} - {error_text}"
+                                return
                     except Exception as e:
                         last_error = e
                         has_next_base_url = base_index < len(request_targets) - 1
                         if request_target["kind"] == "local" and _is_ollama_connect_error(e) and has_next_base_url:
-                            logger.warning(
-                                f"Ollama connect failed via {base_url}: {e}. Trying next base URL."
-                            )
+                            logger.warning(f"Ollama connect failed via {base_url}: {e}. Trying next base URL.")
                             break
 
                         err_retryable = _is_retryable_error(e) and attempt < max_attempts - 1
@@ -1060,7 +992,11 @@ class LLMProvider:
                             )
                             if _is_timeout_error(e):
                                 yield "Error: Timeout (Ollama stream)."
-                            elif request_target["kind"] == "local" and _is_ollama_connect_error(e) and len(request_targets) > 1:
+                            elif (
+                                request_target["kind"] == "local"
+                                and _is_ollama_connect_error(e)
+                                and len(request_targets) > 1
+                            ):
                                 yield (
                                     "Error: Ollama недоступен по localhost из backend runtime. "
                                     "Проверь, что Ollama слушает Windows host не только на 127.0.0.1."

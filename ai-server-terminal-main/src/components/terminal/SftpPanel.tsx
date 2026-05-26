@@ -16,7 +16,6 @@ import {
   FileCode2,
   Folder,
   FolderPlus,
-  Loader2,
   Pencil,
   RefreshCw,
   Search,
@@ -25,12 +24,10 @@ import {
   Trash2,
   Upload,
   User,
-  X,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import {
   chmodServerFile,
@@ -49,24 +46,7 @@ import {
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-
-type TransferStatus = "queued" | "running" | "success" | "error" | "cancelled";
-type TransferDirection = "upload" | "download";
-
-interface TransferItem {
-  id: string;
-  direction: TransferDirection;
-  name: string;
-  remotePath: string;
-  targetDir: string;
-  file?: File;
-  status: TransferStatus;
-  progress: number;
-  loaded: number;
-  total?: number;
-  error?: string;
-  overwrite?: boolean;
-}
+import { SftpTransferQueue, type TransferItem } from "./SftpTransferQueue";
 
 export interface SftpPanelHandle {
   enqueueUploads: (files: FileList | File[]) => void;
@@ -103,6 +83,13 @@ function formatTimestamp(value: number) {
   }
 }
 
+function formatRuCount(value: number, one: string, few: string, many: string) {
+  const mod10 = value % 10;
+  const mod100 = value % 100;
+  const word = mod10 === 1 && mod100 !== 11 ? one : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14) ? few : many;
+  return `${value} ${word}`;
+}
+
 function buildChildPath(basePath: string, name: string) {
   const normalizedName = String(name || "").trim().replace(/^\/+/, "");
   if (!normalizedName) return basePath;
@@ -128,23 +115,6 @@ function defaultPermissionMode(entry: SftpEntry) {
     })
     .join("");
   return octal || (entry.is_dir ? "755" : "644");
-}
-
-function transferStatusLabel(item: TransferItem) {
-  switch (item.status) {
-    case "queued":
-      return "В очереди";
-    case "running":
-      return "Передача";
-    case "success":
-      return "Готово";
-    case "cancelled":
-      return "Отменено";
-    case "error":
-      return item.error || "Ошибка";
-    default:
-      return item.status;
-  }
 }
 
 function entryIcon(entry: SftpEntry) {
@@ -574,7 +544,7 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
   }, [currentPath, loadDirectory, server.id, toast]);
 
   const handleCreateFile = useCallback(async () => {
-    const fileName = window.prompt("New file", "new-file.conf");
+    const fileName = window.prompt("Новый файл", "new-file.conf");
     if (!fileName) return;
     const nextPath = buildChildPath(currentPath, fileName);
     try {
@@ -586,10 +556,10 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
       setEditorContent(result.file.content);
       setSavedEditorContent(result.file.content);
       setEditorError("");
-      toast({ description: "File created." });
+      toast({ description: "Файл создан." });
       void loadDirectory(currentPath);
     } catch (err) {
-      toast({ variant: "destructive", description: err instanceof Error ? err.message : "Could not create file" });
+      toast({ variant: "destructive", description: err instanceof Error ? err.message : "Не удалось создать файл" });
     }
   }, [currentPath, loadDirectory, server.id, toast]);
 
@@ -656,11 +626,6 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
     enqueueUploadFiles(event.dataTransfer.files);
   }, [enqueueUploadFiles]);
 
-  const activeTransfers = useMemo(
-    () => transfers.filter((item) => item.status === "queued" || item.status === "running"),
-    [transfers],
-  );
-
   return (
     <div
       className={cn(
@@ -688,45 +653,63 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
       <div className="border-b border-border bg-card px-4 py-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
-            <div className="text-sm font-semibold text-foreground">SFTP</div>
+            <div className="text-sm font-semibold text-foreground">Файлы SFTP</div>
             <div className="truncate font-mono text-[11px] text-muted-foreground">
               {server.username}@{server.host}:{server.port}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" size="sm" variant="outline" className="h-8 border-border bg-background px-3 text-xs" onClick={() => uploadInputRef.current?.click()}>
-              <Upload className="h-3.5 w-3.5" />
-              Upload
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-9 border-border bg-background px-3 text-xs"
+              onClick={() => uploadInputRef.current?.click()}
+            >
+              <Upload className="h-4 w-4" />
+              Загрузить
             </Button>
-            <Button type="button" size="sm" variant="outline" className="h-8 border-border bg-background px-3 text-xs" onClick={refreshDirectory}>
-              <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
-              Refresh
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-9 border-border bg-background px-3 text-xs"
+              onClick={refreshDirectory}
+            >
+              <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+              Обновить
             </Button>
           </div>
         </div>
 
         <div className="mt-3 flex flex-col gap-2 lg:flex-row lg:items-center">
           <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
-            <Button type="button" size="sm" variant="outline" className="h-8 shrink-0 border-border bg-background px-3 text-xs" onClick={() => void loadDirectory(homePath)}>
-              Home
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-9 shrink-0 border-border bg-background px-3 text-xs"
+              onClick={() => void loadDirectory(homePath)}
+            >
+              Домой
             </Button>
             <Button
               type="button"
               size="sm"
               variant="outline"
-              className="h-8 shrink-0 border-border bg-background px-2 text-xs"
+              className="h-9 shrink-0 border-border bg-background px-2 text-xs"
               onClick={() => parentPath && void loadDirectory(parentPath)}
               disabled={!parentPath}
-              aria-label="Open parent folder"
+              aria-label="На уровень выше"
             >
-              <ArrowUp className="h-3.5 w-3.5" />
+              <ArrowUp className="h-4 w-4" />
             </Button>
             {breadcrumbSegments.map((segment, index) => (
               <button
                 key={`${segment.path}-${index}`}
                 type="button"
                 onClick={() => void loadDirectory(segment.path)}
-                className="shrink-0 rounded-lg border border-border bg-background px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                className="flex h-9 shrink-0 items-center rounded-lg border border-border bg-background px-3 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {segment.label}
               </button>
@@ -737,9 +720,9 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
             <Input
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search files..."
-              aria-label="Search files"
-              className="h-8 border-border bg-background pl-9 text-xs"
+              placeholder="Поиск файлов..."
+              aria-label="Поиск файлов"
+              className="h-9 border-border bg-background pl-9 text-xs"
             />
           </div>
         </div>
@@ -748,11 +731,11 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="border-b border-border bg-secondary/20 px-4 py-2.5">
           <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
-            <span>{visibleEntries.length} items</span>
+            <span>{formatRuCount(visibleEntries.length, "объект", "объекта", "объектов")}</span>
             <span>•</span>
-            <span>{entries.filter((entry) => entry.is_dir).length} folders</span>
+            <span>{formatRuCount(entries.filter((entry) => entry.is_dir).length, "папка", "папки", "папок")}</span>
             <span>•</span>
-            <span>{entries.filter((entry) => !entry.is_dir).length} files</span>
+            <span>{formatRuCount(entries.filter((entry) => !entry.is_dir).length, "файл", "файла", "файлов")}</span>
           </div>
         </div>
 
@@ -762,7 +745,7 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
           ) : visibleEntries.length === 0 && !isLoading ? (
             <div className="workspace-empty m-4">
               <div className="text-sm font-medium text-foreground">
-                {entries.length === 0 ? "This folder is empty." : "Nothing matched the current search."}
+                {entries.length === 0 ? "Папка пустая." : "Поиск ничего не нашел."}
               </div>
             </div>
           ) : (
@@ -790,7 +773,7 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-medium text-foreground">{entry.name}</div>
                         <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                          <span>{entry.is_dir ? "Folder" : "File"}</span>
+                          <span>{entry.is_dir ? "Папка" : "Файл"}</span>
                           {!entry.is_dir ? <span>{formatBytes(entry.size)}</span> : null}
                           {entry.modified_at ? <span>{formatTimestamp(entry.modified_at)}</span> : null}
                         </div>
@@ -798,13 +781,25 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
                     </button>
 
                     {entry.is_dir ? (
-                      <Button type="button" size="sm" variant="ghost" className="h-8 px-2.5 text-xs" onClick={() => void loadDirectory(entry.path)}>
-                        Open
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-9 px-3 text-xs"
+                        onClick={() => void loadDirectory(entry.path)}
+                      >
+                        Открыть
                       </Button>
                     ) : (
-                      <Button type="button" size="sm" variant="outline" className="h-8 border-border bg-background px-2.5 text-xs" onClick={() => queueDownload(entry)}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-9 border-border bg-background px-3 text-xs"
+                        onClick={() => queueDownload(entry)}
+                      >
                         <Download className="mr-1.5 h-3.5 w-3.5" />
-                        Download
+                        Скачать
                       </Button>
                     )}
                   </div>
@@ -815,84 +810,18 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
         </div>
       </div>
 
-      <div className="border-t border-border bg-secondary/20">
-        <div className="flex items-center justify-between px-4 py-2">
-          <button
-            type="button"
-            className="text-[11px] font-medium text-muted-foreground"
-            onClick={() => setTransfersExpanded((value) => !value)}
-          >
-            Transfers {activeTransfers.length > 0 ? `(${activeTransfers.length})` : ""}
-          </button>
-          {transfers.length > 0 ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className="h-7 rounded-lg px-2 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground"
-              onClick={() => setTransfers((prev) => prev.filter((item) => item.status === "queued" || item.status === "running"))}
-            >
-              Clear finished
-            </Button>
-          ) : null}
-        </div>
-        {transfersExpanded ? (
-          <div className="max-h-56 overflow-y-auto">
-            {transfers.length === 0 ? (
-              <div className="px-4 pb-4 text-xs text-muted-foreground">Transfer queue is empty.</div>
-            ) : (
-              <div className="divide-y divide-border/60">
-                {transfers.map((item) => (
-                  <div key={item.id} className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className={cn("rounded-lg p-1.5", item.direction === "upload" ? "bg-primary/10 text-primary" : "bg-secondary text-muted-foreground")}>
-                        {item.direction === "upload" ? <Upload className="h-3.5 w-3.5" /> : <Download className="h-3.5 w-3.5" />}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm text-foreground">{item.name}</div>
-                        <div className="truncate text-[11px] text-muted-foreground">{transferStatusLabel(item)}</div>
-                      </div>
-                      {item.status === "running" ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : null}
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 rounded-lg px-2 text-muted-foreground hover:bg-secondary hover:text-foreground"
-                        onClick={() => (item.status === "running" || item.status === "queued" ? cancelTransfer(item.id) : removeTransfer(item.id))}
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                    <div className="mt-2">
-                      <Progress value={item.progress} className="h-2" />
-                      <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
-                        <span>
-                          {formatBytes(item.loaded)}
-                          {item.total ? ` / ${formatBytes(item.total)}` : ""}
-                        </span>
-                        <span>{item.progress}%</span>
-                      </div>
-                      {item.status === "error" ? (
-                        <div className="mt-2 flex items-center gap-2">
-                          <Button type="button" size="sm" variant="outline" className="h-7 rounded-lg border-border bg-background text-[11px] text-foreground hover:bg-secondary" onClick={() => retryTransfer(item.id)}>
-                            Retry
-                          </Button>
-                          {item.direction === "upload" && item.error?.toLowerCase().includes("существ") ? (
-                            <Button type="button" size="sm" variant="outline" className="h-7 rounded-lg border-border bg-background text-[11px] text-foreground hover:bg-secondary" onClick={() => retryTransfer(item.id, true)}>
-                              Overwrite
-                            </Button>
-                          ) : null}
-                          <div className="truncate text-[11px] text-destructive">{item.error}</div>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : null}
-      </div>
+      <SftpTransferQueue
+        transfers={transfers}
+        expanded={transfersExpanded}
+        onToggleExpanded={() => setTransfersExpanded((value) => !value)}
+        onClearCompleted={() =>
+          setTransfers((prev) => prev.filter((item) => item.status === "queued" || item.status === "running"))
+        }
+        onRetry={retryTransfer}
+        onCancelOrRemove={(item) =>
+          item.status === "running" || item.status === "queued" ? cancelTransfer(item.id) : removeTransfer(item.id)
+        }
+      />
 
       <input
         ref={uploadInputRef}

@@ -11,14 +11,17 @@ from app.agent_kernel.domain.roles import get_role_spec, resolve_task_role_slug
 from app.agent_kernel.domain.specs import ToolSpec
 from app.agent_kernel.hooks.manager import HookManager
 from app.agent_kernel.memory.compaction import build_run_summary_payload
+from app.agent_kernel.memory.pattern_utils import pattern_success_summary
 from app.agent_kernel.memory.redaction import sanitize_prompt_context_text
-from app.agent_kernel.memory.store import DjangoServerMemoryStore, _OperationalPattern
+from app.agent_kernel.memory.snapshot_utils import render_snapshot_lines
+from app.agent_kernel.memory.store import _OperationalPattern
 from app.agent_kernel.permissions.engine import PermissionEngine
 from app.agent_kernel.runtime.context import build_ops_prompt_context
 from app.agent_kernel.runtime.subagents import build_task_subagent_spec
 from app.agent_kernel.sandbox.manager import SandboxManager
 from app.agent_kernel.tools.registry import ToolRegistry
 from app.core.model_config import ModelManager
+from servers.adapters.memory_store import DjangoServerMemoryStore
 from servers.consumers import SSHTerminalConsumer
 from servers.memory_heuristics import should_capture_command_history_memory, should_persist_ai_memory
 from servers.models import (
@@ -132,10 +135,8 @@ def test_command_history_memory_capture_skips_clear_and_keeps_operational_comman
 
 
 def test_render_snapshot_lines_flattens_list_like_strings():
-    rendered = DjangoServerMemoryStore._render_snapshot_lines(
-        "['- SSH: 172.25.173.251:22 user=lunix', '- Доступ только через SSH']",
-        fallback="empty",
-    )
+    payload = "['- SSH: 172.25.173.251:22 user=lunix', '- Доступ только через SSH']"
+    rendered = render_snapshot_lines(payload, fallback="empty")
 
     assert rendered == "- SSH: 172.25.173.251:22 user=lunix\n- Доступ только через SSH"
 
@@ -157,7 +158,7 @@ def test_pattern_success_summary_uses_measured_runs_consistently():
         distinct_sessions=1,
     )
 
-    assert DjangoServerMemoryStore._pattern_success_summary(pattern) == "1/1 измеренных запусков (100%)"
+    assert pattern_success_summary(pattern) == "1/1 измеренных запусков (100%)"
 
 
 def test_manual_terminal_command_capture_persists_output_and_exit_code(monkeypatch):
@@ -183,8 +184,8 @@ def test_manual_terminal_command_capture_persists_output_and_exit_code(monkeypat
 
         return runner
 
-    monkeypatch.setattr("servers.consumers.log_user_activity_async", fake_log_user_activity_async)
-    monkeypatch.setattr("servers.consumers.database_sync_to_async", immediate_sync_to_async)
+    monkeypatch.setattr("servers.consumers.ssh_terminal.log_user_activity_async", fake_log_user_activity_async)
+    monkeypatch.setattr("servers.consumers.ssh_terminal.database_sync_to_async", immediate_sync_to_async)
     monkeypatch.setattr(
         SSHTerminalConsumer,
         "_persist_manual_terminal_command_result",
@@ -241,8 +242,8 @@ def test_manual_terminal_multiline_block_skips_marker_injection(monkeypatch):
 
         return runner
 
-    monkeypatch.setattr("servers.consumers.log_user_activity_async", fake_log_user_activity_async)
-    monkeypatch.setattr("servers.consumers.database_sync_to_async", immediate_sync_to_async)
+    monkeypatch.setattr("servers.consumers.ssh_terminal.log_user_activity_async", fake_log_user_activity_async)
+    monkeypatch.setattr("servers.consumers.ssh_terminal.database_sync_to_async", immediate_sync_to_async)
     monkeypatch.setattr(
         SSHTerminalConsumer,
         "_persist_manual_terminal_command_result",

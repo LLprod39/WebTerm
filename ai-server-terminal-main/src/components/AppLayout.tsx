@@ -15,8 +15,11 @@ export default function AppLayout() {
   const location = useLocation();
   const immersive = immersiveMeta.find(({ match }) => match.test(location.pathname));
   const mobileSidebarTrigger = (
-    <div className="pointer-events-none fixed left-3 top-3 z-40 md:hidden">
-      <SidebarTrigger className="pointer-events-auto h-9 w-9 rounded-xl border border-border bg-card/95 text-foreground shadow-sm" />
+    <div className="pointer-events-none fixed left-4 top-4 z-40 md:hidden">
+      <SidebarTrigger
+        className="pointer-events-auto h-11 w-11 rounded-xl border border-border bg-card/95 text-foreground shadow-lg shadow-background/30"
+        title="Open navigation"
+      />
     </div>
   );
 
@@ -28,11 +31,11 @@ export default function AppLayout() {
           <AppSidebar />
           <div className="flex min-w-0 flex-1 flex-col">
             {!immersive.hideHeader && (
-              <header className="flex h-10 items-center gap-3 border-b border-border px-3 bg-card/40">
-                <SidebarTrigger className="text-muted-foreground hover:text-foreground h-6 w-6" />
+              <header className="flex h-12 items-center gap-3 border-b border-border bg-card/70 px-3">
+                <SidebarTrigger className="h-9 w-9 text-muted-foreground hover:text-foreground" />
                 <Link
                   to={immersive.backTo}
-                  className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                 >
                   <ArrowLeft className="h-3 w-3" />
                   Back

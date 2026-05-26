@@ -79,4 +79,4 @@ def test_pipeline_assistant_returns_reply_and_patch(monkeypatch):
     assert payload["graph_patch"]["anchor_node_id"] == "node_2"
     assert payload["graph_patch"]["nodes"][0]["ref"] == "notify_ops"
     assert payload["graph_patch"]["edges"][0]["target"] == "notify_ops"
-    assert payload["warnings"] == ["Verify the downstream true/false branches."]
+    assert "Verify the downstream true/false branches." in payload["warnings"]

@@ -118,6 +118,13 @@ diff.txt
 .codex-logs/
 .playwright-cli/
 runtime_logs/
+ai-server-terminal-main/playwright-report/
+ai-server-terminal-main/test-results/
+.antigravitycli/
+mars_logs/
+.import_linter_cache/
+.pytest_cache/
+.ruff_cache/
 
 # Deployment files that must stay tracked
 !docker-compose.yml

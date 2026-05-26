@@ -25,7 +25,7 @@ import {
 type PermissionMode = "inherit" | "allow" | "deny";
 
 const SELECT_CLASS =
-  "h-9 w-full rounded-lg border border-border bg-secondary/30 px-3 text-sm text-foreground outline-none ring-0 transition-all focus:border-primary/40 focus:ring-1 focus:ring-primary/30";
+  "h-10 w-full rounded-lg border border-border bg-secondary/30 px-3 text-sm text-foreground outline-none ring-0 transition-all focus:border-primary/40 focus:ring-1 focus:ring-primary/30";
 
 const FALLBACK_FEATURES = ACCESS_FEATURE_OPTIONS;
 
@@ -88,7 +88,7 @@ function MemberPicker({
             key={user.id}
             type="button"
             onClick={() => onToggle(user.id)}
-            className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-all ${
+            className={`min-h-8 rounded-lg px-2.5 py-1 text-xs font-medium transition-all ${
               active
                 ? "bg-primary/15 text-primary ring-1 ring-primary/25"
                 : "bg-secondary/20 text-muted-foreground ring-1 ring-border/40 hover:bg-secondary/40 hover:text-foreground"
@@ -121,7 +121,7 @@ function PermissionModeField({
       <select
         value={mode}
         onChange={(e) => onChange(e.target.value as PermissionMode)}
-        className="h-7 rounded-md border border-border bg-secondary/30 px-2 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary/30"
+        className="h-8 rounded-md border border-border bg-secondary/30 px-2 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary/30"
         aria-label={`${label} mode`}
       >
         <option value="inherit">{t.unset || t.inherit}</option>
@@ -323,14 +323,16 @@ export default function SettingsGroupsPage() {
                   <div className="flex shrink-0 items-center gap-1">
                     <button
                       onClick={() => (isEditing ? cancelEdit() : startEdit(group))}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/50 transition-colors hover:bg-secondary/40 hover:text-foreground"
+                      className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground/60 transition-colors hover:bg-secondary/40 hover:text-foreground"
+                      aria-label={isEditing ? common.cancel : copy.editAction}
                       title={isEditing ? common.cancel : copy.editAction}
                     >
                       {isEditing ? <ChevronUp className="h-4 w-4" /> : <Pencil className="h-3.5 w-3.5" />}
                     </button>
                     <button
                       onClick={() => void removeGroup(group)}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/50 transition-colors hover:bg-red-500/10 hover:text-red-400"
+                      className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground/60 transition-colors hover:bg-red-500/10 hover:text-red-400"
+                      aria-label={common.delete}
                       title={common.delete}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -368,7 +370,7 @@ export default function SettingsGroupsPage() {
                         name="group-name"
                         value={draft.name || ""}
                         onChange={(e) => setEditing((s) => ({ ...s, name: e.target.value }))}
-                        className="h-9 bg-secondary/20 border-border/60"
+                        className="h-10 bg-secondary/20 border-border/60"
                       />
                     </div>
 
@@ -410,10 +412,10 @@ export default function SettingsGroupsPage() {
                     </div>
 
                     <div className="flex gap-2 pt-2">
-                      <Button size="sm" onClick={() => void saveEdit()} disabled={saving}>
+                      <Button className="h-10" onClick={() => void saveEdit()} disabled={saving}>
                         {saving ? common.saving : common.save}
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={cancelEdit} disabled={saving}>
+                      <Button className="h-10" variant="ghost" onClick={cancelEdit} disabled={saving}>
                         {common.cancel}
                       </Button>
                     </div>
@@ -445,7 +447,7 @@ export default function SettingsGroupsPage() {
                   value={createName}
                   onChange={(e) => setCreateName(e.target.value)}
                   placeholder={copy.namePlaceholder}
-                  className="h-9 bg-secondary/20 border-border/60"
+                  className="h-10 bg-secondary/20 border-border/60"
                 />
               </div>
 
@@ -475,7 +477,7 @@ export default function SettingsGroupsPage() {
                 </div>
               </div>
 
-              <Button className="w-full" onClick={() => void createGroup()} disabled={saving || !createName.trim()}>
+              <Button className="h-10 w-full" onClick={() => void createGroup()} disabled={saving || !createName.trim()}>
                 {saving ? copy.creatingAction : copy.createAction}
               </Button>
             </div>

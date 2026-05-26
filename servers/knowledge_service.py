@@ -29,7 +29,7 @@ from django.utils import timezone
 from loguru import logger
 
 from app.agent_kernel.memory.server_cards import render_server_cards_prompt
-from app.agent_kernel.memory.store import DjangoServerMemoryStore
+from servers.adapters.memory_store import DjangoServerMemoryStore
 
 
 class ServerKnowledgeService:
@@ -209,7 +209,7 @@ class ServerKnowledgeService:
             user: User who initiated the task
             confidence: Confidence level (0.0-1.0)
         """
-        from app.agent_kernel.memory.store import DjangoServerMemoryStore
+        from servers.adapters.memory_store import DjangoServerMemoryStore
         from servers.models import ServerKnowledge
 
         # Check for duplicates (similar title + category)

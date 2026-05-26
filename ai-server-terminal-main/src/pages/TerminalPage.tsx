@@ -9,13 +9,14 @@ import {
 } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Bot, FolderOpen, Monitor, Plus, Search, Server, Settings, X } from "lucide-react";
+import { ArrowLeft, Bot, FolderOpen, Monitor, Plus, Settings, X } from "lucide-react";
 import {
   XTerminal,
   type TerminalConnectionStatus,
   type TerminalHandle,
 } from "@/components/terminal/XTerminal";
 import { AiPanel } from "@/components/terminal/AiPanel";
+import { ServerPicker } from "@/components/terminal/ServerPicker";
 import {
   AI_PREFERENCES_STORAGE_KEY,
   cloneAiPreferences,
@@ -45,6 +46,7 @@ import { CompletionOverlay } from "@/components/terminal/CompletionOverlay";
 import { FileEditorModal } from "@/components/editor/FileEditorModal";
 import { useEditorInterceptor } from "@/hooks/useEditorInterceptor";
 import { useI18n } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 import { useTerminalPreferences } from "@/hooks/useTerminalPreferences";
 import { useTerminalInputBuffer } from "@/hooks/useTerminalInputBuffer";
 
@@ -105,182 +107,6 @@ function createTab(server: FrontendServer, tabs: Tab[], tabId = nextId()): Tab {
 function formatTabName(tab: Tab) {
   if (tab.sessionNumber <= 1) return tab.name;
   return `${tab.name} · ${tab.sessionNumber}`;
-}
-
-function formatSessionCount(count: number) {
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-
-  if (mod10 === 1 && mod100 !== 11) return `${count} сессия`;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${count} сессии`;
-  return `${count} сессий`;
-}
-
-interface ServerPickerProps {
-  servers: FrontendServer[];
-  open: boolean;
-  onClose: () => void;
-  onSelect: (server: FrontendServer) => void;
-  openSessionCounts: Map<number, number>;
-}
-
-function ServerPicker({ servers, open, onClose, onSelect, openSessionCounts }: ServerPickerProps) {
-  const [search, setSearch] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    setSearch("");
-    setTimeout(() => inputRef.current?.focus(), 100);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [open, onClose]);
-
-  if (!open) return null;
-
-  const query = search.toLowerCase().trim();
-  const filtered = servers.filter((server) => {
-    if (!query) return true;
-    return (
-      server.name.toLowerCase().includes(query) ||
-      server.host.toLowerCase().includes(query) ||
-      server.username.toLowerCase().includes(query) ||
-      (server.group_name || "").toLowerCase().includes(query)
-    );
-  });
-
-  const groups = new Map<string, FrontendServer[]>();
-  for (const server of filtered) {
-    const groupName = server.group_name || "Без группы";
-    if (!groups.has(groupName)) groups.set(groupName, []);
-    groups.get(groupName)!.push(server);
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative mx-4 flex max-h-[70vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
-              <Server className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <h2 className="text-base font-semibold text-foreground">Выбор сервера</h2>
-              <p className="text-xs text-muted-foreground">{servers.length} серверов доступно</p>
-            </div>
-          </div>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
-            onClick={onClose}
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-
-        <div className="border-b border-border/60 px-5 py-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              ref={inputRef}
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Поиск по имени, хосту, группе..."
-              className="w-full rounded-xl border border-border bg-secondary py-2.5 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-            />
-            {search ? (
-              <button
-                onClick={() => setSearch("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Server className="mb-3 h-10 w-10 text-muted-foreground/40" />
-              <p className="text-sm text-muted-foreground">Серверы не найдены</p>
-              {search ? <p className="mt-1 text-xs text-muted-foreground/60">Попробуйте изменить запрос</p> : null}
-            </div>
-          ) : (
-            Array.from(groups.entries()).map(([groupName, groupServers]) => (
-              <div key={groupName}>
-                <div className="sticky top-0 bg-secondary/40 px-5 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  {groupName} ({groupServers.length})
-                </div>
-                {groupServers.map((server) => {
-                  const openSessions = openSessionCounts.get(server.id) ?? 0;
-                  return (
-                    <button
-                      key={server.id}
-                      onClick={() => {
-                        onSelect(server);
-                        onClose();
-                      }}
-                      className="flex w-full items-center gap-3 border-b border-border/30 px-5 py-3 text-left transition-colors hover:bg-primary/5 active:bg-primary/10"
-                    >
-                      <div
-                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-                          server.server_type === "rdp" ? "bg-blue-500/10" : "bg-primary/10"
-                        }`}
-                      >
-                        {server.server_type === "rdp" ? (
-                          <Monitor className="h-4 w-4 text-blue-500" />
-                        ) : (
-                          <Server className="h-4 w-4 text-primary" />
-                        )}
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="truncate text-sm font-medium text-foreground">{server.name}</span>
-                          <StatusIndicator
-                            status={
-                              server.status === "online"
-                                ? "online"
-                                : server.status === "offline"
-                                  ? "offline"
-                              : "unknown"
-                            }
-                            showLabel={false}
-                          />
-                          {openSessions > 0 ? (
-                            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                              {formatSessionCount(openSessions)}
-                            </span>
-                          ) : null}
-                        </div>
-                        <p className="truncate font-mono text-xs text-muted-foreground">
-                          {server.username}@{server.host}:{server.port}
-                        </p>
-                      </div>
-
-                      <span className="shrink-0 text-[10px] uppercase text-muted-foreground/60">{server.server_type}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    </div>
-  );
 }
 
 export default function TerminalPage() {
@@ -1180,82 +1006,93 @@ export default function TerminalPage() {
 
   return (
     <div className="flex h-[100dvh] flex-col bg-background">
-      <div className="shrink-0 border-b border-border/80 bg-background/95 px-2.5 py-1.5">
-        <div className="flex items-center gap-2">
+      <div className="shrink-0 border-b border-border/80 bg-background/95 py-2 pl-16 pr-3 sm:px-3">
+        <div className="flex flex-wrap items-center gap-2">
           <Link
             to="/servers"
-            className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg px-3 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <ArrowLeft className="h-3.5 w-3.5" />
+            <ArrowLeft className="h-4 w-4" />
             Назад
           </Link>
 
-          <div className="flex min-w-0 shrink-0 items-center gap-2 rounded-xl border border-border/70 bg-card/60 px-2.5 py-1.5">
+          <div className="flex h-10 min-w-0 shrink-0 items-center gap-2 rounded-lg border border-border/70 bg-card/60 px-3">
             <StatusIndicator
               status={activeTab.status === "connected" ? "online" : activeTab.status === "error" ? "offline" : "unknown"}
               showLabel={false}
             />
-            <span className="truncate text-sm font-medium text-foreground">{formatTabName(activeTab)}</span>
+            <span className="max-w-40 truncate text-sm font-medium text-foreground sm:max-w-56">
+              {formatTabName(activeTab)}
+            </span>
             <span className="hidden truncate text-[11px] text-muted-foreground lg:inline">
               {activeServer.username}@{activeServer.host}:{activeServer.port}
             </span>
           </div>
 
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1 overflow-x-auto rounded-xl border border-border/70 bg-card/40 p-1">
+          <div className="min-w-[260px] flex-1">
+            <div className="flex items-center gap-1 overflow-x-auto rounded-lg border border-border/70 bg-card/40 p-1">
               {tabs.map((tab) => (
-                <button
+                <div
                   key={tab.id}
-                  onClick={() => setActiveTabId(tab.id)}
-                  className={`group flex shrink-0 items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm transition-colors ${
+                  className={cn(
+                    "group flex h-10 shrink-0 items-center rounded-lg border transition-colors",
                     tab.id === activeTabId
                       ? "border-border bg-background text-foreground"
-                      : "border-transparent bg-transparent text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
-                  }`}
+                      : "border-transparent bg-transparent text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
+                  )}
                 >
-                  <StatusIndicator
-                    status={tab.status === "connected" ? "online" : tab.status === "error" ? "offline" : "unknown"}
-                    showLabel={false}
-                  />
-                  <span className="max-w-32 truncate">{formatTabName(tab)}</span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTabId(tab.id)}
+                    className="flex h-full min-w-0 items-center gap-2 rounded-l-lg px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-current={tab.id === activeTabId ? "page" : undefined}
+                  >
+                    <StatusIndicator
+                      status={tab.status === "connected" ? "online" : tab.status === "error" ? "offline" : "unknown"}
+                      showLabel={false}
+                    />
+                    <span className="max-w-40 truncate">{formatTabName(tab)}</span>
+                  </button>
                   {tabs.length > 1 ? (
-                    <span
-                      role="button"
-                      aria-label={`Close ${formatTabName(tab)}`}
+                    <button
+                      type="button"
+                      aria-label={`Закрыть вкладку ${formatTabName(tab)}`}
                       onClick={(e) => {
                         e.stopPropagation();
                         closeTab(tab.id);
                       }}
-                      className="opacity-0 transition-opacity group-hover:opacity-100 hover:text-destructive"
+                      className="mr-1 flex h-8 w-8 items-center justify-center rounded-md opacity-60 transition-colors hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      <X className="h-3 w-3" />
-                    </span>
+                      <X className="h-3.5 w-3.5" />
+                    </button>
                   ) : null}
-                </button>
+                </div>
               ))}
 
               <button
+                type="button"
                 onClick={addTab}
-                className="flex shrink-0 items-center gap-1 rounded-lg border border-dashed border-border/70 px-2.5 py-1.5 text-[11px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
-                aria-label="Add tab"
+                className="flex h-10 shrink-0 items-center gap-2 rounded-lg border border-dashed border-border/70 px-3 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Подключить сервер"
                 title="Подключить сервер"
               >
-                <Plus className="h-3.5 w-3.5" />
+                <Plus className="h-4 w-4" />
                 Сервер
               </button>
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-1 rounded-xl border border-border/70 bg-card/40 p-1">
+          <div className="flex shrink-0 items-center gap-1 rounded-lg border border-border/70 bg-card/40 p-1">
             <Button
               type="button"
               size="sm"
               variant={sidePanelMode === "files" ? "secondary" : "ghost"}
-              className="h-8 gap-1.5 px-2.5 text-[11px]"
+              className="h-10 gap-2 px-3 text-sm"
               onClick={() => setSidePanelMode((current) => (current === "files" ? "none" : "files"))}
+              aria-pressed={sidePanelMode === "files"}
               title={sidePanelMode === "files" ? "Скрыть файловую панель" : "Показать файловую панель"}
             >
-              <FolderOpen className="h-3.5 w-3.5" />
+              <FolderOpen className="h-4 w-4" />
               SFTP
             </Button>
             {activeServer?.server_type === "ssh" ? (
@@ -1263,7 +1100,7 @@ export default function TerminalPage() {
                 type="button"
                 size="sm"
                 variant={sidePanelMode === "ui" ? "secondary" : "ghost"}
-                className="h-8 gap-1.5 px-2.5 text-[11px]"
+                className="h-10 gap-2 px-3 text-sm"
                 onClick={() => {
                   if (sidePanelMode === "ui") {
                     setSidePanelMode("none");
@@ -1271,32 +1108,34 @@ export default function TerminalPage() {
                   }
                   revealUiPanel();
                 }}
+                aria-pressed={sidePanelMode === "ui"}
                 title={sidePanelMode === "ui" ? "Скрыть Linux Workspace" : "Показать Linux Workspace"}
               >
-                <Monitor className="h-3.5 w-3.5" />
+                <Monitor className="h-4 w-4" />
                 Linux
               </Button>
             ) : null}
-              <Button
-                type="button"
-                size="sm"
-                variant={sidePanelMode === "ai" ? "secondary" : "ghost"}
-                className="h-8 gap-1.5 px-2.5 text-[11px]"
-                onClick={() => setSidePanelMode((current) => (current === "ai" ? "none" : "ai"))}
-                title={sidePanelMode === "ai" ? "Скрыть AI ассистента" : "Показать AI ассистента"}
+            <Button
+              type="button"
+              size="sm"
+              variant={sidePanelMode === "ai" ? "secondary" : "ghost"}
+              className="h-10 gap-2 px-3 text-sm"
+              onClick={() => setSidePanelMode((current) => (current === "ai" ? "none" : "ai"))}
+              aria-pressed={sidePanelMode === "ai"}
+              title={sidePanelMode === "ai" ? "Скрыть AI ассистента" : "Показать AI ассистента"}
             >
-              <Bot className="h-3.5 w-3.5" />
+              <Bot className="h-4 w-4" />
               AI
             </Button>
             <Button
               type="button"
-              size="sm"
+              size="icon"
               variant="ghost"
-              className="h-8 gap-1.5 px-2.5 text-[11px]"
               onClick={() => setSettingsOpen(true)}
+              aria-label={t("terminal.settingsBtn")}
               title={t("terminal.settingsBtn")}
             >
-              <Settings className="h-3.5 w-3.5" />
+              <Settings className="h-4 w-4" />
             </Button>
           </div>
         </div>

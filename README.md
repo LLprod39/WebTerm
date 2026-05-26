@@ -632,7 +632,7 @@ dotnet build .\MiniProd.Desktop.sln -c Debug -p:Platform=x64 -m:1 /p:UseSharedCo
 - **Две memory-системы** не смешиваются: эфемерная Nova session memory живёт в `SSHTerminalConsumer`, долговременная — в `ServerMemory*` моделях.
 - **Опасные действия** обязательно проходят через [`app/tools/safety.py`](./app/tools/safety.py).
 - **`passwords/`** остался в коде, но не подключён в `INSTALLED_APPS`.
-- **Корневой `src/main.tsx`** — thin entrypoint, который реэкспортирует SPA из `ai-server-terminal-main/`.
+- **Двухуровневая архитектура фронтенда** — в корне проекта есть `package.json`, `vite.config.ts` и `src/main.tsx`. Это тонкая прокси-прослойка (proxy wrapper) для удобства локальной разработки (чтобы можно было запускать `npm run dev` прямо из корня). Настоящее standalone SPA-приложение находится в каталоге `ai-server-terminal-main/`. Избегайте рассинхронизации зависимостей в их `package.json`!
 - **Нарушения архитектуры** фиксируются [`lint-imports`](./.importlinter).
 
 ---

@@ -55,15 +55,15 @@ export function PageHero({
   className?: string;
 }) {
   return (
-    <section className={cn("relative overflow-hidden rounded-xl border border-border bg-card px-6 py-5 shadow-sm", className)}>
+    <section className={cn("relative overflow-hidden rounded-xl border border-border bg-card px-5 py-5 shadow-sm sm:px-6", className)}>
       <div className="absolute left-0 top-0 h-full w-0.5 bg-primary/60" />
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="space-y-1.5 pl-1">
+        <div className="min-w-0 space-y-1.5 pl-1">
           <div className="enterprise-kicker">{kicker}</div>
           <h1 className="text-xl font-semibold tracking-tight text-foreground">{title}</h1>
           <div className="max-w-3xl text-sm leading-6 text-muted-foreground">{description}</div>
         </div>
-        {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
+        {actions ? <div className="flex w-full shrink-0 flex-wrap items-center gap-2 lg:w-auto lg:justify-end">{actions}</div> : null}
       </div>
     </section>
   );
@@ -142,10 +142,10 @@ export function SectionCard({
 }) {
   return (
     <section className={cn("overflow-hidden rounded-xl border border-border bg-card shadow-sm", className)}>
-      <div className="flex flex-col gap-3 border-b border-border/60 bg-secondary/15 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 border-b border-border/60 bg-secondary/15 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2.5">
           {icon ? (
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
               {icon}
             </div>
           ) : null}
@@ -154,7 +154,7 @@ export function SectionCard({
             {description ? <div className="mt-0.5 text-xs leading-5 text-muted-foreground">{description}</div> : null}
           </div>
         </div>
-        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+        {actions ? <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">{actions}</div> : null}
       </div>
       <div className={cn("px-5 py-5", bodyClassName)}>{children}</div>
     </section>

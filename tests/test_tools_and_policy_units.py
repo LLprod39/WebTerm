@@ -12,7 +12,6 @@ from app.tools.server_tools import (
     _get_user_id,
 )
 from app.tools.ssh_tools import SSHConnectionManager, SSHExecuteTool
-from servers.mcp_tool_runtime import MCPBoundTool
 from studio.mcp_client import (
     MCPClientError,
     _extract_json_rpc_result,
@@ -21,6 +20,7 @@ from studio.mcp_client import (
     _json_rpc_payload,
     _normalize_sse_url,
 )
+from studio.mcp_tool_runtime import MCPBoundTool
 from studio.skill_policy import CompiledSkillPolicy, apply_skill_policies, compile_skill_policies
 from studio.skill_registry import SkillDefinition
 

@@ -236,6 +236,9 @@ def test_save_server_profile_sync_bridge_to_layered_memory(monkeypatch):
     incident_calls: list[tuple[int, dict]] = []
 
     class StubStore:
+        def _sync_manual_knowledge_snapshot_sync(self, knowledge_id):  # noqa: ANN001
+            return f"knowledge:{knowledge_id}"
+
         def _upsert_server_fact_sync(self, server_id, fact, **kwargs):  # noqa: ANN001
             upsert_calls.append((server_id, dict(fact)))
             return "event-fact"
@@ -286,6 +289,9 @@ def test_save_server_profile_sync_layered_bridge_can_be_disabled(monkeypatch):
     called = {"count": 0}
 
     class StubStore:
+        def _sync_manual_knowledge_snapshot_sync(self, knowledge_id):  # noqa: ANN001
+            return f"knowledge:{knowledge_id}"
+
         def _upsert_server_fact_sync(self, *args, **kwargs):  # noqa: ANN001, ANN003
             called["count"] += 1
             return ""

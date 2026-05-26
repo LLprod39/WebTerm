@@ -35,3 +35,7 @@ croniter>=3.0
 # In dev without Redis: CELERY_TASK_ALWAYS_EAGER=True runs tasks synchronously
 celery>=5.3
 redis>=5.0
+
+# Architecture fitness checks (see scripts/check_architecture_sizes.py, .importlinter)
+import-linter>=2.0        # provides lint-imports CLI; required when enforce_import_boundaries=true
+tomli>=2.0; python_version < "3.11"  # tomllib stdlib backport for Python 3.10

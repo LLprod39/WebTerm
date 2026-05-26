@@ -1,0 +1,31 @@
+name: Architecture Fitness
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  architecture-fitness:
+    name: God-file & Import Boundary Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install architecture tools
+        # tomli is the Python < 3.11 fallback for tomllib; safe to install on 3.11+.
+        run: pip install tomli import-linter
+
+      - name: Check god-file size limits + import boundaries
+        # --strict-new: any NEW file above the 500-line standard limit blocks the build.
+        # Import boundaries are enforced via enforce_import_boundaries=true in pyproject.toml.
+        run: python scripts/check_architecture_sizes.py --strict-new

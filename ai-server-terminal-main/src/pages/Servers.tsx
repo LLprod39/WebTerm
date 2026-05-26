@@ -47,7 +47,7 @@ import {
 import { FleetHealthIndicator, StatusIndicator } from "@/components/StatusIndicator";
 import { ServerOsBadge } from "@/components/servers/ServerOsBadge";
 import { resolveServerOs, serverOsLabelKey } from "@/lib/server-os";
-import { useI18n } from "@/lib/i18n";
+import { localize, useI18n } from "@/lib/i18n";
 import {
   Terminal,
   Monitor,
@@ -1723,35 +1723,35 @@ export default function Servers() {
         title={t("srv.title")}
         description={t("srv.groups_description")}
         actions={
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-          <div className="relative w-full sm:w-auto">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              placeholder={t("srv.search")}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-9 w-full border-border bg-background pl-8 text-xs sm:w-56"
-            />
-          </div>
-          <Button size="sm" className="h-9 gap-1.5 text-xs" onClick={openCreate}>
-            <Plus className="h-3.5 w-3.5" /> {t("srv.add")}
-          </Button>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <div className="relative w-full sm:w-auto">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder={t("srv.search")}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-10 w-full border-border bg-background pl-9 text-sm sm:w-64"
+              />
+            </div>
+            <Button size="sm" className="h-10 gap-1.5 text-sm" onClick={openCreate}>
+              <Plus className="h-4 w-4" /> {t("srv.add")}
+            </Button>
           </div>
         }
       />
 
       <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as MainTab)} className="space-y-3">
-        <TabsList className="w-full justify-start">
-          <TabsTrigger value="servers" className="gap-2">
+        <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto p-1">
+          <TabsTrigger value="servers" className="min-h-10 gap-2 px-3">
             <Server className="h-4 w-4" /> {t("srv.list")}
           </TabsTrigger>
-          <TabsTrigger value="groups" className="gap-2">
+          <TabsTrigger value="groups" className="min-h-10 gap-2 px-3">
             <Layers className="h-4 w-4" /> {t("srv.groups")}
           </TabsTrigger>
-          <TabsTrigger value="rules" className="gap-2">
+          <TabsTrigger value="rules" className="min-h-10 gap-2 px-3">
             <Settings className="h-4 w-4" /> {t("srv.rules_tab")}
           </TabsTrigger>
-          <TabsTrigger value="playbook" className="gap-2">
+          <TabsTrigger value="playbook" className="min-h-10 gap-2 px-3">
             <BookOpen className="h-4 w-4" /> {t("pb.title")}
           </TabsTrigger>
         </TabsList>
@@ -1766,16 +1766,16 @@ export default function Servers() {
                   className="w-full flex items-center gap-3 px-4 py-3 transition-colors text-left hover:bg-secondary/30"
                   aria-label={tr(isCollapsed ? "srv.expand_group" : "srv.collapse_group", { name: group })}
                 >
-                  <span className={`flex h-5 w-5 items-center justify-center rounded-md transition-colors ${isCollapsed ? "bg-secondary/40" : "bg-primary/10"}`}>
+                  <span className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${isCollapsed ? "bg-secondary/40" : "bg-primary/10"}`}>
                     {isCollapsed
-                      ? <ChevronRight className="h-3 w-3 text-muted-foreground" />
-                      : <ChevronDown className="h-3 w-3 text-primary" />}
+                      ? <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      : <ChevronDown className="h-4 w-4 text-primary" />}
                   </span>
-                  <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10">
-                    <Server className="h-3.5 w-3.5 text-primary" />
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                    <Server className="h-4 w-4 text-primary" />
                   </div>
                   <span className="text-sm font-semibold tracking-tight text-foreground">{group}</span>
-                  <span className="ml-auto rounded-md border border-border/50 bg-secondary/30 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">{inGroup.length} {t("srv.servers_count")}</span>
+                  <span className="ml-auto rounded-md border border-border/50 bg-secondary/30 px-2 py-1 text-xs font-medium text-muted-foreground">{inGroup.length} {t("srv.servers_count")}</span>
                 </button>
 
                 <AnimatePresence initial={false}>
@@ -1858,27 +1858,27 @@ export default function Servers() {
                                     <StatusIndicator status={displayStatus} />
                                   )}
                                 </span>
-                                <Link to={`/servers/${server.id}/terminal`}>
-                                  <Button size="sm" variant="outline" className="gap-1.5 text-xs h-7 border-border hover:border-primary hover:text-primary">
+                                <Button asChild size="xs" variant="outline" className="h-9 gap-1.5 border-border hover:border-primary hover:text-primary">
+                                  <Link to={`/servers/${server.id}/terminal`}>
                                     <Terminal className="h-3 w-3" /> SSH
-                                  </Button>
-                                </Link>
-                                {server.rdp && (
-                                  <Link to={`/servers/${server.id}/rdp`}>
-                                    <Button size="sm" variant="outline" className="gap-1.5 text-xs h-7 border-border hover:border-info hover:text-info">
-                                      <Monitor className="h-3 w-3" /> RDP
-                                    </Button>
                                   </Link>
+                                </Button>
+                                {server.rdp && (
+                                  <Button asChild size="xs" variant="outline" className="h-9 gap-1.5 border-border hover:border-info hover:text-info">
+                                    <Link to={`/servers/${server.id}/rdp`}>
+                                      <Monitor className="h-3 w-3" /> RDP
+                                    </Link>
+                                  </Button>
                                 )}
-                                <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => openAdvanced(server)} aria-label={tr("srv.open_advanced_for", { name: server.name })} title={t("srv.advanced")}>
+                                <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => openAdvanced(server)} aria-label={tr("srv.open_advanced_for", { name: server.name })} title={t("srv.advanced")}>
                                   <Sparkles className="h-3.5 w-3.5" />
                                 </Button>
                                 {server.can_edit && (
                                   <>
-                                    <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => openEdit(server)} aria-label={tr("srv.edit_server_for", { name: server.name })} title={t("srv.edit_server")}>
+                                    <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => openEdit(server)} aria-label={tr("srv.edit_server_for", { name: server.name })} title={t("srv.edit_server")}>
                                       <Settings className="h-3.5 w-3.5" />
                                     </Button>
-                                    <Button size="sm" variant="destructive" className="h-7 px-2" onClick={() => requestDeleteServer(server)} aria-label={tr("srv.delete_server_for", { name: server.name })} title={t("srv.delete")}>
+                                    <Button size="icon" variant="destructive" className="h-9 w-9" onClick={() => requestDeleteServer(server)} aria-label={tr("srv.delete_server_for", { name: server.name })} title={t("srv.delete")}>
                                       <Trash2 className="h-3.5 w-3.5" />
                                     </Button>
                                   </>
@@ -1924,7 +1924,7 @@ export default function Servers() {
                   {tr("srv.groups_count", { count: groupCount })}
                 </p>
               </div>
-              <Button size="sm" className="h-8 gap-1.5 self-start sm:self-auto" onClick={openCreateGroup}>
+              <Button size="sm" className="h-10 gap-1.5 self-start sm:self-auto" onClick={openCreateGroup}>
                 <Plus className="h-3.5 w-3.5" /> {t("srv.create_group")}
               </Button>
             </div>
@@ -1952,20 +1952,20 @@ export default function Servers() {
                         {group.description || t("srv.group_description_empty")} · {tr("srv.servers_count_value", { count: group.server_count })}
                       </p>
                     </div>
-                    <div className="flex gap-1.5 shrink-0">
+                    <div className="flex shrink-0 gap-2">
                       <Button
-                        size="sm"
+                        size="xs"
                         variant="outline"
-                        className="h-7 gap-1.5 text-xs border-border hover:border-primary hover:text-primary"
+                        className="h-9 gap-1.5 border-border hover:border-primary hover:text-primary"
                         onClick={() => openGroupRules(group.id!)}
                       >
                         <Layers className="h-3 w-3" /> {t("srv.rules_tab")}
                       </Button>
                       {group.can_edit && (
                         <Button
-                          size="sm"
+                          size="icon"
                           variant="outline"
-                          className="h-7 px-2 border-border hover:border-primary hover:text-primary"
+                          className="h-9 w-9 border-border hover:border-primary hover:text-primary"
                           onClick={() => openGroupSettings(group)}
                           aria-label={`${t("nav.settings")} ${group.name}`}
                           title={t("nav.settings")}
@@ -1975,9 +1975,9 @@ export default function Servers() {
                       )}
                       {group.role === "owner" && (
                         <Button
-                          size="sm"
+                          size="icon"
                           variant="destructive"
-                          className="h-7 px-2"
+                          className="h-9 w-9"
                           onClick={() => requestDeleteGroup(group)}
                           aria-label={`${t("srv.delete")} ${group.name}`}
                           title={t("srv.delete")}
@@ -2235,11 +2235,11 @@ export default function Servers() {
                   <h2 className="text-sm font-semibold text-foreground">{t("pb.title")}</h2>
                   <p className="text-xs text-muted-foreground mt-0.5">{t("pb.subtitle")}</p>
                 </div>
-                <div className="flex gap-1.5">
-                  <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={() => fileInputRef.current?.click()}>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" className="h-10 gap-1.5 text-xs" onClick={() => fileInputRef.current?.click()}>
                     <Upload className="h-3.5 w-3.5" /> {t("pb.import")}
                   </Button>
-                  <Button size="sm" className="gap-1.5 h-8 text-xs" onClick={openNewPlaybook}>
+                  <Button size="sm" className="h-10 gap-1.5 text-xs" onClick={openNewPlaybook}>
                     <Plus className="h-3.5 w-3.5" /> {t("pb.new")}
                   </Button>
                 </div>
@@ -2278,17 +2278,17 @@ export default function Servers() {
                           {pb.description && ` · ${pb.description}`}
                         </p>
                       </div>
-                      <div className="flex gap-1.5 shrink-0">
-                        <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs gap-1" onClick={() => openEditPlaybook(pb)}>
+                      <div className="flex shrink-0 gap-2">
+                        <Button size="xs" variant="outline" className="h-9 gap-1" onClick={() => openEditPlaybook(pb)}>
                           <Settings className="h-3 w-3" /> {t("pb.edit")}
                         </Button>
-                        <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" title={t("pb.export_json")} onClick={() => exportPlaybookAsJson(pb)}>
+                        <Button size="icon" variant="outline" className="h-9 w-9" title={t("pb.export_json")} aria-label={t("pb.export_json")} onClick={() => exportPlaybookAsJson(pb)}>
                           <Download className="h-3 w-3" />
                         </Button>
-                        <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={() => onDuplicatePlaybook(pb)}>
+                        <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => onDuplicatePlaybook(pb)} aria-label={localize(lang, "Дублировать плейбук", "Duplicate playbook")}>
                           <Copy className="h-3 w-3" />
                         </Button>
-                        <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => onDeletePlaybook(pb.id)}>
+                        <Button size="icon" variant="outline" className="h-9 w-9 border-destructive/30 text-destructive hover:bg-destructive/10" onClick={() => onDeletePlaybook(pb.id)} aria-label={localize(lang, "Удалить плейбук", "Delete playbook")}>
                           <Trash2 className="h-3 w-3" />
                         </Button>
                       </div>
@@ -2303,7 +2303,7 @@ export default function Servers() {
           {playbookView === "edit" && (
             <section className="space-y-4">
               <div className="flex items-center gap-2">
-                <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => setPlaybookView("list")}>
+                <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => setPlaybookView("list")} aria-label={localize(lang, "Вернуться к списку плейбуков", "Back to playbook list")}>
                   <ChevronRight className="h-4 w-4 rotate-180" />
                 </Button>
                 <h2 className="text-sm font-semibold text-foreground">
@@ -2329,7 +2329,7 @@ export default function Servers() {
               <div className="bg-card border border-border rounded-lg p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tr("pb.tasks_title", { count: playbookTasks.length })}</h3>
-                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={addPlaybookTask}>
+                  <Button size="xs" variant="outline" className="h-9 gap-1" onClick={addPlaybookTask}>
                     <Plus className="h-3 w-3" /> {t("pb.add_task")}
                   </Button>
                 </div>
@@ -2338,11 +2338,11 @@ export default function Servers() {
                   {playbookTasks.map((task, idx) => (
                     <div key={task.id} className="flex items-start gap-2 p-3 rounded-lg border border-border bg-secondary/10">
                       <div className="flex flex-col gap-1 pt-1.5 shrink-0">
-                        <button onClick={() => moveTask(idx, -1)} disabled={idx === 0} className="text-muted-foreground hover:text-foreground disabled:opacity-20 transition-colors">
+                        <button type="button" onClick={() => moveTask(idx, -1)} disabled={idx === 0} className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-20">
                           <ChevronDown className="h-3 w-3 rotate-180" />
                         </button>
                         <GripVertical className="h-3 w-3 text-muted-foreground/40 mx-auto" />
-                        <button onClick={() => moveTask(idx, 1)} disabled={idx === playbookTasks.length - 1} className="text-muted-foreground hover:text-foreground disabled:opacity-20 transition-colors">
+                        <button type="button" onClick={() => moveTask(idx, 1)} disabled={idx === playbookTasks.length - 1} className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-20">
                           <ChevronDown className="h-3 w-3" />
                         </button>
                       </div>
@@ -2353,7 +2353,7 @@ export default function Servers() {
                             placeholder={t("pb.task_description_placeholder")}
                             value={task.description}
                             onChange={(e) => updatePlaybookTask(task.id, { description: e.target.value })}
-                            className="bg-secondary/50 h-7 text-xs flex-1"
+                            className="h-8 flex-1 bg-secondary/50 text-xs"
                           />
                         </div>
                         <Input
@@ -2372,7 +2372,7 @@ export default function Servers() {
                           {t("pb.continue_on_error")}
                         </label>
                       </div>
-                      <button onClick={() => removePlaybookTask(task.id)} className="text-muted-foreground hover:text-destructive transition-colors pt-1.5 shrink-0">
+                      <button type="button" onClick={() => removePlaybookTask(task.id)} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive">
                         <X className="h-3.5 w-3.5" />
                       </button>
                     </div>
@@ -2387,8 +2387,8 @@ export default function Servers() {
                     {tr("pb.targets_title", { count: playbookTargets.size })}
                   </h3>
                   <div className="flex gap-1.5">
-                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={selectAllTargets}>{t("pb.select_online")}</Button>
-                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={clearTargets}>{t("pb.clear")}</Button>
+                    <Button size="xs" variant="outline" className="h-8" onClick={selectAllTargets}>{t("pb.select_online")}</Button>
+                    <Button size="xs" variant="outline" className="h-8" onClick={clearTargets}>{t("pb.clear")}</Button>
                   </div>
                 </div>
 

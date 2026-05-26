@@ -43,7 +43,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { localize, useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { formatActivityDetail, formatActivityLabel, formatRelativeTime } from "@/components/studio/StudioActivityText";
+import {
+  getActiveManualTriggerOptions,
+  getActiveMonitoringTriggers,
+  getActiveScheduleTriggers,
+  getActiveWebhookTriggers,
+  toAbsoluteWebhookUrl,
+  type TriggerInfoTarget,
+} from "@/components/studio/StudioPipelineTriggers";
 import { StudioHero, HeroStatChip, HeroActionButton } from "@/components/studio/StudioHero";
 import {
   studioPipelines,
@@ -54,7 +64,6 @@ import {
   fetchAuthSession,
   type PipelineListItem,
   type PipelineDetail,
-  type PipelineTrigger,
   type StudioPipelineAssistantResponse,
 } from "@/lib/api";
 import { StudioNav } from "@/components/StudioNav";
@@ -63,93 +72,26 @@ import { getPipelineActivityState } from "@/components/pipeline/pipelineActivity
 import { applyAssistantGraphPatch, getAssistantPatchStats } from "@/components/pipeline/assistantPatch";
 import { EmptyState, QueryStateBlock } from "@/components/ui/page-shell";
 
-type ManualTriggerOption = {
-  nodeId: string;
-  label: string;
-};
-
-type TriggerInfoTarget = {
-  pipeline: PipelineDetail;
-  webhookTriggers: PipelineTrigger[];
-  scheduleTriggers: PipelineTrigger[];
-  monitoringTriggers: PipelineTrigger[];
-};
-
-function formatRelativeTime(value: string): string {
-  const diffMs = Date.now() - new Date(value).getTime();
-  const minutes = Math.max(1, Math.floor(diffMs / 60_000));
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
-
-function getActiveManualTriggerOptions(pipeline: PipelineDetail | null): ManualTriggerOption[] {
-  if (!pipeline || !Array.isArray(pipeline.nodes)) {
-    return [];
-  }
-  return pipeline.nodes
-    .filter((node) => node.type === "trigger/manual")
-    .map((node) => {
-      const data = node.data && typeof node.data === "object" ? node.data : {};
-      return {
-        nodeId: node.id,
-        label:
-          typeof data.label === "string" && data.label.trim()
-            ? data.label.trim()
-            : `Manual Trigger ${node.id}`,
-        isActive: data.is_active !== false,
-      };
-    })
-    .filter((node) => node.isActive)
-    .map(({ nodeId, label }) => ({ nodeId, label }));
-}
-
-function getActiveWebhookTriggers(pipeline: PipelineDetail | null): PipelineTrigger[] {
-  if (!pipeline || !Array.isArray(pipeline.triggers)) {
-    return [];
-  }
-  return pipeline.triggers.filter((trigger) => trigger.trigger_type === "webhook" && trigger.is_active);
-}
-
-function getActiveScheduleTriggers(pipeline: PipelineDetail | null): PipelineTrigger[] {
-  if (!pipeline || !Array.isArray(pipeline.triggers)) {
-    return [];
-  }
-  return pipeline.triggers.filter((trigger) => trigger.trigger_type === "schedule" && trigger.is_active);
-}
-
-function getActiveMonitoringTriggers(pipeline: PipelineDetail | null): PipelineTrigger[] {
-  if (!pipeline || !Array.isArray(pipeline.triggers)) {
-    return [];
-  }
-  return pipeline.triggers.filter((trigger) => trigger.trigger_type === "monitoring" && trigger.is_active);
-}
-
-function toAbsoluteWebhookUrl(webhookUrl: string): string {
-  return new URL(webhookUrl, window.location.origin).toString();
-}
-
-function RunStatusBadge({ status }: { status: string }) {
+function RunStatusBadge({ status, lang }: { status: string; lang: string }) {
   const normalized = status.toLowerCase();
   if (normalized === "completed") {
     return (
       <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-400">
-        <CheckCircle2 className="h-2.5 w-2.5" /> Completed
+        <CheckCircle2 className="h-2.5 w-2.5" /> {localize(lang, "Завершен", "Completed")}
       </span>
     );
   }
   if (normalized === "failed") {
     return (
       <span className="inline-flex items-center gap-1 rounded-md border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-red-400">
-        <XCircle className="h-2.5 w-2.5" /> Failed
+        <XCircle className="h-2.5 w-2.5" /> {localize(lang, "Ошибка", "Failed")}
       </span>
     );
   }
   if (normalized === "running") {
     return (
       <span className="inline-flex items-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-        <Loader2 className="h-2.5 w-2.5 animate-spin" /> Running
+        <Loader2 className="h-2.5 w-2.5 animate-spin" /> {localize(lang, "Выполняется", "Running")}
       </span>
     );
   }
@@ -207,6 +149,7 @@ function PipelineCard({
   onDelete,
   running,
   cloning,
+  lang,
 }: {
   pipeline: PipelineListItem;
   onOpen: () => void;
@@ -215,6 +158,7 @@ function PipelineCard({
   onDelete: () => void;
   running: boolean;
   cloning: boolean;
+  lang: string;
 }) {
   const tags = Array.isArray(pipeline.tags) ? pipeline.tags.slice(0, 2) : [];
   const activityState = getPipelineActivityState({
@@ -265,27 +209,27 @@ function PipelineCard({
             <div className="min-w-0 flex-1 pr-2">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-sm font-semibold text-foreground">{pipeline.name}</h3>
-                {pipeline.last_run && <RunStatusBadge status={pipeline.last_run.status} />}
+                {pipeline.last_run && <RunStatusBadge status={pipeline.last_run.status} lang={lang} />}
               </div>
               <p className="mt-1 text-xs text-muted-foreground line-clamp-1">
-                {pipeline.description || "No description"}
+                {pipeline.description || localize(lang, "Описание не задано", "No description")}
               </p>
             </div>
 
             <div onClick={(e) => e.stopPropagation()}>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground" aria-label={`Actions for ${pipeline.name}`}>
+                  <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground" aria-label={localize(lang, `Действия для ${pipeline.name}`, `Actions for ${pipeline.name}`)}>
                     <MoreHorizontal className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={onOpen}>Open Editor</DropdownMenuItem>
+                  <DropdownMenuItem onClick={onOpen}>{localize(lang, "Открыть редактор", "Open editor")}</DropdownMenuItem>
                   <DropdownMenuItem onClick={onClone}>
-                    <Copy className="mr-1.5 h-3.5 w-3.5" /> Clone
+                    <Copy className="mr-1.5 h-3.5 w-3.5" /> {localize(lang, "Клонировать", "Clone")}
                   </DropdownMenuItem>
                   <DropdownMenuItem className="text-destructive" onClick={onDelete}>
-                    <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete
+                    <Trash2 className="mr-1.5 h-3.5 w-3.5" /> {localize(lang, "Удалить", "Delete")}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -305,28 +249,28 @@ function PipelineCard({
           <div className="mt-3 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <span className="text-[11px] text-muted-foreground">
-                {formatRelativeTime(pipeline.updated_at)}
+                {formatRelativeTime(pipeline.updated_at, lang)}
               </span>
               {activityState.label && (
                 <span className={cn("inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium", activityToneClass)}>
                   <ActivityIcon className={cn("h-2.5 w-2.5", activityState.icon === "running" && "animate-spin")} />
-                  {activityState.label}
+                  {formatActivityLabel(activityState.label, lang)}
                 </span>
               )}
             </div>
 
             <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-              <Button size="sm" className="h-7 gap-1.5 px-3 text-xs" onClick={onRun} disabled={running}>
-                {running ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
-                Run
+              <Button size="sm" className="h-9 gap-1.5 px-3 text-xs" onClick={onRun} disabled={running}>
+                {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                {localize(lang, "Запуск", "Run")}
               </Button>
             </div>
           </div>
           <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-muted-foreground">
-            {activityState.detail}
+            {formatActivityDetail(activityState.detail, lang)}
           </p>
 
-          {cloning && <p className="mt-2 text-[11px] text-primary">Creating a copy...</p>}
+          {cloning && <p className="mt-2 text-[11px] text-primary">{localize(lang, "Создаю копию...", "Creating a copy...")}</p>}
         </div>
       </div>
     </article>
@@ -340,6 +284,7 @@ function CreatePipelineDialog({ open, onClose }: { open: boolean; onClose: () =>
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { lang } = useI18n();
 
   const createMutation = useMutation({
     mutationFn: (payload: { name: string; description: string; icon: string }) =>
@@ -350,7 +295,7 @@ function CreatePipelineDialog({ open, onClose }: { open: boolean; onClose: () =>
       setDescription("");
       setIcon("W");
       onClose();
-      toast({ description: `Pipeline "${pipeline.name}" created.` });
+      toast({ description: localize(lang, `Пайплайн "${pipeline.name}" создан.`, `Pipeline "${pipeline.name}" created.`) });
       navigate(`/studio/pipeline/${pipeline.id}`);
     },
     onError: (error: Error) => {
@@ -362,26 +307,27 @@ function CreatePipelineDialog({ open, onClose }: { open: boolean; onClose: () =>
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>New Pipeline</DialogTitle>
-          <DialogDescription>Create an empty workflow and open the editor.</DialogDescription>
+          <DialogTitle>{localize(lang, "Новый пайплайн", "New pipeline")}</DialogTitle>
+          <DialogDescription>{localize(lang, "Создать пустой runbook и открыть редактор.", "Create an empty runbook and open the editor.")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3 py-2">
           <div className="flex gap-2">
-            <Input value={icon} onChange={(e) => setIcon(e.target.value)} placeholder="W" className="w-16 text-center" aria-label="Pipeline icon" />
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Pipeline name" aria-label="Pipeline name" autoFocus />
+            <Input value={icon} onChange={(e) => setIcon(e.target.value)} placeholder="W" className="h-10 w-16 text-center" aria-label={localize(lang, "Иконка пайплайна", "Pipeline icon")} />
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={localize(lang, "Название пайплайна", "Pipeline name")} aria-label={localize(lang, "Название пайплайна", "Pipeline name")} autoFocus />
           </div>
-          <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" aria-label="Pipeline description" />
+          <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={localize(lang, "Краткое назначение", "Description")} aria-label={localize(lang, "Описание пайплайна", "Pipeline description")} />
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancel
+          <Button variant="outline" className="h-10" onClick={onClose}>
+            {localize(lang, "Отмена", "Cancel")}
           </Button>
           <Button
+            className="h-10"
             onClick={() => createMutation.mutate({ name: name.trim(), description: description.trim(), icon: icon.trim() || "W" })}
             disabled={!name.trim() || createMutation.isPending}
           >
             {createMutation.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
-            Create
+            {localize(lang, "Создать", "Create")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -393,6 +339,7 @@ export default function StudioPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { lang } = useI18n();
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<PipelineListItem | null>(null);
@@ -403,7 +350,7 @@ export default function StudioPage() {
   const [triggerInfoTarget, setTriggerInfoTarget] = useState<TriggerInfoTarget | null>(null);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiDraft, setAiDraft] = useState<StudioPipelineAssistantResponse | null>(null);
-  const [aiDraftName, setAiDraftName] = useState("AI Automation Draft");
+  const [aiDraftName, setAiDraftName] = useState(() => localize(lang, "Операционный runbook", "Operations runbook"));
 
   const { data: session } = useQuery({
     queryKey: ["auth", "session"],
@@ -450,41 +397,41 @@ export default function StudioPage() {
     enabled: canRuns,
   });
 
-  const runTriggerOptions = useMemo(() => getActiveManualTriggerOptions(runTarget), [runTarget]);
+  const runTriggerOptions = useMemo(() => getActiveManualTriggerOptions(runTarget, lang), [lang, runTarget]);
 
   const sectionLinks = useMemo(
     () =>
       [
         canSkills
-          ? { label: "Skill Catalog", desc: "Private and shared skill playbooks", icon: BookOpen, path: "/studio/skills" }
+          ? { label: localize(lang, "Каталог runbook", "Runbook catalog"), desc: localize(lang, "Личные и общие операционные playbook", "Private and shared operations playbooks"), icon: BookOpen, path: "/studio/skills" }
           : null,
         canMcp
-          ? { label: "MCP Registry", desc: "Personal and shared MCP servers", icon: Server, path: "/studio/mcp" }
+          ? { label: localize(lang, "Реестр MCP", "MCP registry"), desc: localize(lang, "Инструменты и интеграции для автоматизации", "Tools and integrations for automation"), icon: Server, path: "/studio/mcp" }
           : null,
         canAgents
-          ? { label: "Agent Configs", desc: "Reusable agent profiles", icon: Bot, path: "/studio/agents" }
+          ? { label: localize(lang, "Профили агентов", "Agent profiles"), desc: localize(lang, "Переиспользуемые роли для OPS-задач", "Reusable profiles for OPS tasks"), icon: Bot, path: "/studio/agents" }
           : null,
         canRuns
-          ? { label: "Execution History", desc: "Runs available for your access scope", icon: Clock, path: "/studio/runs" }
+          ? { label: localize(lang, "История запусков", "Execution history"), desc: localize(lang, "Запуски в вашей зоне доступа", "Runs available for your access scope"), icon: Clock, path: "/studio/runs" }
           : null,
         canNotifications
-          ? { label: "Notifications", desc: "Admin delivery settings", icon: Zap, path: "/studio/notifications" }
+          ? { label: localize(lang, "Оповещения", "Notifications"), desc: localize(lang, "Каналы доставки для админ-событий", "Delivery settings for admin events"), icon: Zap, path: "/studio/notifications" }
           : null,
       ].filter(Boolean) as Array<{ label: string; desc: string; icon: typeof BookOpen; path: string }>,
-    [canAgents, canMcp, canNotifications, canRuns, canSkills],
+    [canAgents, canMcp, canNotifications, canRuns, canSkills, lang],
   );
 
   const stats = useMemo(
     () =>
       [
-        canPipelines ? { icon: Workflow, label: "Pipelines", value: pipelines.length } : null,
-        canSkills ? { icon: BookOpen, label: "Skills", value: Array.isArray(skills) ? skills.length : 0 } : null,
-        canMcp ? { icon: Server, label: "MCP Servers", value: Array.isArray(mcpList) ? mcpList.length : 0 } : null,
-        canAgents ? { icon: Bot, label: "Agents", value: Array.isArray(agents) ? agents.length : 0 } : null,
-        canRuns ? { icon: CheckCircle2, label: "Completed", value: runs.filter((run) => run.status === "completed").length, sub: "runs" } : null,
-        canRuns ? { icon: XCircle, label: "Failed", value: runs.filter((run) => run.status === "failed").length, sub: "runs" } : null,
+        canPipelines ? { icon: Workflow, label: localize(lang, "Пайплайны", "Pipelines"), value: pipelines.length } : null,
+        canSkills ? { icon: BookOpen, label: localize(lang, "Runbook", "Runbooks"), value: Array.isArray(skills) ? skills.length : 0 } : null,
+        canMcp ? { icon: Server, label: localize(lang, "MCP", "MCP servers"), value: Array.isArray(mcpList) ? mcpList.length : 0 } : null,
+        canAgents ? { icon: Bot, label: localize(lang, "Агенты", "Agents"), value: Array.isArray(agents) ? agents.length : 0 } : null,
+        canRuns ? { icon: CheckCircle2, label: localize(lang, "Завершено", "Completed"), value: runs.filter((run) => run.status === "completed").length, sub: localize(lang, "запусков", "runs") } : null,
+        canRuns ? { icon: XCircle, label: localize(lang, "Ошибки", "Failed"), value: runs.filter((run) => run.status === "failed").length, sub: localize(lang, "запусков", "runs") } : null,
       ].filter(Boolean) as Array<{ icon: React.ElementType; label: string; value: string | number; sub?: string }>,
-    [agents, canAgents, canMcp, canPipelines, canRuns, canSkills, mcpList, pipelines.length, runs, skills],
+    [agents, canAgents, canMcp, canPipelines, canRuns, canSkills, lang, mcpList, pipelines.length, runs, skills],
   );
 
   const runMutation = useMutation({
@@ -496,7 +443,7 @@ export default function StudioPage() {
       setRunTarget(null);
       setRunEntryNodeId("");
       setRunTriggerError("");
-      toast({ description: `Run #${run.id} started.` });
+      toast({ description: localize(lang, `Запуск #${run.id} начат.`, `Run #${run.id} started.`) });
     },
     onError: (error: Error) => {
       toast({ variant: "destructive", description: error.message });
@@ -507,7 +454,7 @@ export default function StudioPage() {
     mutationFn: (pipelineId: number) => studioPipelines.clone(pipelineId),
     onSuccess: (pipeline) => {
       queryClient.invalidateQueries({ queryKey: ["studio", "pipelines"] });
-      toast({ description: `Cloned as "${pipeline.name}".` });
+      toast({ description: localize(lang, `Копия создана: "${pipeline.name}".`, `Cloned as "${pipeline.name}".`) });
     },
     onError: (error: Error) => {
       toast({ variant: "destructive", description: error.message });
@@ -519,7 +466,7 @@ export default function StudioPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["studio", "pipelines"] });
       setDeleteTarget(null);
-      toast({ description: "Pipeline deleted." });
+      toast({ description: localize(lang, "Пайплайн удален.", "Pipeline deleted.") });
     },
     onError: (error: Error) => {
       toast({ variant: "destructive", description: error.message });
@@ -530,7 +477,7 @@ export default function StudioPage() {
     mutationFn: (message: string) =>
       studioPipelines.assistant({
         pipeline_id: null,
-        pipeline_name: aiDraftName.trim() || "AI Automation Draft",
+        pipeline_name: aiDraftName.trim() || localize(lang, "Операционный runbook", "Operations runbook"),
         nodes: [],
         edges: [],
         selected_node: null,
@@ -553,8 +500,8 @@ export default function StudioPage() {
       setAiDraft(response);
       toast({
         description: response.validation?.ok === false
-          ? "AI draft needs fixes before it can be created."
-          : "AI draft is ready for review.",
+          ? localize(lang, "Черновик нужно поправить перед сохранением.", "The draft needs fixes before it can be created.")
+          : localize(lang, "Черновик готов к проверке.", "The draft is ready for review."),
       });
     },
     onError: (error: Error) => {
@@ -565,7 +512,7 @@ export default function StudioPage() {
   const createAiDraftMutation = useMutation({
     mutationFn: async ({ openEditor }: { openEditor: boolean }) => {
       if (!aiDraft) {
-        throw new Error("No AI draft to apply.");
+        throw new Error(localize(lang, "Нет черновика для сохранения.", "No draft to apply."));
       }
       const result = applyAssistantGraphPatch({
         nodes: [],
@@ -573,10 +520,10 @@ export default function StudioPage() {
         response: aiDraft,
       });
       if (!result.stats.hasChanges) {
-        throw new Error("AI draft does not contain graph changes.");
+        throw new Error(localize(lang, "Черновик не содержит изменений графа.", "The draft does not contain graph changes."));
       }
       const pipeline = await studioPipelines.create({
-        name: aiDraftName.trim() || "AI Automation Draft",
+        name: aiDraftName.trim() || localize(lang, "Операционный runbook", "Operations runbook"),
         description: aiPrompt.trim() || aiDraft.reply || "",
         icon: "W",
         tags: ["ai-builder"],
@@ -592,7 +539,7 @@ export default function StudioPage() {
         navigate(`/studio/pipeline/${pipeline.id}`);
         return;
       }
-      toast({ description: `Pipeline "${pipeline.name}" created.` });
+      toast({ description: localize(lang, `Пайплайн "${pipeline.name}" создан.`, `Pipeline "${pipeline.name}" created.`) });
     },
     onError: (error: Error) => {
       toast({ variant: "destructive", description: error.message });
@@ -602,7 +549,7 @@ export default function StudioPage() {
   function handleAiBuilderSubmit(messageOverride?: string) {
     const message = (messageOverride || aiPrompt).trim();
     if (!message) {
-      toast({ variant: "destructive", description: "Describe the automation first." });
+      toast({ variant: "destructive", description: localize(lang, "Сначала опишите задачу автоматизации.", "Describe the automation first.") });
       return;
     }
     aiBuilderMutation.mutate(message);
@@ -611,11 +558,11 @@ export default function StudioPage() {
   function handleCreateAiDraft(openEditor: boolean) {
     if (!aiDraft) return;
     if (aiDraft.validation?.ok === false) {
-      toast({ variant: "destructive", description: "Fix AI draft validation errors before creating a pipeline." });
+      toast({ variant: "destructive", description: localize(lang, "Исправьте ошибки черновика перед созданием пайплайна.", "Fix draft validation errors before creating a pipeline.") });
       return;
     }
     if (aiDraft.risk?.level === "dangerous") {
-      toast({ variant: "destructive", description: "This draft contains a dangerous SSH command. Ask AI to add approval or rewrite it safely." });
+      toast({ variant: "destructive", description: localize(lang, "Черновик содержит опасную SSH-команду. Добавьте approval или безопасную замену.", "This draft contains a dangerous SSH command. Add approval or rewrite it safely.") });
       return;
     }
     createAiDraftMutation.mutate({ openEditor });
@@ -626,7 +573,7 @@ export default function StudioPage() {
     setPreparingRunPipelineId(pipeline.id);
     try {
       const detail = await studioPipelines.get(pipeline.id);
-      const manualTriggers = getActiveManualTriggerOptions(detail);
+      const manualTriggers = getActiveManualTriggerOptions(detail, lang);
       const webhookTriggers = getActiveWebhookTriggers(detail);
       const scheduleTriggers = getActiveScheduleTriggers(detail);
       const monitoringTriggers = getActiveMonitoringTriggers(detail);
@@ -642,7 +589,7 @@ export default function StudioPage() {
         }
         toast({
           variant: "destructive",
-          description: "This pipeline has no active triggers. Add a manual, webhook, schedule, or monitoring trigger first.",
+          description: localize(lang, "У пайплайна нет активных триггеров. Сначала добавьте ручной, webhook, schedule или monitoring-триггер.", "This pipeline has no active triggers. Add a manual, webhook, schedule, or monitoring trigger first."),
         });
         return;
       }
@@ -653,7 +600,7 @@ export default function StudioPage() {
       setRunTarget(detail);
       setRunEntryNodeId(manualTriggers[0].nodeId);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to prepare pipeline run.";
+      const message = error instanceof Error ? error.message : localize(lang, "Не удалось подготовить запуск пайплайна.", "Failed to prepare pipeline run.");
       toast({ variant: "destructive", description: message });
     } finally {
       setPreparingRunPipelineId(null);
@@ -663,9 +610,9 @@ export default function StudioPage() {
   async function handleCopyWebhookUrl(webhookUrl: string) {
     try {
       await navigator.clipboard.writeText(toAbsoluteWebhookUrl(webhookUrl));
-      toast({ description: "Webhook URL copied." });
+      toast({ description: localize(lang, "Webhook URL скопирован.", "Webhook URL copied.") });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to copy webhook URL.";
+      const message = error instanceof Error ? error.message : localize(lang, "Не удалось скопировать webhook URL.", "Failed to copy webhook URL.");
       toast({ variant: "destructive", description: message });
     }
   }
@@ -695,16 +642,16 @@ export default function StudioPage() {
       <div className="flex-1 overflow-auto flex flex-col">
       <StudioHero
         kicker="Studio"
-        title={canPipelines ? "Pipelines" : "Studio"}
+        title={canPipelines ? localize(lang, "Пайплайны", "Pipelines") : "Studio"}
         titleIcon={<Workflow className="h-7 w-7 text-primary" />}
-        description="Build and automate workflows. Connect pipelines, agents, skills, and MCP servers."
+        description={localize(lang, "Операционные runbook, триггеры, проверки и инструменты MCP в одном рабочем контуре.", "Operations runbooks, triggers, verification, and MCP tools in one workspace.")}
         stats={
           <>
-            {canPipelines && <HeroStatChip icon={<Workflow className="h-3.5 w-3.5" />} label={`${pipelines.length} pipelines`} />}
-            {canSkills && Array.isArray(skills) && <HeroStatChip icon={<BookOpen className="h-3.5 w-3.5" />} label={`${skills.length} skills`} />}
-            {canRuns && <HeroStatChip icon={<CheckCircle2 className="h-3.5 w-3.5" />} label={`${runs.filter((r) => r.status === "completed").length} completed`} />}
+            {canPipelines && <HeroStatChip icon={<Workflow className="h-3.5 w-3.5" />} label={localize(lang, `${pipelines.length} пайплайнов`, `${pipelines.length} pipelines`)} />}
+            {canSkills && Array.isArray(skills) && <HeroStatChip icon={<BookOpen className="h-3.5 w-3.5" />} label={localize(lang, `${skills.length} runbook`, `${skills.length} runbooks`)} />}
+            {canRuns && <HeroStatChip icon={<CheckCircle2 className="h-3.5 w-3.5" />} label={localize(lang, `${runs.filter((r) => r.status === "completed").length} завершено`, `${runs.filter((r) => r.status === "completed").length} completed`)} />}
             {canRuns && runs.filter((r) => r.status === "failed").length > 0 && (
-              <HeroStatChip icon={<XCircle className="h-3.5 w-3.5" />} label={`${runs.filter((r) => r.status === "failed").length} failed`} />
+              <HeroStatChip icon={<XCircle className="h-3.5 w-3.5" />} label={localize(lang, `${runs.filter((r) => r.status === "failed").length} ошибок`, `${runs.filter((r) => r.status === "failed").length} failed`)} />
             )}
           </>
         }
@@ -713,7 +660,7 @@ export default function StudioPage() {
             <HeroActionButton
               onClick={() => setShowCreate(true)}
               icon={<Plus className="h-4 w-4" />}
-              label="New Pipeline"
+              label={localize(lang, "Новый пайплайн", "New pipeline")}
               primary
             />
           ) : sectionLinks.length > 0 ? (
@@ -741,23 +688,23 @@ export default function StudioPage() {
                 </span>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-base font-semibold text-foreground">AI Automation Agent</h2>
+                    <h2 className="text-base font-semibold text-foreground">{localize(lang, "Помощник автоматизации", "Automation assistant")}</h2>
                     <Badge variant="outline" className={cn("gap-1", aiDraftStatus.className)}>
                       <AiDraftStatusIcon className="h-3 w-3" />
                       {aiDraftStatus.label}
                     </Badge>
                   </div>
                   <p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">
-                    Опиши цель обычным языком. Агент соберет DAG, нормализует ноды, проверит связи и не даст сохранить битый граф.
+                    {localize(lang, "Опишите цель обычным языком. Помощник соберет DAG, нормализует ноды, проверит связи и не даст сохранить битый граф.", "Describe the operational goal. The assistant builds a DAG, normalizes nodes, checks links, and blocks broken graphs.")}
                   </p>
                 </div>
               </div>
               <div className="flex shrink-0 flex-wrap gap-1.5 text-[10px] font-medium text-muted-foreground">
                 {[
-                  ["Понять", MessageSquare],
-                  ["Собрать DAG", Route],
-                  ["Проверить", ShieldCheck],
-                  ["Сохранить", CheckCircle2],
+                  [localize(lang, "Понять", "Parse"), MessageSquare],
+                  [localize(lang, "Собрать DAG", "Build DAG"), Route],
+                  [localize(lang, "Проверить", "Verify"), ShieldCheck],
+                  [localize(lang, "Сохранить", "Save"), CheckCircle2],
                 ].map(([label, Icon]) => (
                   <span key={label as string} className="inline-flex items-center gap-1 rounded-md border border-border/70 bg-background/40 px-2 py-1">
                     <Icon className="h-3 w-3 text-primary" />
@@ -771,40 +718,40 @@ export default function StudioPage() {
               <div className="min-w-0 space-y-4 p-5">
                 <div className="grid grid-cols-1 gap-3 lg:grid-cols-[240px_minmax(0,1fr)]">
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Имя пайплайна</label>
+                    <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{localize(lang, "Имя пайплайна", "Pipeline name")}</label>
                     <Input
                       value={aiDraftName}
                       onChange={(event) => setAiDraftName(event.target.value)}
-                      placeholder="Pipeline name"
+                      placeholder={localize(lang, "Название пайплайна", "Pipeline name")}
                       className="h-10 bg-background/70"
-                      aria-label="AI draft pipeline name"
+                      aria-label={localize(lang, "Название черновика пайплайна", "Draft pipeline name")}
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Задача для агента</label>
+                    <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{localize(lang, "Задача для помощника", "Assistant task")}</label>
                     <Textarea
                       value={aiPrompt}
                       onChange={(event) => setAiPrompt(event.target.value)}
-                      placeholder="Например: каждый день собрать логи по серверам, кратко отправить в Telegram и предусмотреть отдельный вход для задач оператора"
+                      placeholder={localize(lang, "Например: каждый день собрать логи по серверам, кратко отправить в Telegram и предусмотреть отдельный вход для задач оператора", "Example: collect server logs daily, send a short Telegram summary, and keep a separate operator task entry.")}
                       className="min-h-[128px] resize-none bg-background/70 text-[15px] leading-6"
-                      aria-label="AI automation request"
+                      aria-label={localize(lang, "Запрос на автоматизацию", "Automation request")}
                     />
                   </div>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
                   {[
-                    "Ежедневный health-check серверов с Telegram-отчетом",
-                    "Отдельный Telegram/webhook вход для задач оператора",
-                    "Проверить граф и исправить DAG ошибки",
-                    "Docker monitoring с approval перед опасными действиями",
+                    localize(lang, "Ежедневный health-check серверов с Telegram-отчетом", "Daily server health check with Telegram report"),
+                    localize(lang, "Отдельный Telegram/webhook вход для задач оператора", "Separate Telegram/webhook entry for operator tasks"),
+                    localize(lang, "Проверить граф и исправить DAG ошибки", "Validate the graph and fix DAG errors"),
+                    localize(lang, "Docker monitoring с approval перед опасными действиями", "Docker monitoring with approval before risky actions"),
                   ].map((prompt) => (
                     <Button
                       key={prompt}
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-8 rounded-md border-border/80 bg-background/40 text-xs"
+                      className="min-h-9 rounded-md border-border/80 bg-background/40 px-3 py-1.5 text-xs"
                       disabled={aiBuilderMutation.isPending}
                       onClick={() => {
                         setAiPrompt(prompt);
@@ -823,7 +770,7 @@ export default function StudioPage() {
                     onClick={() => handleAiBuilderSubmit()}
                   >
                     {aiBuilderMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
-                    Собрать и проверить DAG
+                    {localize(lang, "Собрать и проверить DAG", "Build and verify DAG")}
                   </Button>
                   {aiDraft?.validation?.ok === false ? (
                     <Button
@@ -832,17 +779,21 @@ export default function StudioPage() {
                       disabled={aiBuilderMutation.isPending}
                       onClick={() =>
                         handleAiBuilderSubmit(
-                          `Пересобери черновик заново как валидный DAG. Исправь ошибки: ${aiDraftErrors.join("; ")}. Не создавай циклы и не делай Telegram Input триггером.`,
+                          localize(
+                            lang,
+                            `Пересобери черновик заново как валидный DAG. Исправь ошибки: ${aiDraftErrors.join("; ")}. Не создавай циклы и не делай Telegram Input триггером.`,
+                            `Rebuild the draft as a valid DAG. Fix these errors: ${aiDraftErrors.join("; ")}. Do not create cycles and do not use Telegram Input as a trigger.`,
+                          ),
                         )
                       }
                     >
                       <Route className="h-4 w-4" />
-                      Пересобрать без циклов
+                      {localize(lang, "Пересобрать без циклов", "Rebuild without cycles")}
                     </Button>
                   ) : null}
                   {aiDraft ? (
                     <Button variant="ghost" className="h-10" onClick={() => setAiDraft(null)}>
-                      Сбросить
+                      {localize(lang, "Сбросить", "Reset")}
                     </Button>
                   ) : null}
                 </div>
@@ -853,7 +804,7 @@ export default function StudioPage() {
                   <div className="flex h-full flex-col gap-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <h3 className="text-sm font-semibold text-foreground">Проверенный черновик</h3>
+                        <h3 className="text-sm font-semibold text-foreground">{localize(lang, "Проверенный черновик", "Verified draft")}</h3>
                         <p className="mt-1 text-xs leading-5 text-muted-foreground">{aiDraft.patch_summary || aiDraft.reply}</p>
                       </div>
                       <Badge variant="outline" className={cn("shrink-0 gap-1", aiDraftStatus.className)}>
@@ -864,9 +815,9 @@ export default function StudioPage() {
 
                     <div className="grid grid-cols-3 gap-2 text-center text-[10px]">
                       {[
-                        ["нод", aiDraftStats?.addedNodes || 0],
-                        ["связей", aiDraftStats?.addedEdges || 0],
-                        ["правок", aiDraftStats?.updatedNodes || 0],
+                        [localize(lang, "нод", "nodes"), aiDraftStats?.addedNodes || 0],
+                        [localize(lang, "связей", "edges"), aiDraftStats?.addedEdges || 0],
+                        [localize(lang, "правок", "edits"), aiDraftStats?.updatedNodes || 0],
                       ].map(([label, value]) => (
                         <div key={label as string} className="rounded-lg border border-border/70 bg-card/70 px-2 py-2">
                           <div className="text-base font-semibold text-foreground">{value as number}</div>
@@ -879,7 +830,7 @@ export default function StudioPage() {
                       <div className="space-y-2">
                         <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                           <Route className="h-3.5 w-3.5" />
-                          План графа
+                          {localize(lang, "План графа", "Graph plan")}
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5">
                           {aiDraftNodePreview.slice(0, 6).map((node, index) => (
@@ -922,7 +873,7 @@ export default function StudioPage() {
 
                     {aiDraft.risk?.level === "dangerous" ? (
                       <div className="rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-[11px] leading-5 text-red-100">
-                        Обнаружена опасная SSH-команда. Нужен approval или безопасная замена команды.
+                        {localize(lang, "Обнаружена опасная SSH-команда. Нужен approval или безопасная замена команды.", "Dangerous SSH command detected. Add approval or replace it safely.")}
                       </div>
                     ) : null}
 
@@ -934,7 +885,7 @@ export default function StudioPage() {
                         onClick={() => handleCreateAiDraft(false)}
                       >
                         {createAiDraftMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                        Создать пайплайн
+                        {localize(lang, "Создать пайплайн", "Create pipeline")}
                       </Button>
                       <Button
                         size="sm"
@@ -944,7 +895,7 @@ export default function StudioPage() {
                         onClick={() => handleCreateAiDraft(true)}
                       >
                         <Route className="h-3.5 w-3.5" />
-                        Открыть canvas
+                        {localize(lang, "Открыть canvas", "Open canvas")}
                       </Button>
                     </div>
                   </div>
@@ -954,9 +905,9 @@ export default function StudioPage() {
                       <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-primary/20 bg-primary/10">
                         <MessageSquare className="h-5 w-5 text-primary" />
                       </div>
-                      <h3 className="mt-3 text-sm font-semibold text-foreground">Черновик появится здесь</h3>
+                      <h3 className="mt-3 text-sm font-semibold text-foreground">{localize(lang, "Черновик появится здесь", "Draft appears here")}</h3>
                       <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                        После генерации здесь будет статус проверки, список нод, предупреждения и действия сохранения.
+                        {localize(lang, "После сборки здесь будет статус проверки, список нод, предупреждения и действия сохранения.", "After generation, this panel shows verification status, nodes, warnings, and save actions.")}
                       </p>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
@@ -977,7 +928,7 @@ export default function StudioPage() {
 
             {recentFailedRuns.length ? (
               <div className="border-t border-red-500/20 bg-red-500/5 px-5 py-2 text-xs text-red-200">
-                Recent failed runs: {recentFailedRuns.map((run) => `#${run.id} ${run.pipeline_name}`).join(" · ")}
+                {localize(lang, "Последние ошибки запусков", "Recent failed runs")}: {recentFailedRuns.map((run) => `#${run.id} ${run.pipeline_name}`).join(" · ")}
               </div>
             ) : null}
           </section>
@@ -989,8 +940,8 @@ export default function StudioPage() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search pipelines..."
-              aria-label="Search pipelines"
+              placeholder={localize(lang, "Поиск пайплайнов...", "Search pipelines...")}
+              aria-label={localize(lang, "Поиск пайплайнов", "Search pipelines")}
               className="h-10 border-0 bg-transparent shadow-none focus-visible:ring-0 text-sm px-0"
             />
           </div>
@@ -1003,25 +954,25 @@ export default function StudioPage() {
                     <section className="rounded-xl border border-border bg-card p-4">
                       <div className="mb-3 flex items-center justify-between">
                         <h2 className="text-sm font-semibold text-foreground">
-                          {search ? `Results for “${search}”` : "All Pipelines"}
+                          {search ? localize(lang, `Результаты по "${search}"`, `Results for "${search}"`) : localize(lang, "Все пайплайны", "All pipelines")}
                         </h2>
                         {pipelines.length > 0 && (
                           <span className="text-xs text-muted-foreground">{pipelines.length}</span>
                         )}
                       </div>
 
-                      <QueryStateBlock loading={isLoading} loadingText="Loading pipelines...">
+                      <QueryStateBlock loading={isLoading} loadingText={localize(lang, "Загружаю пайплайны...", "Loading pipelines...")}>
                       {pipelines.length === 0 ? (
                         <EmptyState
                           icon={<Workflow className="h-5 w-5" />}
-                          title={search ? "No matches" : "No pipelines yet"}
-                          description={search ? "Try a broader query." : "Create a new pipeline to start automating tasks."}
+                          title={search ? localize(lang, "Ничего не найдено", "No matches") : localize(lang, "Пайплайнов пока нет", "No pipelines yet")}
+                          description={search ? localize(lang, "Попробуйте более общий запрос.", "Try a broader query.") : localize(lang, "Создайте первый runbook для повторяемой OPS-задачи.", "Create the first runbook for a repeatable OPS task.")}
                           actions={!search ? (
-                            <Button size="sm" className="gap-1.5" onClick={() => setShowCreate(true)}>
-                              <Plus className="h-3.5 w-3.5" /> New Pipeline
+                            <Button size="sm" className="h-10 gap-1.5" onClick={() => setShowCreate(true)}>
+                              <Plus className="h-3.5 w-3.5" /> {localize(lang, "Новый пайплайн", "New pipeline")}
                             </Button>
                           ) : undefined}
-                          hint={!search ? "Add a manual trigger node to run on demand, or a schedule/webhook trigger to automate." : undefined}
+                          hint={!search ? localize(lang, "Добавьте manual trigger для запуска по запросу или schedule/webhook trigger для автоматизации.", "Add a manual trigger to run on demand, or a schedule/webhook trigger to automate.") : undefined}
                         />
                       ) : (
                         <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
@@ -1038,6 +989,7 @@ export default function StudioPage() {
                                 (runMutation.isPending && runMutation.variables?.pipelineId === pipeline.id)
                               }
                               cloning={cloneMutation.isPending && cloneMutation.variables === pipeline.id}
+                              lang={lang}
                             />
                           ))}
                         </div>
@@ -1050,13 +1002,13 @@ export default function StudioPage() {
                     <div className="space-y-4">
                       <div>
                         <p className="enterprise-kicker mb-1">Studio</p>
-                        <h2 className="text-xl font-semibold text-foreground">Available sections</h2>
+                        <h2 className="text-xl font-semibold text-foreground">{localize(lang, "Доступные разделы", "Available sections")}</h2>
                       </div>
                       {sectionLinks.length === 0 ? (
                         <EmptyState
                           icon={<Workflow className="h-5 w-5" />}
-                          title="No Studio sections available"
-                          description="Grant a Studio section in Settings to open Skills, MCP, Agents, Runs, or Notifications."
+                          title={localize(lang, "Разделы Studio недоступны", "No Studio sections available")}
+                          description={localize(lang, "Выдайте доступ в Settings, чтобы открыть runbook, MCP, agents, runs или notifications.", "Grant a Studio section in Settings to open runbooks, MCP, agents, runs, or notifications.")}
                         />
                       ) : (
                         <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
@@ -1101,16 +1053,16 @@ export default function StudioPage() {
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Choose Manual Trigger</DialogTitle>
+            <DialogTitle>{localize(lang, "Выберите ручной вход", "Choose manual trigger")}</DialogTitle>
             <DialogDescription>
               {runTarget
-                ? `Pipeline "${runTarget.name}" has multiple manual entry nodes. Choose which branch to launch.`
+                ? localize(lang, `В пайплайне "${runTarget.name}" несколько ручных входов. Выберите ветку для запуска.`, `Pipeline "${runTarget.name}" has multiple manual entry nodes. Choose which branch to launch.`)
                 : ""}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <label className="space-y-2 text-sm">
-              <span className="text-muted-foreground">Manual trigger</span>
+              <span className="text-muted-foreground">{localize(lang, "Ручной вход", "Manual trigger")}</span>
               <select
                 value={runEntryNodeId}
                 onChange={(event) => {
@@ -1131,31 +1083,34 @@ export default function StudioPage() {
           <DialogFooter>
             <Button
               variant="outline"
+              className="h-10"
               onClick={() => {
                 if (runTarget) {
                   navigate(`/studio/pipeline/${runTarget.id}`);
                 }
               }}
             >
-              Open Editor
+              {localize(lang, "Открыть редактор", "Open editor")}
             </Button>
             <Button
               variant="outline"
+              className="h-10"
               onClick={() => {
                 setRunTarget(null);
                 setRunEntryNodeId("");
                 setRunTriggerError("");
               }}
             >
-              Cancel
+              {localize(lang, "Отмена", "Cancel")}
             </Button>
             <Button
+              className="h-10"
               onClick={() => {
                 if (!runTarget) {
                   return;
                 }
                 if (!runEntryNodeId) {
-                  setRunTriggerError("Choose a manual trigger to start the run.");
+                  setRunTriggerError(localize(lang, "Выберите ручной вход для запуска.", "Choose a manual trigger to start the run."));
                   return;
                 }
                 runMutation.mutate({ pipelineId: runTarget.id, entryNodeId: runEntryNodeId });
@@ -1163,7 +1118,7 @@ export default function StudioPage() {
               disabled={runMutation.isPending}
             >
               {runMutation.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
-              Run
+              {localize(lang, "Запустить", "Run")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1181,25 +1136,25 @@ export default function StudioPage() {
           <DialogHeader>
             <DialogTitle>
               {triggerInfoTarget?.webhookTriggers.length
-                ? "Webhook Trigger"
+                ? localize(lang, "Webhook-триггер", "Webhook trigger")
                 : triggerInfoTarget?.scheduleTriggers.length
-                  ? "Scheduled Trigger"
-                  : "Monitoring Trigger"}
+                  ? localize(lang, "Запуск по расписанию", "Scheduled trigger")
+                  : localize(lang, "Monitoring-триггер", "Monitoring trigger")}
             </DialogTitle>
             <DialogDescription>
               {triggerInfoTarget?.webhookTriggers.length
-                ? `Pipeline "${triggerInfoTarget.pipeline.name}" is started by incoming webhook requests. You do not need to press Run first.`
+                ? localize(lang, `Пайплайн "${triggerInfoTarget.pipeline.name}" запускается входящими webhook-запросами. Нажимать "Запустить" не нужно.`, `Pipeline "${triggerInfoTarget.pipeline.name}" is started by incoming webhook requests. You do not need to press Run first.`)
                 : triggerInfoTarget?.scheduleTriggers.length
-                  ? `Pipeline "${triggerInfoTarget.pipeline.name}" is started by its schedule. There is nothing to launch manually.`
+                  ? localize(lang, `Пайплайн "${triggerInfoTarget.pipeline.name}" запускается по расписанию. Ручной запуск здесь не нужен.`, `Pipeline "${triggerInfoTarget.pipeline.name}" is started by its schedule. There is nothing to launch manually.`)
                   : triggerInfoTarget
-                    ? `Pipeline "${triggerInfoTarget.pipeline.name}" is started by server monitoring alerts. Save the graph and let monitoring create runs when a matching issue is detected.`
+                    ? localize(lang, `Пайплайн "${triggerInfoTarget.pipeline.name}" запускается alert-событиями мониторинга. Сохраните граф, и monitoring создаст запуск при совпадении условий.`, `Pipeline "${triggerInfoTarget.pipeline.name}" is started by server monitoring alerts. Save the graph and let monitoring create runs when a matching issue is detected.`)
                   : ""}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             {triggerInfoTarget?.webhookTriggers.length ? (
               <div className="rounded-xl border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-                Save is enough to arm the trigger. Every POST request to the webhook URL below creates a new pipeline run.
+                {localize(lang, "Достаточно сохранить граф. Каждый POST на URL ниже создаст новый запуск пайплайна.", "Save is enough to arm the trigger. Every POST request to the webhook URL below creates a new pipeline run.")}
               </div>
             ) : null}
 
@@ -1207,12 +1162,12 @@ export default function StudioPage() {
               <div key={trigger.id} className="space-y-2 rounded-xl border border-border bg-background/60 p-3">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-sm font-medium text-foreground">{trigger.name || "Webhook trigger"}</div>
+                    <div className="text-sm font-medium text-foreground">{trigger.name || localize(lang, "Webhook-триггер", "Webhook trigger")}</div>
                     <div className="text-[11px] text-muted-foreground">Node `{trigger.node_id}`</div>
                   </div>
-                  <Button size="sm" variant="outline" onClick={() => void handleCopyWebhookUrl(trigger.webhook_url)}>
+                  <Button size="sm" variant="outline" className="h-9" onClick={() => void handleCopyWebhookUrl(trigger.webhook_url)}>
                     <Copy className="mr-1.5 h-3.5 w-3.5" />
-                    Copy URL
+                    {localize(lang, "Копировать URL", "Copy URL")}
                   </Button>
                 </div>
                 <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground break-all">
@@ -1223,15 +1178,15 @@ export default function StudioPage() {
 
             {triggerInfoTarget?.scheduleTriggers.map((trigger) => (
               <div key={trigger.id} className="space-y-1 rounded-xl border border-border bg-background/60 p-3">
-                <div className="text-sm font-medium text-foreground">{trigger.name || "Schedule trigger"}</div>
+                <div className="text-sm font-medium text-foreground">{trigger.name || localize(lang, "Schedule-триггер", "Schedule trigger")}</div>
                 <div className="text-[11px] text-muted-foreground">Node `{trigger.node_id}`</div>
-                <div className="text-xs text-muted-foreground">Cron: {trigger.cron_expression || "not set"}</div>
+                <div className="text-xs text-muted-foreground">Cron: {trigger.cron_expression || localize(lang, "не задан", "not set")}</div>
               </div>
             ))}
 
             {triggerInfoTarget?.monitoringTriggers.length ? (
               <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-                Monitoring triggers are armed after save. A new run appears only when server monitoring opens a matching alert.
+                {localize(lang, "Monitoring-триггеры активируются после сохранения. Новый запуск появится только когда мониторинг откроет подходящий alert.", "Monitoring triggers are armed after save. A new run appears only when server monitoring opens a matching alert.")}
               </div>
             ) : null}
 
@@ -1245,12 +1200,12 @@ export default function StudioPage() {
               const containers = Array.isArray(filters.container_names) ? filters.container_names.join(", ") : "any";
               return (
                 <div key={trigger.id} className="space-y-1 rounded-xl border border-border bg-background/60 p-3">
-                  <div className="text-sm font-medium text-foreground">{trigger.name || "Monitoring trigger"}</div>
+                  <div className="text-sm font-medium text-foreground">{trigger.name || localize(lang, "Monitoring-триггер", "Monitoring trigger")}</div>
                   <div className="text-[11px] text-muted-foreground">Node `{trigger.node_id}`</div>
-                  <div className="text-xs text-muted-foreground">Servers: {serverIds}</div>
-                  <div className="text-xs text-muted-foreground">Severity: {severities}</div>
-                  <div className="text-xs text-muted-foreground">Alert type: {alertTypes}</div>
-                  <div className="text-xs text-muted-foreground">Containers: {containers}</div>
+                  <div className="text-xs text-muted-foreground">{localize(lang, "Серверы", "Servers")}: {serverIds}</div>
+                  <div className="text-xs text-muted-foreground">{localize(lang, "Важность", "Severity")}: {severities}</div>
+                  <div className="text-xs text-muted-foreground">{localize(lang, "Тип alert", "Alert type")}: {alertTypes}</div>
+                  <div className="text-xs text-muted-foreground">{localize(lang, "Контейнеры", "Containers")}: {containers}</div>
                 </div>
               );
             })}
@@ -1258,16 +1213,17 @@ export default function StudioPage() {
           <DialogFooter>
             <Button
               variant="outline"
+              className="h-10"
               onClick={() => {
                 if (triggerInfoTarget) {
                   navigate(`/studio/pipeline/${triggerInfoTarget.pipeline.id}`);
                 }
               }}
             >
-              Open Editor
+              {localize(lang, "Открыть редактор", "Open editor")}
             </Button>
-            <Button variant="outline" onClick={() => setTriggerInfoTarget(null)}>
-              Close
+            <Button variant="outline" className="h-10" onClick={() => setTriggerInfoTarget(null)}>
+              {localize(lang, "Закрыть", "Close")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1276,22 +1232,23 @@ export default function StudioPage() {
       <Dialog open={Boolean(deleteTarget)} onOpenChange={(next) => !next && setDeleteTarget(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete pipeline</DialogTitle>
+            <DialogTitle>{localize(lang, "Удалить пайплайн", "Delete pipeline")}</DialogTitle>
             <DialogDescription>
-              {deleteTarget ? `Delete "${deleteTarget.name}"? This cannot be undone.` : ""}
+              {deleteTarget ? localize(lang, `Удалить "${deleteTarget.name}"? Действие нельзя отменить.`, `Delete "${deleteTarget.name}"? This cannot be undone.`) : ""}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
-              Cancel
+            <Button variant="outline" className="h-10" onClick={() => setDeleteTarget(null)}>
+              {localize(lang, "Отмена", "Cancel")}
             </Button>
             <Button
               variant="destructive"
+              className="h-10"
               onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
               disabled={deleteMutation.isPending}
             >
               {deleteMutation.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
-              Delete
+              {localize(lang, "Удалить", "Delete")}
             </Button>
           </DialogFooter>
         </DialogContent>

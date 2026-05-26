@@ -157,15 +157,20 @@ const DESKTOP_GRID_STYLE: CSSProperties = {
     "linear-gradient(rgba(148,163,184,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.06) 1px, transparent 1px)",
   backgroundSize: "132px 132px",
 };
+const EMPTY_SERVICES: LinuxUiServiceItem[] = [];
+const EMPTY_PROCESSES: LinuxUiProcessItem[] = [];
+const EMPTY_MOUNTS: LinuxUiDiskMount[] = [];
+const EMPTY_NETWORK_INTERFACES: LinuxUiNetworkInterface[] = [];
+const EMPTY_DOCKER_CONTAINERS: LinuxUiDockerContainer[] = [];
 
 function formatUptime(seconds: number | null) {
-  if (!seconds || seconds <= 0) return "Unknown";
+  if (!seconds || seconds <= 0) return "Нет данных";
   const days = Math.floor(seconds / 86400);
   const hours = Math.floor((seconds % 86400) / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
-  if (days > 0) return `${days}d ${hours}h`;
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  return `${minutes}m`;
+  if (days > 0) return `${days} д ${hours} ч`;
+  if (hours > 0) return `${hours} ч ${minutes} мин`;
+  return `${minutes} мин`;
 }
 
 function formatMetric(value: number | null, suffix = "", digits = 0) {
@@ -194,41 +199,30 @@ function statusClass(status: WorkspaceAppStatus) {
 }
 
 function workspaceStatusLabel(status: WorkspaceAppStatus) {
-  if (status === "live") return "Ready";
-  if (status === "ready") return "Available";
-  if (status === "next") return "Planned";
-  return "Unavailable";
+  if (status === "live") return "Готово";
+  if (status === "ready") return "Доступно";
+  if (status === "next") return "Запланировано";
+  return "Недоступно";
 }
 
+function formatWindowCount(count: number) {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  const label = mod10 === 1 && mod100 !== 11 ? "окно" : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14) ? "окна" : "окон";
+  return `${count} ${label}`;
+}
+
+const MOBILE_WINDOW_CLASSES: Partial<Record<WorkspaceAppId, string>> = {
+  files: "h-[28rem] lg:h-auto",
+  services: "h-[28rem] lg:h-auto",
+  network: "h-[22rem] lg:h-auto",
+  packages: "h-[22rem] lg:h-auto",
+  "text-editor": "h-[28rem] lg:h-auto",
+  settings: "h-[26rem] lg:h-auto",
+};
+
 function mobileWindowClass(appId: WorkspaceAppId) {
-  switch (appId) {
-    case "files":
-      return "h-[28rem] lg:h-auto";
-    case "overview":
-      return "h-[24rem] lg:h-auto";
-    case "services":
-      return "h-[28rem] lg:h-auto";
-    case "processes":
-      return "h-[24rem] lg:h-auto";
-    case "logs":
-      return "h-[24rem] lg:h-auto";
-    case "disk":
-      return "h-[24rem] lg:h-auto";
-    case "network":
-      return "h-[22rem] lg:h-auto";
-    case "docker":
-      return "h-[24rem] lg:h-auto";
-    case "packages":
-      return "h-[22rem] lg:h-auto";
-    case "text-editor":
-      return "h-[28rem] lg:h-auto";
-    case "quick-run":
-      return "h-[24rem] lg:h-auto";
-    case "settings":
-      return "h-[26rem] lg:h-auto";
-    default:
-      return "h-[22rem]";
-  }
+  return MOBILE_WINDOW_CLASSES[appId] || "h-[24rem] lg:h-auto";
 }
 
 function getDefaultWindowGeometry(appId: WorkspaceAppId, zIndex: number): WorkspaceWindowState {
@@ -446,12 +440,12 @@ function LauncherMenu({
         <div className="relative z-10">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <div className="text-[11px] font-medium text-muted-foreground">Application Launcher</div>
+              <div className="text-[11px] font-medium text-muted-foreground">Панель приложений</div>
               <div className="mt-2 truncate text-2xl font-semibold tracking-tight text-foreground">{server.name}</div>
               <div className="mt-1 truncate font-mono text-xs text-muted-foreground">{server.username}@{server.host}</div>
             </div>
             <div className="rounded-[1.15rem] border border-primary/20 bg-primary/10 px-3 py-2 text-right">
-              <div className="text-[11px] font-medium text-muted-foreground">Running</div>
+              <div className="text-[11px] font-medium text-muted-foreground">Открыто</div>
               <div className="text-lg font-semibold text-foreground">{openApps.length}</div>
             </div>
           </div>
@@ -461,14 +455,14 @@ function LauncherMenu({
             <Input
               value={query}
               onChange={(event) => onQueryChange(event.target.value)}
-              placeholder="Search applications, tools, settings..."
-              aria-label="Search workspace applications"
+              placeholder="Поиск приложений, инструментов, настроек..."
+              aria-label="Поиск приложений workspace"
               className="h-11 rounded-2xl border-border bg-background pl-10 text-sm text-foreground placeholder:text-muted-foreground"
             />
           </div>
 
           <div className="mt-5">
-            <div className="mb-2 text-[11px] font-medium text-muted-foreground">Pinned</div>
+            <div className="mb-2 text-[11px] font-medium text-muted-foreground">Закреплено</div>
             <div className="grid grid-cols-3 gap-2">
             {pinnedApps.map((app) => (
               <button
@@ -492,8 +486,8 @@ function LauncherMenu({
 
           <div className="mt-5">
             <div className="mb-2 flex items-center justify-between gap-3">
-              <div className="text-[11px] font-medium text-muted-foreground">All Applications</div>
-              <div className="text-[11px] text-muted-foreground">{filteredApps.length} visible</div>
+              <div className="text-[11px] font-medium text-muted-foreground">Все инструменты</div>
+              <div className="text-[11px] text-muted-foreground">{filteredApps.length} доступно</div>
             </div>
           <div className="max-h-64 space-y-1 overflow-y-auto pr-1">
             {filteredApps.map((app) => (
@@ -524,7 +518,7 @@ function LauncherMenu({
             ))}
             {filteredApps.length === 0 ? (
               <div className="rounded-[1.1rem] border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
-                Nothing matched the current search.
+                Ничего не найдено.
               </div>
             ) : null}
           </div>
@@ -532,10 +526,10 @@ function LauncherMenu({
 
         <div className="mt-5 grid grid-cols-3 gap-2">
           <Button type="button" variant="outline" className="h-10 rounded-2xl border-border bg-background text-xs text-foreground hover:bg-secondary" onClick={onRefresh}>
-            Refresh
+            Обновить
           </Button>
           <Button type="button" variant="outline" className="h-10 rounded-2xl border-border bg-background text-xs text-foreground hover:bg-secondary" onClick={onShowDesktop}>
-            Show Desktop
+            Рабочий стол
           </Button>
           <Button
             type="button"
@@ -544,7 +538,7 @@ function LauncherMenu({
             onClick={onCloseWorkspace}
             disabled={!onCloseWorkspace}
           >
-            Close UI
+            Закрыть UI
           </Button>
         </div>
       </div>
@@ -677,30 +671,30 @@ function WorkspaceWindow({
                 type="button"
                 data-no-window-drag="true"
                 onClick={onMinimize}
-                className="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                aria-label={`Minimize ${title}`}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                aria-label={`Свернуть ${title}`}
               >
-                <Minus className="h-3 w-3" />
+                <Minus className="h-3.5 w-3.5" />
               </button>
               {desktopMode ? (
                 <button
                   type="button"
                   data-no-window-drag="true"
                   onClick={onToggleMaximize}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                    aria-label={maximized ? `Restore ${title}` : `Maximize ${title}`}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                    aria-label={maximized ? `Вернуть размер ${title}` : `Развернуть ${title}`}
                   >
-                  {maximized ? <Copy className="h-3 w-3" /> : <Square className="h-3 w-3" />}
+                  {maximized ? <Copy className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
                 </button>
               ) : null}
               <button
                 type="button"
                 data-no-window-drag="true"
                 onClick={onClose}
-                className="flex h-7 w-7 items-center justify-center rounded-lg border border-destructive/20 bg-destructive/10 text-destructive transition-colors hover:bg-destructive/20"
-                aria-label={`Close ${title}`}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-destructive/20 bg-destructive/10 text-destructive transition-colors hover:bg-destructive/20"
+                aria-label={`Закрыть ${title}`}
               >
-                <X className="h-3 w-3" />
+                <X className="h-3.5 w-3.5" />
               </button>
             </div>
           </header>
@@ -719,12 +713,12 @@ function WorkspaceWindow({
       </ContextMenuTrigger>
       <ContextMenuContent className="w-48 rounded-lg border-border bg-popover text-popover-foreground">
         <ContextMenuLabel>{title}</ContextMenuLabel>
-        <ContextMenuItem onSelect={onFocus}>Focus</ContextMenuItem>
-        <ContextMenuItem onSelect={onMinimize}>{minimized ? "Restore" : "Minimize"}</ContextMenuItem>
-        {desktopMode ? <ContextMenuItem onSelect={onToggleMaximize}>{maximized ? "Restore" : "Maximize"}</ContextMenuItem> : null}
-        {desktopMode ? <ContextMenuItem onSelect={onResetPosition}>Reset Position</ContextMenuItem> : null}
+        <ContextMenuItem onSelect={onFocus}>На передний план</ContextMenuItem>
+        <ContextMenuItem onSelect={onMinimize}>{minimized ? "Восстановить" : "Свернуть"}</ContextMenuItem>
+        {desktopMode ? <ContextMenuItem onSelect={onToggleMaximize}>{maximized ? "Восстановить размер" : "Развернуть"}</ContextMenuItem> : null}
+        {desktopMode ? <ContextMenuItem onSelect={onResetPosition}>Сбросить позицию</ContextMenuItem> : null}
         <ContextMenuSeparator />
-        <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={onClose}>Close</ContextMenuItem>
+        <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={onClose}>Закрыть</ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   );
@@ -747,24 +741,24 @@ function OverviewWindow({
 }) {
   const pills = capabilityPills(capabilities);
   const cards = [
-    { label: "Host", value: overview?.hostname || "N/A", hint: overview?.os_name || "Linux server" },
-    { label: "Uptime", value: formatUptime(overview?.uptime_seconds ?? null), hint: overview?.kernel || "Kernel unknown" },
+    { label: "Сервер", value: overview?.hostname || "Нет данных", hint: overview?.os_name || "Linux server" },
+    { label: "Аптайм", value: formatUptime(overview?.uptime_seconds ?? null), hint: overview?.kernel || "Kernel unknown" },
     {
-      label: "Load",
-      value: overview ? `${formatMetric(overview.load.one, "", 2)} / ${formatMetric(overview.load.five, "", 2)}` : "N/A",
-      hint: "1m / 5m",
+      label: "Нагрузка",
+      value: overview ? `${formatMetric(overview.load.one, "", 2)} / ${formatMetric(overview.load.five, "", 2)}` : "Нет данных",
+      hint: "1 мин / 5 мин",
     },
     {
-      label: "Memory",
-      value: overview?.memory.percent != null ? `${overview.memory.percent.toFixed(1)}%` : "N/A",
+      label: "Память",
+      value: overview?.memory.percent != null ? `${overview.memory.percent.toFixed(1)}%` : "Нет данных",
       hint: overview?.memory.used_mb != null && overview.memory.total_mb != null ? `${overview.memory.used_mb} / ${overview.memory.total_mb} MB` : "Usage unavailable",
     },
     {
-      label: "Disk",
-      value: overview?.disk.percent != null ? `${overview.disk.percent.toFixed(1)}%` : "N/A",
+      label: "Диск",
+      value: overview?.disk.percent != null ? `${overview.disk.percent.toFixed(1)}%` : "Нет данных",
       hint: overview?.disk.used_gb != null && overview.disk.total_gb != null ? `${overview.disk.used_gb} / ${overview.disk.total_gb} GB` : "Root filesystem",
     },
-    { label: "Processes", value: overview?.process_count != null ? String(overview.process_count) : "N/A", hint: overview?.cwd || "Working directory" },
+    { label: "Процессы", value: overview?.process_count != null ? String(overview.process_count) : "Нет данных", hint: overview?.cwd || "Working directory" },
   ];
 
   return (
@@ -795,17 +789,17 @@ function OverviewWindow({
       </div>
       <div className="border-t border-border/60 bg-secondary/25 px-4 py-3">
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-          <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={onOpenFiles}>
-            Open Files
+          <Button type="button" size="sm" variant="outline" className="h-9 text-xs" onClick={onOpenFiles}>
+            Файлы
           </Button>
-          <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={onOpenServices}>
-            Services
+          <Button type="button" size="sm" variant="outline" className="h-9 text-xs" onClick={onOpenServices}>
+            Сервисы
           </Button>
-          <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={onOpenDisk}>
-            Disk
+          <Button type="button" size="sm" variant="outline" className="h-9 text-xs" onClick={onOpenDisk}>
+            Диск
           </Button>
-          <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={onOpenLogs}>
-            Logs
+          <Button type="button" size="sm" variant="outline" className="h-9 text-xs" onClick={onOpenLogs}>
+            Логи
           </Button>
         </div>
       </div>
@@ -944,7 +938,7 @@ function ServicesWindow({
     staleTime: 10_000,
   });
 
-  const services = servicesQuery.data?.services || [];
+  const services = servicesQuery.data?.services ?? EMPTY_SERVICES;
   const summary: LinuxUiServicesSummary = servicesQuery.data?.summary || {
     total: services.length,
     active: services.filter((item) => item.health === "active").length,
@@ -1327,7 +1321,7 @@ function ProcessesWindow({
   });
 
   const processPayload = processesQuery.data?.processes;
-  const sourceProcesses = mode === "cpu" ? processPayload?.top_cpu || [] : processPayload?.top_memory || [];
+  const sourceProcesses = mode === "cpu" ? processPayload?.top_cpu ?? EMPTY_PROCESSES : processPayload?.top_memory ?? EMPTY_PROCESSES;
   const filteredProcesses = useMemo(() => {
     if (!deferredSearch) return sourceProcesses;
     return sourceProcesses.filter((item) => {
@@ -1850,7 +1844,7 @@ function DiskWindow({
   });
 
   const diskPayload = diskQuery.data?.disk;
-  const mounts = diskPayload?.mounts || [];
+  const mounts = diskPayload?.mounts ?? EMPTY_MOUNTS;
   const normalizedMountSearch = mountSearch.trim().toLowerCase();
   const normalizedPathSearch = pathSearch.trim().toLowerCase();
   const filteredMounts = useMemo(() => {
@@ -2347,7 +2341,7 @@ function NetworkWindow({
   });
 
   const networkPayload = networkQuery.data?.network;
-  const interfaces = networkPayload?.interfaces || [];
+  const interfaces = networkPayload?.interfaces ?? EMPTY_NETWORK_INTERFACES;
   const filteredInterfaces = useMemo(() => {
     return interfaces.filter((item) => {
       if (showUpOnly && item.state !== "UP") return false;
@@ -2935,7 +2929,7 @@ function DockerWindow({
   });
 
   const dockerPayload = dockerQuery.data?.docker;
-  const containers = dockerPayload?.containers || [];
+  const containers = dockerPayload?.containers ?? EMPTY_DOCKER_CONTAINERS;
   const filteredContainers = useMemo(() => {
     if (!deferredSearch) return containers;
     return containers.filter((item) => `${item.name} ${item.image} ${item.state} ${item.status} ${item.ports}`.toLowerCase().includes(deferredSearch));
@@ -3461,56 +3455,56 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
   const apps = useMemo<WorkspaceAppDefinition[]>(() => [
     {
       id: "files",
-      title: "Files",
-      subtitle: "Folders, uploads, delete, rename",
+      title: "Файлы",
+      subtitle: "Папки, загрузки, удаление и переименование",
       status: "live",
       icon: <FolderOpen className="h-5 w-5" />,
       accentClass: "from-primary/20 to-secondary",
     },
     {
       id: "overview",
-      title: "Overview",
-      subtitle: "Host summary and system markers",
+      title: "Обзор",
+      subtitle: "Сводка хоста и системные маркеры",
       status: "live",
       icon: <Monitor className="h-5 w-5" />,
       accentClass: "from-primary/15 to-background",
     },
     {
       id: "services",
-      title: "Services",
-      subtitle: availableApps?.services ? "systemctl control center is live" : "Unavailable on this host",
+      title: "Сервисы",
+      subtitle: availableApps?.services ? "Управление systemctl доступно" : "Недоступно на этом хосте",
       status: availableApps?.services ? "live" : "unavailable",
       icon: <Settings2 className="h-5 w-5" />,
       accentClass: "from-secondary to-background",
     },
     {
       id: "processes",
-      title: "Processes",
-      subtitle: "Task manager for CPU and memory",
+      title: "Процессы",
+      subtitle: "Процессы по CPU и памяти",
       status: "live",
       icon: <Activity className="h-5 w-5" />,
       accentClass: "from-primary/12 to-secondary",
     },
     {
       id: "logs",
-      title: "Logs",
-      subtitle: availableApps?.logs ? "journalctl and file presets are live" : "File presets and service fallbacks are live",
+      title: "Логи",
+      subtitle: availableApps?.logs ? "journalctl и file presets доступны" : "Доступны file presets и service fallback",
       status: "live",
       icon: <FileText className="h-5 w-5" />,
       accentClass: "from-primary/18 to-secondary",
     },
     {
       id: "disk",
-      title: "Disk",
-      subtitle: availableApps?.disk ? "Usage and cleanup signals are live" : "Disk inspection unavailable",
+      title: "Диск",
+      subtitle: availableApps?.disk ? "Использование и сигналы очистки" : "Инспекция диска недоступна",
       status: availableApps?.disk ? "live" : "unavailable",
       icon: <HardDrive className="h-5 w-5" />,
       accentClass: "from-secondary to-background",
     },
     {
       id: "network",
-      title: "Network",
-      subtitle: availableApps?.network ? "Interfaces and ports are live" : "Network tooling not detected",
+      title: "Сеть",
+      subtitle: availableApps?.network ? "Интерфейсы и порты доступны" : "Сетевые инструменты не найдены",
       status: availableApps?.network ? "live" : "unavailable",
       icon: <Network className="h-5 w-5" />,
       accentClass: "from-primary/16 to-background",
@@ -3518,23 +3512,23 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
     {
       id: "docker",
       title: "Docker",
-      subtitle: availableApps?.docker ? "Containers and logs are live" : "Docker not detected",
+      subtitle: availableApps?.docker ? "Контейнеры и логи доступны" : "Docker не найден",
       status: availableApps?.docker ? "live" : "unavailable",
       icon: <Server className="h-5 w-5" />,
       accentClass: "from-secondary to-background",
     },
     {
       id: "packages",
-      title: "Packages",
-      subtitle: capabilities?.package_manager ? `${capabilities.package_manager} inspector is live` : "Package manager not detected",
+      title: "Пакеты",
+      subtitle: capabilities?.package_manager ? `Инспектор ${capabilities.package_manager} доступен` : "Package manager не найден",
       status: capabilities?.package_manager ? "live" : "unavailable",
       icon: <Package className="h-5 w-5" />,
       accentClass: "from-primary/15 to-secondary",
     },
     {
       id: "text-editor",
-      title: "Text Editor",
-      subtitle: availableApps?.text_editor ? "Edit config files directly" : "Text editing unavailable on this host",
+      title: "Редактор",
+      subtitle: availableApps?.text_editor ? "Редактирование config-файлов" : "Редактор недоступен на этом хосте",
       status: availableApps?.text_editor ? "live" : "unavailable",
       icon: <FileCode2 className="h-5 w-5" />,
       accentClass: "from-primary/18 to-background",
@@ -3542,16 +3536,16 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
     },
     {
       id: "quick-run",
-      title: "Quick Run",
-      subtitle: availableApps?.quick_run ? "Execute commands with output" : "Shell execution unavailable",
+      title: "Быстрый запуск",
+      subtitle: availableApps?.quick_run ? "Команды с выводом результата" : "Shell execution недоступен",
       status: availableApps?.quick_run ? "live" : "unavailable",
       icon: <Terminal className="h-5 w-5" />,
       accentClass: "from-secondary to-background",
     },
     {
       id: "settings",
-      title: "Settings",
-      subtitle: availableApps?.settings ? "System info, users, cron, security" : "Settings snapshot unavailable",
+      title: "Настройки",
+      subtitle: availableApps?.settings ? "Система, пользователи, cron, security" : "Снимок настроек недоступен",
       status: availableApps?.settings ? "live" : "unavailable",
       icon: <Settings className="h-5 w-5" />,
       accentClass: "from-muted to-background",
@@ -3872,7 +3866,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
             <div ref={workspaceCanvasRef} className="relative z-10 h-full min-h-0 overflow-y-auto p-3 lg:overflow-hidden lg:p-4">
               {server.server_type !== "ssh" ? (
                 <div className="rounded-[1.25rem] border border-border bg-card p-6 text-sm text-muted-foreground">
-                  Linux Workspace is available only for SSH servers.
+                  Linux Workspace доступен только для SSH-серверов.
                 </div>
               ) : null}
 
@@ -3886,8 +3880,8 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
                 <div className="flex h-full min-h-[22rem] items-center justify-center">
                   <div className="rounded-[1.5rem] border border-border bg-card px-8 py-10 text-center shadow-lg">
                     <RefreshCw className="mx-auto mb-3 h-5 w-5 animate-spin text-primary" />
-                    <div className="text-sm font-medium text-foreground">Loading workspace...</div>
-                    <div className="mt-1 text-xs text-muted-foreground">Collecting host capabilities</div>
+                    <div className="text-sm font-medium text-foreground">Загрузка workspace...</div>
+                    <div className="mt-1 text-xs text-muted-foreground">Собираем возможности хоста</div>
                   </div>
                 </div>
               ) : null}
@@ -3898,7 +3892,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
                     <div className="rounded-[1.35rem] border border-border bg-card/95 p-4 shadow-sm">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground">Workspace Session</div>
+                          <div className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground">Сессия Linux UI</div>
                           <div className="mt-2 truncate text-lg font-semibold text-foreground">{overview?.hostname || server.name}</div>
                           <div className="mt-1 truncate font-mono text-xs text-muted-foreground">{server.username}@{server.host}</div>
                         </div>
@@ -3916,7 +3910,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
                           </span>
                         ) : null}
                         <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
-                          {openApps.length} windows
+                          {formatWindowCount(openApps.length)}
                         </span>
                       </div>
                     </div>
@@ -3924,19 +3918,19 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
                     <div className="grid grid-cols-2 gap-3">
                       <DesktopStatCard
                         icon={<Activity />}
-                        label="Memory"
-                        value={overview?.memory.percent != null ? `${overview.memory.percent.toFixed(0)}%` : "N/A"}
+                        label="Память"
+                        value={overview?.memory.percent != null ? `${overview.memory.percent.toFixed(0)}%` : "Нет данных"}
                         hint={
                           overview?.memory.used_mb != null && overview.memory.total_mb != null
                             ? `${overview.memory.used_mb} / ${overview.memory.total_mb} MB`
-                            : "Usage unavailable"
+                            : "Нет данных по использованию"
                         }
                         progress={overview?.memory.percent ?? null}
                       />
                       <DesktopStatCard
                         icon={<HardDrive />}
-                        label="Disk"
-                        value={overview?.disk.percent != null ? `${overview.disk.percent.toFixed(0)}%` : "N/A"}
+                        label="Диск"
+                        value={overview?.disk.percent != null ? `${overview.disk.percent.toFixed(0)}%` : "Нет данных"}
                         hint={
                           overview?.disk.used_gb != null && overview.disk.total_gb != null
                             ? `${overview.disk.used_gb} / ${overview.disk.total_gb} GB`
@@ -4024,19 +4018,19 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
             </div>
           </ContextMenuTrigger>
           <ContextMenuContent className="w-56 rounded-xl border-border bg-popover text-popover-foreground">
-            <ContextMenuLabel>Desktop</ContextMenuLabel>
+            <ContextMenuLabel>Рабочий стол</ContextMenuLabel>
             {desktopApps.map((app) => (
               <ContextMenuItem key={app.id} onSelect={() => launchApp(app.id)} disabled={app.status === "unavailable"}>
                 {app.title}
               </ContextMenuItem>
             ))}
             <ContextMenuSeparator />
-            <ContextMenuItem onSelect={refresh}>Refresh</ContextMenuItem>
-            <ContextMenuItem onSelect={rearrangeOpenWindows} disabled={openApps.length === 0}>Rearrange Windows</ContextMenuItem>
-            <ContextMenuItem onSelect={minimizeAllWindows} disabled={openApps.length === 0}>Show Desktop</ContextMenuItem>
+            <ContextMenuItem onSelect={refresh}>Обновить</ContextMenuItem>
+            <ContextMenuItem onSelect={rearrangeOpenWindows} disabled={openApps.length === 0}>Разложить окна</ContextMenuItem>
+            <ContextMenuItem onSelect={minimizeAllWindows} disabled={openApps.length === 0}>Показать рабочий стол</ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem onSelect={closeAllWindows} disabled={openApps.length === 0} className="text-destructive focus:text-destructive">
-              Close All
+              Закрыть все
             </ContextMenuItem>
           </ContextMenuContent>
         </ContextMenu>
@@ -4078,7 +4072,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
               "flex h-10 w-10 shrink-0 items-center justify-center rounded-[1rem] border border-border bg-primary/10 text-primary transition-all duration-150 hover:bg-primary/15",
               launcherOpen && "border-primary/35 bg-primary/15",
             )}
-            aria-label="Open application launcher"
+            aria-label="Открыть панель приложений"
           >
             <LayoutGrid className="h-5 w-5" />
           </button>
@@ -4109,7 +4103,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
               type="button"
               onClick={refresh}
               className="flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-              aria-label="Refresh workspace"
+              aria-label="Обновить workspace"
             >
               <RefreshCw className="h-4 w-4" />
             </button>
@@ -4117,7 +4111,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
               type="button"
               onClick={minimizeAllWindows}
               className="flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-              aria-label="Show desktop"
+              aria-label="Показать рабочий стол"
             >
               <Monitor className="h-4 w-4" />
             </button>
@@ -4149,7 +4143,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
                 type="button"
                 onClick={onClose}
                 className="flex h-9 w-9 items-center justify-center rounded-xl border border-destructive/20 bg-destructive/10 text-destructive transition-colors hover:bg-destructive/20"
-                aria-label="Exit workspace"
+                aria-label="Закрыть workspace"
               >
                 <X className="h-4 w-4" />
               </button>

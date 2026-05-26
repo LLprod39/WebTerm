@@ -29,11 +29,10 @@ import {
 type PermissionMode = "inherit" | "allow" | "deny";
 
 const SELECT_CLASS =
-  "h-9 w-full rounded-lg border border-border bg-secondary/30 px-3 text-sm text-foreground outline-none ring-0 transition-all focus:border-primary/40 focus:ring-1 focus:ring-primary/30";
+  "h-10 w-full rounded-lg border border-border bg-secondary/30 px-3 text-sm text-foreground outline-none ring-0 transition-all focus:border-primary/40 focus:ring-1 focus:ring-primary/30";
 
 const FALLBACK_FEATURES = ACCESS_FEATURE_OPTIONS;
 
-/* ── helpers ── */
 function createPermissionModes(
   features: Array<{ value: string; label: string }>,
   explicit?: Record<string, boolean>,
@@ -56,7 +55,6 @@ function toggleId(source: number[], id: number) {
   return source.includes(id) ? source.filter((value) => value !== id) : [...source, id];
 }
 
-/* ── micro-components ── */
 function FieldLabel({ htmlFor, children }: { htmlFor?: string; children: string }) {
   return (
     <label htmlFor={htmlFor} className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
@@ -108,7 +106,7 @@ function PermissionModeField({
       <select
         value={mode}
         onChange={(e) => onChange(e.target.value as PermissionMode)}
-        className="h-7 rounded-md border border-border bg-secondary/30 px-2 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary/30"
+        className="h-8 rounded-md border border-border bg-secondary/30 px-2 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary/30"
         aria-label={`${label} mode`}
       >
         <option value="inherit">{t.inherit}</option>
@@ -137,7 +135,7 @@ function GroupPicker({
             key={group.id}
             type="button"
             onClick={() => onToggle(group.id)}
-            className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-all ${
+            className={`min-h-8 rounded-lg px-2.5 py-1 text-xs font-medium transition-all ${
               active
                 ? "bg-primary/15 text-primary ring-1 ring-primary/25"
                 : "bg-secondary/20 text-muted-foreground ring-1 ring-border/40 hover:bg-secondary/40 hover:text-foreground"
@@ -152,7 +150,6 @@ function GroupPicker({
   );
 }
 
-/* ── page ── */
 export default function SettingsUsersPage() {
   const { lang } = useI18n();
   const copy = ACCESS_UI_TEXT[lang].users;
@@ -380,21 +377,24 @@ export default function SettingsUsersPage() {
                   <div className="flex shrink-0 items-center gap-1">
                     <button
                       onClick={() => (isEditing ? cancelEdit() : startEdit(user))}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/50 transition-colors hover:bg-secondary/40 hover:text-foreground"
+                      className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground/60 transition-colors hover:bg-secondary/40 hover:text-foreground"
+                      aria-label={isEditing ? common.cancel : copy.editAction}
                       title={isEditing ? common.cancel : copy.editAction}
                     >
                       {isEditing ? <ChevronUp className="h-4 w-4" /> : <Pencil className="h-3.5 w-3.5" />}
                     </button>
                     <button
                       onClick={() => void resetPassword(user)}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/50 transition-colors hover:bg-secondary/40 hover:text-foreground"
+                      className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground/60 transition-colors hover:bg-secondary/40 hover:text-foreground"
+                      aria-label={common.password}
                       title={common.password}
                     >
                       <KeyRound className="h-3.5 w-3.5" />
                     </button>
                     <button
                       onClick={() => void removeUser(user)}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/50 transition-colors hover:bg-red-500/10 hover:text-red-400"
+                      className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground/60 transition-colors hover:bg-red-500/10 hover:text-red-400"
+                      aria-label={common.delete}
                       title={common.delete}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -436,7 +436,7 @@ export default function SettingsUsersPage() {
                           spellCheck={false}
                           value={draft.username || ""}
                           onChange={(e) => setEditing((s) => ({ ...s, username: e.target.value }))}
-                          className="h-9 bg-secondary/20 border-border/60"
+                          className="h-10 bg-secondary/20 border-border/60"
                         />
                       </div>
                       <div>
@@ -449,7 +449,7 @@ export default function SettingsUsersPage() {
                           spellCheck={false}
                           value={draft.email || ""}
                           onChange={(e) => setEditing((s) => ({ ...s, email: e.target.value }))}
-                          className="h-9 bg-secondary/20 border-border/60"
+                          className="h-10 bg-secondary/20 border-border/60"
                         />
                       </div>
                       <div>
@@ -458,7 +458,7 @@ export default function SettingsUsersPage() {
                           id={`user-profile-${user.id}`}
                           value={draft.access_profile || "custom"}
                           onChange={(e) => setEditing((s) => ({ ...s, access_profile: e.target.value }))}
-                          className={SELECT_CLASS + " h-9"}
+                          className={SELECT_CLASS}
                           aria-label={common.profile}
                         >
                           <option value="server_only">{getAccessProfileLabel(lang, "server_only")}</option>
@@ -525,10 +525,10 @@ export default function SettingsUsersPage() {
 
                     {/* Save / Cancel */}
                     <div className="flex gap-2 pt-2">
-                      <Button size="sm" onClick={() => void saveEdit()} disabled={saving}>
+                      <Button className="h-10" onClick={() => void saveEdit()} disabled={saving}>
                         {saving ? common.saving : common.save}
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={cancelEdit} disabled={saving}>
+                      <Button className="h-10" variant="ghost" onClick={cancelEdit} disabled={saving}>
                         {common.cancel}
                       </Button>
                     </div>
@@ -561,7 +561,7 @@ export default function SettingsUsersPage() {
                 placeholder={copy.username}
                 value={createForm.username}
                 onChange={(e) => setCreateForm((s) => ({ ...s, username: e.target.value }))}
-                className="h-9 bg-secondary/20 border-border/60"
+                className="h-10 bg-secondary/20 border-border/60"
               />
             </div>
             <div>
@@ -575,7 +575,7 @@ export default function SettingsUsersPage() {
                 placeholder={copy.email}
                 value={createForm.email}
                 onChange={(e) => setCreateForm((s) => ({ ...s, email: e.target.value }))}
-                className="h-9 bg-secondary/20 border-border/60"
+                className="h-10 bg-secondary/20 border-border/60"
               />
             </div>
             <div>
@@ -588,7 +588,7 @@ export default function SettingsUsersPage() {
                 placeholder={copy.passwordPlaceholder}
                 value={createForm.password}
                 onChange={(e) => setCreateForm((s) => ({ ...s, password: e.target.value }))}
-                className="h-9 bg-secondary/20 border-border/60"
+                className="h-10 bg-secondary/20 border-border/60"
               />
             </div>
             <div>
@@ -597,7 +597,7 @@ export default function SettingsUsersPage() {
                 id="create-user-profile"
                 value={createForm.access_profile}
                 onChange={(e) => setCreateForm((s) => ({ ...s, access_profile: e.target.value }))}
-                className={SELECT_CLASS + " h-9"}
+                className={SELECT_CLASS}
                 aria-label={common.profile}
               >
                 <option value="server_only">{getAccessProfileLabel(lang, "server_only")}</option>
@@ -636,7 +636,7 @@ export default function SettingsUsersPage() {
             </div>
 
             <Button
-              className="w-full"
+              className="h-10 w-full"
               onClick={() => void createUser()}
               disabled={saving || !createForm.username.trim() || !createForm.password.trim()}
             >

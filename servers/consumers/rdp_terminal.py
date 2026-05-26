@@ -338,7 +338,7 @@ class RDPTerminalConsumer(AsyncWebsocketConsumer):
         importance_hint: float,
         force_compact: bool = False,
     ) -> None:
-        from app.agent_kernel.memory.store import DjangoServerMemoryStore
+        from servers.adapters.memory_store import DjangoServerMemoryStore
 
         if not self.server:
             return

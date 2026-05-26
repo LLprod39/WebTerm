@@ -6,116 +6,51 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
 import os
 import re
-import shlex
 import uuid
-from dataclasses import dataclass
 from typing import Any
 
 import asyncssh
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from django.conf import settings
-from django.db.models import Q
-from django.utils import timezone
 from loguru import logger
 
-from app.runtime_limits import get_terminal_session_limit_error
 from core_ui.activity import log_user_activity_async
 from core_ui.audit import audit_context
-from core_ui.context_processors import user_can_feature
-from servers.memory_heuristics import (
-    is_trivial_memory_command,
-    normalize_memory_command_text,
-)
-from servers.models import Server, ServerConnection
-from servers.secret_utils import get_server_auth_secret, has_saved_server_secret
-from servers.services.command_history import (
-    get_recent_session_command_activity,
-    save_command_history_entry,
-)
-from servers.services.editor_intercept import detect_editor_command, is_interactive_tui_command
+from servers.memory_heuristics import is_trivial_memory_command
+from servers.models import Server
+from servers.secret_utils import has_saved_server_secret
+from servers.services import terminal_events, terminal_input
+from servers.services.editor_intercept import detect_editor_command
+from servers.services.terminal_ai import preferences as ai_preferences
 from servers.services.terminal_ai.session_context import (
     apply_successful_command_context,
     build_initial_session_context,
     build_nova_context_bundle,
     build_session_probe_command,
 )
-from servers.ssh_host_keys import build_server_connect_kwargs, ensure_server_known_hosts
+from servers.services.terminal_command_recorder import (
+    append_live_terminal_activity,
+    load_recent_terminal_activity,
+    persist_agent_command_history,
+    persist_manual_terminal_command_result,
+)
+from servers.services.terminal_connection_records import (
+    mark_terminal_connection_closed,
+    register_terminal_connection,
+    touch_terminal_connection,
+)
+from servers.services.terminal_ssh_lifecycle import (
+    close_ssh_handle,
+    open_terminal_ssh_session,
+    resize_terminal_ssh_session,
+)
 
-
-@dataclass(frozen=True)
-class _TermSize:
-    cols: int
-    rows: int
+_TermSize = terminal_input.TerminalSize
 
 _WEUAI_MARKER_PREFIX = "__WEUAI_EXIT_"
-
-# Regex to detect commands that produce infinite/continuous output or need user input
-_STREAMING_CMD_RE = re.compile(
-    r"(?:"
-    r"\btail\s+.*-[a-zA-Z]*[fF]\b"  # tail -f / -F / -fq
-    r"|\btail\s+--follow\b"
-    r"|\bjournalctl\s+.*(?:-[a-zA-Z]*[fF]\b|--follow\b)"  # journalctl -f/-fu/--follow
-    r"|\bdocker\s+logs?\s+.*(?:-[a-zA-Z]*[fF]\b|--follow\b)"  # docker logs -f/--follow
-    r"|\bkubectl\s+logs?\s+.*-[a-zA-Z]*[fF]\b"  # kubectl logs -f
-    r"|\bpodman\s+logs?\s+.*(?:-[a-zA-Z]*[fF]\b|--follow\b)"
-    r"|\bwatch\s+"  # watch anything
-    r"|\btcpdump\b"
-    r"|\bstrace\b"
-    r"|\bping\s+(?!.*-c\s*\d)"  # ping without -c count
-    r")",
-    re.IGNORECASE,
-)
-_INTERACTIVE_CMDS = {
-    "top",
-    "htop",
-    "iotop",
-    "iftop",
-    "nethogs",
-    "vim",
-    "vi",
-    "nano",
-    "less",
-    "more",
-    "man",
-    "pstree",
-    "glances",
-}
-
-# Regex to detect long-running install/build commands that should be monitored
-_INSTALL_CMD_RE = re.compile(
-    r"(?:"
-    r"\bapt(?:-get)?\s+(?:install|upgrade|dist-upgrade)\b"
-    r"|\byum\s+(?:install|update)\b"
-    r"|\bdnf\s+(?:install|upgrade)\b"
-    r"|\bpip[23]?\s+install\b"
-    r"|\bnpm\s+(?:install|ci|i\b)"
-    r"|\byarn\s+(?:install|add)\b"
-    r"|\bdocker\s+(?:pull|build)\b"
-    r"|\bcomposer\s+(?:install|update)\b"
-    r"|\bcargo\s+(?:install|build)\b"
-    r"|\bgo\s+(?:get|install|build)\b"
-    r"|\bmake\s+(?:install|all|build)\b"
-    r")",
-    re.IGNORECASE,
-)
-
-# Patterns that clearly indicate a failed install
-_INSTALL_ERROR_RE = re.compile(
-    r"(?:"
-    r"E: Unable to locate package"
-    r"|No such package|could not find package"
-    r"|npm ERR!"
-    r"|ERROR: Could not install"
-    r"|error: could not"
-    r"|Failed to fetch"
-    r"|dpkg: error"
-    r")",
-    re.IGNORECASE,
-)
 
 # Limit concurrent terminal-AI LLM calls to avoid provider rate limits (429)
 _TERMINAL_AI_LLM_SEMAPHORE = asyncio.Semaphore(4)
@@ -213,129 +148,34 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
 
     @staticmethod
     def _default_ai_settings() -> dict[str, Any]:
-        return {
-            "memory_enabled": True,
-            "memory_ttl_requests": 6,
-            "auto_report": "auto",
-            "confirm_dangerous_commands": True,
-            "allowlist_patterns": [],
-            "blocklist_patterns": [],
-            "dry_run": False,
-            "extra_target_server_ids": [],
-            "nova_session_context_enabled": True,
-            "nova_recent_activity_enabled": True,
-        }
+        return ai_preferences.default_ai_settings()
 
     @staticmethod
     def _parse_bool(value: Any, default: bool = False) -> bool:
-        if isinstance(value, bool):
-            return value
-        if value is None:
-            return default
-        return str(value).strip().lower() in {"1", "true", "yes", "on"}
+        return ai_preferences.parse_bool(value, default)
 
     @staticmethod
     def _normalize_pattern_list(raw_value: Any) -> list[str]:
-        if isinstance(raw_value, str):
-            values = raw_value.replace("\r", "\n").split("\n")
-        elif isinstance(raw_value, list):
-            values = [str(item or "") for item in raw_value]
-        else:
-            values = []
-
-        seen: set[str] = set()
-        normalized: list[str] = []
-        for item in values:
-            line = str(item or "").strip()
-            if not line:
-                continue
-            key = line.lower()
-            if key in seen:
-                continue
-            seen.add(key)
-            normalized.append(line)
-        return normalized[:50]
+        return ai_preferences.normalize_pattern_list(raw_value)
 
     @staticmethod
     def _normalize_int_list(raw_value: Any) -> list[int]:
-        values = raw_value if isinstance(raw_value, list) else []
-        normalized: list[int] = []
-        seen: set[int] = set()
-        for item in values:
-            try:
-                value = int(item)
-            except (TypeError, ValueError):
-                continue
-            if value <= 0 or value in seen:
-                continue
-            seen.add(value)
-            normalized.append(value)
-        return normalized[:5]
+        return ai_preferences.normalize_int_list(raw_value)
 
     def _normalize_ai_settings(self, raw_value: Any) -> dict[str, Any]:
-        incoming = raw_value if isinstance(raw_value, dict) else {}
-        defaults = self._default_ai_settings()
-        auto_report = str(incoming.get("auto_report") or defaults["auto_report"]).strip().lower()
-        if auto_report not in {"auto", "on", "off"}:
-            auto_report = str(defaults["auto_report"])
-
-        try:
-            ttl = int(incoming.get("memory_ttl_requests") or defaults["memory_ttl_requests"])
-        except (TypeError, ValueError):
-            ttl = int(defaults["memory_ttl_requests"])
-        ttl = max(1, min(ttl, 20))
-
-        return {
-            "memory_enabled": self._parse_bool(incoming.get("memory_enabled"), bool(defaults["memory_enabled"])),
-            "memory_ttl_requests": ttl,
-            "auto_report": auto_report,
-            "confirm_dangerous_commands": self._parse_bool(
-                incoming.get("confirm_dangerous_commands"),
-                bool(defaults["confirm_dangerous_commands"]),
-            ),
-            "allowlist_patterns": self._normalize_pattern_list(incoming.get("allowlist_patterns")),
-            "blocklist_patterns": self._normalize_pattern_list(incoming.get("blocklist_patterns")),
-            "dry_run": self._parse_bool(incoming.get("dry_run"), bool(defaults["dry_run"])),
-            "extra_target_server_ids": self._normalize_int_list(incoming.get("extra_target_server_ids")),
-            "nova_session_context_enabled": self._parse_bool(
-                incoming.get("nova_session_context_enabled"),
-                bool(defaults["nova_session_context_enabled"]),
-            ),
-            "nova_recent_activity_enabled": self._parse_bool(
-                incoming.get("nova_recent_activity_enabled"),
-                bool(defaults["nova_recent_activity_enabled"]),
-            ),
-        }
+        return ai_preferences.normalize_ai_settings(raw_value)
 
     @staticmethod
     def _clone_ai_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
-        base = settings or {}
-        return {
-            "memory_enabled": bool(base.get("memory_enabled", True)),
-            "memory_ttl_requests": int(base.get("memory_ttl_requests", 6) or 6),
-            "auto_report": str(base.get("auto_report") or "auto"),
-            "confirm_dangerous_commands": bool(base.get("confirm_dangerous_commands", True)),
-            "allowlist_patterns": list(base.get("allowlist_patterns") or []),
-            "blocklist_patterns": list(base.get("blocklist_patterns") or []),
-            "dry_run": bool(base.get("dry_run", False)),
-            "extra_target_server_ids": SSHTerminalConsumer._normalize_int_list(base.get("extra_target_server_ids")),
-            "nova_session_context_enabled": bool(base.get("nova_session_context_enabled", True)),
-            "nova_recent_activity_enabled": bool(base.get("nova_recent_activity_enabled", True)),
-        }
+        return ai_preferences.clone_ai_settings(settings)
 
     @staticmethod
     def _is_auto_report_enabled(settings: dict[str, Any], execution_mode: str) -> bool:
-        mode = str(settings.get("auto_report") or "auto").strip().lower()
-        if mode == "on":
-            return True
-        if mode == "off":
-            return False
-        return str(execution_mode or "").strip().lower() == "step"
+        return ai_preferences.is_auto_report_enabled(settings, execution_mode)
 
     @staticmethod
     def _normalize_ai_chat_mode(value: Any) -> str:
-        mode = str(value or "").strip().lower()
-        return mode if mode in {"ask", "agent"} else "agent"
+        return ai_preferences.normalize_ai_chat_mode(value)
 
     async def connect(self):
         self._connect_lock = asyncio.Lock()
@@ -693,26 +533,16 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                     await self._safe_send_json({"type": "status", "status": "disconnected"})
                     return
 
-                known_hosts = await ensure_server_known_hosts(self.server)
-                connect_kwargs = build_server_connect_kwargs(
-                    self.server,
-                    secret=secret or "",
-                    known_hosts=known_hosts,
-                    connect_timeout=max(1, int(getattr(settings, "SSH_CONNECT_TIMEOUT_SECONDS", 10) or 10)),
-                    login_timeout=max(1, int(getattr(settings, "SSH_LOGIN_TIMEOUT_SECONDS", 20) or 20)),
-                    keepalive_interval=max(1, int(getattr(settings, "SSH_KEEPALIVE_INTERVAL_SECONDS", 20) or 20)),
-                    keepalive_count_max=max(1, int(getattr(settings, "SSH_KEEPALIVE_COUNT_MAX", 3) or 3)),
-                )
                 network_config = self.server.network_config or {}
 
-                self._ssh_conn = await asyncssh.connect(**connect_kwargs)
-                self._ssh_proc = await self._ssh_conn.create_process(
+                opened = await open_terminal_ssh_session(
+                    server=self.server,
+                    secret=secret or "",
                     term_type=term_type,
-                    # AsyncSSH TermSize = (cols, rows, pixwidth, pixheight)
-                    term_size=(term_size.cols, term_size.rows, 0, 0),
-                    encoding="utf-8",
-                    errors="replace",
+                    term_size=term_size,
                 )
+                self._ssh_conn = opened.conn
+                self._ssh_proc = opened.proc
 
                 # Apply merged environment variables (global/group/server) into shell session.
                 merged_env: dict[str, Any] = {}
@@ -815,7 +645,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             if not can_capture_result:
                 self._ssh_proc.stdin.write(data)
                 for command in completed_commands:
-                    current_cwd = str((self._nova_session_context or {}).get("cwd") or "")
+                    current_cwd = str((getattr(self, "_nova_session_context", None) or {}).get("cwd") or "")
                     await self._log_manual_terminal_command(command)
                     await database_sync_to_async(self._persist_manual_terminal_command_result, thread_sensitive=True)(
                         user_id=self._user_id or 0,
@@ -847,38 +677,11 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
 
     @staticmethod
     def _should_use_manual_command_marker(command: str) -> bool:
-        normalized = normalize_memory_command_text(command)
-        if not normalized:
-            return False
-        stripped = normalized.strip()
-        lowered = stripped.lower()
-        if not stripped:
-            return False
-        # Full-screen TUI programs (nano, vim, less, top, man, htop, tmux, …)
-        # take over the pty and read stdin directly. If we append an exit-code
-        # marker command after launching them, those bytes are injected into
-        # the running TUI as keystrokes instead of being executed by the shell,
-        # which corrupts its state and leaves the terminal "frozen" for the
-        # user (Ctrl+X / arrow keys stop working until they close the tab).
-        if is_interactive_tui_command(stripped):
-            return False
-        if "<<" in stripped:
-            return False
-        if stripped.endswith("\\"):
-            return False
-        if re.search(r"(?:&&|\|\||\|)\s*$", stripped):
-            return False
-        if re.match(r"^\s*(if|for|while|until|case|select|function)\b", lowered):
-            return False
-        if re.search(r"\b(?:then|do|else|elif|in)\s*$", lowered):
-            return False
-        return not (stripped.count("'") % 2 or stripped.count('"') % 2 or stripped.count("`") % 2)
+        return terminal_input.should_use_manual_command_marker(command)
 
     @staticmethod
     def _strip_terminal_input_sequences(data: str) -> str:
-        cleaned = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", data or "")
-        cleaned = re.sub(r"\x1b.", "", cleaned)
-        return cleaned
+        return terminal_input.strip_terminal_input_sequences(data)
 
     @contextlib.contextmanager
     def _suppress_terminal_input_capture(self):
@@ -892,28 +695,12 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         if int(getattr(self, "_input_capture_suppress", 0) or 0) > 0:
             return []
 
-        cleaned = self._strip_terminal_input_sequences(data)
-        if not cleaned:
-            return []
-
-        completed_commands: list[str] = []
-        for char in cleaned:
-            if char in ("\r", "\n"):
-                command = str(getattr(self, "_manual_input_buffer", "") or "").strip()
-                self._manual_input_buffer = ""
-                if command:
-                    completed_commands.append(command)
-                continue
-            if char in ("\x7f", "\b"):
-                self._manual_input_buffer = str(getattr(self, "_manual_input_buffer", "") or "")[:-1]
-                continue
-            if char == "\x15":
-                self._manual_input_buffer = ""
-                continue
-            if ord(char) < 32 and char != "\t":
-                continue
-            self._manual_input_buffer = (str(getattr(self, "_manual_input_buffer", "") or "") + char)[-8000:]
-        return completed_commands
+        captured = terminal_input.capture_completed_terminal_commands(
+            data,
+            buffer=str(getattr(self, "_manual_input_buffer", "") or ""),
+        )
+        self._manual_input_buffer = captured.buffer
+        return captured.commands
 
     async def _log_manual_terminal_command(self, command: str) -> None:
         if not command or not self.server or not self._user_id:
@@ -949,8 +736,8 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                 "session_id": self._server_connection_id or "",
                 "user_id": self._user_id,
                 "server_id": self.server.id,
-                "cwd": str((self._nova_session_context or {}).get("cwd") or ""),
-                "context_before": dict(self._nova_session_context or {}),
+                "cwd": str((getattr(self, "_nova_session_context", None) or {}).get("cwd") or ""),
+                "context_before": dict(getattr(self, "_nova_session_context", None) or {}),
             }
         )
         if self._manual_active_cmd_id is None:
@@ -973,14 +760,14 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         exit_code: int | None,
         cwd: str,
     ) -> None:
-        save_command_history_entry(
-            server_id=server_id,
+        persist_manual_terminal_command_result(
             user_id=user_id,
+            server_id=server_id,
             session_id=session_id,
-            cwd=cwd,
             command=command,
-            output=output or "",
+            output=output,
             exit_code=exit_code,
+            cwd=cwd,
         )
 
     async def _probe_nova_session_context(self, merged_env: dict[str, Any]) -> dict[str, Any]:
@@ -1006,18 +793,13 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         exit_code: int | None,
         source: str,
     ) -> None:
-        if not command:
-            return
-        entries = list(getattr(self, "_nova_recent_activity", []) or [])
-        entries.append(
-            {
-                "command": str(command or "")[:2000],
-                "cwd": str(cwd or "")[:500],
-                "exit_code": exit_code,
-                "source": str(source or "live_session")[:40],
-            }
+        self._nova_recent_activity = append_live_terminal_activity(
+            list(getattr(self, "_nova_recent_activity", []) or []),
+            command=command,
+            cwd=cwd,
+            exit_code=exit_code,
+            source=source,
         )
-        self._nova_recent_activity = entries[-12:]
 
     async def _collect_nova_context_bundle(self):
         include_session_context = bool((self._ai_settings or {}).get("nova_session_context_enabled", True))
@@ -1026,7 +808,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         if include_recent_activity and self.server:
             try:
                 persisted_activity = await database_sync_to_async(
-                    get_recent_session_command_activity,
+                    load_recent_terminal_activity,
                     thread_sensitive=True,
                 )(
                     server_id=self.server.id,
@@ -1048,8 +830,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             return
         try:
             term_size = self._parse_term_size(content)
-            if term_size.cols > 0 and term_size.rows > 0:
-                self._ssh_proc.change_terminal_size(term_size.cols, term_size.rows)
+            resize_terminal_ssh_session(self._ssh_proc, term_size)
         except Exception as e:
             await self._safe_send_json({"type": "error", "message": f"resize failed: {e}"})
 
@@ -1145,16 +926,9 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
 
     @staticmethod
     def _normalize_execution_mode(mode: str) -> str:
-        raw = str(mode or "").strip().lower()
-        if raw in ("auto", "smart", "adaptive_auto", "recommended"):
-            return "auto"
-        if raw in ("step", "step_by_step", "step-by-step", "sequential", "adaptive"):
-            return "step"
-        if raw in ("fast", "plan", "batch"):
-            return "fast"
-        if raw in ("agent", "nova", "react", "interactive"):
-            return "agent"
-        return "step"
+        from servers.services.terminal_ai import normalize_execution_mode
+
+        return normalize_execution_mode(mode)
 
     def _resolve_auto_execution_mode(self, plan_obj: dict[str, Any], commands_raw: Any, user_message: str) -> str:
         """
@@ -1163,37 +937,13 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
           1) planner-provided execution_mode
           2) safety fallback from planned commands / user intent
         """
-        planner_mode = self._normalize_execution_mode(str((plan_obj or {}).get("execution_mode") or ""))
-        if planner_mode in ("step", "fast"):
-            return planner_mode
+        from servers.services.terminal_ai import resolve_auto_execution_mode
 
-        commands_count = len(commands_raw) if isinstance(commands_raw, list) else 0
-        if commands_count <= 2:
-            # Very short, deterministic tasks are usually faster in linear mode.
-            return "fast"
-
-        text = str(user_message or "").lower()
-        danger_hints = (
-            "delete",
-            "drop",
-            "rm ",
-            "truncate",
-            "restart",
-            "stop",
-            "reboot",
-            "firewall",
-            "iptables",
-            "migration",
-            "migrate",
-            "upgrade",
-            "install",
-            "prod",
-            "production",
+        return resolve_auto_execution_mode(
+            plan_obj=plan_obj,
+            commands_raw=commands_raw,
+            user_message=user_message,
         )
-        if any(h in text for h in danger_hints):
-            return "step"
-
-        return "step"
 
     async def _handle_ai_request(self, content: Any):
         payload = content if isinstance(content, dict) else {}
@@ -1560,13 +1310,10 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         except Exception as exc:  # pragma: no cover — non-fatal
             logger.debug("terminal-ai chat history clear skipped: %s", exc)
         await self._send_ai_event(
-            {
-                "type": "ai_response",
-                "mode": "answer",
-                "assistant_text": "🧹 Память текущего чата очищена.",
-                "commands": [],
-                "execution_mode": str(getattr(self, "_ai_execution_mode", "step")),
-            }
+            terminal_events.ai_response(
+                assistant_text="🧹 Память текущего чата очищена.",
+                execution_mode=str(getattr(self, "_ai_execution_mode", "step")),
+            )
         )
 
     async def _handle_ai_explain_output(self, content: dict[str, Any]):
@@ -1592,54 +1339,39 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
 
         if not cmd and not output:
             await self._send_ai_event(
-                {
-                    "type": "ai_error",
-                    "message": "Нужна команда и её вывод для объяснения.",
-                }
+                terminal_events.ai_error("Нужна команда и её вывод для объяснения.")
             )
             return
 
-        from app.core.llm import LLMProvider
-        from servers.services.terminal_ai import build_explain_output_prompt
+        from servers.services.terminal_ai import explain_command_output
 
-        prompt = build_explain_output_prompt(
-            command=cmd,
-            output=output,
-            exit_code=exit_code,
-            user_question=question,
-        )
-
-        await self._send_ai_event(
-            {"type": "ai_status", "status": "explaining", "id": cmd_id}
-        )
+        await self._send_ai_event(terminal_events.ai_status("explaining", id=cmd_id))
 
         try:
-            llm = LLMProvider()
-            text = ""
-            # A6: route to the same cheap bucket as chat/report.
-            async with _TERMINAL_AI_LLM_SEMAPHORE:
-                # TODO: add json_mode=True
-                async for chunk in llm.stream_chat(prompt, model="auto", purpose="terminal_chat"):
-                    text += chunk
-                    if len(text) > 4000:
-                        break
+            text = await explain_command_output(
+                command=cmd,
+                output=output,
+                exit_code=exit_code,
+                user_question=question,
+                semaphore=_TERMINAL_AI_LLM_SEMAPHORE,
+            )
             await self._send_ai_event(
-                {
-                    "type": "ai_explanation",
-                    "id": cmd_id,
-                    "cmd": cmd,
-                    "explanation": (text or "").strip(),
-                }
+                terminal_events.ai_explanation(item_id=cmd_id, command=cmd, explanation=text)
+            )
+        except Exception as exc:
+            logger.warning("AI output explanation failed: %s", exc)
+            await self._send_ai_event(
+                terminal_events.ai_error("Не удалось объяснить вывод команды.")
             )
         finally:
-            await self._send_ai_event({"type": "ai_status", "status": "idle"})
+            await self._send_ai_event(terminal_events.ai_status("idle"))
 
     async def _handle_ai_generate_report(self, content: dict[str, Any]):
         force_regenerate = self._parse_bool((content or {}).get("force"), False)
         async with self._ai_lock:
             if self._ai_task and not self._ai_task.done():
                 await self._send_ai_event(
-                    {"type": "ai_error", "message": "Дождитесь завершения текущего запуска ассистента."}
+                    terminal_events.ai_error("Дождитесь завершения текущего запуска ассистента.")
                 )
                 return
             done_items = list(self._ai_last_done_items or [])
@@ -1648,23 +1380,23 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
 
         if not done_items:
             await self._send_ai_event(
-                {"type": "ai_error", "message": "Нет завершённых команд для формирования отчёта."}
+                terminal_events.ai_error("Нет завершённых команд для формирования отчёта.")
             )
             return
 
         try:
-            await self._send_ai_event({"type": "ai_status", "status": "generating_report"})
+            await self._send_ai_event(terminal_events.ai_status("generating_report"))
             report = cached_report or await self._generate_ai_report_text(user_message, done_items)
             status = self._compute_report_status(done_items)
-            await self._send_ai_event({"type": "ai_report", "report": report, "status": status})
+            await self._send_ai_event(terminal_events.ai_report(report=report, status=status))
             async with self._ai_lock:
                 self._ai_last_report = report
             if bool(self._ai_settings.get("memory_enabled", True)):
                 self._add_to_history("assistant", f"[Ручной отчёт]\n{report[:400]}")
         except Exception as exc:
-            await self._send_ai_event({"type": "ai_error", "message": str(exc) or "Не удалось сформировать отчёт"})
+            await self._send_ai_event(terminal_events.ai_error(str(exc) or "Не удалось сформировать отчёт"))
         finally:
-            await self._send_ai_event({"type": "ai_status", "status": "idle"})
+            await self._send_ai_event(terminal_events.ai_status("idle"))
 
     def _add_to_history(self, role: str, text: str) -> None:
         """Append a message to the conversation history (in-memory + DB, F2-9).
@@ -1719,47 +1451,24 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         confirm_dangerous_commands: bool = True,
         exec_mode: str | None = None,
     ) -> dict[str, Any]:
-        # F2-6: single-source policy decision (allowed / confirm / reason / risk / exec_mode).
-        from servers.services.terminal_ai import decide_command_policy
+        from servers.services.terminal_ai import build_plan_item
 
-        clean_cmd = str(cmd or "").strip()
-        verdict = decide_command_policy(
-            clean_cmd,
+        return build_plan_item(
+            item_id=item_id,
+            command=cmd,
+            why=why,
+            chat_mode=getattr(self, "_ai_chat_mode", "agent"),
             forbidden_patterns=forbidden_patterns,
             allowlist_patterns=allowlist_patterns,
-            chat_mode=getattr(self, "_ai_chat_mode", "agent"),
             confirm_dangerous_commands=confirm_dangerous_commands,
+            exec_mode=exec_mode,
         )
-        blocked = not verdict.allowed
-        # F2-8: trust LLM-provided exec_mode only when valid; otherwise fall
-        # back to policy-picked default. For v1 we keep execution on PTY —
-        # the value is an informational hint for the orchestrator / UI.
-        resolved_exec_mode = (exec_mode or verdict.exec_mode or "pty").strip().lower()
-        if resolved_exec_mode not in {"pty", "direct"}:
-            resolved_exec_mode = verdict.exec_mode
-        return {
-            "id": int(item_id),
-            "cmd": clean_cmd,
-            "why": str(why or "").strip(),
-            # forbidden => hard block, dangerous/ask_mode => explicit confirm
-            "requires_confirm": verdict.requires_confirm,
-            "blocked": blocked,
-            "reason": verdict.reason,
-            "status": "blocked" if blocked else "pending",
-            "streaming": self._is_streaming_command(clean_cmd),
-            # F2-5: expose risk categories/reasons for UI tooltips & audit logs.
-            "risk_categories": list(verdict.risk_categories),
-            "risk_reasons": list(verdict.risk_reasons),
-            # F2-8: hybrid executor hint.
-            "exec_mode": resolved_exec_mode,
-        }
 
     @staticmethod
     def _normalize_command_text(cmd: str) -> str:
-        clean_cmd = normalize_memory_command_text(cmd)
-        if not clean_cmd:
-            return ""
-        return clean_cmd
+        from servers.services.terminal_ai import normalize_command_text
+
+        return normalize_command_text(cmd)
 
     async def _ai_process_queue(self):
         """
@@ -1815,12 +1524,11 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                         item["status"] = "skipped"
                         self._ai_plan_index += 1
                         await self._send_ai_event(
-                            {
-                                "type": "ai_command_status",
-                                "id": item_id,
-                                "status": "skipped",
-                                "reason": reason or "forbidden",
-                            }
+                            terminal_events.ai_command_status(
+                                item_id=item_id,
+                                status="skipped",
+                                reason=reason or "forbidden",
+                            )
                         )
                         continue
 
@@ -1828,19 +1536,20 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                         item["status"] = "pending_confirm"
                         # Pause until user confirms/cancels current command
                         await self._send_ai_event(
-                            {
-                                "type": "ai_status",
-                                "status": "waiting_confirm",
-                                "id": item_id,
-                                "reason": reason or "dangerous",
-                            }
+                            terminal_events.ai_status(
+                                "waiting_confirm",
+                                id=item_id,
+                                reason=reason or "dangerous",
+                            )
                         )
                         send_idle = False
                         return
 
                     item["status"] = "running"
 
-                await self._send_ai_event({"type": "ai_command_status", "id": item_id, "status": "running"})
+                await self._send_ai_event(
+                    terminal_events.ai_command_status(item_id=item_id, status="running")
+                )
 
                 # F2-8 v2: route safe stateless commands through a non-PTY
                 # channel so the interactive shell is not polluted by
@@ -1864,14 +1573,13 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                         # Emit a direct_output-style event so the UI
                         # renders the preview inline without marker tokens.
                         await self._send_ai_event(
-                            {
-                                "type": "ai_direct_output",
-                                "id": item_id,
-                                "cmd": cmd,
-                                "output": output_snippet,
-                                "exit_code": 0,
-                                "dry_run": True,
-                            }
+                            terminal_events.ai_direct_output(
+                                item_id=item_id,
+                                command=cmd,
+                                output=output_snippet,
+                                exit_code=0,
+                                dry_run=True,
+                            )
                         )
                     elif item_exec_mode == "direct":
                         exit_code, output_snippet = await self._ai_execute_command_direct(cmd, item_id)
@@ -1913,12 +1621,11 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                     retries = self._ai_error_retries.get(item_id, 0)
                     if retries < 2:
                         await self._send_ai_event(
-                            {
-                                "type": "ai_status",
-                                "status": "analyzing_error",
-                                "cmd": cmd,
-                                "exit_code": exit_code,
-                            }
+                            terminal_events.ai_status(
+                                "analyzing_error",
+                                cmd=cmd,
+                                exit_code=exit_code,
+                            )
                         )
                         try:
                             async with self._ai_lock:
@@ -2517,42 +2224,18 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
 
         Best-effort: any failure is logged but never blocks execution.
         """
-        from servers.services.snapshot_service import (
-            MAX_SNAPSHOT_BYTES,
-            detect_target_file,
-            save_snapshot,
-        )
+        from servers.services.terminal_snapshotting import capture_pre_execution_snapshot
 
-        file_path = detect_target_file(cmd)
-        if not file_path:
+        if not self._ssh_conn or not self.server:
             return
-        try:
-            # Read file content (non-PTY, short timeout)
-            result = await asyncio.wait_for(
-                self._ssh_conn.run(
-                    f"cat {file_path} 2>/dev/null",
-                    check=False,
-                ),
-                timeout=self.SNAPSHOT_READ_TIMEOUT_SEC,
-            )
-            content = str(result.stdout or "")
-            if len(content.encode("utf-8", errors="replace")) > MAX_SNAPSHOT_BYTES:
-                logger.debug(
-                    "Snapshot skipped: file %s too large (%d bytes)",
-                    file_path,
-                    len(content),
-                )
-                return
-            await database_sync_to_async(save_snapshot)(
-                server_id=self.server.id,
-                user_id=self._user_id,
-                command=cmd,
-                file_path=file_path,
-                content=content,
-            )
-            logger.debug("Snapshot saved for %s before cmd_id=%s", file_path, cmd_id)
-        except Exception as exc:
-            logger.debug("Snapshot capture failed for %s: %s", file_path, exc)
+        await capture_pre_execution_snapshot(
+            command=cmd,
+            cmd_id=cmd_id,
+            ssh_conn=self._ssh_conn,
+            server_id=int(self.server.id),
+            user_id=self._user_id,
+            timeout_seconds=self.SNAPSHOT_READ_TIMEOUT_SEC,
+        )
 
     # ── 4.2: parallel batch execution ──────────────────────────────────────
 
@@ -2676,20 +2359,11 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
 
     @staticmethod
     def _is_streaming_command(cmd: str) -> bool:
-        """Return True if cmd would produce continuous output or need user input."""
-        c = (cmd or "").strip()
-        if not c:
-            return False
-        if _STREAMING_CMD_RE.search(c):
-            return True
-        # Check bare interactive command names
-        cmd_name = c.split()[0].split("/")[-1].lower()
-        return cmd_name in _INTERACTIVE_CMDS
+        return terminal_input.is_streaming_command(cmd)
 
     @staticmethod
     def _is_install_command(cmd: str) -> bool:
-        """Return True if cmd is a package/dependency install (potentially long-running)."""
-        return bool(_INSTALL_CMD_RE.search(cmd or ""))
+        return terminal_input.is_install_command(cmd)
 
     @staticmethod
     def _is_trivial_memory_command(cmd: str) -> bool:
@@ -2703,8 +2377,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
 
     @staticmethod
     def _detect_install_error(output: str) -> bool:
-        """Return True if output clearly shows an install failure."""
-        return bool(_INSTALL_ERROR_RE.search(output or ""))
+        return terminal_input.detect_install_error(output)
 
     async def _monitor_install(self, cmd_id: int, cmd: str, interval: float = 30.0) -> None:
         """
@@ -2770,36 +2443,16 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         :class:`servers.services.terminal_ai.schemas.TerminalPlanResponse`
         (F1-6).
         """
-        from app.core.llm import LLMProvider
-        from servers.services.terminal_ai import (
-            RecoveryDecision,
-            build_recovery_prompt,
-            parse_or_repair,
-        )
+        from servers.services.terminal_ai import decide_recovery
 
-        prompt = build_recovery_prompt(
+        return await decide_recovery(
             cmd=cmd,
             exit_code=exit_code,
             output=output or "",
             remaining_cmds=remaining_cmds or [],
             user_reply=user_reply,
+            semaphore=_TERMINAL_AI_LLM_SEMAPHORE,
         )
-
-        llm = LLMProvider()
-        out = ""
-        # A4: recovery — 1-shot JSON decision, route to cheap bucket.
-        async with _TERMINAL_AI_LLM_SEMAPHORE:
-            # TODO: add json_mode=True
-            async for chunk in llm.stream_chat(prompt, model="auto", purpose="terminal_recovery", json_mode=True):
-                out += chunk
-                if len(out) > 3000:
-                    break
-
-        decision, err = parse_or_repair(out, RecoveryDecision)
-        if decision is None:
-            logger.warning("_ai_handle_error parse failed: %s, output: %.200s", err, out)
-            return {"action": "skip", "why": "Не удалось разобрать ответ LLM — пропускаю команду"}
-        return decision.model_dump()
 
     async def _ai_step_decide_next(
         self,
@@ -2819,36 +2472,17 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         :func:`servers.services.terminal_ai.prompts.build_step_decision_prompt`
         before embedding into the prompt (F1-1 / F1-2).
         """
-        from app.core.llm import LLMProvider
-        from servers.services.terminal_ai import (
-            StepDecision,
-            build_step_decision_prompt,
-            parse_or_repair,
-        )
+        from servers.services.terminal_ai import decide_step_next
 
-        prompt = build_step_decision_prompt(
+        return await decide_step_next(
             user_goal=user_goal,
             last_cmd=last_cmd,
             exit_code=exit_code,
             output=output or "",
             remaining_cmds=remaining_cmds or [],
             user_reply=user_reply,
+            semaphore=_TERMINAL_AI_LLM_SEMAPHORE,
         )
-
-        llm = LLMProvider()
-        out = ""
-        # A4: step decision — next/stop JSON, route to cheap bucket.
-        async with _TERMINAL_AI_LLM_SEMAPHORE:
-            async for chunk in llm.stream_chat(prompt, model="auto", purpose="terminal_step_decision", json_mode=True):
-                out += chunk
-                if len(out) > 5000:
-                    break
-
-        decision, err = parse_or_repair(out, StepDecision)
-        if decision is None:
-            logger.warning("_ai_step_decide_next parse failed: %s, output: %.200s", err, out)
-            return {"action": "continue"}
-        return decision.model_dump()
 
     async def _ai_type_text(self, text: str):
         if not self._ssh_proc or not text:
@@ -3076,44 +2710,13 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         ids the user has access to). Each target opens its own SSH
         connection. Failed connections are skipped with a warning.
         """
-        from servers.services.terminal_ai.agent.tools import ServerTarget
+        from servers.services.terminal_agent_context import build_agent_extra_targets
 
-        extras: dict[str, Any] = {}
-        ids_raw = (self._ai_settings or {}).get("extra_target_server_ids") or []
-        try:
-            ids = [int(x) for x in ids_raw if int(x)]
-        except (TypeError, ValueError):
-            return extras
-        if not ids or not self._user_id:
-            return extras
-
-        # Keep extras modest — more than this runs into SSH connection
-        # limits on common servers.
-        ids = ids[:5]
-
-        try:
-            servers_allowed = await self._list_user_accessible_servers(
-                user_id=self._user_id, server_ids=ids
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("agent extras lookup failed: %s", exc)
-            return extras
-
-        for srv in servers_allowed:
-            # Skip the primary — it's already represented.
-            if self.server and int(srv["id"]) == int(self.server.id):
-                continue
-            name = f"srv-{srv['id']}"
-            extras[name] = ServerTarget(
-                name=name,
-                server_id=int(srv["id"]),
-                display_name=str(srv.get("name") or ""),
-                host=str(srv.get("host") or ""),
-                read_only=bool(srv.get("ai_read_only")),
-                is_primary=False,
-                description=str(srv.get("description") or ""),
-            )
-        return extras
+        return await build_agent_extra_targets(
+            ai_settings=self._ai_settings,
+            user_id=self._user_id,
+            primary_server_id=int(self.server.id) if self.server else None,
+        )
 
     async def _ai_build_agent_memory_context(self, server_ids: list[int]) -> str:
         """Render a layered-memory prompt block for the agent.
@@ -3124,34 +2727,9 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         best-effort — an empty string is returned on any error so the
         agent simply starts without prior knowledge instead of crashing.
         """
-        ids = [int(sid) for sid in server_ids if sid]
-        if not ids:
-            return ""
-        try:
-            from asgiref.sync import sync_to_async
+        from servers.services.terminal_agent_context import build_agent_memory_context
 
-            from app.agent_kernel.memory.server_cards import (
-                render_server_cards_prompt,
-            )
-            from servers.adapters.memory_store import DjangoServerMemoryStore
-
-            store = DjangoServerMemoryStore()
-            cards = await sync_to_async(
-                store._get_server_cards_batch_sync, thread_sensitive=True
-            )(ids)
-            # Primary first — its card is the most useful context. The
-            # batch loader doesn't guarantee order, so resort by the
-            # requested id sequence.
-            cards_by_id = {int(getattr(c, "server_id", 0) or 0): c for c in cards}
-            ordered = [cards_by_id[sid] for sid in ids if sid in cards_by_id]
-            if not ordered:
-                return ""
-            # max_cards mirrors agent_engine's default so we don't blow
-            # the prompt window on sessions with many extras.
-            return render_server_cards_prompt(ordered, max_cards=3, max_records=6)
-        except Exception as exc:  # noqa: BLE001 — memory read is best-effort
-            logger.warning("agent memory context load failed: %s", exc)
-            return ""
+        return await build_agent_memory_context(server_ids)
 
     async def _open_agent_target_conn(self, server_id: int) -> Any | None:
         """Open an asyncssh connection to an authorised extra target.
@@ -3178,54 +2756,26 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                 master_password=master_password or "",
                 plain_password="",
             )
-            known_hosts = await ensure_server_known_hosts(server)
-            connect_kwargs = build_server_connect_kwargs(
-                server,
-                secret=secret or "",
-                known_hosts=known_hosts,
-                connect_timeout=max(
-                    1, int(getattr(settings, "SSH_CONNECT_TIMEOUT_SECONDS", 10) or 10)
-                ),
-                login_timeout=max(
-                    1, int(getattr(settings, "SSH_LOGIN_TIMEOUT_SECONDS", 20) or 20)
-                ),
-                keepalive_interval=max(
-                    1,
-                    int(getattr(settings, "SSH_KEEPALIVE_INTERVAL_SECONDS", 20) or 20),
-                ),
-                keepalive_count_max=max(
-                    1, int(getattr(settings, "SSH_KEEPALIVE_COUNT_MAX", 3) or 3)
-                ),
-            )
+            from servers.services.terminal_connection_options import build_terminal_connect_kwargs
+
+            connect_kwargs = await build_terminal_connect_kwargs(server, secret=secret or "")
             return await asyncssh.connect(**connect_kwargs)
         except Exception as exc:  # noqa: BLE001 — never crash the agent
             logger.warning("agent open_target(server_id=%s) failed: %s", server_id, exc)
             return None
 
-    @database_sync_to_async
-    def _load_server_for_agent(self, server_id: int) -> Any | None:
+    async def _load_server_for_agent(self, server_id: int) -> Any | None:
         """Fetch a server model the user is authorised to access."""
-        from servers.models import Server, ServerShare
+        from servers.services.terminal_agent_context import load_user_accessible_server
 
-        user_id = self._user_id
-        if not user_id:
+        if not self._user_id:
             return None
-        # Same ACL as _list_user_accessible_servers — kept as two
-        # round-trips here because we also need the model instance.
-        own = Server.objects.filter(user_id=user_id, id=server_id).first()
-        if own:
-            return own
-        if ServerShare.objects.filter(
-            shared_with_id=user_id, server_id=server_id
-        ).exists():
-            return Server.objects.filter(id=server_id).first()
-        group_allowed = Server.objects.filter(
-            id=server_id, group__members__user_id=user_id
-        ).first()
-        return group_allowed
+        return await load_user_accessible_server(
+            user_id=int(self._user_id),
+            server_id=server_id,
+        )
 
-    @database_sync_to_async
-    def _list_user_accessible_servers(
+    async def _list_user_accessible_servers(
         self, *, user_id: int, server_ids: list[int]
     ) -> list[dict]:
         """Return server metadata for ids the user can access.
@@ -3233,30 +2783,12 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         Checks ownership, direct shares, and group membership — same
         ACL the terminal-open flow uses.
         """
-        from servers.models import Server, ServerGroupMember, ServerShare
+        from servers.services.terminal_agent_context import list_user_accessible_servers
 
-        own_ids = set(
-            Server.objects.filter(user_id=user_id, id__in=server_ids).values_list(
-                "id", flat=True
-            )
+        return await list_user_accessible_servers(
+            user_id=user_id,
+            server_ids=server_ids,
         )
-        shared_ids = set(
-            ServerShare.objects.filter(
-                shared_with_id=user_id, server_id__in=server_ids
-            ).values_list("server_id", flat=True)
-        )
-        group_server_ids = set(
-            Server.objects.filter(
-                id__in=server_ids,
-                group__members__user_id=user_id,
-            ).values_list("id", flat=True)
-        )
-        allowed = own_ids | shared_ids | group_server_ids
-        _ = ServerGroupMember  # noqa: F841 — keep import grouped with model
-        rows = Server.objects.filter(id__in=allowed).values(
-            "id", "name", "host", "ai_read_only", "description"
-        )
-        return list(rows)
 
     async def _ai_plan_commands(
         self,
@@ -3283,12 +2815,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         :class:`servers.services.terminal_ai.schemas.TerminalPlanResponse`
         (F1-6).
         """
-        from app.core.llm import LLMProvider
-        from servers.services.terminal_ai import (
-            TerminalPlanResponse,
-            build_planner_prompt_parts,
-            parse_or_repair,
-        )
+        from servers.services.terminal_ai import plan_terminal_commands
 
         logger.debug(
             "Terminal AI plan_commands: server_id=%s run_id=%s",
@@ -3296,7 +2823,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             getattr(self, "_ai_run_id", ""),
         )
 
-        system_prompt, user_prompt = build_planner_prompt_parts(
+        return await plan_terminal_commands(
             user_message=user_message,
             rules_context=rules_context,
             terminal_tail=terminal_tail,
@@ -3304,47 +2831,9 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             unavailable_cmds=unavailable_cmds,
             chat_mode=chat_mode,
             execution_mode=execution_mode,
-            # A5: dry-run flag surfaces in the planner prompt so the LLM
-            # can mention it to the user via ``assistant_text``.
             dry_run=dry_run,
+            semaphore=_TERMINAL_AI_LLM_SEMAPHORE,
         )
-
-        llm = LLMProvider()
-        out = ""
-        async with _TERMINAL_AI_LLM_SEMAPHORE:
-            async for chunk in llm.stream_chat(user_prompt, model="auto", purpose="terminal_planning", system_prompt=system_prompt, json_mode=True):
-                out += chunk
-                if len(out) > 20000:
-                    break
-
-        if (out or "").strip().lower().startswith("error:"):
-            raise ValueError(out.strip())
-
-        plan, err = parse_or_repair(out, TerminalPlanResponse)
-        if plan is None:
-            logger.warning("_ai_plan_commands parse failed: %s, output: %.200s", err, out)
-            # Fallback: keep backward-compat with legacy JSON extraction so that
-            # minor schema deviations do not lose the entire plan.
-            try:
-                return self._extract_json_object(out)
-            except Exception:
-                return {
-                    "mode": "answer",
-                    "execution_mode": execution_mode if execution_mode != "auto" else "step",
-                    "assistant_text": ("Не удалось разобрать ответ модели. Попробуйте переформулировать запрос."),
-                    "commands": [],
-                }
-        payload = plan.model_dump()
-        payload["commands"] = [
-            {
-                "cmd": c["cmd"],
-                "why": c.get("why", ""),
-                # F2-8: preserve exec_mode hint if planner supplied one.
-                "exec_mode": c.get("exec_mode", "pty"),
-            }
-            for c in payload.get("commands", [])
-        ]
-        return payload
 
     @staticmethod
     def _compute_report_status(done_items: list[dict[str, Any]]) -> str:
@@ -3361,16 +2850,13 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         return build_fallback_report(done_items)
 
     async def _generate_ai_report_text(self, user_message: str, done_items: list[dict[str, Any]]) -> str:
-        done_with_output = [item for item in done_items if (item.get("output") or "").strip()]
-        report = ""
-        if done_with_output:
-            try:
-                report = (await self._ai_make_report(user_message, done_with_output)).strip()
-            except Exception as exc:
-                logger.warning("AI report generation failed: %s", exc)
-        if not report:
-            report = self._build_fallback_report(done_items)
-        return report
+        from servers.services.terminal_ai import generate_ai_report_text
+
+        return await generate_ai_report_text(
+            user_message,
+            done_items,
+            semaphore=_TERMINAL_AI_LLM_SEMAPHORE,
+        )
 
     async def _ai_make_report(self, user_message: str, commands_with_output: list[dict[str, Any]]) -> str:
         """
@@ -3381,23 +2867,13 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         :func:`servers.services.terminal_ai.prompts.build_report_prompt`
         before embedding into the prompt (F1-1 / F1-2).
         """
-        from app.core.llm import LLMProvider
-        from servers.services.terminal_ai import build_report_prompt
+        from servers.services.terminal_ai import make_ai_report
 
-        prompt = build_report_prompt(
-            user_message=user_message,
-            commands_with_output=commands_with_output or [],
+        return await make_ai_report(
+            user_message,
+            commands_with_output,
+            semaphore=_TERMINAL_AI_LLM_SEMAPHORE,
         )
-
-        llm = LLMProvider()
-        out = ""
-        # A4: run report — short narrative summary, route to cheap bucket.
-        async with _TERMINAL_AI_LLM_SEMAPHORE:
-            async for chunk in llm.stream_chat(prompt, model="auto", purpose="terminal_report"):
-                out += chunk
-                if len(out) > 12000:
-                    break
-        return (out or "").strip()
 
     @staticmethod
     def _sanitize_memory_line(text: str) -> str:
@@ -3451,22 +2927,16 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         """Body of the fire-and-forget memory-extraction task (F1-7)."""
         try:
             with audit_context(**audit_ctx):
-                memory_obj = await self._ai_extract_server_memory(
+                from servers.services.terminal_ai import run_memory_extraction
+
+                await run_memory_extraction(
                     user_message=user_message,
                     commands_with_output=commands_with_output,
                     report=report,
+                    user_id=user_id,
+                    server_id=server_id,
+                    semaphore=_TERMINAL_AI_LLM_SEMAPHORE,
                 )
-                summary = str(memory_obj.get("summary") or "").strip()
-                facts = memory_obj.get("facts") or []
-                issues = memory_obj.get("issues") or []
-                if summary or facts or issues:
-                    await self._save_ai_server_profile(
-                        user_id=user_id,
-                        server_id=server_id,
-                        summary=summary,
-                        facts=facts,
-                        issues=issues,
-                    )
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -3488,53 +2958,14 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         validated against
         :class:`servers.services.terminal_ai.schemas.MemoryExtraction` (F1-6).
         """
-        from app.core.llm import LLMProvider
-        from servers.services.terminal_ai import (
-            MemoryExtraction,
-            build_memory_extraction_prompt,
-            parse_or_repair,
-        )
+        from servers.services.terminal_ai import extract_server_memory
 
-        prompt = build_memory_extraction_prompt(
+        return await extract_server_memory(
             user_message=user_message,
-            commands_with_output=commands_with_output or [],
+            commands_with_output=commands_with_output,
             report=report,
+            semaphore=_TERMINAL_AI_LLM_SEMAPHORE,
         )
-
-        llm = LLMProvider()
-        out = ""
-        async with _TERMINAL_AI_LLM_SEMAPHORE:
-            async for chunk in llm.stream_chat(prompt, model="auto", purpose="memory_extraction"):
-                out += chunk
-                if len(out) > 7000:
-                    break
-
-        extraction, err = parse_or_repair(out, MemoryExtraction)
-        if extraction is None:
-            logger.warning("_ai_extract_server_memory parse failed: %s, output: %.200s", err, out)
-            return {"summary": "", "facts": [], "issues": []}
-
-        def _clean_list(items: list[str], limit: int) -> list[str]:
-            seen: set[str] = set()
-            cleaned: list[str] = []
-            for it in items or []:
-                line = self._sanitize_memory_line(str(it or ""))
-                if not line:
-                    continue
-                key = line.lower()
-                if key in seen:
-                    continue
-                seen.add(key)
-                cleaned.append(line)
-                if len(cleaned) >= limit:
-                    break
-            return cleaned
-
-        return {
-            "summary": self._sanitize_memory_line(extraction.summary),
-            "facts": _clean_list(extraction.facts, 8),
-            "issues": _clean_list(extraction.issues, 4),
-        }
 
     async def _save_ai_server_profile(
         self,
@@ -3557,18 +2988,10 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
 
     @staticmethod
     def _extract_json_object(text: str) -> dict[str, Any]:
-        t = (text or "").strip()
-        # Strip common code fences if any
-        if "```" in t:
-            t = re.sub(r"```(?:json)?", "", t, flags=re.IGNORECASE).replace("```", "").strip()
-        start = t.find("{")
-        if start < 0:
-            raise ValueError(f"AI не вернул JSON: {t[:400]}")
-        decoder = json.JSONDecoder()
-        obj, _ = decoder.raw_decode(t[start:])
-        if not isinstance(obj, dict):
-            raise ValueError("AI JSON должен быть объектом")
-        return obj
+        # Compatibility wrapper for older tests/call sites.
+        from servers.services.terminal_ai import extract_json_object
+
+        return extract_json_object(text)
 
     def _compute_confirm_reason(
         self,
@@ -3619,32 +3042,20 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
 
         try:
             if self._ssh_proc:
-                try:
-                    self._ssh_proc.close()
-                    await asyncio.wait_for(self._ssh_proc.wait_closed(), timeout=5)
-                except Exception:
-                    pass
+                await close_ssh_handle(self._ssh_proc)
         finally:
             self._ssh_proc = None
 
         try:
             if self._ssh_conn:
-                try:
-                    self._ssh_conn.close()
-                    await asyncio.wait_for(self._ssh_conn.wait_closed(), timeout=5)
-                except Exception:
-                    pass
+                await close_ssh_handle(self._ssh_conn)
         finally:
             self._ssh_conn = None
 
         # Nova: tear down any cached extra-target connections so we
         # don't leak SSH sessions when the user closes the terminal.
-        for name, conn in list(getattr(self, "_agent_extra_conns", {}).items()):
-            try:
-                conn.close()
-                await asyncio.wait_for(conn.wait_closed(), timeout=5)
-            except Exception as exc:  # noqa: BLE001
-                logger.debug("agent extra conn %s close failed: %s", name, exc)
+        for conn in list(getattr(self, "_agent_extra_conns", {}).values()):
+            await close_ssh_handle(conn)
         self._agent_extra_conns = {}
 
         if was_connected and self.scope.get("user") and getattr(self.scope["user"], "is_authenticated", False):
@@ -3847,26 +3258,11 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
 
     @staticmethod
     def _normalize_manual_command_output(command: str, output: str) -> str:
-        clean = SSHTerminalConsumer._strip_ansi_and_controls(output or "").replace("\r", "")
-        lines = clean.splitlines()
-        while lines and not lines[0].strip():
-            lines.pop(0)
-        if lines:
-            first = lines[0].strip()
-            if first == command.strip():
-                lines.pop(0)
-        normalized = "\n".join(lines).strip()
-        return normalized[-12000:]
+        return terminal_input.normalize_manual_command_output(command, output)
 
     @staticmethod
     def _strip_ansi_and_controls(text: str) -> str:
-        if not text:
-            return ""
-        # ANSI escape sequences
-        out = re.sub(r"\x1B[@-_][0-?]*[ -/]*[@-~]", "", text)
-        # C0 controls except line breaks and tab
-        out = re.sub(r"[\x00-\x08\x0B-\x1F\x7F]", "", out)
-        return out
+        return terminal_input.strip_ansi_and_controls(text)
 
     async def _wait_for_process_exit(self):
         proc = self._ssh_proc
@@ -3891,31 +3287,11 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
 
     @staticmethod
     def _parse_term_size(content: dict[str, Any]) -> _TermSize:
-        try:
-            cols = int(content.get("cols") or 80)
-        except Exception:
-            cols = 80
-        try:
-            rows = int(content.get("rows") or 24)
-        except Exception:
-            rows = 24
-        cols = max(10, min(cols, 400))
-        rows = max(5, min(rows, 200))
-        return _TermSize(cols=cols, rows=rows)
+        return terminal_input.parse_terminal_size(content)
 
     @staticmethod
     def _build_exports(env_vars: dict[str, Any]) -> str:
-        exports: list[str] = []
-        for k, v in (env_vars or {}).items():
-            key = str(k or "").strip()
-            if not key:
-                continue
-            if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", key):
-                continue
-            # Avoid newlines which would break the shell
-            value = str(v if v is not None else "").replace("\n", " ").replace("\r", " ").strip()
-            exports.append(f"export {key}={shlex.quote(value)}")
-        return "; ".join(exports)
+        return terminal_input.build_shell_exports(env_vars)
 
     async def _get_session_master_password(self) -> str:
         """Get master password from session for auto-connect."""
@@ -3929,119 +3305,46 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         except Exception:
             return ""
 
-    @database_sync_to_async
-    def _user_can_servers(self, user_id: int) -> bool:
-        from django.contrib.auth.models import User
+    async def _user_can_servers(self, user_id: int) -> bool:
+        from servers.services.terminal_access import user_can_servers
 
-        user = User.objects.filter(id=user_id).first()
-        return bool(user and user_can_feature(user, "servers"))
+        return await user_can_servers(user_id)
 
-    @database_sync_to_async
-    def _get_terminal_session_limit(self, user_id: int) -> dict[str, object] | None:
-        from django.contrib.auth.models import User
+    async def _get_terminal_session_limit(self, user_id: int) -> dict[str, object] | None:
+        from servers.services.terminal_access import get_terminal_session_limit
 
-        user = User.objects.filter(id=user_id).first()
-        return get_terminal_session_limit_error(user)
+        return await get_terminal_session_limit(user_id)
 
-    @database_sync_to_async
-    def _get_server(self, user_id: int, server_id: int) -> Server:
-        now = timezone.now()
-        return (
-            Server.objects.select_related("group", "user")
-            .filter(id=server_id, is_active=True)
-            .filter(
-                Q(user_id=user_id)
-                | (
-                    Q(shares__user_id=user_id, shares__is_revoked=False)
-                    & (Q(shares__expires_at__isnull=True) | Q(shares__expires_at__gt=now))
-                )
-            )
-            .distinct()
-            .get()
-        )
+    async def _get_server(self, user_id: int, server_id: int) -> Server:
+        from servers.services.terminal_access import get_terminal_server
+
+        return await get_terminal_server(user_id=user_id, server_id=server_id)
 
     @database_sync_to_async
     def _register_server_connection(self, user_id: int, server_id: int, connection_id: str) -> None:
-        from app.agent_kernel.memory.store import DjangoServerMemoryStore
-
-        now = timezone.now()
-        ServerConnection.objects.update_or_create(
-            connection_id=connection_id,
-            defaults={
-                "server_id": server_id,
-                "user_id": user_id,
-                "status": "connected",
-                "last_seen_at": now,
-                "disconnected_at": None,
-            },
-        )
-        DjangoServerMemoryStore()._ingest_event_sync(
-            server_id,
-            source_kind="terminal",
-            actor_kind="human",
-            source_ref=connection_id,
-            session_id=connection_id,
-            event_type="session_opened",
-            raw_text="SSH terminal session opened",
-            structured_payload={"connection_id": connection_id, "user_id": user_id},
-            importance_hint=0.55,
-            actor_user_id=user_id,
-            force_compact=True,
-        )
-        from servers.os_detect_service import schedule_os_detect_for_server_ids
-
-        schedule_os_detect_for_server_ids([server_id])
+        register_terminal_connection(user_id=user_id, server_id=server_id, connection_id=connection_id)
 
     @database_sync_to_async
     def _touch_server_connection(self, connection_id: str) -> None:
-        ServerConnection.objects.filter(
-            connection_id=connection_id,
-            status="connected",
-            disconnected_at__isnull=True,
-        ).update(last_seen_at=timezone.now())
+        touch_terminal_connection(connection_id)
 
     @database_sync_to_async
     def _mark_server_connection_closed(self, connection_id: str) -> None:
-        from app.agent_kernel.memory.store import DjangoServerMemoryStore
+        mark_terminal_connection_closed(connection_id)
 
-        now = timezone.now()
-        connection = ServerConnection.objects.filter(connection_id=connection_id).first()
-        if connection is None:
-            return
-        ServerConnection.objects.filter(connection_id=connection_id).update(
-            status="disconnected",
-            last_seen_at=now,
-            disconnected_at=now,
-        )
-        DjangoServerMemoryStore()._ingest_event_sync(
-            connection.server_id,
-            source_kind="terminal",
-            actor_kind="human",
-            source_ref=connection_id,
-            session_id=connection_id,
-            event_type="session_closed",
-            raw_text="SSH terminal session closed",
-            structured_payload={"connection_id": connection_id, "user_id": connection.user_id},
-            importance_hint=0.52,
-            actor_user_id=connection.user_id,
-            force_compact=True,
-        )
-
-    @database_sync_to_async
-    def _resolve_server_secret(self, server_id: int, master_password: str, plain_password: str) -> str:
+    async def _resolve_server_secret(self, server_id: int, master_password: str, plain_password: str) -> str:
         """
         Resolve password/passphrase for server authentication.
 
         - If server has encrypted_password and master_password provided -> decrypt.
         - Else fallback to plain_password provided by user (not stored).
         """
-        server = Server.objects.only("id", "encrypted_password", "salt", "auth_method").get(id=server_id)
-        if server.auth_method not in ("password", "key_password"):
-            return ""
-        return get_server_auth_secret(
-            server,
-            master_password=(master_password or "").strip(),
-            fallback_plain=plain_password or "",
+        from servers.services.terminal_access import resolve_server_secret
+
+        return await resolve_server_secret(
+            server_id=server_id,
+            master_password=master_password,
+            plain_password=plain_password,
         )
 
     async def _get_ai_rules_and_forbidden(
@@ -4078,20 +3381,10 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         output_snippet: str,
         exit_code: int,
     ) -> None:
-        from app.agent_kernel.memory.redaction import redact_text
-        from servers.models import ServerCommandHistory
-
-        # B3: redact secrets from output before persisting so that tokens,
-        # passwords, connection strings etc. are never stored verbatim in
-        # ServerCommandHistory (and downstream memory extraction).
-        safe_output = redact_text(output_snippet or "").text
-
-        ServerCommandHistory.objects.create(
-            server_id=server_id,
+        persist_agent_command_history(
             user_id=user_id,
-            actor_kind=ServerCommandHistory.ACTOR_AGENT,
-            source_kind=ServerCommandHistory.SOURCE_AGENT,
+            server_id=server_id,
             command=command,
-            output=safe_output,
+            output_snippet=output_snippet,
             exit_code=exit_code,
         )

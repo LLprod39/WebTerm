@@ -5,7 +5,7 @@ import asyncio
 from typing import Any
 
 from servers.consumers.ssh_terminal import SSHTerminalConsumer
-from servers.services.terminal_ai import build_explain_output_prompt
+from servers.services.terminal_ai import build_explain_output_prompt, explain_command_output
 
 
 def _run(coro):
@@ -86,6 +86,30 @@ class _FakeLLM:
             raise self._raise
         for ch in self._chunks:
             yield ch
+
+
+class TestExplainCommandOutputService:
+    def test_routes_to_terminal_chat_bucket(self):
+        calls: list[dict] = []
+
+        class _ServiceFakeLLM:
+            async def stream_chat(self, prompt, model="auto", purpose="chat"):  # noqa: ANN001
+                calls.append({"prompt": prompt, "model": model, "purpose": purpose})
+                yield "short explanation"
+
+        result = _run(
+            explain_command_output(
+                command="uptime",
+                output="load average: 0.10",
+                exit_code=0,
+                llm_factory=lambda: _ServiceFakeLLM(),
+            )
+        )
+
+        assert result == "short explanation"
+        assert calls[0]["purpose"] == "terminal_chat"
+        assert calls[0]["model"] == "auto"
+        assert "uptime" in calls[0]["prompt"]
 
 
 class TestExplainOutputHandler:
