@@ -47,7 +47,7 @@ services:
     name: mini-prod-frontend
     runtime: static
     plan: free
-    rootDir: ai-server-terminal-main
+    rootDir: frontend
     buildCommand: npm ci && npm run build
     staticPublishPath: dist
     routes:

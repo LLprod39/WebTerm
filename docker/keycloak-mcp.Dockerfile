@@ -25,7 +25,7 @@ WORKDIR /workspace
 RUN pip install --no-cache-dir requests
 
 COPY key_mcp.py ./key_mcp.py
-COPY keycloak_profiles.json ./keycloak_profiles.json
+COPY config/keycloak_profiles.json ./config/keycloak_profiles.json
 
 EXPOSE 8766
 

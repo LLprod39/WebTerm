@@ -1,5 +1,5 @@
 # .pre-commit-config.yaml
-# Enforces the architecture fitness checks defined in ARCHITECTURE_CONTRACT.md.
+# Enforces the architecture fitness checks defined in docs/local/ARCHITECTURE_CONTRACT.md.
 #
 # Install:
 #   pip install pre-commit

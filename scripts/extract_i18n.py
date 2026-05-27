@@ -1,8 +1,9 @@
-"""Extract i18n translations from i18n.tsx into separate JSON files."""
-import re
 import json
+import re
+from pathlib import Path
 
-src = open("c:/WebTrerm/ai-server-terminal-main/src/lib/i18n.tsx", encoding="utf-8").read()
+FRONTEND_SRC = Path(__file__).resolve().parents[1] / "frontend" / "src"
+src = (FRONTEND_SRC / "lib" / "i18n.tsx").read_text(encoding="utf-8")
 
 
 def extract_lang_block(text, lang):
@@ -36,10 +37,10 @@ def extract_lang_block(text, lang):
 en = extract_lang_block(src, "en")
 ru = extract_lang_block(src, "ru")
 
-with open("c:/WebTrerm/ai-server-terminal-main/src/locales/en.json", "w", encoding="utf-8") as f:
+with (FRONTEND_SRC / "locales" / "en.json").open("w", encoding="utf-8") as f:
     json.dump(en, f, ensure_ascii=False, indent=2)
 
-with open("c:/WebTrerm/ai-server-terminal-main/src/locales/ru.json", "w", encoding="utf-8") as f:
+with (FRONTEND_SRC / "locales" / "ru.json").open("w", encoding="utf-8") as f:
     json.dump(ru, f, ensure_ascii=False, indent=2)
 
 print(f"en.json: {len(en)} keys")

@@ -25,7 +25,7 @@ Usage: ./bootstrap-linux.sh [options]
 
 Options:
   --full               Install requirements-full.txt (default: requirements-mini.txt)
-  --skip-frontend      Skip npm install in ai-server-terminal-main
+  --skip-frontend      Skip npm install in frontend
   --no-docker          Do not run docker compose
   --compose-file FILE  Compose file to use (default: docker-compose.yml)
   --python-bin BIN     Python interpreter to use (must be >= 3.10)
@@ -225,7 +225,7 @@ echo "==> Running Django migrations"
 if [[ "$SKIP_FRONTEND" -eq 0 ]]; then
   echo "==> Installing frontend dependencies"
   require_cmd npm
-  (cd ai-server-terminal-main && npm install)
+  (cd frontend && npm install)
 fi
 
 cat <<'EOF'
@@ -238,7 +238,7 @@ Next steps:
        source .venv/bin/activate
        python manage.py runserver
   3) Start frontend (in another shell):
-       cd ai-server-terminal-main
+       cd frontend
        npm run dev
 
 Notes:

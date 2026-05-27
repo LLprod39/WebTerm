@@ -1,14 +1,16 @@
 """
 One-shot script: creates the Full DevOps Autopilot mega-pipeline.
-Run from mini_prod root:  python create_mega_pipeline.py
+Run from the repository root:  python scripts/create_mega_pipeline.py
 """
 import os
 import sys
+from pathlib import Path
 
 import django
 
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.getcwd())
+ROOT = Path(__file__).resolve().parents[1]
+os.chdir(ROOT)
+sys.path.insert(0, str(ROOT))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "web_ui.settings")
 django.setup()
 

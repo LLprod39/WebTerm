@@ -1,5 +1,5 @@
 [importlinter]
-# Enforces architectural boundaries defined in ARCHITECTURE_CONTRACT.md.
+# Enforces architectural boundaries defined in docs/local/ARCHITECTURE_CONTRACT.md.
 # Run manually with:  lint-imports
 # In CI, triggered by:  python scripts/check_architecture_sizes.py
 root_packages =
@@ -8,7 +8,6 @@ root_packages =
     servers
     studio
     web_ui
-    passwords
 include_external_packages = True
 
 

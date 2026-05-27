@@ -40,7 +40,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["app", "core_ui", "servers", "studio", "passwords", "web_ui"]
+known-first-party = ["app", "core_ui", "servers", "studio", "web_ui"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 
 [tool.ruff.format]
@@ -53,10 +53,10 @@ line-ending = "auto"
 DJANGO_SETTINGS_MODULE = "web_ui.settings.test"
 python_files = ["test_*.py", "*_test.py"]
 addopts = "-v --tb=short"
-testpaths = ["tests", "app", "core_ui", "servers", "passwords"]
+testpaths = ["tests", "app", "core_ui", "servers"]
 
 [tool.coverage.run]
-source = ["app", "core_ui", "servers", "passwords"]
+source = ["app", "core_ui", "servers"]
 omit = ["*/migrations/*", "*/tests/*", "*/__pycache__/*"]
 
 [tool.coverage.report]
@@ -69,13 +69,13 @@ exclude_lines = [
 ]
 
 # Architecture fitness checks — enforced by scripts/check_architecture_sizes.py
-# and lint-imports.  See ARCHITECTURE_CONTRACT.md for the full rule set.
+# and lint-imports.  See docs/local/ARCHITECTURE_CONTRACT.md for the full rule set.
 [tool.architecture]
 standard_limit = 500
 strict_limit = 1000
 enforce_import_boundaries = true
 strict_new_files = true
-contract_file = "ARCHITECTURE_CONTRACT.md"
+contract_file = "docs/local/ARCHITECTURE_CONTRACT.md"
 
 # import-linter configuration (used by pre-commit / CI via lint-imports).
 # The contracts themselves live in .importlinter at the project root.
@@ -87,58 +87,58 @@ config_filename = ".importlinter"
 # grow.  Remove a file from this list once it has been refactored under the
 # standard limit.
 [tool.architecture.legacy_baselines]
-"ai-server-terminal-main/src/pages/PipelineEditorPage.tsx" = 4260
-"ai-server-terminal-main/src/lib/api.ts" = 4254
-"ai-server-terminal-main/src/components/terminal/LinuxUiPanel.tsx" = 4162
+"frontend/src/pages/PipelineEditorPage.tsx" = 4260
+"frontend/src/lib/api.ts" = 4254
+"frontend/src/components/terminal/LinuxUiPanel.tsx" = 4162
 "servers/consumers/ssh_terminal.py" = 4097
 "core_ui/views/_views_all.py" = 4092
 "app/agent_kernel/memory/store.py" = 3850
-"ai-server-terminal-main/src/pages/Servers.tsx" = 3448
+"frontend/src/pages/Servers.tsx" = 3448
 "studio/pipeline_executor.py" = 2737
 "studio/views/_views_all.py" = 2573
 "key_mcp.py" = 2089
-"ai-server-terminal-main/src/pages/SettingsPage.tsx" = 2042
+"frontend/src/pages/SettingsPage.tsx" = 2042
 "tests/test_servers_api_smoke.py" = 1949
 "servers/multi_agent_engine.py" = 1725
-"ai-server-terminal-main/src/components/terminal/AiPanel.tsx" = 1501
-"ai-server-terminal-main/src/pages/TerminalPage.tsx" = 1470
+"frontend/src/components/terminal/AiPanel.tsx" = 1501
+"frontend/src/pages/TerminalPage.tsx" = 1470
 "tests/test_ops_agent_kernel.py" = 1408
 "servers/linux_ui.py" = 1361
 "servers/models.py" = 1332
-"ai-server-terminal-main/src/pages/AgentRunPage.tsx" = 1328
-"ai-server-terminal-main/src/pages/StudioPage.tsx" = 1301
-"ai-server-terminal-main/src/pages/StudioSkillsPage.tsx" = 1268
+"frontend/src/pages/AgentRunPage.tsx" = 1328
+"frontend/src/pages/StudioPage.tsx" = 1301
+"frontend/src/pages/StudioSkillsPage.tsx" = 1268
 "studio/keycloak_provisioning.py" = 1187
 "app/core/llm.py" = 1101
 "studio/services/pipeline_assistant.py" = 1093
 "tests/test_studio_node_executors.py" = 1082
-"ai-server-terminal-main/src/pages/settings/SettingsAIPage.tsx" = 1070
+"frontend/src/pages/settings/SettingsAIPage.tsx" = 1070
 "servers/agent_engine.py" = 993
-"ai-server-terminal-main/src/components/terminal/SftpPanel.tsx" = 911
+"frontend/src/components/terminal/SftpPanel.tsx" = 911
 "tests/test_studio_api_smoke.py" = 890
 "studio/docker_service_recovery.py" = 858
 "studio/templates_data.py" = 845
 "studio/demo_showcase.py" = 840
 "app/core/model_config.py" = 831
 "web_ui/settings/base.py" = 763
-"ai-server-terminal-main/src/components/terminal/LinuxUiSystemSettings.tsx" = 732
+"frontend/src/components/terminal/LinuxUiSystemSettings.tsx" = 732
 "tests/test_studio_pipeline_v2.py" = 729
-"ai-server-terminal-main/src/components/dashboard/CustomizableDashboard.tsx" = 714
+"frontend/src/components/dashboard/CustomizableDashboard.tsx" = 714
 "studio/models.py" = 702
-"ai-server-terminal-main/src/pages/AgentsPage.tsx" = 694
-"ai-server-terminal-main/src/pages/AgentConfigPage.tsx" = 667
+"frontend/src/pages/AgentsPage.tsx" = 694
+"frontend/src/pages/AgentConfigPage.tsx" = 667
 "core_ui/desktop_api/views.py" = 653
-"ai-server-terminal-main/src/pages/SettingsUsersPage.tsx" = 650
+"frontend/src/pages/SettingsUsersPage.tsx" = 650
 "servers/services/terminal_ai/prompts.py" = 648
-"ai-server-terminal-main/src/pages/MCPHubPage.tsx" = 647
-"ai-server-terminal-main/src/components/ui/sidebar.tsx" = 637
+"frontend/src/pages/MCPHubPage.tsx" = 647
+"frontend/src/components/ui/sidebar.tsx" = 637
 "servers/monitor.py" = 603
 "studio/demo_mcp_server.py" = 602
-"ai-server-terminal-main/src/components/terminal/LinuxUiTextEditor.tsx" = 600
-"ai-server-terminal-main/src/pages/PipelineRunsPage.tsx" = 586
-"ai-server-terminal-main/src/components/terminal/XTerminal.tsx" = 541
-"ai-server-terminal-main/src/pages/settings/SettingsMemoryPage.tsx" = 537
+"frontend/src/components/terminal/LinuxUiTextEditor.tsx" = 600
+"frontend/src/pages/PipelineRunsPage.tsx" = 586
+"frontend/src/components/terminal/XTerminal.tsx" = 541
+"frontend/src/pages/settings/SettingsMemoryPage.tsx" = 537
 "tests/test_agent_loop.py" = 533
-"ai-server-terminal-main/src/pages/Servers.test.tsx" = 507
+"frontend/src/pages/Servers.test.tsx" = 507
 "scripts/check_architecture_sizes.py" = 600
 "servers/adapters/django_memory_store.py" = 3819

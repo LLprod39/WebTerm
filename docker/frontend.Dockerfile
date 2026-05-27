@@ -20,12 +20,12 @@ ENV http_proxy=${http_proxy} \
     CHOKIDAR_USEPOLLING=true \
     WATCHPACK_POLLING=true
 
-WORKDIR /workspace/ai-server-terminal-main
+WORKDIR /workspace/frontend
 
-COPY ai-server-terminal-main/package*.json ./
+COPY frontend/package*.json ./
 RUN npm ci
 
-COPY ai-server-terminal-main/ ./
+COPY frontend/ ./
 RUN npm run build
 
 EXPOSE 8080

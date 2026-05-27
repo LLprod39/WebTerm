@@ -19,10 +19,10 @@ __pycache__
 dist
 build
 
-# Node (ai-server-terminal-main)
-ai-server-terminal-main/node_modules
-ai-server-terminal-main/dist
-ai-server-terminal-main/dist-ssr
+# Node (frontend)
+frontend/node_modules
+frontend/dist
+frontend/dist-ssr
 
 # Environment and secrets (do not send to build context)
 .env
@@ -58,7 +58,7 @@ db.sqlite3-shm
 db.sqlite3-wal
 *.sqlite3-shm
 *.sqlite3-wal
-ai-server-terminal-main/.vite
-ai-server-terminal-main/playwright-report
-ai-server-terminal-main/test-results
+frontend/.vite
+frontend/playwright-report
+frontend/test-results
 .import_linter_cache

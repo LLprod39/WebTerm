@@ -117,7 +117,7 @@ services:
         FTP_PROXY: ${FTP_PROXY:-}
         NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1}
     container_name: mini-prod-frontend
-    working_dir: /workspace/ai-server-terminal-main
+    working_dir: /workspace/frontend
     command: ["sh", "-lc", "npm run build && npx vite preview --host 0.0.0.0 --port 8080"]
     environment:
       http_proxy: ${http_proxy:-}
@@ -135,8 +135,8 @@ services:
     expose:
       - "8080"
     volumes:
-      - ./ai-server-terminal-main:/workspace/ai-server-terminal-main
-      - mini_prod_frontend_node_modules:/workspace/ai-server-terminal-main/node_modules
+      - ./frontend:/workspace/frontend
+      - mini_prod_frontend_node_modules:/workspace/frontend/node_modules
     depends_on:
       backend:
         condition: service_healthy
@@ -227,7 +227,7 @@ services:
       KEYCLOAK_ADMIN_USER: ${KEYCLOAK_ADMIN_USER:-}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-}
       KEYCLOAK_DEFAULT_PROFILE: ${KEYCLOAK_DEFAULT_PROFILE:-}
-      KEYCLOAK_PROFILES_FILE: ${KEYCLOAK_PROFILES_FILE:-keycloak_profiles.json}
+      KEYCLOAK_PROFILES_FILE: ${KEYCLOAK_PROFILES_FILE:-config/keycloak_profiles.json}
       KEYCLOAK_VERIFY_SSL: ${KEYCLOAK_VERIFY_SSL:-true}
       KEYCLOAK_ALLOW_INSECURE_HTTP: ${KEYCLOAK_ALLOW_INSECURE_HTTP:-false}
       KEYCLOAK_PROD_URL: ${KEYCLOAK_PROD_URL:-}

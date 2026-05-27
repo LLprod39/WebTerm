@@ -19,7 +19,7 @@ from app.tools.ssh_tools import ssh_manager
 from servers.models import Server
 from servers.secret_utils import get_server_auth_secret
 
-# Matches ai-server-terminal-main/src/lib/server-os.ts ServerOsKind (except unknown).
+# Matches frontend/src/lib/server-os.ts ServerOsKind (except unknown).
 VALID_OS_KINDS = frozenset(
     {
         "debian",

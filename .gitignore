@@ -11,7 +11,7 @@ downloads/
 eggs/
 .eggs/
 lib/
-!ai-server-terminal-main/src/lib/
+!frontend/src/lib/
 lib64/
 parts/
 sdist/
@@ -37,7 +37,8 @@ env/
 .claude/
 .playwright-mcp/
 node_modules/
-ai-server-terminal-main/node_modules/
+frontend/node_modules/
+agent_projects/
 **/obj/
 
 # Temporary / cache (do not commit)
@@ -80,6 +81,7 @@ id_ed25519.pub
 
 # Qdrant data
 qdrant_data/
+media/
 *.db
 *.sqlite
 db.sqlite3
@@ -113,13 +115,16 @@ production-upload-bundle-*.rar
 *.bak
 diff.txt
 *.new
+mars_backups/
 
 # Playwright / codex tool artifacts
 .codex-logs/
 .playwright-cli/
 runtime_logs/
-ai-server-terminal-main/playwright-report/
-ai-server-terminal-main/test-results/
+frontend/output/
+frontend/apt
+frontend/playwright-report/
+frontend/test-results/
 .antigravitycli/
 mars_logs/
 .import_linter_cache/
@@ -129,21 +134,21 @@ mars_logs/
 # Deployment files that must stay tracked
 !docker-compose.yml
 !docker-compose.postgres-mcp.yml
-!keycloak_profiles.json
+!config/keycloak_profiles.json
 !create_pipeline.sql
 !create_mega_pipeline.py
 
 # Internal docs kept local-only (not published to GitHub)
-AGENTS.md
-CONTRIBUTING.md
-DEVELOPMENT_RULES.md
-ARCHITECTURE_CONTRACT.md
-PROJECT_FUNCTIONALITY_GUIDE.md
-PROJECT_AUDIT.md
-PRODUCTION_READINESS_PLAN.md
-SECURITY_QA_FOR_IS_REVIEW.md
-AI_MEMORY_PRESENTATION.md
+/AGENTS.md
+/CONTRIBUTING.md
+/DEVELOPMENT_RULES.md
+/PROJECT_FUNCTIONALITY_GUIDE.md
+/PROJECT_AUDIT.md
+/PRODUCTION_READINESS_PLAN.md
+/SECURITY_QA_FOR_IS_REVIEW.md
+/AI_MEMORY_PRESENTATION.md
 desktop/README.md
+docs/local/
 
 .gemini/
 gha-creds-*.json

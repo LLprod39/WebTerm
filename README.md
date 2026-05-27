@@ -378,7 +378,7 @@ python manage.py runserver
 </pre>
 во втором терминале:
 <pre lang="powershell">
-cd ai-server-terminal-main
+cd frontend
 npm install
 npm run dev
 </pre>
@@ -510,7 +510,7 @@ python manage.py setup_server_update_pipeline
 <summary><b>Frontend</b></summary>
 
 ```bash
-cd ai-server-terminal-main
+cd frontend
 npm install
 npm run dev
 npm run build
@@ -547,8 +547,10 @@ python manage.py check
 | [`servers/services/terminal_ai/`](./servers/services/terminal_ai) | Nova terminal AI: agent loop, tools (`shell`/`files`/`search`/`meta`), prompts, session context, snapshot service, egress redaction. |
 | [`studio/`](./studio) | Pipelines, runs, MCP registry, skills, triggers, notifications, live updates, pipeline assistant. |
 | [`app/`](./app) | `agent_kernel` (domain / permissions / memory / runtime / hooks), LLM providers, SSH/server tools, safety. |
-| [`ai-server-terminal-main/`](./ai-server-terminal-main) | Основной React/Vite SPA: терминал, Linux UI, Studio, settings, dashboard. |
+| [`frontend/`](./frontend) | Основной React/Vite SPA: терминал, Linux UI, Studio, settings, dashboard. |
 | [`desktop/`](./desktop) | WinUI 3 клиент и solution. |
+| [`config/`](./config) | Версионируемые профили и небольшие конфиги, которые не обязаны лежать в корне. |
+| [`docs/`](./docs) | Проектная документация, MARS-артефакты, QA-планы и локальные internal notes. |
 | [`docker/`](./docker) | Dockerfile, nginx config, production startup scripts. |
 | [`tests/`](./tests) | Тесты верхнего уровня: API smoke, monitor, memory, agent loop, snapshots, policy, parallel executor. |
 | [`scripts/`](./scripts) | Вспомогательные CLI-скрипты. |
@@ -631,8 +633,8 @@ dotnet build .\MiniProd.Desktop.sln -c Debug -p:Platform=x64 -m:1 /p:UseSharedCo
 
 - **Две memory-системы** не смешиваются: эфемерная Nova session memory живёт в `SSHTerminalConsumer`, долговременная — в `ServerMemory*` моделях.
 - **Опасные действия** обязательно проходят через [`app/tools/safety.py`](./app/tools/safety.py).
-- **`passwords/`** остался в коде, но не подключён в `INSTALLED_APPS`.
-- **Двухуровневая архитектура фронтенда** — в корне проекта есть `package.json`, `vite.config.ts` и `src/main.tsx`. Это тонкая прокси-прослойка (proxy wrapper) для удобства локальной разработки (чтобы можно было запускать `npm run dev` прямо из корня). Настоящее standalone SPA-приложение находится в каталоге `ai-server-terminal-main/`. Избегайте рассинхронизации зависимостей в их `package.json`!
+- **Frontend один**: standalone SPA находится в [`frontend/`](./frontend). Корневой Vite-wrapper удалён, чтобы не было двух наборов frontend-конфигов.
+- **Deprecated `passwords/` shim удалён**: актуальная реализация шифрования живёт в [`servers/encryption.py`](./servers/encryption.py).
 - **Нарушения архитектуры** фиксируются [`lint-imports`](./.importlinter).
 
 ---

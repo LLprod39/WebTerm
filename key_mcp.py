@@ -35,7 +35,12 @@ RETRY_DELAY_SECONDS = max(0.1, float(os.getenv("KEYCLOAK_RETRY_DELAY", "1.5")))
 REQUEST_TIMEOUT_SECONDS = max(5, int(os.getenv("KEYCLOAK_REQUEST_TIMEOUT", "30")))
 MAX_SEARCH_RESULTS = max(1, int(os.getenv("KEYCLOAK_MAX_SEARCH_RESULTS", "50")))
 DEFAULT_GROUP_PAGE_SIZE = max(10, int(os.getenv("KEYCLOAK_GROUP_PAGE_SIZE", "200")))
-PROFILE_FILE = Path(os.getenv("KEYCLOAK_PROFILES_FILE", str(Path(__file__).with_name("keycloak_profiles.json"))))
+PROFILE_FILE = Path(
+    os.getenv(
+        "KEYCLOAK_PROFILES_FILE",
+        str(Path(__file__).resolve().parent / "config" / "keycloak_profiles.json"),
+    )
+)
 EMAIL_DOMAIN_CANDIDATES = [
     item.strip()
     for item in os.getenv("KEYCLOAK_EMAIL_DOMAINS", "erg.kz,corp.erg.kz,mail.erg.kz").split(",")
@@ -1748,7 +1753,7 @@ def handle_create_group(arguments: dict[str, Any]) -> dict[str, Any]:
 PROFILE_PROPERTY = {
     "profile": {
         "type": "string",
-        "description": "Optional profile name from keycloak_profiles.json. Safer than mutating process defaults on shared HTTP servers.",
+        "description": "Optional profile name from config/keycloak_profiles.json. Safer than mutating process defaults on shared HTTP servers.",
     }
 }
 USER_REFERENCE_PROPERTIES = {
@@ -1801,7 +1806,7 @@ TOOLS = [
         },
         ["admin_user"],
     ),
-    _tool("keycloak_use_profile", "Validate a named profile and make it the current process default.", {"profile": {"type": "string", "description": "Profile name from keycloak_profiles.json"}}, ["profile"]),
+    _tool("keycloak_use_profile", "Validate a named profile and make it the current process default.", {"profile": {"type": "string", "description": "Profile name from config/keycloak_profiles.json"}}, ["profile"]),
     _tool("keycloak_list_profiles", "List available Keycloak profiles without exposing secrets.", {}, []),
     _tool("keycloak_current_environment", "Show runtime default and environment-level Keycloak configuration.", {}, []),
     _tool(
