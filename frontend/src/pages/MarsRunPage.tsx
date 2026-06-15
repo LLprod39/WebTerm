@@ -105,8 +105,8 @@ export default function MarsRunPage() {
     return `[${stream}] ${eventText(event)}`;
   });
   const checklist = [
-    { label: localize(lang, "Workspace policy", "Workspace policy"), done: events.some((event) => event.event_type === "mars_run_started") },
-    { label: "Codex", done: events.some((event) => event.event_type === "codex_finished") || Boolean(run?.codex_summary) },
+    { label: localize(lang, "Рабочая папка", "Workspace policy"), done: events.some((event) => event.event_type === "mars_run_started") },
+    { label: localize(lang, "Агент", "Agent"), done: events.some((event) => event.event_type === "codex_finished") || Boolean(run?.codex_summary) },
     { label: localize(lang, "Verification", "Verification"), done: events.some((event) => event.event_type.startsWith("tests_")) || Boolean(run?.test_output) },
     { label: "Gemini", done: events.some((event) => event.event_type === "gemini_finished") || Boolean(run?.gemini_review) },
     { label: localize(lang, "Final report", "Final report"), done: Boolean(run?.final_report) },
@@ -118,11 +118,11 @@ export default function MarsRunPage() {
     <PageShell width="full" className="space-y-5">
       <PageHero
         kicker="MARS"
-        title={localize(lang, "Запуск coding agent", "Coding agent run")}
+        title={localize(lang, "Запуск задачи", "Task run")}
         description={
           run?.workspace.name
-            ? localize(lang, `Личный workspace: ${run.workspace.name}`, `Personal workspace: ${run.workspace.name}`)
-            : localize(lang, "Загрузка workspace...", "Loading workspace...")
+            ? localize(lang, `Рабочая папка: ${run.workspace.name}`, `Workspace: ${run.workspace.name}`)
+            : localize(lang, "Загрузка рабочей папки...", "Loading workspace...")
         }
         actions={
           <div className="flex flex-wrap items-center gap-2">
@@ -185,9 +185,9 @@ export default function MarsRunPage() {
             </SectionCard>
 
             <div className="grid gap-5 xl:grid-cols-2">
-              <SectionCard title="Codex" icon={<BrainCircuit className="h-4 w-4" />}>
+              <SectionCard title={localize(lang, "Результат агента", "Agent result")} icon={<BrainCircuit className="h-4 w-4" />}>
                 <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded-lg bg-secondary/20 p-4 text-xs leading-5 text-foreground">
-                  {run?.codex_summary || localize(lang, "Нет ответа Codex.", "No Codex answer.")}
+                  {run?.codex_summary || localize(lang, "Результат пока пуст.", "No agent result yet.")}
                 </pre>
               </SectionCard>
               <SectionCard title="Gemini review" icon={<BrainCircuit className="h-4 w-4" />}>

@@ -234,23 +234,23 @@ export default function MarsPage() {
   };
 
   const stepItems = [
-    { label: localize(lang, "Workspace", "Workspace"), done: Boolean(selectedWorkspace) },
+    { label: localize(lang, "Рабочая папка", "Workspace"), done: Boolean(selectedWorkspace) },
     { label: localize(lang, "Задача", "Task"), done: Boolean(taskBrief.trim()) },
     { label: localize(lang, "Уточнения", "Interview"), done: interviewReady },
     { label: localize(lang, "План", "Plan"), done: Boolean(session?.generated_plan) },
-    { label: "Goal", done: session?.status === "approved" || session?.status === "running" || session?.status === "completed" },
+    { label: localize(lang, "Цель", "Goal"), done: session?.status === "approved" || session?.status === "running" || session?.status === "completed" },
     { label: localize(lang, "Запуск", "Run"), done: Boolean(latestRunId) },
   ];
 
   return (
     <PageShell width="full" className="space-y-5">
       <PageHero
-        kicker={localize(lang, "Coding Agent", "Coding Agent")}
+        kicker={localize(lang, "Запуск задачи", "Task run")}
         title="MARS"
         description={localize(
           lang,
-          "Сначала MARS уточняет задачу, фиксирует goal и план, потом Codex работает только в личном workspace.",
-          "MARS clarifies the task, locks a goal and plan, then Codex works only in the personal workspace.",
+          "Опишите результат, уточните требования и запустите работу в изолированной рабочей папке.",
+          "Describe the outcome, confirm requirements, and run the job in an isolated workspace.",
         )}
         actions={
           <div className="flex flex-wrap items-center gap-2">
@@ -301,7 +301,7 @@ export default function MarsPage() {
         <div className="space-y-5">
           <SectionCard
             title={localize(lang, "Задача", "Task")}
-            description={localize(lang, "Коротко опишите, что должен построить Codex.", "Briefly describe what Codex should build.")}
+            description={localize(lang, "Коротко опишите нужный результат.", "Briefly describe the outcome you need.")}
             icon={<Target className="h-4 w-4" />}
             actions={
               <Button onClick={() => createSession.mutate()} disabled={!canStartInterview}>
@@ -315,17 +315,17 @@ export default function MarsPage() {
               onChange={(event) => setTaskBrief(event.target.value)}
               rows={4}
               className="resize-none bg-background text-sm"
-              placeholder={localize(lang, "Например: Сделай 3D игру змейка в браузере.", "Example: Build a 3D snake game in the browser.")}
+              placeholder={localize(lang, "Например: собрать страницу мониторинга серверов.", "Example: build a server monitoring page.")}
             />
           </SectionCard>
 
           {session ? (
             <SectionCard
-              title={localize(lang, "Уточнения Codex", "Codex interview")}
+              title={localize(lang, "Уточнения", "Requirements")}
               description={localize(
                 lang,
-                `Ответьте минимум на ${minimumAnswers} вопросов, чтобы MARS собрал нормальный goal.`,
-                `Answer at least ${minimumAnswers} questions so MARS can lock a useful goal.`,
+                `Ответьте минимум на ${minimumAnswers} вопросов, чтобы собрать понятный план.`,
+                `Answer at least ${minimumAnswers} questions to build a useful plan.`,
               )}
               icon={<ClipboardList className="h-4 w-4" />}
               actions={
@@ -417,7 +417,7 @@ export default function MarsPage() {
                     <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="text-sm text-muted-foreground">
                         {interviewReady
-                          ? localize(lang, "Минимум ответов уже набран, можно собирать план.", "Minimum answers reached; you can build the plan.")
+                          ? localize(lang, "Ответов достаточно, можно собирать план.", "Enough answers; you can build the plan.")
                           : localize(lang, `До плана осталось ${Math.max(0, minimumAnswers - answeredQuestionCount)} ответов.`, `${Math.max(0, minimumAnswers - answeredQuestionCount)} more answers before the plan.`)}
                       </div>
                       <div className="flex flex-wrap gap-2">
@@ -498,25 +498,25 @@ export default function MarsPage() {
               <div className="mt-5 flex flex-col gap-3 rounded-lg border border-border bg-secondary/10 p-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-sm text-muted-foreground">
                   {interviewReady
-                    ? localize(lang, "Достаточно данных для goal и плана.", "Enough context for the goal and plan.")
+                    ? localize(lang, "Данных достаточно для плана.", "Enough details for the plan.")
                     : localize(lang, `Нужно еще ответов: ${Math.max(0, minimumAnswers - answeredQuestionCount)}.`, `More answers needed: ${Math.max(0, minimumAnswers - answeredQuestionCount)}.`)}
                 </div>
                 <Button variant="secondary" onClick={() => answerSession.mutate()} disabled={!canSaveAnswers}>
                   {answerSession.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  {localize(lang, "Собрать goal и план", "Build goal and plan")}
+                  {localize(lang, "Собрать план", "Build plan")}
                 </Button>
               </div>
             </SectionCard>
           ) : null}
 
           <SectionCard
-            title={localize(lang, "Goal и план", "Goal and plan")}
-            description={localize(lang, "После уточнений MARS фиксирует цель и шаги для Codex.", "After the interview MARS locks the goal and Codex steps.")}
+            title={localize(lang, "Цель и план", "Goal and plan")}
+            description={localize(lang, "Проверьте цель и шаги перед запуском.", "Review the goal and steps before running.")}
             icon={<ShieldCheck className="h-4 w-4" />}
             actions={
               <Button onClick={() => approvePlan.mutate()} disabled={!canApprovePlan}>
                 {approvePlan.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                {localize(lang, "Зафиксировать goal", "Lock goal")}
+                {localize(lang, "Подтвердить план", "Approve plan")}
               </Button>
             }
           >
@@ -524,7 +524,7 @@ export default function MarsPage() {
               <div className="mb-4 rounded-lg border border-primary/25 bg-primary/10 px-4 py-3">
                 <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-primary">
                   <Rocket className="h-3.5 w-3.5" />
-                  Goal
+                  {localize(lang, "Цель", "Goal")}
                 </div>
                 <div className="text-sm leading-6 text-foreground">{goalText}</div>
               </div>
@@ -540,14 +540,14 @@ export default function MarsPage() {
         </div>
 
         <div className="space-y-5 xl:sticky xl:top-5 xl:self-start">
-          <SectionCard title={localize(lang, "Workspace", "Workspace")} icon={<FolderGit2 className="h-4 w-4" />}>
+          <SectionCard title={localize(lang, "Рабочая папка", "Workspace")} icon={<FolderGit2 className="h-4 w-4" />}>
             <QueryStateBlock loading={workspacesQuery.isLoading} error={workspacesQuery.error}>
               <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-3 py-3">
                 <div className="min-w-0">
-                  <div className="text-xs text-muted-foreground">{localize(lang, "Личный workspace", "Personal workspace")}</div>
+                  <div className="text-xs text-muted-foreground">{localize(lang, "Изолированная папка", "Personal workspace")}</div>
                   <div className="truncate text-sm font-semibold text-foreground">{selectedWorkspace?.name || localize(lang, "Создается...", "Creating...")}</div>
                 </div>
-                <StatusBadge label={selectedWorkspace?.enabled ? localize(lang, "изолирован", "isolated") : localize(lang, "недоступен", "disabled")} tone={selectedWorkspace?.enabled ? "success" : "warning"} />
+                <StatusBadge label={selectedWorkspace?.enabled ? localize(lang, "изолирована", "isolated") : localize(lang, "недоступна", "disabled")} tone={selectedWorkspace?.enabled ? "success" : "warning"} />
               </div>
             </QueryStateBlock>
           </SectionCard>
@@ -598,7 +598,7 @@ export default function MarsPage() {
               <div className="grid gap-2">
                 <Button onClick={() => runSession.mutate()} disabled={!canRun}>
                   {runSession.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                  {localize(lang, "Запустить Codex", "Run Codex")}
+                  {localize(lang, "Запустить выполнение", "Run")}
                 </Button>
                 <Button variant="outline" onClick={() => stopRun.mutate()} disabled={!canStop}>
                   {stopRun.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Square className="h-4 w-4" />}

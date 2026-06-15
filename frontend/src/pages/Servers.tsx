@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import yaml from "js-yaml";
 import { Link } from "react-router-dom";
 import {
@@ -102,6 +102,7 @@ interface ServerForm {
   username: string;
   auth_method: "password" | "key" | "key_password";
   key_path: string;
+  ssh_private_key: string;
   password: string;
   tags: string;
   notes: string;
@@ -470,6 +471,7 @@ function initialForm(): ServerForm {
     username: "root",
     auth_method: "password",
     key_path: "",
+    ssh_private_key: "",
     password: "",
     tags: "",
     notes: "",
@@ -488,7 +490,7 @@ function initialGroupForm(): ServerGroupForm {
 }
 
 function asPayload(form: ServerForm) {
-  return {
+  const payload: Record<string, unknown> = {
     name: form.name,
     server_type: form.server_type,
     host: form.host,
@@ -503,6 +505,11 @@ function asPayload(form: ServerForm) {
     is_active: form.is_active,
     ai_read_only: form.ai_read_only,
   };
+  const privateKey = form.ssh_private_key.trim();
+  if (form.auth_method !== "password" && privateKey) {
+    payload.ssh_private_key = privateKey;
+  }
+  return payload;
 }
 
 function toJson(text: string): Record<string, string> {
@@ -1057,6 +1064,7 @@ export default function Servers() {
       username: details.username,
       auth_method: details.auth_method,
       key_path: details.key_path || "",
+      ssh_private_key: "",
       password: "",
       tags: details.tags || "",
       notes: details.notes || "",
@@ -1080,6 +1088,20 @@ export default function Servers() {
       await reload();
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handlePrivateKeyFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      setForm((s) => ({ ...s, ssh_private_key: text }));
+    } catch (error) {
+      console.error(error);
+      alert(t("srv.private_key_read_error"));
+    } finally {
+      event.currentTarget.value = "";
     }
   };
 
@@ -2563,9 +2585,32 @@ export default function Servers() {
               </div>
 
               {form.auth_method !== "password" && (
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">{t("srv.key_path")}</Label>
-                  <Input placeholder="/home/user/.ssh/id_rsa" value={form.key_path} onChange={(e) => setForm((s) => ({ ...s, key_path: e.target.value }))} className="bg-secondary/50" />
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <Label className="text-xs text-muted-foreground">{t("srv.private_key")}</Label>
+                    <label className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-secondary/50 px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary">
+                      <Upload className="h-3.5 w-3.5" />
+                      {t("srv.private_key_upload")}
+                      <input
+                        type="file"
+                        accept=".key,.pem,.ppk,.txt,text/plain,application/x-pem-file"
+                        className="sr-only"
+                        onChange={handlePrivateKeyFile}
+                      />
+                    </label>
+                  </div>
+                  <Textarea
+                    value={form.ssh_private_key}
+                    onChange={(e) => setForm((s) => ({ ...s, ssh_private_key: e.target.value }))}
+                    placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+                    className="min-h-28 bg-secondary/50 font-mono text-xs"
+                    spellCheck={false}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {form.key_path && !form.ssh_private_key.trim()
+                      ? t("srv.private_key_saved_hint")
+                      : t("srv.private_key_hint")}
+                  </p>
                 </div>
               )}
               {form.auth_method !== "key" && (
@@ -2604,23 +2649,6 @@ export default function Servers() {
                 <Label className="text-xs text-muted-foreground">{t("srv.notes")}</Label>
                 <Input placeholder="..." value={form.notes} onChange={(e) => setForm((s) => ({ ...s, notes: e.target.value }))} className="bg-secondary/50" />
               </div>
-              {editingServer && (
-                <div className="flex items-center gap-3 md:col-span-2 pt-2">
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={form.ai_read_only}
-                    onClick={() => setForm((s) => ({ ...s, ai_read_only: !s.ai_read_only }))}
-                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${form.ai_read_only ? "bg-primary" : "bg-input"}`}
-                  >
-                    <span className={`pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform ${form.ai_read_only ? "translate-x-4" : "translate-x-0"}`} />
-                  </button>
-                  <div>
-                    <span className="text-sm font-medium">{t("srv.ai_read_only")}</span>
-                    <p className="text-xs text-muted-foreground">{t("srv.ai_read_only_hint")}</p>
-                  </div>
-                </div>
-              )}
             </div>
           </DialogBody>
 
@@ -2628,7 +2656,17 @@ export default function Servers() {
             <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)}>
               {t("srv.cancel")}
             </Button>
-            <Button size="sm" onClick={onSave} disabled={saving || !form.name || !form.host || !form.username}>
+            <Button
+              size="sm"
+              onClick={onSave}
+              disabled={
+                saving ||
+                !form.name ||
+                !form.host ||
+                !form.username ||
+                (form.auth_method !== "password" && !form.key_path && !form.ssh_private_key.trim())
+              }
+            >
               {saving ? t("srv.saving") : editingServer ? t("srv.update") : t("srv.create")}
             </Button>
           </DialogFooter>

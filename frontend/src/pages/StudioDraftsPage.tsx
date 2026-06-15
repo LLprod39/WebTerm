@@ -334,7 +334,7 @@ export default function StudioDraftsPage() {
   function handleSubmit(messageOverride?: string, compilerMode?: StudioPipelineAssistantPayload["compiler_mode"]) {
     const message = (messageOverride || questionAnswerMessage || prompt).trim();
     if (!message) {
-      toast({ variant: "destructive", description: localize(lang, "Опишите автоматизацию перед сборкой.", "Describe the automation before building.") });
+      toast({ variant: "destructive", description: localize(lang, "Опишите задачу для пайплайна.", "Describe the pipeline task.") });
       return;
     }
     createOrReviseMutation.mutate({ message, compilerMode });
@@ -556,8 +556,8 @@ export default function StudioDraftsPage() {
                 <label className="grid gap-1.5">
                   <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                     {hasOpenQuestions
-                      ? localize(lang, "Доп. контекст", "Extra context")
-                      : localize(lang, "Запрос на автоматизацию", "Automation request")}
+                      ? localize(lang, "Доп. сведения", "Extra details")
+                      : localize(lang, "Задача для пайплайна", "Pipeline task")}
                   </span>
                   <Textarea
                     value={prompt}
@@ -566,16 +566,16 @@ export default function StudioDraftsPage() {
                       lang,
                       hasOpenQuestions
                         ? "Если нужно, добавь ограничения, окружение или комментарий."
-                        : "Опиши цель, триггер, ресурсы, условия и куда отправить результат.",
+                        : "Опишите запуск, серверы, условия, подтверждения и получателя результата.",
                       hasOpenQuestions
                         ? "Add constraints, environment, or a note if needed."
-                        : "Describe the goal, trigger, resources, conditions, and delivery target.",
+                        : "Describe the trigger, servers, conditions, approvals, and delivery target.",
                     )}
                     className={cn(
                       "min-w-0 resize-none bg-background/70 text-sm leading-6 [overflow-wrap:anywhere]",
                       hasOpenQuestions ? "min-h-[76px]" : "min-h-[132px]",
                     )}
-                    aria-label={localize(lang, "Запрос на автоматизацию", "Automation request")}
+                    aria-label={localize(lang, "Задача для пайплайна", "Pipeline task")}
                   />
                 </label>
               </div>
@@ -684,7 +684,7 @@ export default function StudioDraftsPage() {
                                 {localize(lang, "Пилотный шаблон", "Pilot template")}
                               </div>
                               <div className="mt-0.5 truncate text-[11px] text-muted-foreground/80">
-                                {activeResponse?.selected_template?.name || localize(lang, "Рекомендация ИИ", "AI recommendation")}
+                                {activeResponse?.selected_template?.name || localize(lang, "Рекомендованный шаблон", "Recommended template")}
                               </div>
                             </div>
                             {activeResponse?.selected_template?.slug ? (
@@ -728,10 +728,10 @@ export default function StudioDraftsPage() {
                     <Wand2 className="h-5 w-5 text-primary" />
                   </div>
                   <h2 className="mt-4 text-sm font-semibold text-foreground">
-                    {localize(lang, "Проверка пуста", "Review is empty")}
+                    {localize(lang, "Нет выбранного черновика", "No draft selected")}
                   </h2>
                   <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                    {localize(lang, "Создайте черновик или выберите существующий, чтобы увидеть требования, ресурсы, риски и действия применения.", "Create or select a draft to inspect requirements, resources, risk, and apply actions.")}
+                    {localize(lang, "Создайте или выберите черновик, чтобы увидеть требования, ресурсы, риски и действия.", "Create or select a draft to inspect requirements, resources, risks, and actions.")}
                   </p>
                 </div>
               )}

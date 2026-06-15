@@ -69,7 +69,7 @@ function decorateNodes(nodes: PipelineNode[], response: StudioPipelineAssistantR
     selectable: true,
     data: {
       ...(node.data || {}),
-      status_label: riskNodeIds.has(node.id) ? localize(lang, "Проверка риска", "Risk review") : localize(lang, "ИИ-черновик", "AI draft"),
+      status_label: riskNodeIds.has(node.id) ? localize(lang, "Проверка риска", "Risk review") : localize(lang, "Черновик", "Draft"),
       is_entry_point: index === 0 || node.type.startsWith("trigger/"),
     },
   }));
@@ -191,8 +191,8 @@ function DraftGraphCanvasInner({
             <p className="mt-2 text-xs leading-5 text-muted-foreground">
               {localize(
                 lang,
-                "Опишите автоматизацию справа, и ИИ соберет проверяемый DAG здесь.",
-                "Describe the automation on the right, and AI will build a verifiable DAG here.",
+                "Опишите задачу справа, и здесь появится проверяемый граф.",
+                "Describe the task on the right, and a verifiable graph will appear here.",
               )}
             </p>
           </div>

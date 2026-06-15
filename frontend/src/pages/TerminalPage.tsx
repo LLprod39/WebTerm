@@ -365,7 +365,7 @@ export default function TerminalPage() {
     }
     toast({
       title: "Глобальные настройки сохранены",
-      description: "Новые AI-чаты будут стартовать с текущими параметрами.",
+      description: "Новые чаты будут стартовать с текущими параметрами.",
     });
   }, [activeAiPreferences]);
 
@@ -896,8 +896,8 @@ export default function TerminalPage() {
             type: "text",
             content:
               normalizedMode === "agent"
-                ? "Режим переключён на **Agent**. Ассистент будет сразу запускать безопасные команды, а опасные действия по-прежнему потребуют подтверждения."
-                : "Режим переключён на **Ask**. Ассистент будет объяснять и предлагать команды, а запуск останется только после вашего подтверждения.",
+                ? "Режим переключён на **Agent**. AI будет сразу запускать безопасные команды, а опасные действия по-прежнему потребуют подтверждения."
+                : "Режим переключён на **Ask**. AI будет объяснять и предлагать команды, а запуск останется только после вашего подтверждения.",
           },
         ],
       }));
@@ -1139,7 +1139,7 @@ export default function TerminalPage() {
               className="h-10 gap-2 px-3 text-sm"
               onClick={() => setSidePanelMode((current) => (current === "ai" ? "none" : "ai"))}
               aria-pressed={sidePanelMode === "ai"}
-              title={sidePanelMode === "ai" ? "Скрыть AI ассистента" : "Показать AI ассистента"}
+              title={sidePanelMode === "ai" ? "Скрыть AI" : "Показать AI"}
             >
               <Bot className="h-4 w-4" />
               AI

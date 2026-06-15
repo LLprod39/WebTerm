@@ -1,4 +1,5 @@
 import json
+import os
 from concurrent.futures import Future
 from datetime import timedelta
 from types import SimpleNamespace
@@ -65,6 +66,16 @@ def _make_public_key_record() -> dict[str, str]:
         "fingerprint_sha256": parsed_key.get_fingerprint("sha256"),
         "trusted_at": "2026-03-12T00:00:00+00:00",
     }
+
+
+def _make_private_key_text() -> str:
+    import asyncssh
+
+    private_key = asyncssh.generate_private_key("ssh-ed25519")
+    exported = private_key.export_private_key(format_name="openssh")
+    if isinstance(exported, bytes):
+        return exported.decode("utf-8")
+    return exported
 
 
 def _grant_feature(user: User, *features: str) -> None:
@@ -221,6 +232,41 @@ def test_group_server_and_context_crud_endpoints():
     delete_group = client.post(f"/servers/api/groups/{group_id}/delete/")
     assert delete_group.status_code == 200
     assert delete_group.json()["success"] is True
+
+
+@pytest.mark.django_db
+def test_server_create_accepts_uploaded_ssh_private_key(tmp_path):
+    user = User.objects.create_user(username="ssh-key-user", password="x")
+    _grant_feature(user, "servers")
+
+    client = Client()
+    client.force_login(user)
+    key_text = _make_private_key_text()
+
+    with override_settings(SSH_PRIVATE_KEYS_DIR=tmp_path / "ssh_keys"):
+        response = client.post(
+            "/servers/api/create/",
+            data=_json(
+                {
+                    "name": "keyed-srv",
+                    "host": "10.0.0.44",
+                    "port": 22,
+                    "username": "ubuntu",
+                    "server_type": "ssh",
+                    "auth_method": "key",
+                    "ssh_private_key": key_text,
+                }
+            ),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 200
+        server = Server.objects.get(id=response.json()["server_id"])
+        assert server.key_path
+        assert str(server.key_path).startswith(str(tmp_path / "ssh_keys"))
+        assert os.path.exists(server.key_path)
+        with open(server.key_path, encoding="utf-8") as stored_key:
+            assert stored_key.read() == key_text.strip() + "\n"
 
 
 @pytest.mark.django_db

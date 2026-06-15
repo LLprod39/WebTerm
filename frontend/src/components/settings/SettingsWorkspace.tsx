@@ -9,7 +9,7 @@ const SETTINGS_NAV_ITEMS = [
   {
     href: "/settings",
     label: "Общие",
-    description: "AI, аудит и системные параметры.",
+    description: "Модели, аудит и системные параметры.",
     icon: Settings2,
   },
   {

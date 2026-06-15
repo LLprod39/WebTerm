@@ -54,7 +54,7 @@ export function DraftListItem({
   const StatusIcon = status.icon;
   const model = buildDraftCanvasModel(session);
   const canDiscard = session.status !== "applied" && session.status !== "discarded";
-  const title = session.title || localize(lang, "ИИ-черновик", "AI draft");
+  const title = session.title || localize(lang, "Черновик", "Draft");
 
   return (
     <div

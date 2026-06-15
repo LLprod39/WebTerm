@@ -366,7 +366,7 @@ export default function SettingsMemoryPage() {
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <label className="flex cursor-pointer items-center justify-between rounded-lg border border-border px-3 py-3 transition-colors hover:bg-secondary/30">
                   <div>
-                    <p className="text-xs font-medium">AI Memory</p>
+                    <p className="text-xs font-medium">Автозаметки</p>
                     <p className="text-[10px] text-muted-foreground">Включить долгосрочную память</p>
                   </div>
                   <Switch

@@ -150,7 +150,7 @@ describe("MarsPage", () => {
 
     expect(await screen.findByText("Personal workspace")).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("C:\\WebTrerm")).not.toBeInTheDocument();
-    fireEvent.change(screen.getByPlaceholderText("Например: Сделай 3D игру змейка в браузере."), {
+    fireEvent.change(screen.getByPlaceholderText("Например: собрать страницу мониторинга серверов."), {
       target: { value: "Сделай 3D игру змейка в браузере" },
     });
     fireEvent.click(screen.getByRole("button", { name: /Сформировать вопросы/i }));
@@ -165,13 +165,13 @@ describe("MarsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Клавиатура\/мышь/i }));
     fireEvent.click(screen.getByRole("button", { name: /Дальше/i }));
     fireEvent.click(screen.getByRole("button", { name: /Neon arcade/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Собрать goal и план/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Собрать план/i }));
 
     expect(await screen.findByDisplayValue(/MARS execution plan/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Зафиксировать goal/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Подтвердить план/i }));
     await waitFor(() => expect(marsApi.approveSessionPlan).toHaveBeenCalled());
 
-    fireEvent.click(screen.getByRole("button", { name: /Запустить Codex/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Запустить выполнение/i }));
     await waitFor(() => {
       expect(marsApi.runSession).toHaveBeenCalledWith(3, expect.objectContaining({ allow_dirty: false }));
     });

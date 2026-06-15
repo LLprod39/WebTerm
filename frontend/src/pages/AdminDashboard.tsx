@@ -196,12 +196,12 @@ export default function AdminDashboard() {
       },
       {
         id: "ai_cost_tokens",
-        title: "Расходы и Использование AI",
+        title: "Расходы и использование моделей",
         icon: <ShieldCheck className="h-4 w-4" />,
         defaultSize: { w: 8, h: 1 },
         render: (config) => {
           const tone = config.props?.tone ?? "default";
-          const title = config.props?.customTitle ?? "Анализ вызовов AI & Провайдеры";
+          const title = config.props?.customTitle ?? "Запросы и провайдеры";
           const usageEntries = Object.entries(d?.api_usage || {});
 
           return (
@@ -237,7 +237,7 @@ export default function AdminDashboard() {
                   );
                 })}
                 {usageEntries.length === 0 && (
-                  <div className="py-6 text-center text-xs text-muted-foreground">Нет зарегистрированных данных по API AI</div>
+                  <div className="py-6 text-center text-xs text-muted-foreground">Нет зарегистрированных данных по API</div>
                 )}
               </div>
               <div className="hidden overflow-x-auto md:block">
@@ -272,7 +272,7 @@ export default function AdminDashboard() {
                     })}
                     {usageEntries.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="py-6 text-center text-muted-foreground">Нет зарегистрированных данных по API AI</td>
+                        <td colSpan={6} className="py-6 text-center text-muted-foreground">Нет зарегистрированных данных по API</td>
                       </tr>
                     )}
                   </tbody>
@@ -284,12 +284,12 @@ export default function AdminDashboard() {
       },
       {
         id: "active_providers",
-        title: "Модели AI и Статус",
+        title: "Модели и статус",
         icon: <ShieldCheck className="h-4 w-4" />,
         defaultSize: { w: 4, h: 1 },
         render: (config) => {
           const tone = config.props?.tone ?? "default";
-          const title = config.props?.customTitle ?? "Модели AI и Провайдеры";
+          const title = config.props?.customTitle ?? "Модели и провайдеры";
           const providerEntries = Object.entries(d?.providers || {});
 
           return (
@@ -554,7 +554,7 @@ export default function AdminDashboard() {
       <PageHero
         kicker={localize(lang, "Обзор системы", "System Overview")}
         title={localize(lang, "Центр управления", "Admin Control Center")}
-        description={localize(lang, "Мониторинг всей инфраструктуры, активности пользователей и работы AI-агентов в реальном времени.", "Live monitoring for infrastructure, user activity, and AI agents.")}
+        description={localize(lang, "Мониторинг инфраструктуры, активности пользователей и запусков агентов в реальном времени.", "Live monitoring for infrastructure, user activity, and agent runs.")}
         actions={
           <div className="flex items-center gap-2">
             <Button

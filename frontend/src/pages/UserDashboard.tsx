@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   fetchAgentDashboardRuns,
   fetchFrontendBootstrap,
@@ -14,9 +14,10 @@ import {
   Server, 
   Play, 
   Settings,
-  Workflow
+  Workflow,
+  Maximize2,
+  Minimize2
 } from "lucide-react";
-import { useI18n } from "@/lib/i18n";
 import { relativeTime, cn } from "@/lib/utils";
 import { CustomizableDashboard, type WidgetDefinition } from "@/components/dashboard/CustomizableDashboard";
 import { Link } from "react-router-dom";
@@ -32,7 +33,17 @@ const sectionToneStyles: Record<string, string> = {
 type StatusTone = "neutral" | "success" | "warning" | "danger" | "info";
 
 export default function UserDashboard() {
-  const { t } = useI18n();
+  const [isFullWidth, setIsFullWidth] = useState(() => {
+    return localStorage.getItem("user_dashboard_full_width") === "true";
+  });
+
+  const toggleWidth = () => {
+    setIsFullWidth((prev) => {
+      const next = !prev;
+      localStorage.setItem("user_dashboard_full_width", String(next));
+      return next;
+    });
+  };
 
   const { data: bootstrapResponse, isLoading: bootLoading } = useQuery({
     queryKey: ["bootstrap"],
@@ -411,13 +422,31 @@ export default function UserDashboard() {
   }, [boot, runs, mon]);
 
   return (
-    <PageShell>
+    <PageShell width={isFullWidth ? "full" : "7xl"}>
       <PageHero
         kicker="Dashboard"
         title="Мой воркспейс"
         description="Обзор активных задач, доступных серверов и последних событий в вашей рабочей среде."
         actions={
           <div className="flex items-center gap-2">
+             <Button
+               variant="outline"
+               size="sm"
+               onClick={toggleWidth}
+               className="h-8 gap-1.5 text-xs font-semibold hover:border-primary/50 shadow-sm transition-all"
+             >
+               {isFullWidth ? (
+                 <>
+                   <Minimize2 className="h-3.5 w-3.5" />
+                   <span>Обычный экран</span>
+                 </>
+               ) : (
+                 <>
+                   <Maximize2 className="h-3.5 w-3.5" />
+                   <span>На весь экран</span>
+                 </>
+               )}
+             </Button>
              <Button variant="outline" size="sm" asChild className="h-8 text-xs">
                 <Link to="/servers/hub">
                   <Server className="mr-1.5 h-3.5 w-3.5" /> Хаб серверов

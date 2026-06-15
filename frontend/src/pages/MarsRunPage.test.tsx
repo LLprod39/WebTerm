@@ -97,7 +97,7 @@ describe("MarsRunPage", () => {
   it("renders timeline, CLI stream, review, changed files, tests, and final report", async () => {
     renderRunPage();
 
-    expect(await screen.findByText("Личный workspace: Personal workspace")).toBeInTheDocument();
+    expect(await screen.findByText("Рабочая папка: Personal workspace")).toBeInTheDocument();
     expect(screen.queryByText("C:\\WebTrerm")).not.toBeInTheDocument();
     expect(screen.getByText("frontend/src/App.tsx")).toBeInTheDocument();
     expect(screen.getByText(/codex stream/)).toBeInTheDocument();

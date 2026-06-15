@@ -118,7 +118,7 @@ const PROVIDER_METADATA: Record<string, {
 
 // Features supported by each routing role
 const ROLE_FEATURES: Record<string, { label: string; tooltip: string }[]> = {
-  "Чат / терминальный AI": [
+  "Чат / терминал": [
     { label: "Потоковый вывод", tooltip: "Ответ появляется по мере генерации, без ожидания полного текста." },
     { label: "Быстрый ответ", tooltip: "Лучше выбирать модель с небольшой задержкой первого токена." },
     { label: "Контекст сессии", tooltip: "Учитывает историю терминала и настройки сервера." },
@@ -128,7 +128,7 @@ const ROLE_FEATURES: Record<string, { label: string; tooltip: string }[]> = {
     { label: "Большой контекст", tooltip: "Полезно для логов, конфигураций и длинных выводов." },
     { label: "Самопроверка", tooltip: "Модель должна корректировать план после ошибок выполнения." },
   ],
-  "Оркестратор пайплайнов": [
+  "Пайплайны": [
     { label: "JSON", tooltip: "Нужны строгие структурированные ответы." },
     { label: "Стабильность", tooltip: "Важно одинаково выполнять повторяющиеся шаги автоматизации." },
     { label: "Состояние", tooltip: "Передаёт состояние между шагами сценария." },
@@ -487,7 +487,7 @@ export default function SettingsAIPage() {
       <QueryStateBlock
         loading={settingsLoading}
         error={settingsError || (!settingsLoading && !settingsData?.success ? new Error("Ошибка загрузки настроек") : undefined)}
-        errorText="Не удалось загрузить настройки AI"
+        errorText="Не удалось загрузить настройки моделей"
         onRetry={() => queryClient.invalidateQueries({ queryKey: ["settings", "config"] })}
       >
         {null}
@@ -505,9 +505,9 @@ export default function SettingsAIPage() {
       : "grok";
 
   const routeConfigs = [
-    { key: "chat", shortLabel: "Chat", label: "Чат / терминальный AI", description: "Быстрые ответы в терминале", icon: MessageSquare, provider: chatProvider, model: chatModel },
+    { key: "chat", shortLabel: "Chat", label: "Чат / терминал", description: "Быстрые ответы в терминале", icon: MessageSquare, provider: chatProvider, model: chatModel },
     { key: "agent", shortLabel: "Agent", label: "Агенты (ReAct)", description: "Длинные задачи и итерации", icon: Bot, provider: agentProvider, model: agentModel },
-    { key: "orchestrator", shortLabel: "Pipeline", label: "Оркестратор пайплайнов", description: "Координация пайплайнов", icon: Workflow, provider: orchProvider, model: orchModel },
+    { key: "orchestrator", shortLabel: "Pipeline", label: "Пайплайны", description: "Координация запусков", icon: Workflow, provider: orchProvider, model: orchModel },
   ];
 
   const uniqueRouteProviders = Array.from(new Set(routeConfigs.map((route) => route.provider)));
@@ -699,7 +699,7 @@ export default function SettingsAIPage() {
       >
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
           <PurposeModelSelector
-            label="Чат / терминальный AI"
+            label="Чат / терминал"
             description="Короткие ответы и пояснения рядом с SSH-сессией."
             icon={MessageSquare}
             provider={chatProvider}
@@ -712,7 +712,7 @@ export default function SettingsAIPage() {
             onModelChange={setChatModel}
             onRefresh={() => onRefreshPurpose(chatProvider)}
             refreshing={refreshingPurpose === chatProvider}
-            features={ROLE_FEATURES["Чат / терминальный AI"]}
+            features={ROLE_FEATURES["Чат / терминал"]}
           />
           <PurposeModelSelector
             label="Агенты (ReAct)"
@@ -731,7 +731,7 @@ export default function SettingsAIPage() {
             features={ROLE_FEATURES["Агенты (ReAct)"]}
           />
           <PurposeModelSelector
-            label="Оркестратор пайплайнов"
+            label="Пайплайны"
             description="Структурированные шаги, состояние и строгий JSON."
             icon={Workflow}
             provider={orchProvider}
@@ -744,7 +744,7 @@ export default function SettingsAIPage() {
             onModelChange={setOrchModel}
             onRefresh={() => onRefreshPurpose(orchProvider)}
             refreshing={refreshingPurpose === orchProvider}
-            features={ROLE_FEATURES["Оркестратор пайплайнов"]}
+            features={ROLE_FEATURES["Пайплайны"]}
           />
         </div>
       </SectionCard>

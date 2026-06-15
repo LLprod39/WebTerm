@@ -336,7 +336,7 @@ export function PipelineDraftReview({
             {localize(lang, "Проверенный черновик", "Verified draft")}
           </h3>
           <p className="mt-1 line-clamp-3 text-xs leading-5 text-muted-foreground">
-            {response.patch_summary || response.reply || localize(lang, "ИИ подготовил изменения графа.", "The assistant prepared graph changes.")}
+            {response.patch_summary || response.reply || localize(lang, "Изменения графа подготовлены.", "Graph changes are ready.")}
           </p>
         </div>
         <Badge variant="outline" className={cn("shrink-0 gap-1", status.className)}>

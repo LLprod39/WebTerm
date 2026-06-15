@@ -777,8 +777,8 @@ export default function SettingsPage() {
     {
       key: "chat",
       shortLabel: "Chat",
-      label: "Чат / Терминальный AI",
-      description: "Интерактивный помощник и терминальные подсказки",
+      label: "Чат / терминал",
+      description: "Быстрые ответы и подсказки в терминале",
       icon: MessageSquare,
       provider: chatProvider,
       model: chatModel,
@@ -795,8 +795,8 @@ export default function SettingsPage() {
     {
       key: "orchestrator",
       shortLabel: "Pipeline",
-      label: "Оркестратор (Pipeline)",
-      description: "Планирование и координация пайплайнов",
+      label: "Пайплайны",
+      description: "Планирование и координация запусков",
       icon: Workflow,
       provider: orchProvider,
       model: orchModel,
@@ -852,7 +852,7 @@ export default function SettingsPage() {
 
   const LOGGING_ITEMS = [
     { key: "log_terminal_commands", label: "Команды терминала", desc: "Записывать все SSH-команды пользователей", icon: Terminal },
-    { key: "log_ai_assistant", label: "AI ассистент", desc: "Записывать запросы и ответы AI помощника", icon: MessageSquare },
+    { key: "log_ai_assistant", label: "AI", desc: "Записывать запросы и ответы AI", icon: MessageSquare },
     { key: "log_agent_runs", label: "Запуски агентов", desc: "Логировать все действия и итерации агентов", icon: Bot },
     { key: "log_pipeline_runs", label: "Pipeline запуски", desc: "Логировать выполнение pipeline и результаты", icon: Workflow },
     { key: "log_auth_events", label: "Авторизация", desc: "Входы, выходы, неудачные попытки", icon: Shield },
@@ -871,7 +871,7 @@ export default function SettingsPage() {
   }> = [
     {
       value: "ai",
-      label: "AI модели",
+      label: "Модели",
       description: "Провайдеры, роли, runtime и каталог моделей",
       icon: Bot,
       badge: aiDraftDirty ? "Черновик" : undefined,
@@ -886,8 +886,8 @@ export default function SettingsPage() {
       ? [
           {
             value: "memory" as const,
-            label: "AI Memory",
-            description: "Dreams, snapshots и learned operational patterns",
+            label: "Автозаметки",
+            description: "Долгосрочные записи и рабочие паттерны",
             icon: ScrollText,
             badge: memoryOverview ? String(memoryOverview.stats.canonical + memoryOverview.stats.patterns) : undefined,
           },
@@ -912,13 +912,13 @@ export default function SettingsPage() {
   return (
     <SettingsWorkspace
       title={t("settings.title")}
-      description="Главные системные параметры платформы: AI-маршрутизация, доступы, аудит и рабочий журнал без лишней визуальной перегрузки."
-      asideHint="Начинай с общей AI-схемы и доступов. Логирование и журнал нужны для контроля, но не должны мешать основному рабочему потоку."
+      description="Главные системные параметры платформы: модели, доступы, аудит и рабочий журнал."
+      asideHint="Начните с модели по умолчанию и доступов. Журнал нужен для контроля, но не должен мешать основному рабочему потоку."
       actions={
         <>
           <Badge variant="outline">{activeTabMeta.label}</Badge>
           <Badge variant="secondary">{configuredProviderCount} провайдера готово</Badge>
-          {aiDraftDirty ? <Badge>Есть AI-черновик</Badge> : <Badge variant="outline">Все сохранено</Badge>}
+          {aiDraftDirty ? <Badge>Есть черновик</Badge> : <Badge variant="outline">Все сохранено</Badge>}
         </>
       }
     >
@@ -951,14 +951,14 @@ export default function SettingsPage() {
         <TabsContent value="ai" className="space-y-4">
           <div className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-secondary/20 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="space-y-1">
-              <p className="text-sm font-medium text-foreground">AI модели и маршрутизация</p>
+              <p className="text-sm font-medium text-foreground">Модели и маршруты</p>
               <p className="max-w-3xl text-xs text-muted-foreground">
-                Сначала выбери провайдера по умолчанию, потом разнеси модели по ролям, и только после этого трогай runtime и reasoning.
+                Сначала выберите провайдера по умолчанию. Роли настраивайте отдельно только там, где это действительно нужно.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Badge variant={aiDraftDirty ? "default" : "secondary"}>
-                {aiDraftDirty ? "Есть несохраненные изменения" : "AI-конфиг синхронизирован"}
+                {aiDraftDirty ? "Есть несохраненные изменения" : "Настройки синхронизированы"}
               </Badge>
               <Badge variant="outline">{uniqueRouteProviders.length > 1 ? "Раздельная маршрутизация" : "Один провайдер на все роли"}</Badge>
             </div>
@@ -1062,13 +1062,13 @@ export default function SettingsPage() {
             </div>
           </SectionCard>
 
-          <SectionCard title="Маршруты по ролям" icon={Cpu} description="Отдельные пары провайдер/модель для чата, агентов и pipeline-оркестратора">
+          <SectionCard title="Маршруты по ролям" icon={Cpu} description="Отдельные пары провайдер/модель для чата, агентов и пайплайнов">
             <div className="space-y-4">
               <div className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-secondary/20 p-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="space-y-1">
                   <p className="text-xs font-medium text-foreground">Быстрые действия</p>
                   <p className="text-[11px] text-muted-foreground">
-                    Можно скопировать основную модель в роли, дозаполнить пустые поля или откатить AI-черновик к сохраненному состоянию.
+                    Можно скопировать основную модель в роли, дозаполнить пустые поля или откатить черновик к сохраненному состоянию.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -1089,8 +1089,8 @@ export default function SettingsPage() {
 
               <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
                 <PurposeModelSelector
-                  label="Чат / Терминальный AI"
-                  description="Интерактивный AI помощник"
+                  label="Чат / терминал"
+                  description="Быстрые ответы в терминале"
                   icon={MessageSquare}
                   provider={chatProvider}
                   model={chatModel}
@@ -1119,8 +1119,8 @@ export default function SettingsPage() {
                   refreshing={refreshingPurpose === agentProvider}
                 />
                 <PurposeModelSelector
-                  label="Оркестратор (Pipeline)"
-                  description="Координация multi-step pipeline run"
+                  label="Пайплайны"
+                  description="Координация многошаговых запусков"
                   icon={Workflow}
                   provider={orchProvider}
                   model={orchModel}
@@ -1410,7 +1410,7 @@ export default function SettingsPage() {
         {isAdmin && (
           <TabsContent value="memory" className="space-y-4">
             <SectionCard
-              title="AI Memory и Dreams"
+              title="Автозаметки и Dreams"
               icon={ScrollText}
               description="Админская зона для настройки снов, canonical snapshots и learned operational patterns."
               actions={
@@ -1793,7 +1793,7 @@ export default function SettingsPage() {
                   </>
                 ) : (
                   <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-                    {selectedMemoryServerId ? "Загрузка memory overview..." : "Выбери сервер, чтобы увидеть AI memory настройки."}
+                    {selectedMemoryServerId ? "Загрузка обзора записей..." : "Выберите сервер, чтобы увидеть настройки автозаметок."}
                   </div>
                 )}
               </div>

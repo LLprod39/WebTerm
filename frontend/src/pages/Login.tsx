@@ -68,7 +68,7 @@ export default function Login() {
               </div>
               <div>
                 <div className="text-sm font-semibold">WebTermAI</div>
-                <div className="text-xs text-muted-foreground">Ops workspace</div>
+                <div className="text-xs text-muted-foreground">Operations console</div>
               </div>
             </div>
 
@@ -79,8 +79,8 @@ export default function Login() {
               </h1>
               <p className="mt-4 max-w-lg text-sm leading-6 text-muted-foreground">
                 {lang === "ru"
-                  ? "Вход открывает рабочее пространство с терминалами, мониторингом, автоматизациями и доступом по ролям."
-                  : "Sign in to access terminals, monitoring, automations, and role-based controls from one workspace."}
+                  ? "Вход открывает терминалы, мониторинг, автоматизации и доступы по ролям из одной консоли."
+                  : "Sign in to access terminals, monitoring, automations, and role-based controls from one console."}
               </p>
             </div>
           </div>
@@ -96,7 +96,7 @@ export default function Login() {
             </div>
             <div className="flex items-center gap-3">
               <LockKeyhole className="h-4 w-4 text-primary" />
-              <span>{lang === "ru" ? "Сессия Django, CSRF и WebSocket токены" : "Django session, CSRF, and WebSocket tokens"}</span>
+              <span>{lang === "ru" ? "Защищённая сессия и проверка запросов" : "Protected session and request checks"}</span>
             </div>
           </div>
         </section>

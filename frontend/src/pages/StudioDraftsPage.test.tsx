@@ -124,10 +124,10 @@ describe("StudioDraftsPage", () => {
 
     expect(await screen.findByText(/Pipeline drafts/i)).toBeInTheDocument();
     expect(screen.getByTestId("draft-graph")).toHaveTextContent("empty graph");
-    expect(screen.getByLabelText("Automation request")).toBeInTheDocument();
+    expect(screen.getByLabelText("Pipeline task")).toBeInTheDocument();
   });
 
-  it("loads an existing AI draft and revises it instead of creating a new session", async () => {
+  it("loads an existing draft and revises it instead of creating a new session", async () => {
     const currentDraft = draftSession();
     const revisedSession = {
       ...currentDraft,
@@ -149,7 +149,7 @@ describe("StudioDraftsPage", () => {
     renderPage("/studio/drafts?draft=5");
 
     expect((await screen.findAllByText("Existing draft")).length).toBeGreaterThan(0);
-    const prompt = screen.getByLabelText("Automation request");
+    const prompt = screen.getByLabelText("Pipeline task");
     fireEvent.change(prompt, { target: { value: "Add Telegram delivery" } });
     fireEvent.click(screen.getByRole("button", { name: /Revise draft/i }));
 
@@ -227,7 +227,7 @@ describe("StudioDraftsPage", () => {
 
     renderPage();
 
-    const prompt = await screen.findByLabelText("Automation request");
+    const prompt = await screen.findByLabelText("Pipeline task");
     fireEvent.change(prompt, { target: { value: "Restart nginx after approval" } });
     fireEvent.click(screen.getByRole("button", { name: /Quick template/i }));
 
@@ -251,7 +251,7 @@ describe("StudioDraftsPage", () => {
 
     renderPage("/studio/drafts?title=Kubernetes%20operations&prompt=Create%20a%20Kubernetes%20diagnosis%20workflow");
 
-    const prompt = await screen.findByLabelText("Automation request");
+    const prompt = await screen.findByLabelText("Pipeline task");
     expect(prompt).toHaveValue("Create a Kubernetes diagnosis workflow");
     fireEvent.click(screen.getByRole("button", { name: /Quick template/i }));
 

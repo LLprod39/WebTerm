@@ -80,7 +80,7 @@ interface AiPanelProps {
 const quickPrompts = ["Объясни вывод", "Предложи команду", "Проверь синтаксис", "Что означает ошибка"];
 
 const modeConfig: Record<AiExecutionMode, { icon: typeof Zap; label: string; desc: string }> = {
-  auto: { icon: Wand2, label: "Авто", desc: "AI сам решает" },
+  auto: { icon: Wand2, label: "Авто", desc: "Режим выбирается автоматически" },
   fast: { icon: Zap, label: "Fast", desc: "Быстрый ответ без лишних шагов" },
   step: { icon: Footprints, label: "Step", desc: "Пошаговый и более подробный режим" },
   // Nova: ReAct agent — no pre-plan, picks tools one at a time. Can
@@ -1110,7 +1110,7 @@ export function AiPanel({
               <div className="space-y-2">
                 <ToggleRow
                   title="Сохранять контекст"
-                  description="AI помнит предыдущие запросы в рамках сессии."
+                  description="AI учитывает предыдущие запросы в рамках сессии."
                   checked={settings.memoryEnabled}
                   onCheckedChange={(checked) => updateSettings({ memoryEnabled: checked })}
                 />
@@ -1186,7 +1186,7 @@ export function AiPanel({
                 <Bot className="h-3 w-3 text-muted-foreground" />
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-[13px] font-medium text-foreground">Assistant</span>
+                <span className="text-[13px] font-medium text-foreground">AI</span>
                 <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
                   <span
                     aria-hidden="true"

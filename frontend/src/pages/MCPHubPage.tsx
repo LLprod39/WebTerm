@@ -243,7 +243,7 @@ export default function MCPHubPage() {
                 <EmptyState
                   icon={<Server className="h-5 w-5" />}
                   title={localize(lang, "MCP-серверы ещё не подключены", "No MCP servers yet")}
-                  description={localize(lang, "Выберите шаблон или добавьте stdio/SSE endpoint для OPS-автоматизаций.", "Start from a template or add a stdio/SSE endpoint for OPS automations.")}
+                  description={localize(lang, "Выберите шаблон или добавьте stdio/SSE endpoint для интеграции с внешними инструментами.", "Start from a template or add a stdio/SSE endpoint for external tools.")}
                   actions={
                     <Button type="button" className="gap-1.5" onClick={openCreateDialog}>
                       <Plus className="h-4 w-4" />

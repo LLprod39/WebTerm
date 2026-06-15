@@ -512,6 +512,7 @@ STATICFILES_DIRS = [
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 UPLOADED_FILES_DIR = MEDIA_ROOT / 'uploads'
+SSH_PRIVATE_KEYS_DIR = BASE_DIR / 'data' / 'ssh_keys'
 
 # Create upload directory if it doesn't exist
 UPLOADED_FILES_DIR.mkdir(parents=True, exist_ok=True)

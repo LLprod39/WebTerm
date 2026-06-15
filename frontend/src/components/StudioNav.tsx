@@ -16,7 +16,7 @@ import { localize, useI18n } from "@/lib/i18n";
 
 const NAV_ITEMS = [
   { path: "/studio", labelRu: "Обзор", labelEn: "Overview", icon: LayoutGrid, exact: true },
-  { path: "/studio/drafts", labelRu: "Черновики", labelEn: "AI Drafts", icon: Wand2, feature: "studio_pipelines" },
+  { path: "/studio/drafts", labelRu: "Черновики", labelEn: "Drafts", icon: Wand2, feature: "studio_pipelines" },
   { path: "/studio/skills", labelRu: "Скиллы", labelEn: "OPS Skills", icon: BookOpen, feature: "studio_skills" },
   { path: "/studio/mcp", labelRu: "MCP", labelEn: "MCP Tools", icon: Server, feature: "studio_mcp" },
   { path: "/studio/agents", labelRu: "Агенты", labelEn: "Agents", icon: Bot, feature: "studio_agents" },

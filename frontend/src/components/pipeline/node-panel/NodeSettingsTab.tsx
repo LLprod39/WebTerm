@@ -105,7 +105,7 @@ export function NodeSettingsTab({
             id="node-label"
             value={(data.label as string) || ""}
             onChange={(event) => onSet("label", event.target.value)}
-            placeholder={t(lang, "Например: AI Investigation", "Example: AI Investigation")}
+            placeholder={t(lang, "Например: разбор инцидента", "Example: incident investigation")}
             className="h-10 rounded-lg border-border/70 bg-background/70"
           />
         </div>

@@ -536,7 +536,7 @@ function CreateAgentDialog({
                       <Target className="h-4 w-4 text-primary" /> {localize(lang, "Цель", "Goal")}
                     </label>
                     <Textarea value={goal} onChange={(e) => setGoal(e.target.value)} rows={3} className="bg-secondary/30 text-sm"
-                      placeholder={mode === "multi" ? localize(lang, "Что нужно проверить или исправить. Оркестратор разложит цель на шаги.", "What to check or fix. The orchestrator will split it into steps.") : localize(lang, "Что должен сделать агент и какой результат вернуть.", "What the agent should do and report back.")} />
+                      placeholder={mode === "multi" ? localize(lang, "Что нужно проверить или исправить. Задача будет разложена на шаги.", "What to check or fix. The task will be split into steps.") : localize(lang, "Что должен сделать агент и какой результат вернуть.", "What the agent should do and report back.")} />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground flex items-center gap-2"><Settings2 className="h-4 w-4 text-muted-foreground" /> {localize(lang, "Системные инструкции", "System instructions")}</label>

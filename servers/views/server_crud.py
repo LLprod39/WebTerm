@@ -5,6 +5,7 @@ Server CRUD, detail, and saved-secret endpoints.
 import json
 
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
@@ -14,6 +15,7 @@ from core_ui.decorators import require_feature
 from core_ui.models import UserActivityLog
 from servers.models import Server, ServerGroup
 from servers.secret_utils import get_server_auth_secret, has_saved_server_secret, store_server_auth_secret
+from servers.ssh_private_keys import delete_managed_private_key, store_uploaded_private_key
 from servers.ssh_host_keys import clear_server_trusted_host_keys, get_server_trusted_host_keys
 from servers.views.server_helpers import (
     _accessible_servers_queryset,
@@ -63,30 +65,39 @@ def server_create(request):
         if server_type not in ("ssh", "rdp"):
             return JsonResponse({"error": "Invalid server_type"}, status=400)
 
+        auth_method = str(data.get("auth_method", "password") or "password").strip().lower()
+        if auth_method not in ("password", "key", "key_password"):
+            return JsonResponse({"error": "Invalid auth_method"}, status=400)
+
         group, error_response = _normalize_group_for_user(data.get("group_id"), request.user)
         if error_response:
             return error_response
 
-        server = Server.objects.create(
-            user=request.user,
-            name=data.get("name", ""),
-            server_type=server_type,
-            host=data.get("host", ""),
-            port=port,
-            username=data.get("username", ""),
-            auth_method=data.get("auth_method", "password"),
-            key_path=data.get("key_path", ""),
-            tags=data.get("tags", ""),
-            notes=data.get("notes", ""),
-            corporate_context=data.get("corporate_context", ""),
-            group=group,
-        )
-
         password = str(data.get("password", "") or "").strip()
         master_password = _effective_master_password(request, data)
-        if password:
-            store_server_auth_secret(server, secret_value=password, master_password=master_password)
-            server.save()
+        private_key = str(data.get("ssh_private_key") or "")
+        with transaction.atomic():
+            server = Server.objects.create(
+                user=request.user,
+                name=data.get("name", ""),
+                server_type=server_type,
+                host=data.get("host", ""),
+                port=port,
+                username=data.get("username", ""),
+                auth_method=auth_method,
+                key_path=data.get("key_path", ""),
+                tags=data.get("tags", ""),
+                notes=data.get("notes", ""),
+                corporate_context=data.get("corporate_context", ""),
+                group=group,
+            )
+
+            if private_key.strip() and auth_method in ("key", "key_password"):
+                server.key_path = store_uploaded_private_key(server, private_key, passphrase=password)
+                server.save(update_fields=["key_path"])
+            if password:
+                store_server_auth_secret(server, secret_value=password, master_password=master_password)
+                server.save()
 
         log_user_activity(
             user=request.user,
@@ -112,6 +123,8 @@ def server_create(request):
 
         return JsonResponse({"success": True, "server_id": server.id, "message": "Server created successfully"})
 
+    except ValueError as e:
+        return JsonResponse({"error": str(e)}, status=400)
     except Exception as e:
         log_user_activity(
             user=request.user,
@@ -158,7 +171,10 @@ def server_update(request, server_id):
                 return JsonResponse({"error": "Invalid server_type"}, status=400)
             server.server_type = server_type
         if "auth_method" in data:
-            server.auth_method = data["auth_method"]
+            auth_method = str(data.get("auth_method") or "").strip().lower()
+            if auth_method not in ("password", "key", "key_password"):
+                return JsonResponse({"error": "Invalid auth_method"}, status=400)
+            server.auth_method = auth_method
         if "key_path" in data:
             server.key_path = data["key_path"]
         if "tags" in data:
@@ -189,6 +205,12 @@ def server_update(request, server_id):
             master_password = _effective_master_password(request, data)
             if password:
                 store_server_auth_secret(server, secret_value=password, master_password=master_password)
+
+        if str(data.get("ssh_private_key") or "").strip() and server.auth_method in ("key", "key_password"):
+            old_key_path = server.key_path
+            password = str(data.get("password") or "").strip()
+            server.key_path = store_uploaded_private_key(server, data["ssh_private_key"], passphrase=password)
+            delete_managed_private_key(old_key_path)
 
         if host_changed:
             clear_server_trusted_host_keys(server)
@@ -222,6 +244,8 @@ def server_update(request, server_id):
             }
         )
 
+    except ValueError as e:
+        return JsonResponse({"error": str(e)}, status=400)
     except Exception as e:
         log_user_activity(
             user=request.user,

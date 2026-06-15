@@ -32,8 +32,8 @@ export const settingsNavGroups: SettingsNavGroup[] = [
     items: [
       {
         id: "ai",
-        label: "AI конфигурация",
-        description: "Провайдеры, модели, маршрутизация",
+        label: "Модели",
+        description: "Провайдеры, роли, маршруты",
         icon: Bot,
         path: "/settings/ai",
       },
@@ -87,8 +87,8 @@ export const settingsNavGroups: SettingsNavGroup[] = [
     items: [
       {
         id: "memory",
-        label: "AI Memory",
-        description: "Долгосрочная память серверов",
+        label: "Автозаметки",
+        description: "Долгосрочные записи серверов",
         icon: ScrollText,
         path: "/settings/memory",
         adminOnly: true,

@@ -3643,12 +3643,12 @@ function PipelineAssistantPanel({
               <Wand2 className="h-4 w-4 text-primary" />
             </span>
             <div>
-              <h3 className="text-sm font-semibold text-foreground">{localize(lang, "Помощник pipeline", "Pipeline Assistant")}</h3>
+              <h3 className="text-sm font-semibold text-foreground">{localize(lang, "AI pipeline", "Pipeline AI")}</h3>
               <p className="text-[11px] text-muted-foreground">{selectedLabel}</p>
             </div>
           </div>
         </div>
-        <Button size="icon" variant="ghost" className="h-9 w-9" onClick={onClose} aria-label={localize(lang, "Закрыть помощник", "Close assistant")}>
+        <Button size="icon" variant="ghost" className="h-9 w-9" onClick={onClose} aria-label={localize(lang, "Закрыть AI", "Close AI")}>
           <X className="h-4 w-4" />
         </Button>
       </div>
@@ -3685,7 +3685,7 @@ function PipelineAssistantPanel({
                   )}
                 >
                   <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    {item.role === "user" ? localize(lang, "Запрос", "Request") : localize(lang, "Помощник", "Assistant")}
+                    {item.role === "user" ? localize(lang, "Запрос", "Request") : localize(lang, "AI", "AI")}
                   </div>
                   <div className="whitespace-pre-wrap">{item.content}</div>
                 </div>
@@ -3695,8 +3695,8 @@ function PipelineAssistantPanel({
             <div className="rounded-xl border border-dashed border-border px-3 py-4 text-xs leading-5 text-muted-foreground">
               {localize(
                 lang,
-                "Опишите автоматизацию: что должно запускать pipeline, какие серверы или MCP использовать, где нужно подтверждение и куда отправить результат.",
-                "Describe the automation: what should trigger it, which servers or MCPs it should use, where approval is required, and where to send the result.",
+                "Опишите рабочий процесс: что запускает pipeline, какие серверы или MCP использовать, где нужно подтверждение и куда отправить результат.",
+                "Describe the workflow: what should trigger it, which servers or MCPs it should use, where approval is required, and where to send the result.",
               )}
             </div>
           )}
@@ -4141,7 +4141,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         { role: "user", content: variables.message },
         { role: "assistant", content: response.reply || response.patch_summary || "Draft ready." },
       ].slice(-12));
-      toast({ description: response.validation?.ok === false ? "AI draft needs fixes before apply." : "AI draft is ready for review." });
+      toast({ description: response.validation?.ok === false ? "Draft needs fixes before apply." : "Draft is ready for review." });
     },
     onError: (err: Error) => toast({ variant: "destructive", description: err.message }),
   });
@@ -4345,11 +4345,11 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
   const applyAssistantProposal = (saveAfterApply: boolean) => {
     if (!assistantProposal) return;
     if (assistantProposal.validation?.ok === false) {
-      toast({ variant: "destructive", description: "Fix validation errors before applying this AI draft." });
+      toast({ variant: "destructive", description: "Fix validation errors before applying this draft." });
       return;
     }
     if (assistantProposal.risk?.level === "dangerous") {
-      toast({ variant: "destructive", description: localize(lang, "В черновике есть опасная SSH-команда. Попросите AI добавить подтверждение или переписать шаг безопасно.", "This draft contains a dangerous SSH command. Ask AI to add approval or rewrite it safely.") });
+      toast({ variant: "destructive", description: localize(lang, "В черновике есть опасная SSH-команда. Добавьте подтверждение или перепишите шаг безопасно.", "This draft contains a dangerous SSH command. Add approval or rewrite it safely.") });
       return;
     }
 
@@ -4388,7 +4388,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       });
       return;
     }
-    toast({ description: localize(lang, "AI draft применён локально. Нажмите Save, чтобы сохранить pipeline.", "AI draft applied locally. Click Save to persist the pipeline.") });
+    toast({ description: localize(lang, "Черновик применён локально. Нажмите Save, чтобы сохранить pipeline.", "Draft applied locally. Click Save to persist the pipeline.") });
   };
 
   const handleApplyAssistantProposal = () => applyAssistantProposal(false);
@@ -4707,7 +4707,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
             className="h-9 gap-1.5"
           >
             <Wand2 className="h-3 w-3" />
-            {localize(lang, "Помощник", "Assistant")}
+            {localize(lang, "AI", "AI")}
           </Button>
 
           <DropdownMenu>
