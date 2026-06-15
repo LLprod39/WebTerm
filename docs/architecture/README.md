@@ -9,7 +9,6 @@ This folder is the public architecture entry point. The detailed working contrac
 ```mermaid
 flowchart LR
     Frontend["React/Vite SPA"] --> Django["Django + Channels"]
-    Desktop["WinUI Desktop"] --> Django
     Django --> Core["core_ui: auth, access, settings, admin"]
     Django --> Servers["servers: inventory, terminal, monitoring, memory"]
     Django --> Studio["studio: pipelines, agents, MCP, skills"]

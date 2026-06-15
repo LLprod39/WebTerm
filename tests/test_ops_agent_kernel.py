@@ -523,10 +523,10 @@ def test_django_server_memory_store_creates_revalidation_note_on_conflict():
         memory_key="profile",
     ).exists()
 
-
 @pytest.mark.django_db(transaction=True)
 def test_django_server_memory_store_dream_consolidates_noisy_entries():
     owner = User.objects.create_user(username="ops-memory-dream-user", password="x")
+    ServerMemoryPolicy.objects.create(user=owner, dream_mode=ServerMemoryPolicy.DREAM_HEURISTIC)
     server = Server.objects.create(
         user=owner,
         name="dream-node",

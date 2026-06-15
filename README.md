@@ -6,8 +6,7 @@
 
 <p align="center">
   Рабочая панель для серверов, терминалов и инфраструктурной автоматизации.
-  Django держит API и WebSocket, React/Vite отвечает за веб-интерфейс,
-  WinUI-клиент закрывает desktop-сценарии.
+  Django держит API и WebSocket, React/Vite отвечает за веб-интерфейс.
 </p>
 
 <p align="center">
@@ -46,8 +45,7 @@ WebTerm собирает в одном месте то, что в обычной
 | Nova / Agents | AI-режимы для объяснения, планирования и выполнения задач по серверу с guardrails и подтверждениями. |
 | Monitoring | Dashboard, alerts, watcher drafts и ручной запуск health-checks. |
 | Studio | Визуальные pipeline-графы, triggers, node executors, run history, MCP tools, reusable agent configs и skill authoring. |
-| Access | Сессии, группы, permissions, domain auto-login, audit middleware и desktop API. |
-| Desktop | Windows-клиент на WinUI 3, который работает с тем же backend через `/api/desktop/v1/`. |
+| Access | Сессии, группы, permissions, domain auto-login и audit middleware. |
 
 ## Типовые сценарии
 
@@ -62,7 +60,6 @@ WebTerm собирает в одном месте то, что в обычной
 ```mermaid
 flowchart LR
     UI["React / Vite SPA"] --> API["Django + Channels"]
-    Desktop["WinUI 3 desktop"] --> API
     API --> Servers["Servers<br/>SSH / RDP / Monitoring / Memory"]
     API --> Studio["Studio<br/>Pipelines / Agents / Skills"]
     Studio --> MCP["MCP services<br/>demo / keycloak / custom"]
@@ -79,7 +76,6 @@ flowchart LR
 - Python 3.10+
 - Node.js 20+ и `npm`
 - Docker Desktop, если нужен полный стек с PostgreSQL, Redis, nginx и MCP-сервисами
-- WebView2 Runtime и Windows App SDK, если нужен desktop-клиент
 
 ### Backend
 
@@ -238,7 +234,6 @@ ruff format .
 | [`servers/`](./servers) | Серверы, группы, SSH/RDP, monitoring, memory, server agents. |
 | [`studio/`](./studio) | Pipelines, runs, triggers, MCP registry, skills, notifications. |
 | [`app/`](./app) | Общие LLM, SSH, runtime, policy и safety сервисы. |
-| [`desktop/`](./desktop) | WinUI 3 desktop-клиент. |
 | [`docker/`](./docker) | Dockerfiles, nginx configs, startup scripts. |
 | [`config/`](./config) | Версионируемые конфиги, которым не место в корне. |
 | [`docs/`](./docs) | Документация, отчеты, MARS/QA-артефакты и локальные заметки. |
@@ -246,17 +241,6 @@ ruff format .
 | [`tests/`](./tests) | Backend и integration tests. |
 
 Подробнее о текущей раскладке: [`docs/PROJECT_STRUCTURE.md`](./docs/PROJECT_STRUCTURE.md).
-
-## Desktop
-
-Desktop-клиент лежит в [`desktop/`](./desktop) и использует backend API под `/api/desktop/v1/`.
-
-```powershell
-cd desktop
-dotnet restore .\MiniProd.Desktop.sln
-dotnet build .\MiniProd.Desktop.sln -c Debug -p:Platform=x64 -m:1 /p:UseSharedCompilation=false /p:BuildInParallel=false
-.\src\MiniProd.Desktop\bin\x64\Debug\net8.0-windows10.0.19041.0\MiniProd.Desktop.exe
-```
 
 ## Важные замечания
 

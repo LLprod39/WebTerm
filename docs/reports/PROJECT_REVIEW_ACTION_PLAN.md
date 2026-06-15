@@ -19,12 +19,11 @@ Full test suites were not run during the documentation refresh.
 
 WebTerm is a web-first ops platform:
 
-- Django/Channels backend for API, auth, access, desktop API, WebSockets, and background orchestration.
+- Django/Channels backend for API, auth, access, WebSockets, and background orchestration.
 - React/Vite SPA in `frontend/`.
 - Servers domain for inventory, SSH/RDP, SFTP, Linux UI, monitoring, alerts, memory, snapshots, and server agents.
 - Studio domain for pipelines, triggers, runs, MCP registry, skills, reusable agents, templates, and notifications.
 - `app/` for shared LLM/runtime/safety/agent-kernel services.
-- Optional WinUI desktop client under `desktop/`.
 
 ## P0: Fix The Broken Architecture Guard
 

@@ -2,7 +2,7 @@ meta:
   title: "WebTerm master QA plan"
   version: "2.0"
   last_updated: "2026-05-27"
-  objective: "Current release and regression plan for backend API, WebSocket flows, Studio pipelines, frontend UI, desktop API, and operational integrations."
+  objective: "Current release and regression plan for backend API, WebSocket flows, Studio pipelines, frontend UI, and operational integrations."
   source_of_truth:
     - "README.md"
     - "pyproject.toml"
@@ -12,7 +12,6 @@ meta:
     - "web_ui/urls.py"
     - "web_ui/routing.py"
     - "core_ui/urls.py"
-    - "core_ui/desktop_api/urls.py"
     - "servers/urls.py"
     - "servers/routing.py"
     - "studio/urls.py"
@@ -30,7 +29,7 @@ automation_commands:
       - "Test settings force SQLite, locmem email, eager Celery, and InMemoryChannelLayer."
   backend_targeted_smoke:
     cwd: "C:\\WebTrerm"
-    command: "python -m pytest tests/test_core_ui_api_smoke.py tests/test_servers_api_smoke.py tests/test_studio_api_smoke.py tests/test_desktop_api.py"
+    command: "python -m pytest tests/test_core_ui_api_smoke.py tests/test_servers_api_smoke.py tests/test_studio_api_smoke.py"
   architecture:
     cwd: "C:\\WebTrerm"
     command: "python scripts/check_architecture_sizes.py --strict-new"
@@ -72,7 +71,6 @@ current_automation_baseline:
   backend_pytest:
     core_and_access:
       - "tests/test_core_ui_api_smoke.py"
-      - "tests/test_desktop_api.py"
       - "core_ui/test_access_permissions.py"
       - "tests/test_channel_layer_health.py"
       - "tests/test_llm_budget.py"
@@ -166,12 +164,11 @@ current_automation_baseline:
 test_suites:
   - suite: "Auth, sessions, access, and admin"
     priority: "smoke"
-    surfaces: ["API", "UI", "desktop API"]
+    surfaces: ["API", "UI"]
     automated:
       - "Login, session, ws-token, logout."
       - "Feature permissions and access APIs."
       - "Admin dashboard/activity/session endpoints."
-      - "Desktop bearer auth login/refresh/logout and bootstrap."
     manual:
       - "Domain SSO through a real trusted reverse proxy."
       - "Cross-site cookie/CSRF behavior when frontend and backend use different origins."
@@ -274,7 +271,6 @@ known_gaps:
   - "Real RDP and live SSH are intentionally manual or sandbox-only."
   - "External SMTP, Telegram, and MCP delivery need live sandbox validation before release."
   - "Architecture check depends on import-linter being installed in the current Python environment."
-  - "Desktop WinUI build is not covered by the Python/frontend default suite."
   - "Playwright visual snapshots must be updated intentionally, never as incidental churn."
 
 artifact_policy:

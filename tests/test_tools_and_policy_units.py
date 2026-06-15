@@ -108,6 +108,38 @@ async def test_ssh_connection_manager_execute_injects_env_variables():
 
 
 @pytest.mark.asyncio
+async def test_ssh_connection_manager_execute_quotes_env_values():
+    manager = SSHConnectionManager()
+    conn = _FakeSSHConnection()
+    manager.connections["c1"] = {
+        "connection": conn,
+        "network_config": {"environment": {"TOKEN": "abc; touch /tmp/pwn", "LANG": "C"}},
+    }
+
+    result = await manager.execute("c1", "echo hello")
+
+    assert result["success"] is True
+    assert "export TOKEN='abc; touch /tmp/pwn'" in conn.last_command
+    assert "; touch /tmp/pwn; echo hello" not in conn.last_command
+
+
+@pytest.mark.asyncio
+async def test_ssh_connection_manager_execute_rejects_invalid_env_names():
+    manager = SSHConnectionManager()
+    conn = _FakeSSHConnection()
+    manager.connections["c1"] = {
+        "connection": conn,
+        "network_config": {"environment": {"BAD;NAME": "x"}},
+    }
+
+    result = await manager.execute("c1", "echo hello")
+
+    assert result["success"] is False
+    assert "Invalid environment variable name" in result["stderr"]
+    assert conn.last_command == ""
+
+
+@pytest.mark.asyncio
 async def test_ssh_connection_manager_execute_handles_connection_errors():
     manager = SSHConnectionManager()
     manager.connections["c1"] = {"connection": _FakeSSHConnection(should_fail=True), "network_config": {}}

@@ -41,7 +41,7 @@ class MarsWorkspace(models.Model):
         ordering = ["name", "id"]
         unique_together = ["user", "name"]
         indexes = [
-            models.Index(fields=["user", "enabled", "name"]),
+            models.Index(fields=["user", "enabled", "name"], name="mars_marswo_user_id_191f23_idx"),
         ]
 
     def __str__(self) -> str:
@@ -78,8 +78,8 @@ class MarsSession(models.Model):
     class Meta:
         ordering = ["-updated_at", "-id"]
         indexes = [
-            models.Index(fields=["user", "status", "-updated_at"]),
-            models.Index(fields=["workspace", "-updated_at"]),
+            models.Index(fields=["user", "status", "-updated_at"], name="mars_marsse_user_id_6ff9c5_idx"),
+            models.Index(fields=["workspace", "-updated_at"], name="mars_marsse_workspa_239f48_idx"),
         ]
 
     def __str__(self) -> str:
@@ -120,9 +120,9 @@ class MarsRun(models.Model):
     class Meta:
         ordering = ["-created_at", "-id"]
         indexes = [
-            models.Index(fields=["user", "status", "-created_at"]),
-            models.Index(fields=["status", "created_at"]),
-            models.Index(fields=["session", "-created_at"]),
+            models.Index(fields=["user", "status", "-created_at"], name="mars_marsru_user_id_22364f_idx"),
+            models.Index(fields=["status", "created_at"], name="mars_marsru_status_517a6f_idx"),
+            models.Index(fields=["session", "-created_at"], name="mars_marsru_session_14080d_idx"),
         ]
 
     def __str__(self) -> str:
@@ -139,10 +139,9 @@ class MarsRunEvent(models.Model):
     class Meta:
         ordering = ["created_at", "id"]
         indexes = [
-            models.Index(fields=["run", "created_at"]),
-            models.Index(fields=["event_type", "created_at"]),
+            models.Index(fields=["run", "created_at"], name="mars_marsru_run_id_5da9e2_idx"),
+            models.Index(fields=["event_type", "created_at"], name="mars_marsru_event_t_f19c7f_idx"),
         ]
 
     def __str__(self) -> str:
         return f"mars_run={self.run_id} {self.event_type}"
-

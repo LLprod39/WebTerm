@@ -127,7 +127,6 @@ config_filename = ".importlinter"
 "studio/models.py" = 702
 "frontend/src/pages/AgentsPage.tsx" = 694
 "frontend/src/pages/AgentConfigPage.tsx" = 744
-"core_ui/desktop_api/views.py" = 653
 "frontend/src/pages/SettingsUsersPage.tsx" = 695
 "servers/services/terminal_ai/prompts.py" = 648
 "frontend/src/pages/MCPHubPage.tsx" = 647

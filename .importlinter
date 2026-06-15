@@ -102,16 +102,6 @@ forbidden_modules =
     servers
     studio
 ignore_imports =
-    # desktop_api is the explicit Electron-desktop integration layer — it
-    # bridges bounded contexts by design (documented in DEVELOPMENT_RULES.md §2).
-    core_ui.desktop_api.views -> servers.models
-    core_ui.desktop_api.views -> servers.secret_utils
-    core_ui.desktop_api.views -> servers.views
-    core_ui.desktop_api.views -> studio.mcp_client
-    core_ui.desktop_api.views -> studio.models
-    core_ui.desktop_api.views -> studio.views
-    core_ui.desktop_api.serializers -> servers.models
-    core_ui.desktop_api.serializers -> servers.secret_utils
     # Admin dashboard aggregates cross-context data for system monitoring.
     core_ui.views.admin_views -> servers.models
     # Chat helper bridge can use user-owned server records for explicit

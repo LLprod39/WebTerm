@@ -33,9 +33,6 @@ This file is no longer a raw generated dump of every repository file. Use `rg --
 - `core_ui/access.py`
 - `core_ui/audit.py`
 - `core_ui/middleware.py`
-- `core_ui/desktop_api/urls.py`
-- `core_ui/desktop_api/views.py`
-- `core_ui/desktop_api/serializers.py`
 - `core_ui/views/auth_views.py`
 - `core_ui/views/access_views.py`
 - `core_ui/views/access_group_views.py`
@@ -154,19 +151,11 @@ This file is no longer a raw generated dump of every repository file. Use `rg --
 - `frontend/src/components/pipeline/nodes/*.tsx`
 - `frontend/src/components/pipeline/node-panel/*.tsx`
 
-## Desktop
-
-- `desktop/MiniProd.Desktop.sln`
-- `desktop/src/MiniProd.Desktop/MiniProd.Desktop.csproj`
-- `desktop/src/MiniProd.Desktop/Services/DesktopApiClient.cs`
-- `desktop/src/MiniProd.Desktop/Pages/*.xaml`
-
 ## Tests
 
 - `tests/test_core_ui_api_smoke.py`
 - `tests/test_servers_api_smoke.py`
 - `tests/test_studio_api_smoke.py`
-- `tests/test_desktop_api.py`
 - `tests/test_studio_pipeline_v2.py`
 - `tests/test_studio_node_executors.py`
 - `tests/test_studio_all_nodes_smoke.py`

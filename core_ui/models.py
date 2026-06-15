@@ -1,10 +1,9 @@
 """
-Core UI models: app-level permissions, chat sessions, desktop auth, and managed secrets.
+Core UI models: app-level permissions, chat sessions, managed secrets, and shared preferences.
 """
 
 from django.contrib.auth.models import Group, User
 from django.db import models
-from django.utils import timezone
 
 # -----------------------------------------
 # Chat history
@@ -195,41 +194,6 @@ class LLMUsageLog(models.Model):
 
     def __str__(self):
         return f"{self.provider}/{self.model_name} ({self.status})"
-
-
-class DesktopRefreshToken(models.Model):
-    """Server-side refresh token record for WinUI/desktop clients."""
-
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="desktop_refresh_tokens")
-    token_hash = models.CharField(max_length=64, unique=True)
-    label = models.CharField(max_length=120, blank=True, default="")
-    user_agent = models.CharField(max_length=512, blank=True, default="")
-    expires_at = models.DateTimeField()
-    last_used_at = models.DateTimeField(null=True, blank=True)
-    revoked_at = models.DateTimeField(null=True, blank=True)
-    replaced_by = models.OneToOneField(
-        "self",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="replaces",
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["-created_at"]
-        indexes = [
-            models.Index(fields=["user", "-created_at"]),
-            models.Index(fields=["expires_at"]),
-            models.Index(fields=["revoked_at"]),
-        ]
-
-    def __str__(self):
-        return f"desktop refresh token for {self.user.username}"
-
-    @property
-    def is_active(self) -> bool:
-        return self.revoked_at is None and self.expires_at > timezone.now()
 
 
 class ManagedSecret(models.Model):

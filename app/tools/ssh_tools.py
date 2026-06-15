@@ -2,7 +2,9 @@
 SSH Agent Tool for Remote Operations
 Allows the agent to connect to SSH servers and execute commands
 """
+import re
 import secrets
+import shlex
 from typing import Any
 
 import asyncssh
@@ -15,6 +17,25 @@ from app.tools.safety import is_dangerous_command
 from core_ui.activity import log_user_activity
 from core_ui.audit import get_audit_context
 from servers.ssh_host_keys import ensure_server_known_hosts, parse_host_port_value, tofu_known_hosts_for_host
+
+_ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _build_env_exports(env_vars: dict[str, Any]) -> list[str]:
+    exports: list[str] = []
+    for raw_key, raw_value in env_vars.items():
+        key = str(raw_key or "").strip()
+        if not key:
+            continue
+        if not _ENV_NAME_RE.match(key):
+            raise ValueError(f"Invalid environment variable name: {key}")
+        if raw_value is None:
+            continue
+        value = str(raw_value)
+        if not value:
+            continue
+        exports.append(f"export {key}={shlex.quote(value)}")
+    return exports
 
 
 class SSHConnectionManager:
@@ -128,7 +149,7 @@ class SSHConnectionManager:
             # Сохраняем network_config вместе с connection для использования в execute
             self.connections[conn_id] = {
                 'connection': conn,
-                'network_config': network_config
+                'network_config': effective_network_config
             }
             logger.success(f"Connected to {conn_id}")
             return conn_id
@@ -170,15 +191,13 @@ class SSHConnectionManager:
             final_command = command
             if network_config.get('environment'):
                 env_vars = network_config['environment']
-                # Формируем export команды
-                exports = []
-                for key, value in env_vars.items():
-                    if key and value:
-                        exports.append(f"export {key}={value}")
+                if not isinstance(env_vars, dict):
+                    raise ValueError("network_config.environment must be an object")
+                exports = _build_env_exports(env_vars)
 
                 if exports:
                     final_command = "; ".join(exports) + "; " + command
-                    logger.debug(f"Command with env: {final_command}")
+                    logger.debug("Applying {} environment variable(s) to SSH command", len(exports))
 
             result = await conn.run(final_command, check=False)
 

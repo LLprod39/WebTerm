@@ -17,6 +17,7 @@ from django.views.decorators.http import require_http_methods
 from core_ui.decorators import require_feature
 from core_ui.managed_secrets import get_mcp_secret_env, get_mcp_secret_env_keys
 from studio.mcp_client import MCPClientError, inspect_mcp_server
+from studio.mcp_security import validate_mcp_runtime_policy, validate_stdio_mcp_policy
 from studio.models import MCPServerPool
 
 STUDIO_FEATURE_MCP = "studio_mcp"
@@ -218,6 +219,17 @@ def _normalize_sse_url(url: str) -> str:
     return "http://" + normalized_url
 
 
+def _validate_mcp_payload_policy(data: dict, user, *, existing: MCPServerPool | None = None, action: str = "create"):
+    transport = data.get("transport", existing.transport if existing else MCPServerPool.TRANSPORT_STDIO)
+    if transport != MCPServerPool.TRANSPORT_STDIO:
+        return None
+    command = data.get("command", existing.command if existing else "")
+    policy = validate_stdio_mcp_policy(str(command or ""), user=user, action=action)
+    if not policy.allowed:
+        return _err(policy.error, 403)
+    return None
+
+
 def _default_test_mcp_connection(mcp: MCPServerPool) -> tuple[bool, str | None]:
     """Basic connectivity test for MCP server."""
     if mcp.transport == MCPServerPool.TRANSPORT_SSE:
@@ -232,6 +244,9 @@ def _default_test_mcp_connection(mcp: MCPServerPool) -> tuple[bool, str | None]:
 
     if not mcp.command:
         return False, "No command configured"
+    policy = validate_mcp_runtime_policy(mcp, action="test")
+    if not policy.allowed:
+        return False, policy.error
     try:
         env = {**os.environ, **mcp.env, **get_mcp_secret_env(mcp.id)}
         proc = subprocess.Popen(
@@ -281,6 +296,9 @@ def api_mcp_list(request):
         url = (data.get("url") or "").strip()
         if transport == MCPServerPool.TRANSPORT_SSE and url:
             url = _normalize_sse_url(url)
+        policy_error = _validate_mcp_payload_policy(data, request.user, action="create")
+        if policy_error is not None:
+            return policy_error
         mcp = MCPServerPool.objects.create(
             name=name,
             description=data.get("description", ""),
@@ -316,6 +334,9 @@ def api_mcp_detail(request, mcp_id: int):
         if not can_edit:
             return _err("Only the owner or admin can edit this MCP server", 403)
         data = _json_body(request)
+        policy_error = _validate_mcp_payload_policy(data, request.user, existing=mcp, action="edit")
+        if policy_error is not None:
+            return policy_error
         for field in ("name", "description", "transport", "command", "args", "env", "url"):
             if field in data:
                 val = data[field]
@@ -346,6 +367,9 @@ def api_mcp_test(request, mcp_id: int):
     mcp = _mcp_write_queryset_for_user(request.user).filter(pk=mcp_id).first()
     if mcp is None:
         return _err("MCP server not found", 404)
+    policy = validate_mcp_runtime_policy(mcp, user=request.user, action="test")
+    if not policy.allowed:
+        return _err(policy.error, 403)
 
     ok, error = _test_mcp_connection(mcp)
     mcp.last_test_ok = ok
@@ -366,6 +390,9 @@ def api_mcp_tools(request, mcp_id: int):
     mcp = _mcp_read_queryset_for_user(request.user).filter(pk=mcp_id).first()
     if mcp is None:
         return _err("MCP server not found", 404)
+    policy = validate_mcp_runtime_policy(mcp, user=request.user, action="inspect")
+    if not policy.allowed:
+        return _err(policy.error, 403)
 
     try:
         return _ok(asyncio.run(_inspect_mcp_server(mcp)))

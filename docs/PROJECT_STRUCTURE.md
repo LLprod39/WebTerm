@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-05-27
 
-This repository is a Django + Channels backend, React/Vite SPA, Studio automation layer, and optional WinUI desktop client. The root is intentionally kept for entry points that tools expect at the repository top level.
+This repository is a Django + Channels backend, React/Vite SPA, and Studio automation layer. The root is intentionally kept for entry points that tools expect at the repository top level.
 
 ## Root Entry Points
 
@@ -22,12 +22,11 @@ This repository is a Django + Channels backend, React/Vite SPA, Studio automatio
 | Path | Current responsibility |
 | --- | --- |
 | `web_ui/` | Django project shell: settings, URLs, ASGI/WSGI, Celery, WebSocket routing. `web_ui/settings.py` is a compatibility shim; prefer `web_ui.settings.development`, `.production`, or `.test`. |
-| `core_ui/` | Auth/session APIs, settings/access/admin endpoints, desktop API, audit/activity, shared UI redirects and middleware. |
+| `core_ui/` | Auth/session APIs, settings/access/admin endpoints, audit/activity, shared UI redirects and middleware. |
 | `servers/` | Server inventory, SSH/RDP terminal flows, SFTP/file actions, monitoring, alerts, watcher drafts, server memory, snapshots, and server-bound agents. |
 | `studio/` | Pipelines, triggers, runs, MCP registry, reusable agents, skill authoring, pipeline templates, notifications. |
 | `app/` | Shared LLM/runtime/safety/agent-kernel code. Keep this layer as independent from Django feature apps as possible. |
 | `frontend/` | React 18 + Vite + TypeScript SPA, TanStack Query, Tailwind/Radix local components, Vitest and Playwright tests. |
-| `desktop/` | WinUI 3 client using `/api/desktop/v1/`. Optional and separate from the SPA. |
 | `docker/` | Dockerfiles, nginx configs, and operational smoke scripts. |
 | `config/` | Versioned config that should not live in the root, for example Keycloak profiles. |
 | `scripts/` | Maintained maintenance scripts such as architecture-size checks and setup helpers. |

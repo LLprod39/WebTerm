@@ -13,6 +13,7 @@ from django.conf import settings as django_settings
 from loguru import logger
 
 from core_ui.managed_secrets import get_mcp_secret_env
+from studio.mcp_security import validate_mcp_runtime_policy
 
 from .models import MCPServerPool
 
@@ -123,6 +124,9 @@ class _StdioMCPClient:
     async def __aenter__(self):
         if not self.server.command:
             raise MCPClientError("MCP command is not configured")
+        policy = validate_mcp_runtime_policy(self.server)
+        if not policy.allowed:
+            raise MCPClientError(policy.error)
 
         secret_env = await _s2a(get_mcp_secret_env, thread_sensitive=True)(self.server.id)
         env = {**__import__("os").environ, **(self.server.env or {}), **secret_env}

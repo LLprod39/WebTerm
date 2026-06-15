@@ -8,7 +8,7 @@ This plan is the current architecture migration map after the MARS refactor work
 
 Keep WebTerm modular enough for safe ops automation:
 
-- `core_ui` owns auth, access, settings, admin, desktop API, and shared UI redirects.
+- `core_ui` owns auth, access, settings, admin, and shared UI redirects.
 - `servers` owns server inventory, terminal/RDP/SFTP/Linux UI, monitoring, alerts, memory, snapshots, and server agents.
 - `studio` owns pipelines, triggers, runs, MCP registry, reusable agent configs, skills, templates, and notifications.
 - `app` owns shared runtime, LLM, policy, safety, and agent-kernel abstractions.
@@ -40,7 +40,6 @@ flowchart TD
     frontend --> core_ui
     frontend --> servers
     frontend --> studio
-    desktop --> core_ui
     app -. no feature-app imports .-> app
 ```
 
@@ -97,7 +96,7 @@ Acceptance:
 ### Phase 3: Capability-Based Server Sharing
 
 - Define view/connect/execute/file-read/file-write/RDP/context/admin capabilities.
-- Enforce capabilities in views, consumers, tools, and desktop API bridges.
+- Enforce capabilities in views, consumers, and tools.
 - Add negative tests for shared users.
 
 ### Phase 4: Continue Frontend Decomposition
@@ -116,7 +115,7 @@ Acceptance:
 
 | Context | Stable interface |
 | --- | --- |
-| `core_ui` | URL/API endpoints, desktop API, auth/session/access services. |
+| `core_ui` | URL/API endpoints and auth/session/access services. |
 | `servers` | `servers/urls.py`, WebSocket consumers, server services, memory adapter. |
 | `studio` | `studio/urls.py`, pipeline models, trigger dispatcher, MCP runtime provider. |
 | `app` | LLM/runtime/policy/safety abstractions and protocols. |
@@ -125,7 +124,7 @@ Acceptance:
 ## Testing Strategy
 
 - Architecture: `python scripts/check_architecture_sizes.py --strict-new`.
-- Backend smoke: `python -m pytest tests/test_core_ui_api_smoke.py tests/test_servers_api_smoke.py tests/test_studio_api_smoke.py tests/test_desktop_api.py`.
+- Backend smoke: `python -m pytest tests/test_core_ui_api_smoke.py tests/test_servers_api_smoke.py tests/test_studio_api_smoke.py`.
 - Studio runtime: `python -m pytest tests/test_studio_pipeline_v2.py tests/test_studio_node_executors.py tests/test_studio_all_nodes_smoke.py`.
 - Frontend: `npm run test`, `npm run build`, and targeted Playwright specs from `frontend/`.
 
