@@ -43,6 +43,16 @@ def get_server(server_id: int, user) -> Server | None:
     return get_servers_for_user(user).filter(pk=server_id).first()
 
 
+def get_owned_server(server_id: int, user) -> Server | None:
+    """
+    Return a single active server owned by the user, or None.
+    """
+    try:
+        return Server.objects.get(pk=server_id, user=user, is_active=True)
+    except (Server.DoesNotExist, TypeError, ValueError):
+        return None
+
+
 def get_active_share(server: Server, user) -> ServerShare | None:
     """
     Return the active ServerShare for a shared server, or None if the user owns it.

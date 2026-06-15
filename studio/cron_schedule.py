@@ -115,13 +115,14 @@ def _matches_fallback_cron(
     return month_day_matches and weekday_matches
 
 
-def previous_due_datetime(expression: str, now: datetime) -> datetime:
+def previous_due_datetime(expression: str, now: datetime, *, croniter_factory=None) -> datetime:
     cron_expression = str(expression or "").strip()
     if not cron_expression:
         raise ValueError("cron expression is empty")
 
-    if croniter is not None:
-        previous_due_ts = croniter(cron_expression, now).get_prev(float)
+    effective_croniter = croniter if croniter_factory is None else croniter_factory
+    if effective_croniter is not None:
+        previous_due_ts = effective_croniter(cron_expression, now).get_prev(float)
         previous_due_dt = datetime.fromtimestamp(previous_due_ts, tz=dt_timezone.utc)
         if now.tzinfo is not None:
             previous_due_dt = previous_due_dt.astimezone(now.tzinfo)

@@ -18,6 +18,7 @@ import {
   Server,
   Bot,
   Clock,
+  Wand2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -556,6 +557,21 @@ export default function StudioPage() {
 
           {canPipelines ? (
             <>
+              <section className="flex flex-col gap-3 rounded-lg border border-border/70 bg-card px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-foreground">
+                    {localize(lang, "AI-черновики", "AI Drafts")}
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {localize(lang, "Графовый cockpit для AI-автоматизаций", "Graph-first cockpit for AI automations")}
+                  </p>
+                </div>
+                <Button variant="outline" className="h-9 gap-1.5" onClick={() => navigate("/studio/drafts")}>
+                  <Wand2 className="h-3.5 w-3.5" />
+                  {localize(lang, "Открыть AI-черновики", "Open AI Drafts")}
+                </Button>
+              </section>
+
               <div className="flex items-center gap-3 rounded-lg border border-border/70 bg-card px-3 py-2 shadow-sm">
                 <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <Input

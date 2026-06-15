@@ -520,7 +520,7 @@ def test_manual_run_auto_selects_only_manual_trigger(monkeypatch):
     _grant_feature(user, "studio", "studio_pipelines", "studio_runs")
     client = Client()
     client.force_login(user)
-    monkeypatch.setattr("studio.views._launch_pipeline_run_async", lambda _run: None)
+    monkeypatch.setattr("studio.trigger_dispatch.launch_pipeline_run_async", lambda _run: None)
 
     pipeline = Pipeline.objects.create(
         name="Manual API flow",

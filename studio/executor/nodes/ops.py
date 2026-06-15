@@ -7,11 +7,9 @@ import shlex
 from typing import TYPE_CHECKING, Any
 
 import httpx
-from asgiref.sync import sync_to_async
 
-from servers.linux_ui import (
-    LOG_SOURCES,
-    _run_command_result,
+from studio.executor.nodes.base import BaseNode, NodeResult
+from studio.executor.ops_runtime import (
     get_linux_ui_capabilities,
     get_linux_ui_disk,
     get_linux_ui_docker,
@@ -23,14 +21,16 @@ from servers.linux_ui import (
     get_linux_ui_processes,
     get_linux_ui_service_logs,
     get_linux_ui_services,
+    log_query_sources as _log_query_sources,
+    ops_runtime as _ops_runtime,
+    read_text_file,
+    run_command_result as _run_command_result,
     run_linux_ui_docker_action,
     run_linux_ui_process_action,
     run_linux_ui_service_action,
+    write_text_file,
 )
-from servers.sftp import read_text_file, write_text_file
-from studio.executor.nodes.base import BaseNode, NodeResult
 from studio.executor.registry import registry
-from studio.services import get_owned_server
 
 if TYPE_CHECKING:
     from studio.executor.context import ExecutionContext
@@ -54,7 +54,6 @@ PACKAGE_ACTIONS = {"list_updates", "install", "update", "remove"}
 DISK_CLEANUP_ACTIONS = {"inspect", "journal_vacuum", "tmp_cleanup"}
 BACKUP_RESTORE_CHECK_ACTIONS = {"inspect", "verify_latest"}
 PACKAGE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9+._:@~/-]{0,127}$")
-LOG_QUERY_SOURCES = set(LOG_SOURCES) | {"docker"}
 
 
 def _compact_json(value: Any, *, limit: int = 3500) -> str:
@@ -233,16 +232,14 @@ async def _load_owned_server(ctx: "ExecutionContext", config: dict[str, Any]):
     server_id = _coerce_int(_resolve_context_key(ctx, config, "server_id", "server_id"))
     if not server_id:
         raise ValueError("server_id is required or must be present in pipeline context.")
-    server = await sync_to_async(get_owned_server)(ctx.user, server_id)
+    server = await _ops_runtime().get_owned_server(ctx.user, server_id)
     if server is None:
         raise ValueError(f"Server not found or inaccessible: {server_id}")
     return server
 
 
 async def _server_secret(server) -> str:
-    from servers.monitor import _decrypt_server_secret
-
-    return await sync_to_async(_decrypt_server_secret, thread_sensitive=True)(server)
+    return await _ops_runtime().server_secret(server)
 
 
 @registry.register
@@ -254,7 +251,7 @@ class OpsLogQueryNode(BaseNode):
         server = await _load_owned_server(ctx, config)
         secret = await _server_secret(server)
         source = str(config.get("source") or "journal").strip().lower()
-        if source not in LOG_QUERY_SOURCES:
+        if source not in _log_query_sources():
             return NodeResult(error="Unsupported log source")
 
         lines = _coerce_int(config.get("lines")) or 120
@@ -762,9 +759,6 @@ class OpsAlertUpdateNode(BaseNode):
     node_type = "ops/alert_update"
 
     async def execute(self, ctx: "ExecutionContext") -> NodeResult:
-        from django.utils import timezone
-        from servers.models import ServerAlert
-
         config = self.node_data
         action = str(config.get("action") or "resolve").strip().lower()
         if action not in ALERT_ACTIONS:
@@ -773,27 +767,16 @@ class OpsAlertUpdateNode(BaseNode):
         if not alert_id:
             return NodeResult(error="alert_id is required or must be present in pipeline context")
 
-        def _resolve_alert():
-            alert = ServerAlert.objects.select_related("server").filter(id=alert_id, server__user=ctx.user).first()
-            if alert is None:
-                return None
-            if action == "resolve":
-                alert.is_resolved = True
-                alert.resolved_at = timezone.now()
-                alert.resolved_by = ctx.user if getattr(ctx.user, "is_authenticated", False) else None
-                alert.save(update_fields=["is_resolved", "resolved_at", "resolved_by"])
-            return alert
-
-        alert = await sync_to_async(_resolve_alert, thread_sensitive=True)()
+        alert = await _ops_runtime().update_alert(user=ctx.user, alert_id=alert_id, action=action)
         if alert is None:
             return NodeResult(error=f"Alert not found or inaccessible: {alert_id}")
         output = {
-            "alert_id": alert.id,
+            "alert_id": alert["id"],
             "action": action,
-            "title": alert.title,
-            "server": alert.server.name,
-            "is_resolved": alert.is_resolved,
-            "resolved_at": alert.resolved_at.isoformat() if alert.resolved_at else None,
+            "title": alert["title"],
+            "server": alert["server_name"],
+            "is_resolved": alert["is_resolved"],
+            "resolved_at": alert["resolved_at"],
             "note": ctx.resolve_template(str(config.get("note") or "")),
         }
-        return NodeResult(output={"output": f"Alert #{alert.id} {action}: {alert.title}", "alert": output})
+        return NodeResult(output={"output": f"Alert #{alert['id']} {action}: {alert['title']}", "alert": output})

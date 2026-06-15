@@ -5,6 +5,7 @@ import json
 import threading
 from typing import Any
 
+from django.conf import settings
 from django.utils import timezone
 
 from app.runtime_limits import get_pipeline_run_limit_error
@@ -57,6 +58,9 @@ def create_pipeline_run(
 
 def launch_pipeline_run_async(run: PipelineRun) -> None:
     """Launch pipeline execution in a background thread."""
+
+    if getattr(settings, "PIPELINE_RUNS_DISABLE_BACKGROUND", False):
+        return
 
     run_pk = run.pk
 

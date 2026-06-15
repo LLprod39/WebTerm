@@ -253,19 +253,26 @@ def test_pipeline_executor_wait_node_honors_stop_request():
         owner=user,
         nodes=[
             {
+                "id": "manual",
+                "type": "trigger/manual",
+                "position": {"x": -160, "y": 0},
+                "data": {"label": "Manual"},
+            },
+            {
                 "id": "wait_1",
                 "type": "logic/wait",
                 "position": {"x": 0, "y": 0},
                 "data": {"wait_minutes": 5},
             }
         ],
-        edges=[],
+        edges=[{"id": "manual-wait", "source": "manual", "target": "wait_1", "sourceHandle": "out"}],
     )
     run = PipelineRun.objects.create(
         pipeline=pipeline,
         triggered_by=user,
         status=PipelineRun.STATUS_PENDING,
         context={},
+        entry_node_id="manual",
     )
 
     holder: dict[str, PipelineExecutor] = {}

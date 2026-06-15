@@ -335,10 +335,10 @@ AUTHENTICATION_BACKENDS = ['django.contrib.auth.backends.ModelBackend']
 
 # External SPA frontend (React/Vite)
 SERVE_STATIC_FILES = _env_bool("SERVE_STATIC_FILES", not DEBUG)
-USE_X_FORWARDED_HOST = _env_bool("USE_X_FORWARDED_HOST", True)
+USE_X_FORWARDED_HOST = _env_bool("USE_X_FORWARDED_HOST", False)
 SECURE_PROXY_SSL_HEADER = (
     ("HTTP_X_FORWARDED_PROTO", "https")
-    if _env_bool("TRUST_X_FORWARDED_PROTO", True)
+    if _env_bool("TRUST_X_FORWARDED_PROTO", False)
     else None
 )
 SECURE_SSL_REDIRECT = _env_bool("SECURE_SSL_REDIRECT", _PRODUCTION_HTTPS)
@@ -417,6 +417,7 @@ DOMAIN_AUTH_LOWERCASE_USERNAMES = _env_bool("DOMAIN_AUTH_LOWERCASE_USERNAMES", T
 DOMAIN_AUTH_DEFAULT_PROFILE = (
     os.getenv("DOMAIN_AUTH_DEFAULT_PROFILE", "server_only") or "server_only"
 ).strip().lower() or "server_only"
+CSRF_TRUST_NGROK = _env_bool("CSRF_TRUST_NGROK", DEBUG)
 
 # LDAP / AD auth (form-based login against corporate directory)
 LDAP_ENABLED = _env_bool("LDAP_ENABLED", False)

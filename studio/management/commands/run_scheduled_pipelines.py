@@ -18,8 +18,17 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from app.runtime_limits import get_pipeline_run_limit_error
-from studio.cron_schedule import previous_due_datetime
+from studio import cron_schedule
 from studio.models import PipelineTrigger
+
+croniter = cron_schedule.croniter
+_IMPORTED_CRONITER = croniter
+
+
+def _croniter_factory():
+    if croniter is not _IMPORTED_CRONITER:
+        return croniter
+    return cron_schedule.croniter
 
 
 class Command(BaseCommand):
@@ -68,7 +77,11 @@ class Command(BaseCommand):
             if not trigger.cron_expression:
                 continue
             try:
-                last_due_dt = previous_due_datetime(trigger.cron_expression, now)
+                last_due_dt = cron_schedule.previous_due_datetime(
+                    trigger.cron_expression,
+                    now,
+                    croniter_factory=_croniter_factory(),
+                )
 
                 if trigger.last_triggered_at:
                     should_fire = last_due_dt > trigger.last_triggered_at

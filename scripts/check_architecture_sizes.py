@@ -1,23 +1,5 @@
 #!/usr/bin/env python3
-"""
-Architecture boundary fitness checker.
-
-Enforces the structural constraints defined in docs/local/ARCHITECTURE_CONTRACT.md:
-  1. God-file prevention — file line-count limits with legacy baselines.
-  2. Import boundary validation — delegates to ``lint-imports`` (import-linter).
-
-Usage:
-    python scripts/check_architecture_sizes.py
-    python scripts/check_architecture_sizes.py --config path/to/pyproject.toml
-    python scripts/check_architecture_sizes.py --root src/
-    python scripts/check_architecture_sizes.py --update-baseline
-        Scan the project and pin every file currently over the standard limit
-        into [tool.architecture.legacy_baselines] in pyproject.toml.  Use this
-        ONCE before starting a refactoring effort to freeze the current state.
-    python scripts/check_architecture_sizes.py --strict-new
-        Treat any *new* (non-legacy) file above the strict limit as a hard
-        failure instead of the default soft GOD-FILE warning.
-"""
+"""Architecture boundary fitness checker."""
 
 from __future__ import annotations
 
@@ -42,14 +24,7 @@ except ModuleNotFoundError:
 
 
 class PathNormalizer:
-    """
-    Centralises the rule for converting raw filesystem paths into the
-    canonical ``./forward/slash`` form used throughout the codebase.
-
-    Keeping this in its own class prevents the normalisation logic from
-    being scattered across :class:`ArchitectureConfig` and
-    :class:`DefaultSizeValidator`.
-    """
+    """Converts raw filesystem paths into the canonical ``./forward/slash`` form."""
 
     @staticmethod
     def normalize(path: str) -> str:
@@ -84,16 +59,24 @@ _DEFAULT_EXCLUDE_DIRS: Final[frozenset[str]] = frozenset(
     {
         "node_modules",
         "venv",
+        ".venv",
         "migrations",
         "dist",
+        "build",
         ".git",
+        ".pytest_cache",
+        ".playwright-mcp",
         ".ruff_cache",
         "__pycache__",
+        "agent_projects",
+        "media",
+        "outputs",
+        "staticfiles",
     }
 )
 
 _DEFAULT_EXCLUDE_FRAGMENTS: Final[frozenset[str]] = frozenset(
-    {"production-upload-bundle"}
+    {"production-upload-bundle", "frontend/playwright-report", "frontend/test-results"}
 )
 
 _DEFAULT_EXTENSIONS: Final[frozenset[str]] = frozenset({".py", ".ts", ".tsx"})
@@ -101,15 +84,7 @@ _DEFAULT_EXTENSIONS: Final[frozenset[str]] = frozenset({".py", ".ts", ".tsx"})
 
 @dataclass(frozen=True)
 class ArchitectureConfig:
-    """
-    Immutable configuration for all architecture checks.
-
-    Loaded from ``pyproject.toml`` via :meth:`from_toml`.  Defaults are set
-    so the checker is functional even without a config file (CI bootstrap).
-
-    The class is ``frozen=True`` so it can be safely shared across threads
-    and passed by reference without risk of accidental mutation.
-    """
+    """Immutable configuration loaded from ``pyproject.toml``."""
 
     standard_limit: int = 500
     strict_limit: int = 1000
@@ -238,6 +213,16 @@ class ProjectScanner:
     def scan(self, root_dir: str = ".") -> list[FileMetric]:
         """Return metrics for all tracked files under *root_dir*."""
         metrics: list[FileMetric] = []
+        git_files = self._git_candidate_files(root_dir)
+        if git_files is not None:
+            root_abs = os.path.abspath(root_dir)
+            for full_path in git_files:
+                if self._file_is_excluded(full_path) or not self._has_tracked_extension(full_path):
+                    continue
+                lines = self._count_lines(full_path)
+                rel_path = os.path.relpath(full_path, root_abs)
+                metrics.append(self._validator.validate(rel_path, lines, self._config))
+            return metrics
 
         for dirpath, dirnames, filenames in os.walk(root_dir):
             # Prune excluded directory names in-place so os.walk won't descend.
@@ -260,9 +245,36 @@ class ProjectScanner:
     # Private helpers
     # ------------------------------------------------------------------
 
+    def _git_candidate_files(self, root_dir: str) -> list[str] | None:
+        try:
+            result = subprocess.run(
+                ["git", "-C", root_dir, "ls-files", "--cached", "--others", "--exclude-standard"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except FileNotFoundError:
+            return None
+        if result.returncode != 0:
+            return None
+        root = os.path.abspath(root_dir)
+        files: list[str] = []
+        for raw in result.stdout.splitlines():
+            rel = raw.strip()
+            if not rel:
+                continue
+            files.append(os.path.join(root, rel))
+        return files
+
     def _path_is_excluded(self, dirpath: str) -> bool:
         norm = dirpath.replace("\\", "/")
         return any(fragment in norm for fragment in self._config.exclude_path_fragments)
+
+    def _file_is_excluded(self, path: str) -> bool:
+        norm = path.replace("\\", "/")
+        if any(fragment in norm for fragment in self._config.exclude_path_fragments):
+            return True
+        return any(part in self._config.exclude_dirs for part in norm.split("/"))
 
     def _has_tracked_extension(self, filename: str) -> bool:
         _, ext = os.path.splitext(filename)

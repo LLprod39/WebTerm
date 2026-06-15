@@ -37,6 +37,20 @@ class _EmptyAsyncIter:
         raise StopAsyncIteration
 
 
+class _AsyncByteStream:
+    def __init__(self, chunks: list[bytes]):
+        self._chunks = iter(chunks)
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        try:
+            return next(self._chunks)
+        except StopIteration as exc:
+            raise StopAsyncIteration from exc
+
+
 class TestGeminiJsonMode:
     """Gemini: json_mode → response_mime_type in config."""
 
@@ -91,10 +105,10 @@ class TestOpenAIJsonMode:
         """response_format is added for non-gpt5 models."""
         fake_response = AsyncMock()
         fake_response.status = 200
-        fake_response.content.__aiter__ = AsyncMock(return_value=iter([
+        fake_response.content = _AsyncByteStream([
             b'data: {"choices":[{"delta":{"content":"{\\"mode\\":\\"answer\\"}"}}]}\n',
             b"data: [DONE]\n",
-        ]))
+        ])
 
         fake_session = AsyncMock()
         fake_session.__aenter__ = AsyncMock(return_value=fake_session)
@@ -128,10 +142,10 @@ class TestOpenAIJsonMode:
         """gpt-5 Responses API keeps json format and injects JSON hint into input."""
         fake_response = AsyncMock()
         fake_response.status = 200
-        fake_response.content.__aiter__ = AsyncMock(return_value=iter([
+        fake_response.content = _AsyncByteStream([
             b'data: {"type":"response.output_text.delta","delta":"{\\"ok\\":true}"}\n',
             b'data: {"type":"response.completed"}\n',
-        ]))
+        ])
 
         fake_session = AsyncMock()
         fake_session.__aenter__ = AsyncMock(return_value=fake_session)

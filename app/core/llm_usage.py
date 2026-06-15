@@ -79,7 +79,7 @@ def log_llm_usage(
         loop = None
 
     if loop and loop.is_running():
-        if _uses_sqlite_database():
+        if _uses_sqlite_database() and getattr(django_settings, "LLM_USAGE_SKIP_DETACHED_SQLITE_LOGGING", True):
             logger.debug("Skipping detached async LLM usage logging on SQLite to avoid database locks")
             return
         # Detached background logging must not inherit asgiref's thread-sensitive

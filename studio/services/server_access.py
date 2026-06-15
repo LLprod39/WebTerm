@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from servers.services.server_query import get_owned_server as get_owned_server_for_user
 from servers.services.server_query import get_servers_for_user
 
 
@@ -46,7 +47,7 @@ def get_owned_servers_by_ids(user, server_ids: list[int] | None, *, order_by: st
 def get_owned_server(user, server_id: int | None):
     if server_id is None:
         return None
-    return _owned_servers_queryset(user, order_by="-updated_at").filter(pk=server_id).first()
+    return get_owned_server_for_user(server_id, user)
 
 
 def get_owned_server_id_set(user, server_ids: list[int] | None) -> set[int]:

@@ -139,6 +139,9 @@ class CsrfTrustNgrokMiddleware:
             settings.CSRF_TRUSTED_ORIGINS = trusted
 
     def __call__(self, request):
+        if not bool(getattr(settings, "CSRF_TRUST_NGROK", False)):
+            return self.get_response(request)
+
         origins_to_trust: set[str] = set()
 
         # 1) Origin — браузер часто шлёт при CORS / частично при POST

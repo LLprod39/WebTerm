@@ -29,6 +29,8 @@ EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 # Always run Celery tasks synchronously — no broker required
 CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = True
+LLM_USAGE_SKIP_DETACHED_SQLITE_LOGGING = False
+PIPELINE_RUNS_DISABLE_BACKGROUND = True
 
 # Use in-memory channel layer — no Redis required
 CHANNEL_LAYERS = {
