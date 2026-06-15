@@ -75,6 +75,24 @@ def build_all_nodes_smoke_nodes(
             },
         },
         {
+            "id": "monitoring_start",
+            "type": "trigger/monitoring",
+            "position": {"x": 800, "y": 20},
+            "data": {
+                "label": "Monitoring Alert Start",
+                "label_ru": "Запуск по alert",
+                "is_active": True,
+                "server_ids": primary_server_ids,
+                "severities": ["critical"],
+                "alert_types": ["service"],
+                "monitoring_filters": {
+                    "server_ids": primary_server_ids,
+                    "severities": ["critical"],
+                    "alert_types": ["service"],
+                },
+            },
+        },
+        {
             "id": "trigger_merge",
             "type": "logic/merge",
             "position": {"x": 320, "y": 140},
@@ -125,6 +143,7 @@ def build_all_nodes_smoke_nodes(
                 "to_email": " ",
                 "tg_bot_token": " ",
                 "tg_chat_id": " ",
+                "manual_link_only": True,
                 "message": (
                     "Smoke-проверка всех узлов ожидает подтверждения.\n\n"
                     "{all_outputs}\n\n"
@@ -341,9 +360,173 @@ def build_all_nodes_smoke_nodes(
             },
         },
         {
+            "id": "telegram_input_probe",
+            "type": "logic/telegram_input",
+            "position": {"x": 1300, "y": 920},
+            "data": {
+                "label": "Telegram Input (Disabled Safe)",
+                "label_ru": "Telegram-ввод (безопасно отключен)",
+                "tg_bot_token": " ",
+                "tg_chat_id": " ",
+                "message": "Этот Telegram input намеренно отключен для безопасной smoke-проверки.\n\n{all_outputs}",
+                "timeout_minutes": 1,
+            },
+        },
+        {
+            "id": "server_snapshot_probe",
+            "type": "ops/server_snapshot",
+            "position": {"x": 1460, "y": 920},
+            "data": {
+                "label": "Server Snapshot (Context Safe)",
+                "label_ru": "Снимок сервера (context)",
+                "server_id_context_key": "server_id",
+                "sections": ["overview", "services", "docker", "disk"],
+                "on_failure": "continue",
+            },
+        },
+        {
+            "id": "log_query_probe",
+            "type": "ops/log_query",
+            "position": {"x": 1540, "y": 920},
+            "data": {
+                "label": "Log Query (Context Safe)",
+                "label_ru": "Запрос логов (context)",
+                "server_id_context_key": "server_id",
+                "source": "journal",
+                "lines": 80,
+                "filter_text": "",
+                "on_failure": "continue",
+            },
+        },
+        {
+            "id": "file_action_probe",
+            "type": "ops/file_action",
+            "position": {"x": 1620, "y": 920},
+            "data": {
+                "label": "File Read (Context Safe)",
+                "label_ru": "Чтение файла (context)",
+                "server_id_context_key": "server_id",
+                "action": "read",
+                "path": "/etc/os-release",
+                "max_bytes": 65536,
+                "on_failure": "continue",
+            },
+        },
+        {
+            "id": "package_action_probe",
+            "type": "ops/package_action",
+            "position": {"x": 1700, "y": 920},
+            "data": {
+                "label": "Package Updates (Read-Only)",
+                "label_ru": "Обновления пакетов (read-only)",
+                "server_id_context_key": "server_id",
+                "action": "list_updates",
+                "packages": [],
+                "on_failure": "continue",
+            },
+        },
+        {
+            "id": "disk_cleanup_probe",
+            "type": "ops/disk_cleanup",
+            "position": {"x": 1780, "y": 920},
+            "data": {
+                "label": "Disk Cleanup Inspect",
+                "label_ru": "Disk cleanup inspect",
+                "server_id_context_key": "server_id",
+                "action": "inspect",
+                "dry_run": True,
+                "on_failure": "continue",
+            },
+        },
+        {
+            "id": "backup_restore_check_probe",
+            "type": "ops/backup_restore_check",
+            "position": {"x": 1860, "y": 920},
+            "data": {
+                "label": "Backup Check (Read-Only)",
+                "label_ru": "Проверка backup (read-only)",
+                "server_id_context_key": "server_id",
+                "action": "inspect",
+                "path": "/var/backups",
+                "max_depth": 2,
+                "max_files": 10,
+                "max_age_hours": 24,
+                "on_failure": "continue",
+            },
+        },
+        {
+            "id": "service_action_probe",
+            "type": "ops/service_action",
+            "position": {"x": 2020, "y": 920},
+            "data": {
+                "label": "Service Action (Context Safe)",
+                "label_ru": "Service action (context)",
+                "server_id_context_key": "server_id",
+                "service": "",
+                "action": "reload",
+                "verify": True,
+                "on_failure": "continue",
+            },
+        },
+        {
+            "id": "docker_action_probe",
+            "type": "ops/docker_action",
+            "position": {"x": 2180, "y": 920},
+            "data": {
+                "label": "Docker Action (Context Safe)",
+                "label_ru": "Docker action (context)",
+                "server_id_context_key": "server_id",
+                "container": "",
+                "action": "restart",
+                "include_logs": False,
+                "verify": True,
+                "on_failure": "continue",
+            },
+        },
+        {
+            "id": "process_action_probe",
+            "type": "ops/process_action",
+            "position": {"x": 2340, "y": 920},
+            "data": {
+                "label": "Process Action (Context Safe)",
+                "label_ru": "Process action (context)",
+                "server_id_context_key": "server_id",
+                "pid_context_key": "pid",
+                "action": "terminate",
+                "on_failure": "continue",
+            },
+        },
+        {
+            "id": "http_check_probe",
+            "type": "ops/http_check",
+            "position": {"x": 2500, "y": 920},
+            "data": {
+                "label": "HTTP Health Check",
+                "label_ru": "HTTP health check",
+                "url": LOCAL_WEBHOOK_TARGET,
+                "method": "GET",
+                "expected_status": [200, 204, 404],
+                "timeout_seconds": 5,
+                "on_failure": "continue",
+            },
+        },
+        {
+            "id": "alert_update_probe",
+            "type": "ops/alert_update",
+            "position": {"x": 2660, "y": 920},
+            "data": {
+                "label": "Alert Update (Context Safe)",
+                "label_ru": "Alert update (context)",
+                "alert_id_context_key": "alert_id",
+                "action": "resolve",
+                "note": "Smoke path only resolves when alert_id is explicitly provided.",
+                "on_failure": "continue",
+            },
+        },
+        {
             "id": "branch_merge",
             "type": "logic/merge",
-            "position": {"x": 600, "y": 1100},
+            "position": {"x": 1040, "y": 1100},
             "data": {
                 "label": "Collect Branch Results",
                 "label_ru": "Собрать результаты веток",
@@ -353,7 +536,7 @@ def build_all_nodes_smoke_nodes(
         {
             "id": "final_report",
             "type": "output/report",
-            "position": {"x": 600, "y": 1240},
+            "position": {"x": 1040, "y": 1240},
             "data": {
                 "label": "Final Smoke Report",
                 "label_ru": "Финальный smoke-отчет",
@@ -373,11 +556,23 @@ def build_all_nodes_smoke_edges() -> list[dict]:
         "webhook_probe",
         "email_probe",
         "telegram_probe",
+        "server_snapshot_probe",
+        "log_query_probe",
+        "file_action_probe",
+        "package_action_probe",
+        "disk_cleanup_probe",
+        "backup_restore_check_probe",
+        "service_action_probe",
+        "docker_action_probe",
+        "process_action_probe",
+        "http_check_probe",
+        "alert_update_probe",
     ]
     edges = [
         {"id": "e_manual_merge", "source": "manual_start", "target": "trigger_merge", "sourceHandle": "out", "animated": True},
         {"id": "e_webhook_merge", "source": "webhook_start", "target": "trigger_merge", "sourceHandle": "out", "animated": True},
         {"id": "e_schedule_merge", "source": "schedule_start", "target": "trigger_merge", "sourceHandle": "out", "animated": True},
+        {"id": "e_monitoring_merge", "source": "monitoring_start", "target": "trigger_merge", "sourceHandle": "out", "animated": True},
         {"id": "e_merge_entry", "source": "trigger_merge", "target": "entry_report", "sourceHandle": "out", "animated": True},
         {"id": "e_entry_condition", "source": "entry_report", "target": "condition_gate", "sourceHandle": "success", "animated": True},
         {"id": "e_condition_true", "source": "condition_gate", "target": "approval_gate", "sourceHandle": "true", "animated": True, "label": "true"},
@@ -385,7 +580,6 @@ def build_all_nodes_smoke_edges() -> list[dict]:
         {"id": "e_approval_approved", "source": "approval_gate", "target": "post_condition_merge", "sourceHandle": "approved", "animated": True, "label": "approved"},
         {"id": "e_approval_rejected", "source": "approval_gate", "target": "rejected_report", "sourceHandle": "rejected", "animated": True, "label": "rejected"},
         {"id": "e_approval_timeout", "source": "approval_gate", "target": "timeout_report", "sourceHandle": "timeout", "animated": True, "label": "timeout"},
-        {"id": "e_bypass_wait", "source": "bypass_report", "target": "post_condition_merge", "sourceHandle": "success", "animated": True},
         {"id": "e_gate_merge_wait", "source": "post_condition_merge", "target": "wait_short", "sourceHandle": "out", "animated": True},
         {"id": "e_wait_parallel", "source": "wait_short", "target": "parallel_fanout", "sourceHandle": "done", "animated": True},
     ]
@@ -417,6 +611,33 @@ def build_all_nodes_smoke_edges() -> list[dict]:
                 "animated": True,
             }
         )
+    edges.append(
+        {
+            "id": "e_parallel_telegram_input_probe",
+            "source": "parallel_fanout",
+            "target": "telegram_input_probe",
+            "sourceHandle": "out",
+            "animated": True,
+        }
+    )
+    edges.append(
+        {
+            "id": "e_telegram_input_received_merge",
+            "source": "telegram_input_probe",
+            "target": "branch_merge",
+            "sourceHandle": "received",
+            "animated": True,
+        }
+    )
+    edges.append(
+        {
+            "id": "e_telegram_input_timeout_merge",
+            "source": "telegram_input_probe",
+            "target": "branch_merge",
+            "sourceHandle": "timeout",
+            "animated": True,
+        }
+    )
     edges.append(
         {
             "id": "e_branch_merge_report",

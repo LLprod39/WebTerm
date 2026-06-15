@@ -22,6 +22,7 @@ import {
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { localize, useI18n } from "@/lib/i18n";
 
 interface EditorTab {
   id: string;
@@ -78,6 +79,7 @@ export function TextEditorWindow({
   onPathConsumed?: () => void;
 }) {
   const { toast } = useToast();
+  const { lang } = useI18n();
   const [tabs, setTabs] = useState<EditorTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [openPath, setOpenPath] = useState(initialPath || "");
@@ -131,7 +133,7 @@ export function TextEditorWindow({
 
       try {
         const res = await readServerTextFile(server.id, filePath);
-        if (!res.success) throw new Error("Failed to read file");
+        if (!res.success) throw new Error(localize(lang, "Не удалось прочитать файл", "Failed to read file"));
         pushRecentPath(filePath);
         setTabs((prev) =>
           prev.map((t) =>
@@ -148,7 +150,7 @@ export function TextEditorWindow({
           ),
         );
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Failed to read file";
+        const message = err instanceof Error ? err.message : localize(lang, "Не удалось прочитать файл", "Failed to read file");
         const isMissingFileError = /не найдены|not found|404/i.test(message);
         setTabs((prev) =>
           prev.map((t) =>
@@ -170,13 +172,13 @@ export function TextEditorWindow({
         if (isMissingFileError) {
           pushRecentPath(filePath);
           toast({
-            title: "New file",
-            description: `${filePath} will be created when you save it`,
+            title: localize(lang, "Новый файл", "New file"),
+            description: localize(lang, `${filePath} будет создан при сохранении`, `${filePath} will be created when you save it`),
           });
         }
       }
     },
-    [pushRecentPath, server.id, tabs, toast],
+    [lang, pushRecentPath, server.id, tabs, toast],
   );
 
   useEffect(() => {
@@ -195,7 +197,7 @@ export function TextEditorWindow({
 
       try {
         const res = await writeServerTextFile(server.id, tab.path, tab.content);
-        if (!res.success) throw new Error("Failed to save");
+        if (!res.success) throw new Error(localize(lang, "Не удалось сохранить", "Failed to save"));
         pushRecentPath(tab.path);
         setTabs((prev) =>
           prev.map((t) =>
@@ -204,16 +206,16 @@ export function TextEditorWindow({
               : t,
           ),
         );
-        toast({ title: "Saved", description: tab.filename });
+        toast({ title: localize(lang, "Сохранено", "Saved"), description: tab.filename });
       } catch (err) {
         toast({
-          title: "Save failed",
-          description: err instanceof Error ? err.message : "Unknown error",
+          title: localize(lang, "Сохранение не удалось", "Save failed"),
+          description: err instanceof Error ? err.message : localize(lang, "Неизвестная ошибка", "Unknown error"),
           variant: "destructive",
         });
       }
     },
-    [pushRecentPath, server.id, tabs, toast],
+    [lang, pushRecentPath, server.id, tabs, toast],
   );
 
   const reloadFile = useCallback(
@@ -227,7 +229,7 @@ export function TextEditorWindow({
 
       try {
         const res = await readServerTextFile(server.id, tab.path);
-        if (!res.success) throw new Error("Failed to reload file");
+        if (!res.success) throw new Error(localize(lang, "Не удалось перезагрузить файл", "Failed to reload file"));
         setTabs((prev) =>
           prev.map((item) =>
             item.id === tabId
@@ -247,13 +249,13 @@ export function TextEditorWindow({
         setTabs((prev) =>
           prev.map((item) =>
             item.id === tabId
-              ? { ...item, loading: false, error: err instanceof Error ? err.message : "Failed to reload file" }
+              ? { ...item, loading: false, error: err instanceof Error ? err.message : localize(lang, "Не удалось перезагрузить файл", "Failed to reload file") }
               : item,
           ),
         );
       }
     },
-    [server.id, tabs],
+    [lang, server.id, tabs],
   );
 
   const closeTab = useCallback(
@@ -309,23 +311,23 @@ export function TextEditorWindow({
       java: "Java", rb: "Ruby", php: "PHP",
       nginx: "Nginx", service: "systemd",
     };
-    return map[ext] || "Plain text";
+    return map[ext] || localize(lang, "Обычный текст", "Plain text");
   };
 
   const copyPath = useCallback(async () => {
     if (!activeTab?.path) return;
     await navigator.clipboard.writeText(activeTab.path);
-    toast({ title: "Path copied", description: activeTab.path });
-  }, [activeTab?.path, toast]);
+    toast({ title: localize(lang, "Путь скопирован", "Path copied"), description: activeTab.path });
+  }, [activeTab?.path, lang, toast]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-card text-foreground" onKeyDown={handleKeyDown}>
       <div className="border-b border-border bg-card px-3 py-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
-            <div className="text-sm font-semibold text-foreground">Text Editor</div>
+            <div className="text-sm font-semibold text-foreground">{localize(lang, "Текстовый редактор", "Text Editor")}</div>
             <div className="mt-1 truncate text-xs text-muted-foreground">
-              {activeTab?.path || "Open a config, script, or note file to edit it inline."}
+              {activeTab?.path || localize(lang, "Откройте config, скрипт или заметку для inline-редактирования.", "Open a config, script, or note file to edit it inline.")}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -337,7 +339,7 @@ export function TextEditorWindow({
               onClick={() => setShowOpenDialog(true)}
             >
               <Plus className="mr-1.5 h-3.5 w-3.5" />
-              Open
+              {localize(lang, "Открыть", "Open")}
             </Button>
             <Button
               type="button"
@@ -348,7 +350,7 @@ export function TextEditorWindow({
               disabled={!activeTabId || !activeTab?.dirty}
             >
               <Save className="mr-1.5 h-3.5 w-3.5" />
-              Save
+              {localize(lang, "Сохранить", "Save")}
             </Button>
             <Button
               type="button"
@@ -359,7 +361,7 @@ export function TextEditorWindow({
               disabled={!activeTab?.path}
             >
               <Copy className="mr-1.5 h-3.5 w-3.5" />
-              Copy Path
+              {localize(lang, "Копировать путь", "Copy Path")}
             </Button>
             <Button
               type="button"
@@ -368,7 +370,7 @@ export function TextEditorWindow({
               className="h-8 rounded-xl border-border px-3 text-xs"
               onClick={() => setSoftWrap((value) => !value)}
             >
-              Wrap
+              {localize(lang, "Перенос", "Wrap")}
             </Button>
           </div>
         </div>
@@ -378,34 +380,36 @@ export function TextEditorWindow({
         <ScrollArea className="flex-1">
           <div className="flex items-center gap-0.5 py-1">
             {tabs.map((tab) => (
-              <button
+              <div
                 key={tab.id}
-                type="button"
-                onClick={() => {
-                  setActiveTabId(tab.id);
-                  setShowOpenDialog(false);
-                }}
                 className={cn(
-                  "group flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs transition-colors",
+                  "group flex items-center gap-1.5 rounded-xl px-2 py-1 text-xs transition-colors",
                   activeTabId === tab.id
                     ? "border border-border bg-background text-foreground"
                     : "text-muted-foreground hover:bg-background/80 hover:text-foreground",
                 )}
               >
-                <FileCode2 className="h-3 w-3 shrink-0" />
-                <span className="max-w-32 truncate">{tab.filename}</span>
-                {tab.dirty && <span className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />}
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    closeTab(tab.id);
+                  onClick={() => {
+                    setActiveTabId(tab.id);
+                    setShowOpenDialog(false);
                   }}
-                  className="ml-0.5 flex h-4 w-4 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100 hover:bg-secondary"
+                  className="flex min-w-0 items-center gap-1.5 rounded-lg px-1 py-0.5 text-left"
+                >
+                  <FileCode2 className="h-3 w-3 shrink-0" />
+                  <span className="max-w-32 truncate">{tab.filename}</span>
+                  {tab.dirty && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => closeTab(tab.id)}
+                  className="ml-0.5 flex h-4 w-4 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100 hover:bg-secondary focus:opacity-100"
+                  aria-label={localize(lang, `Закрыть ${tab.filename}`, `Close ${tab.filename}`)}
                 >
                   <X className="h-2.5 w-2.5" />
                 </button>
-              </button>
+              </div>
             ))}
           </div>
         </ScrollArea>
@@ -415,6 +419,7 @@ export function TextEditorWindow({
           variant="ghost"
           className="h-7 w-7 shrink-0 rounded-xl p-0 text-muted-foreground hover:bg-secondary hover:text-foreground"
           onClick={() => setShowOpenDialog(true)}
+          aria-label={localize(lang, "Открыть файл", "Open file")}
         >
           <Plus className="h-3.5 w-3.5" />
         </Button>
@@ -428,7 +433,8 @@ export function TextEditorWindow({
             <Input
               value={openPath}
               onChange={(e) => setOpenPath(e.target.value)}
-              placeholder="/etc/nginx/nginx.conf or relative path (new files are allowed)..."
+              placeholder={localize(lang, "/etc/nginx/nginx.conf или относительный путь (новые файлы допустимы)...", "/etc/nginx/nginx.conf or relative path (new files are allowed)...")}
+              aria-label={localize(lang, "Путь файла для открытия или создания", "File path to open or create")}
               className="h-8 flex-1 rounded-xl border-border bg-background font-mono text-xs text-foreground placeholder:text-muted-foreground"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && openPath.trim()) {
@@ -445,7 +451,7 @@ export function TextEditorWindow({
               disabled={!openPath.trim()}
               onClick={() => void openFile(openPath.trim())}
             >
-              Open / Create
+              {localize(lang, "Открыть / создать", "Open / Create")}
             </Button>
             {tabs.length > 0 && (
               <Button
@@ -455,7 +461,7 @@ export function TextEditorWindow({
                 className="h-8 rounded-xl text-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
                 onClick={() => setShowOpenDialog(false)}
               >
-                Cancel
+                {localize(lang, "Отмена", "Cancel")}
               </Button>
             )}
           </div>
@@ -481,7 +487,7 @@ export function TextEditorWindow({
           </div>
           {recentPaths.length > 0 ? (
             <div className="mt-3">
-              <div className="mb-1.5 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Recent</div>
+              <div className="mb-1.5 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{localize(lang, "Недавние", "Recent")}</div>
               <div className="flex flex-wrap gap-1.5">
                 {recentPaths.map((path) => (
                   <button
@@ -504,14 +510,16 @@ export function TextEditorWindow({
           <div className="flex h-full items-center justify-center px-6 text-sm text-muted-foreground">
             <div className="text-center">
               <FileCode2 className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-              <div>Open a file to start editing</div>
-              <div className="mt-1 text-xs">Use a path, a preset, or a recent file from this workspace.</div>
+              <div>{localize(lang, "Откройте файл, чтобы начать редактирование", "Open a file to start editing")}</div>
+              <div className="mt-1 text-xs">{localize(lang, "Используйте путь, шаблон или недавний файл из рабочего пространства.", "Use a path, a preset, or a recent file from this workspace.")}</div>
             </div>
           </div>
         ) : activeTab.loading ? (
           <div className="flex h-full items-center justify-center">
             <Loader2 className="h-5 w-5 animate-spin text-primary" />
-            <span className="ml-2 text-sm text-muted-foreground">Loading {activeTab.filename}...</span>
+            <span className="ml-2 text-sm text-muted-foreground">
+              {localize(lang, `Загружаю ${activeTab.filename}...`, `Loading ${activeTab.filename}...`)}
+            </span>
           </div>
         ) : activeTab.error ? (
           <div className="flex h-full items-center justify-center p-6">
@@ -529,7 +537,7 @@ export function TextEditorWindow({
                   setShowOpenDialog(true);
                 }}
               >
-                Try another file
+                {localize(lang, "Попробовать другой файл", "Try another file")}
               </Button>
             </div>
           </div>
@@ -556,7 +564,7 @@ export function TextEditorWindow({
               <span>{getLanguageHint(activeTab.filename)}</span>
               <span>{activeTab.encoding}</span>
               {activeTab.isNew && (
-                <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground">New file</span>
+                <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground">{localize(lang, "Новый файл", "New file")}</span>
               )}
             </>
           )}
@@ -565,10 +573,10 @@ export function TextEditorWindow({
           {activeTab && (
             <>
               {activeTab.dirty && (
-                <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">Modified</span>
+                <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">{localize(lang, "Изменён", "Modified")}</span>
               )}
-              <span>{activeLineCount} lines</span>
-              <span>{activeCharCount} chars</span>
+              <span>{localize(lang, `${activeLineCount} строк`, `${activeLineCount} lines`)}</span>
+              <span>{localize(lang, `${activeCharCount} символов`, `${activeCharCount} chars`)}</span>
               <Button
                 type="button"
                 size="sm"
@@ -578,7 +586,7 @@ export function TextEditorWindow({
                 disabled={!activeTab.dirty}
               >
                 <Save className="h-3 w-3" />
-                Save
+                {localize(lang, "Сохранить", "Save")}
               </Button>
               <Button
                 type="button"
@@ -589,7 +597,7 @@ export function TextEditorWindow({
                 disabled={activeTab.isNew}
               >
                 <RotateCcw className="h-3 w-3" />
-                Reload
+                {localize(lang, "Перезагрузить", "Reload")}
               </Button>
             </>
           )}

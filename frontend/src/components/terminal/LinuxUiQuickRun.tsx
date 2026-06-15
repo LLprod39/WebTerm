@@ -18,6 +18,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { executeServerCommand, type FrontendServer } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { localize, useI18n } from "@/lib/i18n";
 
 interface CommandResult {
   id: number;
@@ -40,6 +41,7 @@ export function QuickRunWindow({
   active: boolean;
 }) {
   const { toast } = useToast();
+  const { lang } = useI18n();
   const [command, setCommand] = useState("");
   const [isRunning, setIsRunning] = useState(false);
   const [history, setHistory] = useState<CommandResult[]>([]);
@@ -86,7 +88,7 @@ export function QuickRunWindow({
             exitCode: null,
             timestamp: new Date(),
             duration: Date.now() - start,
-            error: err instanceof Error ? err.message : "Command execution failed",
+            error: err instanceof Error ? err.message : localize(lang, "Команда не выполнилась", "Command execution failed"),
           },
         ]);
       } finally {
@@ -96,7 +98,7 @@ export function QuickRunWindow({
         }, 50);
       }
     },
-    [server.id, isRunning],
+    [server.id, isRunning, lang],
   );
 
   const handleKeyDown = useCallback(
@@ -130,13 +132,13 @@ export function QuickRunWindow({
 
   const copyOutput = useCallback((text: string) => {
     void navigator.clipboard.writeText(text);
-    toast({ title: "Copied", description: "Output copied to clipboard" });
-  }, [toast]);
+    toast({ title: localize(lang, "Скопировано", "Copied"), description: localize(lang, "Вывод скопирован в буфер обмена", "Output copied to clipboard") });
+  }, [lang, toast]);
 
   const copyCommand = useCallback((text: string) => {
     void navigator.clipboard.writeText(text);
-    toast({ title: "Copied", description: "Command copied to clipboard" });
-  }, [toast]);
+    toast({ title: localize(lang, "Скопировано", "Copied"), description: localize(lang, "Команда скопирована в буфер обмена", "Command copied to clipboard") });
+  }, [lang, toast]);
 
   const quickCommands = [
     { label: "uptime", cmd: "uptime" },
@@ -163,24 +165,28 @@ export function QuickRunWindow({
       <div className="border-b border-border bg-card px-4 py-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
-            <div className="text-sm font-semibold text-foreground">Quick Run</div>
+            <div className="text-sm font-semibold text-foreground">{localize(lang, "Быстрый запуск", "Quick Run")}</div>
             <div className="mt-1 text-xs text-muted-foreground">
-              Run a focused command, inspect the result, and re-run from history when needed.
+              {localize(
+                lang,
+                "Запустите точечную команду, проверьте результат и повторите её из истории при необходимости.",
+                "Run a focused command, inspect the result, and re-run from history when needed.",
+              )}
             </div>
           </div>
           <div className="grid grid-cols-3 gap-2 text-xs">
             <div className="rounded-xl border border-border bg-background px-3 py-2">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">History</div>
+              <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{localize(lang, "История", "History")}</div>
               <div className="mt-1 text-base font-semibold text-foreground">{history.length}</div>
             </div>
             <div className="rounded-xl border border-border bg-background px-3 py-2">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Failures</div>
+              <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{localize(lang, "Ошибки", "Failures")}</div>
               <div className="mt-1 text-base font-semibold text-foreground">
                 {history.filter((item) => item.error || item.exitCode !== 0).length}
               </div>
             </div>
             <div className="rounded-xl border border-border bg-background px-3 py-2">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Host</div>
+              <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{localize(lang, "Хост", "Host")}</div>
               <div className="mt-1 truncate font-mono text-[11px] text-muted-foreground">{server.host}</div>
             </div>
           </div>
@@ -188,7 +194,7 @@ export function QuickRunWindow({
 
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           <Terminal className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Quick presets</span>
+          <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{localize(lang, "Быстрые шаблоны", "Quick presets")}</span>
           <div className="flex flex-wrap gap-1.5">
             {quickCommands.map((qc) => (
               <button
@@ -212,7 +218,8 @@ export function QuickRunWindow({
             <Input
               value={historyFilter}
               onChange={(event) => setHistoryFilter(event.target.value)}
-              placeholder="Filter command history and output..."
+              placeholder={localize(lang, "Фильтр истории команд и вывода...", "Filter command history and output...")}
+              aria-label={localize(lang, "Фильтр истории команд и вывода", "Filter command history and output")}
               className="h-9 rounded-xl border-border bg-background pl-9 text-sm text-foreground placeholder:text-muted-foreground"
             />
           </div>
@@ -224,7 +231,7 @@ export function QuickRunWindow({
             onClick={() => setShowOnlyFailures((value) => !value)}
           >
             <ListFilter className="mr-1.5 h-3.5 w-3.5" />
-            Failed only
+            {localize(lang, "Только ошибки", "Failed only")}
           </Button>
           {history.length > 0 ? (
             <Button
@@ -235,7 +242,7 @@ export function QuickRunWindow({
               onClick={() => setHistory([])}
             >
               <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-              Clear history
+              {localize(lang, "Очистить историю", "Clear history")}
             </Button>
           ) : null}
         </div>
@@ -246,9 +253,15 @@ export function QuickRunWindow({
           <div className="flex h-full items-center justify-center p-6">
             <div className="text-center">
               <Terminal className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-              <div className="text-sm text-muted-foreground">Run commands on {server.name}</div>
+              <div className="text-sm text-muted-foreground">
+                {localize(lang, `Запускайте команды на ${server.name}`, `Run commands on ${server.name}`)}
+              </div>
               <div className="mt-1 text-xs text-muted-foreground">
-                Use quick presets for inspection or type your own command below.
+                {localize(
+                  lang,
+                  "Используйте быстрые шаблоны для проверки или введите свою команду ниже.",
+                  "Use quick presets for inspection or type your own command below.",
+                )}
               </div>
             </div>
           </div>
@@ -256,7 +269,7 @@ export function QuickRunWindow({
           <div className="space-y-3 px-4 py-4">
             {filteredHistory.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-                No command history items match the current filter.
+                {localize(lang, "История команд не совпала с текущим фильтром.", "No command history items match the current filter.")}
               </div>
             ) : null}
             {filteredHistory.map((result) => (
@@ -291,9 +304,17 @@ export function QuickRunWindow({
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                   <span>{result.timestamp.toLocaleTimeString()}</span>
                   <span>•</span>
-                  <span>{result.stdout ? `${result.stdout.split("\n").length} stdout lines` : "no stdout"}</span>
+                  <span>
+                    {result.stdout
+                      ? localize(lang, `${result.stdout.split("\n").length} строк stdout`, `${result.stdout.split("\n").length} stdout lines`)
+                      : localize(lang, "stdout нет", "no stdout")}
+                  </span>
                   <span>•</span>
-                  <span>{result.stderr ? `${result.stderr.split("\n").length} stderr lines` : "no stderr"}</span>
+                  <span>
+                    {result.stderr
+                      ? localize(lang, `${result.stderr.split("\n").length} строк stderr`, `${result.stderr.split("\n").length} stderr lines`)
+                      : localize(lang, "stderr нет", "no stderr")}
+                  </span>
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -306,7 +327,7 @@ export function QuickRunWindow({
                     disabled={isRunning}
                   >
                     <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-                    Run again
+                    {localize(lang, "Запустить снова", "Run again")}
                   </Button>
                   <Button
                     type="button"
@@ -316,7 +337,7 @@ export function QuickRunWindow({
                     onClick={() => copyCommand(result.command)}
                   >
                     <Copy className="mr-1.5 h-3.5 w-3.5" />
-                    Copy command
+                    {localize(lang, "Копировать команду", "Copy command")}
                   </Button>
                   {result.stdout ? (
                     <Button
@@ -327,7 +348,7 @@ export function QuickRunWindow({
                       onClick={() => copyOutput(result.stdout)}
                     >
                       <Copy className="mr-1.5 h-3.5 w-3.5" />
-                      Copy stdout
+                      {localize(lang, "Копировать stdout", "Copy stdout")}
                     </Button>
                   ) : null}
                 </div>
@@ -375,7 +396,8 @@ export function QuickRunWindow({
             value={command}
             onChange={(e) => setCommand(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Type a command..."
+            placeholder={localize(lang, "Введите команду...", "Type a command...")}
+            aria-label={localize(lang, "Команда для запуска", "Command to run")}
             className="h-9 flex-1 rounded-xl border-border bg-background px-3 font-mono text-xs text-foreground placeholder:text-muted-foreground shadow-none"
             disabled={isRunning}
             autoFocus
@@ -390,6 +412,7 @@ export function QuickRunWindow({
               className="h-9 rounded-xl border-border bg-background px-3 text-foreground hover:bg-secondary"
               disabled={!command.trim()}
               onClick={() => void runCommand(command)}
+              aria-label={localize(lang, "Запустить команду", "Run command")}
             >
               <Play className="h-3.5 w-3.5" />
             </Button>

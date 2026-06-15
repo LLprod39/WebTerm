@@ -5,6 +5,7 @@ from typing import Any
 
 from core_ui.models import (
     DEFAULT_ALLOWED_FEATURES,
+    EXPLICIT_OPT_IN_FEATURES,
     FEATURE_CHOICES,
     STAFF_ONLY_FEATURES,
     GroupAppPermission,
@@ -112,6 +113,9 @@ def feature_allowed_for_user(
         if legacy_feature in grouped:
             return bool(grouped[legacy_feature])
 
+    if feature in EXPLICIT_OPT_IN_FEATURES:
+        return False
+
     if user.is_staff:
         return True
 
@@ -162,6 +166,10 @@ def build_user_access_payload(
             if applied_legacy:
                 continue
         if feature in effective:
+            continue
+        if feature in EXPLICIT_OPT_IN_FEATURES:
+            effective[feature] = False
+            sources[feature] = "explicit_opt_in"
             continue
         if user.is_staff:
             effective[feature] = True

@@ -8,6 +8,7 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import "@xterm/xterm/css/xterm.css";
 import { getWsUrl, fetchWsToken } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { localize, useI18n } from "@/lib/i18n";
 import { createTerminalFileLinkProvider, parsePromptCwd } from "@/lib/terminal-file-links";
 import { serializeAiSettings } from "./ai-preferences";
 import type { AiAssistantSettings, AiChatMode, AiExecutionMode } from "./ai-types";
@@ -64,6 +65,12 @@ interface XTerminalProps {
   clickableFiles?: boolean;
 }
 
+function normalizeTerminalFontFamily(fontFamily: string) {
+  const trimmed = fontFamily.trim() || "JetBrains Mono";
+  const quotedPrimary = /^[\w-]+\s+[\w\s-]+$/.test(trimmed) && !trimmed.includes(",") ? `"${trimmed}"` : trimmed;
+  return `${quotedPrimary}, "Cascadia Mono", Consolas, "Courier New", monospace`;
+}
+
 export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTerminal(
   {
     serverId,
@@ -86,6 +93,7 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
   }: XTerminalProps,
   ref,
 ) {
+  const { lang } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -176,7 +184,7 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
       cursorBlink: cursorBlinkProp,
       cursorStyle,
       fontSize,
-      fontFamily,
+      fontFamily: normalizeTerminalFontFamily(fontFamily),
       lineHeight,
       scrollback,
       theme: themeOverride ?? defaultTheme,
@@ -431,7 +439,7 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
     if (!term) return;
     if (themeOverride) term.options.theme = themeOverride;
     term.options.fontSize = fontSize;
-    term.options.fontFamily = fontFamily;
+    term.options.fontFamily = normalizeTerminalFontFamily(fontFamily);
     term.options.lineHeight = lineHeight;
     term.options.cursorStyle = cursorStyle;
     term.options.cursorBlink = cursorBlinkProp;
@@ -532,8 +540,10 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
         )}
       >
         <div className="rounded-xl border border-primary/30 bg-background/90 px-4 py-3 text-center shadow-lg backdrop-blur">
-          <div className="text-sm font-semibold text-foreground">Upload files</div>
-          <div className="mt-1 text-xs text-muted-foreground">Drop files here to send them to the current remote folder.</div>
+          <div className="text-sm font-semibold text-foreground">{localize(lang, "Загрузка файлов", "Upload files")}</div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            {localize(lang, "Перетащите файлы сюда, чтобы отправить их в текущую удалённую папку.", "Drop files here to send them to the current remote folder.")}
+          </div>
         </div>
       </div>
     </div>

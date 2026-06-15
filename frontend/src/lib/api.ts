@@ -9,14 +9,58 @@ import {
   DEMO_ACTIVITY_LOGS,
   demoSuccess,
 } from "./demo";
+import type {
+  StudioPipelineAssistantPayload,
+  StudioPipelineAssistantResponse,
+} from "./studioPipelineDraftsApi";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "";
 const BACKEND_ORIGIN = (
   import.meta.env.VITE_BACKEND_ORIGIN ||
   (import.meta.env.DEV && window.location.port === "8080" ? "http://127.0.0.1:9000" : "")
 ).replace(/\/$/, "");
+const DEFAULT_REQUEST_TIMEOUT_MS = parsePositiveInt(import.meta.env.VITE_API_TIMEOUT_MS, 30_000);
+const CSRF_REQUEST_TIMEOUT_MS = parsePositiveInt(import.meta.env.VITE_CSRF_TIMEOUT_MS, 8_000);
 let csrfTokenCache: string | null = null;
 let csrfTokenRequest: Promise<string | null> | null = null;
+
+type ApiFetchOptions = RequestInit & {
+  timeoutMs?: number;
+};
+
+function parsePositiveInt(value: unknown, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const parentSignal = init.signal;
+  const abortFromParent = () => controller.abort();
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  if (parentSignal?.aborted) {
+    controller.abort();
+  } else if (parentSignal) {
+    parentSignal.addEventListener("abort", abortFromParent, { once: true });
+  }
+
+  timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+    parentSignal?.removeEventListener("abort", abortFromParent);
+  }
+}
 
 function getCookie(name: string): string | null {
   const match = document.cookie.match(new RegExp(`(^| )${name}=([^;]+)`));
@@ -28,7 +72,19 @@ function isMutationRequest(method?: string): boolean {
   return !["GET", "HEAD", "OPTIONS", "TRACE"].includes(normalized);
 }
 
-async function ensureCsrfToken(): Promise<string | null> {
+function isMarsApiPath(path: string): boolean {
+  return path.startsWith("/api/mars/");
+}
+
+function isDemoBlackholeApiBase(value: string): boolean {
+  return /^https?:\/\/(127\.0\.0\.1|localhost):1\/?$/.test(value);
+}
+
+function apiBaseForPath(path: string): string {
+  return isMarsApiPath(path) && isDemoBlackholeApiBase(API_BASE) ? "" : API_BASE;
+}
+
+async function ensureCsrfToken(forceBackend = false): Promise<string | null> {
   const cookieToken = getCookie("csrftoken");
   if (cookieToken) {
     csrfTokenCache = cookieToken;
@@ -39,12 +95,16 @@ async function ensureCsrfToken(): Promise<string | null> {
     return csrfTokenCache;
   }
 
-  if (isDemoMode()) return null;
+  if (isDemoMode() && !forceBackend) return null;
 
   if (!csrfTokenRequest) {
-    csrfTokenRequest = fetch(`${API_BASE}/api/auth/csrf/`, {
-      credentials: "include",
-    })
+    csrfTokenRequest = fetchWithTimeout(
+      `${forceBackend && isDemoBlackholeApiBase(API_BASE) ? "" : API_BASE}/api/auth/csrf/`,
+      {
+        credentials: "include",
+      },
+      CSRF_REQUEST_TIMEOUT_MS,
+    )
       .then(async (response) => {
         if (!response.ok) {
           return null;
@@ -81,33 +141,38 @@ async function parseErrorMessage(res: Response): Promise<string> {
 }
 
 function fallbackToDemoOrThrow<T>(path: string, options: RequestInit, errorMessage: string): T {
+  if (isMarsApiPath(path)) {
+    throw new Error(`${errorMessage}. MARS requires the Django backend and local Codex CLI; demo mode cannot generate Codex interviews.`);
+  }
   if (enableDemoMode()) {
     return demoFallback<T>(path, options);
   }
   throw new Error(`${errorMessage}. Start Django or set VITE_ENABLE_DEMO_MODE=true to use demo data.`);
 }
 
-export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
+  const forceBackend = isMarsApiPath(path);
   // In demo mode, return mock data for known paths
-  if (isDemoMode()) {
+  if (isDemoMode() && !forceBackend) {
     return demoFallback<T>(path, options);
   }
 
   let response: Response;
+  const { timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS, ...requestOptions } = options;
   try {
-    const csrfToken = isMutationRequest(options.method) ? await ensureCsrfToken() : getCookie("csrftoken");
-    response = await fetch(`${API_BASE}${path}`, {
+    const csrfToken = isMutationRequest(requestOptions.method) ? await ensureCsrfToken(forceBackend) : getCookie("csrftoken");
+    response = await fetchWithTimeout(`${apiBaseForPath(path)}${path}`, {
       credentials: "include",
+      ...requestOptions,
       headers: {
         "Content-Type": "application/json",
         ...(csrfToken ? { "X-CSRFToken": csrfToken } : {}),
-        ...((options.headers as Record<string, string>) || {}),
+        ...((requestOptions.headers as Record<string, string>) || {}),
       },
-      ...options,
-    });
-  } catch {
+    }, timeoutMs);
+  } catch (error) {
     // Network error — backend unreachable
-    return fallbackToDemoOrThrow<T>(path, options, "Backend unavailable");
+    return fallbackToDemoOrThrow<T>(path, requestOptions, isAbortError(error) ? "Backend request timed out" : "Backend unavailable");
   }
 
   // If server returned HTML instead of JSON (Vite SPA fallback), switch to demo
@@ -1023,6 +1088,8 @@ function demoFallback<T>(path: string, _options: RequestInit = {}): T {
           studio_skills: true,
           studio_mcp: true,
           studio_notifications: true,
+          kubernetes: false,
+          mars: false,
           settings: true,
           orchestrator: true,
           knowledge_base: true,
@@ -1050,6 +1117,8 @@ function demoFallback<T>(path: string, _options: RequestInit = {}): T {
           studio_skills: "group_explicit",
           studio_mcp: "group_explicit",
           studio_notifications: "group_explicit",
+          kubernetes: "explicit_opt_in",
+          mars: "explicit_opt_in",
           settings: "staff_default",
           orchestrator: "staff_default",
           knowledge_base: "staff_default",
@@ -1091,6 +1160,21 @@ function demoFallback<T>(path: string, _options: RequestInit = {}): T {
     group_permissions: [],
   } as T;
   if (path.includes("/api/studio/share-users")) return [{ id: 1, username: "demo", email: "demo@example.com" }] as T;
+  if (path.includes("/api/studio/assistant/drafts")) return [] as T;
+  if (path.includes("/api/studio/node-manifests")) return { version: 1, count: 0, nodes: [] } as T;
+  if (path.includes("/api/studio/capabilities")) return {
+    strategy: {
+      mode: "minimal_universal_nodes",
+      service_specific_work: "mcp_plus_skills",
+      default_execution_node: "agent/mcp_call",
+      approval_node: "logic/human_approval",
+      verification_nodes: ["ops/http_check", "output/report", "agent/mcp_call"],
+    },
+    nodes: [],
+    capability_packs: [],
+    resources: { mcp_servers: [], skills: [], server_count: 0 },
+    task_families: [],
+  } as T;
   if (path.includes("/api/studio/templates")) return [] as T;
   if (path.includes("/api/studio/pipelines")) return [] as T;
   if (path.includes("/api/studio/runs")) return [] as T;
@@ -1101,6 +1185,179 @@ function demoFallback<T>(path: string, _options: RequestInit = {}): T {
   if (path.includes("/api/studio/notifications")) return { success: true } as T;
   if (path.includes("/api/studio/servers")) return [] as T;
   if (path.includes("/api/studio/skills")) return [] as T;
+  if (path.includes("/api/mars/workspaces")) {
+    const workspace = {
+      id: 1,
+      name: "Personal workspace",
+      root_path: "agent_projects\\mars_workspaces\\user_demo",
+      read_allow_roots: ["agent_projects\\mars_workspaces\\user_demo"],
+      write_allow_roots: ["agent_projects\\mars_workspaces\\user_demo"],
+      deny_globs: [".git/**", ".venv/**", "node_modules/**", "dist/**", "build/**", ".env", ".env.*"],
+      enabled: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    return path.match(/\/api\/mars\/workspaces\/\d+\//)
+      ? ({ workspace } as T)
+      : ({ workspaces: [workspace] } as T);
+  }
+  if (path.includes("/api/mars/sessions")) {
+    let taskBrief = "Demo MARS task";
+    try {
+      const body =
+        typeof _options.body === "string" && _options.body
+          ? (JSON.parse(_options.body) as { task_brief?: string })
+          : null;
+      taskBrief = String(body?.task_brief || taskBrief).trim() || taskBrief;
+    } catch {
+      // keep demo task
+    }
+    const taskLower = taskBrief.toLowerCase();
+    const isGameTask = ["game", "игр", "змей", "snake", "3d", "three"].some((token) => taskLower.includes(token));
+    const isBackendTask = ["api", "backend", "django", "endpoint", "бэк", "сервер"].some((token) => taskLower.includes(token));
+    const demoInterviewQuestions = [
+      {
+        id: "success_criteria",
+        question: `Какой результат для «${taskBrief.slice(0, 80)}» считаем готовым?`,
+        kind: "choice_text",
+        options: isGameTask
+          ? ["Играбельный прототип", "Полноценный MVP", "Красивый playable demo", "Только core gameplay"]
+          : isBackendTask
+            ? ["API работает", "Контракт покрыт тестами", "Безопасная интеграция", "Документированное поведение"]
+            : ["Рабочий MVP", "Минимальный прототип", "Полированный UI", "Исправленная проблема"],
+        placeholder: "Опишите конкретный видимый результат, если вариантов мало.",
+        required: true,
+      },
+      {
+        id: "first_scope",
+        question: `Что точно входит в первую версию «${taskBrief.slice(0, 80)}»?`,
+        kind: "multi_choice_text",
+        options: isGameTask
+          ? ["Игровой цикл", "Счет и рекорд", "Пауза/рестарт", "Звуки/эффекты", "Меню", "Адаптив"]
+          : isBackendTask
+            ? ["Endpoint", "Валидация", "Права доступа", "DB-модель", "Тесты", "Audit/logs"]
+            : ["Основной flow", "UI states", "Тесты", "Документация", "Адаптив", "Интеграции"],
+        required: true,
+      },
+      {
+        id: "primary_surface",
+        question: "Где это должно работать в первую очередь?",
+        kind: "choice_text",
+        options: isBackendTask ? ["Django API", "Frontend + API", "Локальный dev", "Production-like path"] : ["Desktop browser", "Mobile browser", "Desktop + mobile", "Только локальный dev"],
+        required: true,
+      },
+      ...(isGameTask
+        ? [
+            { id: "game_core_loop", question: "Какой core loop нужен для этой игры?", kind: "multi_choice_text", options: ["Движение и сбор предметов", "Рост сложности", "Проигрыш и рестарт", "Очки", "Уровни", "Бонусы"], required: true },
+            { id: "game_controls", question: "Как игрок должен управлять игрой?", kind: "choice_text", options: ["Клавиатура", "Клавиатура + мышь", "Touch controls", "Автовыбор под устройство"], required: true },
+            { id: "game_camera", question: "Какая камера лучше подходит этой игре?", kind: "choice_text", options: ["Вид сверху под углом", "Изометрия", "Следит за персонажем", "Свободная камера"], required: true },
+            { id: "game_visual_style", question: "Какой визуальный стиль выбрать для первой сборки?", kind: "choice_text", options: ["3D low-poly", "Neon arcade", "Clean minimal", "Dark premium", "Pixel/retro"], required: true },
+          ]
+        : isBackendTask
+          ? [
+              { id: "api_contract", question: "Какой контракт нужен для этого endpoint?", kind: "multi_choice_text", options: ["GET endpoint", "POST/PATCH action", "Validation errors", "Permissions", "Audit event", "Pagination/filtering"], required: true },
+              { id: "data_model", question: "Какие данные нужно хранить или читать?", kind: "multi_choice_text", options: ["Новая модель", "Существующая модель", "JSON config", "Файлы workspace", "Только read-only"], required: true },
+              { id: "backend_safety", question: "Какие backend-ограничения важны?", kind: "multi_choice_text", options: ["Ownership check", "Feature gate", "No secrets in response", "Idempotent action", "Transaction safety"], required: true },
+            ]
+          : [
+            { id: "main_flow", question: "Какой основной пользовательский flow нужен?", kind: "multi_choice_text", options: ["Создать", "Просмотреть", "Редактировать", "Запустить", "Проверить результат", "Экспортировать"], required: true },
+            { id: "ui_states", question: "Какие состояния интерфейса нужно продумать?", kind: "multi_choice_text", options: ["Loading", "Empty", "Error", "Success", "Disabled", "Mobile"], required: true },
+          ]),
+      { id: "constraints", question: "Что MARS не должен менять?", kind: "multi_choice_text", options: ["Не трогать auth/settings", "Без новых зависимостей", "Без backend", "Не менять API", "Можно добавить библиотеки"], required: false },
+      { id: "verification", question: "Как MARS должен проверить результат?", kind: "multi_choice_text", options: isBackendTask ? ["pytest", "API smoke", "Permission test", "Django check", "No migration drift"] : ["npm run build", "npm run test", "Playwright smoke", "Скриншот в браузере", "Ручная проверка"], required: true },
+      { id: "priority", question: "Что важнее, если придется выбирать?", kind: "choice_text", options: ["Качество UI", "Скорость реализации", "Надежная архитектура", "Минимум изменений", "Максимум функционала"], required: true },
+    ];
+    const session = {
+      id: 1,
+      workspace_id: 1,
+      workspace: {
+        id: 1,
+        name: "Personal workspace",
+        root_path: "agent_projects\\mars_workspaces\\user_demo",
+        read_allow_roots: ["agent_projects\\mars_workspaces\\user_demo"],
+        write_allow_roots: ["agent_projects\\mars_workspaces\\user_demo"],
+        deny_globs: [".git/**", ".venv/**", "node_modules/**", "dist/**", "build/**", ".env", ".env.*"],
+        enabled: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      task_brief: taskBrief,
+      answers: {},
+      interview_questions: demoInterviewQuestions,
+      selected_skill_slugs: ["frontend-design", "frontend-dev", "react-best-practices", "frontend-testing-debugging"],
+      generated_plan: path.includes("/answer/") || path.includes("/approve-plan/") || path.includes("/run/")
+        ? "# MARS execution plan\n\n## Goal\nРабочий результат в личном workspace.\n\n## Execution checklist\n1. Inspect workspace.\n2. Implement approved change.\n3. Run verification.\n4. Request Gemini review."
+        : "",
+      status: path.includes("/approve-plan/") || path.includes("/run/") ? "approved" : path.includes("/answer/") ? "plan_ready" : "interview",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    if (path.includes("/run/")) {
+      return {
+        run: {
+          id: 1,
+          session_id: 1,
+          workspace_id: 1,
+          workspace: session.workspace,
+          cli_roles: { executor: "codex", reviewer: "gemini" },
+          status: "queued",
+          runtime_control: { stop_requested: false },
+          allow_dirty: false,
+          final_report: "",
+          codex_summary: "",
+          gemini_review: "",
+          test_output: "",
+          git_before: "",
+          git_after: "",
+          started_at: null,
+          completed_at: null,
+          created_at: new Date().toISOString(),
+        },
+      } as T;
+    }
+    return { session, recommended_skills: session.selected_skill_slugs } as T;
+  }
+  if (path.includes("/api/mars/runs") && path.includes("/events")) {
+    return {
+      events: [
+        { id: 1, run_id: 1, event_type: "mars_run_queued", message: "MARS run queued", payload: {}, created_at: new Date().toISOString() },
+        { id: 2, run_id: 1, event_type: "codex_stdout", message: "Demo Codex stream", payload: { stream: "stdout", text: "Demo Codex stream" }, created_at: new Date().toISOString() },
+      ],
+    } as T;
+  }
+  if (path.includes("/api/mars/runs")) {
+    return {
+      run: {
+        id: 1,
+        session_id: 1,
+        workspace_id: 1,
+        workspace: {
+          id: 1,
+          name: "Personal workspace",
+          root_path: "agent_projects\\mars_workspaces\\user_demo",
+          read_allow_roots: ["agent_projects\\mars_workspaces\\user_demo"],
+          write_allow_roots: ["agent_projects\\mars_workspaces\\user_demo"],
+          deny_globs: [],
+          enabled: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        cli_roles: { executor: "codex", reviewer: "gemini" },
+        status: path.includes("/stop/") ? "stopped" : "completed",
+        runtime_control: { stop_requested: path.includes("/stop/") },
+        allow_dirty: false,
+        final_report: "# MARS final report\n\nDemo run completed.",
+        codex_summary: "Demo Codex final answer.",
+        gemini_review: "Demo Gemini review.",
+        test_output: "No verification command configured.",
+        git_before: "",
+        git_after: " M frontend/src/App.tsx",
+        started_at: new Date().toISOString(),
+        completed_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+      },
+    } as T;
+  }
 
   // Generic fallback
   return demoSuccess() as T;
@@ -1122,6 +1379,8 @@ export type FeatureFlag =
   | "agents"
   | "studio"
   | StudioSectionFeature
+  | "kubernetes"
+  | "mars"
   | "settings"
   | "orchestrator"
   | "knowledge_base";
@@ -1137,6 +1396,8 @@ export const ACCESS_FEATURE_OPTIONS: Array<{ value: FeatureFlag; label: string }
   { value: "studio_skills", label: "Studio Skills" },
   { value: "studio_mcp", label: "Studio MCP" },
   { value: "studio_notifications", label: "Studio Notifications" },
+  { value: "kubernetes", label: "Kubernetes" },
+  { value: "mars", label: "MARS" },
   { value: "settings", label: "Settings" },
   { value: "orchestrator", label: "Orchestrator" },
   { value: "knowledge_base", label: "Knowledge Base" },
@@ -1927,6 +2188,10 @@ export function getStudioPipelineRunWsUrl(runId: number | string): string {
   return `${buildWsBase()}/ws/studio/pipeline-runs/${runId}/live/`;
 }
 
+export function getMarsRunWsUrl(runId: number | string): string {
+  return `${buildWsBase()}/ws/mars/runs/${runId}/live/`;
+}
+
 /** Fetch a short-lived WS auth token from Django (solves Vite proxy cookie issue). */
 export async function fetchWsToken(): Promise<string | null> {
   try {
@@ -1963,6 +2228,7 @@ export async function authLogin(username: string, password: string, authMode: "a
   return apiFetch<AuthLoginResponse>("/api/auth/login/", {
     method: "POST",
     body: JSON.stringify({ username, password, auth_mode: authMode }),
+    timeoutMs: 10_000,
   });
 }
 
@@ -3212,7 +3478,7 @@ export interface DashboardWidgetConfig {
   w: number;
   h: number;
   visible?: boolean;
-  props?: Record<string, any>;
+  props?: Record<string, unknown>;
 }
 
 export interface DashboardLayoutData {
@@ -3736,6 +4002,124 @@ export async function launchWatcherDraft(draftId: number) {
 }
 
 // =============================================================================
+// MARS API
+// =============================================================================
+
+export interface MarsWorkspace {
+  id: number;
+  name: string;
+  root_path: string;
+  read_allow_roots: string[];
+  write_allow_roots: string[];
+  deny_globs: string[];
+  enabled: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface MarsInterviewQuestion {
+  id: string;
+  question: string;
+  kind: string;
+  options?: string[];
+  placeholder?: string;
+  required?: boolean;
+}
+
+export type MarsSessionStatus = "interview" | "plan_ready" | "approved" | "running" | "completed" | "cancelled";
+
+export interface MarsSession {
+  id: number;
+  workspace_id: number;
+  workspace: MarsWorkspace;
+  task_brief: string;
+  answers: Record<string, string>;
+  interview_questions: MarsInterviewQuestion[];
+  selected_skill_slugs: string[];
+  generated_plan: string;
+  status: MarsSessionStatus | string;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export type MarsRunStatus = "queued" | "running" | "completed" | "failed" | "stopped";
+
+export interface MarsRun {
+  id: number;
+  session_id: number;
+  workspace_id: number;
+  workspace: MarsWorkspace;
+  cli_roles: Record<string, string>;
+  status: MarsRunStatus | string;
+  runtime_control: Record<string, unknown>;
+  allow_dirty: boolean;
+  final_report: string;
+  codex_summary: string;
+  gemini_review: string;
+  test_output: string;
+  git_before: string;
+  git_after: string;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string | null;
+}
+
+export interface MarsRunEvent {
+  id: number;
+  run_id: number;
+  event_type: string;
+  message: string;
+  payload: Record<string, unknown>;
+  created_at: string | null;
+}
+
+export interface MarsWorkspacePayload {
+  name?: string;
+  root_path?: string;
+  read_allow_roots?: string[];
+  write_allow_roots?: string[];
+  deny_globs?: string[];
+  enabled?: boolean;
+}
+
+export interface MarsSessionPayload {
+  workspace_id: number;
+  task_brief: string;
+  selected_skill_slugs?: string[];
+}
+
+export interface MarsRunPayload {
+  allow_dirty?: boolean;
+  test_command?: string;
+}
+
+export const marsApi = {
+  listWorkspaces: () => apiFetch<{ workspaces: MarsWorkspace[] }>("/api/mars/workspaces/"),
+  createWorkspace: (data: MarsWorkspacePayload) =>
+    apiFetch<{ workspace: MarsWorkspace }>("/api/mars/workspaces/", { method: "POST", body: JSON.stringify(data) }),
+  updateWorkspace: (id: number, data: Partial<MarsWorkspacePayload>) =>
+    apiFetch<{ workspace: MarsWorkspace }>(`/api/mars/workspaces/${id}/`, { method: "PATCH", body: JSON.stringify(data) }),
+  deleteWorkspace: (id: number) => apiFetch<{ ok: boolean }>(`/api/mars/workspaces/${id}/`, { method: "DELETE" }),
+  createSession: (data: MarsSessionPayload) =>
+    apiFetch<{ session: MarsSession; recommended_skills: string[] }>("/api/mars/sessions/", {
+      method: "POST",
+      body: JSON.stringify(data),
+      timeoutMs: 240_000,
+    }),
+  getSession: (id: number) => apiFetch<{ session: MarsSession; recommended_skills: string[] }>(`/api/mars/sessions/${id}/`),
+  answerSession: (id: number, data: { answers: Record<string, string>; selected_skill_slugs?: string[] }) =>
+    apiFetch<{ session: MarsSession }>(`/api/mars/sessions/${id}/answer/`, { method: "POST", body: JSON.stringify(data) }),
+  approveSessionPlan: (id: number, data: { generated_plan?: string; selected_skill_slugs?: string[] }) =>
+    apiFetch<{ session: MarsSession }>(`/api/mars/sessions/${id}/approve-plan/`, { method: "POST", body: JSON.stringify(data) }),
+  runSession: (id: number, data: MarsRunPayload) =>
+    apiFetch<{ run: MarsRun }>(`/api/mars/sessions/${id}/run/`, { method: "POST", body: JSON.stringify(data) }),
+  getRun: (id: number) => apiFetch<{ run: MarsRun }>(`/api/mars/runs/${id}/`),
+  listRunEvents: (id: number, afterId?: number) =>
+    apiFetch<{ events: MarsRunEvent[] }>(`/api/mars/runs/${id}/events/${afterId ? `?after_id=${afterId}` : ""}`),
+  stopRun: (id: number) => apiFetch<{ run: MarsRun }>(`/api/mars/runs/${id}/stop/`, { method: "POST" }),
+};
+
+// =============================================================================
 // Studio API
 // =============================================================================
 
@@ -3830,6 +4214,38 @@ export interface PipelineRun {
   trigger_type: string;
   trigger_name: string;
   trigger_node_id: string;
+}
+
+export interface PipelineRunValidation {
+  ok: boolean;
+  validation: {
+    ok: boolean;
+    errors: string[];
+    warnings?: string[];
+  };
+  risk?: {
+    level: "safe" | "dangerous" | string;
+    items: Array<{
+      node_id?: string;
+      node_label?: string;
+      stage?: string;
+      command?: string;
+      level?: string;
+      categories?: string[];
+      matched_patterns?: string[];
+      reasons?: string[];
+    }>;
+  };
+  dry_run?: {
+    ok: boolean;
+    executed: boolean;
+    mode: string;
+    checks: string[];
+    message: string;
+  };
+  entry_node_id?: string;
+  trigger_type?: string;
+  would_create_run?: boolean;
 }
 
 export type StudioAccessMode = "owner" | "shared" | "admin";
@@ -4027,6 +4443,97 @@ export interface MCPServerInspection {
   tools: MCPServerTool[];
 }
 
+export type JsonSchema = Record<string, unknown>;
+
+export interface StudioCapabilityNode {
+  type: string;
+  category: string;
+  purpose: string;
+  source_handles: string[];
+  risk_level: string;
+  mutates_state: boolean;
+  supports_dry_run: boolean;
+  requires_approval_by_default: boolean;
+  recommended_verification: string[];
+  tags: string[];
+  input_schema: JsonSchema;
+  output_schema: JsonSchema;
+  metadata?: Record<string, unknown>;
+}
+
+export interface StudioNodeManifestRegistry {
+  version: number;
+  count: number;
+  nodes: StudioCapabilityNode[];
+}
+
+export interface StudioCapabilityTaskFamily {
+  slug: string;
+  name: string;
+  description: string;
+  readiness: "ready" | "partial" | "missing";
+  missing: string[];
+  preferred_nodes: string[];
+  required_capabilities: string[];
+  matching_mcp_servers: Array<{ id: number; name: string; transport: string; last_test_ok: boolean | null }>;
+  matching_skills: Array<{ slug: string; name: string; service: string; safety_level: string }>;
+  pilot_prompt: string;
+  capability_packs?: Array<{
+    slug: string;
+    name: string;
+    service: string;
+    mcp_server_name: string;
+    tool_names: string[];
+    skill_slugs: string[];
+  }>;
+}
+
+export interface StudioCapabilityPackTool {
+  pack_slug: string;
+  pack_name: string;
+  task_family: string;
+  service: string;
+  mcp_server_name: string;
+  tool_name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+  permission_mode: string;
+  risk_level: string;
+  operation_kind: string;
+  mutates_state: boolean;
+  requires_approval: boolean;
+  skill_slugs: string[];
+  policy_tags: string[];
+}
+
+export interface StudioCapabilityPack {
+  slug: string;
+  name: string;
+  task_family: string;
+  service: string;
+  mcp_server_name: string;
+  skill_slugs: string[];
+  tools: StudioCapabilityPackTool[];
+}
+
+export interface StudioCapabilityRegistry {
+  strategy: {
+    mode: string;
+    service_specific_work: string;
+    default_execution_node: string;
+    approval_node: string;
+    verification_nodes: string[];
+  };
+  nodes: StudioCapabilityNode[];
+  capability_packs: StudioCapabilityPack[];
+  resources: {
+    mcp_servers: Array<{ id: number; name: string; description: string; transport: string; last_test_ok: boolean | null }>;
+    skills: Array<{ slug: string; name: string; description: string; service: string; category: string; safety_level: string }>;
+    server_count: number | null;
+  };
+  task_families: StudioCapabilityTaskFamily[];
+}
+
 export interface PipelineTrigger {
   id: number;
   pipeline_id: number;
@@ -4042,80 +4549,6 @@ export interface PipelineTrigger {
   last_triggered_at: string | null;
 }
 
-export interface StudioPipelineAssistantPayload {
-  pipeline_id?: number | null;
-  pipeline_name: string;
-  nodes: PipelineNode[];
-  edges: PipelineEdge[];
-  selected_node?: PipelineNode | null;
-  user_message: string;
-  intent?: "create" | "edit" | "validate" | "fix_run";
-  last_validation_errors?: string[];
-  last_run_summary?: Record<string, unknown>;
-  draft_mode?: boolean;
-  history?: Array<{
-    role: "user" | "assistant";
-    content: string;
-  }>;
-}
-
-export interface StudioPipelineGraphPatchNode {
-  ref: string;
-  type: string;
-  data: Record<string, unknown>;
-  label?: string;
-  x_offset?: number;
-  y_offset?: number;
-}
-
-export interface StudioPipelineGraphPatchEdge {
-  source: string;
-  target: string;
-  label?: string;
-  source_handle?: string;
-  target_handle?: string;
-}
-
-export interface StudioPipelineGraphPatch {
-  anchor_node_id: string | null;
-  nodes: StudioPipelineGraphPatchNode[];
-  edges: StudioPipelineGraphPatchEdge[];
-  update_nodes?: Array<{
-    node_id: string;
-    data: Record<string, unknown>;
-  }>;
-  remove_node_ids?: string[];
-  remove_edge_ids?: string[];
-}
-
-export interface StudioPipelineAssistantResponse {
-  reply: string;
-  target_node_id: string | null;
-  node_patch: Record<string, unknown>;
-  graph_patch: StudioPipelineGraphPatch;
-  warnings: string[];
-  patch_summary?: string;
-  validation?: {
-    ok: boolean;
-    errors: string[];
-    warnings: string[];
-  };
-  risk?: {
-    level: "safe" | "dangerous" | string;
-    items: Array<{
-      node_id: string;
-      node_label?: string;
-      stage?: string;
-      command?: string;
-      level?: string;
-      categories?: string[];
-      matched_patterns?: string[];
-      reasons?: string[];
-    }>;
-  };
-  suggested_next_actions?: string[];
-}
-
 // Pipelines
 export const studioPipelines = {
   list: (q?: string) => apiFetch<PipelineListItem[]>(`/api/studio/pipelines/${q ? `?q=${encodeURIComponent(q)}` : ""}`),
@@ -4129,6 +4562,16 @@ export const studioPipelines = {
       body: JSON.stringify({
         context: context || {},
         entry_node_id: entryNodeId || undefined,
+      }),
+    }),
+  validateRun: (id: number, context?: Record<string, unknown>, entryNodeId?: string) =>
+    apiFetch<PipelineRunValidation>(`/api/studio/pipelines/${id}/run/`, {
+      method: "POST",
+      body: JSON.stringify({
+        context: context || {},
+        entry_node_id: entryNodeId || undefined,
+        validate_only: true,
+        dry_run: true,
       }),
     }),
   clone: (id: number) => apiFetch<PipelineDetail>(`/api/studio/pipelines/${id}/clone/`, { method: "POST" }),
@@ -4202,6 +4645,14 @@ export const studioMCP = {
   test: (id: number) => apiFetch<{ ok: boolean; error: string | null }>(`/api/studio/mcp/${id}/test/`, { method: "POST" }),
   templates: () => apiFetch<MCPTemplate[]>("/api/studio/mcp/templates/"),
   tools: (id: number) => apiFetch<MCPServerInspection>(`/api/studio/mcp/${id}/tools/`),
+};
+
+export const studioCapabilities = {
+  get: () => apiFetch<StudioCapabilityRegistry>("/api/studio/capabilities/"),
+};
+
+export const studioNodeManifests = {
+  get: () => apiFetch<StudioNodeManifestRegistry>("/api/studio/node-manifests/"),
 };
 
 export const studioShareUsers = {

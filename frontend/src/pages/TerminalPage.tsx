@@ -135,6 +135,9 @@ export default function TerminalPage() {
   const [panelWidth, setPanelWidth] = useState(380);
   const [globalAiPreferences, setGlobalAiPreferences] = useState<AiPreferences>(() => readStoredAiPreferences());
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [isCompactViewport, setIsCompactViewport] = useState(() =>
+    typeof window === "undefined" ? false : window.matchMedia("(max-width: 640px)").matches,
+  );
 
   const { t } = useI18n();
   const { editorState, closeEditor, openFileAtPath, handleWsEvent: handleEditorWsEvent } = useEditorInterceptor();
@@ -150,6 +153,15 @@ export default function TerminalPage() {
   useEffect(() => {
     activeTabIdRef.current = activeTabId;
   }, [activeTabId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia("(max-width: 640px)");
+    const syncViewport = () => setIsCompactViewport(media.matches);
+    syncViewport();
+    media.addEventListener("change", syncViewport);
+    return () => media.removeEventListener("change", syncViewport);
+  }, []);
 
   const updateTabAiState = useCallback((tabId: string, updater: (state: TabAiState) => TabAiState) => {
     if (!tabId) return;
@@ -262,6 +274,11 @@ export default function TerminalPage() {
   const aiMessages = activeAiState.messages;
   const isAiGenerating = activeAiState.isGenerating;
   const isUiMode = sidePanelMode === "ui";
+  const isMobileSidePanelOpen = isCompactViewport && sidePanelMode !== "none";
+  const terminalHiddenByPanel = isUiMode || isMobileSidePanelOpen;
+  const sidePanelWidth = sidePanelMode === "none" ? 0 : isUiMode || isCompactViewport ? "100%" : panelWidth;
+  const effectiveTerminalFontSize = isCompactViewport ? Math.min(termPrefs.font_size, 14) : termPrefs.font_size;
+  const effectiveTerminalLineHeight = isCompactViewport ? Math.max(termPrefs.line_height, 1.2) : termPrefs.line_height;
   const openSessionCounts = useMemo(() => {
     const counts = new Map<number, number>();
     for (const tab of tabs) {
@@ -1143,7 +1160,7 @@ export default function TerminalPage() {
 
       <div className="flex min-h-0 flex-1">
         <div
-          className={isUiMode ? "hidden" : "min-h-0 flex-1 p-0"}
+          className={terminalHiddenByPanel ? "hidden" : "min-h-0 flex-1 p-0"}
           style={{ backgroundColor: resolvedTheme.background ?? "#0a0e14" }}
         >
           <div className="relative h-full w-full">
@@ -1160,9 +1177,9 @@ export default function TerminalPage() {
                   serverId={tab.serverId}
                   active={tab.id === activeTabId}
                   themeOverride={resolvedTheme}
-                  fontSize={termPrefs.font_size}
+                  fontSize={effectiveTerminalFontSize}
                   fontFamily={termPrefs.font_family}
-                  lineHeight={termPrefs.line_height}
+                  lineHeight={effectiveTerminalLineHeight}
                   cursorStyle={termPrefs.cursor_style}
                   cursorBlink={termPrefs.cursor_blink}
                   scrollback={termPrefs.scrollback}
@@ -1190,10 +1207,10 @@ export default function TerminalPage() {
         </div>
 
         <div
-          className={`relative min-h-0 shrink-0 overflow-hidden transition-[width] ${sidePanelMode === "none" || isUiMode ? "border-l-0" : "border-l border-border"}`}
-          style={{ width: sidePanelMode === "none" ? 0 : isUiMode ? "100%" : panelWidth }}
+          className={`relative min-h-0 shrink-0 overflow-hidden transition-[width] ${sidePanelMode === "none" || isUiMode || isCompactViewport ? "border-l-0" : "border-l border-border"}`}
+          style={{ width: sidePanelWidth }}
         >
-          {sidePanelMode !== "none" && !isUiMode ? (
+          {sidePanelMode !== "none" && !isUiMode && !isCompactViewport ? (
             <div
               onMouseDown={startDrag}
               className="absolute bottom-0 left-0 top-0 z-20 w-1 cursor-col-resize select-none transition-colors hover:bg-primary/40 active:bg-primary/60"
@@ -1225,8 +1242,6 @@ export default function TerminalPage() {
                   executionMode={activeExecutionMode}
                   settings={activeAiSettings}
                   onModeChange={handleModeChange}
-                  availableServers={servers}
-                  currentServerId={activeServer?.id}
                 />
               </div>
             </div>

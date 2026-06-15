@@ -1,396 +1,261 @@
 # Project Review Action Plan
 
-Дата среза: 2026-05-19
+Last reviewed: 2026-05-27
 
-Назначение: рабочий backlog проблем после обзорного аудита проекта. Файл сделан так, чтобы отдельные пункты можно было выдавать агентам как самостоятельные read-only или implementation задачи.
+This is the current implementation backlog after refreshing the docs against the codebase. It replaces the older 2026-05-19 action list.
 
-## Кратко о продукте
+## Checks Performed During This Refresh
 
-Проект сейчас является локальной ops-платформой, а не просто терминалом:
+- Reviewed current docs under `docs/`.
+- Reviewed current project files with `rg --files`.
+- Checked pipeline node contract against `studio/pipeline_validation.py`, `studio/models.py`, `studio/pipeline_executor.py`, `studio/trigger_dispatch.py`, `studio/executor/`, and frontend node metadata.
+- Ran `python scripts\check_architecture_sizes.py --strict-new`.
+  - Import boundaries: passed.
+  - File-size guard: failed on `key_mcp.py` because it grew from pinned baseline `2089` to `2094` lines.
 
-- Django/Channels backend: auth, access, settings, desktop API, WebSocket.
-- Servers: CRUD серверов/групп, SSH terminal, RDP, SFTP/file manager, Linux UI, monitoring, alerts.
-- Agents: server agents, live runs, terminal AI.
-- Studio: pipeline editor/runtime, MCP servers, skills, triggers, notifications.
-- AI memory: долговременная layered memory по серверам, которая попадает в prompt агентов.
-- Frontend: React/Vite SPA в `frontend/`.
+Full test suites were not run during the documentation refresh.
 
-## Проверки, которые были выполнены
+## Current Product Summary
 
-- `manage.py check` прошел без ошибок.
-- `npm run build` в `frontend` прошел.
-- `npm run lint -- --max-warnings=0` падает:
-  - 12 errors в `frontend/e2e/servers.spec.ts`;
-  - 26 warnings по hooks/Fast Refresh.
-- Frontend build дает warning по крупным чанкам, включая `vendor` около 1.1 MB minified.
+WebTerm is a web-first ops platform:
 
-## P0: Security / Safety
+- Django/Channels backend for API, auth, access, desktop API, WebSockets, and background orchestration.
+- React/Vite SPA in `frontend/`.
+- Servers domain for inventory, SSH/RDP, SFTP, Linux UI, monitoring, alerts, memory, snapshots, and server agents.
+- Studio domain for pipelines, triggers, runs, MCP registry, skills, reusable agents, templates, and notifications.
+- `app/` for shared LLM/runtime/safety/agent-kernel services.
+- Optional WinUI desktop client under `desktop/`.
 
-### 1. Shared server permissions слишком широкие
+## P0: Fix The Broken Architecture Guard
 
-Проблема: shared server access выглядит как доступ ко всем операциям, а не только view/context. Общий queryset доступных серверов используется для command/file endpoints.
+Scope:
 
-Смотреть:
+- `key_mcp.py`
+- `pyproject.toml`
+- `scripts/check_architecture_sizes.py`
 
-- `servers/views/_views_all.py`
-- `servers/models.py`
-- `servers/sftp.py`
-- `servers/consumers/ssh_terminal.py`
-- `servers/consumers/rdp_terminal.py`
-- frontend share UI в `frontend/src/pages/Servers.tsx`
+Problem:
 
-Задача для агента:
+The guard fails because `key_mcp.py` is a legacy-pinned file and grew by 5 lines.
 
-- проверить все endpoints, которые используют `_accessible_servers_queryset()`;
-- разделить права на view/connect/execute/file_write/admin;
-- предложить минимальную модель permissions для `ServerShare`;
-- добавить тесты на shared user, которому нельзя execute/write/delete.
+Recommended task:
 
-Ожидаемый результат:
+1. Inspect recent growth in `key_mcp.py`.
+2. Prefer extracting/shrinking code below the pinned baseline.
+3. If growth is intentional and unavoidable, update the baseline with a short note.
+4. Re-run `python scripts\check_architecture_sizes.py --strict-new`.
 
-- список endpoint-level permission gaps;
-- миграция/модель или plan для explicit share permissions;
-- тесты на запрет risky операций для shared access.
+Acceptance:
 
-### 2. MCP / SSH / pipeline execution guardrails
+- Architecture check is green.
+- Import boundaries remain green.
 
-Проблема: MCP в SAFE mode разрешается с предупреждением, pipeline напрямую вызывает MCP/SSH/webhook, outbound URL не выглядит ограниченным allowlist.
+## P0: Shared Execution Policy
 
-Смотреть:
+Scope:
 
 - `app/agent_kernel/permissions/engine.py`
-- `studio/pipeline_executor.py`
-- `studio/mcp_client.py`
-- `studio/views/_views_all.py`
 - `app/tools/safety.py`
 - `app/tools/ssh_tools.py`
+- `app/tools/server_tools.py`
+- `servers/services/terminal_ai/`
+- `studio/pipeline_executor.py`
+- `studio/mcp_client.py`
+- `tests/test_agent_and_pipeline_policy_enforcement.py`
+- `tests/test_command_safety.py`
 
-Задача для агента:
+Problem:
 
-- проверить, какие execution paths обходят PermissionEngine;
-- предложить единый policy gate для SSH/MCP/webhook;
-- добавить allowlist/blocklist для webhook и HTTP MCP destinations;
-- закрыть localhost/private network SSRF там, где это не нужно.
+Mutating execution paths exist across SSH, MCP, webhooks, file operations, pipeline nodes, terminal AI, and server agents. They need the same decision/audit model.
 
-Ожидаемый результат:
+Recommended task:
 
-- runtime contract: что разрешено в PLAN/SAFE/AUTO_GUARDED;
-- tests для blocked MCP/admin/write operations;
-- tests для webhook/MCP URL validation.
+1. Define a shared `ExecutionPolicyDecision` shape.
+2. Include user, operation kind, target, redacted preview, risk categories, policy mode, approval requirement, and audit event metadata.
+3. Wire it into pipeline SSH/MCP/webhook outputs and terminal/server tool paths.
+4. Add tests proving direct pipeline nodes cannot bypass policy.
 
-### 3. Secrets redaction не везде применяется
+Acceptance:
 
-Проблема: memory redaction есть, но логи/activity могут писать MCP args, pipeline output excerpts, SSH env.
+- Dangerous command/tool/webhook paths share a common gate.
+- Redacted evidence is available for audit.
 
-Смотреть:
+## P0: Capability-Based Shared Server Access
+
+Scope:
+
+- `servers/models.py`
+- `servers/views/server_helpers.py`
+- `servers/views/server_crud.py`
+- `servers/views/server_files.py`
+- `servers/views/server_ops.py`
+- `servers/views/server_shares.py`
+- `servers/consumers/ssh_terminal.py`
+- `servers/consumers/rdp_terminal.py`
+- `tests/test_servers_api_smoke.py`
+
+Problem:
+
+Server sharing should distinguish viewing metadata from connecting, executing, writing files, using RDP, and administering shares.
+
+Recommended task:
+
+1. Add or derive explicit capabilities.
+2. Add `require_server_access(user, server, capability)` helper.
+3. Replace broad accessible-server checks in risky endpoints.
+4. Add negative tests for shared users.
+
+Acceptance:
+
+- View-only shared users cannot execute commands, open RDP, upload/write/delete/chmod/chown files, or reveal/administer secrets.
+- Owners keep full access.
+
+## P0: Egress Redaction
+
+Scope:
 
 - `app/agent_kernel/memory/redaction.py`
-- `studio/mcp_client.py`
+- `servers/services/egress_redaction.py`
+- logger/activity/event writes under `core_ui/`, `servers/`, `studio/`, `app/`
+- `tests/test_egress_redaction.py`
+- `tests/test_memory_redaction.py`
+
+Problem:
+
+Redaction needs to be consistently applied before data leaves runtime boundaries: logs, activity records, MCP args, pipeline outputs, reports, and prompt context.
+
+Recommended task:
+
+1. Make one egress redaction helper canonical.
+2. Add high-entropy fallback with conservative false-positive controls.
+3. Replace ad hoc redaction at logging/report/event output points.
+4. Add regression tests with token/password/bearer/private-key examples.
+
+Acceptance:
+
+- No raw test secret appears in logs, activity payloads, pipeline node excerpts, or memory/report output.
+
+## P1: Continue Pipeline Executor Migration
+
+Scope:
+
 - `studio/pipeline_executor.py`
-- `app/tools/ssh_tools.py`
-- `core_ui/middleware.py`
-- `core_ui/managed_secrets.py`
+- `studio/executor/`
+- `studio/pipeline_validation.py`
+- `tests/test_studio_node_executors.py`
+- `tests/test_studio_pipeline_v2.py`
+- `tests/test_studio_all_nodes_smoke.py`
 
-Задача для агента:
+Current state:
 
-- найти все logger/activity/event writes с args/output/env;
-- провести их через общий redaction helper;
-- добавить unit tests с token/password/bearer/private key примерами.
+- Target registry exists.
+- `output/report` and `output/webhook` have registry implementations.
+- Production execution still mostly goes through `studio/pipeline_executor.py`.
 
-Ожидаемый результат:
+Recommended task:
 
-- no raw secret values in logs/activity payloads;
-- единый helper для redaction на egress.
+Migrate one node type per change, starting with low-risk logic/output nodes. Keep behavior stable and add node-level tests.
 
-### 4. Docker build context может включать локальные секреты
+Acceptance:
 
-Проблема: `.dockerignore` не закрывает часть локальных production/config artifacts, а Dockerfile делает `COPY . .`.
+- Node-specific logic moves out of the monolithic executor without changing pipeline run behavior.
 
-Смотреть:
+## P1: Frontend Decomposition
 
-- `.dockerignore`
-- `.gitignore`
-- `docker/backend.Dockerfile`
-- `production-upload-bundle-*`
-- `.env.production`
-- `.notification_config.json`
-- `.model_config.json`
+Scope:
 
-Задача для агента:
-
-- обновить `.dockerignore`;
-- проверить build context на секретные/тяжелые/генерируемые файлы;
-- не печатать значения секретов.
-
-Ожидаемый результат:
-
-- `.dockerignore` закрывает `.env*` кроме examples, notification/model config, production bundles, reports, root node_modules, caches;
-- краткий check-list проверки Docker context.
-
-## P1: Product / UX
-
-### 5. Битая кодировка в Pipeline Editor
-
-Проблема: в ключевом Studio editor видны испорченные символы/русский текст.
-
-Смотреть:
-
-- `frontend/src/pages/PipelineEditorPage.tsx`
-- locales в `frontend/src/locales/`
-
-Задача для агента:
-
-- найти все `Ð`, `â`, `�` и похожие mojibake-паттерны;
-- восстановить нормальный текст или вынести строки в locales;
-- убедиться, что UI не ломается.
-
-Ожидаемый результат:
-
-- исправленный visible text;
-- frontend lint/build не ухудшены.
-
-### 6. Silent demo fallback скрывает backend failures
-
-Проблема: frontend может тихо показывать mock/demo данные при недоступном Django, что опасно для ops-продукта.
-
-Смотреть:
-
-- `frontend/src/lib/demo.ts`
 - `frontend/src/lib/api.ts`
-- `frontend/src/App.tsx`
+- `frontend/src/api/`
+- `frontend/src/pages/PipelineEditorPage.tsx`
+- `frontend/src/pages/Servers.tsx`
+- `frontend/src/components/terminal/LinuxUiPanel.tsx`
+- relevant page/component tests
 
-Задача для агента:
+Current state:
 
-- сделать demo mode только через явный env flag, например `VITE_ENABLE_DEMO_MODE=true`;
-- показывать явную backend unavailable ошибку вместо fake success;
-- добавить тесты на fallback behavior.
+- Domain API modules exist under `frontend/src/api/`.
+- Some large compatibility entry points remain.
 
-Ожидаемый результат:
+Recommended task:
 
-- localhost/dev не включает demo автоматически;
-- пользователь ясно видит, что backend недоступен.
+Move API calls and controller state by domain, keeping exports compatible until callers are migrated.
 
-### 7. Settings / AI Memory раздвоены
+Acceptance:
 
-Проблема: старый `SettingsPage.tsx` содержит полноценный AI Memory UI, а новый `/settings/*` layout использует отдельные страницы и alias-поля.
+- Large frontend files shrink.
+- Tests/build pass.
+- No redesign is bundled with pure decomposition work.
 
-Смотреть:
+## P1: Settings And AI Memory Consolidation
 
-- `frontend/src/App.tsx`
+Scope:
+
 - `frontend/src/pages/SettingsPage.tsx`
 - `frontend/src/pages/settings/SettingsMemoryPage.tsx`
-- `frontend/src/lib/api.ts`
-- `servers/views/_views_all.py`
+- `servers/views/server_memory.py`
+- `servers/services/memory_service.py`
 
-Задача для агента:
+Problem:
 
-- определить, какой Settings UI является canonical;
-- удалить/заархивировать legacy UI или переиспользовать компоненты;
-- привести поля policy к backend contract.
+Settings and memory-related UI/service paths have evolved through several iterations. Keep one canonical route and payload contract.
 
-Ожидаемый результат:
+Acceptance:
 
-- один источник UI для AI Memory settings;
-- frontend policy payload совпадает с backend fields.
+- One supported AI Memory settings surface.
+- Payload fields match backend contract exactly.
 
-## P1: Architecture / Maintainability
+## P1: Production Worker Topology
 
-### 8. Backend view monoliths
+Scope:
 
-Проблема: `core_ui`, `servers`, `studio` имеют `_views_all.py` как transition state.
-
-Смотреть:
-
-- `core_ui/views/_views_all.py`
-- `servers/views/_views_all.py`
-- `studio/views/_views_all.py`
-- `core_ui/views/__init__.py`
-- `servers/views/__init__.py`
-- `studio/views/__init__.py`
-
-Задача для агента:
-
-- предложить безопасный split plan без изменения URLs;
-- начинать с одной зоны, например server files или auth/access;
-- добавить smoke tests на перенесенные endpoints.
-
-Ожидаемый результат:
-
-- маленькие domain modules;
-- `urls.py` остается стабильным;
-- no behavior change.
-
-### 9. Frontend monoliths
-
-Проблема: несколько файлов слишком большие и stateful.
-
-Смотреть:
-
-- `frontend/src/lib/api.ts`
-- `frontend/src/pages/Servers.tsx`
-- `frontend/src/pages/PipelineEditorPage.tsx`
-- `frontend/src/components/terminal/LinuxUiPanel.tsx`
-- `frontend/src/pages/SettingsPage.tsx`
-
-Задача для агента:
-
-- разделить без изменения поведения;
-- начинать с API domain modules или hooks;
-- не делать redesign в этом task.
-
-Ожидаемый результат:
-
-- уменьшение размеров ключевых файлов;
-- импорты переведены на feature/domain API modules;
-- tests/build проходят.
-
-### 10. AI memory / agent runtime переусложнен
-
-Проблема: много runtime paths и memory layers, часть поведения выглядит experimental для mini-prod.
-
-Смотреть:
-
-- `servers/agent_engine.py`
-- `servers/multi_agent_engine.py`
-- `servers/services/terminal_ai/`
-- `servers/agent_tools.py`
-- `studio/pipeline_executor.py`
-- `app/agent_kernel/`
-- `app/agent_kernel/memory/store.py`
-
-Задача для агента:
-
-- составить runtime contract: live, legacy, experimental;
-- проверить, какие paths реально вызываются из UI/API;
-- предложить disable/feature-flag для auto skill promotion;
-- не удалять код без отдельного подтверждения.
-
-Ожидаемый результат:
-
-- карта runtime paths;
-- список кандидатов на feature flag / archive / removal.
-
-## P2: Repo Hygiene / Deploy
-
-### 11. Generated artifacts tracked in Git
-
-Проблема: в Git трекаются Playwright reports/output/test-results и другие generated artifacts.
-
-Смотреть:
-
-- `frontend/playwright-report/`
-- `frontend/output/`
-- `frontend/test-results/`
-- `docker/multi-user-load-smoke.*`
-- `.gitignore`
-
-Задача для агента:
-
-- проверить, что реально tracked;
-- предложить `git rm --cached` список;
-- обновить `.gitignore`;
-- не удалять локальные файлы без отдельного подтверждения.
-
-Ожидаемый результат:
-
-- generated artifacts больше не tracked;
-- локально файлы могут остаться ignored.
-
-### 12. Два frontend toolchain слоя
-
-Проблема: есть root `package.json`/`vite.config.ts`/`src`, и отдельное полноценное приложение в `frontend/`.
-
-Смотреть:
-
-- root `package.json`
-- root `vite.config.ts`
-- root `src/`
-- `frontend/package.json`
-- `frontend/vite.config.ts`
-- `README.md`
-
-Задача для агента:
-
-- выяснить, нужен ли root thin entrypoint;
-- если нет, предложить удаление/архивацию;
-- если да, задокументировать назначение и убрать drift.
-
-Ожидаемый результат:
-
-- один canonical frontend workflow;
-- README/scripts не конфликтуют.
-
-### 13. Render / production compose incomplete
-
-Проблема: Render blueprint не задает Redis/Channels env, production compose не поднимает отдельные worker/scheduler services.
-
-Смотреть:
-
-- `render.yaml`
 - `docker-compose.production.yml`
-- `web_ui/settings/production.py`
-- `web_ui/settings/base.py`
-- management commands в `servers/management/commands/` и `studio/management/commands/`
+- `render.yaml`
+- `servers/management/commands/`
+- `studio/management/commands/`
+- `docs/`
 
-Задача для агента:
+Recommended task:
 
-- определить production runtime requirements;
-- добавить Redis env для Render или явно отметить unsupported;
-- предложить worker/scheduler services для compose.
+Document and configure production processes for:
 
-Ожидаемый результат:
+- HTTP backend
+- Channels/Redis
+- scheduled pipelines
+- scheduled agents
+- monitor
+- watchers
+- memory dreams
+- agent execution plane
 
-- deploy docs/config соответствуют production settings;
-- background jobs имеют понятный способ запуска.
+Acceptance:
 
-### 14. Stale config references
+- A deployer can see which features require which process.
+- Missing worker mode is explicit, not silent.
 
-Проблема: `pyproject.toml` и static manifest содержат ссылки на старые modules/routes.
+## Completed Or Demoted Items
 
-Смотреть:
+| Item | Current status |
+| --- | --- |
+| `servers.mcp_tool_runtime` shim | Done. Deleted. Studio owns the concrete MCP runtime; server agents use `MCPRuntimeProvider`. |
+| `passwords/` package | Done. Folder is gone; only migration/historical references remain. |
+| Backend view monolith split | Mostly done. Focused modules exist; `_views_all.py` files are compatibility shims. |
+| Root frontend ambiguity | Mostly done. Active app is `frontend/`; docs point there. |
+| Old docs drift | Addressed in this refresh under `docs/`. |
 
-- `pyproject.toml`
-- `core_ui/static/manifest.json`
-- `requirements*.txt`
-- `README.md`
-
-Задача для агента:
-
-- удалить stale `agent_hub`, `tasks`, неактивные app references;
-- проверить testpaths/coverage/isort;
-- исправить manifest routes/icons.
-
-Ожидаемый результат:
-
-- tooling config отражает текущую структуру: `core_ui`, `servers`, `studio`, `app`;
-- no stale `/tasks/` references.
-
-## Рекомендуемый порядок выдачи агентам
-
-1. `.dockerignore` / generated artifacts cleanup.
-2. Shared server permissions audit + tests.
-3. Redaction for logs/activity.
-4. MCP/webhook/SSH guardrails.
-5. PipelineEditor encoding.
-6. Demo fallback explicit flag.
-7. Settings memory UI consolidation.
-8. Frontend/backend monolith split plans.
-9. Production deploy workers/Render config.
-10. Runtime contract for AI memory/agents.
-
-## Формат задачи для агента
+## Agent Task Template
 
 ```text
-Read-only or implementation task.
+Task type: discovery | implementation | tests | docs
 Scope: <paths>
 Goal: <one concrete objective>
 Constraints:
 - Do not commit or push.
 - Do not touch unrelated files.
 - Do not print secret values.
-- List files inspected/changed.
+- Preserve compatibility unless removal is explicitly in scope.
 Return:
 - summary
+- files inspected
 - files changed
 - tests/checks run
 - risks/open questions

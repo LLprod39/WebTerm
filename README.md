@@ -83,7 +83,7 @@ flowchart LR
 
 ### Backend
 
-`manage.py runserver` без явного порта сам использует `9000`. Если `POSTGRES_HOST` и `POSTGRES_DB` не заданы, backend стартует на локальном SQLite, что удобно для первого запуска.
+`manage.py runserver` без явного порта сам использует `9000`. В WSL он автоматически слушает `0.0.0.0:9000`, чтобы Windows-браузер и Vite proxy не зависали на localhost relay; если нужен строгий loopback, задай `DJANGO_RUNSERVER_HOST=127.0.0.1`. Если `POSTGRES_HOST` и `POSTGRES_DB` не заданы, backend стартует на локальном SQLite, что удобно для первого запуска.
 
 ```powershell
 python -m venv .venv
@@ -94,6 +94,9 @@ python manage.py migrate
 python manage.py createsuperuser
 python manage.py runserver
 ```
+
+Если запускаешь backend в WSL, не передавай вручную `127.0.0.1:9000`; используй просто `python manage.py runserver` или `python manage.py runserver 0.0.0.0:9000`.
+Если Windows `localhost:9000` после старого запуска WSL всё равно не отвечает, укажи Vite прямой адрес Ubuntu в `frontend/.env.local`: `VITE_DJANGO_URL=http://<ip из wsl hostname -I>:9000`.
 
 После запуска:
 

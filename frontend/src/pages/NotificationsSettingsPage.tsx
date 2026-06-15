@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { PageShell, SectionCard, StatusBadge } from "@/components/ui/page-shell";
 import { useToast } from "@/hooks/use-toast";
 import { studioNotifications, type NotificationConfig } from "@/lib/api";
+import { localize, useI18n } from "@/lib/i18n";
 
 function PasswordField({
   value,
@@ -31,6 +32,10 @@ function PasswordField({
   placeholder?: string;
 }) {
   const [visible, setVisible] = useState(false);
+  const { lang } = useI18n();
+  const visibilityLabel = visible
+    ? localize(lang, "Скрыть секретное значение", "Hide secret value")
+    : localize(lang, "Показать секретное значение", "Show secret value");
 
   return (
     <div className="relative">
@@ -45,8 +50,8 @@ function PasswordField({
         type="button"
         className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
         onClick={() => setVisible((current) => !current)}
-        aria-label={visible ? "Hide secret value" : "Show secret value"}
-        title={visible ? "Hide secret value" : "Show secret value"}
+        aria-label={visibilityLabel}
+        title={visibilityLabel}
         tabIndex={-1}
       >
         {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -80,6 +85,7 @@ function DeliveryStatusRow({
   description: string;
   ready: boolean;
 }) {
+  const { lang } = useI18n();
   return (
     <div className="workspace-subtle flex items-start justify-between gap-3 rounded-2xl px-4 py-4">
       <div className="flex min-w-0 items-start gap-3">
@@ -92,7 +98,7 @@ function DeliveryStatusRow({
         </div>
       </div>
       <StatusBadge
-        label={ready ? "Ready" : "Not ready"}
+        label={ready ? localize(lang, "Готово", "Ready") : localize(lang, "Не готово", "Not ready")}
         tone={ready ? "success" : "warning"}
         className="shrink-0"
       />
@@ -157,6 +163,7 @@ function TestButton({
 
 export default function NotificationsSettingsPage() {
   const { toast } = useToast();
+  const { lang } = useI18n();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<Partial<NotificationConfig>>({});
 
@@ -180,7 +187,7 @@ export default function NotificationsSettingsPage() {
       await queryClient.invalidateQueries({ queryKey: ["studio", "notifications"] });
     },
     onSuccess: () => {
-      toast({ description: "Notification settings saved." });
+      toast({ description: localize(lang, "Настройки оповещений сохранены.", "Notification settings saved.") });
     },
     onError: (error: Error) => {
       toast({ variant: "destructive", description: error.message });
@@ -195,7 +202,7 @@ export default function NotificationsSettingsPage() {
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground">
         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        Loading notification settings...
+        {localize(lang, "Загружаю настройки оповещений...", "Loading notification settings...")}
       </div>
     );
   }
@@ -206,39 +213,42 @@ export default function NotificationsSettingsPage() {
       <div className="flex-1 overflow-auto">
         <PageShell width="6xl">
           <SectionCard
-            title="Notification Settings"
-            description="Studio uses these defaults for approvals, alerts, and reports."
+            title={localize(lang, "Настройки оповещений", "Notification Settings")}
+            description={localize(lang, "Студия использует эти значения для согласований, оповещений и отчетов.", "Studio uses these defaults for approvals, alerts, and reports.")}
             icon={<Bell className="h-5 w-5 text-primary" />}
             actions={
               <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} className="gap-2">
                 {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                Save
+                {localize(lang, "Сохранить", "Save")}
               </Button>
             }
           >
             <div className="space-y-5">
               <div className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-4 text-sm leading-6 text-muted-foreground">
-                These values act as Studio-wide defaults. Individual workflows can still override them
-                when needed.
+                {localize(
+                  lang,
+                  "Эти значения работают как настройки по умолчанию для всей Студии. Отдельные сценарии могут переопределять их при необходимости.",
+                  "These values act as Studio-wide defaults. Individual workflows can still override them when needed.",
+                )}
               </div>
 
               <div className="grid gap-3 md:grid-cols-3">
                 <DeliveryStatusRow
                   icon={Bot}
                   title="Telegram"
-                  description="Fast approvals and short alerts."
+                  description={localize(lang, "Быстрые подтверждения и короткие оповещения.", "Fast approvals and short alerts.")}
                   ready={telegramReady}
                 />
                 <DeliveryStatusRow
                   icon={Mail}
                   title="Email"
-                  description="Reports, escalation, and longer messages."
+                  description={localize(lang, "Отчеты, эскалации и длинные сообщения.", "Reports, escalation, and longer messages.")}
                   ready={emailReady}
                 />
                 <DeliveryStatusRow
                   icon={ExternalLink}
-                  title="Public URL"
-                  description="Approval links point here."
+                  title={localize(lang, "Публичный URL", "Public URL")}
+                  description={localize(lang, "Ссылки согласования будут вести сюда.", "Approval links point here.")}
                   ready={siteReady}
                 />
               </div>
@@ -247,13 +257,13 @@ export default function NotificationsSettingsPage() {
 
           <SectionCard
             title="Telegram"
-            description="Use Telegram for quick approvals and immediate alerts."
+            description={localize(lang, "Используйте Telegram для быстрых подтверждений и срочных оповещений.", "Use Telegram for quick approvals and immediate alerts.")}
             icon={<Bot className="h-5 w-5 text-primary" />}
           >
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Bot token</Label>
+                  <Label>{localize(lang, "Токен бота", "Bot token")}</Label>
                   <PasswordField
                     value={form.telegram_bot_token || ""}
                     onChange={(value) => setField("telegram_bot_token", value)}
@@ -262,7 +272,7 @@ export default function NotificationsSettingsPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Chat ID</Label>
+                  <Label>{localize(lang, "ID чата", "Chat ID")}</Label>
                   <Input
                     value={form.telegram_chat_id || ""}
                     onChange={(event) => setField("telegram_chat_id", event.target.value)}
@@ -272,30 +282,30 @@ export default function NotificationsSettingsPage() {
                 </div>
 
                 <TestButton
-                  label="Send test Telegram message"
+                  label={localize(lang, "Отправить тест в Telegram", "Send test Telegram message")}
                   disabled={!telegramReady}
                   onTest={() => studioNotifications.testTelegram()}
                 />
               </div>
 
               <div className="workspace-subtle rounded-2xl px-4 py-4 text-sm leading-6 text-muted-foreground">
-                <p className="font-medium text-foreground">Quick setup</p>
-                <p className="mt-3">1. Create a bot with <HelpLink href="https://t.me/BotFather">@BotFather</HelpLink>.</p>
-                <p>2. Start the bot from your Telegram account.</p>
-                <p>3. Find your chat id with <HelpLink href="https://t.me/userinfobot">@userinfobot</HelpLink>.</p>
+                <p className="font-medium text-foreground">{localize(lang, "Быстрая настройка", "Quick setup")}</p>
+                <p className="mt-3">{localize(lang, "1. Создайте бота через", "1. Create a bot with")} <HelpLink href="https://t.me/BotFather">@BotFather</HelpLink>.</p>
+                <p>{localize(lang, "2. Запустите бота из своего Telegram-аккаунта.", "2. Start the bot from your Telegram account.")}</p>
+                <p>{localize(lang, "3. Найдите ID чата через", "3. Find your chat id with")} <HelpLink href="https://t.me/userinfobot">@userinfobot</HelpLink>.</p>
               </div>
             </div>
           </SectionCard>
 
           <SectionCard
             title="Email"
-            description="Use SMTP for reports, escalations, and links that need an audit trail."
+            description={localize(lang, "Используйте SMTP для отчетов, эскалаций и ссылок, которым нужен журнал подтверждений.", "Use SMTP for reports, escalations, and links that need an audit trail.")}
             icon={<Mail className="h-5 w-5 text-primary" />}
           >
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2 md:col-span-2">
-                  <Label>Recipient email</Label>
+                  <Label>{localize(lang, "Email получателя", "Recipient email")}</Label>
                   <Input
                     type="email"
                     value={form.notify_email || ""}
@@ -305,7 +315,7 @@ export default function NotificationsSettingsPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>SMTP host</Label>
+                  <Label>{localize(lang, "SMTP-хост", "SMTP host")}</Label>
                   <Input
                     value={form.smtp_host || ""}
                     onChange={(event) => setField("smtp_host", event.target.value)}
@@ -314,7 +324,7 @@ export default function NotificationsSettingsPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>SMTP port</Label>
+                  <Label>{localize(lang, "SMTP-порт", "SMTP port")}</Label>
                   <Input
                     value={form.smtp_port || ""}
                     onChange={(event) => setField("smtp_port", event.target.value)}
@@ -323,7 +333,7 @@ export default function NotificationsSettingsPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>SMTP user</Label>
+                  <Label>{localize(lang, "SMTP-пользователь", "SMTP user")}</Label>
                   <Input
                     value={form.smtp_user || ""}
                     onChange={(event) => setField("smtp_user", event.target.value)}
@@ -332,16 +342,16 @@ export default function NotificationsSettingsPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>SMTP password</Label>
+                  <Label>{localize(lang, "SMTP-пароль", "SMTP password")}</Label>
                   <PasswordField
                     value={form.smtp_password || ""}
                     onChange={(value) => setField("smtp_password", value)}
-                    placeholder="App password"
+                    placeholder={localize(lang, "Пароль приложения", "App password")}
                   />
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
-                  <Label>From address</Label>
+                  <Label>{localize(lang, "Адрес отправителя", "From address")}</Label>
                   <Input
                     value={form.from_email || ""}
                     onChange={(event) => setField("from_email", event.target.value)}
@@ -351,7 +361,7 @@ export default function NotificationsSettingsPage() {
 
                 <div className="md:col-span-2">
                   <TestButton
-                    label="Send test email"
+                    label={localize(lang, "Отправить тестовый email", "Send test email")}
                     disabled={!emailReady}
                     onTest={() => studioNotifications.testEmail()}
                   />
@@ -359,14 +369,14 @@ export default function NotificationsSettingsPage() {
               </div>
 
               <div className="workspace-subtle rounded-2xl px-4 py-4 text-sm leading-6 text-muted-foreground">
-                <p className="font-medium text-foreground">Provider notes</p>
+                <p className="font-medium text-foreground">{localize(lang, "Заметки провайдера", "Provider notes")}</p>
                 <p className="mt-3">
-                  Gmail usually requires an <HelpLink href="https://myaccount.google.com/apppasswords">app password</HelpLink>.
+                  {localize(lang, "Gmail обычно требует", "Gmail usually requires an")} <HelpLink href="https://myaccount.google.com/apppasswords">{localize(lang, "пароль приложения", "app password")}</HelpLink>.
                 </p>
                 <p>
-                  Yandex mail instructions:{" "}
+                  {localize(lang, "Инструкция для Yandex Mail:", "Yandex mail instructions:")}{" "}
                   <HelpLink href="https://yandex.ru/support/yandex-360/customers/mail/ru/mail-clients/others">
-                    app password guide
+                    {localize(lang, "гайд по паролю приложения", "app password guide")}
                   </HelpLink>
                 </p>
               </div>
@@ -374,28 +384,28 @@ export default function NotificationsSettingsPage() {
           </SectionCard>
 
           <SectionCard
-            title="Public URL"
-            description="Approval links sent by email and Telegram will point to this address."
+            title={localize(lang, "Публичный URL", "Public URL")}
+            description={localize(lang, "Ссылки согласования из email и Telegram будут вести на этот адрес.", "Approval links sent by email and Telegram will point to this address.")}
             icon={<ExternalLink className="h-5 w-5 text-primary" />}
           >
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
               <div className="space-y-2">
-                <Label>Application URL</Label>
+                <Label>{localize(lang, "URL приложения", "Application URL")}</Label>
                 <Input
                   value={form.site_url || ""}
                   onChange={(event) => setField("site_url", event.target.value)}
                   placeholder="https://your-server.example.com"
                 />
                 <p className="text-xs leading-5 text-muted-foreground">
-                  Use the real external address that approvers can open from their network.
+                  {localize(lang, "Укажите реальный внешний адрес, который смогут открыть согласующие.", "Use the real external address that approvers can open from their network.")}
                 </p>
               </div>
 
               <div className="workspace-subtle rounded-2xl px-4 py-4 text-sm leading-6 text-muted-foreground">
-                <p className="font-medium text-foreground">How Studio uses it</p>
-                <p className="mt-3">1. Email and Telegram approval links are generated from this base URL.</p>
-                <p>2. If this is wrong, operators will land on a broken or local-only address.</p>
-                <p>3. Keep it aligned with the actual host that serves your app.</p>
+                <p className="font-medium text-foreground">{localize(lang, "Как Студия использует адрес", "How Studio uses it")}</p>
+                <p className="mt-3">{localize(lang, "1. Ссылки согласования для email и Telegram собираются от этого базового URL.", "1. Email and Telegram approval links are generated from this base URL.")}</p>
+                <p>{localize(lang, "2. Если адрес неверный, операторы попадут на сломанную или локальную ссылку.", "2. If this is wrong, operators will land on a broken or local-only address.")}</p>
+                <p>{localize(lang, "3. Держите его синхронизированным с реальным хостом приложения.", "3. Keep it aligned with the actual host that serves your app.")}</p>
               </div>
             </div>
           </SectionCard>

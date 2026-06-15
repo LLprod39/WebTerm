@@ -266,7 +266,7 @@ export default function SettingsPermissionsPage() {
               <p className="text-[11px] text-muted-foreground/60">{lang === "ru" ? "Точечное правило для пользователя" : "Override rule for a user"}</p>
             </div>
           </div>
-          <div className="grid gap-3 px-5 py-4 sm:grid-cols-[1fr_1fr_1fr_auto]">
+          <div className="grid gap-3 px-5 py-4 sm:grid-cols-2 2xl:grid-cols-[minmax(10rem,0.9fr)_minmax(13rem,1.2fr)_minmax(9rem,0.9fr)_auto]">
             <div>
               <FieldLabel htmlFor="permission-user-select">{lang === "ru" ? "Пользователь" : "User"}</FieldLabel>
               <select id="permission-user-select" value={userForm.userId} onChange={(e) => setUserForm((c) => ({ ...c, userId: Number(e.target.value) }))} className={SELECT_CLASS}>
@@ -286,8 +286,8 @@ export default function SettingsPermissionsPage() {
                 <option value="0">{common.deny}</option>
               </select>
             </div>
-            <div className="flex items-end">
-              <Button className="h-10" onClick={() => void createUserPermission()} disabled={!users.length || !features.length}>
+            <div className="flex items-end sm:col-span-2 2xl:col-span-1">
+              <Button className="h-10 w-full 2xl:w-auto" onClick={() => void createUserPermission()} disabled={!users.length || !features.length}>
                 {common.save}
               </Button>
             </div>
@@ -305,7 +305,7 @@ export default function SettingsPermissionsPage() {
               <p className="text-[11px] text-muted-foreground/60">{lang === "ru" ? "Политика для всей группы" : "Policy for entire group"}</p>
             </div>
           </div>
-          <div className="grid gap-3 px-5 py-4 sm:grid-cols-[1fr_1fr_1fr_auto]">
+          <div className="grid gap-3 px-5 py-4 sm:grid-cols-2 2xl:grid-cols-[minmax(10rem,0.9fr)_minmax(13rem,1.2fr)_minmax(9rem,0.9fr)_auto]">
             <div>
               <FieldLabel htmlFor="group-permission-group-select">{lang === "ru" ? "Группа" : "Group"}</FieldLabel>
               <select id="group-permission-group-select" value={groupForm.groupId} onChange={(e) => setGroupForm((c) => ({ ...c, groupId: Number(e.target.value) }))} className={SELECT_CLASS}>
@@ -325,8 +325,8 @@ export default function SettingsPermissionsPage() {
                 <option value="0">{common.deny}</option>
               </select>
             </div>
-            <div className="flex items-end">
-              <Button className="h-10" onClick={() => void createGroupPermission()} disabled={!groups.length || !features.length}>
+            <div className="flex items-end sm:col-span-2 2xl:col-span-1">
+              <Button className="h-10 w-full 2xl:w-auto" onClick={() => void createGroupPermission()} disabled={!groups.length || !features.length}>
                 {common.save}
               </Button>
             </div>
@@ -341,20 +341,31 @@ export default function SettingsPermissionsPage() {
           <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">{copy.userListTitle}</h3>
           <div className="space-y-2">
             {permissions.length ? (
-              permissions.map((p) => (
-                <RuleRow
-                  key={p.id}
-                  name={p.username}
-                  feature={getAccessFeatureLabel(lang, p.feature, p.feature_display)}
-                  allowed={p.allowed}
-                  onToggle={() => void toggleUserPermission(p.id, p.allowed)}
-                  onDelete={() => void removeUserPermission(p.id)}
-                  allowedLabel={common.allowed}
-                  deniedLabel={common.denied}
-                  toggleTitle={common.toggle}
-                  deleteTitle={common.delete}
-                />
-              ))
+              permissions.map((p) => {
+                const featureLabel = getAccessFeatureLabel(lang, p.feature, p.feature_display);
+                return (
+                  <RuleRow
+                    key={p.id}
+                    name={p.username}
+                    feature={featureLabel}
+                    allowed={p.allowed}
+                    onToggle={() => void toggleUserPermission(p.id, p.allowed)}
+                    onDelete={() => void removeUserPermission(p.id)}
+                    allowedLabel={common.allowed}
+                    deniedLabel={common.denied}
+                    toggleTitle={
+                      lang === "ru"
+                        ? `Переключить правило ${p.username}: ${featureLabel}`
+                        : `Toggle rule for ${p.username}: ${featureLabel}`
+                    }
+                    deleteTitle={
+                      lang === "ru"
+                        ? `Удалить правило ${p.username}: ${featureLabel}`
+                        : `Delete rule for ${p.username}: ${featureLabel}`
+                    }
+                  />
+                );
+              })
             ) : (
               <EmptyState
                 icon={<Shield className="h-5 w-5" />}
@@ -370,20 +381,31 @@ export default function SettingsPermissionsPage() {
           <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">{copy.groupListTitle}</h3>
           <div className="space-y-2">
             {groupPermissions.length ? (
-              groupPermissions.map((p) => (
-                <RuleRow
-                  key={p.id}
-                  name={p.group_name}
-                  feature={getAccessFeatureLabel(lang, p.feature, p.feature_display)}
-                  allowed={p.allowed}
-                  onToggle={() => void toggleGroupPermission(p.id, p.allowed)}
-                  onDelete={() => void removeGroupPermission(p.id)}
-                  allowedLabel={common.allowed}
-                  deniedLabel={common.denied}
-                  toggleTitle={common.toggle}
-                  deleteTitle={common.delete}
-                />
-              ))
+              groupPermissions.map((p) => {
+                const featureLabel = getAccessFeatureLabel(lang, p.feature, p.feature_display);
+                return (
+                  <RuleRow
+                    key={p.id}
+                    name={p.group_name}
+                    feature={featureLabel}
+                    allowed={p.allowed}
+                    onToggle={() => void toggleGroupPermission(p.id, p.allowed)}
+                    onDelete={() => void removeGroupPermission(p.id)}
+                    allowedLabel={common.allowed}
+                    deniedLabel={common.denied}
+                    toggleTitle={
+                      lang === "ru"
+                        ? `Переключить правило группы ${p.group_name}: ${featureLabel}`
+                        : `Toggle group rule for ${p.group_name}: ${featureLabel}`
+                    }
+                    deleteTitle={
+                      lang === "ru"
+                        ? `Удалить правило группы ${p.group_name}: ${featureLabel}`
+                        : `Delete group rule for ${p.group_name}: ${featureLabel}`
+                    }
+                  />
+                );
+              })
             ) : (
               <EmptyState
                 icon={<Shield className="h-5 w-5" />}

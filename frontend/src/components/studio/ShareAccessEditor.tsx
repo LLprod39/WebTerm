@@ -3,6 +3,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import type { StudioSharedUser } from "@/lib/api";
+import { localize, useI18n } from "@/lib/i18n";
 
 export function ShareAccessEditor({
   title = "Access",
@@ -23,6 +24,7 @@ export function ShareAccessEditor({
   onSharedChange: (value: boolean) => void;
   onToggleUser: (userId: number) => void;
 }) {
+  const { lang } = useI18n();
   const availableUsers = Array.isArray(users) ? users : [];
 
   return (
@@ -34,17 +36,25 @@ export function ShareAccessEditor({
 
       <div className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-background/60 px-3 py-3">
         <div>
-          <div className="text-sm font-medium text-foreground">Shared for all users</div>
-          <div className="text-xs text-muted-foreground">Everyone with this Studio section can open and use it.</div>
+          <div className="text-sm font-medium text-foreground">
+            {localize(lang, "Доступно всем пользователям", "Shared for all users")}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {localize(
+              lang,
+              "Все, у кого открыт этот раздел Studio, смогут использовать объект.",
+              "Everyone with this Studio section can open and use it.",
+            )}
+          </div>
         </div>
         <Switch checked={isShared} onCheckedChange={onSharedChange} disabled={disabled} />
       </div>
 
       <div className="space-y-2">
-        <Label className="text-xs">Share with specific users</Label>
+        <Label className="text-xs">{localize(lang, "Доступ для выбранных пользователей", "Share with specific users")}</Label>
         {availableUsers.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border/70 px-3 py-4 text-xs text-muted-foreground">
-            No active users available.
+            {localize(lang, "Активных пользователей нет.", "No active users available.")}
           </div>
         ) : (
           <div className="grid gap-2 md:grid-cols-2">
@@ -63,9 +73,11 @@ export function ShareAccessEditor({
                   />
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium text-foreground">{user.username}</div>
-                    <div className="truncate text-xs text-muted-foreground">{user.email || "No email"}</div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {user.email || localize(lang, "Email не указан", "No email")}
+                    </div>
                   </div>
-                  {checked ? <Badge variant="secondary">Shared</Badge> : null}
+                  {checked ? <Badge variant="secondary">{localize(lang, "Открыт", "Shared")}</Badge> : null}
                 </label>
               );
             })}

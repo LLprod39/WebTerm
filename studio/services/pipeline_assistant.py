@@ -8,106 +8,12 @@ from typing import Any
 
 from app.agent_kernel.memory.redaction import sanitize_prompt_context_text
 from app.core.llm import LLMProvider
+from studio.node_manifest import KNOWN_NODE_TYPES, assistant_node_catalog
+from studio.services.pipeline_assistant_fallback import handle_unusable_llm_response
+from studio.services.pipeline_assistant_interview import augment_response_with_interview_questions
+from studio.services.pipeline_assistant_prompt import SYSTEM_PROMPT
 
-NODE_TYPE_CATALOG: dict[str, dict[str, Any]] = {
-    "trigger/manual": {
-        "category": "Triggers",
-        "purpose": "Manual operator start. Use for test runs and human-launched workflows.",
-        "source_handles": ["out"],
-    },
-    "trigger/webhook": {
-        "category": "Triggers",
-        "purpose": "HTTP POST start. Use when an external system starts a pipeline.",
-        "source_handles": ["out"],
-    },
-    "trigger/schedule": {
-        "category": "Triggers",
-        "purpose": "Cron-like scheduled start.",
-        "source_handles": ["out"],
-    },
-    "trigger/monitoring": {
-        "category": "Triggers",
-        "purpose": "Start from server monitoring alerts.",
-        "source_handles": ["out"],
-    },
-    "agent/react": {
-        "category": "Agents",
-        "purpose": "Ops agent that reasons and uses server/tools according to policy.",
-        "source_handles": ["success", "error", "out"],
-    },
-    "agent/multi": {
-        "category": "Agents",
-        "purpose": "Multi-server or multi-agent investigation step.",
-        "source_handles": ["success", "error", "out"],
-    },
-    "agent/ssh_cmd": {
-        "category": "Agents",
-        "purpose": "Direct SSH command with preflight and verification commands.",
-        "source_handles": ["success", "error", "out"],
-    },
-    "agent/llm_query": {
-        "category": "Agents",
-        "purpose": "Direct LLM reasoning step over previous outputs/context.",
-        "source_handles": ["success", "error", "out"],
-    },
-    "agent/mcp_call": {
-        "category": "Agents",
-        "purpose": "Pinned MCP tool call with JSON arguments.",
-        "source_handles": ["success", "error", "out"],
-    },
-    "logic/condition": {
-        "category": "Logic",
-        "purpose": "Branch by checking a prior node output.",
-        "source_handles": ["true", "false"],
-    },
-    "logic/parallel": {
-        "category": "Logic",
-        "purpose": "Fan out work into parallel branches.",
-        "source_handles": ["out"],
-    },
-    "logic/merge": {
-        "category": "Logic",
-        "purpose": "Join branches back together before continuing.",
-        "source_handles": ["out"],
-    },
-    "logic/wait": {
-        "category": "Logic",
-        "purpose": "Pause execution for a configured duration.",
-        "source_handles": ["done", "out"],
-    },
-    "logic/human_approval": {
-        "category": "Logic",
-        "purpose": "Pause until an operator approves/rejects/times out.",
-        "source_handles": ["approved", "rejected", "timeout"],
-    },
-    "logic/telegram_input": {
-        "category": "Logic",
-        "purpose": "Ask an operator for a plain-text Telegram reply. This is not a trigger.",
-        "source_handles": ["received", "timeout"],
-    },
-    "output/report": {
-        "category": "Output",
-        "purpose": "Generate a markdown report from prior node outputs.",
-        "source_handles": ["success", "error", "out"],
-    },
-    "output/webhook": {
-        "category": "Output",
-        "purpose": "Send results to an external webhook.",
-        "source_handles": ["success", "error", "out"],
-    },
-    "output/email": {
-        "category": "Output",
-        "purpose": "Send an email notification/report.",
-        "source_handles": ["success", "error", "out"],
-    },
-    "output/telegram": {
-        "category": "Output",
-        "purpose": "Send a Telegram message. This does not wait for a reply.",
-        "source_handles": ["success", "error", "out"],
-    },
-}
-
-KNOWN_NODE_TYPES = set(NODE_TYPE_CATALOG)
+NODE_TYPE_CATALOG: dict[str, dict[str, Any]] = assistant_node_catalog()
 
 NODE_TYPE_ALIASES = {
     "manual": "trigger/manual",
@@ -122,6 +28,39 @@ NODE_TYPE_ALIASES = {
     "ssh_command": "agent/ssh_cmd",
     "llm_query": "agent/llm_query",
     "mcp_call": "agent/mcp_call",
+    "server_snapshot": "ops/server_snapshot",
+    "linux_snapshot": "ops/server_snapshot",
+    "log_query": "ops/log_query",
+    "logs": "ops/log_query",
+    "journal": "ops/log_query",
+    "service_logs": "ops/log_query",
+    "docker_logs": "ops/log_query",
+    "file_action": "ops/file_action",
+    "file_read": "ops/file_action",
+    "file_write": "ops/file_action",
+    "config_file": "ops/file_action",
+    "package_action": "ops/package_action",
+    "package_update": "ops/package_action",
+    "package_install": "ops/package_action",
+    "apt": "ops/package_action",
+    "dnf": "ops/package_action",
+    "yum": "ops/package_action",
+    "disk_cleanup": "ops/disk_cleanup",
+    "journal_vacuum": "ops/disk_cleanup",
+    "tmp_cleanup": "ops/disk_cleanup",
+    "backup_check": "ops/backup_restore_check",
+    "backup_restore_check": "ops/backup_restore_check",
+    "restore_check": "ops/backup_restore_check",
+    "service_action": "ops/service_action",
+    "service_restart": "ops/service_action",
+    "systemctl": "ops/service_action",
+    "docker_action": "ops/docker_action",
+    "docker_restart": "ops/docker_action",
+    "process_action": "ops/process_action",
+    "http_check": "ops/http_check",
+    "health_check": "ops/http_check",
+    "resolve_alert": "ops/alert_update",
+    "alert_update": "ops/alert_update",
     "condition": "logic/condition",
     "parallel": "logic/parallel",
     "merge": "logic/merge",
@@ -166,109 +105,6 @@ class PipelineAssistantError(Exception):
         self.message = message
         self.status = status
 
-
-_SYSTEM_PROMPT = """Ты — корпоративный AI copilot для Studio Pipeline Editor.
-
-Ты помогаешь администратору проектировать, проверять и улучшать ВЕСЬ pipeline. Если передана focus node, ты можешь также дать точечный patch для неё.
-
-Правила:
-- Смотри на весь граф, а не только на одну ноду.
-- Предлагай изменения с учетом реальных доступных ресурсов: servers, agent configs, MCP servers, skills.
-- Если можно использовать существующий ресурс, ссылайся на него по точному ID.
-- Если нужен точечный конфиг ноды, указывай target_node_id и заполняй node_patch только полями data этой ноды.
-- Если пользователь хочет изменить несколько существующих шагов или убрать мусор из графа, используй graph_patch.update_nodes / remove_node_ids / remove_edge_ids.
-- Если хочешь предложить новые шаги или ветку, используй graph_patch.nodes и graph_patch.edges.
-- Если вопрос общий по pipeline, можешь оставить target_node_id пустым и дать только graph_patch и reply.
-- Не удаляй существующие значения без явной просьбы пользователя.
-- Для logic/condition обязательно учитывай source_node_id и входящие связи.
-- Для agent/mcp_call предпочитай доступные MCP tools и валидные JSON arguments.
-- Для agent/ssh_cmd избегай разрушительных команд; если действие потенциально опасное, добавляй human approval или явно предупреждай.
-- Для agent/llm_query ОБЯЗАТЕЛЬНО заполняй data.prompt и data.system_prompt конкретными инструкциями: что прочитать из входов, как рассуждать, какой формат результата вернуть.
-- Для agent/react и agent/multi ОБЯЗАТЕЛЬНО заполняй data.goal, data.system_prompt, data.instructions и data.expected_output. Нельзя оставлять AI-ноды пустыми или с общими словами вроде "process task".
-- Промпты внутри AI-нод должны быть рабочими runbook-инструкциями: цель, входные данные, ограничения безопасности, формат ответа, что делать при недостатке данных.
-- Работай в draft mode: ты предлагаешь изменения, но не считаешь их примененными до подтверждения оператора.
-- Если запрос неоднозначен, задай 1-3 конкретных уточняющих вопроса в reply, но все равно предложи безопасный минимальный draft, если это возможно.
-- reply должен быть коротким и практичным: что понял, что меняешь, что осталось проверить. Избегай длинных таблиц и воды.
-- Если граф почти пустой или пользователь просит «собери пайплайн», верни готовый starter workflow, а не только советы.
-- Возвращай только JSON-объект без markdown-обёрток, префиксов и пояснений вне JSON.
-
-Верни ТОЛЬКО JSON-объект строго такого вида:
-{
-  "reply": "Markdown explanation for the operator",
-  "target_node_id": null,
-  "node_patch": {},
-  "graph_patch": {
-    "anchor_node_id": null,
-    "nodes": [
-      {
-        "ref": "new_step_1",
-        "type": "agent/llm_query",
-        "label": "Optional human label",
-        "data": {},
-        "x_offset": 260,
-        "y_offset": 0
-      }
-    ],
-    "edges": [
-      {
-        "source": "existing_node_id_or_ref",
-        "target": "existing_node_id_or_ref",
-        "source_handle": "out",
-        "label": ""
-      }
-    ],
-    "update_nodes": [
-      {
-        "node_id": "existing_node_id",
-        "data": {}
-      }
-    ],
-    "remove_node_ids": [],
-    "remove_edge_ids": []
-  },
-  "warnings": ["optional warning"],
-  "patch_summary": "Short summary of the proposed graph changes",
-  "suggested_next_actions": ["Save the pipeline", "Run a manual test"]
-}
-
-Правила для graph_patch:
-- graph_patch.nodes / graph_patch.edges должны содержать только НОВЫЕ ноды и новые связи.
-- В nodes[].ref используй короткие уникальные временные идентификаторы.
-- В edges[].source / edges[].target можно ссылаться либо на существующий node_id, либо на ref из graph_patch.nodes.
-- НИКОГДА не создавай ноду для связи. Связь всегда должна быть объектом в graph_patch.edges, а не node type "edge", "edge_placeholder" или "connection".
-- Telegram Input — это строго logic/telegram_input. Не существует trigger/telegram_input.
-- ШАБЛОН «Telegram-бот» (используй его при любом запросе про Telegram-автоматизацию):
-  Шаг 1: trigger/webhook — ОБЯЗАТЕЛЬНЫЙ первый узел, точка входа для сообщений из Telegram.
-  Шаг 2: agent/multi или agent/react — выполнение задачи пользователя (доступ к серверам).
-  Шаг 3 (если нужны уточнения внутри одного запуска): output/telegram (задать вопрос) → logic/telegram_input (ждать ответа handle=received) → agent/... (продолжить с ответом).
-  Шаг 4: output/telegram — финальный ответ пользователю.
-  ВАЖНО: каждое новое сообщение пользователя = новый запуск через trigger/webhook. Пайплайн не зацикливается — это DAG.
-  НИКОГДА не ставь logic/telegram_input первым узлом: это не trigger, он не может запустить пайплайн.
-  НИКОГДА не создавай граф без trigger/manual, trigger/webhook, trigger/schedule или trigger/monitoring.
-- Для правки существующих нод используй graph_patch.update_nodes.
-- Для удаления существующих элементов используй remove_node_ids и remove_edge_ids.
-- Если нужны только текстовые рекомендации без вставки в graph, оставляй graph_patch пустым.
-- ОБЯЗАТЕЛЬНО: граф должен быть ациклическим (DAG). Циклы ЗАПРЕЩЕНЫ. Никогда не создавай edge, который указывает на узел-предок в цепочке. Если нужна повторная проверка по ответу пользователя — используй отдельный trigger (trigger/manual или trigger/monitoring), а не back-edge в основной граф.
-- ОБЯЗАТЕЛЬНО: output/* и Telegram report ноды не должны вести обратно в предыдущие шаги. Для новых входящих задач от Telegram используй отдельный trigger/webhook или manual trigger, а не обратную связь из report в input.
-- ОБЯЗАТЕЛЬНО: каждая новая нода должна быть достижима из какого-либо trigger-узла. Если добавляешь новую ветку, подключи её к существующему trigger или включи новый trigger-узел.
-- ОБЯЗАТЕЛЬНО: для каждого edge указывай source_handle. Допустимые source_handle по типу ноды-источника:
-  - trigger/* : "out"
-  - logic/condition : "true" или "false"
-  - logic/parallel : "out"
-  - logic/merge : "out"
-  - logic/wait : "done" или "out"
-  - logic/human_approval : "approved", "rejected" или "timeout"
-  - logic/telegram_input : "received" или "timeout"
-  - agent/* : "success", "error" или "out"
-  - output/* : "success", "error" или "out"
-  - все остальные : "out"
-- Используй только допустимые типы нод:
-  trigger/manual, trigger/webhook, trigger/schedule, trigger/monitoring,
-  agent/react, agent/multi, agent/ssh_cmd, agent/llm_query, agent/mcp_call,
-  logic/condition, logic/parallel, logic/merge, logic/wait, logic/human_approval, logic/telegram_input,
-  output/report, output/webhook, output/email, output/telegram"""
-
-
 def _extract_json_object(raw_text: str) -> dict[str, Any]:
     text = (raw_text or "").strip()
     if not text:
@@ -292,6 +128,116 @@ def _prompt_json(value: object, *, limit: int) -> str:
         serialized = json.dumps(str(value), ensure_ascii=False)
     sanitized = sanitize_prompt_context_text(serialized).text.strip()
     return sanitized[:limit] if len(sanitized) > limit else sanitized
+
+
+def _string_items(value: object, *, limit: int = 8) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()][:limit]
+
+
+def _dict_items(value: object, *, limit: int = 12) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    result: list[dict[str, Any]] = []
+    for item in value:
+        if isinstance(item, dict):
+            result.append(dict(item))
+        elif str(item).strip():
+            result.append({"name": str(item).strip()})
+        if len(result) >= limit:
+            break
+    return result
+
+
+def _compact_available_resources(assistant_context: dict[str, Any]) -> dict[str, Any]:
+    def _pick(items: object, fields: tuple[str, ...], *, limit: int = 12) -> list[dict[str, Any]]:
+        if not isinstance(items, list):
+            return []
+        result: list[dict[str, Any]] = []
+        for item in items[:limit]:
+            if not isinstance(item, dict):
+                continue
+            payload = {field: item.get(field) for field in fields if item.get(field) not in (None, "", [])}
+            if payload:
+                result.append(payload)
+        return result
+
+    capability_registry = assistant_context.get("capability_registry")
+    task_families = []
+    capability_packs = []
+    if isinstance(capability_registry, dict):
+        task_families = _pick(
+            capability_registry.get("task_families"),
+            ("slug", "name", "readiness", "missing"),
+            limit=8,
+        )
+        packs = capability_registry.get("capability_packs")
+        if isinstance(packs, list):
+            for pack in packs[:8]:
+                if not isinstance(pack, dict):
+                    continue
+                tools = pack.get("tools")
+                capability_packs.append(
+                    {
+                        "slug": pack.get("slug"),
+                        "service": pack.get("service"),
+                        "mcp_server_name": pack.get("mcp_server_name"),
+                        "tool_names": [
+                            tool.get("tool_name")
+                            for tool in tools[:8]
+                            if isinstance(tool, dict) and tool.get("tool_name")
+                        ]
+                        if isinstance(tools, list)
+                        else [],
+                    }
+                )
+
+    return {
+        "servers": _pick(assistant_context.get("available_servers"), ("id", "name", "host", "server_type")),
+        "agents": _pick(assistant_context.get("available_agents"), ("id", "name", "description")),
+        "mcp_servers": _pick(
+            assistant_context.get("available_mcp_servers"),
+            ("id", "name", "transport", "description", "last_test_ok", "owner_id"),
+        ),
+        "skills": _pick(assistant_context.get("available_skills"), ("slug", "name", "service", "category", "safety_level")),
+        "task_families": task_families,
+        "capability_packs": capability_packs,
+    }
+
+
+def _normalize_resource_plan(raw_value: object, assistant_context: dict[str, Any]) -> dict[str, Any]:
+    raw = raw_value if isinstance(raw_value, dict) else {}
+    plan = {
+        "servers": _dict_items(raw.get("servers"), limit=12),
+        "agents": _dict_items(raw.get("agents"), limit=8),
+        "mcp_servers": _dict_items(raw.get("mcp_servers"), limit=12),
+        "skills": _dict_items(raw.get("skills"), limit=12),
+        "missing": _string_items(raw.get("missing"), limit=8),
+        "notes": _string_items(raw.get("notes"), limit=8),
+        "available": _compact_available_resources(assistant_context),
+    }
+    return plan
+
+
+def _normalize_node_explanations(raw_value: object) -> dict[str, str]:
+    if not isinstance(raw_value, dict):
+        return {}
+    result: dict[str, str] = {}
+    for key, value in raw_value.items():
+        node_key = str(key or "").strip()
+        explanation = str(value or "").strip()
+        if node_key and explanation:
+            result[node_key[:100]] = explanation[:500]
+    return result
+
+
+def _normalize_confidence(raw_value: object) -> float | None:
+    try:
+        value = float(raw_value)
+    except (TypeError, ValueError):
+        return None
+    return max(0.0, min(1.0, value))
 
 
 def _node_catalog_payload() -> list[dict[str, Any]]:
@@ -958,7 +904,7 @@ async def _call_llm(*, user_prompt: str) -> str:
         user_prompt,
         model="auto",
         purpose="chat",
-        system_prompt=_SYSTEM_PROMPT,
+        system_prompt=SYSTEM_PROMPT,
         json_mode=True,
     ):
         chunks.append(chunk)
@@ -983,6 +929,8 @@ def get_pipeline_assistant_context(
     last_validation_errors: list[str] | None = None,
     last_run_summary: dict[str, Any] | None = None,
     draft_mode: bool = True,
+    capability_registry: dict[str, Any] | None = None,
+    template_recommendations: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     return {
         "pipeline_name": pipeline_name,
@@ -1000,6 +948,8 @@ def get_pipeline_assistant_context(
         "selected_mcp_tools": selected_mcp_tools,
         "available_skills": available_skills,
         "selected_skill_details": selected_skill_details,
+        "capability_registry": capability_registry or {},
+        "template_recommendations": template_recommendations or [],
         "last_validation_errors": last_validation_errors or [],
         "last_run_summary": last_run_summary or {},
     }
@@ -1037,17 +987,36 @@ def build_pipeline_assistant_response(
         loop.close()
 
     parsed = _extract_json_object(raw_response)
+    fallback_response, fallback_error = handle_unusable_llm_response(
+        raw_text=raw_response,
+        parsed=parsed,
+        user_message=safe_user_message,
+        assistant_context=assistant_context,
+        known_node_types=known_node_types,
+    )
+    if fallback_response is not None:
+        fallback_response.setdefault("template_recommendations", assistant_context.get("template_recommendations") or [])
+        return augment_response_with_interview_questions(fallback_response)
+    if fallback_error:
+        raise PipelineAssistantError(fallback_error, 502)
     if not parsed:
         fallback_reply = sanitize_prompt_context_text(raw_response).text.strip() or "Ассистент вернул невалидный JSON-ответ."
-        return {
+        return augment_response_with_interview_questions({
             "reply": fallback_reply,
+            "requirements": [],
+            "assumptions": [],
+            "questions": [],
+            "resource_plan": _normalize_resource_plan({}, assistant_context),
             "target_node_id": None,
             "node_patch": {},
             "graph_patch": _sanitize_graph_patch(None),
+            "node_explanations": {},
+            "confidence": None,
             "warnings": ["Ассистент вернул невалидный structured output."],
             "patch_summary": "",
             "suggested_next_actions": [],
-        }
+            "template_recommendations": assistant_context.get("template_recommendations") or [],
+        })
 
     reply = str(parsed.get("reply") or "").strip() or sanitize_prompt_context_text(raw_response).text.strip() or "No assistant response."
     target_node_id = str(parsed.get("target_node_id") or "").strip() or None
@@ -1082,12 +1051,20 @@ def build_pipeline_assistant_response(
         warnings=warning_items,
     )
 
-    return {
+    return augment_response_with_interview_questions({
         "reply": reply,
+        "requirements": _string_items(parsed.get("requirements"), limit=12),
+        "assumptions": _string_items(parsed.get("assumptions"), limit=8),
+        "questions": _string_items(parsed.get("questions"), limit=3),
+        "resource_plan": _normalize_resource_plan(parsed.get("resource_plan"), assistant_context),
         "target_node_id": target_node_id,
         "node_patch": node_patch,
         "graph_patch": graph_patch,
+        "node_explanations": _normalize_node_explanations(parsed.get("node_explanations")),
+        "confidence": _normalize_confidence(parsed.get("confidence")),
         "warnings": warning_items[:8],
         "patch_summary": str(parsed.get("patch_summary") or "").strip(),
         "suggested_next_actions": suggested_next_action_items,
-    }
+        "template_recommendations": assistant_context.get("template_recommendations") or [],
+        "selected_template": parsed.get("selected_template") if isinstance(parsed.get("selected_template"), dict) else None,
+    })

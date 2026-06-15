@@ -1,0 +1,891 @@
+- generic [ref=e2] [box=0,0,1249,1221]:
+  - region "Notifications (F8)" [box=0,0,1249,0]:
+    - list [box=829,1189,420,32]
+  - region "Notifications alt+T" [box=0,0,1249,0]
+  - generic [ref=e60] [box=0,0,1249,1221]:
+    - generic [ref=e64] [box=0,0,255,1221]:
+      - generic [ref=e65] [box=0,0,255,64]:
+        - button "Свернуть меню" [ref=e66] [cursor=pointer] [box=12,12,40,40]:
+          - img [ref=e67] [box=24,24,16,16]
+        - generic [ref=e70] [box=64,13,116,37]:
+          - generic [ref=e71] [box=64,13,116,20]: WebTermAI
+          - generic [ref=e72] [box=64,33,116,17]: Платформа операций
+      - generic [ref=e73] [box=0,64,255,1033]:
+        - generic [ref=e74] [box=12,80,231,241]:
+          - generic [ref=e75] [box=20,88,215,17]: Рабочее пространство
+          - list [ref=e77] [box=20,113,215,200]:
+            - listitem [ref=e78] [box=20,113,215,44]:
+              - link "Панель" [ref=e79] [cursor=pointer] [box=20,113,215,44]:
+                - /url: /dashboard
+                - img [ref=e80] [box=32,127,16,16]
+                - generic [ref=e85] [box=58,125,51,20]: Панель
+            - listitem [ref=e86] [box=20,165,215,44]:
+              - link "Серверы" [ref=e87] [cursor=pointer] [box=20,165,215,44]:
+                - /url: /servers
+                - img [ref=e88] [box=32,179,16,16]
+                - generic [ref=e91] [box=58,177,63,20]: Серверы
+            - listitem [ref=e92] [box=20,217,215,44]:
+              - link "Агенты" [ref=e93] [cursor=pointer] [box=20,217,215,44]:
+                - /url: /agents
+                - img [ref=e94] [box=32,231,16,16]
+                - generic [ref=e97] [box=58,229,49,20]: Агенты
+            - listitem [ref=e98] [box=20,269,215,44]:
+              - link "Студия" [ref=e99] [cursor=pointer] [box=20,269,215,44]:
+                - /url: /studio
+                - img [ref=e100] [box=32,283,16,16]
+                - generic [ref=e104] [box=58,281,49,20]: Студия
+        - generic [ref=e105] [box=12,345,231,85]:
+          - generic [ref=e106] [box=20,353,215,17]: Управление
+          - list [ref=e108] [box=20,377,215,44]:
+            - listitem [ref=e109] [box=20,377,215,44]:
+              - link "Настройки" [ref=e110] [cursor=pointer] [box=20,377,215,44]:
+                - /url: /settings
+                - img [ref=e111] [box=32,391,16,16]
+                - generic [ref=e114] [box=58,389,74,20]: Настройки
+      - generic [ref=e115] [box=0,1097,255,124]:
+        - generic [ref=e116] [box=12,1110,231,46]:
+          - button "EN" [ref=e117] [cursor=pointer] [box=17,1115,109,36]
+          - button "RU" [pressed] [ref=e118] [cursor=pointer] [box=130,1115,109,36]
+        - generic [ref=e119] [box=12,1172,231,37]:
+          - generic [ref=e120] [box=12,1173,36,36]: L
+          - generic [ref=e121] [box=58,1172,139,37]:
+            - paragraph [ref=e122] [box=58,1172,139,20]: lunix
+            - paragraph [ref=e123] [box=58,1194,139,15]:
+              - img [ref=e124] [box=58,1197,10,10]
+              - text: Администратор
+          - button "Выйти" [ref=e127] [cursor=pointer] [box=207,1173,36,36]:
+            - img [ref=e128] [box=218,1184,14,14]
+    - main [ref=e132] [box=256,0,993,1221]:
+      - generic [ref=e136] [box=256,0,993,1221]:
+        - generic [ref=e138] [box=268,8,969,50]:
+          - link "Назад" [ref=e139] [cursor=pointer] [box=268,13,90,40]:
+            - /url: /servers
+            - img [ref=e140] [box=280,25,16,16]
+            - text: Назад
+          - generic [ref=e142] [box=366,13,254,40]:
+            - generic "Онлайн" [ref=e143] [box=379,29,8,8]
+            - generic [ref=e147] [box=395,23,79,20]: api-prod-01
+            - generic [ref=e148] [box=481,25,125,17]: lunix@172.25.173.251:22
+          - generic [ref=e150] [box=628,8,310,50]:
+            - button "api-prod-01" [ref=e152] [cursor=pointer] [box=634,14,118,38]:
+              - generic "Онлайн" [ref=e153] [box=646,29,8,8]
+              - generic [ref=e157] [box=662,23,78,20]: api-prod-01
+            - button "Подключить сервер" [ref=e158] [cursor=pointer] [box=757,13,102,40]:
+              - img [ref=e159] [box=770,25,16,16]
+              - text: Сервер
+          - generic [ref=e160] [box=946,8,291,50]:
+            - button "SFTP" [pressed] [ref=e161] [cursor=pointer] [box=951,13,83,40]:
+              - img [box=963,25,16,16]
+              - text: SFTP
+            - button "Linux" [ref=e162] [cursor=pointer] [box=1038,13,84,40]:
+              - img [box=1050,25,16,16]
+              - text: Linux
+            - button "AI" [ref=e163] [cursor=pointer] [box=1126,13,62,40]:
+              - img [box=1138,25,16,16]
+              - text: AI
+            - button "Настройки" [ref=e164] [cursor=pointer] [box=1192,13,40,40]:
+              - img [box=1204,25,16,16]
+        - generic [ref=e165] [box=256,67,993,1154]:
+          - generic [ref=e169] [box=256,67,613,1154]:
+            - generic [ref=e173] [box=256,67,595,1144]:
+              - textbox "Terminal input" [ref=e174] [box=453,487,9,20]
+              - generic [box=256,67,595,1144]:
+                - generic [box=256,67,595,22]:
+                  - generic [box=256,67,86,22]: WebTermAI
+                - generic [box=256,89,595,22]:
+                  - generic [box=256,89,259,22]: "Connecting to server #24..."
+                - generic [box=256,111,595,22]:
+                  - generic [box=256,111,423,22]: WebSocket connected. Starting SSH session...
+                - generic [box=256,133,595,22]:
+                  - generic [box=256,133,595,22]: Welcome to Ubuntu 24.04.1 LTS (GNU/Linux 5.15.153.1-microsoft-
+                - generic [box=256,155,595,22]:
+                  - generic [box=256,155,202,22]: standard-WSL2 x86_64)
+                - generic [box=256,199,595,22]:
+                  - generic [box=256,199,403,22]: "* Documentation: https://help.ubuntu.com"
+                - generic [box=256,221,595,22]:
+                  - generic [box=256,221,480,22]: "* Management: https://landscape.canonical.com"
+                - generic [box=256,243,595,22]:
+                  - generic [box=256,243,394,22]: "* Support: https://ubuntu.com/pro"
+                - generic [box=256,287,595,22]:
+                  - generic [box=256,287,519,22]: System information as of Sat Jun 13 15:21:05 +05 2026
+                - generic [box=256,331,595,22]:
+                  - generic [box=256,331,586,22]: "System load: 1.02 Processes: 42"
+                - generic [box=256,353,595,22]:
+                  - generic [box=256,353,576,22]: "Usage of /: 0.4% of 1006.85GB Users logged in: 2"
+                - generic [box=256,375,595,22]:
+                  - generic [box=256,375,595,22]: "Memory usage: 7% IPv4 address for eth0: 172"
+                - generic [box=256,397,595,22]:
+                  - generic [box=256,397,106,22]: .25.173.251
+                - generic [box=256,419,595,22]:
+                  - generic [box=256,419,173,22]: "Swap usage: 0%"
+                - generic [box=256,463,595,22]:
+                  - generic [box=256,463,595,22]: "* Strictly confined Kubernetes makes edge and IoT secure. Lea"
+                - generic [box=256,485,595,22]:
+                  - generic [box=256,485,144,22]: rn how MicroK8s
+                - generic [box=256,507,595,22]:
+                  - generic [box=256,507,595,22]: just raised the bar for easy, resilient and secure K8s clus
+                - generic [box=256,529,595,22]:
+                  - generic [box=256,529,144,22]: ter deployment.
+                - generic [box=256,573,595,22]:
+                  - generic [box=256,573,557,22]: https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+                - generic [box=256,595,595,22]:
+                  - generic [box=256,595,538,22]: "Last login: Thu Jun 11 04:13:00 2026 from 172.25.173.251"
+                - generic [box=256,617,595,22]:
+                  - generic [box=256,617,163,22]: lunix@PC-643653b3
+                  - generic [box=419,617,10,22]: ":"
+                  - generic [box=429,617,10,22]: ~
+                  - generic [box=438,617,19,22]: $
+            - generic [box=256,67,613,1154]:
+              - generic [box=322,611,480,66]:
+                - generic [box=339,624,446,20]: Загрузка файлов
+                - generic [box=339,648,446,16]: Перетащите файлы сюда, чтобы отправить их в текущую удалённую папку.
+          - generic [ref=e175] [box=869,67,380,1154]:
+            - generic "Перетащите для изменения ширины" [ref=e176] [box=870,67,4,1154]
+            - generic [ref=e180] [box=870,67,379,1154]:
+              - generic [ref=e181] [box=870,67,379,158]:
+                - generic [ref=e182] [box=886,79,347,80]:
+                  - generic [ref=e183] [box=886,79,80,57]:
+                    - generic [ref=e184] [box=886,79,80,40]: Файлы SFTP
+                    - generic [ref=e185] [box=886,119,80,17]: lunix@172.25.173.251:22
+                  - generic [ref=e186] [box=978,79,256,80]:
+                    - button "Новый файл" [ref=e187] [cursor=pointer] [box=978,79,122,36]:
+                      - img [box=991,89,16,16]
+                      - text: Новый файл
+                    - button "Новая папка" [ref=e188] [cursor=pointer] [box=1108,79,124,36]:
+                      - img [box=1121,89,16,16]
+                      - text: Новая папка
+                    - button "Загрузить" [ref=e189] [cursor=pointer] [box=978,123,110,36]:
+                      - img [box=991,133,16,16]
+                      - text: Загрузить
+                    - button "Обновить" [ref=e190] [cursor=pointer] [box=1095,123,108,36]:
+                      - img [box=1108,133,16,16]
+                      - text: Обновить
+                - generic [ref=e191] [box=886,171,347,41]:
+                  - generic [ref=e192] [box=886,171,83,41]:
+                    - button "Домой" [ref=e193] [cursor=pointer] [box=886,171,67,36]
+                    - button "На уровень выше" [ref=e194] [cursor=pointer] [box=961,171,34,36]:
+                      - img [box=970,181,16,16]
+                    - button "home" [ref=e195] [cursor=pointer] [box=1003,171,58,36]
+                    - button "lunix" [ref=e196] [cursor=pointer] [box=1069,171,53,36]
+                  - generic [ref=e197] [box=977,174,256,36]:
+                    - img [box=989,185,14,14]
+                    - textbox "Поиск файлов" [ref=e198] [box=977,174,256,36]:
+                      - /placeholder: Поиск файлов...
+              - generic [ref=e199] [box=870,225,379,707]:
+                - generic [ref=e201] [box=886,235,347,75]:
+                  - generic [ref=e202] [box=886,235,347,17]:
+                    - generic [ref=e203] [box=886,235,52,17]: 61 объект
+                    - generic [ref=e204] [box=950,235,6,17]: •
+                    - generic [ref=e205] [box=968,235,46,17]: 21 папка
+                    - generic [ref=e206] [box=1026,235,6,17]: •
+                    - generic [ref=e207] [box=1044,235,57,17]: 40 файлов
+                  - generic [ref=e1046] [box=886,260,347,50]:
+                    - generic [box=899,269,0,31]:
+                      - generic [box=899,269,0,16]: .bashrc
+                      - generic [box=899,285,0,15]: /home/lunix/.bashrc
+                    - generic [ref=e1047] [box=907,269,545,32]:
+                      - button "Редактировать" [ref=e1048] [cursor=pointer] [box=907,269,126,32]:
+                        - img [box=915,277,16,16]
+                        - text: Редактировать
+                      - button "Переименовать" [ref=e1049] [cursor=pointer] [box=1039,269,131,32]:
+                        - img [box=1047,277,16,16]
+                        - text: Переименовать
+                      - button "Права" [ref=e1050] [cursor=pointer] [box=1176,269,78,32]:
+                        - img [box=1184,277,16,16]
+                        - text: Права
+                      - button "Владелец" [ref=e1051] [cursor=pointer] [box=1260,269,97,32]:
+                        - img [box=1268,277,16,16]
+                        - text: Владелец
+                      - button "Удалить" [ref=e1052] [cursor=pointer] [box=1363,269,89,32]:
+                        - img [box=1371,277,16,16]
+                        - text: Удалить
+                - generic [ref=e209] [box=870,-1136,374,6668]:
+                  - generic [ref=e210] [box=870,-1136,374,61]:
+                    - button ".cache Папка 25.05.2026, 22:09:14" [ref=e211] [cursor=pointer] [box=886,-1124,255,37]:
+                      - img [ref=e213] [box=894,-1114,16,16]
+                      - generic [ref=e215] [box=930,-1124,211,37]:
+                        - generic [ref=e216] [box=930,-1124,211,20]: .cache
+                        - generic [ref=e217] [box=930,-1104,211,17]
+                    - button "Открыть" [ref=e220] [cursor=pointer] [box=1153,-1124,75,36]
+                  - generic [ref=e221] [box=870,-1076,374,62]:
+                    - button ".claude Папка 09.03.2026, 17:40:17" [ref=e222] [cursor=pointer] [box=886,-1063,255,37]:
+                      - img [ref=e224] [box=894,-1053,16,16]
+                      - generic [ref=e226] [box=930,-1063,211,37]:
+                        - generic [ref=e227] [box=930,-1063,211,20]: .claude
+                        - generic [ref=e228] [box=930,-1043,211,17]
+                    - button "Открыть" [ref=e231] [cursor=pointer] [box=1153,-1063,75,36]
+                  - generic [ref=e232] [box=870,-1014,374,62]:
+                    - button ".codeium Папка 21.05.2026, 14:20:46" [ref=e233] [cursor=pointer] [box=886,-1001,255,37]:
+                      - img [ref=e235] [box=894,-991,16,16]
+                      - generic [ref=e237] [box=930,-1001,211,37]:
+                        - generic [ref=e238] [box=930,-1001,211,20]: .codeium
+                        - generic [ref=e239] [box=930,-981,211,17]
+                    - button "Открыть" [ref=e242] [cursor=pointer] [box=1153,-1001,75,36]
+                  - generic [ref=e243] [box=870,-953,374,62]:
+                    - button ".codex Папка 25.05.2026, 13:49:13" [ref=e244] [cursor=pointer] [box=886,-940,255,37]:
+                      - img [ref=e246] [box=894,-930,16,16]
+                      - generic [ref=e248] [box=930,-940,211,37]:
+                        - generic [ref=e249] [box=930,-940,211,20]: .codex
+                        - generic [ref=e250] [box=930,-920,211,17]
+                    - button "Открыть" [ref=e253] [cursor=pointer] [box=1153,-940,75,36]
+                  - generic [ref=e254] [box=870,-891,374,62]:
+                    - button ".config Папка 25.05.2026, 22:07:40" [ref=e255] [cursor=pointer] [box=886,-878,255,37]:
+                      - img [ref=e257] [box=894,-868,16,16]
+                      - generic [ref=e259] [box=930,-878,211,37]:
+                        - generic [ref=e260] [box=930,-878,211,20]: .config
+                        - generic [ref=e261] [box=930,-858,211,17]
+                    - button "Открыть" [ref=e264] [cursor=pointer] [box=1153,-878,75,36]
+                  - generic [ref=e265] [box=870,-830,374,62]:
+                    - button ".docker Папка 23.04.2026, 22:42:09" [ref=e266] [cursor=pointer] [box=886,-817,255,37]:
+                      - img [ref=e268] [box=894,-807,16,16]
+                      - generic [ref=e270] [box=930,-817,211,37]:
+                        - generic [ref=e271] [box=930,-817,211,20]: .docker
+                        - generic [ref=e272] [box=930,-797,211,17]
+                    - button "Открыть" [ref=e275] [cursor=pointer] [box=1153,-817,75,36]
+                  - generic [ref=e276] [box=870,-768,374,62]:
+                    - button ".gemini Папка 25.05.2026, 22:03:40" [ref=e277] [cursor=pointer] [box=886,-755,255,37]:
+                      - img [ref=e279] [box=894,-745,16,16]
+                      - generic [ref=e281] [box=930,-755,211,37]:
+                        - generic [ref=e282] [box=930,-755,211,20]: .gemini
+                        - generic [ref=e283] [box=930,-735,211,17]
+                    - button "Открыть" [ref=e286] [cursor=pointer] [box=1153,-755,75,36]
+                  - generic [ref=e287] [box=870,-707,374,62]:
+                    - button ".jules Папка 18.05.2026, 13:41:00" [ref=e288] [cursor=pointer] [box=886,-694,255,37]:
+                      - img [ref=e290] [box=894,-684,16,16]
+                      - generic [ref=e292] [box=930,-694,211,37]:
+                        - generic [ref=e293] [box=930,-694,211,20]: .jules
+                        - generic [ref=e294] [box=930,-674,211,17]
+                    - button "Открыть" [ref=e297] [cursor=pointer] [box=1153,-694,75,36]
+                  - generic [ref=e298] [box=870,-645,374,62]:
+                    - button ".landscape Папка 02.03.2026, 13:41:55" [ref=e299] [cursor=pointer] [box=886,-632,255,37]:
+                      - img [ref=e301] [box=894,-622,16,16]
+                      - generic [ref=e303] [box=930,-632,211,37]:
+                        - generic [ref=e304] [box=930,-632,211,20]: .landscape
+                        - generic [ref=e305] [box=930,-612,211,17]
+                    - button "Открыть" [ref=e308] [cursor=pointer] [box=1153,-632,75,36]
+                  - generic [ref=e309] [box=870,-584,374,62]:
+                    - button ".local Папка 03.03.2026, 17:58:17" [ref=e310] [cursor=pointer] [box=886,-571,255,37]:
+                      - img [ref=e312] [box=894,-561,16,16]
+                      - generic [ref=e314] [box=930,-571,211,37]:
+                        - generic [ref=e315] [box=930,-571,211,20]: .local
+                        - generic [ref=e316] [box=930,-551,211,17]
+                    - button "Открыть" [ref=e319] [cursor=pointer] [box=1153,-571,75,36]
+                  - generic [ref=e320] [box=870,-522,374,62]:
+                    - button ".npm Папка 27.05.2026, 02:42:47" [ref=e321] [cursor=pointer] [box=886,-509,255,37]:
+                      - img [ref=e323] [box=894,-499,16,16]
+                      - generic [ref=e325] [box=930,-509,211,37]:
+                        - generic [ref=e326] [box=930,-509,211,20]: .npm
+                        - generic [ref=e327] [box=930,-489,211,17]
+                    - button "Открыть" [ref=e330] [cursor=pointer] [box=1153,-509,75,36]
+                  - generic [ref=e331] [box=870,-461,374,62]:
+                    - button ".nvm Папка 18.05.2026, 13:38:52" [ref=e332] [cursor=pointer] [box=886,-448,255,37]:
+                      - img [ref=e334] [box=894,-438,16,16]
+                      - generic [ref=e336] [box=930,-448,211,37]:
+                        - generic [ref=e337] [box=930,-448,211,20]: .nvm
+                        - generic [ref=e338] [box=930,-428,211,17]
+                    - button "Открыть" [ref=e341] [cursor=pointer] [box=1153,-448,75,36]
+                  - generic [ref=e342] [box=870,-399,374,62]:
+                    - button ".windsurf-cli Папка 21.05.2026, 14:22:42" [ref=e343] [cursor=pointer] [box=886,-386,255,37]:
+                      - img [ref=e345] [box=894,-376,16,16]
+                      - generic [ref=e347] [box=930,-386,211,37]:
+                        - generic [ref=e348] [box=930,-386,211,20]: .windsurf-cli
+                        - generic [ref=e349] [box=930,-366,211,17]
+                    - button "Открыть" [ref=e352] [cursor=pointer] [box=1153,-386,75,36]
+                  - generic [ref=e353] [box=870,-338,374,62]:
+                    - button "check_disk Папка 16.04.2026, 21:54:10" [ref=e354] [cursor=pointer] [box=886,-325,255,37]:
+                      - img [ref=e356] [box=894,-315,16,16]
+                      - generic [ref=e358] [box=930,-325,211,37]:
+                        - generic [ref=e359] [box=930,-325,211,20]: check_disk
+                        - generic [ref=e360] [box=930,-305,211,17]
+                    - button "Открыть" [ref=e363] [cursor=pointer] [box=1153,-325,75,36]
+                  - generic [ref=e364] [box=870,-276,374,62]:
+                    - button "docker-jitsi-meet Папка 24.04.2026, 00:51:37" [ref=e365] [cursor=pointer] [box=886,-263,255,37]:
+                      - img [ref=e367] [box=894,-253,16,16]
+                      - generic [ref=e369] [box=930,-263,211,37]:
+                        - generic [ref=e370] [box=930,-263,211,20]: docker-jitsi-meet
+                        - generic [ref=e371] [box=930,-243,211,17]
+                    - button "Открыть" [ref=e374] [cursor=pointer] [box=1153,-263,75,36]
+                  - generic [ref=e375] [box=870,-215,374,62]:
+                    - button "lampa Папка 23.04.2026, 22:42:02" [ref=e376] [cursor=pointer] [box=886,-202,255,37]:
+                      - img [ref=e378] [box=894,-192,16,16]
+                      - generic [ref=e380] [box=930,-202,211,37]:
+                        - generic [ref=e381] [box=930,-202,211,20]: lampa
+                        - generic [ref=e382] [box=930,-182,211,17]
+                    - button "Открыть" [ref=e385] [cursor=pointer] [box=1153,-202,75,36]
+                  - generic [ref=e386] [box=870,-153,374,62]:
+                    - button "nginx-html Папка 09.04.2026, 23:52:55" [ref=e387] [cursor=pointer] [box=886,-140,255,37]:
+                      - img [ref=e389] [box=894,-130,16,16]
+                      - generic [ref=e391] [box=930,-140,211,37]:
+                        - generic [ref=e392] [box=930,-140,211,20]: nginx-html
+                        - generic [ref=e393] [box=930,-120,211,17]
+                    - button "Открыть" [ref=e396] [cursor=pointer] [box=1153,-140,75,36]
+                  - generic [ref=e397] [box=870,-92,374,62]:
+                    - button "test_001 Папка 21.04.2026, 00:32:50" [ref=e398] [cursor=pointer] [box=886,-79,255,37]:
+                      - img [ref=e400] [box=894,-69,16,16]
+                      - generic [ref=e402] [box=930,-79,211,37]:
+                        - generic [ref=e403] [box=930,-79,211,20]: test_001
+                        - generic [ref=e404] [box=930,-59,211,17]
+                    - button "Открыть" [ref=e407] [cursor=pointer] [box=1153,-79,75,36]
+                  - generic [ref=e408] [box=870,-30,374,62]:
+                    - button "test_0222 Папка 16.04.2026, 20:55:53" [ref=e409] [cursor=pointer] [box=886,-17,255,37]:
+                      - img [ref=e411] [box=894,-7,16,16]
+                      - generic [ref=e413] [box=930,-17,211,37]:
+                        - generic [ref=e414] [box=930,-17,211,20]: test_0222
+                        - generic [ref=e415] [box=930,3,211,17]
+                    - button "Открыть" [ref=e418] [cursor=pointer] [box=1153,-17,75,36]
+                  - generic [ref=e419] [box=870,31,374,62]:
+                    - button "test12345 Папка 21.04.2026, 10:55:50" [ref=e420] [cursor=pointer] [box=886,44,255,37]:
+                      - img [ref=e422] [box=894,54,16,16]
+                      - generic [ref=e424] [box=930,44,211,37]:
+                        - generic [ref=e425] [box=930,44,211,20]: test12345
+                        - generic [ref=e426] [box=930,64,211,17]
+                    - button "Открыть" [ref=e429] [cursor=pointer] [box=1153,44,75,36]
+                  - generic [ref=e430] [box=870,93,374,62]:
+                    - button "test123455 Папка 21.04.2026, 11:27:38" [ref=e431] [cursor=pointer] [box=886,106,255,37]:
+                      - img [ref=e433] [box=894,116,16,16]
+                      - generic [ref=e435] [box=930,106,211,37]:
+                        - generic [ref=e436] [box=930,106,211,20]: test123455
+                        - generic [ref=e437] [box=930,126,211,17]
+                    - button "Открыть" [ref=e440] [cursor=pointer] [box=1153,106,75,36]
+                  - generic [ref=e441] [box=870,154,374,127]:
+                    - button ".aws Файл 23 B 02.03.2026, 13:42:06" [ref=e442] [cursor=pointer] [box=886,167,73,102]:
+                      - img [ref=e444] [box=894,210,16,16]
+                      - generic [ref=e447] [box=930,167,29,102]:
+                        - generic [ref=e448] [box=930,167,29,20]: .aws
+                        - generic [ref=e449] [box=930,187,29,82]
+                    - generic [ref=e453] [box=971,200,257,36]:
+                      - button "Редактировать" [ref=e454] [cursor=pointer] [box=971,200,144,36]:
+                        - img [box=983,210,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e455] [cursor=pointer] [box=1123,200,105,36]:
+                        - img [box=1136,210,16,16]
+                        - text: Скачать
+                  - generic [ref=e456] [box=870,281,374,127]:
+                    - button ".azure Файл 25 B 02.03.2026, 13:42:06" [ref=e457] [cursor=pointer] [box=886,294,73,102]:
+                      - img [ref=e459] [box=894,337,16,16]
+                      - generic [ref=e462] [box=930,294,29,102]:
+                        - generic [ref=e463] [box=930,294,29,20]: .azure
+                        - generic [ref=e464] [box=930,314,29,82]
+                    - generic [ref=e468] [box=971,327,257,36]:
+                      - button "Редактировать" [ref=e469] [cursor=pointer] [box=971,327,144,36]:
+                        - img [box=983,337,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e470] [cursor=pointer] [box=1123,327,105,36]:
+                        - img [box=1136,337,16,16]
+                        - text: Скачать
+                  - generic [ref=e471] [box=870,408,374,144]:
+                    - button ".bash_history Файл 147 KB 11.06.2026, 04:42:09" [ref=e472] [cursor=pointer] [box=886,421,73,119]:
+                      - img [ref=e474] [box=894,472,16,16]
+                      - generic [ref=e477] [box=930,421,29,119]:
+                        - generic [ref=e478] [box=930,421,29,20]: .bash_history
+                        - generic [ref=e479] [box=930,441,29,99]
+                    - generic [ref=e483] [box=971,462,257,36]:
+                      - button "Редактировать" [ref=e484] [cursor=pointer] [box=971,462,144,36]:
+                        - img [box=983,472,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e485] [cursor=pointer] [box=1123,462,105,36]:
+                        - img [box=1136,472,16,16]
+                        - text: Скачать
+                  - generic [ref=e486] [box=870,552,374,144]:
+                    - button ".bash_logout Файл 220 B 02.03.2026, 13:41:46" [ref=e487] [cursor=pointer] [box=886,565,73,119]:
+                      - img [ref=e489] [box=894,616,16,16]
+                      - generic [ref=e492] [box=930,565,29,119]:
+                        - generic [ref=e493] [box=930,565,29,20]: .bash_logout
+                        - generic [ref=e494] [box=930,585,29,99]
+                    - generic [ref=e498] [box=971,606,257,36]:
+                      - button "Редактировать" [ref=e499] [cursor=pointer] [box=971,606,144,36]:
+                        - img [box=983,616,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e500] [cursor=pointer] [box=1123,606,105,36]:
+                        - img [box=1136,616,16,16]
+                        - text: Скачать
+                  - generic [ref=e501] [box=870,695,374,144]:
+                    - button ".bashrc Файл 4.0 KB 20.05.2026, 18:11:17" [ref=e502] [cursor=pointer] [box=886,708,73,119]:
+                      - img [ref=e504] [box=894,759,16,16]
+                      - generic [ref=e507] [box=930,708,29,119]:
+                        - generic [ref=e508] [box=930,708,29,20]: .bashrc
+                        - generic [ref=e509] [box=930,728,29,99]
+                    - generic [ref=e513] [box=971,749,257,36]:
+                      - button "Редактировать" [active] [ref=e514] [cursor=pointer] [box=971,749,144,36]:
+                        - img [box=983,759,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e515] [cursor=pointer] [box=1123,749,105,36]:
+                        - img [box=1136,759,16,16]
+                        - text: Скачать
+                  - generic [ref=e516] [box=870,839,374,144]:
+                    - button ".claude.json Файл 6.0 KB 09.03.2026, 18:33:03" [ref=e517] [cursor=pointer] [box=886,852,73,119]:
+                      - img [ref=e519] [box=894,903,16,16]
+                      - generic [ref=e522] [box=930,852,29,119]:
+                        - generic [ref=e523] [box=930,852,29,20]: .claude.json
+                        - generic [ref=e524] [box=930,872,29,99]
+                    - generic [ref=e528] [box=971,893,257,36]:
+                      - button "Редактировать" [ref=e529] [cursor=pointer] [box=971,893,144,36]:
+                        - img [box=983,903,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e530] [cursor=pointer] [box=1123,893,105,36]:
+                        - img [box=1136,903,16,16]
+                        - text: Скачать
+                  - generic [ref=e531] [box=870,982,374,144]:
+                    - button ".gitignore Файл 277 B 19.03.2026, 02:34:33" [ref=e532] [cursor=pointer] [box=886,995,73,119]:
+                      - img [ref=e534] [box=894,1046,16,16]
+                      - generic [ref=e537] [box=930,995,29,119]:
+                        - generic [ref=e538] [box=930,995,29,20]: .gitignore
+                        - generic [ref=e539] [box=930,1015,29,99]
+                    - generic [ref=e543] [box=971,1036,257,36]:
+                      - button "Редактировать" [ref=e544] [cursor=pointer] [box=971,1036,144,36]:
+                        - img [box=983,1046,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e545] [cursor=pointer] [box=1123,1036,105,36]:
+                        - img [box=1136,1046,16,16]
+                        - text: Скачать
+                  - generic [ref=e546] [box=870,1126,374,144]:
+                    - button ".lesshst Файл 352 B 08.04.2026, 14:10:58" [ref=e547] [cursor=pointer] [box=886,1139,73,119]:
+                      - img [ref=e549] [box=894,1190,16,16]
+                      - generic [ref=e552] [box=930,1139,29,119]:
+                        - generic [ref=e553] [box=930,1139,29,20]: .lesshst
+                        - generic [ref=e554] [box=930,1159,29,99]
+                    - generic [ref=e558] [box=971,1180,257,36]:
+                      - button "Редактировать" [ref=e559] [cursor=pointer] [box=971,1180,144,36]:
+                        - img [box=983,1190,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e560] [cursor=pointer] [box=1123,1180,105,36]:
+                        - img [box=1136,1190,16,16]
+                        - text: Скачать
+                  - generic [ref=e561] [box=870,1269,374,127]:
+                    - button ".motd_shown Файл 0 B 13.06.2026, 15:09:01" [ref=e562] [cursor=pointer] [box=886,1282,73,102]:
+                      - img [ref=e564] [box=894,1325,16,16]
+                      - generic [ref=e567] [box=930,1282,29,102]:
+                        - generic [ref=e568] [box=930,1282,29,20]: .motd_shown
+                        - generic [ref=e569] [box=930,1302,29,82]
+                    - generic [ref=e573] [box=971,1315,257,36]:
+                      - button "Редактировать" [ref=e574] [cursor=pointer] [box=971,1315,144,36]:
+                        - img [box=983,1325,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e575] [cursor=pointer] [box=1123,1315,105,36]:
+                        - img [box=1136,1325,16,16]
+                        - text: Скачать
+                  - generic [ref=e576] [box=870,1396,374,144]:
+                    - button ".profile Файл 889 B 20.05.2026, 18:11:17" [ref=e577] [cursor=pointer] [box=886,1409,73,119]:
+                      - img [ref=e579] [box=894,1460,16,16]
+                      - generic [ref=e582] [box=930,1409,29,119]:
+                        - generic [ref=e583] [box=930,1409,29,20]: .profile
+                        - generic [ref=e584] [box=930,1429,29,99]
+                    - generic [ref=e588] [box=971,1450,257,36]:
+                      - button "Редактировать" [ref=e589] [cursor=pointer] [box=971,1450,144,36]:
+                        - img [box=983,1460,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e590] [cursor=pointer] [box=1123,1450,105,36]:
+                        - img [box=1136,1460,16,16]
+                        - text: Скачать
+                  - generic [ref=e591] [box=870,1540,374,127]:
+                    - button ".sudo_as_admin_successful Файл 0 B 11.03.2026, 18:15:52" [ref=e592] [cursor=pointer] [box=886,1553,73,102]:
+                      - img [ref=e594] [box=894,1596,16,16]
+                      - generic [ref=e597] [box=930,1553,29,102]:
+                        - generic [ref=e598] [box=930,1553,29,20]: .sudo_as_admin_successful
+                        - generic [ref=e599] [box=930,1573,29,82]
+                    - generic [ref=e603] [box=971,1586,257,36]:
+                      - button "Редактировать" [ref=e604] [cursor=pointer] [box=971,1586,144,36]:
+                        - img [box=983,1596,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e605] [cursor=pointer] [box=1123,1586,105,36]:
+                        - img [box=1136,1596,16,16]
+                        - text: Скачать
+                  - generic [ref=e606] [box=870,1667,374,144]:
+                    - button "check_disk.py Файл 962 B 16.04.2026, 21:54:10" [ref=e607] [cursor=pointer] [box=886,1680,73,119]:
+                      - img [ref=e609] [box=894,1731,16,16]
+                      - generic [ref=e612] [box=930,1680,29,119]:
+                        - generic [ref=e613] [box=930,1680,29,20]: check_disk.py
+                        - generic [ref=e614] [box=930,1700,29,99]
+                    - generic [ref=e618] [box=971,1721,257,36]:
+                      - button "Редактировать" [ref=e619] [cursor=pointer] [box=971,1721,144,36]:
+                        - img [box=983,1731,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e620] [cursor=pointer] [box=1123,1721,105,36]:
+                        - img [box=1136,1731,16,16]
+                        - text: Скачать
+                  - generic [ref=e621] [box=870,1810,374,144]:
+                    - button "claude (2).json Файл 6.0 KB 30.03.2026, 14:43:28" [ref=e622] [cursor=pointer] [box=886,1823,73,119]:
+                      - img [ref=e624] [box=894,1874,16,16]
+                      - generic [ref=e627] [box=930,1823,29,119]:
+                        - generic [ref=e628] [box=930,1823,29,20]: claude (2).json
+                        - generic [ref=e629] [box=930,1843,29,99]
+                    - generic [ref=e633] [box=971,1864,257,36]:
+                      - button "Редактировать" [ref=e634] [cursor=pointer] [box=971,1864,144,36]:
+                        - img [box=983,1874,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e635] [cursor=pointer] [box=1123,1864,105,36]:
+                        - img [box=1136,1874,16,16]
+                        - text: Скачать
+                  - generic [ref=e636] [box=870,1954,374,144]:
+                    - button "claude (2).json.save Файл 6.1 KB 17.04.2026, 02:25:35" [ref=e637] [cursor=pointer] [box=886,1967,73,119]:
+                      - img [ref=e639] [box=894,2018,16,16]
+                      - generic [ref=e642] [box=930,1967,29,119]:
+                        - generic [ref=e643] [box=930,1967,29,20]: claude (2).json.save
+                        - generic [ref=e644] [box=930,1987,29,99]
+                    - generic [ref=e648] [box=971,2008,257,36]:
+                      - button "Редактировать" [ref=e649] [cursor=pointer] [box=971,2008,144,36]:
+                        - img [box=983,2018,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e650] [cursor=pointer] [box=1123,2008,105,36]:
+                        - img [box=1136,2018,16,16]
+                        - text: Скачать
+                  - generic [ref=e651] [box=870,2097,374,144]:
+                    - button "docker-compose.grafana.yml Файл 523 B 23.04.2026, 22:58:14" [ref=e652] [cursor=pointer] [box=886,2110,73,119]:
+                      - img [ref=e654] [box=894,2161,16,16]
+                      - generic [ref=e657] [box=930,2110,29,119]:
+                        - generic [ref=e658] [box=930,2110,29,20]: docker-compose.grafana.yml
+                        - generic [ref=e659] [box=930,2130,29,99]
+                    - generic [ref=e663] [box=971,2151,257,36]:
+                      - button "Редактировать" [ref=e664] [cursor=pointer] [box=971,2151,144,36]:
+                        - img [box=983,2161,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e665] [cursor=pointer] [box=1123,2151,105,36]:
+                        - img [box=1136,2161,16,16]
+                        - text: Скачать
+                  - generic [ref=e666] [box=870,2241,374,144]:
+                    - button "docker-compose.loki.yml Файл 375 B 23.04.2026, 23:02:58" [ref=e667] [cursor=pointer] [box=886,2254,73,119]:
+                      - img [ref=e669] [box=894,2305,16,16]
+                      - generic [ref=e672] [box=930,2254,29,119]:
+                        - generic [ref=e673] [box=930,2254,29,20]: docker-compose.loki.yml
+                        - generic [ref=e674] [box=930,2274,29,99]
+                    - generic [ref=e678] [box=971,2295,257,36]:
+                      - button "Редактировать" [ref=e679] [cursor=pointer] [box=971,2295,144,36]:
+                        - img [box=983,2305,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e680] [cursor=pointer] [box=1123,2295,105,36]:
+                        - img [box=1136,2305,16,16]
+                        - text: Скачать
+                  - generic [ref=e681] [box=870,2384,374,144]:
+                    - button "document.txt Файл 340 B 17.04.2026, 04:14:43" [ref=e682] [cursor=pointer] [box=886,2397,73,119]:
+                      - img [ref=e684] [box=894,2448,16,16]
+                      - generic [ref=e687] [box=930,2397,29,119]:
+                        - generic [ref=e688] [box=930,2397,29,20]: document.txt
+                        - generic [ref=e689] [box=930,2417,29,99]
+                    - generic [ref=e693] [box=971,2438,257,36]:
+                      - button "Редактировать" [ref=e694] [cursor=pointer] [box=971,2438,144,36]:
+                        - img [box=983,2448,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e695] [cursor=pointer] [box=1123,2438,105,36]:
+                        - img [box=1136,2448,16,16]
+                        - text: Скачать
+                  - generic [ref=e696] [box=870,2528,374,144]:
+                    - button "ex Файл 782 B 17.04.2026, 02:15:07" [ref=e697] [cursor=pointer] [box=886,2541,73,119]:
+                      - img [ref=e699] [box=894,2592,16,16]
+                      - generic [ref=e702] [box=930,2541,29,119]:
+                        - generic [ref=e703] [box=930,2541,29,20]: ex
+                        - generic [ref=e704] [box=930,2561,29,99]
+                    - generic [ref=e708] [box=971,2582,257,36]:
+                      - button "Редактировать" [ref=e709] [cursor=pointer] [box=971,2582,144,36]:
+                        - img [box=983,2592,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e710] [cursor=pointer] [box=1123,2582,105,36]:
+                        - img [box=1136,2592,16,16]
+                        - text: Скачать
+                  - generic [ref=e711] [box=870,2671,374,144]:
+                    - button "example.conf Файл 782 B 17.04.2026, 02:13:49" [ref=e712] [cursor=pointer] [box=886,2684,73,119]:
+                      - img [ref=e714] [box=894,2735,16,16]
+                      - generic [ref=e717] [box=930,2684,29,119]:
+                        - generic [ref=e718] [box=930,2684,29,20]: example.conf
+                        - generic [ref=e719] [box=930,2704,29,99]
+                    - generic [ref=e723] [box=971,2725,257,36]:
+                      - button "Редактировать" [ref=e724] [cursor=pointer] [box=971,2725,144,36]:
+                        - img [box=983,2735,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e725] [cursor=pointer] [box=1123,2725,105,36]:
+                        - img [box=1136,2735,16,16]
+                        - text: Скачать
+                  - generic [ref=e726] [box=870,2815,374,127]:
+                    - button "nano.2290.save Файл 86 B 17.04.2026, 02:00:56" [ref=e727] [cursor=pointer] [box=886,2828,73,102]:
+                      - img [ref=e729] [box=894,2871,16,16]
+                      - generic [ref=e732] [box=930,2828,29,102]:
+                        - generic [ref=e733] [box=930,2828,29,20]: nano.2290.save
+                        - generic [ref=e734] [box=930,2848,29,82]
+                    - generic [ref=e738] [box=971,2861,257,36]:
+                      - button "Редактировать" [ref=e739] [cursor=pointer] [box=971,2861,144,36]:
+                        - img [box=983,2871,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e740] [cursor=pointer] [box=1123,2861,105,36]:
+                        - img [box=1136,2871,16,16]
+                        - text: Скачать
+                  - generic [ref=e741] [box=870,2942,374,127]:
+                    - button "nano.4237.save Файл 86 B 17.04.2026, 02:29:06" [ref=e742] [cursor=pointer] [box=886,2955,73,102]:
+                      - img [ref=e744] [box=894,2998,16,16]
+                      - generic [ref=e747] [box=930,2955,29,102]:
+                        - generic [ref=e748] [box=930,2955,29,20]: nano.4237.save
+                        - generic [ref=e749] [box=930,2975,29,82]
+                    - generic [ref=e753] [box=971,2988,257,36]:
+                      - button "Редактировать" [ref=e754] [cursor=pointer] [box=971,2988,144,36]:
+                        - img [box=983,2998,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e755] [cursor=pointer] [box=1123,2988,105,36]:
+                        - img [box=1136,2998,16,16]
+                        - text: Скачать
+                  - generic [ref=e756] [box=870,3069,374,127]:
+                    - button "nano.4293.save Файл 86 B 17.04.2026, 02:29:26" [ref=e757] [cursor=pointer] [box=886,3082,73,102]:
+                      - img [ref=e759] [box=894,3125,16,16]
+                      - generic [ref=e762] [box=930,3082,29,102]:
+                        - generic [ref=e763] [box=930,3082,29,20]: nano.4293.save
+                        - generic [ref=e764] [box=930,3102,29,82]
+                    - generic [ref=e768] [box=971,3115,257,36]:
+                      - button "Редактировать" [ref=e769] [cursor=pointer] [box=971,3115,144,36]:
+                        - img [box=983,3125,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e770] [cursor=pointer] [box=1123,3115,105,36]:
+                        - img [box=1136,3125,16,16]
+                        - text: Скачать
+                  - generic [ref=e771] [box=870,3196,374,127]:
+                    - button "pizada.txt Файл 130 B 21.04.2026, 00:33:34" [ref=e772] [cursor=pointer] [box=886,3209,73,102]:
+                      - img [ref=e774] [box=894,3252,16,16]
+                      - generic [ref=e777] [box=930,3209,29,102]:
+                        - generic [ref=e778] [box=930,3209,29,20]: pizada.txt
+                        - generic [ref=e779] [box=930,3229,29,82]
+                    - generic [ref=e783] [box=971,3242,257,36]:
+                      - button "Редактировать" [ref=e784] [cursor=pointer] [box=971,3242,144,36]:
+                        - img [box=983,3252,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e785] [cursor=pointer] [box=1123,3242,105,36]:
+                        - img [box=1136,3252,16,16]
+                        - text: Скачать
+                  - generic [ref=e786] [box=870,3323,374,144]:
+                    - button "promtail-config.yml Файл 309 B 23.04.2026, 23:02:59" [ref=e787] [cursor=pointer] [box=886,3336,73,119]:
+                      - img [ref=e789] [box=894,3387,16,16]
+                      - generic [ref=e792] [box=930,3336,29,119]:
+                        - generic [ref=e793] [box=930,3336,29,20]: promtail-config.yml
+                        - generic [ref=e794] [box=930,3356,29,99]
+                    - generic [ref=e798] [box=971,3377,257,36]:
+                      - button "Редактировать" [ref=e799] [cursor=pointer] [box=971,3377,144,36]:
+                        - img [box=983,3387,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e800] [cursor=pointer] [box=1123,3377,105,36]:
+                        - img [box=1136,3387,16,16]
+                        - text: Скачать
+                  - generic [ref=e801] [box=870,3466,374,127]:
+                    - button "s -tuln Файл 13 KB 19.03.2026, 16:30:08" [ref=e802] [cursor=pointer] [box=886,3479,73,102]:
+                      - img [ref=e804] [box=894,3522,16,16]
+                      - generic [ref=e807] [box=930,3479,29,102]:
+                        - generic [ref=e808] [box=930,3479,29,20]: s -tuln
+                        - generic [ref=e809] [box=930,3499,29,82]
+                    - generic [ref=e813] [box=971,3512,257,36]:
+                      - button "Редактировать" [ref=e814] [cursor=pointer] [box=971,3512,144,36]:
+                        - img [box=983,3522,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e815] [cursor=pointer] [box=1123,3512,105,36]:
+                        - img [box=1136,3522,16,16]
+                        - text: Скачать
+                  - generic [ref=e816] [box=870,3593,374,127]:
+                    - button "test.pt.save Файл 79 B 16.04.2026, 21:53:00" [ref=e817] [cursor=pointer] [box=886,3606,73,102]:
+                      - img [ref=e819] [box=894,3649,16,16]
+                      - generic [ref=e822] [box=930,3606,29,102]:
+                        - generic [ref=e823] [box=930,3606,29,20]: test.pt.save
+                        - generic [ref=e824] [box=930,3626,29,82]
+                    - generic [ref=e828] [box=971,3639,257,36]:
+                      - button "Редактировать" [ref=e829] [cursor=pointer] [box=971,3639,144,36]:
+                        - img [box=983,3649,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e830] [cursor=pointer] [box=1123,3639,105,36]:
+                        - img [box=1136,3649,16,16]
+                        - text: Скачать
+                  - generic [ref=e831] [box=870,3720,374,127]:
+                    - button "test.py Файл 21 B 16.04.2026, 21:52:33" [ref=e832] [cursor=pointer] [box=886,3733,73,102]:
+                      - img [ref=e834] [box=894,3776,16,16]
+                      - generic [ref=e837] [box=930,3733,29,102]:
+                        - generic [ref=e838] [box=930,3733,29,20]: test.py
+                        - generic [ref=e839] [box=930,3753,29,82]
+                    - generic [ref=e843] [box=971,3766,257,36]:
+                      - button "Редактировать" [ref=e844] [cursor=pointer] [box=971,3766,144,36]:
+                        - img [box=983,3776,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e845] [cursor=pointer] [box=1123,3766,105,36]:
+                        - img [box=1136,3776,16,16]
+                        - text: Скачать
+                  - generic [ref=e846] [box=870,3847,374,127]:
+                    - button "test.txt Файл 167 B 19.05.2026, 18:00:04" [ref=e847] [cursor=pointer] [box=886,3860,73,102]:
+                      - img [ref=e849] [box=894,3903,16,16]
+                      - generic [ref=e852] [box=930,3860,29,102]:
+                        - generic [ref=e853] [box=930,3860,29,20]: test.txt
+                        - generic [ref=e854] [box=930,3880,29,82]
+                    - generic [ref=e858] [box=971,3893,257,36]:
+                      - button "Редактировать" [ref=e859] [cursor=pointer] [box=971,3893,144,36]:
+                        - img [box=983,3903,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e860] [cursor=pointer] [box=1123,3893,105,36]:
+                        - img [box=1136,3903,16,16]
+                        - text: Скачать
+                  - generic [ref=e861] [box=870,3974,374,127]:
+                    - button "test.txt.save Файл 79 B 16.04.2026, 20:58:46" [ref=e862] [cursor=pointer] [box=886,3987,73,102]:
+                      - img [ref=e864] [box=894,4030,16,16]
+                      - generic [ref=e867] [box=930,3987,29,102]:
+                        - generic [ref=e868] [box=930,3987,29,20]: test.txt.save
+                        - generic [ref=e869] [box=930,4007,29,82]
+                    - generic [ref=e873] [box=971,4020,257,36]:
+                      - button "Редактировать" [ref=e874] [cursor=pointer] [box=971,4020,144,36]:
+                        - img [box=983,4030,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e875] [cursor=pointer] [box=1123,4020,105,36]:
+                        - img [box=1136,4030,16,16]
+                        - text: Скачать
+                  - generic [ref=e876] [box=870,4101,374,127]:
+                    - button "test.txt.save.1 Файл 79 B 16.04.2026, 21:01:23" [ref=e877] [cursor=pointer] [box=886,4114,73,102]:
+                      - img [ref=e879] [box=894,4157,16,16]
+                      - generic [ref=e882] [box=930,4114,29,102]:
+                        - generic [ref=e883] [box=930,4114,29,20]: test.txt.save.1
+                        - generic [ref=e884] [box=930,4134,29,82]
+                    - generic [ref=e888] [box=971,4147,257,36]:
+                      - button "Редактировать" [ref=e889] [cursor=pointer] [box=971,4147,144,36]:
+                        - img [box=983,4157,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e890] [cursor=pointer] [box=1123,4147,105,36]:
+                        - img [box=1136,4157,16,16]
+                        - text: Скачать
+                  - generic [ref=e891] [box=870,4228,374,127]:
+                    - button "test.txt.save.2 Файл 79 B 16.04.2026, 21:25:11" [ref=e892] [cursor=pointer] [box=886,4241,73,102]:
+                      - img [ref=e894] [box=894,4284,16,16]
+                      - generic [ref=e897] [box=930,4241,29,102]:
+                        - generic [ref=e898] [box=930,4241,29,20]: test.txt.save.2
+                        - generic [ref=e899] [box=930,4261,29,82]
+                    - generic [ref=e903] [box=971,4274,257,36]:
+                      - button "Редактировать" [ref=e904] [cursor=pointer] [box=971,4274,144,36]:
+                        - img [box=983,4284,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e905] [cursor=pointer] [box=1123,4274,105,36]:
+                        - img [box=1136,4284,16,16]
+                        - text: Скачать
+                  - generic [ref=e906] [box=870,4355,374,127]:
+                    - button "test.txt.save.3 Файл 84 B 16.04.2026, 21:44:40" [ref=e907] [cursor=pointer] [box=886,4368,73,102]:
+                      - img [ref=e909] [box=894,4411,16,16]
+                      - generic [ref=e912] [box=930,4368,29,102]:
+                        - generic [ref=e913] [box=930,4368,29,20]: test.txt.save.3
+                        - generic [ref=e914] [box=930,4388,29,82]
+                    - generic [ref=e918] [box=971,4401,257,36]:
+                      - button "Редактировать" [ref=e919] [cursor=pointer] [box=971,4401,144,36]:
+                        - img [box=983,4411,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e920] [cursor=pointer] [box=1123,4401,105,36]:
+                        - img [box=1136,4411,16,16]
+                        - text: Скачать
+                  - generic [ref=e921] [box=870,4482,374,127]:
+                    - button "test.txt.save.4 Файл 93 B 16.04.2026, 21:46:16" [ref=e922] [cursor=pointer] [box=886,4495,73,102]:
+                      - img [ref=e924] [box=894,4538,16,16]
+                      - generic [ref=e927] [box=930,4495,29,102]:
+                        - generic [ref=e928] [box=930,4495,29,20]: test.txt.save.4
+                        - generic [ref=e929] [box=930,4515,29,82]
+                    - generic [ref=e933] [box=971,4528,257,36]:
+                      - button "Редактировать" [ref=e934] [cursor=pointer] [box=971,4528,144,36]:
+                        - img [box=983,4538,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e935] [cursor=pointer] [box=1123,4528,105,36]:
+                        - img [box=1136,4538,16,16]
+                        - text: Скачать
+                  - generic [ref=e936] [box=870,4609,374,144]:
+                    - button "test.txt.save.5 Файл 853 B 17.04.2026, 04:33:10" [ref=e937] [cursor=pointer] [box=886,4622,73,119]:
+                      - img [ref=e939] [box=894,4673,16,16]
+                      - generic [ref=e942] [box=930,4622,29,119]:
+                        - generic [ref=e943] [box=930,4622,29,20]: test.txt.save.5
+                        - generic [ref=e944] [box=930,4642,29,99]
+                    - generic [ref=e948] [box=971,4663,257,36]:
+                      - button "Редактировать" [ref=e949] [cursor=pointer] [box=971,4663,144,36]:
+                        - img [box=983,4673,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e950] [cursor=pointer] [box=1123,4663,105,36]:
+                        - img [box=1136,4673,16,16]
+                        - text: Скачать
+                  - generic [ref=e951] [box=870,4753,374,127]:
+                    - button "test.txt.save.save Файл 164 B 16.04.2026, 21:31:56" [ref=e952] [cursor=pointer] [box=886,4766,73,102]:
+                      - img [ref=e954] [box=894,4809,16,16]
+                      - generic [ref=e957] [box=930,4766,29,102]:
+                        - generic [ref=e958] [box=930,4766,29,20]: test.txt.save.save
+                        - generic [ref=e959] [box=930,4786,29,82]
+                    - generic [ref=e963] [box=971,4799,257,36]:
+                      - button "Редактировать" [ref=e964] [cursor=pointer] [box=971,4799,144,36]:
+                        - img [box=983,4809,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e965] [cursor=pointer] [box=1123,4799,105,36]:
+                        - img [box=1136,4809,16,16]
+                        - text: Скачать
+                  - generic [ref=e966] [box=870,4880,374,127]:
+                    - button "test.txt.save.save.1 Файл 157 B 16.04.2026, 21:33:27" [ref=e967] [cursor=pointer] [box=886,4893,73,102]:
+                      - img [ref=e969] [box=894,4936,16,16]
+                      - generic [ref=e972] [box=930,4893,29,102]:
+                        - generic [ref=e973] [box=930,4893,29,20]: test.txt.save.save.1
+                        - generic [ref=e974] [box=930,4913,29,82]
+                    - generic [ref=e978] [box=971,4926,257,36]:
+                      - button "Редактировать" [ref=e979] [cursor=pointer] [box=971,4926,144,36]:
+                        - img [box=983,4936,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e980] [cursor=pointer] [box=1123,4926,105,36]:
+                        - img [box=1136,4936,16,16]
+                        - text: Скачать
+                  - generic [ref=e981] [box=870,5007,374,127]:
+                    - button "test.txt.save.save.2 Файл 157 B 16.04.2026, 21:34:20" [ref=e982] [cursor=pointer] [box=886,5020,73,102]:
+                      - img [ref=e984] [box=894,5063,16,16]
+                      - generic [ref=e987] [box=930,5020,29,102]:
+                        - generic [ref=e988] [box=930,5020,29,20]: test.txt.save.save.2
+                        - generic [ref=e989] [box=930,5040,29,82]
+                    - generic [ref=e993] [box=971,5053,257,36]:
+                      - button "Редактировать" [ref=e994] [cursor=pointer] [box=971,5053,144,36]:
+                        - img [box=983,5063,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e995] [cursor=pointer] [box=1123,5053,105,36]:
+                        - img [box=1136,5063,16,16]
+                        - text: Скачать
+                  - generic [ref=e996] [box=870,5134,374,127]:
+                    - button "test.txt.save.save.3 Файл 84 B 16.04.2026, 21:36:23" [ref=e997] [cursor=pointer] [box=886,5147,73,102]:
+                      - img [ref=e999] [box=894,5190,16,16]
+                      - generic [ref=e1002] [box=930,5147,29,102]:
+                        - generic [ref=e1003] [box=930,5147,29,20]: test.txt.save.save.3
+                        - generic [ref=e1004] [box=930,5167,29,82]
+                    - generic [ref=e1008] [box=971,5180,257,36]:
+                      - button "Редактировать" [ref=e1009] [cursor=pointer] [box=971,5180,144,36]:
+                        - img [box=983,5190,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e1010] [cursor=pointer] [box=1123,5180,105,36]:
+                        - img [box=1136,5190,16,16]
+                        - text: Скачать
+                  - generic [ref=e1011] [box=870,5261,374,127]:
+                    - button "test3.txt.save Файл 1 B 16.04.2026, 21:34:48" [ref=e1012] [cursor=pointer] [box=886,5274,73,102]:
+                      - img [ref=e1014] [box=894,5317,16,16]
+                      - generic [ref=e1017] [box=930,5274,29,102]:
+                        - generic [ref=e1018] [box=930,5274,29,20]: test3.txt.save
+                        - generic [ref=e1019] [box=930,5294,29,82]
+                    - generic [ref=e1023] [box=971,5307,257,36]:
+                      - button "Редактировать" [ref=e1024] [cursor=pointer] [box=971,5307,144,36]:
+                        - img [box=983,5317,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e1025] [cursor=pointer] [box=1123,5307,105,36]:
+                        - img [box=1136,5317,16,16]
+                        - text: Скачать
+                  - generic [ref=e1026] [box=870,5388,374,144]:
+                    - button "ystemctl list-units --type=service --state=running Файл 92 KB 18.03.2026, 13:56:08" [ref=e1027] [cursor=pointer] [box=886,5401,73,119]:
+                      - img [ref=e1029] [box=894,5452,16,16]
+                      - generic [ref=e1032] [box=930,5401,29,119]:
+                        - generic [ref=e1033] [box=930,5401,29,20]: ystemctl list-units --type=service --state=running
+                        - generic [ref=e1034] [box=930,5421,29,99]
+                    - generic [ref=e1038] [box=971,5442,257,36]:
+                      - button "Редактировать" [ref=e1039] [cursor=pointer] [box=971,5442,144,36]:
+                        - img [box=983,5452,16,16]
+                        - text: Редактировать
+                      - button "Скачать" [ref=e1040] [cursor=pointer] [box=1123,5442,105,36]:
+                        - img [box=1136,5452,16,16]
+                        - text: Скачать
+              - generic [ref=e1053] [box=870,932,379,224]:
+                - generic [ref=e1054] [box=870,933,379,66]:
+                  - generic [box=886,945,0,41]:
+                    - generic [box=886,945,0,20]:
+                      - img [box=886,947,0,16]
+                      - generic [box=894,945,0,20]: .bashrc
+                    - generic [box=886,969,0,17]: /home/lunix/.bashrc
+                  - generic [ref=e1059] [box=894,945,353,32]:
+                    - button "Перезагрузить" [ref=e1060] [cursor=pointer] [box=894,945,145,32]:
+                      - img [box=907,953,16,16]
+                      - text: Перезагрузить
+                    - button "Сохранить" [disabled] [box=1047,945,118,32]:
+                      - img [box=1059,953,16,16]
+                      - text: Сохранить
+                    - button "Закрыть" [ref=e1061] [cursor=pointer] [box=1173,945,74,32]
+                - textbox "Содержимое файла" [ref=e1062] [box=870,998,379,124]: "# ~/.bashrc: executed by bash(1) for non-login shells. # see /usr/share/doc/bash/examples/startup-files (in the package bash-doc) # for examples # If not running interactively, don't do anything case $- in *i*) ;; *) return;; esac # don't put duplicate lines or lines starting with space in the history. # See bash(1) for more options HISTCONTROL=ignoreboth # append to the history file, don't overwrite it shopt -s histappend # for setting history length see HISTSIZE and HISTFILESIZE in bash(1) HISTSIZE=1000 HISTFILESIZE=2000 # check the window size after each command and, if necessary, # update the values of LINES and COLUMNS. shopt -s checkwinsize # If set, the pattern \"**\" used in a pathname expansion context will # match all files and zero or more directories and subdirectories. #shopt -s globstar # make less more friendly for non-text input files, see lesspipe(1) [ -x /usr/bin/lesspipe ] && eval \"$(SHELL=/bin/sh lesspipe)\" # set variable identifying the chroot you work in (used in the prompt below) if [ -z \"${debian_chroot:-}\" ] && [ -r /etc/debian_chroot ]; then debian_chroot=$(cat /etc/debian_chroot) fi # set a fancy prompt (non-color, unless we know we \"want\" color) case \"$TERM\" in xterm-color|*-256color) color_prompt=yes;; esac # uncomment for a colored prompt, if the terminal has the capability; turned # off by default to not distract the user: the focus in a terminal window # should be on the output of commands, not on the prompt #force_color_prompt=yes if [ -n \"$force_color_prompt\" ]; then if [ -x /usr/bin/tput ] && tput setaf 1 >&/dev/null; then # We have color support; assume it's compliant with Ecma-48 # (ISO/IEC-6429). (Lack of such support is extremely rare, and such # a case would tend to support setf rather than setaf.) color_prompt=yes else color_prompt= fi fi if [ \"$color_prompt\" = yes ]; then PS1='${debian_chroot:+($debian_chroot)}\\[\\033[01;32m\\]\\u@\\h\\[\\033[00m\\]:\\[\\033[01;34m\\]\\w\\[\\033[00m\\]\\$ ' else PS1='${debian_chroot:+($debian_chroot)}\\u@\\h:\\w\\$ ' fi unset color_prompt force_color_prompt # If this is an xterm set the title to user@host:dir case \"$TERM\" in xterm*|rxvt*) PS1=\"\\[\\e]0;${debian_chroot:+($debian_chroot)}\\u@\\h: \\w\\a\\]$PS1\" ;; *) ;; esac # enable color support of ls and also add handy aliases if [ -x /usr/bin/dircolors ]; then test -r ~/.dircolors && eval \"$(dircolors -b ~/.dircolors)\" || eval \"$(dircolors -b)\" alias ls='ls --color=auto' #alias dir='dir --color=auto' #alias vdir='vdir --color=auto' alias grep='grep --color=auto' alias fgrep='fgrep --color=auto' alias egrep='egrep --color=auto' fi # colored GCC warnings and errors #export GCC_COLORS='error=01;31:warning=01;35:note=01;36:caret=01;32:locus=01:quote=01' # some more ls aliases alias ll='ls -alF' alias la='ls -A' alias l='ls -CF' # Add an \"alert\" alias for long running commands. Use like so: # sleep 10; alert alias alert='notify-send --urgency=low -i \"$([ $? = 0 ] && echo terminal || echo error)\" \"$(history|tail -n1|sed -e '\\''s/^\\s*[0-9]\\+\\s*//;s/[;&|]\\s*alert$//'\\'')\"' # Alias definitions. # You may want to put all your additions into a separate file like # ~/.bash_aliases, instead of adding them here directly. # See /usr/share/doc/bash-doc/examples in the bash-doc package. if [ -f ~/.bash_aliases ]; then . ~/.bash_aliases fi # enable programmable completion features (you don't need to enable # this, if it's already enabled in /etc/bash.bashrc and /etc/profile # sources /etc/bash.bashrc). if ! shopt -oq posix; then if [ -f /usr/share/bash-completion/bash_completion ]; then . /usr/share/bash-completion/bash_completion elif [ -f /etc/bash_completion ]; then . /etc/bash_completion fi fi export NVM_DIR=\"$HOME/.nvm\" [ -s \"$NVM_DIR/nvm.sh\" ] && \\. \"$NVM_DIR/nvm.sh\" # This loads nvm [ -s \"$NVM_DIR/bash_completion\" ] && \\. \"$NVM_DIR/bash_completion\" # This loads nvm bash_completion # Added by Antigravity CLI installer export PATH=\"/home/lunix/.local/bin:$PATH\""
+                - generic [ref=e1063] [box=870,1122,379,34]:
+                  - generic [ref=e1064] [box=886,1131,25,17]: utf-8
+                  - generic [ref=e1065] [box=1134,1131,99,17]: 126 строк • 4.0 KB
+              - generic [ref=e1041] [box=870,1156,379,66]:
+                - button "Передачи" [ref=e1043] [cursor=pointer] [box=886,1165,54,17]
+                - generic [ref=e1045] [box=870,1189,379,32]: Очередь передач пуста.

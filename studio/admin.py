@@ -1,6 +1,15 @@
 from django.contrib import admin
 
-from .models import AgentConfig, MCPServerPool, Pipeline, PipelineRun, PipelineTemplate, PipelineTrigger
+from .models import (
+    AgentConfig,
+    MCPServerPool,
+    Pipeline,
+    PipelineDraftRevision,
+    PipelineDraftSession,
+    PipelineRun,
+    PipelineTemplate,
+    PipelineTrigger,
+)
 
 
 @admin.register(MCPServerPool)
@@ -38,6 +47,21 @@ class PipelineRunAdmin(admin.ModelAdmin):
     list_display = ["pipeline", "status", "triggered_by", "started_at", "finished_at"]
     list_filter = ["status"]
     readonly_fields = ["started_at", "finished_at", "created_at", "node_states"]
+
+
+@admin.register(PipelineDraftSession)
+class PipelineDraftSessionAdmin(admin.ModelAdmin):
+    list_display = ["title", "owner", "source_pipeline", "status", "intent", "updated_at"]
+    list_filter = ["status", "intent", "created_at"]
+    search_fields = ["title", "user_goal"]
+    readonly_fields = ["created_at", "updated_at", "applied_at"]
+
+
+@admin.register(PipelineDraftRevision)
+class PipelineDraftRevisionAdmin(admin.ModelAdmin):
+    list_display = ["session", "patch_summary", "created_at"]
+    list_filter = ["created_at"]
+    readonly_fields = ["created_at"]
 
 
 @admin.register(PipelineTemplate)

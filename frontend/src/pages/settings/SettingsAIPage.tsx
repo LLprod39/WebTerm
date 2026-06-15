@@ -98,7 +98,7 @@ const PROVIDER_METADATA: Record<string, {
     textColor: "text-emerald-500",
     badge: "Инструменты и логика",
     brand: "OpenAI",
-    slogan: "Хороший выбор для tool calling, проверок и структурированных ответов.",
+    slogan: "Хороший выбор для вызова инструментов, проверок и структурированных ответов.",
   },
   claude: {
     accentColor: "bg-orange-500",
@@ -118,7 +118,7 @@ const PROVIDER_METADATA: Record<string, {
 
 // Features supported by each routing role
 const ROLE_FEATURES: Record<string, { label: string; tooltip: string }[]> = {
-  "Чат / Терминальный AI": [
+  "Чат / терминальный AI": [
     { label: "Потоковый вывод", tooltip: "Ответ появляется по мере генерации, без ожидания полного текста." },
     { label: "Быстрый ответ", tooltip: "Лучше выбирать модель с небольшой задержкой первого токена." },
     { label: "Контекст сессии", tooltip: "Учитывает историю терминала и настройки сервера." },
@@ -128,7 +128,7 @@ const ROLE_FEATURES: Record<string, { label: string; tooltip: string }[]> = {
     { label: "Большой контекст", tooltip: "Полезно для логов, конфигураций и длинных выводов." },
     { label: "Самопроверка", tooltip: "Модель должна корректировать план после ошибок выполнения." },
   ],
-  "Оркестратор (Pipeline)": [
+  "Оркестратор пайплайнов": [
     { label: "JSON", tooltip: "Нужны строгие структурированные ответы." },
     { label: "Стабильность", tooltip: "Важно одинаково выполнять повторяющиеся шаги автоматизации." },
     { label: "Состояние", tooltip: "Передаёт состояние между шагами сценария." },
@@ -505,9 +505,9 @@ export default function SettingsAIPage() {
       : "grok";
 
   const routeConfigs = [
-    { key: "chat", shortLabel: "Chat", label: "Чат / Терминальный AI", description: "Быстрые ответы в терминале", icon: MessageSquare, provider: chatProvider, model: chatModel },
+    { key: "chat", shortLabel: "Chat", label: "Чат / терминальный AI", description: "Быстрые ответы в терминале", icon: MessageSquare, provider: chatProvider, model: chatModel },
     { key: "agent", shortLabel: "Agent", label: "Агенты (ReAct)", description: "Длинные задачи и итерации", icon: Bot, provider: agentProvider, model: agentModel },
-    { key: "orchestrator", shortLabel: "Pipeline", label: "Оркестратор (Pipeline)", description: "Координация пайплайнов", icon: Workflow, provider: orchProvider, model: orchModel },
+    { key: "orchestrator", shortLabel: "Pipeline", label: "Оркестратор пайплайнов", description: "Координация пайплайнов", icon: Workflow, provider: orchProvider, model: orchModel },
   ];
 
   const uniqueRouteProviders = Array.from(new Set(routeConfigs.map((route) => route.provider)));
@@ -515,7 +515,7 @@ export default function SettingsAIPage() {
   const ollamaCloudModels = modelsData?.ollama_cloud || [];
   const ollamaCatalogModels = getModelsForProvider("ollama");
   const ollamaRoutingActive = provider === "ollama" || routeConfigs.some((route) => route.provider === "ollama");
-  const ollamaRuntimeSummary = ollamaRuntimeMode === "cloud" ? "Только облако" : ollamaRuntimeMode === "local" ? "Только локально" : "Авто";
+  const ollamaRuntimeSummary = ollamaRuntimeMode === "cloud" ? "Только облако" : ollamaRuntimeMode === "local" ? "Только локально" : "Автоматически";
 
   const providerOverview = LLM_PROVIDERS.map((providerOption) => {
     const catalogSize = getModelsForProvider(providerOption.value).length;
@@ -699,7 +699,7 @@ export default function SettingsAIPage() {
       >
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
           <PurposeModelSelector
-            label="Чат / Терминальный AI"
+            label="Чат / терминальный AI"
             description="Короткие ответы и пояснения рядом с SSH-сессией."
             icon={MessageSquare}
             provider={chatProvider}
@@ -712,7 +712,7 @@ export default function SettingsAIPage() {
             onModelChange={setChatModel}
             onRefresh={() => onRefreshPurpose(chatProvider)}
             refreshing={refreshingPurpose === chatProvider}
-            features={ROLE_FEATURES["Чат / Терминальный AI"]}
+            features={ROLE_FEATURES["Чат / терминальный AI"]}
           />
           <PurposeModelSelector
             label="Агенты (ReAct)"
@@ -731,7 +731,7 @@ export default function SettingsAIPage() {
             features={ROLE_FEATURES["Агенты (ReAct)"]}
           />
           <PurposeModelSelector
-            label="Оркестратор (Pipeline)"
+            label="Оркестратор пайплайнов"
             description="Структурированные шаги, состояние и строгий JSON."
             icon={Workflow}
             provider={orchProvider}
@@ -744,7 +744,7 @@ export default function SettingsAIPage() {
             onModelChange={setOrchModel}
             onRefresh={() => onRefreshPurpose(orchProvider)}
             refreshing={refreshingPurpose === orchProvider}
-            features={ROLE_FEATURES["Оркестратор (Pipeline)"]}
+            features={ROLE_FEATURES["Оркестратор пайплайнов"]}
           />
         </div>
       </SectionCard>
@@ -753,7 +753,7 @@ export default function SettingsAIPage() {
       <SectionCard
         title="Ollama и режим рассуждений"
         icon={Database}
-        description="Где запускать Ollama и как показывать reasoning/thinking у моделей."
+        description="Где запускать Ollama и как показывать рассуждения моделей."
       >
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           {/* Ollama Runtime Control Panel */}
@@ -766,7 +766,7 @@ export default function SettingsAIPage() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-sm text-foreground">Подключение Ollama</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">Локальный адрес, облачный endpoint и режим выбора модели.</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Локальный адрес, облачный API-адрес и режим выбора модели.</p>
                 </div>
               </div>
               <Badge variant={ollamaRoutingActive ? "default" : "secondary"} className="px-2.5 py-0.5 text-[10px] font-semibold">
@@ -791,7 +791,7 @@ export default function SettingsAIPage() {
                   <SelectContent className="text-xs">
                     {OLLAMA_RUNTIME_KEYS.map((option) => {
                       const runtimeLabels: Record<string, string> = {
-                        "auto": "Автоматический выбор (Auto)",
+                        "auto": "Автоматический выбор",
                         "local": "Только локальный сервер",
                         "cloud": "Только облачный хаб"
                       };
@@ -901,7 +901,7 @@ export default function SettingsAIPage() {
               </div>
               <div>
                 <h3 className="font-semibold text-sm text-foreground">Режим рассуждений</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">Управляет тем, показывать ли reasoning/thinking пользователю.</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Управляет тем, показывать ли служебные рассуждения модели пользователю.</p>
               </div>
             </div>
 
@@ -910,7 +910,7 @@ export default function SettingsAIPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <h4 className="text-xs font-semibold text-foreground">Рассуждения Ollama</h4>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">Показывать или скрывать блоки &lt;think&gt; у reasoning-моделей.</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Показывать или скрывать служебные блоки &lt;think&gt; у моделей с рассуждениями.</p>
                 </div>
               </div>
               <Select value={ollamaThinkMode} onValueChange={setOllamaThinkMode}>
@@ -920,12 +920,12 @@ export default function SettingsAIPage() {
                 <SelectContent className="text-xs">
                   {OLLAMA_THINKING_KEYS.map((option) => {
                     const thinkLabels: Record<string, string> = {
-                      [AUTO_OLLAMA_THINKING_VALUE]: "Автоматически (Auto)",
-                      "off": "Скрывать reasoning",
-                      "on": "Показывать reasoning полностью",
-                      "low": "Краткий reasoning (Low)",
-                      "medium": "Средняя глубина (Medium)",
-                      "high": "Максимальная глубина (High)"
+                      [AUTO_OLLAMA_THINKING_VALUE]: "Автоматически",
+                      "off": "Скрывать рассуждения",
+                      "on": "Показывать рассуждения полностью",
+                      "low": "Краткие рассуждения",
+                      "medium": "Средняя глубина",
+                      "high": "Максимальная глубина"
                     };
                     return (
                       <SelectItem key={option.value} value={option.value}>
@@ -941,7 +941,7 @@ export default function SettingsAIPage() {
             <div className="space-y-2 rounded-xl border border-border/40 bg-background/20 p-3 hover:border-border transition-colors">
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="text-xs font-semibold text-foreground">Reasoning effort OpenAI</h4>
+                  <h4 className="text-xs font-semibold text-foreground">Глубина рассуждений OpenAI</h4>
                   <p className="text-[10px] text-muted-foreground mt-0.5">Передаётся в модели o-серии как параметр reasoning_effort.</p>
                 </div>
               </div>
@@ -950,17 +950,17 @@ export default function SettingsAIPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="text-xs">
-                  <SelectItem value={AUTO_REASONING_VALUE}>Автоматически (Auto)</SelectItem>
-                  <SelectItem value="none">Без reasoning (None)</SelectItem>
-                  <SelectItem value="low">Краткий reasoning (Low)</SelectItem>
-                  <SelectItem value="medium">Сбалансированная глубина (Medium)</SelectItem>
-                  <SelectItem value="high">Глубокий reasoning (High)</SelectItem>
+                  <SelectItem value={AUTO_REASONING_VALUE}>Автоматически</SelectItem>
+                  <SelectItem value="none">Без рассуждений</SelectItem>
+                  <SelectItem value="low">Краткие рассуждения</SelectItem>
+                  <SelectItem value="medium">Сбалансированная глубина</SelectItem>
+                  <SelectItem value="high">Глубокие рассуждения</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             
             <p className="text-[10px] text-muted-foreground leading-normal italic bg-background/30 p-2.5 rounded-lg border border-border/30">
-              Более глубокий reasoning может увеличить задержку первого токена. Включайте его для сложных задач, а не для быстрых терминальных ответов.
+              Более глубокие рассуждения могут увеличить задержку первого токена. Включайте их для сложных задач, а не для быстрых терминальных ответов.
             </p>
           </div>
         </div>
@@ -979,8 +979,8 @@ export default function SettingsAIPage() {
               { name: "Grok xAI", key: "grok_set", enabled: config.grok_enabled, desc: "xAI API" },
               { name: "OpenAI GPT", key: "openai_set", enabled: config.openai_enabled, desc: "OpenAI API (GPT & o-series)" },
               { name: "Claude Anthropic", key: "claude_set", enabled: config.claude_enabled, desc: "Anthropic API (Claude)" },
-              { name: "Ollama Local Node", key: "ollama_local_set", enabled: config.ollama_enabled && ollamaRuntimeMode !== "cloud", desc: "Локальный адрес Ollama" },
-              { name: "Ollama Cloud Hub", key: "ollama_cloud_set", enabled: config.ollama_enabled && ollamaCloudEnabled, desc: "Удаленный API-адрес Ollama" },
+              { name: "Ollama локальный узел", key: "ollama_local_set", enabled: config.ollama_enabled && ollamaRuntimeMode !== "cloud", desc: "Локальный адрес Ollama" },
+              { name: "Ollama облачный хаб", key: "ollama_cloud_set", enabled: config.ollama_enabled && ollamaCloudEnabled, desc: "Удалённый API-адрес Ollama" },
             ].map((p) => {
               const active = apiKeys[p.key];
               return (
@@ -1022,7 +1022,7 @@ export default function SettingsAIPage() {
         <SectionCard 
           title="Доменная SSO-авторизация" 
           icon={Network} 
-          description="Вход через корпоративный proxy/header вместо ручного логина."
+          description="Вход через корпоративный прокси и HTTP-заголовок вместо ручного логина."
         >
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="rounded-xl border border-border/50 bg-card/25 p-4 transition-all hover:border-border">

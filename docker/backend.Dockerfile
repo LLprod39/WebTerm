@@ -23,7 +23,9 @@ ENV http_proxy=${http_proxy} \
 WORKDIR /workspace
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    docker.io \
     gcc \
+    git \
     libldap2-dev \
     libsasl2-dev \
     libssl-dev \

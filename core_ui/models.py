@@ -67,6 +67,8 @@ FEATURE_CHOICES = [
     ("studio_skills", "Studio Skills"),
     ("studio_mcp", "Studio MCP"),
     ("studio_notifications", "Studio Notifications"),
+    ("kubernetes", "Kubernetes"),
+    ("mars", "MARS"),
     ("settings", "Settings"),
     ("orchestrator", "Orchestrator"),
     ("knowledge_base", "Knowledge Base"),
@@ -75,6 +77,8 @@ FEATURE_CHOICES = [
 # Features allowed by default for non-staff users.
 # Settings remain opt-in, and the admin dashboard stays staff-only.
 DEFAULT_ALLOWED_FEATURES = {"servers", "agents", "knowledge_base", "dashboard"}
+# Features that must be granted explicitly even for staff users.
+EXPLICIT_OPT_IN_FEATURES = {"kubernetes", "mars"}
 STAFF_ONLY_FEATURES = set()
 
 

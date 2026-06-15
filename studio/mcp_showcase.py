@@ -165,9 +165,36 @@ def build_showcase_nodes(mcp_server_id: int) -> list[dict]:
             },
         },
         {
+            "id": "artifact_write_ready",
+            "type": "logic/merge",
+            "position": {"x": 620, "y": 520},
+            "data": {
+                "label": "Artifacts Prepared",
+                "mode": "all",
+            },
+        },
+        {
+            "id": "approve_artifact_write",
+            "type": "logic/human_approval",
+            "position": {"x": 620, "y": 610},
+            "data": {
+                "label": "Approve Artifact Writes",
+                "manual_link_only": True,
+                "timeout_minutes": 120,
+                "message": (
+                    "Approve writing the generated MCP showcase artifacts.\n\n"
+                    "Plan target: " + DEMO_ARTIFACT_PLAN + "\n"
+                    "Manifest target: " + DEMO_ARTIFACT_MANIFEST + "\n\n"
+                    "{compose_plan_output}\n\n"
+                    "Approve: {approve_url}\n"
+                    "Reject: {reject_url}"
+                ),
+            },
+        },
+        {
             "id": "write_plan",
             "type": "agent/mcp_call",
-            "position": {"x": 430, "y": 620},
+            "position": {"x": 430, "y": 730},
             "data": {
                 "label": "MCP: Write Plan Artifact",
                 "mcp_server_id": mcp_server_id,
@@ -185,7 +212,7 @@ def build_showcase_nodes(mcp_server_id: int) -> list[dict]:
         {
             "id": "write_manifest",
             "type": "agent/mcp_call",
-            "position": {"x": 920, "y": 620},
+            "position": {"x": 920, "y": 730},
             "data": {
                 "label": "MCP: Write Manifest Artifact",
                 "mcp_server_id": mcp_server_id,
@@ -203,7 +230,7 @@ def build_showcase_nodes(mcp_server_id: int) -> list[dict]:
         {
             "id": "check_plan",
             "type": "agent/mcp_call",
-            "position": {"x": 210, "y": 850},
+            "position": {"x": 210, "y": 920},
             "data": {
                 "label": "MCP: Verify Plan Artifact",
                 "mcp_server_id": mcp_server_id,
@@ -215,7 +242,7 @@ def build_showcase_nodes(mcp_server_id: int) -> list[dict]:
         {
             "id": "preview_plan",
             "type": "agent/mcp_call",
-            "position": {"x": 530, "y": 850},
+            "position": {"x": 530, "y": 920},
             "data": {
                 "label": "MCP: Preview Plan",
                 "mcp_server_id": mcp_server_id,
@@ -227,7 +254,7 @@ def build_showcase_nodes(mcp_server_id: int) -> list[dict]:
         {
             "id": "check_manifest",
             "type": "agent/mcp_call",
-            "position": {"x": 850, "y": 850},
+            "position": {"x": 850, "y": 920},
             "data": {
                 "label": "MCP: Verify Manifest Artifact",
                 "mcp_server_id": mcp_server_id,
@@ -239,7 +266,7 @@ def build_showcase_nodes(mcp_server_id: int) -> list[dict]:
         {
             "id": "preview_manifest",
             "type": "agent/mcp_call",
-            "position": {"x": 1170, "y": 850},
+            "position": {"x": 1170, "y": 920},
             "data": {
                 "label": "MCP: Preview Manifest",
                 "mcp_server_id": mcp_server_id,
@@ -251,7 +278,7 @@ def build_showcase_nodes(mcp_server_id: int) -> list[dict]:
         {
             "id": "final_report",
             "type": "output/report",
-            "position": {"x": 620, "y": 1090},
+            "position": {"x": 620, "y": 1160},
             "data": {
                 "label": "Final MCP Showcase Report",
                 "template": (
@@ -282,7 +309,7 @@ def build_showcase_nodes(mcp_server_id: int) -> list[dict]:
         {
             "id": "final_merge",
             "type": "logic/merge",
-            "position": {"x": 620, "y": 980},
+            "position": {"x": 620, "y": 1050},
             "data": {
                 "label": "Artifacts Ready",
                 "mode": "all",
@@ -303,19 +330,22 @@ def build_showcase_edges() -> list[dict]:
         {"id": "e8", "source": "ai_brief", "target": "compose_ready", "sourceHandle": "error", "animated": True},
         {"id": "e9", "source": "compose_ready", "target": "compose_plan", "sourceHandle": "out", "animated": True},
         {"id": "e10", "source": "compose_plan", "target": "compose_manifest", "sourceHandle": "success", "animated": True},
-        {"id": "e11", "source": "compose_plan", "target": "write_plan", "sourceHandle": "success", "animated": True},
-        {"id": "e12", "source": "compose_manifest", "target": "write_manifest", "sourceHandle": "success", "animated": True},
-        {"id": "e13", "source": "write_plan", "target": "check_plan", "sourceHandle": "success", "animated": True},
-        {"id": "e14", "source": "write_plan", "target": "preview_plan", "sourceHandle": "success", "animated": True},
-        {"id": "e15", "source": "write_manifest", "target": "check_manifest", "sourceHandle": "success", "animated": True},
-        {"id": "e16", "source": "write_manifest", "target": "preview_manifest", "sourceHandle": "success", "animated": True},
-        {"id": "e17", "source": "todo_flag", "target": "final_merge", "sourceHandle": "true", "animated": True},
-        {"id": "e18", "source": "todo_flag", "target": "final_merge", "sourceHandle": "false", "animated": True},
-        {"id": "e19", "source": "check_plan", "target": "final_merge", "sourceHandle": "success", "animated": True},
-        {"id": "e20", "source": "preview_plan", "target": "final_merge", "sourceHandle": "success", "animated": True},
-        {"id": "e21", "source": "check_manifest", "target": "final_merge", "sourceHandle": "success", "animated": True},
-        {"id": "e22", "source": "preview_manifest", "target": "final_merge", "sourceHandle": "success", "animated": True},
-        {"id": "e23", "source": "final_merge", "target": "final_report", "sourceHandle": "out", "animated": True},
+        {"id": "e11", "source": "compose_plan", "target": "artifact_write_ready", "sourceHandle": "success", "animated": True},
+        {"id": "e12", "source": "compose_manifest", "target": "artifact_write_ready", "sourceHandle": "success", "animated": True},
+        {"id": "e13", "source": "artifact_write_ready", "target": "approve_artifact_write", "sourceHandle": "out", "animated": True},
+        {"id": "e14", "source": "approve_artifact_write", "target": "write_plan", "sourceHandle": "approved", "animated": True},
+        {"id": "e15", "source": "approve_artifact_write", "target": "write_manifest", "sourceHandle": "approved", "animated": True},
+        {"id": "e16", "source": "write_plan", "target": "check_plan", "sourceHandle": "success", "animated": True},
+        {"id": "e17", "source": "write_plan", "target": "preview_plan", "sourceHandle": "success", "animated": True},
+        {"id": "e18", "source": "write_manifest", "target": "check_manifest", "sourceHandle": "success", "animated": True},
+        {"id": "e19", "source": "write_manifest", "target": "preview_manifest", "sourceHandle": "success", "animated": True},
+        {"id": "e20", "source": "todo_flag", "target": "final_merge", "sourceHandle": "true", "animated": True},
+        {"id": "e21", "source": "todo_flag", "target": "final_merge", "sourceHandle": "false", "animated": True},
+        {"id": "e22", "source": "check_plan", "target": "final_merge", "sourceHandle": "success", "animated": True},
+        {"id": "e23", "source": "preview_plan", "target": "final_merge", "sourceHandle": "success", "animated": True},
+        {"id": "e24", "source": "check_manifest", "target": "final_merge", "sourceHandle": "success", "animated": True},
+        {"id": "e25", "source": "preview_manifest", "target": "final_merge", "sourceHandle": "success", "animated": True},
+        {"id": "e26", "source": "final_merge", "target": "final_report", "sourceHandle": "out", "animated": True},
     ]
 
 

@@ -75,10 +75,6 @@ interface AiPanelProps {
   executionMode: AiExecutionMode;
   settings: AiAssistantSettings;
   onModeChange: (mode: AiExecutionMode) => void;
-  // Nova: full server list (from bootstrap) for the extra-targets picker.
-  // Optional because the panel is usable without multi-target granting.
-  availableServers?: ReadonlyArray<{ id: number; name: string; host: string; server_type?: string | null }>;
-  currentServerId?: number;
 }
 
 const quickPrompts = ["Объясни вывод", "Предложи команду", "Проверь синтаксис", "Что означает ошибка"];
@@ -106,20 +102,6 @@ const chatModeConfig: Record<AiChatMode, { label: string; desc: string }> = {
     desc: "Сразу запускает безопасные команды в терминале. Опасные действия требуют подтверждения.",
   },
 };
-
-function normalizePatternList(text: string) {
-  const seen = new Set<string>();
-  const normalized: string[] = [];
-  for (const row of text.replace(/\r/g, "").split("\n")) {
-    const line = row.trim();
-    if (!line) continue;
-    const key = line.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    normalized.push(line);
-  }
-  return normalized.slice(0, 50);
-}
 
 function isExecutedCommandStatus(status?: AiCommand["status"]) {
   return status === "running" || status === "done" || status === "skipped" || status === "cancelled";
@@ -979,10 +961,6 @@ function ToggleRow({
   );
 }
 
-function InputLabel({ children }: { children: ReactNode }) {
-  return <label className="mb-1 block text-[11px] font-medium text-muted-foreground">{children}</label>;
-}
-
 export function AiPanel({
   onClose,
   onSend,
@@ -1004,8 +982,6 @@ export function AiPanel({
   executionMode,
   settings,
   onModeChange,
-  availableServers,
-  currentServerId,
 }: AiPanelProps) {
   const [input, setInput] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -1052,8 +1028,6 @@ export function AiPanel({
     };
   }, [messages]);
 
-  const whitelistText = useMemo(() => settings.whitelistPatterns.join("\n"), [settings.whitelistPatterns]);
-  const blacklistText = useMemo(() => settings.blacklistPatterns.join("\n"), [settings.blacklistPatterns]);
   const canGenerateReport = messages.length > 0 && !isGenerating;
 
   const updateSettings = (patch: Partial<AiAssistantSettings>) => {
@@ -1089,7 +1063,7 @@ export function AiPanel({
   return (
     <>
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent className="max-h-[85vh] max-w-2xl overflow-hidden rounded-xl border-border/60">
+        <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-2xl grid-rows-[auto,minmax(0,1fr),auto] overflow-hidden rounded-xl border-border/60 sm:max-h-[85vh]">
           <DialogHeader className="pb-0">
             <DialogTitle className="flex items-center gap-2 text-base">
               <Settings2 className="h-4 w-4 text-muted-foreground" />
@@ -1100,7 +1074,7 @@ export function AiPanel({
             </DialogDescription>
           </DialogHeader>
 
-          <DialogBody className="max-h-[calc(85vh-8rem)] space-y-5 overflow-y-auto py-2">
+          <DialogBody className="min-h-0 space-y-5 overflow-y-auto py-2">
             <SettingsSection
               title="Режим"
               description="Как AI ведёт диалог и исполняет команды."
@@ -1165,111 +1139,6 @@ export function AiPanel({
                   </Button>
                 </div>
               </div>
-            </SettingsSection>
-
-            <SettingsSection
-              title="Безопасность"
-              description="Контроль опасных команд и ограничение допустимых операций."
-            >
-              <div className="space-y-2">
-                <ToggleRow
-                  title="Подтверждать опасные"
-                  description="Требовать ручное подтверждение для опасных операций."
-                  checked={settings.confirmDangerousCommands}
-                  onCheckedChange={(checked) => updateSettings({ confirmDangerousCommands: checked })}
-                />
-                <ToggleRow
-                  title="Dry-run режим"
-                  description="AI показывает, что выполнило бы, но не трогает сервер."
-                  checked={settings.dryRun}
-                  onCheckedChange={(checked) => updateSettings({ dryRun: checked })}
-                />
-
-                <div className="grid gap-2.5 pt-1 md:grid-cols-2">
-                  <div>
-                    <InputLabel>Whitelist</InputLabel>
-                    <textarea
-                      value={whitelistText}
-                      onChange={(event) => updateSettings({ whitelistPatterns: normalizePatternList(event.target.value) })}
-                      rows={4}
-                      placeholder={"sudo systemctl\nre:^docker\\s+ps"}
-                      className="w-full rounded-md border border-border bg-background px-2.5 py-2 font-mono text-[11px] text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <InputLabel>Blocklist</InputLabel>
-                    <textarea
-                      value={blacklistText}
-                      onChange={(event) => updateSettings({ blacklistPatterns: normalizePatternList(event.target.value) })}
-                      rows={4}
-                      placeholder={"rm -rf /\nshutdown\nre:^mkfs"}
-                      className="w-full rounded-md border border-border bg-background px-2.5 py-2 font-mono text-[11px] text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none"
-                    />
-                  </div>
-                </div>
-              </div>
-            </SettingsSection>
-
-            {/* Nova: extra-target picker — only makes sense when the
-                 agent mode is selected; render it always so the user
-                 can prepare the list before switching to Nova. */}
-            <SettingsSection
-              title="Nova: дополнительные серверы"
-              description="Разрешить агенту работать с другими серверами в этой сессии. Только те, к которым у вас уже есть доступ. Вступает в силу при следующем запросе в Nova-режиме."
-            >
-              {(() => {
-                const others = (availableServers || []).filter(
-                  (s) => s.id !== currentServerId,
-                );
-                if (others.length === 0) {
-                  return (
-                    <p className="text-[11px] text-muted-foreground">
-                      Нет других доступных серверов.
-                    </p>
-                  );
-                }
-                const selected = new Set(settings.extraTargetServerIds);
-                const toggle = (id: number) => {
-                  const next = new Set(selected);
-                  if (next.has(id)) {
-                    next.delete(id);
-                  } else {
-                    if (next.size >= 10) return; // Nova hard cap: 10 extras
-                    next.add(id);
-                  }
-                  updateSettings({ extraTargetServerIds: Array.from(next) });
-                };
-                return (
-                  <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
-                    {others.map((srv) => (
-                      <label
-                        key={srv.id}
-                        className={`flex cursor-pointer items-center gap-2 rounded-md border px-2 py-1.5 text-[12px] transition-colors ${
-                          selected.has(srv.id)
-                            ? "border-primary/40 bg-primary/5 text-foreground"
-                            : "border-border/40 bg-transparent text-muted-foreground hover:bg-secondary/30"
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selected.has(srv.id)}
-                          onChange={() => toggle(srv.id)}
-                          className="h-3 w-3 accent-primary"
-                        />
-                        <span className="truncate font-medium">{srv.name}</span>
-                        <span className="truncate text-[10px] text-muted-foreground">
-                          {srv.host}
-                        </span>
-                        {selected.has(srv.id) ? (
-                          <span className="ml-auto rounded border border-primary/30 bg-primary/10 px-1 py-0 font-mono text-[9px] text-primary">
-                            srv-{srv.id}
-                          </span>
-                        ) : null}
-                      </label>
-                    ))}
-                  </div>
-                );
-              })()}
             </SettingsSection>
 
             <NovaContextSettings settings={settings} onChange={updateSettings} />

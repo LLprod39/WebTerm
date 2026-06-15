@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import StudioPage from "@/pages/StudioPage";
 import * as api from "@/lib/api";
+import * as draftApi from "@/lib/studioPipelineDraftsApi";
 
 const toastMock = vi.fn();
 
@@ -19,6 +20,11 @@ vi.mock("@/hooks/use-toast", () => ({
 
 vi.mock("@/lib/featureAccess", () => ({
   hasFeatureAccess: () => true,
+}));
+
+vi.mock("@/lib/i18n", () => ({
+  useI18n: () => ({ lang: "en", setLang: () => undefined, t: (key: string) => key }),
+  localize: (lang: string, ru: string, en: string) => (lang === "ru" ? ru : en),
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -49,6 +55,17 @@ vi.mock("@/lib/api", () => ({
   },
   studioAgents: {
     list: vi.fn(),
+  },
+}));
+
+vi.mock("@/lib/studioPipelineDraftsApi", () => ({
+  studioPipelineDrafts: {
+    list: vi.fn(),
+    create: vi.fn(),
+    get: vi.fn(),
+    discard: vi.fn(),
+    revise: vi.fn(),
+    apply: vi.fn(),
   },
 }));
 
@@ -180,6 +197,7 @@ describe("StudioPage quick run", () => {
     vi.mocked(api.studioRuns.list).mockResolvedValue([]);
     vi.mocked(api.studioSkills.list).mockResolvedValue([]);
     vi.mocked(api.studioAgents.list).mockResolvedValue([]);
+    vi.mocked(draftApi.studioPipelineDrafts.list).mockResolvedValue([]);
   });
 
   it("prompts for the manual trigger when a pipeline has multiple manual entries", async () => {
@@ -188,7 +206,7 @@ describe("StudioPage quick run", () => {
     const runButton = await screen.findByRole("button", { name: /^Run$/ });
     fireEvent.click(runButton);
 
-    expect(await screen.findByText("Choose Manual Trigger")).toBeInTheDocument();
+    expect(await screen.findByText(/Choose manual trigger/i)).toBeInTheDocument();
 
     const select = screen.getByRole("combobox");
     fireEvent.change(select, { target: { value: "manual_b" } });
@@ -273,7 +291,7 @@ describe("StudioPage quick run", () => {
     const runButton = await screen.findByRole("button", { name: /^Run$/ });
     fireEvent.click(runButton);
 
-    expect(await screen.findByText("Webhook Trigger")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /^Webhook trigger$/i })).toBeInTheDocument();
     expect(
       screen.getByText(/incoming webhook requests/i),
     ).toBeInTheDocument();
@@ -358,7 +376,7 @@ describe("StudioPage quick run", () => {
     const runButton = await screen.findByRole("button", { name: /^Run$/ });
     fireEvent.click(runButton);
 
-    expect(await screen.findByText("Monitoring Trigger")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /^Monitoring trigger$/i })).toBeInTheDocument();
     expect(screen.getByText(/started by server monitoring alerts/i)).toBeInTheDocument();
     expect(screen.getByText(/mini-prod-mcp-demo/)).toBeInTheDocument();
     expect(toastMock).not.toHaveBeenCalledWith(
@@ -368,5 +386,54 @@ describe("StudioPage quick run", () => {
       }),
     );
     expect(api.studioPipelines.run).not.toHaveBeenCalled();
+  });
+
+  it("shows the dedicated AI Drafts cockpit entry instead of the full drafter workspace", async () => {
+    vi.mocked(draftApi.studioPipelineDrafts.list).mockResolvedValue([
+      {
+        id: 5,
+        status: "ready",
+        intent: "create",
+        title: "Existing draft",
+        user_goal: "Create a daily health report",
+        source_pipeline_id: null,
+        applied_pipeline_id: null,
+        selected_node_id: "",
+        created_at: "2026-04-10T10:00:00Z",
+        updated_at: "2026-04-10T10:05:00Z",
+        applied_at: null,
+        latest_revision: {
+          id: 9,
+          session_id: 5,
+          user_message: "Create a daily health report",
+          created_at: "2026-04-10T10:05:00Z",
+          preview_nodes: [],
+          preview_edges: [],
+          response: {
+            reply: "Draft ready.",
+            target_node_id: null,
+            node_patch: {},
+            graph_patch: {
+              anchor_node_id: null,
+              nodes: [
+                { ref: "manual_start", type: "trigger/manual", label: "Manual start", data: {} },
+                { ref: "report", type: "output/report", label: "Report", data: {} },
+              ],
+              edges: [{ source: "manual_start", target: "report" }],
+            },
+            warnings: [],
+            validation: { ok: true, errors: [], warnings: [] },
+            risk: { level: "safe", items: [] },
+            patch_summary: "Creates a manual report pipeline.",
+          },
+        },
+      },
+    ] as never);
+
+    renderPage();
+
+    expect(await screen.findByText(/Graph-first cockpit for AI automations/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Open AI Drafts/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Automation request")).not.toBeInTheDocument();
   });
 });

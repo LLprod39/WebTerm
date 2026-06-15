@@ -299,8 +299,9 @@ def test_pipeline_assistant_validates_preview_and_flags_dangerous_ssh(monkeypatc
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["validation"]["ok"] is True
+    assert payload["validation"]["ok"] is False
     assert not any("unknown type" in item for item in payload["validation"]["errors"])
+    assert any("Policy guard" in item and "wipe_step" in item for item in payload["validation"]["errors"])
     assert any("bad_node" in item and "dropped" in item for item in payload["warnings"])
     assert payload["risk"]["level"] == "dangerous"
     assert payload["risk"]["items"][0]["node_id"] == "wipe_step"

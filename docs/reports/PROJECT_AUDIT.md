@@ -1,45 +1,109 @@
 # Project Audit Report
 
-## 1. Executive Summary
+Last reviewed: 2026-05-27
 
-This report documents the architectural flaws, anti-patterns, security issues, and performance bottlenecks identified within the `weu-ai-platform` (WebTerm) codebase. The project integrates Django, Django Channels, React/Vite, WinUI 3, and several background worker processes. While the system demonstrates a sophisticated combination of capabilities, several fundamental violations of the established bounds and best practices pose risks to maintainability, performance, and security.
+This is the current audit snapshot for `C:\WebTrerm`. Older findings that were already fixed are kept only when they affect remaining work.
 
-## 2. Architectural Flaws & Anti-patterns
+## Executive Summary
 
-### Bounded Context Leakage
-The `.importlinter` configuration explicitly flags anti-patterns that exist within the codebase:
-- **`app.tools` imports from `servers` ORM**: The `servers_tools.py` and `ssh_tools.py` directly query Django models (`Server`, `ServerCommandHistory`, `ServerShare`, etc.). This tightly couples the execution logic of tools to the server database layer.
-- **Deprecated `mcp_tool_runtime.py` in `servers`**: This module acts as a re-export shim to `studio`, violating the separation between the execution/AI boundaries (`servers`) and the orchestrator layer (`studio`).
-- **Deep imports in models**: Models and background workers tightly intertwine. Cross-domain queries are abundant across `views/_views_all.py` logic.
-- **`__init__.py` and wildcard imports**: There are un-sorted import blocks and wildcard imports (`from web_ui.settings.base import *`) inside settings files that obfuscate overrides.
+WebTerm is an ops control plane built from Django/Channels, a React/Vite SPA, server terminal/RDP tooling, Studio pipelines, MCP/skills, server agents, and layered server memory.
 
-### Circular Dependencies
-- Inline imports inside methods (`from servers.models import ...` embedded within function bodies) are widely used across `app/agent_kernel/memory/store.py` and `app/tools/server_tools.py` to circumvent circular import crashes. This is a clear indicator that bounded contexts are improperly mapped.
+Current architecture is much healthier than the older audit described: most backend view groups have been split into focused modules, the old `servers.mcp_tool_runtime` shim is gone, and the `passwords/` compatibility package is gone. Import boundaries currently pass through `import-linter`.
 
-## 3. Security Issues
+The main open risks are now narrower:
 
-### Subprocess / Execution Risks
-- **Shell injections**: `core_ui/views/_views_all.py` uses `asyncio.create_subprocess_exec` executing parameters passed potentially from the environment or user.
-- **`safety.py` limitations**: `is_dangerous_command` evaluates safety through basic Regex pattern matching (`\bkill\b`, `\brm -r\b`). It fails to account for basic shell obfuscations (e.g., `k\ill`, `r\m`, variables usage) or non-standard paths.
+1. `python scripts/check_architecture_sizes.py --strict-new` fails because `key_mcp.py` grew beyond its pinned legacy baseline: `2094 > 2089`.
+2. Dangerous execution paths still need one shared policy/audit/redaction contract across SSH, MCP, webhooks, files, and pipeline nodes.
+3. Shared server permissions still need capability-level enforcement for connect/execute/file-write/RDP/admin.
+4. Several legacy-large files remain pinned and should shrink over time.
+5. Production worker/scheduler topology needs to stay explicit in deploy docs and compose/Render config.
 
-### Secrets and Encryption Management
-- **Weak Iteration Counts**: `servers.encryption.PasswordEncryption` uses PBKDF2HMAC with 100,000 iterations. Modern standards recommend at least 600,000 iterations for PBKDF2-HMAC-SHA256, or using Argon2id.
-- **Secret Redaction**: `app/agent_kernel/memory/redaction.py` attempts to sanitize credentials prior to AI and logging stages. The `secret_assignment` regex fallback is naive (`password|token=...`) and can easily miss keys injected dynamically via JSON strings, or leak secrets that do not conform to explicit naming schemes.
+## Current Architecture Evidence
 
-## 4. Performance Bottlenecks
+| Area | Current state |
+| --- | --- |
+| Import boundaries | `import-linter` passed on 2026-05-27. Contracts live in `.importlinter`. |
+| Size guard | Failed only on `key_mcp.py` legacy baseline growth. |
+| Backend views | `core_ui/views/`, `servers/views/`, and `studio/views/` are split into focused modules with compatibility shims. |
+| MCP runtime | Server agents use `MCPRuntimeProvider`; concrete implementation lives in `studio.mcp_runtime_adapter` / `studio.mcp_tool_runtime`. |
+| Passwords shim | No `passwords/` folder exists; only historical/migration references remain. |
+| Pipeline executor | `studio/pipeline_executor.py` still executes the full node set; `studio/executor/` is the target registry migration path. |
+| Test config | `pyproject.toml` points pytest to `web_ui.settings.test`, which isolates tests on SQLite and in-memory services. |
 
-### N+1 and Unbounded Queries
-- **Unbounded object fetching**: In `core_ui/views/_views_all.py`, calls like `User.objects.all().prefetch_related("groups")` are fully loaded into memory without pagination. On a sizable deployment, fetching the full table into memory will degrade performance and crash background worker processes.
-- **ORM calls inside loops**: In `servers/views/_views_all.py`, individual queries inside list iterations are visible in operations pertaining to `ServerGroupMember.objects.filter(group_id__in=group_ids, user=request.user)`.
+## Findings
 
-### Event Loop Blocking
-- Synchronous file and JSON parsing logic runs within asynchronous functions in the `agent_kernel` loop. Large strings and memory compactions are parsed using `ast.literal_eval` synchronously (e.g., in `store.py: _try_parse_list_literal`), which blocks the entire async event loop.
+### P0: Architecture Guard Currently Fails
 
-## 5. Recommendations for Improvement
+`key_mcp.py` is pinned at 2089 lines in `pyproject.toml`, but the file is now 2094 lines.
 
-1. **Refactor Bounded Contexts**: Move server-specific execution logic out of `app/tools` and into `servers/tools/`. Remove the deprecated `mcp_tool_runtime` shim from `servers`.
-2. **Eliminate Inline Imports**: Reorganize domain logic to avoid circular dependencies, decoupling the database abstractions from domain interfaces.
-3. **Enhance Execution Safety**: Replace regex-based shell safety checks with an AST-based parser (like `bashlex`) to definitively determine the binaries and parameters being executed.
-4. **Upgrade Encryption**: Transition PBKDF2 iterations to 600,000 or adopt Argon2 for `PasswordEncryption`. Add specific secret scanning to detect entropy rather than relying purely on regex patterns.
-5. **Optimize Database Queries**: Introduce pagination limits to list endpoints, and bulk fetch relationships before looping over groups/users.
-6. **Decouple Sync from Async**: Use `sync_to_async` around heavy CPU-bound parsing algorithms (like AST logic) within the agent loops to prevent blocking Django Channels.
+Impact: the architecture guard fails even though import boundaries pass. This blocks using the guard as a clean CI signal.
+
+Recommended fix: either shrink `key_mcp.py` below the baseline or intentionally update the baseline with a short justification. Prefer shrinking because `key_mcp.py` is already above the standard file-size limit.
+
+### P0: Execution Policy Is Still Cross-Cutting
+
+SSH commands, MCP calls, file writes, outbound webhooks, pipeline execution, terminal AI, and server agents all represent potentially mutating operations.
+
+Impact: risk decisions can diverge between runtime paths.
+
+Recommended fix: define one `ExecutionPolicyDecision` contract with actor, target, operation kind, redacted preview, risk categories, approval requirement, and audit evidence. Wire it into pipeline nodes and server/terminal tool paths.
+
+### P0: Shared Server Permissions Need Capability Checks
+
+`ServerShare`-style access should not be treated as one broad "server is accessible" decision for every endpoint.
+
+Impact: view-only users can become risky if an endpoint only checks broad server accessibility.
+
+Recommended fix: enforce explicit capabilities: view, terminal connect, command execute, file read, file write, RDP, context view, share/admin.
+
+### P1: Secret Redaction Should Be Applied At Every Egress Point
+
+Memory redaction exists, but pipeline outputs, MCP args, logs, activity records, and report excerpts should all use a shared redaction helper.
+
+Impact: operational logs and reports can become a leakage path even when prompts are sanitized.
+
+Recommended fix: one egress redaction helper, unit tests with tokens/passwords/private keys/high-entropy values, and targeted checks for logger/activity/event writes.
+
+### P1: Legacy-Large Files Remain
+
+The repository still carries large pinned files such as `frontend/src/pages/PipelineEditorPage.tsx`, `frontend/src/lib/api.ts`, `servers/consumers/ssh_terminal.py`, `studio/pipeline_executor.py`, `key_mcp.py`, and others in `pyproject.toml`.
+
+Impact: changes are harder to review and regression risk remains high.
+
+Recommended fix: continue one-domain-at-a-time extraction, and remove baseline entries once files fall below the standard limit.
+
+### P1: Pipeline Executor Migration Is Incomplete
+
+The target registry exists under `studio/executor/`, but the production path still runs through `studio/pipeline_executor.py` for most node types.
+
+Impact: node-specific logic remains centralized and difficult to test independently.
+
+Recommended fix: migrate one node at a time to `BaseNode` implementations and keep `tests/test_studio_node_executors.py` plus runtime smoke tests green.
+
+### P2: Production Worker Topology Needs Explicit Ownership
+
+Management commands exist for monitor, scheduled pipelines, scheduled agents, watchers, memory dreams, and agent execution plane.
+
+Impact: a deployment can serve HTTP while silently missing background behavior.
+
+Recommended fix: document and configure required worker processes for production compose/Render or explicitly mark unsupported modes.
+
+## Completed Since Older Audits
+
+- `servers.mcp_tool_runtime` shim removed.
+- `passwords/` package removed.
+- Backend view monolith split is largely done.
+- `web_ui.settings` is a compatibility shim; explicit settings modules exist.
+- Frontend app is clearly under `frontend/`.
+- Test settings isolate DB/email/Celery/channel layer.
+- `.dockerignore` and `.gitignore` cover key generated and secret-prone paths.
+
+## Recommended Next Order
+
+1. Fix `key_mcp.py` architecture baseline failure.
+2. Add shared execution policy/audit/redaction contract.
+3. Add capability-based shared server permissions.
+4. Normalize egress redaction across logs/activity/pipeline/MCP.
+5. Continue pipeline executor node-registry migration.
+6. Continue frontend API/page decomposition.
+7. Make production worker topology explicit.

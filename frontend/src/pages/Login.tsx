@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { AlertCircle, Languages, Loader2, LockKeyhole, Server, ShieldCheck } from "lucide-react";
+import { AlertCircle, Loader2, LockKeyhole, Server, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -197,13 +197,6 @@ export default function Login() {
               </Button>
             </form>
 
-            <div className="mt-6 flex items-center justify-between gap-3 border-t border-border pt-5 text-xs text-muted-foreground">
-              <span>{t("login.footer")}</span>
-              <span className="inline-flex items-center gap-1.5">
-                <Languages className="h-3.5 w-3.5" />
-                {lang.toUpperCase()}
-              </span>
-            </div>
           </div>
         </main>
       </div>

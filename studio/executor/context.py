@@ -56,6 +56,15 @@ class ExecutionContext:
             return template
 
         flat: dict[str, str] = {}
+        base_context = self.extra.get("context")
+        if isinstance(base_context, dict):
+            for key, value in base_context.items():
+                flat[str(key)] = str(value) if value is not None else ""
+        if self.pipeline is not None:
+            flat["pipeline_name"] = str(getattr(self.pipeline, "name", "") or "")
+        flat["run_id"] = str(self.run_id)
+        for key, value in (self.extra.get("runtime") or {}).items():
+            flat[str(key)] = str(value) if value is not None else ""
         for node_id, output in self.node_outputs.items():
             if isinstance(output, dict):
                 for k, v in output.items():
@@ -67,6 +76,32 @@ class ExecutionContext:
             return flat.get(key, m.group(0))
 
         return _TEMPLATE_PATTERN.sub(_replace, template)
+
+    def get_variable(self, key: str, default: Any = "") -> Any:
+        """Return a value from runtime/base context or upstream node outputs."""
+        runtime = self.extra.get("runtime")
+        if isinstance(runtime, dict) and key in runtime:
+            return runtime[key]
+        base_context = self.extra.get("context")
+        if isinstance(base_context, dict) and key in base_context:
+            return base_context[key]
+        if key == "pipeline_name" and self.pipeline is not None:
+            return getattr(self.pipeline, "name", default)
+        if key == "run_id":
+            return self.run_id
+        for node_id, output in self.node_outputs.items():
+            if key == node_id:
+                return output.get("output", default) if isinstance(output, dict) else default
+            if isinstance(output, dict):
+                if key in output:
+                    return output[key]
+                if key == f"{node_id}_output":
+                    return output.get("output", default)
+                if key == f"{node_id}_error":
+                    return output.get("error", default)
+                if key == f"{node_id}_status":
+                    return output.get("status", default)
+        return default
 
     def get_upstream_output(self, node_id: str) -> dict[str, Any]:
         """Return the output dict of a specific upstream node, or empty dict."""

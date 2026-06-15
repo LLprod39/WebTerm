@@ -200,6 +200,33 @@ export default function MCPHubPage() {
         }
       />
       <div className="flex-1 px-6 pb-8 space-y-5">
+        {editorOpen && editMcp ? (
+          <SectionCard
+            title={
+              (editMcp as MCPServer | null)?.id
+                ? (editMcp as MCPServer | null)?.can_edit === false
+                  ? localize(lang, "Просмотр MCP-сервера", "View MCP server")
+                  : localize(lang, "Редактировать MCP-сервер", "Edit MCP server")
+                : localize(lang, "Добавить MCP-сервер", "Add MCP server")
+            }
+            description={localize(lang, "Укажите локальную stdio-команду или удалённый SSE endpoint.", "Configure either a local stdio command or a remote SSE endpoint.")}
+            icon={<Pencil className="h-5 w-5" />}
+          >
+            <MCPForm
+              initial={editMcp}
+              onSave={handleSave}
+              onCancel={() => {
+                setEditorOpen(false);
+                setEditMcp(null);
+              }}
+              isPending={createMutation.isPending || updateMutation.isPending}
+              shareUsers={shareUsers}
+              isAdmin={isAdmin}
+              canEdit={(editMcp as MCPServer | null)?.can_edit !== false}
+            />
+          </SectionCard>
+        ) : null}
+
         <Tabs defaultValue="mine" className="space-y-5">
           <TabsList>
             <TabsTrigger value="mine">{localize(lang, "Подключения", "My servers")} ({mcpList.length})</TabsTrigger>
@@ -404,33 +431,6 @@ export default function MCPHubPage() {
             )}
           </TabsContent>
         </Tabs>
-
-      {editorOpen && editMcp ? (
-        <SectionCard
-          title={
-            (editMcp as MCPServer | null)?.id
-              ? (editMcp as MCPServer | null)?.can_edit === false
-                ? localize(lang, "Просмотр MCP-сервера", "View MCP server")
-                : localize(lang, "Редактировать MCP-сервер", "Edit MCP server")
-              : localize(lang, "Добавить MCP-сервер", "Add MCP server")
-          }
-          description={localize(lang, "Укажите локальную stdio-команду или удалённый SSE endpoint.", "Configure either a local stdio command or a remote SSE endpoint.")}
-          icon={<Pencil className="h-5 w-5" />}
-        >
-          <MCPForm
-            initial={editMcp}
-            onSave={handleSave}
-            onCancel={() => {
-              setEditorOpen(false);
-              setEditMcp(null);
-            }}
-            isPending={createMutation.isPending || updateMutation.isPending}
-            shareUsers={shareUsers}
-            isAdmin={isAdmin}
-            canEdit={(editMcp as MCPServer | null)?.can_edit !== false}
-          />
-        </SectionCard>
-      ) : null}
 
       <Dialog open={deleteTarget !== null} onOpenChange={(nextOpen) => !nextOpen && setDeleteTarget(null)}>
         <DialogContent className="max-w-sm">

@@ -33,7 +33,7 @@ export const NODE_TYPE_META: Record<string, NodeTypeMeta> = {
   },
   "trigger/monitoring": {
     label: { ru: "Мониторинг", en: "Monitoring Trigger" },
-    paletteDescription: { ru: "Запуск по alert из server monitoring", en: "Start from a server monitoring alert" },
+    paletteDescription: { ru: "Запуск по алерту мониторинга сервера", en: "Start from a server monitoring alert" },
   },
   "agent/react": {
     label: { ru: "ReAct-агент", en: "ReAct Agent" },
@@ -54,6 +54,50 @@ export const NODE_TYPE_META: Record<string, NodeTypeMeta> = {
   "agent/mcp_call": {
     label: { ru: "MCP-вызов", en: "MCP Call" },
     paletteDescription: { ru: "Прямой вызов конкретного MCP-инструмента", en: "Force one exact MCP tool call" },
+  },
+  "ops/server_snapshot": {
+    label: { ru: "Снимок сервера", en: "Server Snapshot" },
+    paletteDescription: { ru: "Безопасный снимок Linux, Docker, дисков и логов", en: "Read-only Linux/Docker/disk/log snapshot" },
+  },
+  "ops/log_query": {
+    label: { ru: "Запрос логов", en: "Log Query" },
+    paletteDescription: { ru: "Чтение логов Linux, сервисов и Docker", en: "Read-only Linux/service/Docker logs" },
+  },
+  "ops/file_action": {
+    label: { ru: "Файл", en: "File Action" },
+    paletteDescription: { ru: "Чтение или запись текстового файла через SFTP", en: "Read/write a text file through SFTP" },
+  },
+  "ops/package_action": {
+    label: { ru: "Пакеты", en: "Package Action" },
+    paletteDescription: { ru: "Просмотр, установка, обновление или удаление пакетов ОС", en: "List/install/update/remove OS packages" },
+  },
+  "ops/disk_cleanup": {
+    label: { ru: "Очистка диска", en: "Disk Cleanup" },
+    paletteDescription: { ru: "Проверка места, очистка journal или старых tmp-файлов", en: "Inspect, journal vacuum, or clean old tmp files" },
+  },
+  "ops/backup_restore_check": {
+    label: { ru: "Проверка backup", en: "Backup Check" },
+    paletteDescription: { ru: "Проверка свежести backup и целостности последнего архива", en: "Read-only backup freshness and latest archive integrity" },
+  },
+  "ops/service_action": {
+    label: { ru: "Действие сервиса", en: "Service Action" },
+    paletteDescription: { ru: "Структурированный systemctl с проверкой", en: "Structured systemctl with verification" },
+  },
+  "ops/docker_action": {
+    label: { ru: "Действие Docker", en: "Docker Action" },
+    paletteDescription: { ru: "Start, stop или restart контейнера с проверкой", en: "Start/stop/restart a container with verification" },
+  },
+  "ops/process_action": {
+    label: { ru: "Действие процесса", en: "Process Action" },
+    paletteDescription: { ru: "Остановить процесс мягко или принудительно", en: "Terminate or force kill a process" },
+  },
+  "ops/http_check": {
+    label: { ru: "HTTP-проверка", en: "HTTP Check" },
+    paletteDescription: { ru: "Проверка URL, статуса и текста ответа", en: "Verify URL status and response text" },
+  },
+  "ops/alert_update": {
+    label: { ru: "Обновить alert", en: "Alert Update" },
+    paletteDescription: { ru: "Закрыть алерт мониторинга после проверки", en: "Resolve a monitoring alert after verification" },
   },
   "logic/condition": {
     label: { ru: "Условие", en: "Condition" },
@@ -197,6 +241,127 @@ export const NODE_TYPE_GUIDANCE_META: Record<string, NodeGuidanceMeta> = {
       en: ["Select the MCP server", "Select the tool", "Provide valid JSON arguments"],
     },
   },
+  "ops/server_snapshot": {
+    category: { ru: "OPS", en: "Ops" },
+    summary: {
+      ru: "Собирает безопасный read-only снимок сервера через существующие Linux UI collectors.",
+      en: "Collects a safe read-only server snapshot through existing Linux UI collectors.",
+    },
+    checklist: {
+      ru: ["Выберите сервер или оставьте server_id из контекста", "Отметьте нужные разделы снимка"],
+      en: ["Select a server or use server_id from context", "Choose the snapshot sections"],
+    },
+  },
+  "ops/log_query": {
+    category: { ru: "OPS", en: "Ops" },
+    summary: {
+      ru: "Собирает read-only логи из journalctl, service journal, Docker logs или типовых файлов /var/log.",
+      en: "Collects read-only logs from journalctl, service journal, Docker logs, or common /var/log files.",
+    },
+    checklist: {
+      ru: ["Выберите сервер или используйте server_id из контекста", "Выберите источник логов", "Для service/docker укажите unit или container"],
+      en: ["Select a server or use server_id from context", "Choose the log source", "For service/docker, set the unit or container"],
+    },
+  },
+  "ops/file_action": {
+    category: { ru: "OPS", en: "Ops" },
+    summary: {
+      ru: "Читает или записывает UTF-8 текстовые файлы через существующий SFTP слой WebTerm.",
+      en: "Reads or writes UTF-8 text files through WebTerm's existing SFTP layer.",
+    },
+    checklist: {
+      ru: ["Выберите сервер или используйте server_id из контекста", "Укажите path", "Для write поставьте approval перед нодой"],
+      en: ["Select a server or use server_id from context", "Set the path", "Place approval before write actions"],
+    },
+  },
+  "ops/package_action": {
+    category: { ru: "OPS", en: "Ops" },
+    summary: {
+      ru: "Показывает доступные обновления или выполняет install/update/remove для явного списка пакетов.",
+      en: "Lists package updates or runs install/update/remove for an explicit package list.",
+    },
+    checklist: {
+      ru: ["Для list_updates approval не нужен", "Для install/update/remove укажите пакеты", "Поставьте approval перед изменением пакетов"],
+      en: ["list_updates does not need approval", "For install/update/remove, set package names", "Place approval before package changes"],
+    },
+  },
+  "ops/disk_cleanup": {
+    category: { ru: "OPS", en: "Ops" },
+    summary: {
+      ru: "Показывает disk usage или выполняет ограниченную очистку journal/tmp на Linux сервере.",
+      en: "Inspects disk usage or runs bounded journal/tmp cleanup on a Linux server.",
+    },
+    checklist: {
+      ru: ["Inspect approval не требует", "Для journal_vacuum/tmp_cleanup поставьте approval", "Используйте dry-run перед реальной очисткой"],
+      en: ["inspect does not require approval", "Place approval before journal_vacuum/tmp_cleanup", "Use dry-run before real cleanup"],
+    },
+  },
+  "ops/backup_restore_check": {
+    category: { ru: "OPS", en: "Ops" },
+    summary: {
+      ru: "Проверяет каталог backup: свежесть последнего файла и целостность последнего архива без восстановления.",
+      en: "Checks a backup directory for latest-file freshness and archive integrity without restore.",
+    },
+    checklist: {
+      ru: ["Укажите путь к backup", "Задайте допустимый возраст backup", "Используйте verify_latest для проверки целостности tar/gz/zip"],
+      en: ["Set the backup path", "Set the accepted backup age", "Use verify_latest for tar/gz/zip integrity checks"],
+    },
+  },
+  "ops/service_action": {
+    category: { ru: "OPS", en: "Ops" },
+    summary: {
+      ru: "Выполняет systemd action как структурированный шаг с preflight и verification.",
+      en: "Runs a systemd action as a structured step with preflight and verification.",
+    },
+    checklist: {
+      ru: ["Выберите сервер", "Укажите unit и action", "Поставьте approval перед нодой для изменений"],
+      en: ["Select a server", "Set unit and action", "Place approval before this node for mutations"],
+    },
+  },
+  "ops/docker_action": {
+    category: { ru: "OPS", en: "Ops" },
+    summary: {
+      ru: "Выполняет Docker action для контейнера и собирает inspect/logs после изменения.",
+      en: "Runs a Docker container action and collects inspect/logs after the change.",
+    },
+    checklist: {
+      ru: ["Выберите сервер", "Укажите контейнер или {container_name}", "Добавьте approval для restart/stop/start"],
+      en: ["Select a server", "Set the container or {container_name}", "Add approval for restart/stop/start"],
+    },
+  },
+  "ops/process_action": {
+    category: { ru: "OPS", en: "Ops" },
+    summary: {
+      ru: "Завершает процесс по PID; force kill должен использоваться только как break-glass действие.",
+      en: "Terminates a process by PID; force kill should be a break-glass action only.",
+    },
+    checklist: {
+      ru: ["Передайте PID явно или из контекста", "Используйте approval перед kill_force"],
+      en: ["Pass PID explicitly or from context", "Use approval before kill_force"],
+    },
+  },
+  "ops/http_check": {
+    category: { ru: "OPS", en: "Ops" },
+    summary: {
+      ru: "Проверяет HTTP endpoint по статусу и опциональному фрагменту body.",
+      en: "Checks an HTTP endpoint by status and optional body fragment.",
+    },
+    checklist: {
+      ru: ["Укажите URL", "Задайте ожидаемые статусы", "Добавьте body contains при необходимости"],
+      en: ["Set the URL", "Set expected statuses", "Add body contains if needed"],
+    },
+  },
+  "ops/alert_update": {
+    category: { ru: "OPS", en: "Ops" },
+    summary: {
+      ru: "Обновляет алерт мониторинга WebTerm, например закрывает его после успешной проверки.",
+      en: "Updates a WebTerm monitoring alert, for example resolving it after successful verification.",
+    },
+    checklist: {
+      ru: ["Передайте alert_id из monitoring trigger", "Подключайте после успешной проверки"],
+      en: ["Pass alert_id from a monitoring trigger", "Place it after successful verification"],
+    },
+  },
   "logic/condition": {
     category: { ru: "Логика", en: "Logic" },
     summary: {
@@ -248,8 +413,8 @@ export const NODE_TYPE_GUIDANCE_META: Record<string, NodeGuidanceMeta> = {
       en: "Human approval nodes pause the flow until an operator approves or rejects the action.",
     },
     checklist: {
-      ru: ["Настройте доставку через email или Telegram", "Задайте timeout", "Укажите base URL для approval-ссылок"],
-      en: ["Set email or Telegram delivery", "Set the timeout window", "Provide a reachable base URL for approval links"],
+      ru: ["Настройте email/Telegram или явно включите ручную ссылку", "Задайте timeout", "Укажите base URL для approval-ссылок"],
+      en: ["Set email/Telegram delivery or explicitly enable manual link mode", "Set the timeout window", "Provide a reachable base URL for approval links"],
     },
   },
   "logic/telegram_input": {
@@ -312,6 +477,7 @@ export const NODE_TYPE_GUIDANCE_META: Record<string, NodeGuidanceMeta> = {
 export const NODE_CATEGORY_LABELS: Record<string, LocalizedText> = {
   Triggers: { ru: "Триггеры", en: "Triggers" },
   Agents: { ru: "Агенты", en: "Agents" },
+  Ops: { ru: "OPS", en: "Ops" },
   Logic: { ru: "Логика", en: "Logic" },
   Output: { ru: "Выходы", en: "Output" },
   All: { ru: "Все", en: "All" },

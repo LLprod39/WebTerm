@@ -153,8 +153,8 @@ function renderServers(lang: "en" | "ru" = "en") {
 }
 
 function getActionsContainer() {
-  const sshButton = screen.getByRole("button", { name: "SSH" });
-  const actionsContainer = sshButton.parentElement?.parentElement;
+  const sshLink = screen.getByRole("link", { name: "SSH" });
+  const actionsContainer = sshLink.parentElement?.parentElement;
   if (!(actionsContainer instanceof HTMLElement)) {
     throw new Error("Unable to find server actions container");
   }
@@ -480,7 +480,7 @@ describe("Servers page rules and translations", () => {
     expect(screen.getByText(/Docker контейнеры: nginx-web/)).toBeInTheDocument();
     expect(screen.getByText("Повторяющиеся ручные привычки пока не выделены.")).toBeInTheDocument();
     expect(screen.queryByText(/Command used:/)).not.toBeInTheDocument();
-    expect(screen.getAllByText("Сводка").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Summary").length).toBeGreaterThan(0);
     expect(screen.queryByText("knowledge_note:501")).not.toBeInTheDocument();
   });
 

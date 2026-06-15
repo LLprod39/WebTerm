@@ -91,6 +91,10 @@ export function FileEditorModal({ serverId, open, initialPath, onClose }: FileEd
   const activeTab = tabs.find((tb) => tb.id === activeTabId) ?? null;
   const lineCount = useMemo(() => (activeTab ? activeTab.content.split("\n").length : 0), [activeTab]);
   const charCount = useMemo(() => (activeTab ? activeTab.content.length : 0), [activeTab]);
+  const tabCountLabel = useMemo(() => {
+    const suffix = tabs.length === 1 ? t("editor.tabSingular") : t("editor.tabPlural");
+    return `${tabs.length} ${suffix}`;
+  }, [tabs.length, t]);
 
   /* ---- drag title bar ---- */
   const onDragStart = useCallback((e: React.MouseEvent) => {
@@ -249,13 +253,26 @@ export function FileEditorModal({ serverId, open, initialPath, onClose }: FileEd
     return (
       <div
         className="fixed bottom-4 left-4 z-[60] flex h-10 items-center gap-2 rounded-lg border border-white/10 bg-[#161b22] px-3 shadow-xl cursor-pointer select-none"
-        onClick={() => setMode("normal")}
       >
-        <FileCode2 className="h-4 w-4 text-blue-400" />
-        <span className="text-xs font-medium text-zinc-300">{t("editor.title")}</span>
-        {tabs.some((tb) => tb.dirty) && <span className="h-2 w-2 rounded-full bg-blue-500" />}
-        <span className="text-[10px] text-zinc-500">{tabs.length} {tabs.length === 1 ? "tab" : "tabs"}</span>
-        <button type="button" onClick={(e) => { e.stopPropagation(); handleClose(); }} className="ml-1 rounded p-0.5 text-zinc-500 hover:text-zinc-200 hover:bg-white/10">
+        <button
+          type="button"
+          className="flex min-w-0 items-center gap-2 text-left"
+          onClick={() => setMode("normal")}
+          aria-label={t("editor.restoreWindow")}
+          title={t("editor.restoreWindow")}
+        >
+          <FileCode2 className="h-4 w-4 text-blue-400" />
+          <span className="text-xs font-medium text-zinc-300">{t("editor.title")}</span>
+          {tabs.some((tb) => tb.dirty) && <span className="h-2 w-2 rounded-full bg-blue-500" />}
+          <span className="text-[10px] text-zinc-500">{tabCountLabel}</span>
+        </button>
+        <button
+          type="button"
+          onClick={handleClose}
+          className="ml-1 rounded p-0.5 text-zinc-500 hover:text-zinc-200 hover:bg-white/10"
+          aria-label={t("editor.closeWindow")}
+          title={t("editor.closeWindow")}
+        >
           <X className="h-3 w-3" />
         </button>
       </div>
@@ -270,6 +287,9 @@ export function FileEditorModal({ serverId, open, initialPath, onClose }: FileEd
   return (
     <div
       ref={windowRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={t("editor.title")}
       className={cn(
         "z-[60] flex flex-col bg-[#0d1117] shadow-2xl border border-white/10",
         isMax ? "rounded-none" : "rounded-lg",
@@ -288,26 +308,26 @@ export function FileEditorModal({ serverId, open, initialPath, onClose }: FileEd
         {activeTab && <span className="text-[10px] text-zinc-500 truncate hidden sm:inline">— {activeTab.path}</span>}
 
         <div className="ml-auto flex items-center gap-0.5 shrink-0">
-          <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200" onClick={() => setShowOpen(true)} title={t("editor.open")}>
+          <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200" onClick={() => setShowOpen(true)} title={t("editor.open")} aria-label={t("editor.open")}>
             <FolderOpen className="h-3 w-3" />
           </Button>
-          <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200" onClick={() => activeTabId && void saveFile(activeTabId)} disabled={!activeTab?.dirty} title={t("editor.save")}>
+          <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200" onClick={() => activeTabId && void saveFile(activeTabId)} disabled={!activeTab?.dirty} title={t("editor.save")} aria-label={t("editor.save")}>
             <Save className="h-3 w-3" />
           </Button>
-          <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200" onClick={() => activeTabId && void reloadFile(activeTabId)} disabled={!activeTab || activeTab.isNew} title={t("editor.reload")}>
+          <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200" onClick={() => activeTabId && void reloadFile(activeTabId)} disabled={!activeTab || activeTab.isNew} title={t("editor.reload")} aria-label={t("editor.reload")}>
             <RefreshCw className="h-3 w-3" />
           </Button>
-          <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200" onClick={copyPath} disabled={!activeTab} title={t("editor.pathCopied")}>
+          <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200" onClick={copyPath} disabled={!activeTab} title={t("editor.copyPath")} aria-label={t("editor.copyPath")}>
             <Copy className="h-3 w-3" />
           </Button>
           <div className="mx-1 h-4 w-px bg-white/10" />
-          <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-zinc-400 hover:text-yellow-400" onClick={() => setMode("minimized")} title="Minimize">
+          <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-zinc-400 hover:text-yellow-400" onClick={() => setMode("minimized")} title={t("editor.minimize")} aria-label={t("editor.minimize")}>
             <Minus className="h-3 w-3" />
           </Button>
-          <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200" onClick={toggleMaximize} title={isMax ? "Restore" : "Maximize"}>
+          <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200" onClick={toggleMaximize} title={isMax ? t("editor.restoreWindow") : t("editor.maximize")} aria-label={isMax ? t("editor.restoreWindow") : t("editor.maximize")}>
             {isMax ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
           </Button>
-          <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-zinc-400 hover:text-red-400" onClick={handleClose} title="Close">
+          <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-zinc-400 hover:text-red-400" onClick={handleClose} title={t("editor.closeWindow")} aria-label={t("editor.closeWindow")}>
             <X className="h-3.5 w-3.5" />
           </Button>
         </div>
@@ -316,28 +336,36 @@ export function FileEditorModal({ serverId, open, initialPath, onClose }: FileEd
       {/* ---- tab bar ---- */}
       <div className="flex items-center gap-0.5 border-b border-white/5 bg-[#0d1117] px-2 py-0.5 overflow-x-auto">
         {tabs.map((tab) => (
-          <button
+          <div
             key={tab.id}
-            type="button"
-            onClick={() => { setActiveTabId(tab.id); setShowOpen(false); }}
             className={cn(
               "group flex items-center gap-1.5 rounded px-2 py-0.5 text-[11px] transition-colors shrink-0",
               activeTabId === tab.id ? "bg-[#161b22] text-zinc-200" : "text-zinc-500 hover:bg-white/5 hover:text-zinc-300",
             )}
           >
-            <FileCode2 className="h-3 w-3 shrink-0" />
-            <span className="max-w-28 truncate">{tab.filename}</span>
-            {tab.dirty && <span className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0" />}
+            <button
+              type="button"
+              onClick={() => { setActiveTabId(tab.id); setShowOpen(false); }}
+              className="flex min-w-0 items-center gap-1.5 text-left"
+              aria-label={tab.dirty ? `${t("editor.openTab")} ${tab.filename}, ${t("editor.modified")}` : `${t("editor.openTab")} ${tab.filename}`}
+              title={tab.path}
+            >
+              <FileCode2 className="h-3 w-3 shrink-0" />
+              <span className="max-w-28 truncate">{tab.filename}</span>
+              {tab.dirty && <span className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0" />}
+            </button>
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); closeTab(tab.id); }}
               className="ml-0.5 flex h-3.5 w-3.5 items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-white/10"
+              aria-label={`${t("editor.closeTab")} ${tab.filename}`}
+              title={t("editor.closeTab")}
             >
               <X className="h-2.5 w-2.5" />
             </button>
-          </button>
+          </div>
         ))}
-        <button type="button" onClick={() => setShowOpen(true)} className="ml-1 flex h-5 w-5 items-center justify-center rounded text-zinc-500 hover:bg-white/5 hover:text-zinc-300 shrink-0">
+        <button type="button" onClick={() => setShowOpen(true)} className="ml-1 flex h-5 w-5 items-center justify-center rounded text-zinc-500 hover:bg-white/5 hover:text-zinc-300 shrink-0" aria-label={t("editor.open")} title={t("editor.open")}>
           <Plus className="h-3 w-3" />
         </button>
       </div>
@@ -351,6 +379,7 @@ export function FileEditorModal({ serverId, open, initialPath, onClose }: FileEd
               value={openPath}
               onChange={(e) => setOpenPath(e.target.value)}
               placeholder={t("editor.pathPlaceholder")}
+              aria-label={t("editor.pathInput")}
               className="h-7 flex-1 border-zinc-700 bg-[#0d1117] font-mono text-[11px] text-zinc-200 placeholder:text-zinc-600"
               onKeyDown={(e) => { if (e.key === "Enter" && openPath.trim()) { e.preventDefault(); void openFile(openPath.trim()); } }}
               autoFocus

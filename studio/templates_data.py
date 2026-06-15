@@ -842,4 +842,1006 @@ PIPELINE_TEMPLATES = [
             {"id": "e3-5", "source": "n3", "target": "n5", "sourceHandle": "false"},
         ],
     },
+
+    # ------------------------------------------------------------------
+    # Pilot pack: universal OPS automation templates
+    # ------------------------------------------------------------------
+    {
+        "slug": "pilot-keycloak-access-change",
+        "name": "Pilot: Keycloak Access Change",
+        "description": "Preflight lookup, approval, Keycloak role/group change, verification and audit report through MCP.",
+        "icon": "IAM",
+        "category": "Pilot OPS",
+        "tags": ["pilot", "keycloak", "iam", "mcp", "approval"],
+        "nodes": [
+            {
+                "id": "manual",
+                "type": "trigger/manual",
+                "position": {"x": 120, "y": 80},
+                "data": {"label": "Start access request"},
+            },
+            {
+                "id": "preflight",
+                "type": "agent/mcp_call",
+                "position": {"x": 120, "y": 220},
+                "data": {
+                    "label": "Read current Keycloak access",
+                    "mcp_server_id": "",
+                    "mcp_server_name": "Keycloak Admin",
+                    "tool_name": "keycloak_lookup_subject_access",
+                    "arguments": {
+                        "realm": "{realm}",
+                        "username": "{username}",
+                        "group": "{group}",
+                        "role": "{role}",
+                    },
+                    "permission_mode": "READ_ONLY",
+                    "skill_slugs": ["keycloak-safety"],
+                    "on_failure": "abort",
+                },
+            },
+            {
+                "id": "risk_review",
+                "type": "agent/llm_query",
+                "position": {"x": 120, "y": 370},
+                "data": {
+                    "label": "Summarize access risk",
+                    "provider": "openai",
+                    "model": "gpt-5-mini",
+                    "system_prompt": "You are an IAM change reviewer. Do not approve changes yourself.",
+                    "prompt": (
+                        "Review the requested Keycloak access change and the current state.\n\n"
+                        "Requested target:\n"
+                        "- realm: {realm}\n"
+                        "- username: {username}\n"
+                        "- group: {group}\n"
+                        "- role: {role}\n\n"
+                        "Current access evidence:\n{preflight_output}\n\n"
+                        "Return: risk level, exact proposed MCP action, verification expectation and rollback note."
+                    ),
+                    "include_all_outputs": False,
+                },
+            },
+            {
+                "id": "approval",
+                "type": "logic/human_approval",
+                "position": {"x": 120, "y": 520},
+                "data": {
+                    "label": "Approve IAM mutation",
+                    "manual_link_only": True,
+                    "timeout_minutes": 120,
+                    "message": (
+                        "Keycloak access change requires approval.\n\n"
+                        "Risk review:\n{risk_review_output}\n\n"
+                        "Approve: {approve_url}\nReject: {reject_url}"
+                    ),
+                },
+            },
+            {
+                "id": "apply_change",
+                "type": "agent/mcp_call",
+                "position": {"x": 120, "y": 690},
+                "data": {
+                    "label": "Apply Keycloak access change",
+                    "mcp_server_id": "",
+                    "mcp_server_name": "Keycloak Admin",
+                    "tool_name": "keycloak_apply_access_change",
+                    "arguments": {
+                        "realm": "{realm}",
+                        "username": "{username}",
+                        "group": "{group}",
+                        "role": "{role}",
+                        "operation": "{operation}",
+                        "approval": "{approval_output}",
+                    },
+                    "permission_mode": "ASSISTED",
+                    "skill_slugs": ["keycloak-safety"],
+                    "on_failure": "abort",
+                },
+            },
+            {
+                "id": "verify_change",
+                "type": "agent/mcp_call",
+                "position": {"x": 120, "y": 850},
+                "data": {
+                    "label": "Verify effective access",
+                    "mcp_server_id": "",
+                    "mcp_server_name": "Keycloak Admin",
+                    "tool_name": "keycloak_lookup_subject_access",
+                    "arguments": {
+                        "realm": "{realm}",
+                        "username": "{username}",
+                        "group": "{group}",
+                        "role": "{role}",
+                    },
+                    "permission_mode": "READ_ONLY",
+                    "skill_slugs": ["keycloak-safety"],
+                    "on_failure": "continue",
+                },
+            },
+            {
+                "id": "report",
+                "type": "output/report",
+                "position": {"x": 120, "y": 1010},
+                "data": {
+                    "label": "IAM audit report",
+                    "template": (
+                        "# Keycloak access change report\n\n"
+                        "## Preflight\n{preflight_output}\n\n"
+                        "## Risk review\n{risk_review_output}\n\n"
+                        "## Approval\n{approval_output}\n\n"
+                        "## Change result\n{apply_change_output}\n\n"
+                        "## Verification\n{verify_change_output}"
+                    ),
+                },
+            },
+            {
+                "id": "rejected",
+                "type": "output/report",
+                "position": {"x": 520, "y": 690},
+                "data": {
+                    "label": "Access change rejected",
+                    "template": "# Keycloak access change rejected\n\n{approval_error}\n\n## Proposed change\n{risk_review_output}",
+                },
+            },
+            {
+                "id": "timed_out",
+                "type": "output/report",
+                "position": {"x": 520, "y": 850},
+                "data": {
+                    "label": "Access change timed out",
+                    "template": "# Keycloak access change timed out\n\nNo approval was received.\n\n## Proposed change\n{risk_review_output}",
+                },
+            },
+        ],
+        "edges": [
+            {"id": "e-manual-preflight", "source": "manual", "target": "preflight", "sourceHandle": "out", "animated": True},
+            {"id": "e-preflight-risk", "source": "preflight", "target": "risk_review", "sourceHandle": "success", "animated": True},
+            {"id": "e-risk-approval", "source": "risk_review", "target": "approval", "sourceHandle": "success", "animated": True},
+            {"id": "e-approval-apply", "source": "approval", "target": "apply_change", "sourceHandle": "approved", "label": "approved"},
+            {"id": "e-approval-rejected", "source": "approval", "target": "rejected", "sourceHandle": "rejected", "label": "rejected"},
+            {"id": "e-approval-timeout", "source": "approval", "target": "timed_out", "sourceHandle": "timeout", "label": "timeout"},
+            {"id": "e-apply-verify", "source": "apply_change", "target": "verify_change", "sourceHandle": "success", "animated": True},
+            {"id": "e-verify-report", "source": "verify_change", "target": "report", "sourceHandle": "out", "animated": True},
+        ],
+    },
+    {
+        "slug": "pilot-kubernetes-rollout",
+        "name": "Pilot: Kubernetes Diagnose And Rollout",
+        "description": "Read Kubernetes state through MCP, summarize risk, approve a rollout action, verify rollout status and report.",
+        "icon": "K8S",
+        "category": "Pilot OPS",
+        "tags": ["pilot", "kubernetes", "mcp", "rollout", "approval"],
+        "nodes": [
+            {"id": "manual", "type": "trigger/manual", "position": {"x": 120, "y": 80}, "data": {"label": "Start Kubernetes workflow"}},
+            {
+                "id": "inspect",
+                "type": "agent/mcp_call",
+                "position": {"x": 120, "y": 220},
+                "data": {
+                    "label": "Inspect workload",
+                    "mcp_server_id": "",
+                    "mcp_server_name": "Kubernetes MCP",
+                    "tool_name": "kubernetes_describe_workload",
+                    "arguments": {"cluster": "{cluster}", "namespace": "{namespace}", "kind": "{kind}", "name": "{workload_name}"},
+                    "permission_mode": "READ_ONLY",
+                    "on_failure": "abort",
+                },
+            },
+            {
+                "id": "plan",
+                "type": "agent/llm_query",
+                "position": {"x": 120, "y": 370},
+                "data": {
+                    "label": "Assess rollout risk",
+                    "provider": "openai",
+                    "model": "gpt-5-mini",
+                    "system_prompt": "You are a Kubernetes SRE reviewer. Prefer read-only diagnosis unless a human approves mutation.",
+                    "prompt": (
+                        "Inspect this Kubernetes evidence and decide if rollout restart is justified.\n\n"
+                        "{inspect_output}\n\n"
+                        "Return risk, blast radius, exact action, rollback/verification plan and operator checklist."
+                    ),
+                    "include_all_outputs": False,
+                },
+            },
+            {
+                "id": "approval",
+                "type": "logic/human_approval",
+                "position": {"x": 120, "y": 520},
+                "data": {
+                    "label": "Approve rollout action",
+                    "manual_link_only": True,
+                    "timeout_minutes": 60,
+                    "message": "Kubernetes rollout requires approval.\n\n{plan_output}\n\nApprove: {approve_url}\nReject: {reject_url}",
+                },
+            },
+            {
+                "id": "rollout",
+                "type": "agent/mcp_call",
+                "position": {"x": 120, "y": 690},
+                "data": {
+                    "label": "Run approved rollout",
+                    "mcp_server_id": "",
+                    "mcp_server_name": "Kubernetes MCP",
+                    "tool_name": "kubernetes_rollout_restart",
+                    "arguments": {"cluster": "{cluster}", "namespace": "{namespace}", "kind": "{kind}", "name": "{workload_name}"},
+                    "permission_mode": "ASSISTED",
+                    "on_failure": "abort",
+                },
+            },
+            {
+                "id": "verify",
+                "type": "agent/mcp_call",
+                "position": {"x": 120, "y": 850},
+                "data": {
+                    "label": "Verify rollout status",
+                    "mcp_server_id": "",
+                    "mcp_server_name": "Kubernetes MCP",
+                    "tool_name": "kubernetes_rollout_status",
+                    "arguments": {"cluster": "{cluster}", "namespace": "{namespace}", "kind": "{kind}", "name": "{workload_name}", "timeout_seconds": 300},
+                    "permission_mode": "READ_ONLY",
+                    "on_failure": "continue",
+                },
+            },
+            {
+                "id": "report",
+                "type": "output/report",
+                "position": {"x": 120, "y": 1010},
+                "data": {
+                    "label": "Kubernetes rollout report",
+                    "template": "# Kubernetes rollout report\n\n## Inspection\n{inspect_output}\n\n## Risk plan\n{plan_output}\n\n## Approval\n{approval_output}\n\n## Rollout\n{rollout_output}\n\n## Verification\n{verify_output}",
+                },
+            },
+            {"id": "rejected", "type": "output/report", "position": {"x": 520, "y": 690}, "data": {"label": "Rollout rejected", "template": "# Kubernetes rollout rejected\n\n{approval_error}\n\n## Proposed plan\n{plan_output}"}},
+            {"id": "timed_out", "type": "output/report", "position": {"x": 520, "y": 850}, "data": {"label": "Rollout approval timed out", "template": "# Kubernetes rollout timed out\n\nNo approval was received.\n\n## Proposed plan\n{plan_output}"}},
+        ],
+        "edges": [
+            {"id": "e-manual-inspect", "source": "manual", "target": "inspect", "sourceHandle": "out", "animated": True},
+            {"id": "e-inspect-plan", "source": "inspect", "target": "plan", "sourceHandle": "success", "animated": True},
+            {"id": "e-plan-approval", "source": "plan", "target": "approval", "sourceHandle": "success", "animated": True},
+            {"id": "e-approval-rollout", "source": "approval", "target": "rollout", "sourceHandle": "approved", "label": "approved"},
+            {"id": "e-approval-rejected", "source": "approval", "target": "rejected", "sourceHandle": "rejected", "label": "rejected"},
+            {"id": "e-approval-timeout", "source": "approval", "target": "timed_out", "sourceHandle": "timeout", "label": "timeout"},
+            {"id": "e-rollout-verify", "source": "rollout", "target": "verify", "sourceHandle": "success", "animated": True},
+            {"id": "e-verify-report", "source": "verify", "target": "report", "sourceHandle": "out", "animated": True},
+        ],
+    },
+    {
+        "slug": "pilot-gitlab-failed-pipeline-mr",
+        "name": "Pilot: GitLab Failed Pipeline To MR",
+        "description": "Webhook-driven failed pipeline triage, fix proposal, approval, MR creation and pipeline verification through MCP.",
+        "icon": "GL",
+        "category": "Pilot OPS",
+        "tags": ["pilot", "gitlab", "ci", "mcp", "approval"],
+        "nodes": [
+            {
+                "id": "webhook",
+                "type": "trigger/webhook",
+                "position": {"x": 120, "y": 80},
+                "data": {
+                    "label": "GitLab pipeline webhook",
+                    "webhook_payload_map": {
+                        "project_id": "project.id",
+                        "pipeline_id": "object_attributes.id",
+                        "branch": "object_attributes.ref",
+                        "commit_sha": "object_attributes.sha",
+                    },
+                },
+            },
+            {
+                "id": "inspect",
+                "type": "agent/mcp_call",
+                "position": {"x": 120, "y": 220},
+                "data": {
+                    "label": "Inspect failed pipeline",
+                    "mcp_server_id": "",
+                    "mcp_server_name": "GitLab MCP",
+                    "tool_name": "gitlab_get_pipeline_failure",
+                    "arguments": {"project_id": "{project_id}", "pipeline_id": "{pipeline_id}", "commit_sha": "{commit_sha}"},
+                    "permission_mode": "READ_ONLY",
+                    "on_failure": "abort",
+                },
+            },
+            {
+                "id": "proposal",
+                "type": "agent/llm_query",
+                "position": {"x": 120, "y": 370},
+                "data": {
+                    "label": "Propose fix path",
+                    "provider": "openai",
+                    "model": "gpt-5-mini",
+                    "system_prompt": "You are a CI/CD support engineer. Prefer PR/MR-first fixes and never push directly to protected branches.",
+                    "prompt": (
+                        "Analyze the failed GitLab pipeline evidence and produce a proposed MR plan.\n\n"
+                        "{inspect_output}\n\n"
+                        "Return suspected cause, files likely involved, test command, MR title/body and risk."
+                    ),
+                    "include_all_outputs": False,
+                },
+            },
+            {
+                "id": "approval",
+                "type": "logic/human_approval",
+                "position": {"x": 120, "y": 520},
+                "data": {
+                    "label": "Approve MR creation",
+                    "manual_link_only": True,
+                    "timeout_minutes": 120,
+                    "message": "GitLab MR creation requires approval.\n\n{proposal_output}\n\nApprove: {approve_url}\nReject: {reject_url}",
+                },
+            },
+            {
+                "id": "create_mr",
+                "type": "agent/mcp_call",
+                "position": {"x": 120, "y": 690},
+                "data": {
+                    "label": "Create GitLab MR",
+                    "mcp_server_id": "",
+                    "mcp_server_name": "GitLab MCP",
+                    "tool_name": "gitlab_create_fix_merge_request",
+                    "arguments": {
+                        "project_id": "{project_id}",
+                        "source_branch": "ops-fix/{pipeline_id}",
+                        "target_branch": "{branch}",
+                        "commit_sha": "{commit_sha}",
+                        "proposal": "{proposal_output}",
+                    },
+                    "permission_mode": "ASSISTED",
+                    "on_failure": "abort",
+                },
+            },
+            {
+                "id": "verify",
+                "type": "agent/mcp_call",
+                "position": {"x": 120, "y": 850},
+                "data": {
+                    "label": "Verify MR pipeline",
+                    "mcp_server_id": "",
+                    "mcp_server_name": "GitLab MCP",
+                    "tool_name": "gitlab_get_merge_request_pipeline",
+                    "arguments": {"project_id": "{project_id}", "merge_request": "{create_mr_output}"},
+                    "permission_mode": "READ_ONLY",
+                    "on_failure": "continue",
+                },
+            },
+            {
+                "id": "report",
+                "type": "output/report",
+                "position": {"x": 120, "y": 1010},
+                "data": {
+                    "label": "CI support report",
+                    "template": "# GitLab CI support report\n\n## Failure evidence\n{inspect_output}\n\n## Proposal\n{proposal_output}\n\n## Approval\n{approval_output}\n\n## MR result\n{create_mr_output}\n\n## Verification\n{verify_output}",
+                },
+            },
+            {"id": "rejected", "type": "output/report", "position": {"x": 520, "y": 690}, "data": {"label": "MR rejected", "template": "# GitLab MR rejected\n\n{approval_error}\n\n## Proposal\n{proposal_output}"}},
+            {"id": "timed_out", "type": "output/report", "position": {"x": 520, "y": 850}, "data": {"label": "MR approval timed out", "template": "# GitLab MR approval timed out\n\nNo approval was received.\n\n## Proposal\n{proposal_output}"}},
+        ],
+        "edges": [
+            {"id": "e-webhook-inspect", "source": "webhook", "target": "inspect", "sourceHandle": "out", "animated": True},
+            {"id": "e-inspect-proposal", "source": "inspect", "target": "proposal", "sourceHandle": "success", "animated": True},
+            {"id": "e-proposal-approval", "source": "proposal", "target": "approval", "sourceHandle": "success", "animated": True},
+            {"id": "e-approval-mr", "source": "approval", "target": "create_mr", "sourceHandle": "approved", "label": "approved"},
+            {"id": "e-approval-rejected", "source": "approval", "target": "rejected", "sourceHandle": "rejected", "label": "rejected"},
+            {"id": "e-approval-timeout", "source": "approval", "target": "timed_out", "sourceHandle": "timeout", "label": "timeout"},
+            {"id": "e-mr-verify", "source": "create_mr", "target": "verify", "sourceHandle": "success", "animated": True},
+            {"id": "e-verify-report", "source": "verify", "target": "report", "sourceHandle": "out", "animated": True},
+        ],
+    },
+    {
+        "slug": "pilot-database-diagnostics-maintenance",
+        "name": "Pilot: Database Diagnostics And Maintenance",
+        "description": "Read-only DB diagnostics, maintenance risk summary, approval, guarded DB MCP maintenance action and verification.",
+        "icon": "DB",
+        "category": "Pilot OPS",
+        "tags": ["pilot", "database", "mcp", "diagnostics", "approval"],
+        "nodes": [
+            {"id": "manual", "type": "trigger/manual", "position": {"x": 120, "y": 80}, "data": {"label": "Start DB diagnostics"}},
+            {
+                "id": "diagnose",
+                "type": "agent/mcp_call",
+                "position": {"x": 120, "y": 220},
+                "data": {
+                    "label": "Run read-only DB diagnostics",
+                    "mcp_server_id": "",
+                    "mcp_server_name": "Database MCP",
+                    "tool_name": "database_readonly_diagnostics",
+                    "arguments": {"database": "{database}", "schema": "{schema}", "checks": ["locks", "slow_queries", "replication", "capacity"]},
+                    "permission_mode": "READ_ONLY",
+                    "on_failure": "abort",
+                },
+            },
+            {
+                "id": "plan",
+                "type": "agent/llm_query",
+                "position": {"x": 120, "y": 370},
+                "data": {
+                    "label": "Prepare maintenance plan",
+                    "provider": "openai",
+                    "model": "gpt-5-mini",
+                    "system_prompt": "You are a database reliability reviewer. Never propose destructive maintenance without explicit break-glass.",
+                    "prompt": (
+                        "Review DB diagnostics and produce a safe maintenance plan.\n\n"
+                        "{diagnose_output}\n\n"
+                        "Classify risk, list read-only findings, propose only reversible/guarded actions, and define verification."
+                    ),
+                    "include_all_outputs": False,
+                },
+            },
+            {
+                "id": "approval",
+                "type": "logic/human_approval",
+                "position": {"x": 120, "y": 520},
+                "data": {
+                    "label": "Approve DB maintenance",
+                    "manual_link_only": True,
+                    "timeout_minutes": 120,
+                    "message": "Database maintenance requires approval.\n\n{plan_output}\n\nApprove: {approve_url}\nReject: {reject_url}",
+                },
+            },
+            {
+                "id": "maintenance",
+                "type": "agent/mcp_call",
+                "position": {"x": 120, "y": 690},
+                "data": {
+                    "label": "Apply guarded maintenance",
+                    "mcp_server_id": "",
+                    "mcp_server_name": "Database MCP",
+                    "tool_name": "database_apply_guarded_maintenance",
+                    "arguments": {"database": "{database}", "plan": "{plan_output}", "approval": "{approval_output}"},
+                    "permission_mode": "ASSISTED",
+                    "on_failure": "abort",
+                },
+            },
+            {
+                "id": "verify",
+                "type": "agent/mcp_call",
+                "position": {"x": 120, "y": 850},
+                "data": {
+                    "label": "Verify database health",
+                    "mcp_server_id": "",
+                    "mcp_server_name": "Database MCP",
+                    "tool_name": "database_verify_health",
+                    "arguments": {"database": "{database}", "checks": ["locks", "replication", "capacity"]},
+                    "permission_mode": "READ_ONLY",
+                    "on_failure": "continue",
+                },
+            },
+            {
+                "id": "report",
+                "type": "output/report",
+                "position": {"x": 120, "y": 1010},
+                "data": {
+                    "label": "DB maintenance report",
+                    "template": "# Database maintenance report\n\n## Diagnostics\n{diagnose_output}\n\n## Plan\n{plan_output}\n\n## Approval\n{approval_output}\n\n## Maintenance\n{maintenance_output}\n\n## Verification\n{verify_output}",
+                },
+            },
+            {"id": "rejected", "type": "output/report", "position": {"x": 520, "y": 690}, "data": {"label": "DB maintenance rejected", "template": "# Database maintenance rejected\n\n{approval_error}\n\n## Plan\n{plan_output}"}},
+            {"id": "timed_out", "type": "output/report", "position": {"x": 520, "y": 850}, "data": {"label": "DB approval timed out", "template": "# Database maintenance timed out\n\nNo approval was received.\n\n## Plan\n{plan_output}"}},
+        ],
+        "edges": [
+            {"id": "e-manual-diagnose", "source": "manual", "target": "diagnose", "sourceHandle": "out", "animated": True},
+            {"id": "e-diagnose-plan", "source": "diagnose", "target": "plan", "sourceHandle": "success", "animated": True},
+            {"id": "e-plan-approval", "source": "plan", "target": "approval", "sourceHandle": "success", "animated": True},
+            {"id": "e-approval-maintenance", "source": "approval", "target": "maintenance", "sourceHandle": "approved", "label": "approved"},
+            {"id": "e-approval-rejected", "source": "approval", "target": "rejected", "sourceHandle": "rejected", "label": "rejected"},
+            {"id": "e-approval-timeout", "source": "approval", "target": "timed_out", "sourceHandle": "timeout", "label": "timeout"},
+            {"id": "e-maintenance-verify", "source": "maintenance", "target": "verify", "sourceHandle": "success", "animated": True},
+            {"id": "e-verify-report", "source": "verify", "target": "report", "sourceHandle": "out", "animated": True},
+        ],
+    },
+    {
+        "slug": "pilot-observability-incident-response",
+        "name": "Pilot: Observability Incident Response",
+        "description": "Monitoring alert triage, observability evidence collection, risk summary, approval, incident ticket update and acknowledgement verification through MCP.",
+        "icon": "IR",
+        "category": "Pilot OPS",
+        "tags": ["pilot", "observability", "incident", "mcp", "approval"],
+        "nodes": [
+            {
+                "id": "monitoring",
+                "type": "trigger/monitoring",
+                "position": {"x": 120, "y": 80},
+                "data": {
+                    "label": "Monitoring alert trigger",
+                    "is_active": True,
+                    "monitoring_filters": {"severities": ["critical", "warning"], "alert_types": ["service", "slo", "error_rate"]},
+                },
+            },
+            {
+                "id": "alert_context",
+                "type": "agent/mcp_call",
+                "position": {"x": 120, "y": 220},
+                "data": {
+                    "label": "Read alert context",
+                    "mcp_server_id": "",
+                    "mcp_server_name": "Observability MCP",
+                    "tool_name": "observability_get_alert_context",
+                    "arguments": {
+                        "alert_id": "{alert_id}",
+                        "alert_source": "{alert_source}",
+                        "service": "{service_name}",
+                        "severity": "{alert_severity}",
+                        "time_range_minutes": 60,
+                    },
+                    "permission_mode": "READ_ONLY",
+                    "on_failure": "abort",
+                },
+            },
+            {
+                "id": "evidence",
+                "type": "agent/mcp_call",
+                "position": {"x": 120, "y": 370},
+                "data": {
+                    "label": "Query metrics and logs",
+                    "mcp_server_id": "",
+                    "mcp_server_name": "Observability MCP",
+                    "tool_name": "observability_query_metrics_logs",
+                    "arguments": {
+                        "service": "{service_name}",
+                        "query": "errors OR saturation OR latency OR failed requests",
+                        "time_range_minutes": 60,
+                    },
+                    "permission_mode": "READ_ONLY",
+                    "on_failure": "abort",
+                },
+            },
+            {
+                "id": "plan",
+                "type": "agent/llm_query",
+                "position": {"x": 120, "y": 520},
+                "data": {
+                    "label": "Summarize incident risk",
+                    "provider": "openai",
+                    "model": "gpt-5-mini",
+                    "system_prompt": "You are an incident commander. Use evidence first, avoid unapproved remediation and write concise operator-ready summaries.",
+                    "prompt": (
+                        "Review alert context and observability evidence.\n\n"
+                        "Alert context:\n{alert_context_output}\n\n"
+                        "Evidence:\n{evidence_output}\n\n"
+                        "Return severity, likely cause, blast radius, recommended operator action, escalation/ticket text and verification checklist."
+                    ),
+                    "include_all_outputs": False,
+                },
+            },
+            {
+                "id": "approval",
+                "type": "logic/human_approval",
+                "position": {"x": 120, "y": 690},
+                "data": {
+                    "label": "Approve incident update",
+                    "manual_link_only": True,
+                    "timeout_minutes": 30,
+                    "message": "Incident ticket/update requires approval.\n\n{plan_output}\n\nApprove: {approve_url}\nReject: {reject_url}",
+                },
+            },
+            {
+                "id": "ticket",
+                "type": "agent/mcp_call",
+                "position": {"x": 120, "y": 860},
+                "data": {
+                    "label": "Create or update incident ticket",
+                    "mcp_server_id": "",
+                    "mcp_server_name": "Observability MCP",
+                    "tool_name": "incident_create_or_update_ticket",
+                    "arguments": {
+                        "summary": "{plan_output}",
+                        "severity": "{alert_severity}",
+                        "evidence": "{evidence_output}",
+                        "approval": "{approval_output}",
+                    },
+                    "permission_mode": "ASSISTED",
+                    "on_failure": "abort",
+                },
+            },
+            {
+                "id": "verify",
+                "type": "agent/mcp_call",
+                "position": {"x": 120, "y": 1020},
+                "data": {
+                    "label": "Verify incident acknowledgement",
+                    "mcp_server_id": "",
+                    "mcp_server_name": "Observability MCP",
+                    "tool_name": "incident_verify_acknowledgement",
+                    "arguments": {"ticket_ref": "{ticket_output}"},
+                    "permission_mode": "READ_ONLY",
+                    "on_failure": "continue",
+                },
+            },
+            {
+                "id": "report",
+                "type": "output/report",
+                "position": {"x": 120, "y": 1180},
+                "data": {
+                    "label": "Incident response report",
+                    "template": "# Incident response report\n\n## Alert context\n{alert_context_output}\n\n## Evidence\n{evidence_output}\n\n## Plan\n{plan_output}\n\n## Approval\n{approval_output}\n\n## Ticket/update\n{ticket_output}\n\n## Verification\n{verify_output}",
+                },
+            },
+            {"id": "rejected", "type": "output/report", "position": {"x": 520, "y": 860}, "data": {"label": "Incident update rejected", "template": "# Incident update rejected\n\n{approval_error}\n\n## Proposed plan\n{plan_output}"}},
+            {"id": "timed_out", "type": "output/report", "position": {"x": 520, "y": 1020}, "data": {"label": "Incident approval timed out", "template": "# Incident approval timed out\n\nNo approval was received.\n\n## Proposed plan\n{plan_output}"}},
+        ],
+        "edges": [
+            {"id": "e-monitoring-context", "source": "monitoring", "target": "alert_context", "sourceHandle": "out", "animated": True},
+            {"id": "e-context-evidence", "source": "alert_context", "target": "evidence", "sourceHandle": "success", "animated": True},
+            {"id": "e-evidence-plan", "source": "evidence", "target": "plan", "sourceHandle": "success", "animated": True},
+            {"id": "e-plan-approval", "source": "plan", "target": "approval", "sourceHandle": "success", "animated": True},
+            {"id": "e-approval-ticket", "source": "approval", "target": "ticket", "sourceHandle": "approved", "label": "approved"},
+            {"id": "e-approval-rejected", "source": "approval", "target": "rejected", "sourceHandle": "rejected", "label": "rejected"},
+            {"id": "e-approval-timeout", "source": "approval", "target": "timed_out", "sourceHandle": "timeout", "label": "timeout"},
+            {"id": "e-ticket-verify", "source": "ticket", "target": "verify", "sourceHandle": "success", "animated": True},
+            {"id": "e-verify-report", "source": "verify", "target": "report", "sourceHandle": "out", "animated": True},
+        ],
+    },
+    {
+        "slug": "pilot-linux-package-maintenance",
+        "name": "Pilot: Linux Package Maintenance",
+        "description": "Check package update state, review risk, update explicit package list after approval, verify packages and report.",
+        "icon": "PKG",
+        "category": "Pilot OPS",
+        "tags": ["pilot", "linux", "packages", "maintenance", "approval"],
+        "nodes": [
+            {"id": "manual", "type": "trigger/manual", "position": {"x": 120, "y": 80}, "data": {"label": "Start package maintenance"}},
+            {
+                "id": "package_snapshot",
+                "type": "ops/server_snapshot",
+                "position": {"x": 120, "y": 220},
+                "data": {
+                    "label": "Read package state",
+                    "server_id": "",
+                    "sections": ["overview", "packages", "services", "disk"],
+                    "on_failure": "abort",
+                },
+            },
+            {
+                "id": "review",
+                "type": "agent/llm_query",
+                "position": {"x": 120, "y": 370},
+                "data": {
+                    "label": "Review package update risk",
+                    "provider": "openai",
+                    "model": "gpt-5-mini",
+                    "system_prompt": "You are a Linux maintenance reviewer. Require approval before package changes and avoid full system upgrades.",
+                    "prompt": (
+                        "Review package maintenance evidence and the explicit package request.\n\n"
+                        "Requested packages: {packages}\n\n"
+                        "Package/server state:\n{package_snapshot_output}\n\n"
+                        "Return risk, service impact, exact package action, rollback note and post-update verification checklist."
+                    ),
+                    "include_all_outputs": False,
+                },
+            },
+            {
+                "id": "approval",
+                "type": "logic/human_approval",
+                "position": {"x": 120, "y": 520},
+                "data": {
+                    "label": "Approve package update",
+                    "manual_link_only": True,
+                    "timeout_minutes": 120,
+                    "message": "Linux package update requires approval.\n\n{review_output}\n\nApprove: {approve_url}\nReject: {reject_url}",
+                },
+            },
+            {
+                "id": "apply_updates",
+                "type": "ops/package_action",
+                "position": {"x": 120, "y": 690},
+                "data": {
+                    "label": "Update explicit packages",
+                    "server_id": "",
+                    "action": "update",
+                    "packages": "{packages}",
+                    "verify": True,
+                    "on_failure": "abort",
+                },
+            },
+            {
+                "id": "verify_packages",
+                "type": "ops/package_action",
+                "position": {"x": 120, "y": 850},
+                "data": {
+                    "label": "Verify package state",
+                    "server_id": "",
+                    "action": "list_updates",
+                    "verify": False,
+                    "on_failure": "continue",
+                },
+            },
+            {
+                "id": "report",
+                "type": "output/report",
+                "position": {"x": 120, "y": 1010},
+                "data": {
+                    "label": "Package maintenance report",
+                    "template": "# Linux package maintenance report\n\n## Package state\n{package_snapshot_output}\n\n## Review\n{review_output}\n\n## Approval\n{approval_output}\n\n## Update\n{apply_updates_output}\n\n## Verification\n{verify_packages_output}",
+                },
+            },
+            {"id": "rejected", "type": "output/report", "position": {"x": 520, "y": 690}, "data": {"label": "Package update rejected", "template": "# Package update rejected\n\n{approval_error}\n\n## Review\n{review_output}"}},
+            {"id": "timed_out", "type": "output/report", "position": {"x": 520, "y": 850}, "data": {"label": "Package update timed out", "template": "# Package update timed out\n\nNo approval was received.\n\n## Review\n{review_output}"}},
+        ],
+        "edges": [
+            {"id": "e-manual-snapshot", "source": "manual", "target": "package_snapshot", "sourceHandle": "out", "animated": True},
+            {"id": "e-snapshot-review", "source": "package_snapshot", "target": "review", "sourceHandle": "success", "animated": True},
+            {"id": "e-review-approval", "source": "review", "target": "approval", "sourceHandle": "success", "animated": True},
+            {"id": "e-approval-update", "source": "approval", "target": "apply_updates", "sourceHandle": "approved", "label": "approved"},
+            {"id": "e-approval-rejected", "source": "approval", "target": "rejected", "sourceHandle": "rejected", "label": "rejected"},
+            {"id": "e-approval-timeout", "source": "approval", "target": "timed_out", "sourceHandle": "timeout", "label": "timeout"},
+            {"id": "e-update-verify", "source": "apply_updates", "target": "verify_packages", "sourceHandle": "success", "animated": True},
+            {"id": "e-verify-report", "source": "verify_packages", "target": "report", "sourceHandle": "out", "animated": True},
+        ],
+    },
+    {
+        "slug": "pilot-linux-disk-cleanup",
+        "name": "Pilot: Linux Disk Cleanup",
+        "description": "Inspect disk pressure, review cleanup risk, approve bounded tmp cleanup, verify disk state and report.",
+        "icon": "DSK",
+        "category": "Pilot OPS",
+        "tags": ["pilot", "linux", "disk", "cleanup", "approval"],
+        "nodes": [
+            {"id": "manual", "type": "trigger/manual", "position": {"x": 120, "y": 80}, "data": {"label": "Start disk cleanup"}},
+            {
+                "id": "inspect_disk",
+                "type": "ops/disk_cleanup",
+                "position": {"x": 120, "y": 220},
+                "data": {
+                    "label": "Inspect disk usage",
+                    "server_id": "",
+                    "action": "inspect",
+                    "dry_run": True,
+                    "on_failure": "abort",
+                },
+            },
+            {
+                "id": "review",
+                "type": "agent/llm_query",
+                "position": {"x": 120, "y": 370},
+                "data": {
+                    "label": "Review cleanup risk",
+                    "provider": "openai",
+                    "model": "gpt-5-mini",
+                    "system_prompt": "You are a Linux operations reviewer. Prefer bounded cleanup and never delete arbitrary paths.",
+                    "prompt": (
+                        "Review disk pressure and cleanup candidates.\n\n"
+                        "{inspect_disk_output}\n\n"
+                        "Return risk level, expected reclaimed areas, services that might be affected, exact cleanup action and verification plan."
+                    ),
+                    "include_all_outputs": False,
+                },
+            },
+            {
+                "id": "approval",
+                "type": "logic/human_approval",
+                "position": {"x": 120, "y": 520},
+                "data": {
+                    "label": "Approve disk cleanup",
+                    "manual_link_only": True,
+                    "timeout_minutes": 60,
+                    "message": "Disk cleanup requires approval.\n\n{review_output}\n\nApprove: {approve_url}\nReject: {reject_url}",
+                },
+            },
+            {
+                "id": "cleanup",
+                "type": "ops/disk_cleanup",
+                "position": {"x": 120, "y": 690},
+                "data": {
+                    "label": "Cleanup old tmp files",
+                    "server_id": "",
+                    "action": "tmp_cleanup",
+                    "dry_run": False,
+                    "verify": True,
+                    "min_age_days": 7,
+                    "max_entries": 50,
+                    "on_failure": "abort",
+                },
+            },
+            {
+                "id": "verify_disk",
+                "type": "ops/disk_cleanup",
+                "position": {"x": 120, "y": 850},
+                "data": {
+                    "label": "Verify disk state",
+                    "server_id": "",
+                    "action": "inspect",
+                    "dry_run": True,
+                    "on_failure": "continue",
+                },
+            },
+            {
+                "id": "report",
+                "type": "output/report",
+                "position": {"x": 120, "y": 1010},
+                "data": {
+                    "label": "Disk cleanup report",
+                    "template": "# Linux disk cleanup report\n\n## Before\n{inspect_disk_output}\n\n## Review\n{review_output}\n\n## Approval\n{approval_output}\n\n## Cleanup\n{cleanup_output}\n\n## Verification\n{verify_disk_output}",
+                },
+            },
+            {"id": "rejected", "type": "output/report", "position": {"x": 520, "y": 690}, "data": {"label": "Disk cleanup rejected", "template": "# Disk cleanup rejected\n\n{approval_error}\n\n## Review\n{review_output}"}},
+            {"id": "timed_out", "type": "output/report", "position": {"x": 520, "y": 850}, "data": {"label": "Disk cleanup timed out", "template": "# Disk cleanup timed out\n\nNo approval was received.\n\n## Review\n{review_output}"}},
+        ],
+        "edges": [
+            {"id": "e-manual-inspect", "source": "manual", "target": "inspect_disk", "sourceHandle": "out", "animated": True},
+            {"id": "e-inspect-review", "source": "inspect_disk", "target": "review", "sourceHandle": "success", "animated": True},
+            {"id": "e-review-approval", "source": "review", "target": "approval", "sourceHandle": "success", "animated": True},
+            {"id": "e-approval-cleanup", "source": "approval", "target": "cleanup", "sourceHandle": "approved", "label": "approved"},
+            {"id": "e-approval-rejected", "source": "approval", "target": "rejected", "sourceHandle": "rejected", "label": "rejected"},
+            {"id": "e-approval-timeout", "source": "approval", "target": "timed_out", "sourceHandle": "timeout", "label": "timeout"},
+            {"id": "e-cleanup-verify", "source": "cleanup", "target": "verify_disk", "sourceHandle": "success", "animated": True},
+            {"id": "e-verify-report", "source": "verify_disk", "target": "report", "sourceHandle": "out", "animated": True},
+        ],
+    },
+    {
+        "slug": "pilot-backup-restore-check",
+        "name": "Pilot: Backup Restore Check",
+        "description": "Read-only backup freshness and latest archive integrity check, with AI review and report.",
+        "icon": "BKP",
+        "category": "Pilot OPS",
+        "tags": ["pilot", "linux", "backup", "restore", "read-only"],
+        "nodes": [
+            {"id": "manual", "type": "trigger/manual", "position": {"x": 120, "y": 80}, "data": {"label": "Start backup check"}},
+            {
+                "id": "inspect_backup",
+                "type": "ops/backup_restore_check",
+                "position": {"x": 120, "y": 220},
+                "data": {
+                    "label": "Inspect backup directory",
+                    "server_id": "",
+                    "action": "inspect",
+                    "path": "{backup_path}",
+                    "max_depth": 2,
+                    "max_files": 20,
+                    "max_age_hours": 24,
+                    "on_failure": "abort",
+                },
+            },
+            {
+                "id": "verify_latest",
+                "type": "ops/backup_restore_check",
+                "position": {"x": 120, "y": 370},
+                "data": {
+                    "label": "Verify latest backup archive",
+                    "server_id": "",
+                    "action": "verify_latest",
+                    "path": "{backup_path}",
+                    "max_depth": 2,
+                    "max_files": 20,
+                    "max_age_hours": 24,
+                    "on_failure": "continue",
+                },
+            },
+            {
+                "id": "review",
+                "type": "agent/llm_query",
+                "position": {"x": 120, "y": 520},
+                "data": {
+                    "label": "Review backup readiness",
+                    "provider": "openai",
+                    "model": "gpt-5-mini",
+                    "system_prompt": "You are a backup reliability reviewer. Do not claim restore succeeded unless restore evidence exists.",
+                    "prompt": (
+                        "Review backup freshness and latest archive verification.\n\n"
+                        "Backup path: {backup_path}\n"
+                        "Accepted age hours: 24\n\n"
+                        "Inspection:\n{inspect_backup_output}\n\n"
+                        "Verification:\n{verify_latest_output}\n\n"
+                        "Return readiness, stale/missing risks, restore confidence, and next manual restore drill recommendation."
+                    ),
+                    "include_all_outputs": False,
+                },
+            },
+            {
+                "id": "report",
+                "type": "output/report",
+                "position": {"x": 120, "y": 690},
+                "data": {
+                    "label": "Backup check report",
+                    "template": "# Backup restore check report\n\n## Inspection\n{inspect_backup_output}\n\n## Archive verification\n{verify_latest_output}\n\n## Review\n{review_output}",
+                },
+            },
+        ],
+        "edges": [
+            {"id": "e-manual-inspect", "source": "manual", "target": "inspect_backup", "sourceHandle": "out", "animated": True},
+            {"id": "e-inspect-verify", "source": "inspect_backup", "target": "verify_latest", "sourceHandle": "success", "animated": True},
+            {"id": "e-verify-review", "source": "verify_latest", "target": "review", "sourceHandle": "out", "animated": True},
+            {"id": "e-review-report", "source": "review", "target": "report", "sourceHandle": "success", "animated": True},
+        ],
+    },
+    {
+        "slug": "pilot-service-config-validate-restart",
+        "name": "Pilot: Service Config Validate And Restart",
+        "description": "Collect service evidence, review config risk, approve restart, run structured service action, verify HTTP health and report.",
+        "icon": "SVC",
+        "category": "Pilot OPS",
+        "tags": ["pilot", "linux", "service", "restart", "approval"],
+        "nodes": [
+            {"id": "manual", "type": "trigger/manual", "position": {"x": 120, "y": 80}, "data": {"label": "Start service maintenance"}},
+            {
+                "id": "snapshot",
+                "type": "ops/server_snapshot",
+                "position": {"x": 120, "y": 220},
+                "data": {
+                    "label": "Collect service snapshot",
+                    "server_id": "",
+                    "sections": ["overview", "services", "logs", "disk", "network"],
+                    "on_failure": "abort",
+                },
+            },
+            {
+                "id": "review",
+                "type": "agent/llm_query",
+                "position": {"x": 120, "y": 370},
+                "data": {
+                    "label": "Review restart risk",
+                    "provider": "openai",
+                    "model": "gpt-5-mini",
+                    "system_prompt": "You are a Linux service operations reviewer. Require approval before restart/reload.",
+                    "prompt": (
+                        "Review the service snapshot for service '{service_name}'.\n\n"
+                        "{snapshot_output}\n\n"
+                        "Return config/risk notes, expected impact, restart command, verification URL and rollback note."
+                    ),
+                    "include_all_outputs": False,
+                },
+            },
+            {
+                "id": "approval",
+                "type": "logic/human_approval",
+                "position": {"x": 120, "y": 520},
+                "data": {
+                    "label": "Approve service restart",
+                    "manual_link_only": True,
+                    "timeout_minutes": 60,
+                    "message": "Service restart requires approval.\n\n{review_output}\n\nApprove: {approve_url}\nReject: {reject_url}",
+                },
+            },
+            {
+                "id": "restart",
+                "type": "ops/service_action",
+                "position": {"x": 120, "y": 690},
+                "data": {
+                    "label": "Restart service",
+                    "server_id": "",
+                    "service": "{service_name}",
+                    "action": "restart",
+                    "preflight_commands": ["systemctl is-active {service_name} || true"],
+                    "verification_commands": ["systemctl is-active {service_name}"],
+                    "on_failure": "abort",
+                },
+            },
+            {
+                "id": "http_check",
+                "type": "ops/http_check",
+                "position": {"x": 120, "y": 850},
+                "data": {
+                    "label": "Verify HTTP health",
+                    "url": "{healthcheck_url}",
+                    "method": "GET",
+                    "expected_status": [200, 204],
+                    "retries": 5,
+                    "timeout_seconds": 5,
+                    "body_contains": "",
+                    "on_failure": "continue",
+                },
+            },
+            {
+                "id": "report",
+                "type": "output/report",
+                "position": {"x": 120, "y": 1010},
+                "data": {
+                    "label": "Service maintenance report",
+                    "template": "# Service maintenance report\n\n## Snapshot\n{snapshot_output}\n\n## Review\n{review_output}\n\n## Approval\n{approval_output}\n\n## Restart\n{restart_output}\n\n## HTTP check\n{http_check_output}",
+                },
+            },
+            {"id": "rejected", "type": "output/report", "position": {"x": 520, "y": 690}, "data": {"label": "Service restart rejected", "template": "# Service restart rejected\n\n{approval_error}\n\n## Review\n{review_output}"}},
+            {"id": "timed_out", "type": "output/report", "position": {"x": 520, "y": 850}, "data": {"label": "Service restart timed out", "template": "# Service restart timed out\n\nNo approval was received.\n\n## Review\n{review_output}"}},
+        ],
+        "edges": [
+            {"id": "e-manual-snapshot", "source": "manual", "target": "snapshot", "sourceHandle": "out", "animated": True},
+            {"id": "e-snapshot-review", "source": "snapshot", "target": "review", "sourceHandle": "success", "animated": True},
+            {"id": "e-review-approval", "source": "review", "target": "approval", "sourceHandle": "success", "animated": True},
+            {"id": "e-approval-restart", "source": "approval", "target": "restart", "sourceHandle": "approved", "label": "approved"},
+            {"id": "e-approval-rejected", "source": "approval", "target": "rejected", "sourceHandle": "rejected", "label": "rejected"},
+            {"id": "e-approval-timeout", "source": "approval", "target": "timed_out", "sourceHandle": "timeout", "label": "timeout"},
+            {"id": "e-restart-http", "source": "restart", "target": "http_check", "sourceHandle": "success", "animated": True},
+            {"id": "e-http-report", "source": "http_check", "target": "report", "sourceHandle": "out", "animated": True},
+        ],
+    },
 ]

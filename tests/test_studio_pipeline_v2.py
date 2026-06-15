@@ -6,6 +6,7 @@ import pytest
 from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
 from django.test import Client
+from django.utils import timezone
 
 from core_ui.models import UserAppPermission
 from studio.keycloak_provisioning import (
@@ -431,6 +432,35 @@ def test_validation_allows_merge_with_single_remaining_input():
 
 
 @pytest.mark.django_db
+def test_validation_rejects_invalid_output_webhook_options():
+    user = User.objects.create_user(username="webhook-validation-user", password="x")
+
+    errors = validate_pipeline_definition(
+        nodes=[
+            {"id": "manual", "type": "trigger/manual", "position": {"x": 0, "y": 0}, "data": {}},
+            {
+                "id": "notify",
+                "type": "output/webhook",
+                "position": {"x": 120, "y": 0},
+                "data": {
+                    "url": "https://example.test/hook",
+                    "timeout_seconds": 0,
+                    "headers": ["X-Bad"],
+                    "extra_payload": "not-json-object",
+                },
+            },
+        ],
+        edges=[{"id": "e1", "source": "manual", "target": "notify", "sourceHandle": "out"}],
+        owner=user,
+        graph_version=2,
+    )
+
+    assert any("field 'timeout_seconds' must be between 1 and 120" in error for error in errors)
+    assert any("field 'headers' must be a JSON object" in error for error in errors)
+    assert any("field 'extra_payload' must be a JSON object" in error for error in errors)
+
+
+@pytest.mark.django_db
 def test_api_run_approve_resolves_normalized_node_id_and_sends_telegram_confirmation(monkeypatch):
     user = User.objects.create_user(username="approval-link-user", password="x")
     pipeline = Pipeline.objects.create(
@@ -514,6 +544,79 @@ def test_manual_run_auto_selects_only_manual_trigger(monkeypatch):
     assert payload["entry_node_id"] == "manual"
     assert payload["trigger_type"] == "manual"
     assert payload["trigger_id"] is not None
+
+
+@pytest.mark.django_db
+def test_manual_run_validate_only_does_not_create_or_launch_run(monkeypatch):
+    user = User.objects.create_user(username="manual-validate-user", password="x")
+    _grant_feature(user, "studio", "studio_pipelines", "studio_runs")
+    client = Client()
+    client.force_login(user)
+    launch_calls: list[int] = []
+    monkeypatch.setattr("studio.views._launch_pipeline_run_async", lambda run: launch_calls.append(run.id))
+
+    pipeline = Pipeline.objects.create(
+        name="Manual validate flow",
+        owner=user,
+        nodes=[
+            {"id": "manual", "type": "trigger/manual", "position": {"x": 0, "y": 0}, "data": {"label": "Manual"}},
+            _report_node("report"),
+        ],
+        edges=[{"id": "e1", "source": "manual", "target": "report", "sourceHandle": "out"}],
+    )
+    pipeline.sync_triggers_from_nodes()
+
+    response = client.post(
+        f"/api/studio/pipelines/{pipeline.id}/run/",
+        data=_json({"context": {"ticket": "INC-1"}, "validate_only": True}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["validation"] == {"ok": True, "errors": []}
+    assert payload["dry_run"]["executed"] is False
+    assert payload["dry_run"]["mode"] == "validate_only"
+    assert payload["entry_node_id"] == "manual"
+    assert payload["would_create_run"] is False
+    assert launch_calls == []
+    assert PipelineRun.objects.filter(pipeline=pipeline).count() == 0
+
+
+@pytest.mark.django_db
+def test_manual_run_validate_only_reports_graph_errors_without_launch(monkeypatch):
+    user = User.objects.create_user(username="manual-validate-errors-user", password="x")
+    _grant_feature(user, "studio", "studio_pipelines", "studio_runs")
+    client = Client()
+    client.force_login(user)
+    monkeypatch.setattr("studio.views._launch_pipeline_run_async", lambda _run: pytest.fail("validate_only must not launch"))
+
+    pipeline = Pipeline.objects.create(
+        name="Legacy validate flow",
+        owner=user,
+        graph_version=1,
+        nodes=[
+            {"id": "manual", "type": "trigger/manual", "position": {"x": 0, "y": 0}, "data": {"label": "Manual"}},
+            _report_node("report"),
+        ],
+        edges=[{"id": "e1", "source": "manual", "target": "report", "sourceHandle": "out"}],
+    )
+    pipeline.sync_triggers_from_nodes()
+
+    response = client.post(
+        f"/api/studio/pipelines/{pipeline.id}/run/",
+        data=_json({"context": {}, "dry_run": True}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is False
+    assert payload["validation"]["ok"] is False
+    assert any("graph_version=1" in error for error in payload["validation"]["errors"])
+    assert payload["dry_run"]["executed"] is False
+    assert PipelineRun.objects.filter(pipeline=pipeline).count() == 0
 
 
 @pytest.mark.django_db
@@ -631,6 +734,53 @@ def test_schedule_runner_stores_entry_node_id(monkeypatch):
     run = PipelineRun.objects.get(trigger=trigger)
     assert run.entry_node_id == "schedule"
     assert run.trigger_data["source"] == "schedule"
+
+
+@pytest.mark.django_db
+def test_schedule_runner_fires_with_fallback_cron_without_croniter(monkeypatch):
+    user = User.objects.create_user(username="schedule-fallback-user", password="x")
+    pipeline = Pipeline.objects.create(
+        name="Fallback schedule flow",
+        owner=user,
+        nodes=[
+            {"id": "schedule", "type": "trigger/schedule", "position": {"x": 0, "y": 0}, "data": {"label": "Schedule", "cron_expression": "* * * * *"}},
+            _report_node("report"),
+        ],
+        edges=[{"id": "e1", "source": "schedule", "target": "report", "sourceHandle": "out"}],
+    )
+    pipeline.sync_triggers_from_nodes()
+    trigger = pipeline.triggers.get(trigger_type="schedule")
+    now = timezone.now().replace(second=30, microsecond=0)
+
+    monkeypatch.setattr("studio.cron_schedule.croniter", None)
+    monkeypatch.setattr("studio.management.commands.run_scheduled_pipelines.timezone.now", lambda: now)
+    monkeypatch.setattr("studio.trigger_dispatch.launch_pipeline_run_async", lambda _run: None)
+
+    RunScheduledPipelinesCommand()._tick(interval_seconds=60)
+
+    run = PipelineRun.objects.get(trigger=trigger)
+    trigger.refresh_from_db()
+    assert run.entry_node_id == "schedule"
+    assert run.trigger_data == {"source": "schedule", "cron": "* * * * *"}
+    assert trigger.last_triggered_at is not None
+
+
+@pytest.mark.django_db
+def test_schedule_validation_rejects_invalid_fallback_cron_without_croniter(monkeypatch):
+    user = User.objects.create_user(username="schedule-validation-fallback-user", password="x")
+    monkeypatch.setattr("studio.cron_schedule.croniter", None)
+
+    errors = validate_pipeline_definition(
+        nodes=[
+            {"id": "schedule", "type": "trigger/schedule", "position": {"x": 0, "y": 0}, "data": {"cron_expression": "*/0 * * * *"}},
+            _report_node("report"),
+        ],
+        edges=[{"id": "e1", "source": "schedule", "target": "report", "sourceHandle": "out"}],
+        owner=user,
+        graph_version=2,
+    )
+
+    assert any("invalid cron expression" in error for error in errors)
 
 
 @pytest.mark.django_db

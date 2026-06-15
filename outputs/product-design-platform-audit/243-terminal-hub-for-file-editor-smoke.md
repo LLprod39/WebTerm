@@ -1,0 +1,439 @@
+- generic [ref=e2] [box=0,0,1249,1221]:
+  - region "Notifications (F8)" [box=0,0,1249,0]:
+    - list [box=829,1189,420,32]
+  - region "Notifications alt+T" [box=0,0,1249,0]
+  - generic [ref=e60] [box=0,0,1249,1221]:
+    - generic [ref=e64] [box=0,0,255,1221]:
+      - generic [ref=e65] [box=0,0,255,64]:
+        - button "Свернуть меню" [ref=e66] [cursor=pointer] [box=12,12,40,40]:
+          - img [ref=e67] [box=24,24,16,16]
+        - generic [ref=e70] [box=64,13,116,37]:
+          - generic [ref=e71] [box=64,13,116,20]: WebTermAI
+          - generic [ref=e72] [box=64,33,116,17]: Платформа операций
+      - generic [ref=e73] [box=0,64,255,1033]:
+        - generic [ref=e74] [box=12,80,231,241]:
+          - generic [ref=e75] [box=20,88,215,17]: Рабочее пространство
+          - list [ref=e77] [box=20,113,215,200]:
+            - listitem [ref=e78] [box=20,113,215,44]:
+              - link "Панель" [ref=e79] [cursor=pointer] [box=20,113,215,44]:
+                - /url: /dashboard
+                - img [ref=e80] [box=32,127,16,16]
+                - generic [ref=e85] [box=58,125,51,20]: Панель
+            - listitem [ref=e86] [box=20,165,215,44]:
+              - link "Серверы" [ref=e87] [cursor=pointer] [box=20,165,215,44]:
+                - /url: /servers
+                - img [ref=e88] [box=32,179,16,16]
+                - generic [ref=e91] [box=58,177,63,20]: Серверы
+            - listitem [ref=e92] [box=20,217,215,44]:
+              - link "Агенты" [ref=e93] [cursor=pointer] [box=20,217,215,44]:
+                - /url: /agents
+                - img [ref=e94] [box=32,231,16,16]
+                - generic [ref=e97] [box=58,229,49,20]: Агенты
+            - listitem [ref=e98] [box=20,269,215,44]:
+              - link "Студия" [ref=e99] [cursor=pointer] [box=20,269,215,44]:
+                - /url: /studio
+                - img [ref=e100] [box=32,283,16,16]
+                - generic [ref=e104] [box=58,281,49,20]: Студия
+        - generic [ref=e105] [box=12,345,231,85]:
+          - generic [ref=e106] [box=20,353,215,17]: Управление
+          - list [ref=e108] [box=20,377,215,44]:
+            - listitem [ref=e109] [box=20,377,215,44]:
+              - link "Настройки" [ref=e110] [cursor=pointer] [box=20,377,215,44]:
+                - /url: /settings
+                - img [ref=e111] [box=32,391,16,16]
+                - generic [ref=e114] [box=58,389,74,20]: Настройки
+      - generic [ref=e115] [box=0,1097,255,124]:
+        - generic [ref=e116] [box=12,1110,231,46]:
+          - button "EN" [ref=e117] [cursor=pointer] [box=17,1115,109,36]
+          - button "RU" [pressed] [ref=e118] [cursor=pointer] [box=130,1115,109,36]
+        - generic [ref=e119] [box=12,1172,231,37]:
+          - generic [ref=e120] [box=12,1173,36,36]: L
+          - generic [ref=e121] [box=58,1172,139,37]:
+            - paragraph [ref=e122] [box=58,1172,139,20]: lunix
+            - paragraph [ref=e123] [box=58,1194,139,15]:
+              - img [ref=e124] [box=58,1197,10,10]
+              - text: Администратор
+          - button "Выйти" [ref=e127] [cursor=pointer] [box=207,1173,36,36]:
+            - img [ref=e128] [box=218,1184,14,14]
+    - main [ref=e132] [box=256,0,993,1221]:
+      - generic [ref=e136] [box=256,0,993,1221]:
+        - generic [ref=e138] [box=268,8,969,50]:
+          - link "Назад" [ref=e139] [cursor=pointer] [box=268,13,90,40]:
+            - /url: /servers
+            - img [ref=e140] [box=280,25,16,16]
+            - text: Назад
+          - generic [ref=e142] [box=366,13,254,40]:
+            - generic "Онлайн" [ref=e143] [box=379,29,8,8]
+            - generic [ref=e147] [box=395,23,79,20]: api-prod-01
+            - generic [ref=e148] [box=481,25,125,17]: lunix@172.25.173.251:22
+          - generic [ref=e150] [box=628,8,310,50]:
+            - button "api-prod-01" [ref=e152] [cursor=pointer] [box=634,14,118,38]:
+              - generic "Онлайн" [ref=e153] [box=646,29,8,8]
+              - generic [ref=e157] [box=662,23,78,20]: api-prod-01
+            - button "Подключить сервер" [ref=e158] [cursor=pointer] [box=757,13,102,40]:
+              - img [ref=e159] [box=770,25,16,16]
+              - text: Сервер
+          - generic [ref=e160] [box=946,8,291,50]:
+            - button "SFTP" [ref=e161] [cursor=pointer] [box=951,13,83,40]:
+              - img [box=963,25,16,16]
+              - text: SFTP
+            - button "Linux" [ref=e162] [cursor=pointer] [box=1038,13,84,40]:
+              - img [box=1050,25,16,16]
+              - text: Linux
+            - button "AI" [ref=e163] [cursor=pointer] [box=1126,13,62,40]:
+              - img [box=1138,25,16,16]
+              - text: AI
+            - button "Настройки" [ref=e164] [cursor=pointer] [box=1192,13,40,40]:
+              - img [box=1204,25,16,16]
+        - generic [ref=e169] [box=256,67,993,1154]:
+          - generic [ref=e173] [box=256,67,975,1140]:
+            - textbox "Terminal input" [ref=e174] [box=453,487,9,20]
+            - generic [box=256,67,975,1140]:
+              - generic [box=256,67,975,20]:
+                - generic [box=256,67,86,20]: WebTermAI
+              - generic [box=256,87,975,20]:
+                - generic [box=256,87,259,20]: "Connecting to server #24..."
+              - generic [box=256,107,975,20]:
+                - generic [box=256,107,29,20]: Web
+                - generic [box=285,107,9,20]: S
+                - generic [box=294,107,19,20]: oc
+                - generic [box=313,107,9,20]: k
+                - generic [box=323,107,106,20]: et connecte
+                - generic [box=428,107,9,20]: d
+                - generic [box=438,107,19,20]: .
+                - generic [box=457,107,9,20]: S
+                - generic [box=466,107,10,20]: t
+                - generic [box=476,107,9,20]: a
+                - generic [box=485,107,58,20]: rting
+                - generic [box=543,107,28,20]: SSH
+                - generic [box=571,107,106,20]: session...
+              - generic [box=256,127,975,20]:
+                - generic [box=256,127,19,20]: We
+                - generic [box=275,127,9,20]: l
+                - generic [box=285,127,77,20]: come to
+                - generic [box=361,127,9,20]: U
+                - generic [box=371,127,10,20]: b
+                - generic [box=380,127,9,20]: u
+                - generic [box=390,127,19,20]: nt
+                - generic [box=409,127,9,20]: u
+                - generic [box=418,127,38,20]: "24."
+                - generic [box=457,127,9,20]: "0"
+                - generic [box=466,127,19,20]: "4."
+                - generic [box=485,127,9,20]: "1"
+                - generic [box=504,127,9,20]: L
+                - generic [box=514,127,10,20]: T
+                - generic [box=523,127,9,20]: S
+                - generic [box=542,127,56,20]: (GNU/L
+                - generic [box=599,127,19,20]: in
+                - generic [box=618,127,19,20]: ux
+                - generic [box=646,127,9,20]: "5"
+                - generic [box=656,127,10,20]: .
+                - generic [box=665,127,19,20]: "15"
+                - generic [box=684,127,10,20]: .
+                - generic [box=694,127,28,20]: "153"
+                - generic [box=722,127,10,20]: .
+                - generic [box=731,127,19,20]: 1-
+                - generic [box=750,127,67,20]: microso
+                - generic [box=817,127,9,20]: f
+                - generic [box=827,127,10,20]: t
+                - generic [box=836,127,9,20]: "-"
+                - generic [box=846,127,19,20]: st
+                - generic [box=865,127,9,20]: a
+                - generic [box=874,127,10,20]: "n"
+                - generic [box=884,127,19,20]: da
+                - generic [box=903,127,10,20]: r
+                - generic [box=912,127,19,20]: d-
+                - generic [box=931,127,10,20]: W
+                - generic [box=941,127,19,20]: SL
+                - generic [box=959,127,19,20]: "2"
+                - generic [box=979,127,47,20]: x86_6
+                - generic [box=1026,127,10,20]: "4"
+                - generic [box=1035,127,9,20]: )
+              - generic [box=256,167,975,20]:
+                - generic [box=266,167,9,20]: "*"
+                - generic [box=285,167,9,20]: D
+                - generic [box=294,167,19,20]: oc
+                - generic [box=313,167,9,20]: u
+                - generic [box=323,167,38,20]: ment
+                - generic [box=361,167,9,20]: a
+                - generic [box=370,167,38,20]: tion
+                - generic [box=409,167,9,20]: ":"
+                - generic [box=437,167,9,20]: h
+                - generic [box=447,167,19,20]: tt
+                - generic [box=466,167,9,20]: p
+                - generic [box=475,167,10,20]: s
+                - generic [box=485,167,38,20]: ://h
+                - generic [box=523,167,10,20]: e
+                - generic [box=532,167,19,20]: lp
+                - generic [box=551,167,10,20]: .
+                - generic [box=561,167,9,20]: u
+                - generic [box=570,167,10,20]: b
+                - generic [box=580,167,9,20]: u
+                - generic [box=589,167,19,20]: nt
+                - generic [box=608,167,9,20]: u
+                - generic [box=617,167,38,20]: .com
+              - generic [box=256,187,975,20]:
+                - generic [box=266,187,9,20]: "*"
+                - generic [box=285,187,19,20]: Ma
+                - generic [box=303,187,10,20]: "n"
+                - generic [box=313,187,9,20]: a
+                - generic [box=322,187,58,20]: gement
+                - generic [box=380,187,9,20]: ":"
+                - generic [box=437,187,9,20]: h
+                - generic [box=447,187,19,20]: tt
+                - generic [box=466,187,9,20]: p
+                - generic [box=475,187,10,20]: s
+                - generic [box=485,187,47,20]: ://la
+                - generic [box=532,187,10,20]: "n"
+                - generic [box=541,187,9,20]: d
+                - generic [box=551,187,19,20]: sc
+                - generic [box=570,187,19,20]: ap
+                - generic [box=589,187,29,20]: e.c
+                - generic [box=618,187,9,20]: a
+                - generic [box=627,187,48,20]: nonic
+                - generic [box=675,187,19,20]: al
+                - generic [box=694,187,38,20]: .com
+              - generic [box=256,207,975,20]:
+                - generic [box=266,207,9,20]: "*"
+                - generic [box=285,207,38,20]: Supp
+                - generic [box=322,207,29,20]: ort
+                - generic [box=351,207,9,20]: ":"
+                - generic [box=437,207,9,20]: h
+                - generic [box=447,207,19,20]: tt
+                - generic [box=466,207,9,20]: p
+                - generic [box=475,207,10,20]: s
+                - generic [box=485,207,38,20]: ://u
+                - generic [box=522,207,10,20]: b
+                - generic [box=532,207,9,20]: u
+                - generic [box=541,207,19,20]: nt
+                - generic [box=560,207,9,20]: u
+                - generic [box=570,207,38,20]: .com
+                - generic [box=608,207,19,20]: /p
+                - generic [box=627,207,19,20]: ro
+              - generic [box=256,247,975,20]:
+                - generic [box=266,247,19,20]: Sy
+                - generic [box=284,247,67,20]: stem in
+                - generic [box=352,247,9,20]: f
+                - generic [box=361,247,29,20]: orm
+                - generic [box=390,247,9,20]: a
+                - generic [box=399,247,48,20]: tion
+                - generic [box=447,247,9,20]: a
+                - generic [box=457,247,29,20]: s o
+                - generic [box=485,247,9,20]: f
+                - generic [box=504,247,19,20]: Sa
+                - generic [box=523,247,19,20]: t
+                - generic [box=542,247,19,20]: Ju
+                - generic [box=561,247,19,20]: "n"
+                - generic [box=580,247,19,20]: "13"
+                - generic [box=609,247,28,20]: "15:"
+                - generic [box=637,247,10,20]: "2"
+                - generic [box=646,247,38,20]: 1:05
+                - generic [box=694,247,28,20]: "+05"
+                - generic [box=722,247,19,20]: "2"
+                - generic [box=741,247,9,20]: "0"
+                - generic [box=750,247,10,20]: "2"
+                - generic [box=760,247,9,20]: "6"
+              - generic [box=256,287,975,20]:
+                - generic [box=275,287,19,20]: Sy
+                - generic [box=294,287,48,20]: stem
+                - generic [box=342,287,9,20]: l
+                - generic [box=351,287,10,20]: o
+                - generic [box=361,287,28,20]: "ad:"
+                - generic [box=408,287,9,20]: "1"
+                - generic [box=418,287,10,20]: .
+                - generic [box=427,287,9,20]: "0"
+                - generic [box=437,287,163,20]: "2"
+                - generic [box=600,287,9,20]: P
+                - generic [box=609,287,77,20]: rocesses
+                - generic [box=686,287,9,20]: ":"
+                - generic [box=696,287,144,20]: "42"
+              - generic [box=256,307,975,20]:
+                - generic [box=275,307,9,20]: U
+                - generic [box=285,307,10,20]: s
+                - generic [box=294,307,9,20]: a
+                - generic [box=304,307,38,20]: ge o
+                - generic [box=342,307,9,20]: f
+                - generic [box=361,307,19,20]: "/:"
+                - generic [box=409,307,9,20]: "0"
+                - generic [box=418,307,19,20]: ".4"
+                - generic [box=437,307,9,20]: "%"
+                - generic [box=447,307,19,20]: o
+                - generic [box=466,307,9,20]: f
+                - generic [box=485,307,38,20]: "1006"
+                - generic [box=522,307,10,20]: .
+                - generic [box=532,307,38,20]: 85GB
+                - generic [box=598,307,9,20]: U
+                - generic [box=608,307,48,20]: sers
+                - generic [box=656,307,9,20]: l
+                - generic [box=665,307,38,20]: ogge
+                - generic [box=703,307,9,20]: d
+                - generic [box=713,307,29,20]: in
+                - generic [box=742,307,9,20]: ":"
+                - generic [box=751,307,77,20]: "2"
+              - generic [box=256,327,975,20]:
+                - generic [box=275,327,9,20]: M
+                - generic [box=285,327,38,20]: emor
+                - generic [box=323,327,9,20]: "y"
+                - generic [box=342,327,9,20]: u
+                - generic [box=351,327,10,20]: s
+                - generic [box=361,327,9,20]: a
+                - generic [box=370,327,19,20]: ge
+                - generic [box=390,327,9,20]: ":"
+                - generic [box=409,327,19,20]: 7%
+                - generic [box=427,327,182,20]: I
+                - generic [box=610,327,9,20]: P
+                - generic [box=619,327,29,20]: v4
+                - generic [box=648,327,28,20]: add
+                - generic [box=676,327,48,20]: ress
+                - generic [box=724,327,9,20]: f
+                - generic [box=734,327,48,20]: or et
+                - generic [box=782,327,28,20]: "h0:"
+                - generic [box=819,327,19,20]: "17"
+                - generic [box=838,327,29,20]: "2.2"
+                - generic [box=867,327,9,20]: "5"
+                - generic [box=876,327,10,20]: .
+                - generic [box=886,327,28,20]: "173"
+                - generic [box=914,327,19,20]: ".2"
+                - generic [box=933,327,19,20]: "51"
+              - generic [box=256,347,975,20]:
+                - generic [box=275,347,38,20]: Swap
+                - generic [box=322,347,9,20]: u
+                - generic [box=332,347,10,20]: s
+                - generic [box=341,347,9,20]: a
+                - generic [box=351,347,19,20]: ge
+                - generic [box=370,347,9,20]: ":"
+                - generic [box=408,347,19,20]: 0%
+              - generic [box=256,387,975,20]:
+                - generic [box=266,387,9,20]: "*"
+                - generic [box=285,387,9,20]: S
+                - generic [box=294,387,48,20]: trict
+                - generic [box=342,387,19,20]: ly
+                - generic [box=361,387,38,20]: con
+                - generic [box=399,387,9,20]: f
+                - generic [box=409,387,29,20]: ine
+                - generic [box=437,387,9,20]: d
+                - generic [box=456,387,19,20]: Ku
+                - generic [box=475,387,96,20]: bernetes m
+                - generic [box=571,387,19,20]: ak
+                - generic [box=590,387,38,20]: es e
+                - generic [box=628,387,9,20]: d
+                - generic [box=638,387,29,20]: ge
+                - generic [box=667,387,9,20]: a
+                - generic [box=676,387,10,20]: "n"
+                - generic [box=686,387,9,20]: d
+                - generic [box=695,387,77,20]: IoT sec
+                - generic [box=772,387,9,20]: u
+                - generic [box=781,387,38,20]: re.
+                - generic [box=820,387,9,20]: L
+                - generic [box=829,387,10,20]: e
+                - generic [box=839,387,9,20]: a
+                - generic [box=848,387,29,20]: rn
+                - generic [box=877,387,9,20]: h
+                - generic [box=886,387,10,20]: o
+                - generic [box=896,387,9,20]: w
+                - generic [box=915,387,9,20]: M
+                - generic [box=924,387,38,20]: icro
+                - generic [box=963,387,19,20]: K8
+                - generic [box=981,387,10,20]: s
+              - generic [box=256,407,975,20]:
+                - generic [box=285,407,19,20]: ju
+                - generic [box=304,407,38,20]: st r
+                - generic [box=342,407,9,20]: a
+                - generic [box=351,407,29,20]: ise
+                - generic [box=380,407,9,20]: d
+                - generic [box=390,407,19,20]: t
+                - generic [box=409,407,9,20]: h
+                - generic [box=418,407,29,20]: e b
+                - generic [box=447,407,9,20]: a
+                - generic [box=456,407,19,20]: r
+                - generic [box=476,407,9,20]: f
+                - generic [box=485,407,38,20]: or e
+                - generic [box=523,407,9,20]: a
+                - generic [box=533,407,10,20]: s
+                - generic [box=542,407,19,20]: y,
+                - generic [box=561,407,48,20]: resi
+                - generic [box=609,407,9,20]: l
+                - generic [box=619,407,48,20]: ient
+                - generic [box=667,407,9,20]: a
+                - generic [box=676,407,10,20]: "n"
+                - generic [box=686,407,9,20]: d
+                - generic [box=695,407,38,20]: sec
+                - generic [box=733,407,9,20]: u
+                - generic [box=743,407,29,20]: re
+                - generic [box=772,407,19,20]: K8
+                - generic [box=790,407,29,20]: s c
+                - generic [box=819,407,19,20]: lu
+                - generic [box=838,407,48,20]: ster
+                - generic [box=886,407,9,20]: d
+                - generic [box=895,407,10,20]: e
+                - generic [box=905,407,19,20]: pl
+                - generic [box=924,407,10,20]: o
+                - generic [box=933,407,9,20]: "y"
+                - generic [box=943,407,48,20]: ment.
+              - generic [box=256,447,975,20]:
+                - generic [box=285,447,9,20]: h
+                - generic [box=294,447,19,20]: tt
+                - generic [box=313,447,9,20]: p
+                - generic [box=323,447,10,20]: s
+                - generic [box=332,447,38,20]: ://u
+                - generic [box=370,447,10,20]: b
+                - generic [box=380,447,9,20]: u
+                - generic [box=389,447,19,20]: nt
+                - generic [box=408,447,9,20]: u
+                - generic [box=418,447,38,20]: .com
+                - generic [box=456,447,9,20]: /
+                - generic [box=465,447,29,20]: eng
+                - generic [box=494,447,9,20]: a
+                - generic [box=504,447,19,20]: ge
+                - generic [box=523,447,9,20]: /
+                - generic [box=532,447,29,20]: sec
+                - generic [box=561,447,9,20]: u
+                - generic [box=570,447,19,20]: re
+                - generic [box=590,447,28,20]: "-ku"
+                - generic [box=618,447,77,20]: bernetes
+                - generic [box=695,447,19,20]: "-a"
+                - generic [box=713,447,10,20]: t
+                - generic [box=723,447,9,20]: "-"
+                - generic [box=732,447,10,20]: t
+                - generic [box=742,447,9,20]: h
+                - generic [box=751,447,10,20]: e
+                - generic [box=761,447,9,20]: "-"
+                - generic [box=770,447,10,20]: e
+                - generic [box=780,447,9,20]: d
+                - generic [box=789,447,19,20]: ge
+              - generic [box=256,467,975,20]:
+                - generic [box=256,467,19,20]: La
+                - generic [box=275,467,29,20]: st
+                - generic [box=304,467,9,20]: l
+                - generic [box=313,467,38,20]: ogin
+                - generic [box=351,467,9,20]: ":"
+                - generic [box=361,467,19,20]: T
+                - generic [box=380,467,19,20]: hu
+                - generic [box=408,467,19,20]: Ju
+                - generic [box=427,467,19,20]: "n"
+                - generic [box=446,467,19,20]: "11"
+                - generic [box=475,467,9,20]: "0"
+                - generic [box=484,467,10,20]: "4"
+                - generic [box=494,467,56,20]: :13:00
+                - generic [box=550,467,19,20]: "2"
+                - generic [box=569,467,9,20]: "0"
+                - generic [box=579,467,10,20]: "2"
+                - generic [box=588,467,9,20]: "6"
+                - generic [box=607,467,9,20]: f
+                - generic [box=617,467,38,20]: rom
+                - generic [box=655,467,19,20]: "17"
+                - generic [box=674,467,29,20]: "2.2"
+                - generic [box=703,467,9,20]: "5"
+                - generic [box=712,467,10,20]: .
+                - generic [box=722,467,28,20]: "173"
+                - generic [box=750,467,19,20]: ".2"
+                - generic [box=769,467,19,20]: "51"
+              - generic [box=256,487,975,20]:
+                - generic [box=256,487,159,20]: lunix@PC-643653b3
+                - generic [box=415,487,9,20]: ":"
+                - generic [box=425,487,9,20]: ~
+                - generic [box=434,487,9,20]: $
+          - generic [box=256,67,993,1154]:
+            - generic [box=512,611,480,66]:
+              - generic [box=529,624,446,20]: Загрузка файлов
+              - generic [box=529,648,446,16]: Перетащите файлы сюда, чтобы отправить их в текущую удалённую папку.

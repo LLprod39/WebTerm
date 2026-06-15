@@ -15,6 +15,8 @@ import secrets
 from django.contrib.auth.models import User
 from django.db import models
 
+from .pipeline_draft_models import PipelineDraftRevision, PipelineDraftSession  # noqa: F401
+
 CURRENT_PIPELINE_GRAPH_VERSION = 2
 
 
@@ -591,8 +593,6 @@ class PipelineRun(models.Model):
             "trigger_name": trigger.name if trigger else "",
             "trigger_node_id": trigger.node_id if trigger else self.entry_node_id,
         }
-
-
 class PipelineTemplate(models.Model):
     """
     Bundled pipeline template for quick start.

@@ -1,13 +1,17 @@
 """
-Studio pipeline assistant endpoint.
+Studio pipeline assistant endpoint and shared assistant payload builder.
 """
 
 import asyncio
 
+from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
 from core_ui.decorators import require_feature
-from studio.models import CURRENT_PIPELINE_GRAPH_VERSION
+from studio.capability_registry import build_studio_capability_registry
+from studio.models import (
+    CURRENT_PIPELINE_GRAPH_VERSION,
+)
 from studio.pipeline_validation import validate_pipeline_definition
 from studio.services import (
     PipelineAssistantError,
@@ -15,6 +19,8 @@ from studio.services import (
     get_pipeline_assistant_context,
     list_owned_server_payloads,
 )
+from studio.services.pipeline_assistant_fallback import build_provider_free_draft_response
+from studio.services.pipeline_template_recommendations import recommend_pilot_pipeline_templates
 from studio.skill_registry import SkillNotFoundError, get_skill, list_skills, normalise_skill_slugs
 from studio.views.agent_helpers import _agent_read_queryset_for_user
 from studio.views.common import (
@@ -39,10 +45,28 @@ from studio.views.pipeline_helpers import _get_pipeline
 from studio.views.skill_helpers import _can_read_skill, _skill_access_map, _skill_to_summary_dict
 
 
-@require_feature(STUDIO_FEATURE_PIPELINES)
-@require_http_methods(["POST"])
-def api_pipeline_assistant(request):
-    data = _json_body(request)
+def _conversation_history(raw_history: object) -> list[dict[str, str]]:
+    if not isinstance(raw_history, list):
+        return []
+    history: list[dict[str, str]] = []
+    for item in raw_history[-10:]:
+        if not isinstance(item, dict):
+            continue
+        role = str(item.get("role") or "").strip().lower()
+        content = str(item.get("content") or "").strip()
+        if role not in {"user", "assistant"} or not content:
+            continue
+        history.append({"role": role, "content": content[:4000]})
+    return history
+
+
+def _selected_node_id(selected_node: object) -> str:
+    if not isinstance(selected_node, dict):
+        return ""
+    return str(selected_node.get("id") or "").strip()
+
+
+def _build_assistant_response_for_payload(request, data: dict) -> tuple[dict | None, dict, JsonResponse | None]:
     user_message = str(data.get("user_message") or "").strip()
     pipeline_name = str(data.get("pipeline_name") or "").strip() or "Untitled pipeline"
     nodes = data.get("nodes") or []
@@ -53,6 +77,7 @@ def api_pipeline_assistant(request):
     if intent not in {"create", "edit", "validate", "fix_run"}:
         intent = "edit"
     draft_mode = data.get("draft_mode", True) is not False
+    compiler_mode = str(data.get("compiler_mode") or "").strip().lower()
     raw_last_validation_errors = data.get("last_validation_errors") or []
     if not isinstance(raw_last_validation_errors, list):
         raw_last_validation_errors = []
@@ -60,13 +85,13 @@ def api_pipeline_assistant(request):
     last_run_summary = data.get("last_run_summary") if isinstance(data.get("last_run_summary"), dict) else {}
 
     if not user_message:
-        return _err("user_message is required")
+        return None, {}, _err("user_message is required")
     if not isinstance(nodes, list) or not isinstance(edges, list):
-        return _err("nodes and edges must be arrays")
+        return None, {}, _err("nodes and edges must be arrays")
     if selected_node not in (None, "") and not isinstance(selected_node, dict):
-        return _err("selected_node must be an object or null")
+        return None, {}, _err("selected_node must be an object or null")
     if not isinstance(history, list):
-        return _err("history must be an array")
+        return None, {}, _err("history must be an array")
 
     pipeline_id_raw = data.get("pipeline_id")
     assistant_pipeline = None
@@ -74,31 +99,20 @@ def api_pipeline_assistant(request):
         try:
             pipeline_id = int(pipeline_id_raw)
         except (TypeError, ValueError):
-            return _err("pipeline_id must be an integer")
+            return None, {}, _err("pipeline_id must be an integer")
         assistant_pipeline = _get_pipeline(request, pipeline_id)
         if assistant_pipeline is None:
-            return _err("Pipeline not found", 404)
+            return None, {}, _err("Pipeline not found", 404)
 
-    selected_node_id = str((selected_node or {}).get("id") or "").strip()
-
+    selected_node_id = _selected_node_id(selected_node)
     node_map = {
         str(item.get("id") or ""): item
         for item in nodes
         if isinstance(item, dict) and str(item.get("id") or "").strip()
     }
-    if selected_node_id and selected_node_id not in node_map:
+    if selected_node_id and isinstance(selected_node, dict) and selected_node_id not in node_map:
         node_map[selected_node_id] = selected_node
     current_node = node_map[selected_node_id] if selected_node_id and selected_node_id in node_map else None
-
-    conversation_history = []
-    for item in history[-10:]:
-        if not isinstance(item, dict):
-            continue
-        role = str(item.get("role") or "").strip().lower()
-        content = str(item.get("content") or "").strip()
-        if role not in {"user", "assistant"} or not content:
-            continue
-        conversation_history.append({"role": role, "content": content[:4000]})
 
     if current_node:
         incoming_ids = [
@@ -130,6 +144,7 @@ def api_pipeline_assistant(request):
             }
             for agent in _agent_read_queryset_for_user(request.user).order_by("name")
         ]
+
     mcps = []
     if _user_has_feature(request.user, STUDIO_FEATURE_MCP):
         mcps = [
@@ -139,6 +154,7 @@ def api_pipeline_assistant(request):
                 "description": mcp.description,
                 "transport": mcp.transport,
                 "last_test_ok": mcp.last_test_ok,
+                "owner_id": mcp.owner_id,
             }
             for mcp in _mcp_read_queryset_for_user(request.user)
         ]
@@ -204,6 +220,12 @@ def api_pipeline_assistant(request):
         "logic_nodes": [item for item in graph_node_summaries if str(item.get("type") or "").startswith("logic/")],
         "output_nodes": [item for item in graph_node_summaries if str(item.get("type") or "").startswith("output/")],
     }
+    capability_registry = build_studio_capability_registry(request.user, server_count=len(servers))
+    template_recommendations = recommend_pilot_pipeline_templates(
+        user_message=user_message,
+        pipeline_name=pipeline_name,
+        limit=3,
+    )
 
     assistant_context = get_pipeline_assistant_context(
         pipeline_name=pipeline_name,
@@ -222,22 +244,35 @@ def api_pipeline_assistant(request):
         last_validation_errors=last_validation_errors,
         last_run_summary=last_run_summary,
         draft_mode=draft_mode,
+        capability_registry=capability_registry,
+        template_recommendations=template_recommendations,
     )
-    try:
-        response = build_pipeline_assistant_response(
+    assistant_context["current_user_id"] = request.user.id
+    assistant_context["binding_query"] = f"{pipeline_name} {user_message}".strip()
+    assistant_context["user_message"] = user_message
+
+    if compiler_mode in {"deterministic", "local", "pilot", "pilot_template"}:
+        response = build_provider_free_draft_response(
             user_message=user_message,
-            conversation_history=conversation_history,
             assistant_context=assistant_context,
-            known_node_ids=set(node_map.keys()),
-            known_node_types={
-                node_id: str(node.get("type") or "")
-                for node_id, node in node_map.items()
-                if isinstance(node, dict)
-            },
-            known_edges=[edge for edge in edges if isinstance(edge, dict)],
         )
-    except PipelineAssistantError as exc:
-        return _err(exc.message, exc.status)
+    else:
+        try:
+            response = build_pipeline_assistant_response(
+                user_message=user_message,
+                conversation_history=_conversation_history(history),
+                assistant_context=assistant_context,
+                known_node_ids=set(node_map.keys()),
+                known_node_types={
+                    node_id: str(node.get("type") or "")
+                    for node_id, node in node_map.items()
+                    if isinstance(node, dict)
+                },
+                known_edges=[edge for edge in edges if isinstance(edge, dict)],
+            )
+        except PipelineAssistantError as exc:
+            return None, {}, _err(exc.message, exc.status)
+
     preview_nodes, preview_edges = apply_pipeline_assistant_patch(nodes, edges, response)
     validation_errors = validate_pipeline_definition(
         nodes=preview_nodes,
@@ -251,11 +286,33 @@ def api_pipeline_assistant(request):
         "errors": validation_errors,
         "warnings": [],
     }
-    response["risk"] = pipeline_assistant_risk(preview_nodes)
+    response["risk"] = pipeline_assistant_risk(preview_nodes, preview_edges)
     if not response.get("suggested_next_actions"):
         response["suggested_next_actions"] = (
             ["Fix validation errors before applying the proposal"]
             if validation_errors
             else ["Review the diff", "Apply the draft", "Save the pipeline", "Run a manual test"]
         )
+
+    meta = {
+        "pipeline": assistant_pipeline,
+        "pipeline_name": pipeline_name,
+        "nodes": nodes,
+        "edges": edges,
+        "selected_node": selected_node if isinstance(selected_node, dict) else None,
+        "selected_node_id": selected_node_id,
+        "intent": intent,
+        "user_message": user_message,
+        "preview_nodes": preview_nodes,
+        "preview_edges": preview_edges,
+    }
+    return response, meta, None
+
+
+@require_feature(STUDIO_FEATURE_PIPELINES)
+@require_http_methods(["POST"])
+def api_pipeline_assistant(request):
+    response, _meta, error = _build_assistant_response_for_payload(request, _json_body(request))
+    if error is not None:
+        return error
     return _ok(response)

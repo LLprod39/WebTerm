@@ -21,7 +21,7 @@ function FieldLabel({ htmlFor, children }: { htmlFor?: string; children: React.R
 }
 
 function FieldHint({ children }: { children: React.ReactNode }) {
-  return <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground/50">{children}</p>;
+  return <p className="mt-1.5 max-w-full break-words text-[11px] leading-relaxed text-muted-foreground/50">{children}</p>;
 }
 
 function StatusIndicator({ active }: { active: boolean }) {
@@ -104,14 +104,14 @@ export default function SettingsSSOPage() {
   return (
     <div className="space-y-6 pb-10">
       {/* ── Header ── */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
             <Globe className="h-4 w-4 text-primary" />
           </div>
-          <div>
+          <div className="min-w-0">
             <h1 className="text-base font-semibold tracking-tight text-foreground">{t("sso.title")}</h1>
-            <p className="text-[11px] text-muted-foreground">{t("sso.description")}</p>
+            <p className="break-words text-[11px] leading-5 text-muted-foreground">{t("sso.description")}</p>
           </div>
         </div>
         <StatusIndicator active={currentForm.domain_auth_enabled} />
@@ -123,11 +123,11 @@ export default function SettingsSSOPage() {
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/12 text-blue-400 mt-0.5">
             <Info className="h-4 w-4" />
           </div>
-          <div className="text-sm leading-relaxed text-muted-foreground/70">
+          <div className="min-w-0 text-sm leading-relaxed text-muted-foreground/70">
             <p>
               {t("sso.how_it_works")}
             </p>
-            <p className="mt-2 text-xs text-muted-foreground/50">
+            <p className="mt-2 break-words text-xs leading-5 text-muted-foreground/50">
               Поддерживаемые сценарии: Nginx + Kerberos, Apache + mod_auth_kerb, Keycloak proxy, ADFS + WAP, Traefik + ForwardAuth
             </p>
           </div>
@@ -143,15 +143,15 @@ export default function SettingsSSOPage() {
         <div className="space-y-4 rounded-xl border border-border bg-card p-5 shadow-sm">
           {/* Enable toggle */}
           <div className="flex items-center justify-between gap-4 rounded-lg border border-border/50 bg-secondary/20 px-4 py-3.5">
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 items-center gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/12 text-emerald-400">
                 <ShieldCheck className="h-4 w-4" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="text-sm font-medium text-foreground/90">
                   {t("sso.enable")}
                 </div>
-                <div className="text-[11px] text-muted-foreground/50">
+                <div className="break-words text-[11px] leading-4 text-muted-foreground/50">
                   {t("sso.enable_desc")}
                 </div>
               </div>
@@ -216,15 +216,15 @@ export default function SettingsSSOPage() {
         <div className="space-y-3 rounded-xl border border-border bg-card p-5 shadow-sm">
           {/* Auto-create */}
           <div className="flex items-center justify-between gap-4 rounded-lg border border-border/50 bg-secondary/20 px-4 py-3.5">
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 items-center gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-500/12 text-violet-400">
                 <UserPlus className="h-4 w-4" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="text-sm font-medium text-foreground/90">
                   {t("sso.auto_create")}
                 </div>
-                <div className="text-[11px] text-muted-foreground/50">
+                <div className="break-words text-[11px] leading-4 text-muted-foreground/50">
                   {t("sso.auto_create_desc")}
                 </div>
               </div>
@@ -237,15 +237,15 @@ export default function SettingsSSOPage() {
 
           {/* Lowercase */}
           <div className="flex items-center justify-between gap-4 rounded-lg border border-border/50 bg-secondary/20 px-4 py-3.5">
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 items-center gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/12 text-amber-400">
                 <ArrowDownAZ className="h-4 w-4" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="text-sm font-medium text-foreground/90">
                   {t("sso.lowercase")}
                 </div>
-                <div className="text-[11px] text-muted-foreground/50">
+                <div className="break-words text-[11px] leading-4 text-muted-foreground/50">
                   {t("sso.lowercase_desc")}
                 </div>
               </div>

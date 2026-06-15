@@ -76,15 +76,32 @@ services:
       CHANNEL_REDIS_URL: ${CHANNEL_REDIS_URL:-redis://redis:6379/1}
       SITE_URL: ${SITE_URL:-http://127.0.0.1:8080}
       FRONTEND_APP_URL: ${FRONTEND_APP_URL:-http://127.0.0.1:8080}
-      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-127.0.0.1,localhost,10.169.66.211}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-127.0.0.1,localhost,10.169.66.211,26.71.166.145,192.168.0.19,172.25.160.1}
       CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-http://127.0.0.1:8080,http://localhost:8080,http://10.169.66.211:8080}
       DJANGO_PORT: 9000
       DJANGO_DEBUG: ${DJANGO_DEBUG:-false}
       DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-web_ui.settings.production}
+      MARS_AGENT_RUNTIME: ${MARS_AGENT_RUNTIME:-docker}
+      MARS_AGENT_DOCKER_IMAGE: ${MARS_AGENT_DOCKER_IMAGE:-webterm-mars-agent:latest}
+      MARS_AGENT_DOCKER_NETWORK: ${MARS_AGENT_DOCKER_NETWORK:-bridge}
+      MARS_AGENT_DOCKER_CPUS: ${MARS_AGENT_DOCKER_CPUS:-2}
+      MARS_AGENT_DOCKER_MEMORY: ${MARS_AGENT_DOCKER_MEMORY:-2g}
+      MARS_AGENT_DOCKER_CODEX_HOME_VOLUME: ${MARS_AGENT_DOCKER_CODEX_HOME_VOLUME:-mini-prod-mars-codex-home}
+      MARS_AGENT_DOCKER_GEMINI_HOME_VOLUME: ${MARS_AGENT_DOCKER_GEMINI_HOME_VOLUME:-mini-prod-mars-gemini-home}
+      MARS_CODEX_HOME: ${MARS_CODEX_HOME:-/mars-codex-home}
+      MARS_GEMINI_HOME: ${MARS_GEMINI_HOME:-/mars-gemini-home}
+      MARS_DOCKER_CONTAINER_PATH_PREFIX: ${MARS_DOCKER_CONTAINER_PATH_PREFIX:-/workspace}
+      MARS_DOCKER_HOST_PATH_PREFIX: ${MARS_DOCKER_HOST_PATH_PREFIX:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
     ports:
       - "${DJANGO_PORT:-9000}:9000"
     volumes:
       - .:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+      - mars_codex_home:/mars-codex-home
+      - mars_gemini_home:/mars-gemini-home
     depends_on:
       postgres:
         condition: service_healthy
@@ -102,6 +119,17 @@ services:
       interval: 15s
       timeout: 5s
       retries: 10
+
+  mars-agent:
+    build:
+      context: .
+      dockerfile: docker/mars-agent.Dockerfile
+      args:
+        CODEX_NPM_PACKAGE: ${MARS_CODEX_NPM_PACKAGE:-@openai/codex@0.139.0}
+        GEMINI_NPM_PACKAGE: ${MARS_GEMINI_NPM_PACKAGE:-@google/gemini-cli@0.46.0}
+    image: ${MARS_AGENT_DOCKER_IMAGE:-webterm-mars-agent:latest}
+    profiles: ["mars-agent"]
+    command: ["node", "--version"]
 
   frontend:
     build:
@@ -266,3 +294,7 @@ services:
 volumes:
   mini_prod_postgres_data:
   mini_prod_frontend_node_modules:
+  mars_codex_home:
+    name: ${MARS_AGENT_DOCKER_CODEX_HOME_VOLUME:-mini-prod-mars-codex-home}
+  mars_gemini_home:
+    name: ${MARS_AGENT_DOCKER_GEMINI_HOME_VOLUME:-mini-prod-mars-gemini-home}

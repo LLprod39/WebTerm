@@ -5,7 +5,7 @@ Pure preview and risk helpers for Studio pipeline assistant responses.
 import json
 import re
 
-from app.tools.safety import evaluate_command_safety
+from studio.execution_policy import build_execution_policy_decisions
 
 
 def _clone_json_snapshot(value):
@@ -44,7 +44,7 @@ def _assistant_allowed_source_handles(node_type: str) -> set[str]:
         return {"done", "out"}
     if node_type in {"logic/parallel", "logic/merge"} or node_type.startswith("trigger/"):
         return {"out"}
-    if node_type.startswith("agent/") or node_type.startswith("output/"):
+    if node_type.startswith("agent/") or node_type.startswith("ops/") or node_type.startswith("output/"):
         return {"success", "error", "out"}
     return {"out"}
 
@@ -211,37 +211,21 @@ def apply_pipeline_assistant_patch(nodes: list, edges: list, response: dict) -> 
     return preview_nodes, preview_edges
 
 
-def pipeline_assistant_risk(nodes: list) -> dict:
-    items = []
-    for node in (nodes if isinstance(nodes, list) else []):
-        if not isinstance(node, dict) or str(node.get("type") or "") != "agent/ssh_cmd":
-            continue
-        data = node.get("data") if isinstance(node.get("data"), dict) else {}
-        commands = [("command", data.get("command"))]
-        for value in data.get("preflight_commands") or []:
-            commands.append(("preflight", value))
-        for value in data.get("verification_commands") or []:
-            commands.append(("verification", value))
-        for stage, raw_command in commands:
-            command = str(raw_command or "").strip()
-            if not command:
-                continue
-            verdict = evaluate_command_safety(command)
-            if not verdict.is_dangerous:
-                continue
-            items.append(
-                {
-                    "node_id": str(node.get("id") or ""),
-                    "node_label": str(data.get("label") or node.get("id") or ""),
-                    "stage": stage,
-                    "command": command[:400],
-                    "level": verdict.level,
-                    "categories": list(verdict.categories),
-                    "matched_patterns": list(verdict.matched_patterns),
-                    "reasons": list(verdict.reasons),
-                }
-            )
-    return {"level": "dangerous" if items else "safe", "items": items}
+def pipeline_assistant_risk(nodes: list, edges: list | None = None) -> dict:
+    items = [
+        decision.to_risk_item()
+        for decision in build_execution_policy_decisions(
+            nodes=nodes if isinstance(nodes, list) else [],
+            edges=edges if isinstance(edges, list) else None,
+        )
+    ]
+    if any(str(item.get("level") or "") == "dangerous" for item in items):
+        level = "dangerous"
+    elif items:
+        level = "review"
+    else:
+        level = "safe"
+    return {"level": level, "items": items}
 
 
 def compact_node_summary(node: dict) -> dict:

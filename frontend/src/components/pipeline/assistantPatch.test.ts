@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { applyAssistantGraphPatch, getAssistantPatchStats } from "@/components/pipeline/assistantPatch";
-import type { PipelineEdge, PipelineNode, StudioPipelineAssistantResponse } from "@/lib/api";
+import type { PipelineEdge, PipelineNode } from "@/lib/api";
+import type { StudioPipelineAssistantResponse } from "@/lib/studioPipelineDraftsApi";
 
 function response(overrides: Partial<StudioPipelineAssistantResponse>): StudioPipelineAssistantResponse {
   return {
@@ -94,5 +95,31 @@ describe("assistant graph patch helper", () => {
       expect.objectContaining({ source: "manual", target: "ask_ops", sourceHandle: "out" }),
       expect.objectContaining({ source: "ask_ops", target: "report", sourceHandle: "received" }),
     ]);
+  });
+
+  it("keeps success handles for ops nodes", () => {
+    const nodes: PipelineNode[] = [
+      { id: "manual", type: "trigger/manual", position: { x: 0, y: 0 }, data: {} },
+    ];
+    const draft = response({
+      graph_patch: {
+        anchor_node_id: "manual",
+        nodes: [
+          { ref: "read-file", type: "ops/file_action", label: "Read File", data: { action: "read", path: "/etc/os-release" } },
+          { ref: "report", type: "output/report", label: "Report", data: {} },
+        ],
+        edges: [
+          { source: "manual", target: "read-file" },
+          { source: "read-file", target: "report", source_handle: "success" },
+        ],
+        update_nodes: [],
+        remove_node_ids: [],
+        remove_edge_ids: [],
+      },
+    });
+
+    const result = applyAssistantGraphPatch({ nodes, edges: [], response: draft });
+
+    expect(result.edges[1]).toEqual(expect.objectContaining({ source: "read_file", target: "report", sourceHandle: "success" }));
   });
 });

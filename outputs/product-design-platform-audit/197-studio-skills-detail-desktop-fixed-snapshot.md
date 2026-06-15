@@ -1,0 +1,109 @@
+- generic [ref=e2] [box=0,0,1435,1503]:
+  - region "Notifications (F8)" [box=0,0,1435,0]:
+    - list [box=1015,992,420,32]
+  - region "Notifications alt+T" [box=0,0,1435,0]
+  - generic [ref=e5] [box=0,0,1435,1503]:
+    - generic [ref=e9] [box=0,0,255,1024]:
+      - generic [ref=e10] [box=0,0,255,64]:
+        - button "Свернуть меню" [ref=e11] [cursor=pointer] [box=12,12,40,40]:
+          - img [ref=e12] [box=24,24,16,16]
+        - generic [ref=e15] [box=64,13,116,37]:
+          - generic [ref=e16] [box=64,13,116,20]: WebTermAI
+          - generic [ref=e17] [box=64,33,116,17]: Платформа операций
+      - generic [ref=e18] [box=0,64,255,836]:
+        - generic [ref=e19] [box=12,80,231,241]:
+          - generic [ref=e20] [box=20,88,215,17]: Рабочее пространство
+          - list [ref=e22] [box=20,113,215,200]:
+            - listitem [ref=e23] [box=20,113,215,44]:
+              - link "Панель" [ref=e24] [cursor=pointer] [box=20,113,215,44]:
+                - /url: /dashboard
+                - img [ref=e25] [box=32,127,16,16]
+                - generic [ref=e30] [box=58,125,51,20]: Панель
+            - listitem [ref=e31] [box=20,165,215,44]:
+              - link "Серверы" [ref=e32] [cursor=pointer] [box=20,165,215,44]:
+                - /url: /servers
+                - img [ref=e33] [box=32,179,16,16]
+                - generic [ref=e36] [box=58,177,62,20]: Серверы
+            - listitem [ref=e37] [box=20,217,215,44]:
+              - link "Агенты" [ref=e38] [cursor=pointer] [box=20,217,215,44]:
+                - /url: /agents
+                - img [ref=e39] [box=32,231,16,16]
+                - generic [ref=e42] [box=58,229,49,20]: Агенты
+            - listitem [ref=e43] [box=20,269,215,44]:
+              - link "Студия" [ref=e44] [cursor=pointer] [box=20,269,215,44]:
+                - /url: /studio
+                - img [ref=e45] [box=32,283,16,16]
+                - generic [ref=e49] [box=58,281,51,20]: Студия
+        - generic [ref=e50] [box=12,345,231,85]:
+          - generic [ref=e51] [box=20,353,215,17]: Управление
+          - list [ref=e53] [box=20,377,215,44]:
+            - listitem [ref=e54] [box=20,377,215,44]:
+              - link "Настройки" [ref=e55] [cursor=pointer] [box=20,377,215,44]:
+                - /url: /settings
+                - img [ref=e56] [box=32,391,16,16]
+                - generic [ref=e59] [box=58,389,74,20]: Настройки
+      - generic [ref=e60] [box=0,900,255,124]:
+        - generic [ref=e61] [box=12,913,231,46]:
+          - button "EN" [ref=e62] [cursor=pointer] [box=17,918,109,36]
+          - button "RU" [pressed] [ref=e63] [cursor=pointer] [box=130,918,109,36]
+        - generic [ref=e64] [box=12,975,231,37]:
+          - generic [ref=e65] [box=12,976,36,36]: L
+          - generic [ref=e66] [box=58,975,139,37]:
+            - paragraph [ref=e67] [box=58,975,139,20]: lunix
+            - paragraph [ref=e68] [box=58,997,139,15]:
+              - img [ref=e69] [box=58,1000,10,10]
+              - text: Администратор
+          - button "Выйти" [ref=e72] [cursor=pointer] [box=207,976,36,36]:
+            - img [ref=e73] [box=218,987,14,14]
+    - main [ref=e77] [box=256,0,1179,1503]:
+      - generic [ref=e78] [box=256,0,1179,1503]:
+        - navigation [ref=e79] [box=256,0,1179,56]:
+          - generic [ref=e80] [box=272,8,71,40]: Studio
+          - button "Обзор" [ref=e82] [cursor=pointer] [box=363,8,87,40]:
+            - img [ref=e83] [box=377,21,14,14]
+            - text: Обзор
+          - button "Черновики" [ref=e88] [cursor=pointer] [box=454,8,115,40]:
+            - img [ref=e89] [box=468,21,14,14]
+            - text: Черновики
+          - button "Скиллы" [ref=e92] [cursor=pointer] [box=574,8,96,40]:
+            - img [ref=e93] [box=588,21,14,14]
+            - text: Скиллы
+          - button "MCP" [ref=e96] [cursor=pointer] [box=673,8,77,40]:
+            - img [ref=e97] [box=687,21,14,14]
+            - text: MCP
+          - button "Агенты" [ref=e100] [cursor=pointer] [box=755,8,93,40]:
+            - img [ref=e101] [box=769,21,14,14]
+            - text: Агенты
+          - button "Запуски" [ref=e104] [cursor=pointer] [box=852,8,99,40]:
+            - img [ref=e105] [box=866,21,14,14]
+            - text: Запуски
+          - button "Оповещения" [ref=e108] [cursor=pointer] [box=955,8,126,40]:
+            - img [ref=e109] [box=969,21,14,14]
+            - text: Оповещения
+        - generic [ref=e112] [box=256,56,1179,1447]:
+          - generic [ref=e274] [box=256,56,1179,65]:
+            - generic [ref=e275] [box=280,68,351,40]:
+              - button "Каталог" [ref=e276] [cursor=pointer] [box=280,68,103,40]:
+                - img [box=292,80,16,16]
+                - text: Каталог
+              - generic [ref=e277] [box=395,76,236,24]:
+                - generic [ref=e278] [box=395,76,6,24]: /
+                - img [ref=e279] [box=409,81,14,14]
+                - generic [ref=e281] [box=431,78,200,20]: Frontend UX/UI Structure Skill
+            - generic [ref=e283] [box=1231,77,180,23]: frontend-ux-ui-structure
+          - generic [ref=e284] [box=296,153,1099,1286]:
+            - generic [ref=e285] [box=296,153,1099,152]:
+              - generic [ref=e288] [box=321,178,1029,44]:
+                - img [ref=e290] [box=333,190,20,20]
+                - heading "Frontend UX/UI Structure Skill" [level=2] [ref=e292] [box=377,182,416,36]
+                - generic [ref=e293] [box=805,189,180,23]: frontend-ux-ui-structure
+              - tablist [ref=e295] [box=321,258,1049,46]:
+                - tab "Обзор" [selected] [ref=e296] [cursor=pointer] [box=322,259,105,44]
+                - tab "Плейбук" [ref=e299] [cursor=pointer] [box=431,259,121,44]
+                - tab "Файлы" [ref=e303] [cursor=pointer] [box=557,259,109,44]
+                - tab "Настройки" [ref=e309] [cursor=pointer] [box=670,259,137,44]
+            - tabpanel "Обзор" [ref=e313] [box=296,325,1099,330]:
+              - generic [ref=e315] [box=296,325,540,330]:
+                - generic [ref=e316] [box=296,325,540,170]
+                - generic [ref=e319] [box=296,515,540,140]
+            - tabpanel "Файлы" [ref=e325] [box=296,655,1099,784]

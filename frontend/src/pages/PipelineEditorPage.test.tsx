@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { formatCommandListText, parseCommandListText } from "@/components/pipeline/commandList";
+import { getPipelineClientValidationErrors } from "@/components/pipeline/pipelineClientValidation";
 import PipelineEditorPage, { buildPipelineSavePayload } from "@/pages/PipelineEditorPage";
 import * as api from "@/lib/api";
 
@@ -72,6 +74,7 @@ vi.mock("@/lib/api", () => ({
     list: vi.fn(),
     get: vi.fn(),
     run: vi.fn(),
+    validateRun: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
@@ -96,6 +99,9 @@ vi.mock("@/lib/api", () => ({
   },
   studioSkills: {
     list: vi.fn(),
+  },
+  studioNodeManifests: {
+    get: vi.fn(),
   },
   fetchModels: vi.fn(),
   refreshModels: vi.fn(),
@@ -352,6 +358,42 @@ describe("PipelineEditorPage save hydration", () => {
     document.documentElement.lang = "ru";
 
     vi.mocked(api.studioPipelines.get).mockResolvedValue(freshPipeline as never);
+    vi.mocked(api.studioPipelines.run).mockResolvedValue({
+      id: 99,
+      pipeline_id: 45,
+      pipeline_name: "All Nodes Smoke Test",
+      status: "queued",
+      node_states: {},
+      nodes_snapshot: freshPipeline.nodes,
+      context: {},
+      summary: "",
+      error: "",
+      duration_seconds: null,
+      started_at: null,
+      finished_at: null,
+      created_at: "2026-04-11T08:10:00Z",
+      triggered_by: "tester",
+      trigger_id: 401,
+      entry_node_id: "manual_start",
+      trigger_type: "manual",
+      trigger_name: "Manual Start",
+      trigger_node_id: "manual_start",
+    } as never);
+    vi.mocked(api.studioPipelines.validateRun).mockResolvedValue({
+      ok: true,
+      validation: { ok: true, errors: [] },
+      risk: { level: "safe", items: [] },
+      dry_run: {
+        ok: true,
+        executed: false,
+        mode: "validate_only",
+        checks: ["graph_contract", "manual_trigger", "references", "risk_review"],
+        message: "No runtime actions were executed.",
+      },
+      entry_node_id: "manual_start",
+      trigger_type: "manual",
+      would_create_run: false,
+    } as never);
     vi.mocked(api.studioPipelines.update).mockImplementation(async (_id, data) => ({
       ...freshPipeline,
       ...data,
@@ -364,6 +406,7 @@ describe("PipelineEditorPage save hydration", () => {
     vi.mocked(api.studioMCP.list).mockResolvedValue([]);
     vi.mocked(api.studioMCP.tools).mockResolvedValue({ tools: [] } as never);
     vi.mocked(api.studioSkills.list).mockResolvedValue([]);
+    vi.mocked(api.studioNodeManifests.get).mockResolvedValue({ version: 1, count: 0, nodes: [] } as never);
     vi.mocked(api.fetchModels).mockResolvedValue({ providers: [], defaults: {} } as never);
     vi.mocked(api.refreshModels).mockResolvedValue({ providers: [], defaults: {} } as never);
   });
@@ -460,6 +503,119 @@ describe("PipelineEditorPage save hydration", () => {
     renderPage(queryClient);
 
     expect(await screen.findByText(/Текущий шаг:/)).toHaveTextContent("Entry Snapshot");
+  });
+
+  it("keeps explicit manual-link approval mode in save payload", () => {
+    const approvalPipeline = {
+      ...freshPipeline,
+      nodes: [
+        ...freshPipeline.nodes,
+        {
+          id: "approval_gate",
+          type: "logic/human_approval",
+          position: { x: 720, y: 0 },
+          data: {
+            label: "Approve Recovery",
+            to_email: "",
+            tg_chat_id: "",
+            timeout_minutes: 45,
+            manual_link_only: true,
+          },
+        },
+      ],
+    };
+
+    const payload = buildPipelineSavePayload({
+      pipelineId: 45,
+      pipeline: approvalPipeline,
+      pipelineName: "All Nodes Smoke Test",
+      nodes: approvalPipeline.nodes as unknown as api.PipelineNode[],
+      edges: approvalPipeline.edges as unknown as api.PipelineEdge[],
+      hasLocalChanges: true,
+    });
+    const approvalNode = payload.nodes.find((item) => item.id === "approval_gate");
+    expect(approvalNode?.data).toMatchObject({ manual_link_only: true });
+  });
+
+  it("round-trips SSH preflight and verification command lists", () => {
+    expect(parseCommandListText(" systemctl is-active nginx \n\n nginx -t \r\n")).toEqual([
+      "systemctl is-active nginx",
+      "nginx -t",
+    ]);
+    expect(formatCommandListText(["systemctl is-active nginx", "", "curl -fsS http://localhost/health"])).toBe(
+      "systemctl is-active nginx\ncurl -fsS http://localhost/health",
+    );
+  });
+
+  it("reports a local validation error for contains conditions without a check value", () => {
+    const errors = getPipelineClientValidationErrors([
+      {
+        id: "condition",
+        type: "logic/condition",
+        position: { x: 0, y: 0 },
+        data: { check_type: "contains", check_value: "" },
+      },
+    ] as unknown as api.PipelineNode[]);
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({ nodeId: "condition", field: "check_value" });
+  });
+
+  it("checks configured values against node manifest schema enum and range", () => {
+    const manifests = [
+      {
+        type: "ops/log_query",
+        input_schema: {
+          type: "object",
+          properties: {
+            source: { type: "string", enum: ["journal", "docker"] },
+            lines: { type: "integer", minimum: 20, maximum: 240 },
+          },
+        },
+      },
+    ] as unknown as api.StudioCapabilityNode[];
+
+    const errors = getPipelineClientValidationErrors([
+      {
+        id: "logs",
+        type: "ops/log_query",
+        position: { x: 0, y: 0 },
+        data: { source: "unknown", lines: 500 },
+      },
+    ] as unknown as api.PipelineNode[], manifests);
+
+    expect(errors).toEqual([
+      expect.objectContaining({ nodeId: "logs", field: "source" }),
+      expect.objectContaining({ nodeId: "logs", field: "lines" }),
+    ]);
+  });
+
+  it("checks MCP arguments against embedded tool schema", () => {
+    const errors = getPipelineClientValidationErrors([
+      {
+        id: "inspect",
+        type: "agent/mcp_call",
+        position: { x: 0, y: 0 },
+        data: {
+          tool_name: "kubernetes_describe_workload",
+          arguments: { namespace: "auth", kind: "cronjob" },
+          input_schema: {
+            type: "object",
+            properties: {
+              namespace: { type: "string" },
+              kind: { type: "string", enum: ["deployment", "statefulset"] },
+              name: { type: "string" },
+            },
+            required: ["namespace", "kind", "name"],
+          },
+        },
+      },
+    ] as unknown as api.PipelineNode[]);
+
+    expect(errors).toEqual([
+      expect.objectContaining({ nodeId: "inspect", field: "name" }),
+      expect.objectContaining({ nodeId: "inspect", field: "kind" }),
+    ]);
   });
 
 });

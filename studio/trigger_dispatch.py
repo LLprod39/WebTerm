@@ -8,7 +8,7 @@ from typing import Any
 from django.utils import timezone
 
 from app.runtime_limits import get_pipeline_run_limit_error
-from servers.services.alert_query import ServerAlertSnapshot, get_open_alert_snapshot
+from servers.services.alert_query import ServerAlertSnapshot, get_alert_snapshot, get_open_alert_snapshot
 
 from .models import PipelineRun, PipelineTrigger
 from .pipeline_validation import validate_pipeline_definition
@@ -194,7 +194,19 @@ def _iter_matching_monitoring_triggers(alert: ServerAlertSnapshot) -> list[Pipel
     return [trigger for trigger in triggers if monitoring_trigger_matches_alert(trigger, alert)]
 
 
+def _coerce_alert_snapshot(alert: Any) -> ServerAlertSnapshot | None:
+    if isinstance(alert, ServerAlertSnapshot):
+        return alert
+    alert_id = getattr(alert, "alert_id", None) or getattr(alert, "pk", None)
+    if alert_id is None:
+        return None
+    return get_alert_snapshot(int(alert_id))
+
+
 def launch_monitoring_triggers_for_alert(alert: ServerAlertSnapshot) -> list[PipelineRun]:
+    alert = _coerce_alert_snapshot(alert)
+    if alert is None:
+        return []
     if alert.is_resolved:
         return []
 

@@ -35,16 +35,9 @@ RETRY_DELAY_SECONDS = max(0.1, float(os.getenv("KEYCLOAK_RETRY_DELAY", "1.5")))
 REQUEST_TIMEOUT_SECONDS = max(5, int(os.getenv("KEYCLOAK_REQUEST_TIMEOUT", "30")))
 MAX_SEARCH_RESULTS = max(1, int(os.getenv("KEYCLOAK_MAX_SEARCH_RESULTS", "50")))
 DEFAULT_GROUP_PAGE_SIZE = max(10, int(os.getenv("KEYCLOAK_GROUP_PAGE_SIZE", "200")))
-PROFILE_FILE = Path(
-    os.getenv(
-        "KEYCLOAK_PROFILES_FILE",
-        str(Path(__file__).resolve().parent / "config" / "keycloak_profiles.json"),
-    )
-)
+PROFILE_FILE = Path(os.getenv("KEYCLOAK_PROFILES_FILE", str(Path(__file__).resolve().parent / "config" / "keycloak_profiles.json")))
 EMAIL_DOMAIN_CANDIDATES = [
-    item.strip()
-    for item in os.getenv("KEYCLOAK_EMAIL_DOMAINS", "erg.kz,corp.erg.kz,mail.erg.kz").split(",")
-    if item.strip()
+    item.strip() for item in os.getenv("KEYCLOAK_EMAIL_DOMAINS", "erg.kz,corp.erg.kz,mail.erg.kz").split(",") if item.strip()
 ]
 HTTP_PROXIES = {
     key: value

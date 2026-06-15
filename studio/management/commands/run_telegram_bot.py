@@ -150,8 +150,13 @@ class Command(BaseCommand):
         if not isinstance(message, dict):
             return
 
-        # Skip reply messages — those are handled by logic/telegram_input inside running pipelines
         if message.get("reply_to_message"):
+            from studio.pipeline_executor import store_telegram_operator_reply
+
+            if store_telegram_operator_reply(bot_token, message):
+                ts = timezone.now().strftime("%H:%M:%S")
+                chat = message.get("chat") or {}
+                self.stdout.write(f"[{ts}] chat={chat.get('id')}  reply routed to waiting pipeline")
             return
 
         text = str(message.get("text") or "").strip()

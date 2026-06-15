@@ -1,0 +1,19 @@
+- generic [ref=e2] [box=0,0,1440,1248]:
+  - region "Notifications (F8)" [box=0,0,1440,0]:
+    - list [box=1020,968,420,32]
+  - region "Notifications alt+T" [box=0,0,1440,0]
+  - generic [ref=e5] [box=0,0,1440,1248]:
+    - generic [ref=e9] [box=0,0,255,1000]:
+      - generic [ref=e10] [box=0,0,255,64]:
+        - button "Свернуть меню" [ref=e11] [cursor=pointer] [box=12,12,40,40]
+        - generic [ref=e15] [box=64,13,116,37]
+      - generic [ref=e18] [box=0,64,255,812]:
+        - generic [ref=e19] [box=12,80,231,241]
+        - generic [ref=e50] [box=12,345,231,85]
+      - generic [ref=e60] [box=0,876,255,124]:
+        - generic [ref=e61] [box=12,889,231,46]
+        - generic [ref=e64] [box=12,951,231,37]
+    - main [ref=e77] [box=256,0,1184,1248]:
+      - generic [ref=e78] [box=256,0,1184,1248]:
+        - generic [ref=e81] [box=313,41,1070,103]
+        - generic [ref=e94] [box=288,185,1120,1043]

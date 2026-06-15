@@ -50,6 +50,8 @@ export const DEMO_SESSION: AuthSessionResponse = {
       studio_skills: true,
       studio_mcp: true,
       studio_notifications: true,
+      kubernetes: false,
+      mars: false,
       settings: true,
       orchestrator: true,
       knowledge_base: true,

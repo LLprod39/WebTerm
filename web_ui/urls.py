@@ -29,6 +29,7 @@ urlpatterns = [
     path('api/desktop/v1/', include('core_ui.desktop_api.urls')),
     path('servers/', include('servers.urls')),
     path('api/studio/', include('studio.urls')),
+    path('api/mars/', include('mars.urls')),
 ]
 
 # Serve media files in development

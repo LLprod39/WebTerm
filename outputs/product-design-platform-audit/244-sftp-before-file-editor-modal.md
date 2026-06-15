@@ -1,0 +1,90 @@
+- generic [ref=e2] [box=0,0,1249,1221]:
+  - region "Notifications (F8)" [box=0,0,1249,0]:
+    - list [box=829,1189,420,32]
+  - region "Notifications alt+T" [box=0,0,1249,0]
+  - generic [ref=e60] [box=0,0,1249,1221]:
+    - generic [ref=e64] [box=0,0,255,1221]:
+      - generic [ref=e65] [box=0,0,255,64]:
+        - button "Свернуть меню" [ref=e66] [cursor=pointer] [box=12,12,40,40]:
+          - img [ref=e67] [box=24,24,16,16]
+        - generic [ref=e70] [box=64,13,116,37]:
+          - generic [ref=e71] [box=64,13,116,20]: WebTermAI
+          - generic [ref=e72] [box=64,33,116,17]: Платформа операций
+      - generic [ref=e73] [box=0,64,255,1033]:
+        - generic [ref=e74] [box=12,80,231,241]:
+          - generic [ref=e75] [box=20,88,215,17]: Рабочее пространство
+          - list [ref=e77] [box=20,113,215,200]:
+            - listitem [ref=e78] [box=20,113,215,44]:
+              - link "Панель" [ref=e79] [cursor=pointer] [box=20,113,215,44]:
+                - /url: /dashboard
+            - listitem [ref=e86] [box=20,165,215,44]:
+              - link "Серверы" [ref=e87] [cursor=pointer] [box=20,165,215,44]:
+                - /url: /servers
+            - listitem [ref=e92] [box=20,217,215,44]:
+              - link "Агенты" [ref=e93] [cursor=pointer] [box=20,217,215,44]:
+                - /url: /agents
+            - listitem [ref=e98] [box=20,269,215,44]:
+              - link "Студия" [ref=e99] [cursor=pointer] [box=20,269,215,44]:
+                - /url: /studio
+        - generic [ref=e105] [box=12,345,231,85]:
+          - generic [ref=e106] [box=20,353,215,17]: Управление
+          - list [ref=e108] [box=20,377,215,44]:
+            - listitem [ref=e109] [box=20,377,215,44]:
+              - link "Настройки" [ref=e110] [cursor=pointer] [box=20,377,215,44]:
+                - /url: /settings
+      - generic [ref=e115] [box=0,1097,255,124]:
+        - generic [ref=e116] [box=12,1110,231,46]:
+          - button "EN" [ref=e117] [cursor=pointer] [box=17,1115,109,36]
+          - button "RU" [pressed] [ref=e118] [cursor=pointer] [box=130,1115,109,36]
+        - generic [ref=e119] [box=12,1172,231,37]:
+          - generic [ref=e120] [box=12,1173,36,36]: L
+          - generic [ref=e121] [box=58,1172,139,37]:
+            - paragraph [ref=e122] [box=58,1172,139,20]: lunix
+            - paragraph [ref=e123] [box=58,1194,139,15]:
+              - img [ref=e124] [box=58,1197,10,10]
+              - text: Администратор
+          - button "Выйти" [ref=e127] [cursor=pointer] [box=207,1173,36,36]:
+            - img [ref=e128] [box=218,1184,14,14]
+    - main [ref=e132] [box=256,0,993,1221]:
+      - generic [ref=e136] [box=256,0,993,1221]:
+        - generic [ref=e138] [box=268,8,969,50]:
+          - link "Назад" [ref=e139] [cursor=pointer] [box=268,13,90,40]:
+            - /url: /servers
+            - img [ref=e140] [box=280,25,16,16]
+            - text: Назад
+          - generic [ref=e142] [box=366,13,254,40]:
+            - generic "Онлайн" [ref=e143] [box=379,29,8,8]
+            - generic [ref=e147] [box=395,23,79,20]: api-prod-01
+            - generic [ref=e148] [box=481,25,125,17]: lunix@172.25.173.251:22
+          - generic [ref=e150] [box=628,8,310,50]:
+            - button "api-prod-01" [ref=e152] [cursor=pointer] [box=634,14,118,38]:
+              - generic "Онлайн" [ref=e153] [box=646,29,8,8]
+              - generic [ref=e157] [box=662,23,78,20]: api-prod-01
+            - button "Подключить сервер" [ref=e158] [cursor=pointer] [box=757,13,102,40]:
+              - img [ref=e159] [box=770,25,16,16]
+              - text: Сервер
+          - generic [ref=e160] [box=946,8,291,50]:
+            - button "SFTP" [active] [pressed] [ref=e161] [cursor=pointer] [box=951,13,83,40]:
+              - img [box=963,25,16,16]
+              - text: SFTP
+            - button "Linux" [ref=e162] [cursor=pointer] [box=1038,13,84,40]:
+              - img [box=1050,25,16,16]
+              - text: Linux
+            - button "AI" [ref=e163] [cursor=pointer] [box=1126,13,62,40]:
+              - img [box=1138,25,16,16]
+              - text: AI
+            - button "Настройки" [ref=e164] [cursor=pointer] [box=1192,13,40,40]:
+              - img [box=1204,25,16,16]
+        - generic [ref=e165] [box=256,67,993,1154]:
+          - generic [ref=e169] [box=256,67,613,1154]:
+            - generic [ref=e173] [box=256,67,595,1144]:
+              - textbox "Terminal input" [ref=e174] [box=453,487,9,20]
+              - generic [box=256,67,595,1144]
+            - generic [box=256,67,613,1154]:
+              - generic [box=322,611,480,66]
+          - generic [ref=e175] [box=869,67,380,1154]:
+            - generic "Перетащите для изменения ширины" [ref=e176] [box=870,67,4,1154]
+            - generic [ref=e180] [box=870,67,379,1154]:
+              - generic [ref=e181] [box=870,67,379,158]
+              - generic [ref=e199] [box=870,225,379,931]
+              - generic [ref=e1041] [box=870,1156,379,66]

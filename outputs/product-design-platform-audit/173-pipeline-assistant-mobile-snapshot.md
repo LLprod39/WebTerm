@@ -1,0 +1,72 @@
+- generic [ref=e2] [box=0,0,390,844]:
+  - region "Notifications (F8)" [box=0,0,390,0]:
+    - list [box=0,0,390,32]
+  - region "Notifications alt+T" [box=0,0,390,0]
+  - generic [ref=e4] [box=0,0,390,844]:
+    - button "Toggle Sidebar" [ref=e5] [cursor=pointer] [box=16,16,44,44]:
+      - img [box=30,30,16,16]
+      - generic [ref=e6] [box=38,38,1,1]: Toggle Sidebar
+    - main [ref=e9] [box=0,0,390,844]:
+      - generic [ref=e11] [box=0,64,390,780]:
+        - generic [ref=e12] [box=0,64,390,149]:
+          - generic [ref=e13] [box=12,76,366,36]:
+            - button "Вернуться в Studio" [ref=e14] [cursor=pointer] [box=12,76,36,36]:
+              - img [box=22,86,16,16]
+            - img [ref=e15] [box=56,87,14,14]
+            - textbox "Название pipeline…" [ref=e17] [box=78,76,300,36]
+          - generic [ref=e18] [box=12,120,366,80]:
+            - button "Сохранить" [ref=e19] [cursor=pointer] [box=12,120,121,36]:
+              - img [box=24,130,16,16]
+              - text: Сохранить
+            - button "Ноды" [ref=e20] [cursor=pointer] [box=141,120,86,36]:
+              - img [box=154,130,16,16]
+              - text: Ноды
+            - button "Запуск" [ref=e21] [cursor=pointer] [box=235,120,95,36]:
+              - img [box=247,130,16,16]
+              - text: Запуск
+            - button "Помощник" [active] [ref=e22] [cursor=pointer] [box=12,164,121,36]:
+              - img [box=24,174,16,16]
+              - text: Помощник
+            - button "Ещё действия" [ref=e23] [cursor=pointer] [box=141,164,36,36]:
+              - img [box=151,174,16,16]
+        - generic [ref=e24] [box=0,213,390,99]:
+          - generic [ref=e25] [box=16,223,185,30]:
+            - img [ref=e26] [box=27,231,14,14]
+            - generic [ref=e30] [box=49,230,141,16]: Нет активного триггера
+          - paragraph [ref=e31] [box=16,261,358,40]: Добавьте ручной запуск, webhook, расписание или мониторинг, чтобы подготовить pipeline к запуску.
+        - generic [ref=e32] [box=0,312,390,532]:
+          - application [ref=e35] [box=0,312,390,532]:
+            - img [box=0,312,390,532]
+            - generic "Control Panel" [ref=e38] [box=15,725,26,104]:
+              - button "Zoom In" [ref=e39] [cursor=pointer] [box=15,725,26,26]:
+                - img [ref=e40] [box=22,732,12,12]
+              - button "Zoom Out" [ref=e42] [cursor=pointer] [box=15,751,26,26]:
+                - img [ref=e43] [box=22,763,12,2]
+              - button "Fit View" [ref=e45] [cursor=pointer] [box=15,777,26,26]:
+                - img [ref=e46] [box=22,784,12,11]
+              - button "Toggle Interactivity" [ref=e48] [cursor=pointer] [box=15,803,26,26]:
+                - img [ref=e49] [box=22,810,12,12]
+            - generic [box=113,410,165,140]:
+              - generic [box=113,410,165,140]:
+                - img [box=171,410,48,48]
+                - paragraph [box=113,470,165,20]: Соберите OPS pipeline
+                - paragraph [box=113,502,165,48]: Добавьте шаги из палитры и соедините их в порядок выполнения.
+          - generic [ref=e53] [box=13,129,364,702]:
+            - generic [ref=e54] [box=13,129,364,62]:
+              - generic [ref=e56] [box=29,141,169,37]:
+                - img [ref=e58] [box=35,151,16,16]
+                - generic [ref=e61] [box=65,141,133,37]
+              - button "Закрыть помощник" [ref=e64] [cursor=pointer] [box=325,141,36,36]:
+                - img [box=335,151,16,16]
+            - generic [ref=e68] [box=13,191,364,210]:
+              - generic [ref=e69] [box=25,203,340,80]:
+                - button "Собрать" [ref=e70] [cursor=pointer] [box=25,203,166,36]
+                - button "Улучшить" [ref=e71] [cursor=pointer] [box=199,203,166,36]
+                - button "Проверить" [ref=e72] [cursor=pointer] [box=25,247,166,36]
+                - button "Исправить" [ref=e73] [cursor=pointer] [box=199,247,166,36]
+              - generic [ref=e74] [box=25,295,340,94]: "Опишите автоматизацию: что должно запускать pipeline, какие серверы или MCP использовать, где нужен approval и куда отправить результат."
+            - generic [ref=e75] [box=13,662,364,169]:
+              - 'textbox "Например: проверь Docker service, попроси approval и отправь отчёт в Telegram" [ref=e76] [box=25,675,340,96]'
+              - button "Подготовить правку" [disabled] [box=25,779,340,40]:
+                - img [box=114,791,16,16]
+                - text: Подготовить правку

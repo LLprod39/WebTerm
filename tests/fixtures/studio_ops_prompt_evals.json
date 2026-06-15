@@ -1,0 +1,247 @@
+[
+  {
+    "id": "iam_keycloak_assign_role",
+    "pipeline_name": "Keycloak access request",
+    "prompt": "Keycloak: add realm role finance-auditor to user ivan.petrov, verify effective access and create an audit report.",
+    "expected_template": "pilot-keycloak-access-change",
+    "must_have_node_types": ["trigger/manual", "agent/mcp_call", "logic/human_approval", "output/report"]
+  },
+  {
+    "id": "iam_keycloak_group_membership",
+    "pipeline_name": "IAM group request",
+    "prompt": "Создай группу в Keycloak, добавь туда пользователя и проверь роли перед отчетом.",
+    "expected_template": "pilot-keycloak-access-change",
+    "must_have_node_types": ["agent/mcp_call", "agent/llm_query", "logic/human_approval"]
+  },
+  {
+    "id": "iam_keycloak_revoke_access",
+    "pipeline_name": "Keycloak revoke access",
+    "prompt": "Убери роль admin у пользователя в кейклоке после preflight и approval, затем проверь что доступа нет.",
+    "expected_template": "pilot-keycloak-access-change",
+    "must_have_node_types": ["agent/mcp_call", "logic/human_approval", "output/report"]
+  },
+  {
+    "id": "iam_keycloak_client_role",
+    "pipeline_name": "Client role access",
+    "prompt": "IAM request: assign client role billing-reader in Keycloak for service account svc-reporting and produce approval evidence.",
+    "expected_template": "pilot-keycloak-access-change",
+    "must_have_node_types": ["agent/mcp_call", "logic/human_approval", "output/report"]
+  },
+  {
+    "id": "iam_keycloak_access_review",
+    "pipeline_name": "Access review",
+    "prompt": "Проверь текущие Keycloak группы пользователя, предложи изменение доступа, выполни только после подтверждения и сделай audit report.",
+    "expected_template": "pilot-keycloak-access-change",
+    "must_have_node_types": ["agent/mcp_call", "agent/llm_query", "logic/human_approval"]
+  },
+  {
+    "id": "k8s_rollout_restart",
+    "pipeline_name": "Kubernetes rollout",
+    "prompt": "Kubernetes rollout restart deployment keycloak in namespace auth after reading pods/events and approval, then verify rollout status.",
+    "expected_template": "pilot-kubernetes-rollout",
+    "must_have_node_types": ["trigger/manual", "agent/mcp_call", "agent/llm_query", "logic/human_approval"]
+  },
+  {
+    "id": "k8s_crashloop_diagnose",
+    "pipeline_name": "CrashLoopBackOff support",
+    "prompt": "K8s pod is CrashLoopBackOff: collect logs and events, prepare rollout plan, approve remediation and verify workload health.",
+    "expected_template": "pilot-kubernetes-rollout",
+    "must_have_node_types": ["agent/mcp_call", "agent/llm_query", "logic/human_approval", "output/report"]
+  },
+  {
+    "id": "k8s_scale_deployment",
+    "pipeline_name": "K8s deployment action",
+    "prompt": "Scale Kubernetes deployment web-api in namespace prod only after read-only inspect and human approval; verify pods after action.",
+    "expected_template": "pilot-kubernetes-rollout",
+    "must_have_node_types": ["agent/mcp_call", "logic/human_approval", "output/report"]
+  },
+  {
+    "id": "gitlab_failed_pipeline",
+    "pipeline_name": "GitLab CI support",
+    "prompt": "GitLab failed pipeline: collect failed job evidence, propose fix, create MR after approval and verify MR pipeline.",
+    "expected_template": "pilot-gitlab-failed-pipeline-mr",
+    "must_have_node_types": ["trigger/webhook", "agent/mcp_call", "agent/llm_query", "logic/human_approval"]
+  },
+  {
+    "id": "gitlab_mr_for_config_fix",
+    "pipeline_name": "GitLab config change",
+    "prompt": "Создай GitLab MR с исправлением nginx config после упавшей сборки, но сначала покажи plan и дождись approve.",
+    "expected_template": "pilot-gitlab-failed-pipeline-mr",
+    "must_have_node_types": ["trigger/webhook", "agent/mcp_call", "logic/human_approval", "output/report"]
+  },
+  {
+    "id": "db_slow_queries",
+    "pipeline_name": "Database diagnostics",
+    "prompt": "PostgreSQL database has slow queries and lock waits: run read-only diagnostics, propose maintenance, approve guarded action and verify health.",
+    "expected_template": "pilot-database-diagnostics-maintenance",
+    "must_have_node_types": ["trigger/manual", "agent/mcp_call", "agent/llm_query", "logic/human_approval"]
+  },
+  {
+    "id": "db_replication_lag",
+    "pipeline_name": "DB replication support",
+    "prompt": "Проверь БД postgres: replication lag, locks и capacity, затем подготовь maintenance plan и выполни только после approval.",
+    "expected_template": "pilot-database-diagnostics-maintenance",
+    "must_have_node_types": ["agent/mcp_call", "logic/human_approval", "output/report"]
+  },
+  {
+    "id": "service_nginx_restart",
+    "pipeline_name": "Nginx service maintenance",
+    "prompt": "Validate nginx config, collect recent logs, restart service after approval and run HTTP healthcheck.",
+    "expected_template": "pilot-service-config-validate-restart",
+    "must_have_node_types": ["trigger/manual", "ops/server_snapshot", "agent/llm_query", "ops/service_action", "ops/http_check"]
+  },
+  {
+    "id": "service_systemd_logs",
+    "pipeline_name": "Systemd service fix",
+    "prompt": "Сервис api-prod падает: собери systemd логи и snapshot, предложи restart, дождись подтверждения, проверь health URL.",
+    "expected_template": "pilot-service-config-validate-restart",
+    "must_have_node_types": ["ops/server_snapshot", "logic/human_approval", "ops/service_action", "ops/http_check"]
+  },
+  {
+    "id": "service_incident_alert",
+    "pipeline_name": "Runtime incident response",
+    "prompt": "Monitoring alert: service is unhealthy. Collect Linux logs, review risk, restart only after approval and send final report.",
+    "expected_template": "pilot-service-config-validate-restart",
+    "must_have_node_types": ["ops/server_snapshot", "agent/llm_query", "logic/human_approval", "output/report"]
+  },
+  {
+    "id": "packages_security_update",
+    "pipeline_name": "Linux package security maintenance",
+    "prompt": "Update packages openssl curl on server web-prod-01 after reading package state, require approval and verify updates.",
+    "expected_template": "pilot-linux-package-maintenance",
+    "must_have_node_types": ["trigger/manual", "ops/server_snapshot", "agent/llm_query", "logic/human_approval", "ops/package_action"]
+  },
+  {
+    "id": "packages_apt_patch",
+    "pipeline_name": "APT package patch",
+    "prompt": "apt update packages nginx libssl3 only after package review and human approval, then create maintenance report.",
+    "expected_template": "pilot-linux-package-maintenance",
+    "must_have_node_types": ["ops/server_snapshot", "logic/human_approval", "ops/package_action", "output/report"]
+  },
+  {
+    "id": "packages_russian_update",
+    "pipeline_name": "Обновление пакетов Linux",
+    "prompt": "Обнови пакеты docker.io containerd на сервере после проверки списка обновлений и подтверждения оператора.",
+    "expected_template": "pilot-linux-package-maintenance",
+    "must_have_node_types": ["ops/server_snapshot", "agent/llm_query", "logic/human_approval", "ops/package_action"]
+  },
+  {
+    "id": "packages_runtime_libs",
+    "pipeline_name": "Runtime library patch",
+    "prompt": "Patch packages python3-pip ca-certificates on Linux host, show risk, wait approval, verify package state and report.",
+    "expected_template": "pilot-linux-package-maintenance",
+    "must_have_node_types": ["ops/server_snapshot", "logic/human_approval", "ops/package_action", "output/report"]
+  },
+  {
+    "id": "packages_db_server_patch",
+    "pipeline_name": "DB server package update",
+    "prompt": "Update packages postgresql-client-16 pgbouncer after package snapshot and approval; do not run full system upgrade.",
+    "expected_template": "pilot-linux-package-maintenance",
+    "must_have_node_types": ["trigger/manual", "ops/server_snapshot", "ops/package_action", "output/report"]
+  },
+  {
+    "id": "disk_cleanup_tmp_full",
+    "pipeline_name": "Linux disk cleanup",
+    "prompt": "Disk is full on server web-prod-01: inspect disk usage, cleanup old tmp files after approval, verify free space and report.",
+    "expected_template": "pilot-linux-disk-cleanup",
+    "must_have_node_types": ["trigger/manual", "ops/disk_cleanup", "agent/llm_query", "logic/human_approval", "output/report"]
+  },
+  {
+    "id": "disk_cleanup_russian_tmp",
+    "pipeline_name": "Очистка диска",
+    "prompt": "Диск забит, проверь свободное место, найди cleanup candidates и очисти старые временные файлы только после подтверждения.",
+    "expected_template": "pilot-linux-disk-cleanup",
+    "must_have_node_types": ["ops/disk_cleanup", "agent/llm_query", "logic/human_approval", "output/report"]
+  },
+  {
+    "id": "disk_cleanup_var_tmp",
+    "pipeline_name": "Tmp cleanup",
+    "prompt": "Check disk usage and clean /tmp /var/tmp old files with approval, then verify disk state.",
+    "expected_template": "pilot-linux-disk-cleanup",
+    "must_have_node_types": ["ops/disk_cleanup", "logic/human_approval", "output/report"]
+  },
+  {
+    "id": "disk_cleanup_alert",
+    "pipeline_name": "Disk pressure alert",
+    "prompt": "Monitoring alert says disk usage critical: collect disk evidence, review risk, cleanup disk after approval and create final report.",
+    "expected_template": "pilot-linux-disk-cleanup",
+    "must_have_node_types": ["trigger/manual", "ops/disk_cleanup", "agent/llm_query", "logic/human_approval"]
+  },
+  {
+    "id": "disk_cleanup_free_space",
+    "pipeline_name": "Free space recovery",
+    "prompt": "Free space is low on Linux host, run disk cleanup workflow with inspect, approval, bounded tmp cleanup and verification.",
+    "expected_template": "pilot-linux-disk-cleanup",
+    "must_have_node_types": ["ops/disk_cleanup", "logic/human_approval", "output/report"]
+  },
+  {
+    "id": "backup_latest_archive",
+    "pipeline_name": "Backup restore check",
+    "prompt": "Check backup path /var/backups: inspect freshness, verify latest archive integrity and report restore readiness.",
+    "expected_template": "pilot-backup-restore-check",
+    "must_have_node_types": ["trigger/manual", "ops/backup_restore_check", "agent/llm_query", "output/report"]
+  },
+  {
+    "id": "backup_russian_freshness",
+    "pipeline_name": "Проверка backup",
+    "prompt": "Проверь backup /srv/backups, свежесть последнего архива и возможность restore check без изменений.",
+    "expected_template": "pilot-backup-restore-check",
+    "must_have_node_types": ["ops/backup_restore_check", "agent/llm_query", "output/report"]
+  },
+  {
+    "id": "backup_restore_readiness",
+    "pipeline_name": "Restore readiness",
+    "prompt": "Verify backup latest archive in /opt/backups and create a restore readiness report, read-only only.",
+    "expected_template": "pilot-backup-restore-check",
+    "must_have_node_types": ["ops/backup_restore_check", "agent/llm_query", "output/report"]
+  },
+  {
+    "id": "backup_stale_check",
+    "pipeline_name": "Backup stale check",
+    "prompt": "Backup may be stale: check /var/backups max age 24 hours, verify latest tar.gz and summarize risk.",
+    "expected_template": "pilot-backup-restore-check",
+    "must_have_node_types": ["trigger/manual", "ops/backup_restore_check", "output/report"]
+  },
+  {
+    "id": "backup_archive_integrity",
+    "pipeline_name": "Archive integrity check",
+    "prompt": "Run backup verification for latest dump under /srv/backups, inspect files, verify archive integrity and produce audit report.",
+    "expected_template": "pilot-backup-restore-check",
+    "must_have_node_types": ["ops/backup_restore_check", "agent/llm_query", "output/report"]
+  },
+  {
+    "id": "observability_grafana_alert_ticket",
+    "pipeline_name": "Observability incident response",
+    "prompt": "Grafana critical alert api latency: read alert context, query Prometheus and Loki, create PagerDuty incident after approval and verify acknowledgement.",
+    "expected_template": "pilot-observability-incident-response",
+    "must_have_node_types": ["trigger/monitoring", "agent/mcp_call", "agent/llm_query", "logic/human_approval", "output/report"]
+  },
+  {
+    "id": "observability_prometheus_slo_burn",
+    "pipeline_name": "SLO burn incident",
+    "prompt": "Prometheus SLO burn alert for checkout service: collect metrics and logs, summarize impact, update Jira incident after approval and report.",
+    "expected_template": "pilot-observability-incident-response",
+    "must_have_node_types": ["trigger/monitoring", "agent/mcp_call", "logic/human_approval", "output/report"]
+  },
+  {
+    "id": "observability_loki_errors",
+    "pipeline_name": "Loki error spike",
+    "prompt": "Loki warning alert shows error rate spike in payments-api, gather evidence, prepare oncall update, require approval and verify incident ticket.",
+    "expected_template": "pilot-observability-incident-response",
+    "must_have_node_types": ["trigger/monitoring", "agent/mcp_call", "agent/llm_query", "logic/human_approval"]
+  },
+  {
+    "id": "observability_sentry_outage",
+    "pipeline_name": "Sentry outage triage",
+    "prompt": "Sentry outage incident for frontend checkout: collect observability context, propose operator action, approve ticket update and verify acknowledgement.",
+    "expected_template": "pilot-observability-incident-response",
+    "must_have_node_types": ["trigger/monitoring", "agent/mcp_call", "agent/llm_query", "output/report"]
+  },
+  {
+    "id": "observability_russian_incident",
+    "pipeline_name": "Инцидент мониторинга",
+    "prompt": "Инцидент: алерт Grafana critical по сервису billing-api, собери метрики и логи, после подтверждения создай Jira/PagerDuty запись и проверь ack.",
+    "expected_template": "pilot-observability-incident-response",
+    "must_have_node_types": ["trigger/monitoring", "agent/mcp_call", "logic/human_approval", "output/report"]
+  }
+]

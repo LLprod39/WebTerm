@@ -2,7 +2,7 @@
  * Slide-over panel for terminal appearance settings.
  */
 
-import React from "react";
+import React, { useEffect } from "react";
 import { X, Palette, Type, MonitorDot, PaintBucket, FileCode2 } from "lucide-react";
 
 import { useI18n } from "@/lib/i18n";
@@ -26,10 +26,10 @@ const FONT_OPTIONS = [
   "monospace",
 ];
 
-const CURSOR_OPTIONS: { value: TerminalPrefs["cursor_style"]; label: string }[] = [
-  { value: "block", label: "▌ Block" },
-  { value: "bar", label: "│ Bar" },
-  { value: "underline", label: "▁ Underline" },
+const CURSOR_OPTIONS: { value: TerminalPrefs["cursor_style"]; labelKey: string; marker: string }[] = [
+  { value: "block", labelKey: "terminal.cursorBlock", marker: "▌" },
+  { value: "bar", labelKey: "terminal.cursorBar", marker: "│" },
+  { value: "underline", labelKey: "terminal.cursorUnderline", marker: "▁" },
 ];
 
 export const TerminalSettingsPanel: React.FC<TerminalSettingsPanelProps> = ({
@@ -40,6 +40,20 @@ export const TerminalSettingsPanel: React.FC<TerminalSettingsPanelProps> = ({
 }) => {
   const { t } = useI18n();
 
+  useEffect(() => {
+    if (!open) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   return (
@@ -47,15 +61,22 @@ export const TerminalSettingsPanel: React.FC<TerminalSettingsPanelProps> = ({
       {/* backdrop */}
       <div className="fixed inset-0 bg-black/40" onClick={onClose} />
       {/* panel */}
-      <div className="relative ml-auto flex h-full w-80 flex-col overflow-y-auto border-l border-zinc-700 bg-zinc-900 shadow-2xl">
+      <div
+        className="relative ml-auto flex h-full w-full max-w-sm flex-col overflow-y-auto border-l border-zinc-700 bg-zinc-900 shadow-2xl sm:w-80"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="terminal-settings-title"
+      >
         {/* header */}
         <div className="flex items-center justify-between border-b border-zinc-700 px-4 py-3">
-          <h2 className="text-sm font-semibold text-zinc-100">
+          <h2 id="terminal-settings-title" className="text-sm font-semibold text-zinc-100">
             {t("terminal.settingsTitle")}
           </h2>
           <button
             onClick={onClose}
             className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+            aria-label={t("terminal.closeSettings")}
+            title={t("terminal.closeSettings")}
           >
             <X size={16} />
           </button>
@@ -141,7 +162,7 @@ export const TerminalSettingsPanel: React.FC<TerminalSettingsPanelProps> = ({
                   }}
                   className="ml-auto text-[10px] text-zinc-500 hover:text-zinc-300"
                 >
-                  Reset
+                  {t("terminal.reset")}
                 </button>
               )}
             </label>
@@ -208,7 +229,7 @@ export const TerminalSettingsPanel: React.FC<TerminalSettingsPanelProps> = ({
                       : "border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-500"
                   }`}
                 >
-                  {c.label}
+                  {c.marker} {t(c.labelKey)}
                 </button>
               ))}
             </div>

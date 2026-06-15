@@ -34,16 +34,19 @@ interface AgentEvent {
 
 type NodeAgentEvents = Record<string, AgentEvent[]>;
 
-export function formatRunDuration(seconds: number | null): string {
-  if (!seconds) return "—";
-  if (seconds < 60) return `${Math.round(seconds)}s`;
-  return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
+export function formatRunDuration(seconds: number | null, lang = "en"): string {
+  if (seconds == null) return "—";
+  const roundedSeconds = Math.max(0, Math.round(seconds));
+  if (roundedSeconds < 60) return localize(lang, `${roundedSeconds} с`, `${roundedSeconds}s`);
+  const minutes = Math.floor(roundedSeconds / 60);
+  const restSeconds = roundedSeconds % 60;
+  return localize(lang, `${minutes} мин ${restSeconds} с`, `${minutes}m ${restSeconds}s`);
 }
 
-export function formatRunDate(iso: string | null): string {
+export function formatRunDate(iso: string | null, lang = "ru"): string {
   if (!iso) return "—";
   const d = new Date(iso);
-  return d.toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleString(lang === "ru" ? "ru-RU" : "en-US", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
 export function StatusBadge({ status, lang }: { status: string; lang: string }) {
@@ -70,7 +73,12 @@ function NodeIcon({ status }: { status: string }) {
   return <Clock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />;
 }
 
-function AgentSteps({ events }: { events: AgentEvent[] }) {
+function formatNodeDuration(ms: number, lang: string): string {
+  if (ms < 1000) return localize(lang, `${ms} мс`, `${ms}ms`);
+  return localize(lang, `${(ms / 1000).toFixed(1)} с`, `${(ms / 1000).toFixed(1)}s`);
+}
+
+function AgentSteps({ events, lang }: { events: AgentEvent[]; lang: string }) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -123,7 +131,7 @@ function AgentSteps({ events }: { events: AgentEvent[] }) {
         if (ev.event_type === "agent_status") {
           const status = String(ev.data.status || "");
           if (!status || status === "connecting") return null;
-          const iter = ev.data.iteration ? ` · iter ${ev.data.iteration}` : "";
+          const iter = ev.data.iteration ? localize(lang, ` · итерация ${ev.data.iteration}`, ` · iter ${ev.data.iteration}`) : "";
           return (
             <div key={i} className="flex gap-2 items-center text-xs text-muted-foreground">
               <Activity className="h-3 w-3 shrink-0" />
@@ -213,7 +221,7 @@ export function PipelineRunDetail({ runId, onClose, lang }: { runId: number; onC
     mutationFn: () => studioRuns.stop(runId),
     onSuccess: () => {
       refetch();
-      toast({ description: "Run stopped" });
+      toast({ description: localize(lang, "Запуск остановлен", "Run stopped") });
     },
   });
 
@@ -230,7 +238,7 @@ export function PipelineRunDetail({ runId, onClose, lang }: { runId: number; onC
   const nodeStates: PipelineRun["node_states"] = run.node_states || {};
   const nodes: PipelineNode[] = (run.nodes_snapshot || []).filter((n) => !n.type?.startsWith("trigger/"));
   const copyOutput = (text: string) => {
-    navigator.clipboard.writeText(text).then(() => toast({ description: "Скопировано" }));
+    navigator.clipboard.writeText(text).then(() => toast({ description: localize(lang, "Скопировано", "Copied") }));
   };
 
   return (
@@ -247,11 +255,11 @@ export function PipelineRunDetail({ runId, onClose, lang }: { runId: number; onC
           </button>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-semibold">Run #{run.id}</span>
+              <span className="text-sm font-semibold">{localize(lang, "Запуск", "Run")} #{run.id}</span>
               <StatusBadge status={run.status} lang={lang} />
             </div>
             <div className="mt-0.5 truncate text-xs text-muted-foreground">
-              {run.pipeline_name} · {formatRunDate(run.started_at || run.created_at)} · {formatRunDuration(run.duration_seconds)}
+              {run.pipeline_name} · {formatRunDate(run.started_at || run.created_at, lang)} · {formatRunDuration(run.duration_seconds, lang)}
             </div>
           </div>
         </div>
@@ -264,7 +272,7 @@ export function PipelineRunDetail({ runId, onClose, lang }: { runId: number; onC
           <Button size="sm" variant="outline" className="h-9 gap-1.5" onClick={() => navigate(`/studio/pipeline/${run.pipeline_id}`)}>
             <ExternalLink className="h-3.5 w-3.5" /> {localize(lang, "Открыть пайплайн", "Open pipeline")}
           </Button>
-          <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => refetch()} aria-label={localize(lang, "Обновить run", "Refresh run")}>
+          <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => refetch()} aria-label={localize(lang, "Обновить запуск", "Refresh run")}>
             <RotateCcw className="h-3.5 w-3.5" />
           </Button>
         </div>
@@ -316,7 +324,7 @@ export function PipelineRunDetail({ runId, onClose, lang }: { runId: number; onC
                 let duration = "";
                 if (startedAt && finishedAt) {
                   const ms = new Date(finishedAt).getTime() - new Date(startedAt).getTime();
-                  duration = ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
+                  duration = formatNodeDuration(ms, lang);
                 }
 
                 const iterCount = agentEvents.filter((e) => e.event_type === "agent_action").length;
@@ -358,9 +366,9 @@ export function PipelineRunDetail({ runId, onClose, lang }: { runId: number; onC
                           <div className="rounded-lg border border-border/60 bg-background/18 px-3 py-2">
                             <div className="text-xs text-muted-foreground mb-2 flex items-center gap-1.5">
                               <Activity className="h-3 w-3 text-blue-400" />
-                              <span>Шаги агента · {iterCount} действий</span>
+                              <span>{localize(lang, `Шаги агента · ${iterCount} действий`, `Agent steps · ${iterCount} actions`)}</span>
                             </div>
-                            <AgentSteps events={agentEvents} />
+                            <AgentSteps events={agentEvents} lang={lang} />
                           </div>
                         )}
                         {error && (
@@ -374,7 +382,9 @@ export function PipelineRunDetail({ runId, onClose, lang }: { runId: number; onC
                               <Copy className="h-3 w-3" />
                             </Button>
                             <pre className="text-xs text-muted-foreground font-mono whitespace-pre-wrap break-all leading-relaxed bg-muted/20 rounded px-3 py-2 max-h-96 overflow-auto pr-16">
-                              {output.length > 5000 ? output.slice(0, 5000) + "\n\n… [обрезано, полный вывод > 5000 символов]" : output}
+                              {output.length > 5000
+                                ? output.slice(0, 5000) + localize(lang, "\n\n… [обрезано, полный вывод > 5000 символов]", "\n\n… [truncated, full output > 5000 characters]")
+                                : output}
                             </pre>
                           </div>
                         )}
@@ -399,7 +409,7 @@ export function PipelineRunDetail({ runId, onClose, lang }: { runId: number; onC
               onClick={() => setShowRaw(!showRaw)}
             >
               {showRaw ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-              Raw JSON (для отладки)
+              {localize(lang, "JSON для отладки", "Raw JSON")}
             </button>
             {showRaw && (
               <pre className="mt-2 text-xs font-mono text-muted-foreground bg-muted/20 rounded px-4 py-3 max-h-96 overflow-auto">

@@ -77,10 +77,10 @@ export default function PipelineRunsPage() {
     <div className="flex flex-col h-full">
       <StudioNav />
       <StudioHero
-        kicker="Studio / Runs"
+        kicker={localize(lang, "Studio / Запуски", "Studio / Runs")}
         title={localize(lang, "История запусков", "Execution History")}
         titleIcon={<Workflow className="h-7 w-7 text-primary" />}
-        description={localize(lang, "Следите за pipeline run, проверяйте ошибки и открывайте подробный вывод по каждому шагу.", "Monitor pipeline runs, inspect failures, and open detailed output for each step.")}
+        description={localize(lang, "Следите за запусками пайплайнов, проверяйте ошибки и открывайте подробный вывод по каждому шагу.", "Monitor pipeline runs, inspect failures, and open detailed output for each step.")}
         stats={
           <>
             <HeroStatChip icon={<CheckCircle2 className="h-3.5 w-3.5" />} label={`${statusCount("completed")} ${localize(lang, "выполнено", "completed")}`} />
@@ -92,9 +92,9 @@ export default function PipelineRunsPage() {
           <HeroActionButton onClick={() => refetch()} icon={<RotateCcw className="h-4 w-4" />} label={localize(lang, "Обновить", "Refresh")} />
         }
       />
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
       {/* Left: runs list */}
-      <div className={`flex-col border-r border-border ${selectedRunId ? "hidden lg:flex lg:w-80 lg:shrink-0" : "flex flex-1"}`}>
+      <div className={`min-w-0 flex-col border-r border-border ${selectedRunId ? "hidden lg:flex lg:w-80 lg:shrink-0" : "flex w-full flex-1"}`}>
         {/* Filters */}
         <div className="px-4 py-2.5 border-b border-border/60 bg-secondary/10 shrink-0">
           <div className="flex flex-wrap gap-1.5">
@@ -119,7 +119,7 @@ export default function PipelineRunsPage() {
         <div className="flex-1 overflow-auto">
           {isLoading && (
             <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">
-              <Loader2 className="h-4 w-4 animate-spin mr-2" /> Загрузка…
+              <Loader2 className="h-4 w-4 animate-spin mr-2" /> {localize(lang, "Загрузка…", "Loading…")}
             </div>
           )}
 
@@ -151,11 +151,11 @@ export default function PipelineRunsPage() {
               <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
                 <span className="font-mono">#{run.id}</span>
                 <span className="text-border">·</span>
-                <span>{formatRunDate(run.started_at || run.created_at)}</span>
+                <span>{formatRunDate(run.started_at || run.created_at, lang)}</span>
                 {run.duration_seconds && (
                   <>
                     <span className="text-border">·</span>
-                    <span>{formatRunDuration(run.duration_seconds)}</span>
+                    <span>{formatRunDuration(run.duration_seconds, lang)}</span>
                   </>
                 )}
               </div>
@@ -172,7 +172,7 @@ export default function PipelineRunsPage() {
 
       {/* Right: run detail */}
       {selectedRunId && (
-        <div className="flex-1 overflow-hidden">
+        <div className="min-w-0 flex-1 overflow-hidden">
           <PipelineRunDetail runId={selectedRunId} onClose={() => setSelectedRunId(null)} lang={lang} />
         </div>
       )}

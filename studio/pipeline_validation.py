@@ -1,50 +1,23 @@
 from __future__ import annotations
 
 import json
+import re
 from collections import defaultdict, deque
 from typing import Any
 
-try:
-    from croniter import croniter
-except ModuleNotFoundError:  # pragma: no cover - optional dependency in local mini env
-    croniter = None
-
+from .cron_schedule import validate_cron_expression
+from .execution_policy import validate_execution_policy_guardrails
 from .models import CURRENT_PIPELINE_GRAPH_VERSION, AgentConfig, MCPServerPool
+from .node_manifest import KNOWN_NODE_TYPES, OPS_NODE_TYPES, TRIGGER_NODE_TYPES, allowed_source_handles
 from .services import get_owned_server_id_set, has_owned_server
 from .skill_registry import normalise_skill_slugs, resolve_skills
 
-TRIGGER_NODE_TYPES = {
-    "trigger/manual",
-    "trigger/webhook",
-    "trigger/schedule",
-    "trigger/monitoring",
-}
-KNOWN_NODE_TYPES = {
-    *TRIGGER_NODE_TYPES,
-    "agent/react",
-    "agent/multi",
-    "agent/ssh_cmd",
-    "agent/llm_query",
-    "agent/mcp_call",
-    "logic/condition",
-    "logic/parallel",
-    "logic/merge",
-    "logic/wait",
-    "logic/human_approval",
-    "logic/telegram_input",
-    "output/report",
-    "output/webhook",
-    "output/email",
-    "output/telegram",
-}
+PACKAGE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9+._:@~/-]{0,127}$")
+PLACEHOLDER_RE = re.compile(r"^\{[A-Za-z_][A-Za-z0-9_]*\}$")
 
 
 def _owner_can_use_mcp(owner) -> bool:
     return bool(owner and getattr(owner, "is_staff", False))
-
-
-def _looks_like_five_field_cron(value: str) -> bool:
-    return len([part for part in value.split() if part]) == 5
 
 
 def _collect_int_ids(raw: Any, *, field_name: str, errors: list[str], node_id: str) -> list[int]:
@@ -73,6 +46,84 @@ def _collect_optional_int(raw: Any, *, field_name: str, errors: list[str], node_
         return None
 
 
+def _validate_owned_optional_server(data: dict[str, Any], owner, errors: list[str], node_id: str) -> None:
+    server_id = _collect_optional_int(data.get("server_id"), field_name="server_id", errors=errors, node_id=node_id)
+    if server_id is not None and not has_owned_server(owner, server_id):
+        errors.append(f"Node '{node_id}' references an inaccessible server: {server_id}.")
+
+
+def _validate_choice(
+    data: dict[str, Any],
+    *,
+    field_name: str,
+    allowed: set[str],
+    errors: list[str],
+    node_id: str,
+    required: bool = False,
+) -> None:
+    value = str(data.get(field_name) or "").strip().lower()
+    if not value:
+        if required:
+            errors.append(f"Node '{node_id}' field '{field_name}' is required.")
+        return
+    if value not in allowed:
+        errors.append(f"Node '{node_id}' field '{field_name}' must be one of: {', '.join(sorted(allowed))}.")
+
+
+def _validate_optional_int_list(data: dict[str, Any], *, field_name: str, errors: list[str], node_id: str) -> None:
+    raw = data.get(field_name)
+    if raw in (None, ""):
+        return
+    if not isinstance(raw, list):
+        errors.append(f"Node '{node_id}' field '{field_name}' must be a list of integers.")
+        return
+    for item in raw:
+        try:
+            int(item)
+        except (TypeError, ValueError):
+            errors.append(f"Node '{node_id}' field '{field_name}' contains an invalid integer: {item!r}.")
+
+
+def _validate_optional_int_range(
+    data: dict[str, Any],
+    *,
+    field_name: str,
+    min_value: int,
+    max_value: int,
+    errors: list[str],
+    node_id: str,
+) -> None:
+    raw = data.get(field_name)
+    if raw in (None, ""):
+        return
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        errors.append(f"Node '{node_id}' field '{field_name}' must be an integer.")
+        return
+    if value < min_value or value > max_value:
+        errors.append(f"Node '{node_id}' field '{field_name}' must be between {min_value} and {max_value}.")
+
+
+def _validate_package_names(data: dict[str, Any], *, field_name: str, errors: list[str], node_id: str, required: bool = False) -> None:
+    raw = data.get(field_name)
+    if raw in (None, ""):
+        if required:
+            errors.append(f"Node '{node_id}' field '{field_name}' is required.")
+        return
+    source_items = raw if isinstance(raw, list) else [raw]
+    items: list[str] = []
+    for item in source_items:
+        items.extend(part for part in re.split(r"[\s,]+", str(item or "")) if part)
+    packages = [str(item or "").strip() for item in items if str(item or "").strip()]
+    if required and not packages:
+        errors.append(f"Node '{node_id}' field '{field_name}' is required.")
+        return
+    invalid = [package for package in packages if not PLACEHOLDER_RE.fullmatch(package) and not PACKAGE_NAME_RE.fullmatch(package)]
+    if invalid:
+        errors.append(f"Node '{node_id}' field '{field_name}' contains invalid package names: {invalid}.")
+
+
 def _parse_json_object_text(raw: Any, *, field_name: str, errors: list[str], node_id: str) -> dict[str, Any] | None:
     text = str(raw or "").strip()
     if not text:
@@ -88,6 +139,115 @@ def _parse_json_object_text(raw: Any, *, field_name: str, errors: list[str], nod
     return parsed
 
 
+def _is_template_placeholder(value: Any) -> bool:
+    return isinstance(value, str) and bool(PLACEHOLDER_RE.fullmatch(value.strip()))
+
+
+def _has_schema_value(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    return True
+
+
+def _mcp_arguments_from_node_data(data: dict[str, Any], *, errors: list[str], node_id: str) -> dict[str, Any] | None:
+    if "arguments_text" in data:
+        parsed = _parse_json_object_text(
+            data.get("arguments_text"),
+            field_name="arguments_text",
+            errors=errors,
+            node_id=node_id,
+        )
+        if parsed is not None:
+            return parsed
+
+    raw_arguments = data.get("arguments")
+    if raw_arguments in (None, ""):
+        return {}
+    if isinstance(raw_arguments, dict):
+        return raw_arguments
+    errors.append(f"Node '{node_id}' field 'arguments' must be a JSON object.")
+    return None
+
+
+def _schema_type_matches(value: Any, expected_type: str) -> bool:
+    if _is_template_placeholder(value):
+        return True
+    if expected_type == "string":
+        return isinstance(value, str)
+    if expected_type == "integer":
+        if isinstance(value, bool):
+            return False
+        if isinstance(value, int):
+            return True
+        if isinstance(value, str):
+            try:
+                int(value)
+                return True
+            except ValueError:
+                return False
+        return False
+    if expected_type == "number":
+        if isinstance(value, bool):
+            return False
+        if isinstance(value, (int, float)):
+            return True
+        if isinstance(value, str):
+            try:
+                float(value)
+                return True
+            except ValueError:
+                return False
+        return False
+    if expected_type == "boolean":
+        if isinstance(value, bool):
+            return True
+        return isinstance(value, str) and value.strip().lower() in {"true", "false", "1", "0", "yes", "no"}
+    if expected_type == "array":
+        return isinstance(value, list)
+    if expected_type == "object":
+        return isinstance(value, dict)
+    return True
+
+
+def _validate_mcp_arguments_schema(data: dict[str, Any], arguments: dict[str, Any], *, errors: list[str], node_id: str) -> None:
+    schema = data.get("input_schema")
+    if not isinstance(schema, dict):
+        return
+    properties = schema.get("properties")
+    if not isinstance(properties, dict):
+        return
+    required = schema.get("required") or []
+    if isinstance(required, list):
+        for field_name in required:
+            field = str(field_name)
+            if not _has_schema_value(arguments.get(field)):
+                errors.append(f"Node '{node_id}' MCP argument '{field}' is required by input_schema.")
+
+    for field_name, property_schema in properties.items():
+        if not isinstance(property_schema, dict) or field_name not in arguments:
+            continue
+        value = arguments.get(field_name)
+        if not _has_schema_value(value):
+            continue
+        enum_values = property_schema.get("enum")
+        if isinstance(enum_values, list) and enum_values and not _is_template_placeholder(value):
+            allowed = [str(item) for item in enum_values]
+            if str(value) not in allowed:
+                errors.append(f"Node '{node_id}' MCP argument '{field_name}' must be one of: {', '.join(allowed)}.")
+                continue
+        expected_type = property_schema.get("type")
+        if isinstance(expected_type, list):
+            allowed_types = [str(item) for item in expected_type]
+        elif isinstance(expected_type, str):
+            allowed_types = [expected_type]
+        else:
+            allowed_types = []
+        if allowed_types and not any(_schema_type_matches(value, item) for item in allowed_types):
+            errors.append(f"Node '{node_id}' MCP argument '{field_name}' must match schema type: {' or '.join(allowed_types)}.")
+
+
 def _validate_node_references(node: dict[str, Any], owner, errors: list[str]) -> None:
     node_id = str(node.get("id") or "").strip() or "<unknown>"
     node_type = str(node.get("type") or "").strip()
@@ -101,14 +261,6 @@ def _validate_node_references(node: dict[str, Any], owner, errors: list[str]) ->
             node_id=node_id,
         )
 
-    if "arguments_text" in data:
-        _parse_json_object_text(
-            data.get("arguments_text"),
-            field_name="arguments_text",
-            errors=errors,
-            node_id=node_id,
-        )
-
     if node_type == "trigger/webhook":
         payload_map = data.get("webhook_payload_map", {})
         if payload_map not in (None, "") and not isinstance(payload_map, dict):
@@ -117,16 +269,9 @@ def _validate_node_references(node: dict[str, Any], owner, errors: list[str]) ->
     if node_type == "trigger/schedule":
         cron_expression = str(data.get("cron_expression") or "").strip()
         if cron_expression:
-            if croniter is None:
-                if not _looks_like_five_field_cron(cron_expression):
-                    errors.append(
-                        f"Node '{node_id}' cron expression must contain 5 fields (minute hour day month weekday)."
-                    )
-            else:
-                try:
-                    croniter(cron_expression)
-                except Exception as exc:
-                    errors.append(f"Node '{node_id}' has an invalid cron expression: {exc}.")
+            is_valid, error = validate_cron_expression(cron_expression)
+            if not is_valid:
+                errors.append(f"Node '{node_id}' has an invalid cron expression: {error}.")
 
     if node_type == "trigger/monitoring":
         monitoring_filters = data.get("monitoring_filters")
@@ -197,9 +342,7 @@ def _validate_node_references(node: dict[str, Any], owner, errors: list[str]) ->
                 errors.append(f"Node '{node_id}' references inaccessible MCP servers: {missing}.")
 
     if node_type == "agent/ssh_cmd":
-        server_id = _collect_optional_int(data.get("server_id"), field_name="server_id", errors=errors, node_id=node_id)
-        if server_id is not None and not has_owned_server(owner, server_id):
-            errors.append(f"Node '{node_id}' references an inaccessible server: {server_id}.")
+        _validate_owned_optional_server(data, owner, errors, node_id)
 
     if node_type == "agent/mcp_call":
         mcp_server_id = _collect_optional_int(
@@ -213,6 +356,155 @@ def _validate_node_references(node: dict[str, Any], owner, errors: list[str]) ->
                 errors.append(f"Node '{node_id}' uses an MCP call, but MCP is admin-only.")
             if not MCPServerPool.objects.filter(owner=owner, id=mcp_server_id).exists():
                 errors.append(f"Node '{node_id}' references an inaccessible MCP server: {mcp_server_id}.")
+        mcp_arguments = _mcp_arguments_from_node_data(data, errors=errors, node_id=node_id)
+        if mcp_arguments is not None:
+            _validate_mcp_arguments_schema(data, mcp_arguments, errors=errors, node_id=node_id)
+
+    if node_type in {"ops/server_snapshot", "ops/log_query", "ops/file_action", "ops/package_action", "ops/disk_cleanup", "ops/backup_restore_check", "ops/service_action", "ops/docker_action", "ops/process_action"}:
+        _validate_owned_optional_server(data, owner, errors, node_id)
+
+    if node_type == "ops/server_snapshot":
+        allowed_sections = {"overview", "services", "processes", "docker", "logs", "disk", "network", "packages"}
+        raw_sections = data.get("sections")
+        if raw_sections not in (None, ""):
+            if not isinstance(raw_sections, list) or any(str(item or "").strip().lower() not in allowed_sections for item in raw_sections):
+                errors.append(f"Node '{node_id}' field 'sections' must be a list of known server snapshot sections.")
+
+    if node_type == "ops/log_query":
+        _validate_choice(
+            data,
+            field_name="source",
+            allowed={"journal", "service", "docker", "syslog", "messages", "auth", "nginx_error", "nginx_access", "apache_error", "apache_access"},
+            errors=errors,
+            node_id=node_id,
+            required=False,
+        )
+        _validate_optional_int_range(data, field_name="lines", min_value=20, max_value=240, errors=errors, node_id=node_id)
+
+    if node_type == "ops/file_action":
+        _validate_choice(
+            data,
+            field_name="action",
+            allowed={"read", "write"},
+            errors=errors,
+            node_id=node_id,
+            required=False,
+        )
+        if not str(data.get("path") or "").strip():
+            errors.append(f"Node '{node_id}' field 'path' is required.")
+        _validate_optional_int_range(data, field_name="max_bytes", min_value=1024, max_value=1048576, errors=errors, node_id=node_id)
+
+    if node_type == "ops/package_action":
+        _validate_choice(
+            data,
+            field_name="action",
+            allowed={"list_updates", "install", "update", "remove"},
+            errors=errors,
+            node_id=node_id,
+            required=False,
+        )
+        package_action = str(data.get("action") or "list_updates").strip().lower()
+        _validate_package_names(
+            data,
+            field_name="packages",
+            errors=errors,
+            node_id=node_id,
+            required=package_action in {"install", "update", "remove"},
+        )
+
+    if node_type == "ops/disk_cleanup":
+        _validate_choice(
+            data,
+            field_name="action",
+            allowed={"inspect", "journal_vacuum", "tmp_cleanup"},
+            errors=errors,
+            node_id=node_id,
+            required=False,
+        )
+        _validate_optional_int_range(data, field_name="min_age_days", min_value=1, max_value=365, errors=errors, node_id=node_id)
+        _validate_optional_int_range(data, field_name="max_entries", min_value=1, max_value=500, errors=errors, node_id=node_id)
+        _validate_optional_int_range(data, field_name="vacuum_time_days", min_value=1, max_value=365, errors=errors, node_id=node_id)
+        _validate_optional_int_range(data, field_name="vacuum_size_mb", min_value=64, max_value=102400, errors=errors, node_id=node_id)
+
+    if node_type == "ops/backup_restore_check":
+        _validate_choice(
+            data,
+            field_name="action",
+            allowed={"inspect", "verify_latest"},
+            errors=errors,
+            node_id=node_id,
+            required=False,
+        )
+        if not str(data.get("path") or "").strip():
+            errors.append(f"Node '{node_id}' field 'path' is required.")
+        _validate_optional_int_range(data, field_name="max_depth", min_value=1, max_value=5, errors=errors, node_id=node_id)
+        _validate_optional_int_range(data, field_name="max_files", min_value=1, max_value=100, errors=errors, node_id=node_id)
+        _validate_optional_int_range(data, field_name="max_age_hours", min_value=1, max_value=8760, errors=errors, node_id=node_id)
+
+    if node_type == "ops/service_action":
+        _validate_choice(
+            data,
+            field_name="action",
+            allowed={"start", "stop", "restart", "reload"},
+            errors=errors,
+            node_id=node_id,
+            required=True,
+        )
+
+    if node_type == "ops/docker_action":
+        _validate_choice(
+            data,
+            field_name="action",
+            allowed={"start", "stop", "restart"},
+            errors=errors,
+            node_id=node_id,
+            required=True,
+        )
+
+    if node_type == "ops/process_action":
+        _validate_choice(
+            data,
+            field_name="action",
+            allowed={"terminate", "kill_force"},
+            errors=errors,
+            node_id=node_id,
+            required=True,
+        )
+
+    if node_type == "ops/http_check":
+        method = str(data.get("method") or "GET").strip().upper()
+        if method not in {"GET", "HEAD"}:
+            errors.append(f"Node '{node_id}' field 'method' must be GET or HEAD.")
+        _validate_optional_int_list(data, field_name="expected_status", errors=errors, node_id=node_id)
+
+    if node_type == "ops/alert_update":
+        _validate_choice(
+            data,
+            field_name="action",
+            allowed={"resolve"},
+            errors=errors,
+            node_id=node_id,
+            required=False,
+        )
+
+    if node_type == "logic/condition":
+        check_type = str(data.get("check_type") or "").strip()
+        if check_type in {"contains", "not_contains"} and not str(data.get("check_value") or "").strip():
+            errors.append(f"Node '{node_id}' field 'check_value' is required for {check_type}.")
+
+    if node_type == "output/webhook":
+        _validate_optional_int_range(
+            data,
+            field_name="timeout_seconds",
+            min_value=1,
+            max_value=120,
+            errors=errors,
+            node_id=node_id,
+        )
+        for field_name in ("headers", "extra_payload"):
+            raw = data.get(field_name)
+            if raw not in (None, "") and not isinstance(raw, dict):
+                errors.append(f"Node '{node_id}' field '{field_name}' must be a JSON object.")
 
 
 def _normalized_handle(raw: Any) -> str:
@@ -221,19 +513,7 @@ def _normalized_handle(raw: Any) -> str:
 
 
 def _allowed_outgoing_handles(node_type: str) -> set[str]:
-    if node_type == "logic/condition":
-        return {"true", "false"}
-    if node_type == "logic/human_approval":
-        return {"approved", "rejected", "timeout"}
-    if node_type == "logic/telegram_input":
-        return {"received", "timeout"}
-    if node_type == "logic/wait":
-        return {"done", "out"}
-    if node_type in {"logic/parallel", "logic/merge"} or node_type in TRIGGER_NODE_TYPES:
-        return {"out"}
-    if node_type.startswith("agent/") or node_type.startswith("output/"):
-        return {"success", "error", "out"}
-    return {"out"}
+    return set(allowed_source_handles(node_type))
 
 
 def _is_active_manual_trigger(node: dict[str, Any]) -> bool:
@@ -438,6 +718,13 @@ def validate_pipeline_definition(
             outgoing_edges=outgoing_edges,
             incoming_edges=incoming_edges,
             require_manual_trigger=require_manual_trigger,
+        )
+    )
+    errors.extend(
+        validate_execution_policy_guardrails(
+            nodes=nodes,
+            id_to_node=id_to_node,
+            incoming_edges=incoming_edges,
         )
     )
 

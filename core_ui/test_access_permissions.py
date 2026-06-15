@@ -52,6 +52,21 @@ class AccessPermissionsTests(TestCase):
         dashboard_response = self.client.get(reverse("api_admin_dashboard"))
         self.assertEqual(dashboard_response.status_code, 200)
 
+    def test_mars_and_kubernetes_are_not_staff_defaults(self):
+        user = self.create_user("staff-opt-in", is_staff=True)
+
+        features = self.auth_features(user)
+
+        self.assertFalse(features["mars"])
+        self.assertFalse(features["kubernetes"])
+
+        UserAppPermission.objects.create(user=user, feature="mars", allowed=True)
+        UserAppPermission.objects.create(user=user, feature="kubernetes", allowed=True)
+        features = self.auth_features(user)
+
+        self.assertTrue(features["mars"])
+        self.assertTrue(features["kubernetes"])
+
     def test_group_settings_permission_grants_access_management(self):
         user = self.create_user("manager")
         group = Group.objects.create(name="Managers")

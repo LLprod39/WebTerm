@@ -1,0 +1,11 @@
+- generic [ref=e2] [box=0,0,1435,2143]:
+  - region "Notifications (F8)" [box=0,0,1435,0]:
+    - list [box=1015,992,420,32]
+  - region "Notifications alt+T" [box=0,0,1435,0]
+  - generic [ref=e5] [box=0,0,1435,2143]:
+    - generic [ref=e9] [box=0,0,255,1024]:
+      - generic [ref=e10] [box=0,0,255,64]
+      - generic [ref=e18] [box=0,64,255,836]
+      - generic [ref=e60] [box=0,900,255,124]
+    - main [ref=e77] [box=256,0,1179,2143]:
+      - generic [ref=e79] [box=256,0,1179,2143]

@@ -10,6 +10,7 @@ from studio.models import CURRENT_PIPELINE_GRAPH_VERSION, Pipeline, PipelineTrig
 from studio.pipeline_validation import ensure_json_object, validate_pipeline_definition
 from studio.trigger_dispatch import get_pipeline_run_limit_error
 from studio.views.common import _err, _json_body, _ok, _validation_err
+from studio.views.pipeline_assistant_preview import pipeline_assistant_risk
 from studio.views.pipeline_helpers import (
     _create_pipeline_run,
     _default_pipeline_draft_nodes,
@@ -107,15 +108,12 @@ def api_pipeline_run(request, pipeline_id: int):
     if pipeline is None:
         return _err("Pipeline not found", 404)
 
-    limit_error = get_pipeline_run_limit_error(pipeline.owner)
-    if limit_error:
-        return JsonResponse(limit_error, status=429)
-
     payload = _json_body(request)
     context, error = ensure_json_object(payload.get("context", {}), label="context")
     if error:
         return _err(error)
     entry_node_id = str(payload.get("entry_node_id") or "").strip()
+    validate_only = bool(payload.get("validate_only") or payload.get("dry_run"))
 
     validation_errors = validate_pipeline_definition(
         nodes=pipeline.nodes,
@@ -124,9 +122,43 @@ def api_pipeline_run(request, pipeline_id: int):
         graph_version=pipeline.graph_version,
         require_manual_trigger=True,
     )
+    selected_trigger = None
+    trigger_errors: list[str] = []
+    if not validation_errors:
+        selected_trigger, trigger_errors = _resolve_manual_entry_trigger(pipeline, entry_node_id)
+    all_errors = [*validation_errors, *trigger_errors]
+
+    if validate_only:
+        risk = pipeline_assistant_risk(pipeline.nodes, pipeline.edges)
+        validation = {"ok": not all_errors, "errors": all_errors}
+        dry_run = {
+            "ok": validation["ok"] and risk.get("level") != "dangerous",
+            "executed": False,
+            "mode": "validate_only",
+            "checks": ["graph_contract", "manual_trigger", "references", "risk_review"],
+            "message": (
+                "Dry-run validation checked graph structure, manual trigger routing, references and risk. "
+                "No pipeline run was created and no runtime actions were executed."
+            ),
+        }
+        return _ok(
+            {
+                "ok": validation["ok"],
+                "validation": validation,
+                "risk": risk,
+                "dry_run": dry_run,
+                "entry_node_id": selected_trigger.node_id if selected_trigger else entry_node_id,
+                "trigger_type": PipelineTrigger.TYPE_MANUAL,
+                "would_create_run": False,
+            }
+        )
+
+    limit_error = get_pipeline_run_limit_error(pipeline.owner)
+    if limit_error:
+        return JsonResponse(limit_error, status=429)
+
     if validation_errors:
         return _validation_err(validation_errors, prefix="Pipeline is not runnable")
-    selected_trigger, trigger_errors = _resolve_manual_entry_trigger(pipeline, entry_node_id)
     if trigger_errors:
         return _validation_err(trigger_errors, prefix="Pipeline is not runnable")
 

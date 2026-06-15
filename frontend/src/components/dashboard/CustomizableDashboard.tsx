@@ -215,13 +215,13 @@ export function CustomizableDashboard({
     });
   };
 
-  const updateWidgetProp = (id: string, key: string, value: any) => {
+  const updateWidgetProp = (id: string, key: string, value: string | number) => {
     setLocalLayout((prev) =>
       prev.map((widget) => {
         if (widget.id !== id) return widget;
         
         if (key === "w") {
-          return { ...widget, w: value };
+          return { ...widget, w: Number.isFinite(Number(value)) ? Number(value) : widget.w };
         }
         
         const currentProps = widget.props ?? {};

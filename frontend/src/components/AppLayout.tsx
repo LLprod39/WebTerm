@@ -2,6 +2,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { Outlet, useLocation, Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
+import { localize, useI18n } from "@/lib/i18n";
 
 const immersiveMeta: Array<{ match: RegExp; title: string; backTo: string; hideHeader?: boolean }> = [
   { match: /^\/servers\/hub$/, title: "Terminal Hub", backTo: "/servers", hideHeader: true },
@@ -13,12 +14,15 @@ const immersiveMeta: Array<{ match: RegExp; title: string; backTo: string; hideH
 
 export default function AppLayout() {
   const location = useLocation();
+  const { lang } = useI18n();
   const immersive = immersiveMeta.find(({ match }) => match.test(location.pathname));
+  const openNavigationLabel = localize(lang, "Открыть навигацию", "Open navigation");
   const mobileSidebarTrigger = (
     <div className="pointer-events-none fixed left-4 top-4 z-40 md:hidden">
       <SidebarTrigger
         className="pointer-events-auto h-11 w-11 rounded-xl border border-border bg-card/95 text-foreground shadow-lg shadow-background/30"
-        title="Open navigation"
+        aria-label={openNavigationLabel}
+        title={openNavigationLabel}
       />
     </div>
   );
@@ -27,9 +31,9 @@ export default function AppLayout() {
     return (
       <SidebarProvider>
         {mobileSidebarTrigger}
-        <div className="flex min-h-screen w-full bg-background">
+        <div className="flex h-screen min-h-0 w-full overflow-hidden bg-background">
           <AppSidebar />
-          <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             {!immersive.hideHeader && (
               <header className="flex h-12 items-center gap-3 border-b border-border bg-card/70 px-3">
                 <SidebarTrigger className="h-9 w-9 text-muted-foreground hover:text-foreground" />
@@ -43,7 +47,7 @@ export default function AppLayout() {
                 <span className="text-xs font-medium text-foreground">{immersive.title}</span>
               </header>
             )}
-            <main className="min-h-0 flex-1 overflow-auto animate-in fade-in duration-200">
+            <main className="min-h-0 flex-1 overflow-hidden pt-16 animate-in fade-in duration-200 md:pt-0">
               <Outlet />
             </main>
           </div>
@@ -58,7 +62,7 @@ export default function AppLayout() {
       <div className="flex min-h-screen w-full bg-background">
         <AppSidebar />
         <div className="flex min-w-0 flex-1 flex-col">
-          <main className="min-h-0 flex-1 overflow-auto animate-in fade-in duration-200">
+          <main className="min-h-0 flex-1 overflow-auto pt-16 animate-in fade-in duration-200 md:pt-0">
             <Outlet />
           </main>
         </div>

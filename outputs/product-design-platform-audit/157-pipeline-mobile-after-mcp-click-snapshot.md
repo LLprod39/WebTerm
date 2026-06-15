@@ -1,0 +1,40 @@
+- generic [ref=e2] [box=0,0,390,844]:
+  - region "Notifications (F8)" [box=0,0,390,0]:
+    - list [box=0,0,390,32]
+  - region "Notifications alt+T" [box=0,0,390,0]
+  - generic [ref=e4] [box=0,0,390,844]:
+    - button "Toggle Sidebar" [ref=e395] [cursor=pointer] [box=16,16,44,44]:
+      - img [box=30,30,16,16]
+      - generic [ref=e6] [box=38,38,1,1]: Toggle Sidebar
+    - main [ref=e9] [box=0,0,390,844]:
+      - generic [ref=e11] [box=0,64,390,780]:
+        - generic [ref=e12] [box=0,64,390,149]:
+          - generic [ref=e13] [box=12,76,366,36]:
+            - button "Вернуться в Studio" [ref=e14] [cursor=pointer] [box=12,76,36,36]
+            - img [ref=e15] [box=56,87,14,14]
+            - textbox "Название pipeline…" [ref=e17] [box=78,76,300,36]
+          - generic [ref=e18] [box=12,120,366,80]:
+            - button "Сохранить" [ref=e19] [cursor=pointer] [box=12,120,121,36]
+            - button "Ноды" [ref=e20] [cursor=pointer] [box=141,120,86,36]
+            - button "Запуск" [ref=e21] [cursor=pointer] [box=235,120,95,36]
+            - button "Помощник" [ref=e22] [cursor=pointer] [box=12,164,123,36]
+            - button "Ещё действия" [ref=e23] [cursor=pointer] [box=143,164,36,36]
+        - generic [ref=e24] [box=0,213,390,99]:
+          - generic [ref=e25] [box=16,223,185,30]:
+            - img [ref=e26] [box=27,231,14,14]
+            - generic [ref=e30] [box=49,230,141,16]: Нет активного триггера
+          - paragraph [ref=e31] [box=16,261,358,40]: Добавьте ручной запуск, webhook, расписание или мониторинг, чтобы подготовить pipeline к запуску.
+        - generic [ref=e396] [box=0,312,390,49]:
+          - generic [ref=e397] [box=16,329,36,15]: Flow
+          - generic [ref=e398] [box=68,326,57,20]: Агенты
+          - button "MCP Call" [ref=e400] [cursor=pointer] [box=134,320,81,32]:
+            - img [ref=e401] [box=143,329,14,14]
+            - generic [ref=e403] [box=163,329,43,15]: MCP Call
+        - generic [ref=e32] [box=0,361,390,483]:
+          - application [ref=e35] [box=0,361,390,483]:
+            - group [ref=e404] [box=17,567,356,119]
+            - img [box=0,361,390,483]
+            - generic "Control Panel" [ref=e38] [box=15,725,26,104]
+          - generic [ref=e420] [box=13,129,364,702]:
+            - generic [ref=e421] [box=13,129,364,64]
+            - generic [ref=e433] [box=13,193,364,639]

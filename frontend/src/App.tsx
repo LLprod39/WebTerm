@@ -30,12 +30,16 @@ const SettingsSSOPage = lazy(() => import("./pages/settings/SettingsSSOPage"));
 const AgentsPage = lazy(() => import("./pages/AgentsPage"));
 const AgentRunPage = lazy(() => import("./pages/AgentRunPage"));
 const StudioPage = lazy(() => import("./pages/StudioPage"));
+const StudioDraftsPage = lazy(() => import("./pages/StudioDraftsPage"));
 const PipelineEditorPage = lazy(() => import("./pages/PipelineEditorPage"));
 const PipelineRunsPage = lazy(() => import("./pages/PipelineRunsPage"));
 const AgentConfigPage = lazy(() => import("./pages/AgentConfigPage"));
 const StudioSkillsPage = lazy(() => import("./pages/StudioSkillsPage"));
 const NotificationsSettingsPage = lazy(() => import("./pages/NotificationsSettingsPage"));
 const MCPHubPage = lazy(() => import("./pages/MCPHubPage"));
+const KubernetesPage = lazy(() => import("./pages/KubernetesPage"));
+const MarsPage = lazy(() => import("./pages/MarsPage"));
+const MarsRunPage = lazy(() => import("./pages/MarsRunPage"));
 
 function RouteLoader() {
   const { t } = useI18n();
@@ -169,6 +173,14 @@ const App = () => (
                   )}
                 />
                 <Route
+                  path="/studio/drafts"
+                  element={(
+                    <FeatureGate feature="studio_pipelines">
+                      <StudioDraftsPage />
+                    </FeatureGate>
+                  )}
+                />
+                <Route
                   path="/studio/pipeline/:id"
                   element={(
                     <FeatureGate feature="studio_pipelines">
@@ -221,6 +233,30 @@ const App = () => (
                   element={(
                     <FeatureGate feature="studio_notifications">
                       <NotificationsSettingsPage />
+                    </FeatureGate>
+                  )}
+                />
+                <Route
+                  path="/kubernetes"
+                  element={(
+                    <FeatureGate feature="kubernetes">
+                      <KubernetesPage />
+                    </FeatureGate>
+                  )}
+                />
+                <Route
+                  path="/mars"
+                  element={(
+                    <FeatureGate feature="mars">
+                      <MarsPage />
+                    </FeatureGate>
+                  )}
+                />
+                <Route
+                  path="/mars/runs/:runId"
+                  element={(
+                    <FeatureGate feature="mars">
+                      <MarsRunPage />
                     </FeatureGate>
                   )}
                 />

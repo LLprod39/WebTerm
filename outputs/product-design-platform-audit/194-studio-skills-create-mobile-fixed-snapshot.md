@@ -1,0 +1,97 @@
+- generic [box=0,0,385,2221]:
+  - generic [box=0,0,385,2221]:
+    - list [box=0,0,390,32]
+    - region "Notifications alt+T" [box=0,0,385,0]
+    - generic [box=0,0,385,2221]:
+      - button [ref=e206] [cursor=pointer] [box=16,16,44,44]:
+        - img [box=30,30,16,16]
+        - generic [ref=e6] [box=38,38,1,1]: Toggle Sidebar
+      - generic [box=0,0,385,2221]:
+        - generic [box=0,0,385,2221]:
+          - main [box=0,0,385,2221]:
+            - generic [box=0,64,385,2157]:
+              - navigation [box=0,64,385,56]:
+                - generic [box=64,69,71,40]: Studio
+                - button [box=155,69,87,40]:
+                  - img [box=169,82,14,14]
+                  - text: Обзор
+                - button [box=246,69,115,40]:
+                  - img [box=260,82,14,14]
+                  - text: Черновики
+                - button [box=366,69,96,40]:
+                  - img [box=380,82,14,14]
+                  - text: Скиллы
+                - button [box=465,69,77,40]:
+                  - img [box=479,82,14,14]
+                  - text: MCP
+                - button [box=547,69,93,40]:
+                  - img [box=561,82,14,14]
+                  - text: Агенты
+                - button [box=644,69,99,40]:
+                  - img [box=658,82,14,14]
+                  - text: Запуски
+                - button [box=747,69,126,40]:
+                  - img [box=761,82,14,14]
+                  - text: Оповещения
+              - generic [box=0,120,385,2101]:
+                - generic [box=0,120,385,564]:
+                  - generic [box=24,144,337,524]
+                - generic [box=0,684,385,1537]:
+                  - generic [box=24,684,337,166]
+                  - generic [box=24,874,337,1315]
+  - dialog "Создание скилла" [ref=e208] [box=0,16,390,812]:
+    - generic [ref=e210] [box=17,33,356,149]:
+      - heading "Создание скилла" [level=2] [ref=e211] [box=41,53,308,28]:
+        - img [ref=e212] [box=41,57,20,20]
+        - text: Создание скилла
+      - paragraph [ref=e215] [box=41,87,308,78]: Скилл — это рабочий плейбук агента. Заполните основные поля, а сложную конфигурацию мы спрятали в продвинутых настройках.
+    - generic [ref=e216] [box=1,199,388,563]:
+      - generic [ref=e217] [box=17,219,351,408]:
+        - generic [ref=e218] [box=17,219,351,24]:
+          - generic [ref=e219] [box=17,219,24,24]: "1"
+          - heading "Основная информация" [level=3] [ref=e220] [box=49,221,159,20]
+        - generic [ref=e221] [box=17,259,351,368]:
+          - generic [ref=e222] [box=17,259,351,70]:
+            - text: Если есть готовый концепт, выберите шаблон
+            - combobox [active] [ref=e223] [cursor=pointer] [box=17,289,351,40]:
+              - generic [box=30,299,215,20]: С чистого листа (пустой скилл)
+              - img [ref=e224] [box=339,301,16,16]
+          - generic [ref=e226] [box=17,345,351,156]:
+            - generic [ref=e227] [box=17,345,351,70]:
+              - text: Название (Что делает?)
+              - textbox "Управление токенами" [ref=e228] [box=17,375,351,40]
+            - generic [ref=e229] [box=17,431,351,70]:
+              - text: Сервис (Где делает?)
+              - textbox "github, keycloak..." [ref=e230] [box=17,461,351,40]
+          - generic [ref=e231] [box=17,517,351,110]:
+            - text: Описание для агентов
+            - textbox "Когда и зачем агент должен применять этот плейбук." [ref=e232] [box=17,547,351,80]
+      - generic [ref=e233] [box=17,655,351,198]:
+        - generic [ref=e234] [box=17,655,351,24]:
+          - generic [ref=e235] [box=17,655,24,24]: "2"
+          - heading "Структура и безопасность" [level=3] [ref=e236] [box=49,657,185,20]
+        - generic [ref=e237] [box=17,695,351,158]:
+          - generic [ref=e238] [box=17,695,351,70]:
+            - text: Уровень риска
+            - combobox [ref=e239] [cursor=pointer] [box=17,725,351,40]:
+              - generic [box=30,735,126,20]: стандартный риск
+              - img [ref=e240] [box=339,737,16,16]
+          - generic [ref=e242] [box=17,789,351,64]:
+            - generic [ref=e243] [box=17,793,351,24]:
+              - generic [ref=e244] [cursor=pointer] [box=17,797,163,16]: Добавить папку references/
+              - switch "Добавить папку references/" [checked] [ref=e245] [cursor=pointer] [box=324,793,44,24]
+            - generic [ref=e246] [box=17,829,351,24]:
+              - generic [ref=e247] [cursor=pointer] [box=17,833,141,16]: Добавить папку scripts/
+              - switch "Добавить папку scripts/" [ref=e248] [cursor=pointer] [box=324,829,44,24]
+      - heading "Дополнительные настройки" [level=3] [ref=e251] [box=17,881,351,52]:
+        - button "Дополнительные настройки" [ref=e252] [cursor=pointer] [box=17,881,351,52]:
+          - text: Дополнительные настройки
+          - img [ref=e253] [box=344,899,16,16]
+    - generic [ref=e255] [box=1,762,388,65]:
+      - button "Отмена" [ref=e256] [cursor=pointer] [box=17,775,85,40]
+      - button "Создать" [disabled] [box=244,775,129,40]:
+        - img [box=268,787,16,16]
+        - text: Создать
+    - button "Close" [ref=e257] [cursor=pointer] [box=345,33,28,28]:
+      - img [ref=e258] [box=351,39,16,16]
+      - generic [ref=e261] [box=358,54,1,1]: Close

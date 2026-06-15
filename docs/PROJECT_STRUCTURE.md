@@ -1,31 +1,63 @@
 # Project Structure
 
-This repository keeps only convention-required files in the root.
+Last reviewed: 2026-05-27
 
-## Root
+This repository is a Django + Channels backend, React/Vite SPA, Studio automation layer, and optional WinUI desktop client. The root is intentionally kept for entry points that tools expect at the repository top level.
 
-- `.git/` - local Git database; do not move or edit manually.
-- `.github/` - GitHub Actions, GitHub command configs, and README images; must stay at the root for GitHub.
-- `.env*`, `.model_config.json`, `.notification_config.json`, `db.sqlite3` - local runtime state and secrets; ignored by Git.
-- `.importlinter`, `.pre-commit-config.yaml`, `pyproject.toml` - architecture and Python tooling entry points.
-- `docker-compose*.yml`, `render.yaml` - deployment entry points that common tools expect at the root.
-- `requirements*.txt`, `manage.py` - backend setup and Django entry points.
+## Root Entry Points
 
-## Main Folders
+| Path | Role |
+| --- | --- |
+| `README.md` | Public project overview and quickstart. |
+| `manage.py` | Django management entry point. |
+| `pyproject.toml` | Python metadata, pytest config, ruff config, architecture baselines. |
+| `.importlinter` | Import-boundary contracts for the main Python packages. |
+| `requirements*.txt` | Python dependency sets: default, mini, and full. |
+| `docker-compose*.yml`, `render.yaml` | Local, production, smoke, and Render deployment entry points. |
+| `.env.example`, `.env.production.example`, `.notification_config.example.json` | Versioned environment/config templates only. |
+| `key_mcp.py` | Standalone Keycloak-oriented MCP server entry point. |
 
-- `frontend/` - React/Vite SPA.
-- `web_ui/`, `core_ui/`, `servers/`, `studio/`, `app/` - Django backend and agent/runtime modules.
-- `desktop/` - Windows desktop client.
-- `docker/` - Dockerfiles and deployment helper scripts.
-- `config/` - versioned config files that do not need root placement.
-- `docs/` - markdown reports, MARS artifacts, QA plans, and local-only internal notes.
-- `scripts/` - reusable maintenance scripts only.
-- `tests/` - automated test suites.
+## Active Application Areas
 
-## Removed From Root
+| Path | Current responsibility |
+| --- | --- |
+| `web_ui/` | Django project shell: settings, URLs, ASGI/WSGI, Celery, WebSocket routing. `web_ui/settings.py` is a compatibility shim; prefer `web_ui.settings.development`, `.production`, or `.test`. |
+| `core_ui/` | Auth/session APIs, settings/access/admin endpoints, desktop API, audit/activity, shared UI redirects and middleware. |
+| `servers/` | Server inventory, SSH/RDP terminal flows, SFTP/file actions, monitoring, alerts, watcher drafts, server memory, snapshots, and server-bound agents. |
+| `studio/` | Pipelines, triggers, runs, MCP registry, reusable agents, skill authoring, pipeline templates, notifications. |
+| `app/` | Shared LLM/runtime/safety/agent-kernel code. Keep this layer as independent from Django feature apps as possible. |
+| `frontend/` | React 18 + Vite + TypeScript SPA, TanStack Query, Tailwind/Radix local components, Vitest and Playwright tests. |
+| `desktop/` | WinUI 3 client using `/api/desktop/v1/`. Optional and separate from the SPA. |
+| `docker/` | Dockerfiles, nginx configs, and operational smoke scripts. |
+| `config/` | Versioned config that should not live in the root, for example Keycloak profiles. |
+| `scripts/` | Maintained maintenance scripts such as architecture-size checks and setup helpers. |
+| `tests/` | Backend, integration, policy, terminal, memory, Studio, and API tests. |
+| `docs/` | Current documentation, QA plans, reports, and ignored local-only docs. |
 
-- `ai-server-terminal-main/` was renamed to `frontend/`.
-- `passwords/` was removed; it was a deprecated compatibility shim.
-- `.windsurf/` was removed; it only contained editor workflow notes.
-- `agent_projects/` was removed and ignored; it is runtime/generated storage.
-- Root Vite wrapper files were removed; frontend commands now run from `frontend/`.
+## Important Internal Boundaries
+
+- `core_ui` should not accumulate server or Studio business logic. Cross-context exceptions are documented in `.importlinter`.
+- `servers` and `studio` should not import each other directly except for explicitly tracked legacy exceptions.
+- `app.agent_kernel` should remain pure Python/domain logic and avoid Django ORM dependencies.
+- Large legacy files are pinned in `[tool.architecture.legacy_baselines]`; they may shrink, but they should not grow.
+- `studio/pipeline_executor.py` is still the active executor for most node types. `studio/executor/` is the target node-registry architecture and currently contains migrated node implementations for selected output nodes.
+
+## Generated, Local, and Ignored Paths
+
+These paths are intentionally not documentation sources of truth:
+
+| Path | Treatment |
+| --- | --- |
+| `.venv/`, `node_modules/`, `frontend/node_modules/` | Local dependency installs. Ignored. |
+| `frontend/dist/`, `frontend/playwright-report/`, `frontend/test-results/` | Generated frontend artifacts. Ignored. |
+| `runtime_logs/`, `logs/`, `mars_logs/`, `.codex-logs/` | Runtime and agent logs. Ignored. |
+| `agent_projects/` | Generated/local agent project storage. Ignored. |
+| `db.sqlite3`, `*.sqlite`, `*.db`, `media/` | Local runtime data. Ignored. |
+| `docs/local/` | Local-only internal docs. Ignored by git, but still useful in this workspace. |
+
+## Historical Cleanup Already Reflected
+
+- Root Vite wrapper files are no longer the active frontend source. Frontend commands run from `frontend/`.
+- Old root copies of internal docs were moved under `docs/local/` and are ignored.
+- Backend view monoliths now mostly act as compatibility shims while focused modules own endpoint groups.
+- The old `servers.mcp_tool_runtime` shim and `passwords/` compatibility package are no longer present in this checkout; MCP runtime ownership is now under `studio.mcp_tool_runtime` with an app-level `MCPRuntimeProvider` bridge.

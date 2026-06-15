@@ -43,7 +43,7 @@ from app.agent_kernel.domain.roles import ROLE_SPECS
 from app.agent_kernel.domain.specs import ToolSpec
 from app.agent_kernel.hooks.manager import HookManager
 from app.agent_kernel.memory.compaction import compact_text
-from app.agent_kernel.memory.redaction import sanitize_observation_text
+from app.agent_kernel.memory.redaction import redact_payload, sanitize_observation_text
 from app.agent_kernel.memory.server_cards import render_server_cards_prompt
 from app.agent_kernel.permissions.engine import PermissionEngine
 from app.agent_kernel.runtime.context import build_ops_prompt_context
@@ -56,8 +56,12 @@ from servers.services.pipeline_agents import run_pipeline_multi_agent, run_pipel
 from servers.services.pipeline_memory import build_pipeline_operational_recipes, get_pipeline_server_card
 from servers.services.ssh_connection import get_server_connect_kwargs
 from studio.mcp_tool_runtime import MCPBoundTool
+from studio.executor.context import ExecutionContext
+from studio.executor.registry import registry
+from studio.executor import nodes as _registered_executor_nodes  # noqa: F401
 
 from .mcp_client import call_mcp_tool
+from .execution_policy import build_execution_policy_decisions, summarize_execution_policy_decisions
 from .models import PipelineRun
 from .pipeline_runtime import is_runtime_stop_requested, register_executor, unregister_executor
 from .pipeline_validation import validate_pipeline_definition
@@ -235,6 +239,59 @@ async def _poll_telegram_reply_message(bot_token: str, chat_id: str, reply_to_me
 
     await _poll_telegram_updates(bot_token)
     return _pop_telegram_reply(chat_id, reply_to_message_id)
+
+
+def store_telegram_operator_reply(bot_token: str, message: dict[str, Any]) -> bool:
+    """Persist a Telegram reply into the matching running pipeline node state."""
+    if not isinstance(message, dict):
+        return False
+    reply_to = message.get("reply_to_message") or {}
+    chat = message.get("chat") or {}
+    text = str(message.get("text") or "").strip()
+    chat_id = str(chat.get("id") or "").strip()
+    try:
+        reply_to_message_id = int(reply_to.get("message_id"))
+    except (TypeError, ValueError):
+        reply_to_message_id = 0
+    if not chat_id or reply_to_message_id <= 0 or not text:
+        return False
+
+    runs = list(
+        PipelineRun.objects.filter(status__in=[PipelineRun.STATUS_RUNNING, PipelineRun.STATUS_HIBERNATING])
+        .order_by("-created_at")
+        .only("id", "node_states")[:100]
+    )
+    for run in runs:
+        node_states = run.node_states if isinstance(run.node_states, dict) else {}
+        for node_id, state in node_states.items():
+            if not isinstance(state, dict):
+                continue
+            if state.get("status") not in {"hibernating", "awaiting_operator_reply"}:
+                continue
+            if str(state.get("telegram_chat_id") or "") != chat_id:
+                continue
+            try:
+                prompt_message_id = int(state.get("telegram_prompt_message_id") or 0)
+            except (TypeError, ValueError):
+                prompt_message_id = 0
+            if prompt_message_id != reply_to_message_id:
+                continue
+            stored_token = str(state.get("bot_token") or "").strip()
+            if stored_token and bot_token and stored_token != bot_token:
+                continue
+            next_state = dict(state)
+            next_state.update(
+                {
+                    "operator_response": text,
+                    "operator_response_message_id": message.get("message_id"),
+                    "operator_response_from": ((message.get("from") or {}) or {}).get("username") or "",
+                    "operator_response_received_at": timezone.now().isoformat(),
+                }
+            )
+            node_states[str(node_id)] = next_state
+            PipelineRun.objects.filter(pk=run.pk).update(node_states=node_states)
+            return True
+    return False
 
 
 def _merge_unique_strings(*groups: list[str]) -> list[str]:
@@ -503,6 +560,74 @@ def _compact_node_outputs_context(node_outputs: dict[str, dict], *, max_nodes: i
     return "\n\n".join(lines)
 
 
+def _redact_pipeline_text(
+    value: Any,
+    *,
+    limit: int | None = None,
+    preserve_values: list[str] | tuple[str, ...] | None = None,
+) -> str:
+    text = str(value or "")
+    placeholders: dict[str, str] = {}
+    for index, raw_value in enumerate(preserve_values or []):
+        preserved = str(raw_value or "")
+        if not preserved or preserved not in text:
+            continue
+        placeholder = f"__PIPELINE_REDACTION_PRESERVE_{index}__"
+        placeholders[placeholder] = preserved
+        text = text.replace(preserved, placeholder)
+
+    redacted = sanitize_observation_text(text).text
+    for placeholder, preserved in placeholders.items():
+        redacted = redacted.replace(placeholder, preserved)
+    if limit is not None:
+        return redacted[: max(0, int(limit))]
+    return redacted
+
+
+def _redact_pipeline_value(value: Any, *, key: str = "", preserve_keys: set[str] | None = None) -> Any:
+    if preserve_keys and key in preserve_keys:
+        return value
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        return {str(child_key): _redact_pipeline_value(item, key=str(child_key), preserve_keys=preserve_keys) for child_key, item in value.items()}
+    if isinstance(value, list):
+        return [_redact_pipeline_value(item, preserve_keys=preserve_keys) for item in value]
+    if isinstance(value, tuple):
+        return [_redact_pipeline_value(item, preserve_keys=preserve_keys) for item in value]
+    if isinstance(value, (int, float, bool)):
+        return value
+    return _redact_pipeline_text(value)
+
+
+def _redacted_pipeline_context(context: dict[str, Any], *, preserve_keys: set[str] | None = None) -> defaultdict[str, Any]:
+    return defaultdict(
+        str,
+        {
+            str(key): _redact_pipeline_value(value, key=str(key), preserve_keys=preserve_keys)
+            for key, value in dict(context or {}).items()
+        },
+    )
+
+
+def _redacted_node_outputs_payload(node_outputs: dict[str, dict], *, max_output_chars: int = 1000) -> dict[str, dict[str, Any]]:
+    return {
+        str(node_id): {
+            "status": state.get("status"),
+            "output": _redact_pipeline_text(state.get("output", ""), limit=max_output_chars),
+        }
+        for node_id, state in node_outputs.items()
+    }
+
+
+def _redacted_all_outputs_text(node_outputs: dict[str, dict], *, max_output_chars: int = 2000) -> str:
+    return "\n\n".join(
+        f"--- [{nid}] ---\n{_redact_pipeline_text((state.get('output') or '').strip(), limit=max_output_chars)}"
+        for nid, state in node_outputs.items()
+        if (state.get("output") or "").strip()
+    )
+
+
 def _build_pipeline_tool_spec(tool_name: str, *, command: str = "") -> ToolSpec:
     lowered_name = (tool_name or "").lower()
     lowered_command = (command or "").lower()
@@ -629,7 +754,7 @@ def _possible_routing_ports(node_type: str) -> set[str]:
         return {"approved", "rejected", "timeout"}
     if node_type == "logic/telegram_input":
         return {"received", "timeout"}
-    if node_type.startswith("agent/") or node_type.startswith("output/"):
+    if node_type.startswith("agent/") or node_type.startswith("output/") or node_type.startswith("ops/"):
         return {"success", "error", "out"}
     return {"out"}
 
@@ -661,7 +786,7 @@ def _result_routing_ports(node: dict[str, Any], result: dict[str, Any]) -> list[
     if node_type == "logic/telegram_input":
         decision = str(result.get("decision") or "").strip()
         return [decision] if decision in {"received", "timeout"} else []
-    if node_type.startswith("agent/") or node_type.startswith("output/"):
+    if node_type.startswith("agent/") or node_type.startswith("output/") or node_type.startswith("ops/"):
         if status == "completed":
             return ["success", "out"]
         if status == "failed":
@@ -969,8 +1094,9 @@ async def _execute_agent_ssh_cmd(node: dict, context: dict, run: PipelineRun) ->
 
     if not server_id:
         return {
-            "status": "skipped",
-            "output": "⚠️ No server configured for this SSH node. Click the node → select a Server in the config panel.",
+            "status": "failed",
+            "error": "No server configured for this SSH node. Select a Server or provide one through a structured ops node.",
+            "output": "",
         }
     if not command:
         # If an AgentConfig is attached, the node was likely meant to be agent/react — delegate.
@@ -1351,15 +1477,18 @@ async def _execute_output_email(node: dict, context: dict, node_outputs: dict[st
 
     subject_template = config.get("subject", f"Pipeline Report: {run.pipeline.name}")
     body_template = config.get("body", "")
+    preserve_values = [str(item) for item in config.get("_redaction_preserve_values", []) if str(item or "")]
+    preserve_context_keys = {str(item) for item in config.get("_redaction_preserve_context_keys", []) if str(item or "")}
 
     # context is already enriched with {nid}, {nid_output}, {nid_error} from _execute_node
-    subs = dict(context)
+    subs = _redacted_pipeline_context(context, preserve_keys=preserve_context_keys)
 
     # Format subject
     try:
         subject = subject_template.format_map(subs)
     except (KeyError, ValueError):
         subject = subject_template
+    subject = _redact_pipeline_text(subject, preserve_values=preserve_values)
 
     # Build body
     if body_template:
@@ -1376,9 +1505,10 @@ async def _execute_output_email(node: dict, context: dict, node_outputs: dict[st
         for nid, state in node_outputs.items():
             if state.get("output"):
                 lines.append(f"## [{nid}]")
-                lines.append(state["output"][:2000])
+                lines.append(_redact_pipeline_text(state["output"], limit=2000))
                 lines.append("")
         body = "\n".join(lines)
+    body = _redact_pipeline_text(body, preserve_values=preserve_values)
 
     # SMTP config: node overrides global Django settings which override hardcoded defaults
     smtp_host = (config.get("smtp_host") or "").strip() or g_host or getattr(settings, "EMAIL_HOST", "smtp.gmail.com")
@@ -1460,21 +1590,23 @@ async def _execute_output_report(node: dict, context: dict, node_outputs: dict[s
     """Compile a markdown report from all node outputs."""
     config = node.get("data", {})
     template = config.get("template", "")
+    safe_context = _redacted_pipeline_context(context)
 
     if template:
         # Render what we can and leave missing values blank instead of leaking raw placeholders.
-        report = _render_template_value(template, context)
+        report = _render_template_value(template, safe_context)
     else:
         lines = [f"# Pipeline Run Report: {run.pipeline.name}\n"]
         for nid, state in node_outputs.items():
             lines.append(f"## Node `{nid}`")
             lines.append(f"**Status:** {state.get('status', 'unknown')}")
             if state.get("output"):
-                lines.append(f"```\n{state['output'][:2000]}\n```")
+                lines.append(f"```\n{_redact_pipeline_text(state['output'], limit=2000)}\n```")
             if state.get("error"):
-                lines.append(f"**Error:** {state['error']}")
+                lines.append(f"**Error:** {_redact_pipeline_text(state['error'])}")
             lines.append("")
         report = "\n".join(lines)
+    report = _redact_pipeline_text(report)
 
     await _s2a_fn(PipelineRun.objects.filter(pk=run.pk).update)(summary=report)
     return {"status": "completed", "output": report}
@@ -1483,20 +1615,37 @@ async def _execute_output_report(node: dict, context: dict, node_outputs: dict[s
 async def _execute_output_webhook(node: dict, context: dict, node_outputs: dict[str, dict]) -> dict:
     """POST the pipeline results to an external webhook URL."""
     config = node.get("data", {})
-    url = config.get("url", "")
+    url = str(_render_template_value(config.get("url", ""), context) or "").strip()
     if not url:
         return {"status": "failed", "error": "No URL configured"}
 
+    safe_context = _redacted_pipeline_context(context)
     payload = {
-        "context": context,
-        "outputs": {k: {"status": v.get("status"), "output": v.get("output", "")[:1000]} for k, v in node_outputs.items()},
+        "context": dict(safe_context),
+        "outputs": _redacted_node_outputs_payload(node_outputs),
     }
     extra_payload = config.get("extra_payload", {})
-    payload.update(extra_payload)
+    if isinstance(extra_payload, dict):
+        payload.update(_render_template_value(extra_payload, safe_context))
+    payload, _redaction_report, _redaction_hashes = redact_payload(payload)
+    headers = config.get("headers") if isinstance(config.get("headers"), dict) else {}
+    rendered_headers = _render_template_value(headers, context) if isinstance(headers, dict) else {}
+    try:
+        timeout_seconds = max(1, min(int(config.get("timeout_seconds") or 30), 120))
+    except (TypeError, ValueError):
+        timeout_seconds = 30
+    fail_on_non_2xx = bool(config.get("fail_on_non_2xx", False))
 
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(url, json=payload)
+        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+            resp = await client.post(url, json=payload, headers=rendered_headers)
+            if fail_on_non_2xx and not (200 <= resp.status_code < 300):
+                return {
+                    "status": "failed",
+                    "error": f"Webhook returned HTTP {resp.status_code}",
+                    "output": f"POST {url} → {resp.status_code}",
+                    "http_status": resp.status_code,
+                }
             return {
                 "status": "completed",
                 "output": f"POST {url} → {resp.status_code}",
@@ -1687,24 +1836,27 @@ async def _execute_output_telegram(node: dict, context: dict, node_outputs: dict
         # Auto-build message from pipeline outputs
         lines = [f"📊 *Pipeline: {run.pipeline.name}*\n"]
         for nid, state in node_outputs.items():
-            out = (state.get("output") or "").strip()
+            out = _redact_pipeline_text((state.get("output") or "").strip())
             if out:
                 lines.append(f"*[{nid}]*\n{out[:800]}")
         message_template = "\n\n".join(lines) or f"Pipeline {run.pipeline.name} status update."
 
-    subs = dict(context)
+    preserve_context_keys = {str(item) for item in config.get("_redaction_preserve_context_keys", []) if str(item or "")}
+    subs = _redacted_pipeline_context(context, preserve_keys=preserve_context_keys)
     subs["pipeline_name"] = run.pipeline.name
     subs["run_id"] = str(run.pk)
     subs["entry_node_id"] = str(run.entry_node_id or "")
     subs["trigger_type"] = str(getattr(run.trigger, "trigger_type", "") or "")
     subs["trigger_name"] = str(getattr(run.trigger, "name", "") or "")
     subs["all_outputs"] = "\n\n".join(
-        f"[{nid}]: {(v.get('output') or '')[:500]}" for nid, v in node_outputs.items() if v.get("output")
+        f"[{nid}]: {_redact_pipeline_text(v.get('output') or '', limit=500)}" for nid, v in node_outputs.items() if v.get("output")
     )
     try:
         message = message_template.format_map(subs)
     except (KeyError, ValueError):
         message = message_template
+    preserve_values = [str(item) for item in config.get("_redaction_preserve_values", []) if str(item or "")]
+    message = _redact_pipeline_text(message, preserve_values=preserve_values)
 
     parse_mode = config.get("parse_mode", "Markdown")
     reply_markup = config.get("reply_markup")
@@ -1780,12 +1932,8 @@ async def _execute_logic_human_approval(
     base_url = (config.get("base_url") or "").rstrip("/") or _global_site_url()
 
     # Build rich context for the notification message
-    all_outputs_text = "\n\n".join(
-        f"--- [{nid}] ---\n{(v.get('output') or '').strip()[:2000]}"
-        for nid, v in node_outputs.items()
-        if (v.get("output") or "").strip()
-    )
-    subs = dict(context)
+    all_outputs_text = _redacted_all_outputs_text(node_outputs, max_output_chars=2000)
+    subs = _redacted_pipeline_context(context)
 
     # Format message
     message_template = config.get(
@@ -1803,6 +1951,20 @@ async def _execute_logic_human_approval(
     approval_token = secrets.token_urlsafe(32)
     approve_url = f"{base_url}/api/studio/runs/{run.pk}/approve/{node_id}/?token={approval_token}&decision=approved"
     reject_url = f"{base_url}/api/studio/runs/{run.pk}/approve/{node_id}/?token={approval_token}&decision=rejected"
+    manual_link_only = bool(config.get("manual_link_only", False))
+    preview_to_email = (config.get("to_email") or g_to or "").strip()
+    preview_tg_bot_token, preview_tg_chat_id = _resolve_telegram_target(
+        config,
+        token_keys=("tg_bot_token", "bot_token", "telegram_bot_token"),
+        chat_keys=("tg_chat_id", "chat_id", "telegram_chat_id"),
+    )
+    if not preview_to_email and not (preview_tg_bot_token and preview_tg_chat_id) and not manual_link_only:
+        return {
+            "status": "failed",
+            "error": "No delivery channel configured for human approval. Set email/Telegram or enable manual_link_only.",
+            "decision": "timeout",
+            "output": f"Approval links were not armed because delivery is missing.\nApprove: {approve_url}\nReject: {reject_url}",
+        }
 
     subs["pipeline_name"] = run.pipeline.name
     subs["run_id"] = str(run.pk)
@@ -1872,6 +2034,8 @@ async def _execute_logic_human_approval(
                 "smtp_user": config.get("smtp_user") or "",
                 "smtp_password": config.get("smtp_password") or "",
                 "from_email": config.get("from_email") or "",
+                "_redaction_preserve_values": [approve_url, reject_url],
+                "_redaction_preserve_context_keys": ["approve_url", "reject_url"],
             },
         }
         try:
@@ -1909,6 +2073,8 @@ async def _execute_logic_human_approval(
                     "message": telegram_message,
                     "parse_mode": tg_parse_mode,
                     "disable_web_page_preview": True,
+                    "_redaction_preserve_values": [approve_url, reject_url],
+                    "_redaction_preserve_context_keys": ["approve_url", "reject_url"],
                     "reply_markup": {
                     "inline_keyboard": [
                         [
@@ -2035,12 +2201,8 @@ async def _execute_logic_telegram_input(
     if not chat_id:
         return {"status": "failed", "error": "tg_chat_id not configured for telegram_input node.", "decision": "timeout"}
 
-    all_outputs_text = "\n\n".join(
-        f"--- [{nid}] ---\n{(v.get('output') or '').strip()[:2000]}"
-        for nid, v in node_outputs.items()
-        if (v.get("output") or "").strip()
-    )
-    subs = dict(context)
+    all_outputs_text = _redacted_all_outputs_text(node_outputs, max_output_chars=2000)
+    subs = _redacted_pipeline_context(context)
     subs["pipeline_name"] = run.pipeline.name
     subs["run_id"] = str(run.pk)
     subs["all_outputs"] = all_outputs_text
@@ -2055,8 +2217,9 @@ async def _execute_logic_telegram_input(
         "Ответьте на это сообщение обычным текстом. Ответ будет передан агенту."
     )
     node_state = dict(run.node_states.get(node_id, {}))
+    prompt_message_id = 0
+    started_at = timezone.now()
 
-    # ── Phase 2: Wakeup / Timeout check ──
     if node_state.get("status") in {"hibernating", "awaiting_operator_reply"}:
         operator_response = str(node_state.get("operator_response") or "").strip()
         if operator_response:
@@ -2066,64 +2229,116 @@ async def _execute_logic_telegram_input(
                 "decision": "received",
                 "response_text": operator_response,
             }
-
+        try:
+            prompt_message_id = int(node_state.get("telegram_prompt_message_id") or 0)
+        except (TypeError, ValueError):
+            prompt_message_id = 0
         started_at_str = node_state.get("started_at")
         if started_at_str:
-            from dateutil.parser import isoparse
-            started_at = isoparse(started_at_str)
-            if timezone.now() >= started_at + timedelta(minutes=timeout_minutes):
-                return {
-                    "status": "failed",
-                    "error": f"Таймаут ожидания ответа оператора — нет ответа в течение {timeout_minutes:.0f} мин.",
-                    "decision": "timeout",
-                }
-        if is_runtime_stop_requested(run):
-            return {"status": "stopped", "output": "Ожидание ответа оператора отменено", "stopped": True}
-        return {"status": "hibernating", "reason": "awaiting_operator_reply"}
+            with contextlib.suppress(Exception):
+                from dateutil.parser import isoparse
 
-    # ── Phase 1: Send prompt ──
+                started_at = isoparse(started_at_str)
+    else:
+        try:
+            prompt_message = str(message_template).format_map(subs)
+        except (KeyError, ValueError):
+            prompt_message = str(message_template)
+        prompt_message = _redact_pipeline_text(prompt_message)
+
+        telegram_result = await _send_telegram_message(
+            bot_token=bot_token,
+            chat_id=chat_id,
+            message=prompt_message,
+            parse_mode=parse_mode,
+            reply_markup={"force_reply": True, "selective": False},
+        )
+        if telegram_result.get("status") != "completed":
+            return {
+                "status": "failed",
+                "error": str(telegram_result.get("error") or "Не удалось отправить Telegram-сообщение."),
+                "decision": "timeout",
+            }
+
+        try:
+            prompt_message_id = int(telegram_result.get("last_message_id") or 0)
+        except (TypeError, ValueError):
+            prompt_message_id = 0
+        if prompt_message_id <= 0:
+            return {
+                "status": "failed",
+                "error": "Telegram не вернул message_id для ожидания ответа оператора.",
+                "decision": "timeout",
+            }
+
+        await _update_node_state(
+            run,
+            node_id,
+            {
+                "status": "awaiting_operator_reply",
+                "telegram_prompt_message_id": prompt_message_id,
+                "telegram_chat_id": chat_id,
+                "bot_token": bot_token,
+                "started_at": started_at.isoformat(),
+            },
+        )
+
+    deadline = started_at + timedelta(minutes=timeout_minutes)
     try:
-        prompt_message = str(message_template).format_map(subs)
-    except (KeyError, ValueError):
-        prompt_message = str(message_template)
-
-    telegram_result = await _send_telegram_message(
-        bot_token=bot_token,
-        chat_id=chat_id,
-        message=prompt_message,
-        parse_mode=parse_mode,
-        reply_markup={"force_reply": True, "selective": False},
-    )
-    if telegram_result.get("status") != "completed":
-        return {
-            "status": "failed",
-            "error": str(telegram_result.get("error") or "Не удалось отправить Telegram-сообщение."),
-            "decision": "timeout",
-        }
-
-    try:
-        prompt_message_id = int(telegram_result.get("last_message_id") or 0)
+        poll_interval = max(1, min(int(config.get("poll_interval_seconds") or 2), 30))
     except (TypeError, ValueError):
-        prompt_message_id = 0
-    if prompt_message_id <= 0:
-        return {
-            "status": "failed",
-            "error": "Telegram не вернул message_id для ожидания ответа оператора.",
-            "decision": "timeout",
-        }
+        poll_interval = 2
 
-    await _update_node_state(
-        run,
-        node_id,
-        {
-            "status": "hibernating",
-            "telegram_prompt_message_id": prompt_message_id,
-            "telegram_chat_id": chat_id,
-            "bot_token": bot_token,
-            "started_at": timezone.now().isoformat(),
-        },
-    )
-    return {"status": "hibernating", "reason": "awaiting_operator_reply"}
+    while True:
+        fresh_run = await _s2a(lambda: PipelineRun.objects.get(pk=run.pk), thread_sensitive=False)()
+        fresh_state = dict(fresh_run.node_states.get(node_id, {}))
+        operator_response = str(fresh_state.get("operator_response") or "").strip()
+        if operator_response:
+            return {
+                "status": "completed",
+                "output": operator_response,
+                "decision": "received",
+                "response_text": operator_response,
+            }
+
+        if stop_event and stop_event.is_set():
+            return {"status": "stopped", "output": "Ожидание ответа оператора отменено", "stopped": True}
+        if is_runtime_stop_requested(fresh_run):
+            return {"status": "stopped", "output": "Ожидание ответа оператора отменено", "stopped": True}
+
+        reply = await _poll_telegram_reply_message(bot_token, chat_id, prompt_message_id)
+        if reply:
+            response_text = str(reply.get("text") or "").strip()
+            if response_text:
+                fresh_state.update(
+                    {
+                        "status": "awaiting_operator_reply",
+                        "operator_response": response_text,
+                        "operator_response_message_id": reply.get("message_id"),
+                        "operator_response_from": reply.get("from_username") or "",
+                        "operator_response_received_at": timezone.now().isoformat(),
+                    }
+                )
+                await _update_node_state(fresh_run, node_id, fresh_state)
+                return {
+                    "status": "completed",
+                    "output": response_text,
+                    "decision": "received",
+                    "response_text": response_text,
+                }
+
+        fresh_run = await _s2a(lambda: PipelineRun.objects.get(pk=run.pk), thread_sensitive=False)()
+        if stop_event and stop_event.is_set():
+            return {"status": "stopped", "output": "Ожидание ответа оператора отменено", "stopped": True}
+        if is_runtime_stop_requested(fresh_run):
+            return {"status": "stopped", "output": "Ожидание ответа оператора отменено", "stopped": True}
+        if timezone.now() >= deadline:
+            return {
+                "status": "failed",
+                "error": f"Таймаут ожидания ответа оператора — нет ответа в течение {timeout_minutes:.0f} мин.",
+                "decision": "timeout",
+            }
+        await asyncio.sleep(poll_interval)
 
 
 async def _execute_logic_merge(node: dict, context: dict, node_outputs: dict[str, dict], run: PipelineRun) -> dict:
@@ -2248,6 +2463,57 @@ async def _update_run_status(run: PipelineRun, status: str, **extra):
                 f"pipeline_run_{run.pk}",
                 {"type": "pipeline.status", "status": status, **extra},
             )
+
+
+async def _execute_registry_node(
+    node: dict,
+    context: dict,
+    node_outputs: dict[str, dict],
+    run: PipelineRun,
+    stop_event: Event | None = None,
+    executed_mcp_tools: set[str] | None = None,
+) -> dict:
+    """Execute registry-owned nodes from the current production executor."""
+    node_type = str(node.get("type") or "")
+    node_id = str(node.get("id") or "")
+    if node_type not in registry:
+        return {"status": "failed", "error": f"Node type is not registered: {node_type}"}
+
+    owner = await _s2a_fn(lambda: run.pipeline.owner)()
+    ctx = ExecutionContext(
+        run_id=run.pk,
+        user=owner,
+        pipeline=run.pipeline,
+        node_outputs=dict(node_outputs or {}),
+        stop_event=stop_event or Event(),
+        extra={
+            "context": dict(context or {}),
+            "run": run,
+            "executed_mcp_tools": executed_mcp_tools,
+            "runtime": {
+                "pipeline_name": run.pipeline.name,
+                "run_id": str(run.pk),
+                "run_status": str(run.status or ""),
+                "entry_node_id": str(run.entry_node_id or ""),
+                "trigger_type": str(getattr(run.trigger, "trigger_type", "") or ""),
+                "trigger_name": str(getattr(run.trigger, "name", "") or ""),
+            },
+        },
+    )
+    try:
+        result = await registry.create(node_type, node_id=node_id, node_data=node.get("data") or {}).execute(ctx)
+    except Exception as exc:
+        logger.exception("pipeline run %s registry node %s raised exception", run.pk, node_id)
+        return {"status": "failed", "error": str(exc)}
+
+    payload = dict(result.output or {})
+    status = str(payload.pop("status", "") or ("completed" if result.ok else "failed"))
+    state = {"status": status, **payload}
+    if result.error:
+        state["error"] = result.error
+    if "output" not in state and result.error:
+        state["output"] = ""
+    return state
 
 
 # ---------------------------------------------------------------------------
@@ -2442,6 +2708,13 @@ class PipelineExecutor:
                     return run
                 entry_node_id = str(run.entry_node_id or getattr(getattr(run, "trigger", None), "node_id", "") or "").strip()
                 id_to_node, outgoing_edges, incoming_edges = self._build_graph(nodes, edges)
+                policy_summary = summarize_execution_policy_decisions(
+                    build_execution_policy_decisions(
+                        nodes=nodes,
+                        id_to_node=id_to_node,
+                        incoming_edges=incoming_edges,
+                    )
+                )
                 entry_node = id_to_node.get(entry_node_id)
                 if not entry_node_id or entry_node is None:
                     await _update_run_status(
@@ -2481,6 +2754,8 @@ class PipelineExecutor:
                 run.nodes_snapshot = nodes
                 run.edges_snapshot = edges
                 run.context = context
+                trigger_data = run.trigger_data if isinstance(run.trigger_data, dict) else {}
+                run.trigger_data = {**trigger_data, "execution_policy": policy_summary}
                 run.entry_node_id = entry_node_id
                 run.node_states = {}
                 run.routing_state = _serialize_routing_state(
@@ -2688,50 +2963,15 @@ class PipelineExecutor:
             enriched[f"{nid}_error"] = err
             enriched[f"{nid}_status"] = state.get("status", "")
 
-        if node_type == "agent/react":
-            return await _execute_agent_react(node, enriched, self.run)
-
-        if node_type == "agent/multi":
-            return await _execute_agent_multi(node, enriched, self.run)
-
-        if node_type == "agent/ssh_cmd":
-            return await _execute_agent_ssh_cmd(node, enriched, self.run)
-
-        if node_type == "agent/llm_query":
-            return await _execute_agent_llm_query(node, enriched, node_outputs, self.run)
-
-        if node_type == "agent/mcp_call":
-            return await _execute_agent_mcp_call(node, enriched, self.run, self._executed_mcp_tools)
-
-        if node_type == "logic/condition":
-            return await _execute_logic_condition(node, enriched, node_outputs, self.run)
-
-        if node_type == "logic/parallel":
-            return {"status": "completed", "output": "параллельное разветвление"}
-
-        if node_type == "logic/merge":
-            return await _execute_logic_merge(node, enriched, node_outputs, self.run)
-
-        if node_type == "logic/wait":
-            return await _execute_logic_wait(node, enriched, self.run, self._stop_event)
-
-        if node_type == "logic/human_approval":
-            return await _execute_logic_human_approval(node, enriched, node_outputs, self.run, self._stop_event)
-
-        if node_type == "logic/telegram_input":
-            return await _execute_logic_telegram_input(node, enriched, node_outputs, self.run, self._stop_event)
-
-        if node_type == "output/report":
-            return await _execute_output_report(node, enriched, node_outputs, self.run)
-
-        if node_type == "output/webhook":
-            return await _execute_output_webhook(node, enriched, node_outputs)
-
-        if node_type == "output/email":
-            return await _execute_output_email(node, enriched, node_outputs, self.run)
-
-        if node_type == "output/telegram":
-            return await _execute_output_telegram(node, enriched, node_outputs, self.run)
+        if str(node_type) in registry:
+            return await _execute_registry_node(
+                node,
+                enriched,
+                node_outputs,
+                self.run,
+                self._stop_event,
+                self._executed_mcp_tools,
+            )
 
         logger.warning("Unknown node type: %s (node id=%s)", node_type, node.get("id"))
         return {"status": "skipped", "output": f"unknown node type: {node_type}"}

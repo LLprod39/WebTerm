@@ -1,0 +1,331 @@
+- generic [ref=e2] [box=0,0,1440,1000]:
+  - region "Notifications (F8)" [box=0,0,1440,0]:
+    - list [box=1020,968,420,32]
+  - region "Notifications alt+T" [box=0,0,1440,0]
+  - generic [ref=e7] [box=0,0,1440,1000]:
+    - generic [ref=e374] [box=0,0,255,1000]:
+      - generic [ref=e375] [box=0,0,255,64]:
+        - button "Свернуть меню" [ref=e376] [cursor=pointer] [box=12,12,40,40]:
+          - img [ref=e377] [box=24,24,16,16]
+        - generic [ref=e380] [box=64,13,116,37]:
+          - generic [ref=e381] [box=64,13,116,20]: WebTermAI
+          - generic [ref=e382] [box=64,33,116,17]: Платформа операций
+      - generic [ref=e383] [box=0,64,255,812]:
+        - generic [ref=e384] [box=12,80,231,241]:
+          - generic [ref=e385] [box=20,88,215,17]: Рабочее пространство
+          - list [ref=e387] [box=20,113,215,200]:
+            - listitem [ref=e388] [box=20,113,215,44]:
+              - link "Панель" [ref=e389] [cursor=pointer] [box=20,113,215,44]:
+                - /url: /dashboard
+                - img [ref=e390] [box=32,127,16,16]
+                - generic [ref=e395] [box=58,125,51,20]: Панель
+            - listitem [ref=e396] [box=20,165,215,44]:
+              - link "Серверы" [ref=e397] [cursor=pointer] [box=20,165,215,44]:
+                - /url: /servers
+                - img [ref=e398] [box=32,179,16,16]
+                - generic [ref=e401] [box=58,177,63,20]: Серверы
+            - listitem [ref=e402] [box=20,217,215,44]:
+              - link "Агенты" [ref=e403] [cursor=pointer] [box=20,217,215,44]:
+                - /url: /agents
+                - img [ref=e404] [box=32,231,16,16]
+                - generic [ref=e407] [box=58,229,49,20]: Агенты
+            - listitem [ref=e408] [box=20,269,215,44]:
+              - link "Студия" [ref=e409] [cursor=pointer] [box=20,269,215,44]:
+                - /url: /studio
+                - img [ref=e410] [box=32,283,16,16]
+                - generic [ref=e414] [box=58,281,49,20]: Студия
+        - generic [ref=e415] [box=12,345,231,85]:
+          - generic [ref=e416] [box=20,353,215,17]: Управление
+          - list [ref=e418] [box=20,377,215,44]:
+            - listitem [ref=e419] [box=20,377,215,44]:
+              - link "Настройки" [ref=e420] [cursor=pointer] [box=20,377,215,44]:
+                - /url: /settings
+                - img [ref=e421] [box=32,391,16,16]
+                - generic [ref=e424] [box=58,389,74,20]: Настройки
+      - generic [ref=e425] [box=0,876,255,124]:
+        - generic [ref=e426] [box=12,889,231,46]:
+          - button "EN" [ref=e427] [cursor=pointer] [box=17,894,109,36]
+          - button "RU" [pressed] [ref=e428] [cursor=pointer] [box=130,894,109,36]
+        - generic [ref=e429] [box=12,951,231,37]:
+          - generic [ref=e430] [box=12,952,36,36]: L
+          - generic [ref=e431] [box=58,951,139,37]:
+            - paragraph [ref=e432] [box=58,951,139,20]: lunix
+            - paragraph [ref=e433] [box=58,973,139,15]:
+              - img [ref=e434] [box=58,976,10,10]
+              - text: Администратор
+          - button "Выйти" [ref=e437] [cursor=pointer] [box=207,952,36,36]:
+            - img [ref=e438] [box=218,963,14,14]
+    - main [ref=e9] [box=256,0,1184,1000]:
+      - generic [ref=e10] [box=256,0,1184,1000]:
+        - generic [ref=e12] [box=268,8,1160,50]:
+          - link "Назад" [ref=e13] [cursor=pointer] [box=268,13,90,40]:
+            - /url: /servers
+            - img [ref=e14] [box=280,25,16,16]
+            - text: Назад
+          - generic [ref=e16] [box=366,13,254,40]:
+            - generic "Онлайн" [ref=e17] [box=379,29,8,8]
+            - generic [ref=e21] [box=395,23,79,20]: api-prod-01
+            - generic [ref=e442] [box=481,25,125,17]: lunix@172.25.173.251:22
+          - generic [ref=e23] [box=628,8,501,50]:
+            - button "api-prod-01" [ref=e25] [cursor=pointer] [box=634,14,118,38]:
+              - generic "Онлайн" [ref=e26] [box=646,29,8,8]
+              - generic [ref=e30] [box=662,23,78,20]: api-prod-01
+            - button "Подключить сервер" [ref=e31] [cursor=pointer] [box=757,13,102,40]:
+              - img [ref=e32] [box=770,25,16,16]
+              - text: Сервер
+          - generic [ref=e33] [box=1137,8,291,50]:
+            - button "SFTP" [ref=e34] [cursor=pointer] [box=1142,13,83,40]:
+              - img [box=1154,25,16,16]
+              - text: SFTP
+            - button "Linux" [pressed] [ref=e35] [cursor=pointer] [box=1229,13,84,40]:
+              - img [box=1241,25,16,16]
+              - text: Linux
+            - button "AI" [ref=e36] [cursor=pointer] [box=1317,13,62,40]:
+              - img [box=1329,25,16,16]
+              - text: AI
+            - button "Настройки" [ref=e37] [cursor=pointer] [box=1383,13,40,40]:
+              - img [box=1395,25,16,16]
+        - generic [ref=e43] [box=256,67,1184,933]:
+          - generic [ref=e46] [box=272,83,1152,825]:
+            - generic [box=1056,99,352,294]:
+              - generic [box=1056,99,352,149]:
+                - generic [box=1073,116,318,73]:
+                  - generic [box=1073,116,144,73]:
+                    - generic [box=1073,116,144,17]: Сессия Linux UI
+                    - generic [box=1073,141,144,28]: PC-643653b3
+                    - generic [box=1073,173,144,16]: lunix@172.25.173.251
+                  - generic [box=1351,116,40,40]:
+                    - img [box=1363,128,16,16]
+                - generic [box=1073,205,318,27]:
+                  - generic [box=1073,205,122,27]: Ubuntu 24.04.1 LTS
+                  - generic [box=1203,205,39,27]: apt
+                  - generic [box=1250,205,57,27]: 2 окна
+              - generic [box=1056,260,352,133]:
+                - generic [box=1056,260,170,133]:
+                  - generic [box=1073,277,136,53]:
+                    - generic [box=1073,277,42,53]
+                    - generic [box=1169,277,40,40]
+                  - generic [box=1073,338,136,20]: 1651 / 15961 MB
+                - generic [box=1238,260,170,133]:
+                  - generic [box=1255,277,136,53]:
+                    - generic [box=1255,277,29,53]
+                    - generic [box=1351,277,40,40]
+                  - generic [box=1255,338,136,20]: 3.8 / 1006.9 GB
+            - generic [ref=e47] [box=288,99,200,852]:
+              - button "Файлы Готово" [active] [ref=e48] [cursor=pointer] [box=288,99,88,132]:
+                - img [ref=e52] [box=322,127,20,20]
+                - generic [ref=e55] [box=314,173,37,34]:
+                  - generic [ref=e56] [box=314,173,37,14]: Файлы
+                  - generic [ref=e57] [box=314,191,37,17]: Готово
+              - button "Обзор Готово" [ref=e58] [cursor=pointer] [box=288,243,88,132]:
+                - img [ref=e62] [box=322,271,20,20]
+                - generic [ref=e65] [box=314,317,36,34]:
+                  - generic [ref=e66] [box=314,317,36,14]: Обзор
+                  - generic [ref=e67] [box=314,335,36,17]: Готово
+              - button "Сервисы Готово" [ref=e68] [cursor=pointer] [box=288,387,88,132]:
+                - img [ref=e72] [box=322,415,20,20]
+                - generic [ref=e76] [box=308,461,49,34]:
+                  - generic [ref=e77] [box=308,461,49,14]: Сервисы
+                  - generic [ref=e78] [box=308,479,49,17]: Готово
+              - button "Процессы Готово" [ref=e79] [cursor=pointer] [box=288,531,88,132]:
+                - img [ref=e83] [box=322,559,20,20]
+                - generic [ref=e86] [box=304,605,56,34]:
+                  - generic [ref=e87] [box=304,605,56,14]: Процессы
+                  - generic [ref=e88] [box=304,623,56,17]: Готово
+              - button "Логи Готово" [ref=e89] [cursor=pointer] [box=288,675,88,132]:
+                - img [ref=e93] [box=322,703,20,20]
+                - generic [ref=e97] [box=314,749,36,34]:
+                  - generic [ref=e98] [box=314,749,36,14]: Логи
+                  - generic [ref=e99] [box=314,767,36,17]: Готово
+              - button "Диск Готово" [ref=e100] [cursor=pointer] [box=288,819,88,132]:
+                - img [ref=e104] [box=322,847,20,20]
+                - generic [ref=e107] [box=314,893,36,34]:
+                  - generic [ref=e108] [box=314,893,36,14]: Диск
+                  - generic [ref=e109] [box=314,911,36,17]: Готово
+              - button "Сеть Готово" [ref=e110] [cursor=pointer] [box=396,99,88,132]:
+                - img [ref=e114] [box=430,127,20,20]
+                - generic [ref=e120] [box=422,173,36,34]:
+                  - generic [ref=e121] [box=422,173,36,14]: Сеть
+                  - generic [ref=e122] [box=422,191,36,17]: Готово
+              - button "Docker Готово" [ref=e123] [cursor=pointer] [box=396,243,88,132]:
+                - img [ref=e127] [box=430,271,20,20]
+                - generic [ref=e131] [box=421,317,38,34]:
+                  - generic [ref=e132] [box=421,317,38,14]: Docker
+                  - generic [ref=e133] [box=421,335,38,17]: Готово
+              - button "Пакеты Готово" [ref=e134] [cursor=pointer] [box=396,387,88,132]:
+                - img [ref=e138] [box=430,415,20,20]
+                - generic [ref=e143] [box=420,461,41,34]:
+                  - generic [ref=e144] [box=420,461,41,14]: Пакеты
+                  - generic [ref=e145] [box=420,479,41,17]: Готово
+              - button "Быстрый запуск Готово" [ref=e146] [cursor=pointer] [box=396,531,88,132]:
+                - img [ref=e150] [box=430,559,20,20]
+                - generic [ref=e153] [box=406,605,68,48]:
+                  - generic [ref=e154] [box=406,605,68,28]: Быстрый запуск
+                  - generic [ref=e155] [box=406,637,68,17]: Готово
+              - button "Настройки Готово" [ref=e156] [cursor=pointer] [box=396,675,88,132]:
+                - img [ref=e160] [box=430,703,20,20]
+                - generic [ref=e164] [box=410,749,59,34]:
+                  - generic [ref=e165] [box=410,749,59,14]: Настройки
+                  - generic [ref=e166] [box=410,767,59,17]: Готово
+            - generic [ref=e201] [box=352,143,1000,680]:
+              - generic [ref=e202] [box=353,144,998,44]:
+                - generic [ref=e203] [box=367,146,282,39]:
+                  - img [ref=e205] [box=375,158,16,16]
+                  - generic [ref=e208] [box=411,146,238,39]:
+                    - generic [ref=e209] [box=411,146,238,23]
+                    - generic [ref=e212] [box=411,169,238,17]: Система, пользователи, cron, безопасность
+                - generic [ref=e213] [box=1233,150,104,32]:
+                  - button "Свернуть Настройки" [ref=e214] [cursor=pointer] [box=1233,150,32,32]:
+                    - img [ref=e215] [box=1242,159,14,14]
+                  - button "Развернуть Настройки" [ref=e444] [cursor=pointer] [box=1269,150,32,32]:
+                    - img [ref=e445] [box=1278,159,14,14]
+                  - button "Закрыть Настройки" [ref=e216] [cursor=pointer] [box=1305,150,32,32]:
+                    - img [ref=e217] [box=1314,159,14,14]
+              - generic [ref=e221] [box=353,188,998,634]:
+                - navigation [ref=e222] [box=353,188,208,634]:
+                  - generic [ref=e223] [box=353,188,207,105]:
+                    - generic [ref=e224] [box=365,200,183,32]
+                    - generic [ref=e229] [box=365,244,183,36]
+                  - generic [ref=e232] [box=365,305,183,214]:
+                    - generic [ref=e233] [box=365,305,183,65]
+                    - generic [ref=e236] [box=365,378,183,65]
+                    - generic [ref=e239] [box=365,450,183,69]
+                  - generic [ref=e242] [box=353,532,207,291]:
+                    - button "Обзор" [ref=e243] [cursor=pointer] [box=361,540,191,38]
+                    - button "Система" [ref=e248] [cursor=pointer] [box=361,584,191,36]
+                    - button "Пользователи" [ref=e253] [cursor=pointer] [box=361,626,191,36]
+                    - button "Задачи cron" [ref=e260] [cursor=pointer] [box=361,668,191,36]
+                    - button "Окружение" [ref=e265] [cursor=pointer] [box=361,710,191,36]
+                    - button "Безопасность" [ref=e270] [cursor=pointer] [box=361,752,191,36]
+                - generic [ref=e277] [box=561,188,790,1086]:
+                  - generic [ref=e279] [box=594,221,724,72]:
+                    - generic [ref=e280] [box=594,229,507,56]
+                    - generic [ref=e283] [box=1113,221,205,72]
+                  - generic [ref=e286] [box=577,326,758,932]:
+                    - generic [ref=e287] [box=577,326,758,219]
+                    - generic [ref=e318] [box=577,561,758,697]
+            - generic [ref=e463] [box=288,123,1152,720]:
+              - generic [ref=e464] [box=289,124,1150,44]:
+                - generic [ref=e465] [box=303,126,292,39]:
+                  - img [ref=e467] [box=311,138,16,16]
+                  - generic [ref=e469] [box=347,126,248,39]:
+                    - generic [ref=e470] [box=347,126,248,23]
+                    - generic [ref=e473] [box=347,149,248,17]: Папки, загрузки, удаление и переименование
+                - generic [ref=e474] [box=1321,130,104,32]:
+                  - button "Свернуть Файлы" [ref=e475] [cursor=pointer] [box=1321,130,32,32]:
+                    - img [ref=e476] [box=1330,139,14,14]
+                  - button "Развернуть Файлы" [ref=e477] [cursor=pointer] [box=1357,130,32,32]:
+                    - img [ref=e478] [box=1366,139,14,14]
+                  - button "Закрыть Файлы" [ref=e480] [cursor=pointer] [box=1393,130,32,32]:
+                    - img [ref=e481] [box=1402,139,14,14]
+              - generic [ref=e485] [box=289,168,1150,674]:
+                - generic [ref=e486] [box=289,168,1150,110]:
+                  - generic [ref=e487] [box=305,180,1118,37]:
+                    - generic [ref=e488] [box=305,180,152,37]
+                    - generic [ref=e491] [box=1198,180,225,36]
+                  - generic [ref=e494] [box=305,229,1118,36]:
+                    - generic [ref=e495] [box=305,229,854,36]
+                    - generic [ref=e500] [box=1167,229,256,36]
+                - generic [ref=e502] [box=289,278,1150,499]:
+                  - generic [ref=e504] [box=305,288,1118,17]:
+                    - generic [ref=e505] [box=305,288,52,17]: 61 объект
+                    - generic [ref=e506] [box=369,288,6,17]: •
+                    - generic [ref=e507] [box=387,288,46,17]: 21 папка
+                    - generic [ref=e508] [box=445,288,6,17]: •
+                    - generic [ref=e509] [box=463,288,57,17]: 40 файлов
+                  - generic [ref=e511] [box=289,315,1145,3751]:
+                    - generic [ref=e512] [box=289,315,1145,61]
+                    - generic [ref=e523] [box=289,376,1145,62]
+                    - generic [ref=e534] [box=289,437,1145,62]
+                    - generic [ref=e545] [box=289,499,1145,62]
+                    - generic [ref=e556] [box=289,560,1145,62]
+                    - generic [ref=e567] [box=289,622,1145,62]
+                    - generic [ref=e578] [box=289,683,1145,62]
+                    - generic [ref=e589] [box=289,745,1145,62]
+                    - generic [ref=e600] [box=289,806,1145,62]
+                    - generic [ref=e611] [box=289,868,1145,62]
+                    - generic [ref=e622] [box=289,929,1145,62]
+                    - generic [ref=e633] [box=289,991,1145,62]
+                    - generic [ref=e644] [box=289,1052,1145,62]
+                    - generic [ref=e655] [box=289,1114,1145,62]
+                    - generic [ref=e666] [box=289,1175,1145,62]
+                    - generic [ref=e677] [box=289,1237,1145,62]
+                    - generic [ref=e688] [box=289,1298,1145,62]
+                    - generic [ref=e699] [box=289,1360,1145,62]
+                    - generic [ref=e710] [box=289,1421,1145,62]
+                    - generic [ref=e721] [box=289,1483,1145,62]
+                    - generic [ref=e732] [box=289,1544,1145,62]
+                    - generic [ref=e743] [box=289,1606,1145,62]
+                    - generic [ref=e756] [box=289,1667,1145,62]
+                    - generic [ref=e769] [box=289,1729,1145,62]
+                    - generic [ref=e782] [box=289,1790,1145,62]
+                    - generic [ref=e795] [box=289,1852,1145,62]
+                    - generic [ref=e808] [box=289,1913,1145,62]
+                    - generic [ref=e821] [box=289,1975,1145,62]
+                    - generic [ref=e834] [box=289,2036,1145,62]
+                    - generic [ref=e847] [box=289,2098,1145,62]
+                    - generic [ref=e860] [box=289,2159,1145,62]
+                    - generic [ref=e873] [box=289,2221,1145,62]
+                    - generic [ref=e886] [box=289,2282,1145,62]
+                    - generic [ref=e899] [box=289,2344,1145,62]
+                    - generic [ref=e912] [box=289,2405,1145,62]
+                    - generic [ref=e925] [box=289,2467,1145,62]
+                    - generic [ref=e938] [box=289,2528,1145,62]
+                    - generic [ref=e951] [box=289,2590,1145,62]
+                    - generic [ref=e964] [box=289,2651,1145,62]
+                    - generic [ref=e977] [box=289,2713,1145,62]
+                    - generic [ref=e990] [box=289,2774,1145,62]
+                    - generic [ref=e1003] [box=289,2836,1145,62]
+                    - generic [ref=e1016] [box=289,2897,1145,62]
+                    - generic [ref=e1029] [box=289,2959,1145,62]
+                    - generic [ref=e1042] [box=289,3020,1145,62]
+                    - generic [ref=e1055] [box=289,3082,1145,62]
+                    - generic [ref=e1068] [box=289,3143,1145,62]
+                    - generic [ref=e1081] [box=289,3205,1145,62]
+                    - generic [ref=e1094] [box=289,3266,1145,62]
+                    - generic [ref=e1107] [box=289,3328,1145,62]
+                    - generic [ref=e1120] [box=289,3389,1145,62]
+                    - generic [ref=e1133] [box=289,3451,1145,62]
+                    - generic [ref=e1146] [box=289,3512,1145,62]
+                    - generic [ref=e1159] [box=289,3574,1145,62]
+                    - generic [ref=e1172] [box=289,3635,1145,62]
+                    - generic [ref=e1185] [box=289,3697,1145,62]
+                    - generic [ref=e1198] [box=289,3758,1145,62]
+                    - generic [ref=e1211] [box=289,3820,1145,62]
+                    - generic [ref=e1224] [box=289,3881,1145,62]
+                    - generic [ref=e1237] [box=289,3943,1145,62]
+                    - generic [ref=e1250] [box=289,4004,1145,62]
+                - generic [ref=e1263] [box=289,777,1150,66]:
+                  - button "Передачи" [ref=e1265] [cursor=pointer] [box=305,786,54,17]
+                  - generic [ref=e1267] [box=289,810,1150,32]: Очередь передач пуста.
+          - generic [ref=e168] [box=268,932,1160,56]:
+            - button "Открыть панель приложений" [ref=e169] [cursor=pointer] [box=281,940,40,40]:
+              - img [ref=e170] [box=291,950,20,20]
+            - generic [ref=e362] [box=338,940,579,40]:
+              - button "Настройки" [ref=e363] [cursor=pointer] [box=338,940,140,40]:
+                - img [ref=e366] [box=359,952,16,16]
+                - generic [ref=e369] [box=391,950,74,20]: Настройки
+              - button "Файлы" [ref=e1270] [cursor=pointer] [box=482,940,128,40]:
+                - img [ref=e1273] [box=503,952,16,16]
+                - generic [ref=e1275] [box=535,950,46,20]: Файлы
+            - generic [ref=e177] [box=934,934,481,53]:
+              - button "Обновить рабочее пространство" [ref=e178] [cursor=pointer] [box=934,942,36,36]:
+                - img [ref=e179] [box=944,952,16,16]
+              - button "Показать рабочий стол" [ref=e184] [cursor=pointer] [box=978,942,36,36]:
+                - img [ref=e185] [box=988,952,16,16]
+              - generic [ref=e449] [box=1022,946,72,28]:
+                - img [ref=e450] [box=1033,953,14,14]
+                - img [ref=e454] [box=1051,953,14,14]
+                - img [ref=e458] [box=1069,953,14,14]
+              - generic [ref=e460] [box=1102,936,158,49]:
+                - generic [ref=e461] [box=1115,943,132,17]: lunix@172.25.173.251
+                - generic [ref=e462] [box=1115,961,132,17]: Ubuntu 24.04.1 LTS
+              - generic [ref=e187] [box=1268,934,103,53]:
+                - generic [ref=e188] [box=1281,941,77,17]:
+                  - img [ref=e189] [box=1281,942,14,14]
+                  - generic [ref=e191] [box=1299,941,59,17]: ср, 10 июн.
+                - generic [ref=e192] [box=1281,959,77,20]:
+                  - img [ref=e193] [box=1299,962,14,14]
+                  - generic [ref=e196] [box=1317,959,41,20]: 20:40
+              - button "Закрыть рабочее пространство" [ref=e197] [cursor=pointer] [box=1379,942,36,36]:
+                - img [ref=e198] [box=1389,952,16,16]

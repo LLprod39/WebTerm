@@ -24,6 +24,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -47,17 +48,18 @@ import {
   type AgentConfig,
 } from "@/lib/api";
 import { hasFeatureAccess } from "@/lib/featureAccess";
+import { localize, useI18n } from "@/lib/i18n";
 
 const ALL_TOOLS = [
-  { id: "ssh_execute", label: "SSH Execute", description: "Run commands on servers" },
-  { id: "read_console", label: "Read Console", description: "Read terminal output" },
-  { id: "send_ctrl_c", label: "Send Ctrl+C", description: "Interrupt running processes" },
-  { id: "open_connection", label: "Open Connection", description: "Open SSH connections" },
-  { id: "close_connection", label: "Close Connection", description: "Close SSH connections" },
-  { id: "wait_for_output", label: "Wait for Output", description: "Wait for terminal patterns" },
-  { id: "report", label: "Report", description: "Send intermediate status updates" },
-  { id: "ask_user", label: "Ask User", description: "Pause for user input" },
-  { id: "analyze_output", label: "Analyze Output", description: "Run LLM analysis over output" },
+  { id: "ssh_execute", labelRu: "SSH-команды", labelEn: "SSH Execute", descriptionRu: "Запуск команд на серверах", descriptionEn: "Run commands on servers" },
+  { id: "read_console", labelRu: "Чтение консоли", labelEn: "Read Console", descriptionRu: "Чтение вывода терминала", descriptionEn: "Read terminal output" },
+  { id: "send_ctrl_c", labelRu: "Ctrl+C", labelEn: "Send Ctrl+C", descriptionRu: "Прерывание запущенных процессов", descriptionEn: "Interrupt running processes" },
+  { id: "open_connection", labelRu: "Открыть SSH", labelEn: "Open Connection", descriptionRu: "Открытие SSH-подключений", descriptionEn: "Open SSH connections" },
+  { id: "close_connection", labelRu: "Закрыть SSH", labelEn: "Close Connection", descriptionRu: "Закрытие SSH-подключений", descriptionEn: "Close SSH connections" },
+  { id: "wait_for_output", labelRu: "Ожидать вывод", labelEn: "Wait for Output", descriptionRu: "Ожидание нужного текста в терминале", descriptionEn: "Wait for terminal patterns" },
+  { id: "report", labelRu: "Отчёт", labelEn: "Report", descriptionRu: "Промежуточные статусы выполнения", descriptionEn: "Send intermediate status updates" },
+  { id: "ask_user", labelRu: "Спросить пользователя", labelEn: "Ask User", descriptionRu: "Пауза до ответа пользователя", descriptionEn: "Pause for user input" },
+  { id: "analyze_output", labelRu: "Анализ вывода", labelEn: "Analyze Output", descriptionRu: "LLM-анализ полученного вывода", descriptionEn: "Run LLM analysis over output" },
 ];
 
 const MODEL_OPTIONS = [
@@ -67,6 +69,11 @@ const MODEL_OPTIONS = [
   "claude-4.5-opus",
   "gpt-5.2",
 ];
+
+function toolLabel(toolId: string, lang: "ru" | "en") {
+  const tool = ALL_TOOLS.find((item) => item.id === toolId);
+  return tool ? localize(lang, tool.labelRu, tool.labelEn) : toolId;
+}
 
 function AgentForm({
   initial,
@@ -89,6 +96,7 @@ function AgentForm({
   isAdmin: boolean;
   canEdit: boolean;
 }) {
+  const { lang } = useI18n();
   const navigate = useNavigate();
   const [form, setForm] = useState<Partial<AgentConfig>>({
     name: "",
@@ -177,7 +185,7 @@ function AgentForm({
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-[96px_minmax(0,1fr)]">
         <div className="space-y-2">
-          <Label>Icon</Label>
+          <Label>{localize(lang, "Иконка", "Icon")}</Label>
           <Input
             value={form.icon || "B"}
             onChange={(event) => setField("icon", event.target.value)}
@@ -186,29 +194,33 @@ function AgentForm({
           />
         </div>
         <div className="space-y-2">
-          <Label>Name</Label>
+          <Label>{localize(lang, "Название", "Name")}</Label>
           <Input
             value={form.name || ""}
             onChange={(event) => setField("name", event.target.value)}
-            placeholder="Ops triage agent"
+            placeholder={localize(lang, "Агент OPS-разбора", "Ops triage agent")}
             disabled={readOnly}
           />
         </div>
       </div>
 
       <div className="space-y-2">
-        <Label>Description</Label>
+        <Label>{localize(lang, "Описание", "Description")}</Label>
         <Input
           value={form.description || ""}
           onChange={(event) => setField("description", event.target.value)}
-          placeholder="Reusable agent for infrastructure checks and repair suggestions"
+          placeholder={localize(
+            lang,
+            "Переиспользуемый агент для проверок инфраструктуры и предложений по ремонту",
+            "Reusable agent for infrastructure checks and repair suggestions",
+          )}
           disabled={readOnly}
         />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label>Model</Label>
+          <Label>{localize(lang, "Модель", "Model")}</Label>
           <Select value={form.model || MODEL_OPTIONS[0]} onValueChange={(value) => setField("model", value)}>
             <SelectTrigger disabled={readOnly}>
               <SelectValue />
@@ -224,7 +236,7 @@ function AgentForm({
         </div>
 
         <div className="space-y-2">
-          <Label>Max iterations</Label>
+          <Label>{localize(lang, "Лимит итераций", "Max iterations")}</Label>
           <Input
             type="number"
             min={1}
@@ -237,29 +249,37 @@ function AgentForm({
       </div>
 
       <div className="space-y-2">
-        <Label>System prompt</Label>
+        <Label>{localize(lang, "Системный промпт", "System prompt")}</Label>
         <Textarea
           value={form.system_prompt || ""}
           onChange={(event) => setField("system_prompt", event.target.value)}
           rows={4}
-          placeholder="You are a careful operations agent. Verify before any risky action."
+          placeholder={localize(
+            lang,
+            "Ты аккуратный OPS-агент. Проверяй контекст перед рискованными действиями.",
+            "You are a careful operations agent. Verify before any risky action.",
+          )}
           disabled={readOnly}
         />
       </div>
 
       <div className="space-y-2">
-        <Label>Instructions</Label>
+        <Label>{localize(lang, "Инструкции", "Instructions")}</Label>
         <Textarea
           value={form.instructions || ""}
           onChange={(event) => setField("instructions", event.target.value)}
           rows={4}
-          placeholder="Always gather context first. Avoid destructive commands unless explicitly approved."
+          placeholder={localize(
+            lang,
+            "Сначала собирай контекст. Не выполняй разрушительные команды без явного подтверждения.",
+            "Always gather context first. Avoid destructive commands unless explicitly approved.",
+          )}
           disabled={readOnly}
         />
       </div>
 
       <div className="space-y-3">
-        <Label>Allowed tools</Label>
+        <Label>{localize(lang, "Разрешённые инструменты", "Allowed tools")}</Label>
         <div className="grid gap-2 md:grid-cols-2">
           {ALL_TOOLS.map((tool) => (
             <label
@@ -273,8 +293,8 @@ function AgentForm({
                 disabled={readOnly}
               />
               <div>
-                <div className="text-sm font-medium text-foreground">{tool.label}</div>
-                <div className="text-xs text-muted-foreground">{tool.description}</div>
+                <div className="text-sm font-medium text-foreground">{localize(lang, tool.labelRu, tool.labelEn)}</div>
+                <div className="text-xs text-muted-foreground">{localize(lang, tool.descriptionRu, tool.descriptionEn)}</div>
               </div>
             </label>
           ))}
@@ -283,7 +303,7 @@ function AgentForm({
 
       {canUseMcp && mcpList.length > 0 ? (
         <div className="space-y-3">
-          <Label>MCP servers</Label>
+          <Label>{localize(lang, "MCP-серверы", "MCP servers")}</Label>
           <div className="grid gap-2">
             {mcpList.map((mcp) => (
               <label
@@ -300,7 +320,9 @@ function AgentForm({
                     {mcp.last_test_ok === true ? <Badge variant="secondary">OK</Badge> : null}
                     {mcp.last_test_ok === false ? <Badge variant="destructive">ERR</Badge> : null}
                   </div>
-                  <div className="text-xs text-muted-foreground">{mcp.description || "No description"}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {mcp.description || localize(lang, "Описание не заполнено", "No description")}
+                  </div>
                 </div>
               </label>
             ))}
@@ -311,7 +333,7 @@ function AgentForm({
       {canUseSkills && skills.length > 0 ? (
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-2">
-            <Label>Skills</Label>
+            <Label>{localize(lang, "Skills", "Skills")}</Label>
             <Button
               type="button"
               variant="outline"
@@ -321,7 +343,7 @@ function AgentForm({
               disabled={readOnly}
             >
               <BookOpen className="h-3.5 w-3.5" />
-              Browse catalog
+              {localize(lang, "Открыть каталог", "Browse catalog")}
             </Button>
           </div>
           <div className="grid gap-2">
@@ -353,9 +375,13 @@ function AgentForm({
 
       {servers.length > 0 ? (
         <div className="space-y-3">
-          <Label>Server scope</Label>
+          <Label>{localize(lang, "Ограничение по серверам", "Server scope")}</Label>
           <p className="text-xs text-muted-foreground">
-            Leave empty to allow all accessible servers. Select specific servers to hard-scope this agent.
+            {localize(
+              lang,
+              "Оставьте пустым, чтобы агент работал со всеми доступными серверами. Выберите серверы, чтобы жёстко ограничить профиль.",
+              "Leave empty to allow all accessible servers. Select specific servers to hard-scope this agent.",
+            )}
           </p>
           <div className="grid gap-2 md:grid-cols-2">
             {servers.map((server) => (
@@ -380,8 +406,12 @@ function AgentForm({
 
       {isAdmin ? (
         <ShareAccessEditor
-          title="Visibility"
-          description="Admin controls who can open and reuse this agent profile."
+          title={localize(lang, "Видимость", "Visibility")}
+          description={localize(
+            lang,
+            "Администратор управляет тем, кто может открывать и переиспользовать этот профиль агента.",
+            "Admin controls who can open and reuse this agent profile.",
+          )}
           isShared={Boolean(form.is_shared)}
           sharedUserIds={sharedUserIds}
           users={shareUsers}
@@ -400,7 +430,7 @@ function AgentForm({
 
       {form.skill_errors?.length ? (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3">
-          <div className="text-sm font-medium text-amber-200">Skill warnings</div>
+          <div className="text-sm font-medium text-amber-200">{localize(lang, "Предупреждения skills", "Skill warnings")}</div>
           <div className="mt-2 space-y-1">
             {form.skill_errors.map((error) => (
               <p key={error} className="text-xs text-amber-100">
@@ -413,7 +443,7 @@ function AgentForm({
 
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={onCancel}>
-          Cancel
+          {localize(lang, "Отмена", "Cancel")}
         </Button>
         <Button
           onClick={() => onSave(form)}
@@ -421,7 +451,7 @@ function AgentForm({
           className="gap-2"
         >
           {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          Save agent
+          {localize(lang, "Сохранить агента", "Save agent")}
         </Button>
       </div>
     </div>
@@ -429,6 +459,7 @@ function AgentForm({
 }
 
 export default function AgentConfigPage() {
+  const { lang } = useI18n();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -462,7 +493,7 @@ export default function AgentConfigPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["studio", "agents"] });
       setEditAgent(null);
-      toast({ description: "Agent created." });
+      toast({ description: localize(lang, "Агент создан.", "Agent created.") });
     },
     onError: (error: Error) => {
       toast({ variant: "destructive", description: error.message });
@@ -475,7 +506,7 @@ export default function AgentConfigPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["studio", "agents"] });
       setEditAgent(null);
-      toast({ description: "Agent updated." });
+      toast({ description: localize(lang, "Агент обновлён.", "Agent updated.") });
     },
     onError: (error: Error) => {
       toast({ variant: "destructive", description: error.message });
@@ -487,7 +518,7 @@ export default function AgentConfigPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["studio", "agents"] });
       setDeleteTarget(null);
-      toast({ description: "Agent deleted." });
+      toast({ description: localize(lang, "Агент удалён.", "Agent deleted.") });
     },
     onError: (error: Error) => {
       toast({ variant: "destructive", description: error.message });
@@ -514,17 +545,24 @@ export default function AgentConfigPage() {
       <div className="flex-1 overflow-auto flex flex-col">
       <StudioHero
         kicker="Studio / Agents"
-        title="Agent Configs"
+        title={localize(lang, "Профили агентов", "Agent Configs")}
         titleIcon={<Bot className="h-7 w-7 text-primary" />}
-        description="Reusable agent profiles for pipeline nodes and automation tasks."
+        description={localize(
+          lang,
+          "Переиспользуемые профили для pipeline-нод и задач автоматизации.",
+          "Reusable agent profiles for pipeline nodes and automation tasks.",
+        )}
         stats={
-          <HeroStatChip icon={<Bot className="h-3.5 w-3.5" />} label={`${agents.length} configs`} />
+          <HeroStatChip
+            icon={<Bot className="h-3.5 w-3.5" />}
+            label={localize(lang, `${agents.length} профилей`, `${agents.length} configs`)}
+          />
         }
         actions={
           <HeroActionButton
             onClick={() => setEditAgent({})}
             icon={<Plus className="h-4 w-4" />}
-            label="New agent"
+            label={localize(lang, "Новый агент", "New agent")}
             primary
           />
         }
@@ -533,18 +571,20 @@ export default function AgentConfigPage() {
       {isLoading ? (
         <div className="flex h-40 items-center justify-center text-muted-foreground">
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          Loading agent configs...
+          {localize(lang, "Загружаем профили агентов...", "Loading agent configs...")}
         </div>
       ) : agents.length === 0 ? (
         <div className="flex h-56 flex-col items-center justify-center rounded-2xl border border-dashed border-border text-center">
           <Bot className="mb-3 h-10 w-10 text-muted-foreground/50" />
-          <p className="text-sm font-medium text-foreground">No agent configs yet.</p>
+          <p className="text-sm font-medium text-foreground">
+            {localize(lang, "Профилей агентов пока нет.", "No agent configs yet.")}
+          </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Create reusable agent profiles for pipelines.
+            {localize(lang, "Создайте переиспользуемые профили для pipelines.", "Create reusable agent profiles for pipelines.")}
           </p>
           <Button className="mt-4 gap-2" size="sm" onClick={() => setEditAgent({})}>
             <Plus className="h-4 w-4" />
-            New agent
+            {localize(lang, "Новый агент", "New agent")}
           </Button>
         </div>
       ) : (
@@ -559,21 +599,39 @@ export default function AgentConfigPage() {
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-foreground">{agent.name}</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">{agent.description || "No description"}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {agent.description || localize(lang, "Описание не заполнено", "No description")}
+                      </p>
                       <div className="mt-2 flex flex-wrap gap-1">
-                        {agent.is_owner ? <Badge variant="secondary" className="text-[10px]">Mine</Badge> : null}
-                        {!agent.is_owner && agent.owner_username ? <Badge variant="outline" className="text-[10px]">Owner: {agent.owner_username}</Badge> : null}
-                        {agent.is_shared ? <Badge variant="outline" className="text-[10px]">Shared</Badge> : null}
-                        {agent.can_edit === false ? <Badge variant="outline" className="text-[10px]">Read only</Badge> : null}
+                        {agent.is_owner ? <Badge variant="secondary" className="text-[10px]">{localize(lang, "Мой", "Mine")}</Badge> : null}
+                        {!agent.is_owner && agent.owner_username ? (
+                          <Badge variant="outline" className="text-[10px]">{localize(lang, "Владелец", "Owner")}: {agent.owner_username}</Badge>
+                        ) : null}
+                        {agent.is_shared ? <Badge variant="outline" className="text-[10px]">{localize(lang, "Общий", "Shared")}</Badge> : null}
+                        {agent.can_edit === false ? <Badge variant="outline" className="text-[10px]">{localize(lang, "Только чтение", "Read only")}</Badge> : null}
                       </div>
                     </div>
                   </div>
                   <div className="flex gap-1 shrink-0">
-                    <Button size="icon" variant="ghost" className="h-8 w-8 rounded-lg" onClick={() => setEditAgent(agent)} title={agent.can_edit === false ? "View agent" : "Edit agent"}>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 rounded-lg"
+                      onClick={() => setEditAgent(agent)}
+                      aria-label={agent.can_edit === false ? localize(lang, `Открыть агента ${agent.name}`, `View agent ${agent.name}`) : localize(lang, `Изменить агента ${agent.name}`, `Edit agent ${agent.name}`)}
+                      title={agent.can_edit === false ? localize(lang, "Открыть агента", "View agent") : localize(lang, "Изменить агента", "Edit agent")}
+                    >
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
                     {agent.can_edit !== false ? (
-                      <Button size="icon" variant="ghost" className="h-8 w-8 rounded-lg text-destructive hover:text-destructive" onClick={() => setDeleteTarget(agent)}>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 rounded-lg text-destructive hover:text-destructive"
+                        onClick={() => setDeleteTarget(agent)}
+                        aria-label={localize(lang, `Удалить агента ${agent.name}`, `Delete agent ${agent.name}`)}
+                        title={localize(lang, "Удалить агента", "Delete agent")}
+                      >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     ) : null}
@@ -584,14 +642,25 @@ export default function AgentConfigPage() {
               <div className="border-t border-border/50 bg-secondary/10 px-4 py-3 space-y-2.5">
                 <div className="flex flex-wrap gap-1.5">
                   <span className="rounded border border-border/50 bg-secondary/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{agent.model}</span>
-                  <span className="rounded border border-border/50 bg-secondary/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">{agent.max_iterations} iter</span>
+                  <span className="rounded border border-border/50 bg-secondary/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                    {localize(lang, `${agent.max_iterations} итер.`, `${agent.max_iterations} iter`)}
+                  </span>
                   {agent.mcp_servers?.length ? <span className="rounded border border-border/50 bg-secondary/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">{agent.mcp_servers.length} MCP</span> : null}
-                  {agent.skill_slugs?.length ? <span className="rounded border border-border/50 bg-secondary/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">{agent.skill_slugs.length} skills</span> : null}
-                  {agent.server_scope?.length ? <span className="rounded border border-border/50 bg-secondary/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">{agent.server_scope.length} scoped</span> : null}
+                  {agent.skill_slugs?.length ? (
+                    <span className="rounded border border-border/50 bg-secondary/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                      {localize(lang, `${agent.skill_slugs.length} skills`, `${agent.skill_slugs.length} skills`)}
+                    </span>
+                  ) : null}
+                  {agent.server_scope?.length ? (
+                    <span className="rounded border border-border/50 bg-secondary/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                      {localize(lang, `${agent.server_scope.length} серверов`, `${agent.server_scope.length} scoped`)}
+                    </span>
+                  ) : null}
                 </div>
                 {agent.allowed_tools?.length ? (
                   <p className="text-[11px] text-muted-foreground/70">
-                    {agent.allowed_tools.slice(0, 4).join(", ")}{agent.allowed_tools.length > 4 ? ` +${agent.allowed_tools.length - 4}` : ""}
+                    {agent.allowed_tools.slice(0, 4).map((item) => toolLabel(item, lang)).join(", ")}
+                    {agent.allowed_tools.length > 4 ? ` +${agent.allowed_tools.length - 4}` : ""}
                   </p>
                 ) : null}
                 {agent.skill_errors?.length ? (
@@ -608,46 +677,54 @@ export default function AgentConfigPage() {
       )}
 
       <Dialog open={editAgent !== null} onOpenChange={(nextOpen) => !nextOpen && setEditAgent(null)}>
-        <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+        <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-4xl">
           <DialogHeader>
             <DialogTitle>
               {(editAgent as AgentConfig | null)?.id
-                ? (editAgent as AgentConfig | null)?.can_edit === false
-                  ? "View agent"
-                  : "Edit agent"
-                : "New agent"}
+                  ? (editAgent as AgentConfig | null)?.can_edit === false
+                  ? localize(lang, "Просмотр агента", "View agent")
+                  : localize(lang, "Редактировать агента", "Edit agent")
+                : localize(lang, "Новый агент", "New agent")}
             </DialogTitle>
             <DialogDescription>
-              Configure model, tools, scopes, MCP servers, and skills for this reusable agent profile.
+              {localize(
+                lang,
+                "Настройте модель, инструменты, ограничения, MCP-серверы и skills для переиспользуемого профиля.",
+                "Configure model, tools, scopes, MCP servers, and skills for this reusable agent profile.",
+              )}
             </DialogDescription>
           </DialogHeader>
-          {editAgent ? (
-            <AgentForm
-              initial={editAgent}
-              onSave={handleSave}
-              onCancel={() => setEditAgent(null)}
-              isPending={createMutation.isPending || updateMutation.isPending}
-              canUseMcp={canUseMcp}
-              canUseSkills={canUseSkills}
-              shareUsers={shareUsers}
-              isAdmin={isAdmin}
-              canEdit={(editAgent as AgentConfig | null)?.can_edit !== false}
-            />
-          ) : null}
+          <DialogBody className="max-h-[calc(100dvh-10rem)] overflow-y-auto">
+            {editAgent ? (
+              <AgentForm
+                initial={editAgent}
+                onSave={handleSave}
+                onCancel={() => setEditAgent(null)}
+                isPending={createMutation.isPending || updateMutation.isPending}
+                canUseMcp={canUseMcp}
+                canUseSkills={canUseSkills}
+                shareUsers={shareUsers}
+                isAdmin={isAdmin}
+                canEdit={(editAgent as AgentConfig | null)?.can_edit !== false}
+              />
+            ) : null}
+          </DialogBody>
         </DialogContent>
       </Dialog>
 
       <Dialog open={deleteTarget !== null} onOpenChange={(nextOpen) => !nextOpen && setDeleteTarget(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete agent</DialogTitle>
+            <DialogTitle>{localize(lang, "Удалить агента", "Delete agent")}</DialogTitle>
             <DialogDescription>
-              {deleteTarget ? `Delete "${deleteTarget.name}"? This cannot be undone.` : ""}
+              {deleteTarget
+                ? localize(lang, `Удалить "${deleteTarget.name}"? Действие нельзя отменить.`, `Delete "${deleteTarget.name}"? This cannot be undone.`)
+                : ""}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>
-              Cancel
+              {localize(lang, "Отмена", "Cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -655,7 +732,7 @@ export default function AgentConfigPage() {
               disabled={deleteMutation.isPending}
             >
               {deleteMutation.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
-              Delete
+              {localize(lang, "Удалить", "Delete")}
             </Button>
           </DialogFooter>
         </DialogContent>

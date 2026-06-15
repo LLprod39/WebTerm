@@ -25,10 +25,23 @@ def main():
             "forget to activate a virtual environment?"
         ) from exc
 
-    # Если запускается runserver без указания порта, используем порт из переменной окружения или 9000
+    # Если запускается runserver без указания порта, используем порт из переменной окружения или 9000.
+    # В WSL биндимся на 0.0.0.0, иначе Windows/Vite могут зависать на localhost relay.
     if len(sys.argv) >= 2 and sys.argv[1] == 'runserver' and len(sys.argv) == 2:
         default_port = os.getenv('DJANGO_PORT', '9000')
-        sys.argv.append(default_port)
+        if ':' in default_port:
+            sys.argv.append(default_port)
+        else:
+            runserver_host = os.getenv('DJANGO_RUNSERVER_HOST')
+            if not runserver_host:
+                proc_version = ''
+                try:
+                    proc_version = Path('/proc/version').read_text(encoding='utf-8', errors='ignore').lower()
+                except OSError:
+                    pass
+                is_wsl = bool(os.getenv('WSL_INTEROP') or os.getenv('WSL_DISTRO_NAME') or 'microsoft' in proc_version)
+                runserver_host = '0.0.0.0' if is_wsl else '127.0.0.1'
+            sys.argv.append(f'{runserver_host}:{default_port}')
 
     execute_from_command_line(sys.argv)
 

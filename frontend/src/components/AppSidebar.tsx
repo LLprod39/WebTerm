@@ -1,4 +1,4 @@
-import { Bot, Languages, LayoutDashboard, LogOut, PanelLeftClose, PanelLeftOpen, Server, Settings, ShieldCheck, Workflow } from "lucide-react";
+import { Bot, Boxes, BrainCircuit, Languages, LayoutDashboard, LogOut, PanelLeftClose, PanelLeftOpen, Server, Settings, ShieldCheck, Workflow } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useNavigate } from "react-router-dom";
 import {
@@ -35,6 +35,8 @@ export function AppSidebar() {
     { titleKey: "nav.servers", url: "/servers", icon: Server, feature: null },
     { titleKey: "nav.agents", url: "/agents", icon: Bot, feature: "agents" },
     { titleKey: "nav.studio", url: "/studio", icon: Workflow, feature: "studio" },
+    { titleKey: "nav.kubernetes", url: "/kubernetes", icon: Boxes, feature: "kubernetes" },
+    { titleKey: "nav.mars", url: "/mars", icon: BrainCircuit, feature: "mars" },
     { titleKey: "nav.settings", url: "/settings", icon: Settings, feature: "settings" },
   ];
 

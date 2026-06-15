@@ -1,0 +1,974 @@
+- generic [ref=e2] [box=0,0,385,8014]:
+  - region "Notifications (F8)" [box=0,0,385,0]:
+    - list [box=0,0,385,32]
+  - region "Notifications alt+T" [box=0,0,385,0]
+  - generic [ref=e4] [box=0,0,385,8014]:
+    - button "Открыть навигацию" [ref=e5] [cursor=pointer] [box=16,16,44,44]:
+      - img [box=30,30,16,16]
+      - generic [ref=e6] [box=38,38,1,1]: Открыть навигацию
+    - main [ref=e9] [box=0,0,385,8014]:
+      - generic [ref=e10] [box=0,64,385,7950]:
+        - navigation [ref=e11] [box=0,64,385,56]:
+          - generic [ref=e12] [box=64,69,71,40]: Studio
+          - button "Обзор" [ref=e14] [cursor=pointer] [box=155,69,87,40]:
+            - img [ref=e15] [box=169,82,14,14]
+            - text: Обзор
+          - button "Черновики" [ref=e20] [cursor=pointer] [box=246,69,115,40]:
+            - img [ref=e21] [box=260,82,14,14]
+            - text: Черновики
+          - button "Скиллы" [ref=e24] [cursor=pointer] [box=366,69,96,40]:
+            - img [ref=e25] [box=380,82,14,14]
+            - text: Скиллы
+          - button "MCP" [ref=e27] [cursor=pointer] [box=465,69,77,40]:
+            - img [ref=e28] [box=479,82,14,14]
+            - text: MCP
+          - button "Агенты" [ref=e31] [cursor=pointer] [box=547,69,93,40]:
+            - img [ref=e32] [box=561,82,14,14]
+            - text: Агенты
+          - button "Запуски" [ref=e35] [cursor=pointer] [box=644,69,99,40]:
+            - img [ref=e36] [box=658,82,14,14]
+            - text: Запуски
+          - button "Оповещения" [ref=e40] [cursor=pointer] [box=747,69,126,40]:
+            - img [ref=e41] [box=761,82,14,14]
+            - text: Оповещения
+        - generic [ref=e47] [box=49,177,287,305]:
+          - generic [ref=e48] [box=49,177,287,233]:
+            - generic [ref=e50] [box=49,177,287,104]:
+              - generic [ref=e52] [box=49,177,139,24]: Studio / Запуски
+              - heading "История запусков" [level=1] [ref=e53] [box=49,209,287,72]:
+                - img [ref=e54] [box=49,231,27,28]
+                - text: История запусков
+            - paragraph [ref=e58] [box=49,297,287,73]: Следите за запусками пайплайнов, проверяйте ошибки и открывайте подробный вывод по каждому шагу.
+            - generic [ref=e60] [box=49,386,127,24]:
+              - img [ref=e61] [box=61,391,14,14]
+              - generic [ref=e64] [box=81,390,83,16]: 74 выполнено
+          - button "Обновить" [ref=e66] [cursor=pointer] [box=49,442,125,40]:
+            - img [box=66,454,16,16]
+            - text: Обновить
+        - generic [ref=e68] [box=0,531,385,7483]:
+          - generic [ref=e70] [box=16,541,352,78]:
+            - button "Все (92)" [ref=e71] [cursor=pointer] [box=16,541,75,36]
+            - button "В работе" [ref=e72] [cursor=pointer] [box=97,541,78,36]
+            - button "Выполнены" [ref=e73] [cursor=pointer] [box=181,541,95,36]
+            - button "Ошибки" [ref=e74] [cursor=pointer] [box=282,541,74,36]
+            - button "Ожидают" [ref=e75] [cursor=pointer] [box=16,583,83,36]
+            - button "Остановлены" [ref=e76] [cursor=pointer] [box=105,583,106,36]
+          - generic [ref=e77] [box=0,630,384,7384]:
+            - 'button "AI Automation Draft Остановлен #175 · 28.05, 15:00 · 39 с" [ref=e78] [cursor=pointer] [box=0,630,384,80]':
+              - generic [ref=e79] [box=18,647,350,22]:
+                - generic [ref=e80] [box=18,648,131,20]: AI Automation Draft
+                - generic [ref=e81] [box=261,647,107,22]
+              - generic [ref=e84] [box=18,675,350,17]:
+                - generic [ref=e85] [box=18,675,26,17]: "#175"
+                - generic [ref=e86] [box=50,675,3,17]: ·
+                - generic [ref=e87] [box=60,675,64,17]: 28.05, 15:00
+                - generic [ref=e88] [box=129,675,3,17]: ·
+                - generic [ref=e89] [box=138,675,23,17]: 39 с
+            - 'button "AI Automation Draft Выполнен #174 · 28.05, 15:00 · 0 с" [ref=e90] [cursor=pointer] [box=0,710,384,80]':
+              - generic [ref=e91] [box=18,727,350,22]:
+                - generic [ref=e92] [box=18,728,131,20]: AI Automation Draft
+                - generic [ref=e93] [box=272,727,96,22]
+              - generic [ref=e97] [box=18,755,350,17]:
+                - generic [ref=e98] [box=18,755,26,17]: "#174"
+                - generic [ref=e99] [box=50,755,3,17]: ·
+                - generic [ref=e100] [box=60,755,64,17]: 28.05, 15:00
+                - generic [ref=e101] [box=129,755,3,17]: ·
+                - generic [ref=e102] [box=138,755,16,17]: 0 с
+            - 'button "AI Automation Draft Выполнен #173 · 27.05, 10:27 · 1 мин 41 с" [ref=e103] [cursor=pointer] [box=0,790,384,80]':
+              - generic [ref=e104] [box=18,807,350,22]:
+                - generic [ref=e105] [box=18,808,131,20]: AI Automation Draft
+                - generic [ref=e106] [box=272,807,96,22]
+              - generic [ref=e110] [box=18,835,350,17]:
+                - generic [ref=e111] [box=18,835,26,17]: "#173"
+                - generic [ref=e112] [box=50,835,3,17]: ·
+                - generic [ref=e113] [box=60,835,61,17]: 27.05, 10:27
+                - generic [ref=e114] [box=127,835,3,17]: ·
+                - generic [ref=e115] [box=136,835,53,17]: 1 мин 41 с
+            - 'button "AI Automation Draft Остановлен #172 · 24.05, 20:36 · 43 с" [ref=e116] [cursor=pointer] [box=0,870,384,80]':
+              - generic [ref=e117] [box=18,887,350,22]:
+                - generic [ref=e118] [box=18,888,131,20]: AI Automation Draft
+                - generic [ref=e119] [box=261,887,107,22]
+              - generic [ref=e122] [box=18,915,350,17]:
+                - generic [ref=e123] [box=18,915,26,17]: "#172"
+                - generic [ref=e124] [box=50,915,3,17]: ·
+                - generic [ref=e125] [box=60,915,66,17]: 24.05, 20:36
+                - generic [ref=e126] [box=132,915,3,17]: ·
+                - generic [ref=e127] [box=141,915,23,17]: 43 с
+            - 'button "AI Automation Draft Выполнен #171 · 24.05, 20:31 · 51 с" [ref=e128] [cursor=pointer] [box=0,950,384,80]':
+              - generic [ref=e129] [box=18,967,350,22]:
+                - generic [ref=e130] [box=18,968,131,20]: AI Automation Draft
+                - generic [ref=e131] [box=272,967,96,22]
+              - generic [ref=e135] [box=18,995,350,17]:
+                - generic [ref=e136] [box=18,995,26,17]: "#171"
+                - generic [ref=e137] [box=50,995,3,17]: ·
+                - generic [ref=e138] [box=60,995,64,17]: 24.05, 20:31
+                - generic [ref=e139] [box=129,995,3,17]: ·
+                - generic [ref=e140] [box=138,995,20,17]: 51 с
+            - 'button "AI Automation Draft Выполнен #170 · 20.05, 17:57 · 49 с" [ref=e141] [cursor=pointer] [box=0,1030,384,80]':
+              - generic [ref=e142] [box=18,1047,350,22]:
+                - generic [ref=e143] [box=18,1048,131,20]: AI Automation Draft
+                - generic [ref=e144] [box=272,1047,96,22]
+              - generic [ref=e148] [box=18,1075,350,17]:
+                - generic [ref=e149] [box=18,1075,26,17]: "#170"
+                - generic [ref=e150] [box=50,1075,3,17]: ·
+                - generic [ref=e151] [box=60,1075,62,17]: 20.05, 17:57
+                - generic [ref=e152] [box=128,1075,3,17]: ·
+                - generic [ref=e153] [box=137,1075,23,17]: 49 с
+            - 'button "AI Automation Draft Выполнен #169 · 20.05, 17:34 · 0 с" [ref=e154] [cursor=pointer] [box=0,1110,384,80]':
+              - generic [ref=e155] [box=18,1127,350,22]:
+                - generic [ref=e156] [box=18,1128,131,20]: AI Automation Draft
+                - generic [ref=e157] [box=272,1127,96,22]
+              - generic [ref=e161] [box=18,1155,350,17]:
+                - generic [ref=e162] [box=18,1155,26,17]: "#169"
+                - generic [ref=e163] [box=50,1155,3,17]: ·
+                - generic [ref=e164] [box=60,1155,63,17]: 20.05, 17:34
+                - generic [ref=e165] [box=129,1155,3,17]: ·
+                - generic [ref=e166] [box=138,1155,16,17]: 0 с
+            - 'button "AI Automation Draft Выполнен #168 · 20.05, 17:33 · 0 с" [ref=e167] [cursor=pointer] [box=0,1190,384,80]':
+              - generic [ref=e168] [box=18,1207,350,22]:
+                - generic [ref=e169] [box=18,1208,131,20]: AI Automation Draft
+                - generic [ref=e170] [box=272,1207,96,22]
+              - generic [ref=e174] [box=18,1235,350,17]:
+                - generic [ref=e175] [box=18,1235,26,17]: "#168"
+                - generic [ref=e176] [box=50,1235,3,17]: ·
+                - generic [ref=e177] [box=60,1235,63,17]: 20.05, 17:33
+                - generic [ref=e178] [box=128,1235,3,17]: ·
+                - generic [ref=e179] [box=138,1235,16,17]: 0 с
+            - 'button "AI Automation Draft Выполнен #167 · 20.05, 17:33 · 0 с" [ref=e180] [cursor=pointer] [box=0,1270,384,80]':
+              - generic [ref=e181] [box=18,1287,350,22]:
+                - generic [ref=e182] [box=18,1288,131,20]: AI Automation Draft
+                - generic [ref=e183] [box=272,1287,96,22]
+              - generic [ref=e187] [box=18,1315,350,17]:
+                - generic [ref=e188] [box=18,1315,26,17]: "#167"
+                - generic [ref=e189] [box=50,1315,3,17]: ·
+                - generic [ref=e190] [box=60,1315,63,17]: 20.05, 17:33
+                - generic [ref=e191] [box=128,1315,3,17]: ·
+                - generic [ref=e192] [box=138,1315,16,17]: 0 с
+            - 'button "AI Automation Draft Выполнен #166 · 20.05, 17:32 · 0 с" [ref=e193] [cursor=pointer] [box=0,1350,384,80]':
+              - generic [ref=e194] [box=18,1367,350,22]:
+                - generic [ref=e195] [box=18,1368,131,20]: AI Automation Draft
+                - generic [ref=e196] [box=272,1367,96,22]
+              - generic [ref=e200] [box=18,1395,350,17]:
+                - generic [ref=e201] [box=18,1395,26,17]: "#166"
+                - generic [ref=e202] [box=50,1395,3,17]: ·
+                - generic [ref=e203] [box=60,1395,63,17]: 20.05, 17:32
+                - generic [ref=e204] [box=128,1395,3,17]: ·
+                - generic [ref=e205] [box=137,1395,16,17]: 0 с
+            - 'button "AI Automation Draft Выполнен #165 · 20.05, 17:30 · 7 с" [ref=e206] [cursor=pointer] [box=0,1430,384,80]':
+              - generic [ref=e207] [box=18,1447,350,22]:
+                - generic [ref=e208] [box=18,1448,131,20]: AI Automation Draft
+                - generic [ref=e209] [box=272,1447,96,22]
+              - generic [ref=e213] [box=18,1475,350,17]:
+                - generic [ref=e214] [box=18,1475,26,17]: "#165"
+                - generic [ref=e215] [box=50,1475,3,17]: ·
+                - generic [ref=e216] [box=60,1475,63,17]: 20.05, 17:30
+                - generic [ref=e217] [box=129,1475,3,17]: ·
+                - generic [ref=e218] [box=138,1475,16,17]: 7 с
+            - 'button "AI Automation Draft Выполнен #164 · 20.05, 17:28 · 9 с" [ref=e219] [cursor=pointer] [box=0,1510,384,80]':
+              - generic [ref=e220] [box=18,1527,350,22]:
+                - generic [ref=e221] [box=18,1528,131,20]: AI Automation Draft
+                - generic [ref=e222] [box=272,1527,96,22]
+              - generic [ref=e226] [box=18,1555,350,17]:
+                - generic [ref=e227] [box=18,1555,26,17]: "#164"
+                - generic [ref=e228] [box=50,1555,3,17]: ·
+                - generic [ref=e229] [box=60,1555,63,17]: 20.05, 17:28
+                - generic [ref=e230] [box=128,1555,3,17]: ·
+                - generic [ref=e231] [box=137,1555,16,17]: 9 с
+            - 'button "AI Automation Draft Выполнен #163 · 20.05, 17:28 · 8 с" [ref=e232] [cursor=pointer] [box=0,1590,384,80]':
+              - generic [ref=e233] [box=18,1607,350,22]:
+                - generic [ref=e234] [box=18,1608,131,20]: AI Automation Draft
+                - generic [ref=e235] [box=272,1607,96,22]
+              - generic [ref=e239] [box=18,1635,350,17]:
+                - generic [ref=e240] [box=18,1635,26,17]: "#163"
+                - generic [ref=e241] [box=50,1635,3,17]: ·
+                - generic [ref=e242] [box=60,1635,63,17]: 20.05, 17:28
+                - generic [ref=e243] [box=128,1635,3,17]: ·
+                - generic [ref=e244] [box=137,1635,16,17]: 8 с
+            - 'button "AI Automation Draft Выполнен #162 · 20.05, 17:27 · 9 с" [ref=e245] [cursor=pointer] [box=0,1670,384,80]':
+              - generic [ref=e246] [box=18,1687,350,22]:
+                - generic [ref=e247] [box=18,1688,131,20]: AI Automation Draft
+                - generic [ref=e248] [box=272,1687,96,22]
+              - generic [ref=e252] [box=18,1715,350,17]:
+                - generic [ref=e253] [box=18,1715,26,17]: "#162"
+                - generic [ref=e254] [box=50,1715,3,17]: ·
+                - generic [ref=e255] [box=60,1715,62,17]: 20.05, 17:27
+                - generic [ref=e256] [box=128,1715,3,17]: ·
+                - generic [ref=e257] [box=137,1715,16,17]: 9 с
+            - 'button "AI Automation Draft Выполнен #161 · 20.05, 17:26 · 19 с" [ref=e258] [cursor=pointer] [box=0,1750,384,80]':
+              - generic [ref=e259] [box=18,1767,350,22]:
+                - generic [ref=e260] [box=18,1768,131,20]: AI Automation Draft
+                - generic [ref=e261] [box=272,1767,96,22]
+              - generic [ref=e265] [box=18,1795,350,17]:
+                - generic [ref=e266] [box=18,1795,26,17]: "#161"
+                - generic [ref=e267] [box=50,1795,3,17]: ·
+                - generic [ref=e268] [box=60,1795,63,17]: 20.05, 17:26
+                - generic [ref=e269] [box=128,1795,3,17]: ·
+                - generic [ref=e270] [box=137,1795,21,17]: 19 с
+            - 'button "AI Automation Draft Выполнен #160 · 20.05, 17:24 · 11 с" [ref=e271] [cursor=pointer] [box=0,1830,384,80]':
+              - generic [ref=e272] [box=18,1847,350,22]:
+                - generic [ref=e273] [box=18,1848,131,20]: AI Automation Draft
+                - generic [ref=e274] [box=272,1847,96,22]
+              - generic [ref=e278] [box=18,1875,350,17]:
+                - generic [ref=e279] [box=18,1875,26,17]: "#160"
+                - generic [ref=e280] [box=50,1875,3,17]: ·
+                - generic [ref=e281] [box=60,1875,63,17]: 20.05, 17:24
+                - generic [ref=e282] [box=128,1875,3,17]: ·
+                - generic [ref=e283] [box=138,1875,18,17]: 11 с
+            - 'button "AI Automation Draft Выполнен #159 · 20.05, 17:22 · 9 с" [ref=e284] [cursor=pointer] [box=0,1910,384,80]':
+              - generic [ref=e285] [box=18,1927,350,22]:
+                - generic [ref=e286] [box=18,1928,131,20]: AI Automation Draft
+                - generic [ref=e287] [box=272,1927,96,22]
+              - generic [ref=e291] [box=18,1955,350,17]:
+                - generic [ref=e292] [box=18,1955,26,17]: "#159"
+                - generic [ref=e293] [box=50,1955,3,17]: ·
+                - generic [ref=e294] [box=60,1955,63,17]: 20.05, 17:22
+                - generic [ref=e295] [box=128,1955,3,17]: ·
+                - generic [ref=e296] [box=137,1955,16,17]: 9 с
+            - 'button "AI Automation Draft Выполнен #158 · 20.05, 17:22 · 9 с" [ref=e297] [cursor=pointer] [box=0,1990,384,80]':
+              - generic [ref=e298] [box=18,2007,350,22]:
+                - generic [ref=e299] [box=18,2008,131,20]: AI Automation Draft
+                - generic [ref=e300] [box=272,2007,96,22]
+              - generic [ref=e304] [box=18,2035,350,17]:
+                - generic [ref=e305] [box=18,2035,26,17]: "#158"
+                - generic [ref=e306] [box=50,2035,3,17]: ·
+                - generic [ref=e307] [box=60,2035,63,17]: 20.05, 17:22
+                - generic [ref=e308] [box=128,2035,3,17]: ·
+                - generic [ref=e309] [box=137,2035,16,17]: 9 с
+            - 'button "AI Automation Draft Выполнен #157 · 20.05, 17:21 · 0 с" [ref=e310] [cursor=pointer] [box=0,2070,384,80]':
+              - generic [ref=e311] [box=18,2087,350,22]:
+                - generic [ref=e312] [box=18,2088,131,20]: AI Automation Draft
+                - generic [ref=e313] [box=272,2087,96,22]
+              - generic [ref=e317] [box=18,2115,350,17]:
+                - generic [ref=e318] [box=18,2115,26,17]: "#157"
+                - generic [ref=e319] [box=50,2115,3,17]: ·
+                - generic [ref=e320] [box=60,2115,60,17]: 20.05, 17:21
+                - generic [ref=e321] [box=126,2115,3,17]: ·
+                - generic [ref=e322] [box=135,2115,16,17]: 0 с
+            - 'button "AI Automation Draft Выполнен #156 · 20.05, 17:21 · 0 с" [ref=e323] [cursor=pointer] [box=0,2150,384,80]':
+              - generic [ref=e324] [box=18,2167,350,22]:
+                - generic [ref=e325] [box=18,2168,131,20]: AI Automation Draft
+                - generic [ref=e326] [box=272,2167,96,22]
+              - generic [ref=e330] [box=18,2195,350,17]:
+                - generic [ref=e331] [box=18,2195,26,17]: "#156"
+                - generic [ref=e332] [box=50,2195,3,17]: ·
+                - generic [ref=e333] [box=60,2195,60,17]: 20.05, 17:21
+                - generic [ref=e334] [box=126,2195,3,17]: ·
+                - generic [ref=e335] [box=135,2195,16,17]: 0 с
+            - 'button "AI Automation Draft Выполнен #155 · 20.05, 17:21 · 0 с" [ref=e336] [cursor=pointer] [box=0,2230,384,80]':
+              - generic [ref=e337] [box=18,2247,350,22]:
+                - generic [ref=e338] [box=18,2248,131,20]: AI Automation Draft
+                - generic [ref=e339] [box=272,2247,96,22]
+              - generic [ref=e343] [box=18,2275,350,17]:
+                - generic [ref=e344] [box=18,2275,26,17]: "#155"
+                - generic [ref=e345] [box=50,2275,3,17]: ·
+                - generic [ref=e346] [box=60,2275,60,17]: 20.05, 17:21
+                - generic [ref=e347] [box=126,2275,3,17]: ·
+                - generic [ref=e348] [box=135,2275,16,17]: 0 с
+            - 'button "AI Automation Draft Выполнен #154 · 20.05, 17:21 · 0 с" [ref=e349] [cursor=pointer] [box=0,2310,384,80]':
+              - generic [ref=e350] [box=18,2327,350,22]:
+                - generic [ref=e351] [box=18,2328,131,20]: AI Automation Draft
+                - generic [ref=e352] [box=272,2327,96,22]
+              - generic [ref=e356] [box=18,2355,350,17]:
+                - generic [ref=e357] [box=18,2355,26,17]: "#154"
+                - generic [ref=e358] [box=50,2355,3,17]: ·
+                - generic [ref=e359] [box=60,2355,60,17]: 20.05, 17:21
+                - generic [ref=e360] [box=126,2355,3,17]: ·
+                - generic [ref=e361] [box=135,2355,16,17]: 0 с
+            - 'button "AI Automation Draft Выполнен #153 · 20.05, 17:20 · 2 с" [ref=e362] [cursor=pointer] [box=0,2390,384,80]':
+              - generic [ref=e363] [box=18,2407,350,22]:
+                - generic [ref=e364] [box=18,2408,131,20]: AI Automation Draft
+                - generic [ref=e365] [box=272,2407,96,22]
+              - generic [ref=e369] [box=18,2435,350,17]:
+                - generic [ref=e370] [box=18,2435,26,17]: "#153"
+                - generic [ref=e371] [box=50,2435,3,17]: ·
+                - generic [ref=e372] [box=60,2435,63,17]: 20.05, 17:20
+                - generic [ref=e373] [box=128,2435,3,17]: ·
+                - generic [ref=e374] [box=138,2435,16,17]: 2 с
+            - 'button "AI Automation Draft Выполнен #152 · 20.05, 17:20 · 0 с" [ref=e375] [cursor=pointer] [box=0,2470,384,80]':
+              - generic [ref=e376] [box=18,2487,350,22]:
+                - generic [ref=e377] [box=18,2488,131,20]: AI Automation Draft
+                - generic [ref=e378] [box=272,2487,96,22]
+              - generic [ref=e382] [box=18,2515,350,17]:
+                - generic [ref=e383] [box=18,2515,26,17]: "#152"
+                - generic [ref=e384] [box=50,2515,3,17]: ·
+                - generic [ref=e385] [box=60,2515,63,17]: 20.05, 17:20
+                - generic [ref=e386] [box=128,2515,3,17]: ·
+                - generic [ref=e387] [box=138,2515,16,17]: 0 с
+            - 'button "AI Automation Draft Выполнен #151 · 20.05, 17:20 · 0 с" [ref=e388] [cursor=pointer] [box=0,2550,384,80]':
+              - generic [ref=e389] [box=18,2567,350,22]:
+                - generic [ref=e390] [box=18,2568,131,20]: AI Automation Draft
+                - generic [ref=e391] [box=272,2567,96,22]
+              - generic [ref=e395] [box=18,2595,350,17]:
+                - generic [ref=e396] [box=18,2595,26,17]: "#151"
+                - generic [ref=e397] [box=50,2595,3,17]: ·
+                - generic [ref=e398] [box=60,2595,63,17]: 20.05, 17:20
+                - generic [ref=e399] [box=128,2595,3,17]: ·
+                - generic [ref=e400] [box=138,2595,16,17]: 0 с
+            - 'button "AI Automation Draft Выполнен #150 · 20.05, 17:12 · 5 с" [ref=e401] [cursor=pointer] [box=0,2630,384,80]':
+              - generic [ref=e402] [box=18,2647,350,22]:
+                - generic [ref=e403] [box=18,2648,131,20]: AI Automation Draft
+                - generic [ref=e404] [box=272,2647,96,22]
+              - generic [ref=e408] [box=18,2675,350,17]:
+                - generic [ref=e409] [box=18,2675,26,17]: "#150"
+                - generic [ref=e410] [box=50,2675,3,17]: ·
+                - generic [ref=e411] [box=60,2675,60,17]: 20.05, 17:12
+                - generic [ref=e412] [box=126,2675,3,17]: ·
+                - generic [ref=e413] [box=135,2675,16,17]: 5 с
+            - 'button "AI Automation Draft Выполнен #149 · 20.05, 17:10 · 6 с" [ref=e414] [cursor=pointer] [box=0,2710,384,80]':
+              - generic [ref=e415] [box=18,2727,350,22]:
+                - generic [ref=e416] [box=18,2728,131,20]: AI Automation Draft
+                - generic [ref=e417] [box=272,2727,96,22]
+              - generic [ref=e421] [box=18,2755,350,17]:
+                - generic [ref=e422] [box=18,2755,26,17]: "#149"
+                - generic [ref=e423] [box=50,2755,3,17]: ·
+                - generic [ref=e424] [box=60,2755,61,17]: 20.05, 17:10
+                - generic [ref=e425] [box=126,2755,3,17]: ·
+                - generic [ref=e426] [box=135,2755,16,17]: 6 с
+            - 'button "AI Automation Draft Выполнен #148 · 20.05, 16:52 · 7 с" [ref=e427] [cursor=pointer] [box=0,2790,384,80]':
+              - generic [ref=e428] [box=18,2807,350,22]:
+                - generic [ref=e429] [box=18,2808,131,20]: AI Automation Draft
+                - generic [ref=e430] [box=272,2807,96,22]
+              - generic [ref=e434] [box=18,2835,350,17]:
+                - generic [ref=e435] [box=18,2835,26,17]: "#148"
+                - generic [ref=e436] [box=50,2835,3,17]: ·
+                - generic [ref=e437] [box=60,2835,63,17]: 20.05, 16:52
+                - generic [ref=e438] [box=129,2835,3,17]: ·
+                - generic [ref=e439] [box=138,2835,16,17]: 7 с
+            - 'button "AI Automation Draft Выполнен #147 · 20.05, 15:24 · 6 с" [ref=e440] [cursor=pointer] [box=0,2870,384,80]':
+              - generic [ref=e441] [box=18,2887,350,22]:
+                - generic [ref=e442] [box=18,2888,131,20]: AI Automation Draft
+                - generic [ref=e443] [box=272,2887,96,22]
+              - generic [ref=e447] [box=18,2915,350,17]:
+                - generic [ref=e448] [box=18,2915,26,17]: "#147"
+                - generic [ref=e449] [box=50,2915,3,17]: ·
+                - generic [ref=e450] [box=60,2915,64,17]: 20.05, 15:24
+                - generic [ref=e451] [box=129,2915,3,17]: ·
+                - generic [ref=e452] [box=138,2915,16,17]: 6 с
+            - 'button "AI Automation Draft Выполнен #146 · 20.05, 15:09 · 6 с" [ref=e453] [cursor=pointer] [box=0,2950,384,80]':
+              - generic [ref=e454] [box=18,2967,350,22]:
+                - generic [ref=e455] [box=18,2968,131,20]: AI Automation Draft
+                - generic [ref=e456] [box=272,2967,96,22]
+              - generic [ref=e460] [box=18,2995,350,17]:
+                - generic [ref=e461] [box=18,2995,26,17]: "#146"
+                - generic [ref=e462] [box=50,2995,3,17]: ·
+                - generic [ref=e463] [box=60,2995,64,17]: 20.05, 15:09
+                - generic [ref=e464] [box=129,2995,3,17]: ·
+                - generic [ref=e465] [box=138,2995,16,17]: 6 с
+            - 'button "AI Automation Draft Выполнен #145 · 20.05, 15:08 · 6 с" [ref=e466] [cursor=pointer] [box=0,3030,384,80]':
+              - generic [ref=e467] [box=18,3047,350,22]:
+                - generic [ref=e468] [box=18,3048,131,20]: AI Automation Draft
+                - generic [ref=e469] [box=272,3047,96,22]
+              - generic [ref=e473] [box=18,3075,350,17]:
+                - generic [ref=e474] [box=18,3075,26,17]: "#145"
+                - generic [ref=e475] [box=50,3075,3,17]: ·
+                - generic [ref=e476] [box=60,3075,64,17]: 20.05, 15:08
+                - generic [ref=e477] [box=129,3075,3,17]: ·
+                - generic [ref=e478] [box=138,3075,16,17]: 6 с
+            - 'button "AI Automation Draft Выполнен #144 · 20.05, 15:08 · 7 с" [ref=e479] [cursor=pointer] [box=0,3110,384,80]':
+              - generic [ref=e480] [box=18,3127,350,22]:
+                - generic [ref=e481] [box=18,3128,131,20]: AI Automation Draft
+                - generic [ref=e482] [box=272,3127,96,22]
+              - generic [ref=e486] [box=18,3155,350,17]:
+                - generic [ref=e487] [box=18,3155,26,17]: "#144"
+                - generic [ref=e488] [box=50,3155,3,17]: ·
+                - generic [ref=e489] [box=60,3155,64,17]: 20.05, 15:08
+                - generic [ref=e490] [box=129,3155,3,17]: ·
+                - generic [ref=e491] [box=138,3155,16,17]: 7 с
+            - 'button "AI Automation Draft Выполнен #143 · 20.05, 15:03 · 1 с" [ref=e492] [cursor=pointer] [box=0,3190,384,80]':
+              - generic [ref=e493] [box=18,3207,350,22]:
+                - generic [ref=e494] [box=18,3208,131,20]: AI Automation Draft
+                - generic [ref=e495] [box=272,3207,96,22]
+              - generic [ref=e499] [box=18,3235,350,17]:
+                - generic [ref=e500] [box=18,3235,26,17]: "#143"
+                - generic [ref=e501] [box=50,3235,3,17]: ·
+                - generic [ref=e502] [box=60,3235,64,17]: 20.05, 15:03
+                - generic [ref=e503] [box=129,3235,3,17]: ·
+                - generic [ref=e504] [box=138,3235,14,17]: 1 с
+            - 'button "AI Automation Draft Выполнен #142 · 20.05, 15:02 · 1 с" [ref=e505] [cursor=pointer] [box=0,3270,384,80]':
+              - generic [ref=e506] [box=18,3287,350,22]:
+                - generic [ref=e507] [box=18,3288,131,20]: AI Automation Draft
+                - generic [ref=e508] [box=272,3287,96,22]
+              - generic [ref=e512] [box=18,3315,350,17]:
+                - generic [ref=e513] [box=18,3315,26,17]: "#142"
+                - generic [ref=e514] [box=50,3315,3,17]: ·
+                - generic [ref=e515] [box=60,3315,64,17]: 20.05, 15:02
+                - generic [ref=e516] [box=129,3315,3,17]: ·
+                - generic [ref=e517] [box=138,3315,14,17]: 1 с
+            - 'button "AI Automation Draft Выполнен #141 · 20.05, 15:01 · 0 с" [ref=e518] [cursor=pointer] [box=0,3350,384,80]':
+              - generic [ref=e519] [box=18,3367,350,22]:
+                - generic [ref=e520] [box=18,3368,131,20]: AI Automation Draft
+                - generic [ref=e521] [box=272,3367,96,22]
+              - generic [ref=e525] [box=18,3395,350,17]:
+                - generic [ref=e526] [box=18,3395,26,17]: "#141"
+                - generic [ref=e527] [box=50,3395,3,17]: ·
+                - generic [ref=e528] [box=60,3395,61,17]: 20.05, 15:01
+                - generic [ref=e529] [box=127,3395,3,17]: ·
+                - generic [ref=e530] [box=136,3395,16,17]: 0 с
+            - 'button "AI Automation Draft Выполнен #140 · 20.05, 15:01 · 0 с" [ref=e531] [cursor=pointer] [box=0,3430,384,80]':
+              - generic [ref=e532] [box=18,3447,350,22]:
+                - generic [ref=e533] [box=18,3448,131,20]: AI Automation Draft
+                - generic [ref=e534] [box=272,3447,96,22]
+              - generic [ref=e538] [box=18,3475,350,17]:
+                - generic [ref=e539] [box=18,3475,26,17]: "#140"
+                - generic [ref=e540] [box=50,3475,3,17]: ·
+                - generic [ref=e541] [box=60,3475,61,17]: 20.05, 15:01
+                - generic [ref=e542] [box=127,3475,3,17]: ·
+                - generic [ref=e543] [box=136,3475,16,17]: 0 с
+            - 'button "AI Automation Draft Выполнен #139 · 20.05, 14:59 · 0 с" [ref=e544] [cursor=pointer] [box=0,3510,384,80]':
+              - generic [ref=e545] [box=18,3527,350,22]:
+                - generic [ref=e546] [box=18,3528,131,20]: AI Automation Draft
+                - generic [ref=e547] [box=272,3527,96,22]
+              - generic [ref=e551] [box=18,3555,350,17]:
+                - generic [ref=e552] [box=18,3555,26,17]: "#139"
+                - generic [ref=e553] [box=50,3555,3,17]: ·
+                - generic [ref=e554] [box=60,3555,64,17]: 20.05, 14:59
+                - generic [ref=e555] [box=129,3555,3,17]: ·
+                - generic [ref=e556] [box=139,3555,16,17]: 0 с
+            - 'button "AI Data Detective Showcase Выполнен #138 · 20.05, 13:47 · 0 с" [ref=e557] [cursor=pointer] [box=0,3590,384,80]':
+              - generic [ref=e558] [box=18,3607,350,22]:
+                - generic [ref=e559] [box=18,3608,188,20]: AI Data Detective Showcase
+                - generic [ref=e560] [box=272,3607,96,22]
+              - generic [ref=e564] [box=18,3635,350,17]:
+                - generic [ref=e565] [box=18,3635,26,17]: "#138"
+                - generic [ref=e566] [box=50,3635,3,17]: ·
+                - generic [ref=e567] [box=60,3635,63,17]: 20.05, 13:47
+                - generic [ref=e568] [box=129,3635,3,17]: ·
+                - generic [ref=e569] [box=138,3635,16,17]: 0 с
+            - 'button "AI Content Studio Showcase Выполнен #137 · 19.05, 18:05 · 3 с" [ref=e570] [cursor=pointer] [box=0,3670,384,80]':
+              - generic [ref=e571] [box=18,3687,350,22]:
+                - generic [ref=e572] [box=18,3688,190,20]: AI Content Studio Showcase
+                - generic [ref=e573] [box=272,3687,96,22]
+              - generic [ref=e577] [box=18,3715,350,17]:
+                - generic [ref=e578] [box=18,3715,26,17]: "#137"
+                - generic [ref=e579] [box=50,3715,3,17]: ·
+                - generic [ref=e580] [box=60,3715,61,17]: 19.05, 18:05
+                - generic [ref=e581] [box=127,3715,3,17]: ·
+                - generic [ref=e582] [box=136,3715,16,17]: 3 с
+            - 'button "AI Content Studio Showcase Выполнен #136 · 19.05, 16:13 · 4 с" [ref=e583] [cursor=pointer] [box=0,3750,384,80]':
+              - generic [ref=e584] [box=18,3767,350,22]:
+                - generic [ref=e585] [box=18,3768,190,20]: AI Content Studio Showcase
+                - generic [ref=e586] [box=272,3767,96,22]
+              - generic [ref=e590] [box=18,3795,350,17]:
+                - generic [ref=e591] [box=18,3795,26,17]: "#136"
+                - generic [ref=e592] [box=50,3795,3,17]: ·
+                - generic [ref=e593] [box=60,3795,59,17]: 19.05, 16:13
+                - generic [ref=e594] [box=125,3795,3,17]: ·
+                - generic [ref=e595] [box=134,3795,16,17]: 4 с
+            - 'button "AI Data Detective Showcase Выполнен #103 · 17.04, 04:37 · 0 с" [ref=e596] [cursor=pointer] [box=0,3830,384,80]':
+              - generic [ref=e597] [box=18,3847,350,22]:
+                - generic [ref=e598] [box=18,3848,188,20]: AI Data Detective Showcase
+                - generic [ref=e599] [box=272,3847,96,22]
+              - generic [ref=e603] [box=18,3875,350,17]:
+                - generic [ref=e604] [box=18,3875,26,17]: "#103"
+                - generic [ref=e605] [box=50,3875,3,17]: ·
+                - generic [ref=e606] [box=60,3875,62,17]: 17.04, 04:37
+                - generic [ref=e607] [box=128,3875,3,17]: ·
+                - generic [ref=e608] [box=137,3875,16,17]: 0 с
+            - 'button "Docker Recovery: mini-prod-mcp-demo Остановлен #102 · 17.04, 02:31 · 28 с" [ref=e609] [cursor=pointer] [box=0,3910,384,80]':
+              - generic [ref=e610] [box=18,3927,350,22]:
+                - generic [ref=e611] [box=18,3928,235,20]: "Docker Recovery: mini-prod-mcp-demo"
+                - generic [ref=e612] [box=261,3927,107,22]
+              - generic [ref=e615] [box=18,3955,350,17]:
+                - generic [ref=e616] [box=18,3955,26,17]: "#102"
+                - generic [ref=e617] [box=50,3955,3,17]: ·
+                - generic [ref=e618] [box=60,3955,60,17]: 17.04, 02:31
+                - generic [ref=e619] [box=126,3955,3,17]: ·
+                - generic [ref=e620] [box=135,3955,23,17]: 28 с
+            - 'button "Docker Recovery: mini-prod-mcp-demo Выполнен #100 · 16.04, 21:03 · 45 с" [ref=e621] [cursor=pointer] [box=0,3990,384,80]':
+              - generic [ref=e622] [box=18,4007,350,22]:
+                - generic [ref=e623] [box=18,4008,246,20]: "Docker Recovery: mini-prod-mcp-demo"
+                - generic [ref=e624] [box=272,4007,96,22]
+              - generic [ref=e628] [box=18,4035,350,17]:
+                - generic [ref=e629] [box=18,4035,26,17]: "#100"
+                - generic [ref=e630] [box=50,4035,3,17]: ·
+                - generic [ref=e631] [box=60,4035,62,17]: 16.04, 21:03
+                - generic [ref=e632] [box=127,4035,3,17]: ·
+                - generic [ref=e633] [box=137,4035,23,17]: 45 с
+            - 'button "Docker Recovery: mini-prod-mcp-demo Остановлен #99 · 16.04, 19:06 · 1 мин 32 с" [ref=e634] [cursor=pointer] [box=0,4070,384,80]':
+              - generic [ref=e635] [box=18,4087,350,22]:
+                - generic [ref=e636] [box=18,4088,235,20]: "Docker Recovery: mini-prod-mcp-demo"
+                - generic [ref=e637] [box=261,4087,107,22]
+              - generic [ref=e640] [box=18,4115,350,17]:
+                - generic [ref=e641] [box=18,4115,20,17]: "#99"
+                - generic [ref=e642] [box=44,4115,3,17]: ·
+                - generic [ref=e643] [box=53,4115,62,17]: 16.04, 19:06
+                - generic [ref=e644] [box=121,4115,3,17]: ·
+                - generic [ref=e645] [box=130,4115,55,17]: 1 мин 32 с
+            - 'button "Docker Recovery: mini-prod-mcp-demo Остановлен #98 · 16.04, 14:01 · 2 мин 40 с" [ref=e646] [cursor=pointer] [box=0,4150,384,80]':
+              - generic [ref=e647] [box=18,4167,350,22]:
+                - generic [ref=e648] [box=18,4168,235,20]: "Docker Recovery: mini-prod-mcp-demo"
+                - generic [ref=e649] [box=261,4167,107,22]
+              - generic [ref=e652] [box=18,4195,350,17]:
+                - generic [ref=e653] [box=18,4195,20,17]: "#98"
+                - generic [ref=e654] [box=44,4195,3,17]: ·
+                - generic [ref=e655] [box=53,4195,60,17]: 16.04, 14:01
+                - generic [ref=e656] [box=119,4195,3,17]: ·
+                - generic [ref=e657] [box=128,4195,58,17]: 2 мин 40 с
+            - 'button "Docker Recovery: mini-prod-mcp-demo Остановлен #97 · 15.04, 09:38" [ref=e658] [cursor=pointer] [box=0,4230,384,80]':
+              - generic [ref=e659] [box=18,4247,350,22]:
+                - generic [ref=e660] [box=18,4248,235,20]: "Docker Recovery: mini-prod-mcp-demo"
+                - generic [ref=e661] [box=261,4247,107,22]
+              - generic [ref=e664] [box=18,4275,350,17]:
+                - generic [ref=e665] [box=18,4275,20,17]: "#97"
+                - generic [ref=e666] [box=44,4275,3,17]: ·
+                - generic [ref=e667] [box=53,4275,64,17]: 15.04, 09:38
+            - 'button "Docker Recovery: mini-prod-mcp-demo Выполнен #96 · 15.04, 09:24 · 1 мин 1 с" [ref=e668] [cursor=pointer] [box=0,4310,384,80]':
+              - generic [ref=e669] [box=18,4327,350,22]:
+                - generic [ref=e670] [box=18,4328,246,20]: "Docker Recovery: mini-prod-mcp-demo"
+                - generic [ref=e671] [box=272,4327,96,22]
+              - generic [ref=e675] [box=18,4355,350,17]:
+                - generic [ref=e676] [box=18,4355,20,17]: "#96"
+                - generic [ref=e677] [box=44,4355,3,17]: ·
+                - generic [ref=e678] [box=53,4355,64,17]: 15.04, 09:24
+                - generic [ref=e679] [box=123,4355,3,17]: ·
+                - generic [ref=e680] [box=132,4355,46,17]: 1 мин 1 с
+            - 'button "Docker Recovery: mini-prod-mcp-demo Выполнен #95 · 15.04, 09:22 · 59 с" [ref=e681] [cursor=pointer] [box=0,4390,384,80]':
+              - generic [ref=e682] [box=18,4407,350,22]:
+                - generic [ref=e683] [box=18,4408,246,20]: "Docker Recovery: mini-prod-mcp-demo"
+                - generic [ref=e684] [box=272,4407,96,22]
+              - generic [ref=e688] [box=18,4435,350,17]:
+                - generic [ref=e689] [box=18,4435,20,17]: "#95"
+                - generic [ref=e690] [box=44,4435,3,17]: ·
+                - generic [ref=e691] [box=53,4435,64,17]: 15.04, 09:22
+                - generic [ref=e692] [box=123,4435,3,17]: ·
+                - generic [ref=e693] [box=132,4435,23,17]: 59 с
+            - 'button "Docker Recovery: mini-prod-mcp-demo Остановлен #94 · 11.04, 23:25 · 2069 мин 25 с" [ref=e694] [cursor=pointer] [box=0,4470,384,80]':
+              - generic [ref=e695] [box=18,4487,350,22]:
+                - generic [ref=e696] [box=18,4488,235,20]: "Docker Recovery: mini-prod-mcp-demo"
+                - generic [ref=e697] [box=261,4487,107,22]
+              - generic [ref=e700] [box=18,4515,350,17]:
+                - generic [ref=e701] [box=18,4515,20,17]: "#94"
+                - generic [ref=e702] [box=44,4515,3,17]: ·
+                - generic [ref=e703] [box=53,4515,62,17]: 11.04, 23:25
+                - generic [ref=e704] [box=121,4515,3,17]: ·
+                - generic [ref=e705] [box=130,4515,78,17]: 2069 мин 25 с
+            - 'button "DBG Monitoring Launch 2 Выполнен #93 · 11.04, 23:20 · 0 с" [ref=e706] [cursor=pointer] [box=0,4550,384,80]':
+              - generic [ref=e707] [box=18,4567,350,22]:
+                - generic [ref=e708] [box=18,4568,171,20]: DBG Monitoring Launch 2
+                - generic [ref=e709] [box=272,4567,96,22]
+              - generic [ref=e713] [box=18,4595,350,17]:
+                - generic [ref=e714] [box=18,4595,20,17]: "#93"
+                - generic [ref=e715] [box=44,4595,3,17]: ·
+                - generic [ref=e716] [box=53,4595,62,17]: 11.04, 23:20
+                - generic [ref=e717] [box=121,4595,3,17]: ·
+                - generic [ref=e718] [box=130,4595,16,17]: 0 с
+            - 'button "Docker Recovery: mini-prod-mcp-demo Остановлен #92 · 11.04, 23:10 · 2084 мин 37 с" [ref=e719] [cursor=pointer] [box=0,4630,384,80]':
+              - generic [ref=e720] [box=18,4647,350,22]:
+                - generic [ref=e721] [box=18,4648,235,20]: "Docker Recovery: mini-prod-mcp-demo"
+                - generic [ref=e722] [box=261,4647,107,22]
+              - generic [ref=e725] [box=18,4675,350,17]:
+                - generic [ref=e726] [box=18,4675,20,17]: "#92"
+                - generic [ref=e727] [box=44,4675,3,17]: ·
+                - generic [ref=e728] [box=53,4675,60,17]: 11.04, 23:10
+                - generic [ref=e729] [box=119,4675,3,17]: ·
+                - generic [ref=e730] [box=128,4675,78,17]: 2084 мин 37 с
+            - 'button "DBG Monitoring Launch 2 Выполнен #91 · 11.04, 23:05 · 0 с" [ref=e731] [cursor=pointer] [box=0,4710,384,80]':
+              - generic [ref=e732] [box=18,4727,350,22]:
+                - generic [ref=e733] [box=18,4728,171,20]: DBG Monitoring Launch 2
+                - generic [ref=e734] [box=272,4727,96,22]
+              - generic [ref=e738] [box=18,4755,350,17]:
+                - generic [ref=e739] [box=18,4755,20,17]: "#91"
+                - generic [ref=e740] [box=44,4755,3,17]: ·
+                - generic [ref=e741] [box=53,4755,62,17]: 11.04, 23:05
+                - generic [ref=e742] [box=121,4755,3,17]: ·
+                - generic [ref=e743] [box=130,4755,16,17]: 0 с
+            - 'button "Docker Recovery: mini-prod-mcp-demo Остановлен #90 · 11.04, 22:55 · 2099 мин 42 с" [ref=e744] [cursor=pointer] [box=0,4790,384,80]':
+              - generic [ref=e745] [box=18,4807,350,22]:
+                - generic [ref=e746] [box=18,4808,235,20]: "Docker Recovery: mini-prod-mcp-demo"
+                - generic [ref=e747] [box=261,4807,107,22]
+              - generic [ref=e750] [box=18,4835,350,17]:
+                - generic [ref=e751] [box=18,4835,20,17]: "#90"
+                - generic [ref=e752] [box=44,4835,3,17]: ·
+                - generic [ref=e753] [box=53,4835,61,17]: 11.04, 22:55
+                - generic [ref=e754] [box=120,4835,3,17]: ·
+                - generic [ref=e755] [box=130,4835,78,17]: 2099 мин 42 с
+            - 'button "DBG Monitoring Launch 2 Выполнен #89 · 11.04, 22:50 · 0 с" [ref=e756] [cursor=pointer] [box=0,4870,384,80]':
+              - generic [ref=e757] [box=18,4887,350,22]:
+                - generic [ref=e758] [box=18,4888,171,20]: DBG Monitoring Launch 2
+                - generic [ref=e759] [box=272,4887,96,22]
+              - generic [ref=e763] [box=18,4915,350,17]:
+                - generic [ref=e764] [box=18,4915,20,17]: "#89"
+                - generic [ref=e765] [box=44,4915,3,17]: ·
+                - generic [ref=e766] [box=53,4915,62,17]: 11.04, 22:50
+                - generic [ref=e767] [box=121,4915,3,17]: ·
+                - generic [ref=e768] [box=130,4915,16,17]: 0 с
+            - 'button "Docker Recovery: mini-prod-mcp-demo Выполнен #88 · 11.04, 22:40 · 45 мин 4 с" [ref=e769] [cursor=pointer] [box=0,4950,384,80]':
+              - generic [ref=e770] [box=18,4967,350,22]:
+                - generic [ref=e771] [box=18,4968,246,20]: "Docker Recovery: mini-prod-mcp-demo"
+                - generic [ref=e772] [box=272,4967,96,22]
+              - generic [ref=e776] [box=18,4995,350,17]:
+                - generic [ref=e777] [box=18,4995,20,17]: "#88"
+                - generic [ref=e778] [box=44,4995,3,17]: ·
+                - generic [ref=e779] [box=53,4995,62,17]: 11.04, 22:40
+                - generic [ref=e780] [box=121,4995,3,17]: ·
+                - generic [ref=e781] [box=131,4995,58,17]: 45 мин 4 с
+            - 'button "DBG Monitoring Launch 2 Выполнен #87 · 11.04, 22:34 · 0 с" [ref=e782] [cursor=pointer] [box=0,5030,384,80]':
+              - generic [ref=e783] [box=18,5047,350,22]:
+                - generic [ref=e784] [box=18,5048,171,20]: DBG Monitoring Launch 2
+                - generic [ref=e785] [box=272,5047,96,22]
+              - generic [ref=e789] [box=18,5075,350,17]:
+                - generic [ref=e790] [box=18,5075,20,17]: "#87"
+                - generic [ref=e791] [box=44,5075,3,17]: ·
+                - generic [ref=e792] [box=53,5075,62,17]: 11.04, 22:34
+                - generic [ref=e793] [box=121,5075,3,17]: ·
+                - generic [ref=e794] [box=130,5075,16,17]: 0 с
+            - 'button "Docker Recovery: mini-prod-mcp-demo Выполнен #86 · 11.04, 22:25 · 45 мин 5 с" [ref=e795] [cursor=pointer] [box=0,5110,384,80]':
+              - generic [ref=e796] [box=18,5127,350,22]:
+                - generic [ref=e797] [box=18,5128,246,20]: "Docker Recovery: mini-prod-mcp-demo"
+                - generic [ref=e798] [box=272,5127,96,22]
+              - generic [ref=e802] [box=18,5155,350,17]:
+                - generic [ref=e803] [box=18,5155,20,17]: "#86"
+                - generic [ref=e804] [box=44,5155,3,17]: ·
+                - generic [ref=e805] [box=53,5155,62,17]: 11.04, 22:25
+                - generic [ref=e806] [box=121,5155,3,17]: ·
+                - generic [ref=e807] [box=130,5155,57,17]: 45 мин 5 с
+            - 'button "DBG Monitoring Launch 2 Выполнен #85 · 11.04, 22:19 · 0 с" [ref=e808] [cursor=pointer] [box=0,5190,384,80]':
+              - generic [ref=e809] [box=18,5207,350,22]:
+                - generic [ref=e810] [box=18,5208,171,20]: DBG Monitoring Launch 2
+                - generic [ref=e811] [box=272,5207,96,22]
+              - generic [ref=e815] [box=18,5235,350,17]:
+                - generic [ref=e816] [box=18,5235,20,17]: "#85"
+                - generic [ref=e817] [box=44,5235,3,17]: ·
+                - generic [ref=e818] [box=53,5235,60,17]: 11.04, 22:19
+                - generic [ref=e819] [box=119,5235,3,17]: ·
+                - generic [ref=e820] [box=128,5235,16,17]: 0 с
+            - 'button "Docker Recovery: mini-prod-mcp-demo Выполнен #84 · 11.04, 22:10 · 45 мин 5 с" [ref=e821] [cursor=pointer] [box=0,5270,384,80]':
+              - generic [ref=e822] [box=18,5287,350,22]:
+                - generic [ref=e823] [box=18,5288,246,20]: "Docker Recovery: mini-prod-mcp-demo"
+                - generic [ref=e824] [box=272,5287,96,22]
+              - generic [ref=e828] [box=18,5315,350,17]:
+                - generic [ref=e829] [box=18,5315,20,17]: "#84"
+                - generic [ref=e830] [box=44,5315,3,17]: ·
+                - generic [ref=e831] [box=53,5315,60,17]: 11.04, 22:10
+                - generic [ref=e832] [box=119,5315,3,17]: ·
+                - generic [ref=e833] [box=128,5315,57,17]: 45 мин 5 с
+            - 'button "DBG Monitoring Launch 2 Выполнен #83 · 11.04, 22:03 · 0 с" [ref=e834] [cursor=pointer] [box=0,5350,384,80]':
+              - generic [ref=e835] [box=18,5367,350,22]:
+                - generic [ref=e836] [box=18,5368,171,20]: DBG Monitoring Launch 2
+                - generic [ref=e837] [box=272,5367,96,22]
+              - generic [ref=e841] [box=18,5395,350,17]:
+                - generic [ref=e842] [box=18,5395,20,17]: "#83"
+                - generic [ref=e843] [box=44,5395,3,17]: ·
+                - generic [ref=e844] [box=53,5395,62,17]: 11.04, 22:03
+                - generic [ref=e845] [box=121,5395,3,17]: ·
+                - generic [ref=e846] [box=130,5395,16,17]: 0 с
+            - 'button "Docker Recovery: mini-prod-mcp-demo Выполнен #82 · 11.04, 21:55 · 45 мин 4 с" [ref=e847] [cursor=pointer] [box=0,5430,384,80]':
+              - generic [ref=e848] [box=18,5447,350,22]:
+                - generic [ref=e849] [box=18,5448,246,20]: "Docker Recovery: mini-prod-mcp-demo"
+                - generic [ref=e850] [box=272,5447,96,22]
+              - generic [ref=e854] [box=18,5475,350,17]:
+                - generic [ref=e855] [box=18,5475,20,17]: "#82"
+                - generic [ref=e856] [box=44,5475,3,17]: ·
+                - generic [ref=e857] [box=53,5475,59,17]: 11.04, 21:55
+                - generic [ref=e858] [box=118,5475,3,17]: ·
+                - generic [ref=e859] [box=127,5475,58,17]: 45 мин 4 с
+            - 'button "DBG Monitoring Launch 2 Выполнен #81 · 11.04, 21:48 · 0 с" [ref=e860] [cursor=pointer] [box=0,5510,384,80]':
+              - generic [ref=e861] [box=18,5527,350,22]:
+                - generic [ref=e862] [box=18,5528,171,20]: DBG Monitoring Launch 2
+                - generic [ref=e863] [box=272,5527,96,22]
+              - generic [ref=e867] [box=18,5555,350,17]:
+                - generic [ref=e868] [box=18,5555,20,17]: "#81"
+                - generic [ref=e869] [box=44,5555,3,17]: ·
+                - generic [ref=e870] [box=53,5555,60,17]: 11.04, 21:48
+                - generic [ref=e871] [box=119,5555,3,17]: ·
+                - generic [ref=e872] [box=128,5555,16,17]: 0 с
+            - 'button "Docker Recovery: mini-prod-mcp-demo Выполнен #80 · 11.04, 21:40 · 45 мин 4 с" [ref=e873] [cursor=pointer] [box=0,5590,384,80]':
+              - generic [ref=e874] [box=18,5607,350,22]:
+                - generic [ref=e875] [box=18,5608,246,20]: "Docker Recovery: mini-prod-mcp-demo"
+                - generic [ref=e876] [box=272,5607,96,22]
+              - generic [ref=e880] [box=18,5635,350,17]:
+                - generic [ref=e881] [box=18,5635,20,17]: "#80"
+                - generic [ref=e882] [box=44,5635,3,17]: ·
+                - generic [ref=e883] [box=53,5635,60,17]: 11.04, 21:40
+                - generic [ref=e884] [box=119,5635,3,17]: ·
+                - generic [ref=e885] [box=128,5635,58,17]: 45 мин 4 с
+            - 'button "DBG Monitoring Launch 2 Выполнен #79 · 11.04, 21:32 · 0 с" [ref=e886] [cursor=pointer] [box=0,5670,384,80]':
+              - generic [ref=e887] [box=18,5687,350,22]:
+                - generic [ref=e888] [box=18,5688,171,20]: DBG Monitoring Launch 2
+                - generic [ref=e889] [box=272,5687,96,22]
+              - generic [ref=e893] [box=18,5715,350,17]:
+                - generic [ref=e894] [box=18,5715,20,17]: "#79"
+                - generic [ref=e895] [box=44,5715,3,17]: ·
+                - generic [ref=e896] [box=53,5715,60,17]: 11.04, 21:32
+                - generic [ref=e897] [box=119,5715,3,17]: ·
+                - generic [ref=e898] [box=128,5715,16,17]: 0 с
+            - 'button "Docker Recovery: mini-prod-mcp-demo Выполнен #78 · 11.04, 21:25 · 45 мин 3 с" [ref=e899] [cursor=pointer] [box=0,5750,384,80]':
+              - generic [ref=e900] [box=18,5767,350,22]:
+                - generic [ref=e901] [box=18,5768,246,20]: "Docker Recovery: mini-prod-mcp-demo"
+                - generic [ref=e902] [box=272,5767,96,22]
+              - generic [ref=e906] [box=18,5795,350,17]:
+                - generic [ref=e907] [box=18,5795,20,17]: "#78"
+                - generic [ref=e908] [box=44,5795,3,17]: ·
+                - generic [ref=e909] [box=53,5795,59,17]: 11.04, 21:25
+                - generic [ref=e910] [box=118,5795,3,17]: ·
+                - generic [ref=e911] [box=128,5795,57,17]: 45 мин 3 с
+            - 'button "DBG Monitoring Launch 2 Выполнен #77 · 11.04, 21:16 · 0 с" [ref=e912] [cursor=pointer] [box=0,5830,384,80]':
+              - generic [ref=e913] [box=18,5847,350,22]:
+                - generic [ref=e914] [box=18,5848,171,20]: DBG Monitoring Launch 2
+                - generic [ref=e915] [box=272,5847,96,22]
+              - generic [ref=e919] [box=18,5875,350,17]:
+                - generic [ref=e920] [box=18,5875,20,17]: "#77"
+                - generic [ref=e921] [box=44,5875,3,17]: ·
+                - generic [ref=e922] [box=53,5875,57,17]: 11.04, 21:16
+                - generic [ref=e923] [box=116,5875,3,17]: ·
+                - generic [ref=e924] [box=126,5875,16,17]: 0 с
+            - 'button "Docker Recovery: mini-prod-mcp-demo Выполнен #76 · 11.04, 21:10 · 45 мин 3 с" [ref=e925] [cursor=pointer] [box=0,5910,384,80]':
+              - generic [ref=e926] [box=18,5927,350,22]:
+                - generic [ref=e927] [box=18,5928,246,20]: "Docker Recovery: mini-prod-mcp-demo"
+                - generic [ref=e928] [box=272,5927,96,22]
+              - generic [ref=e932] [box=18,5955,350,17]:
+                - generic [ref=e933] [box=18,5955,20,17]: "#76"
+                - generic [ref=e934] [box=44,5955,3,17]: ·
+                - generic [ref=e935] [box=53,5955,58,17]: 11.04, 21:10
+                - generic [ref=e936] [box=117,5955,3,17]: ·
+                - generic [ref=e937] [box=126,5955,57,17]: 45 мин 3 с
+            - 'button "DBG Monitoring Launch 2 Выполнен #75 · 11.04, 21:01 · 0 с" [ref=e938] [cursor=pointer] [box=0,5990,384,80]':
+              - generic [ref=e939] [box=18,6007,350,22]:
+                - generic [ref=e940] [box=18,6008,171,20]: DBG Monitoring Launch 2
+                - generic [ref=e941] [box=272,6007,96,22]
+              - generic [ref=e945] [box=18,6035,350,17]:
+                - generic [ref=e946] [box=18,6035,20,17]: "#75"
+                - generic [ref=e947] [box=44,6035,3,17]: ·
+                - generic [ref=e948] [box=53,6035,58,17]: 11.04, 21:01
+                - generic [ref=e949] [box=117,6035,3,17]: ·
+                - generic [ref=e950] [box=126,6035,16,17]: 0 с
+            - 'button "Docker Recovery: mini-prod-mcp-demo Выполнен #74 · 11.04, 20:55 · 45 мин 3 с" [ref=e951] [cursor=pointer] [box=0,6070,384,80]':
+              - generic [ref=e952] [box=18,6087,350,22]:
+                - generic [ref=e953] [box=18,6088,246,20]: "Docker Recovery: mini-prod-mcp-demo"
+                - generic [ref=e954] [box=272,6087,96,22]
+              - generic [ref=e958] [box=18,6115,350,17]:
+                - generic [ref=e959] [box=18,6115,20,17]: "#74"
+                - generic [ref=e960] [box=44,6115,3,17]: ·
+                - generic [ref=e961] [box=53,6115,62,17]: 11.04, 20:55
+                - generic [ref=e962] [box=121,6115,3,17]: ·
+                - generic [ref=e963] [box=130,6115,57,17]: 45 мин 3 с
+            - 'button "DBG Monitoring Launch 2 Выполнен #73 · 11.04, 20:46 · 0 с" [ref=e964] [cursor=pointer] [box=0,6150,384,80]':
+              - generic [ref=e965] [box=18,6167,350,22]:
+                - generic [ref=e966] [box=18,6168,171,20]: DBG Monitoring Launch 2
+                - generic [ref=e967] [box=272,6167,96,22]
+              - generic [ref=e971] [box=18,6195,350,17]:
+                - generic [ref=e972] [box=18,6195,20,17]: "#73"
+                - generic [ref=e973] [box=44,6195,3,17]: ·
+                - generic [ref=e974] [box=53,6195,63,17]: 11.04, 20:46
+                - generic [ref=e975] [box=122,6195,3,17]: ·
+                - generic [ref=e976] [box=131,6195,16,17]: 0 с
+            - 'button "Docker Recovery: mini-prod-mcp-demo Выполнен #72 · 11.04, 20:40 · 45 мин 4 с" [ref=e977] [cursor=pointer] [box=0,6230,384,80]':
+              - generic [ref=e978] [box=18,6247,350,22]:
+                - generic [ref=e979] [box=18,6248,246,20]: "Docker Recovery: mini-prod-mcp-demo"
+                - generic [ref=e980] [box=272,6247,96,22]
+              - generic [ref=e984] [box=18,6275,350,17]:
+                - generic [ref=e985] [box=18,6275,20,17]: "#72"
+                - generic [ref=e986] [box=44,6275,3,17]: ·
+                - generic [ref=e987] [box=53,6275,63,17]: 11.04, 20:40
+                - generic [ref=e988] [box=122,6275,3,17]: ·
+                - generic [ref=e989] [box=131,6275,58,17]: 45 мин 4 с
+            - 'button "DBG Monitoring Launch 2 Выполнен #71 · 11.04, 20:30 · 0 с" [ref=e990] [cursor=pointer] [box=0,6310,384,80]':
+              - generic [ref=e991] [box=18,6327,350,22]:
+                - generic [ref=e992] [box=18,6328,171,20]: DBG Monitoring Launch 2
+                - generic [ref=e993] [box=272,6327,96,22]
+              - generic [ref=e997] [box=18,6355,350,17]:
+                - generic [ref=e998] [box=18,6355,20,17]: "#71"
+                - generic [ref=e999] [box=44,6355,3,17]: ·
+                - generic [ref=e1000] [box=53,6355,62,17]: 11.04, 20:30
+                - generic [ref=e1001] [box=121,6355,3,17]: ·
+                - generic [ref=e1002] [box=130,6355,16,17]: 0 с
+            - 'button "Docker Recovery: mini-prod-mcp-demo Выполнен #70 · 11.04, 20:25 · 45 мин 3 с" [ref=e1003] [cursor=pointer] [box=0,6390,384,80]':
+              - generic [ref=e1004] [box=18,6407,350,22]:
+                - generic [ref=e1005] [box=18,6408,246,20]: "Docker Recovery: mini-prod-mcp-demo"
+                - generic [ref=e1006] [box=272,6407,96,22]
+              - generic [ref=e1010] [box=18,6435,350,17]:
+                - generic [ref=e1011] [box=18,6435,20,17]: "#70"
+                - generic [ref=e1012] [box=44,6435,3,17]: ·
+                - generic [ref=e1013] [box=53,6435,62,17]: 11.04, 20:25
+                - generic [ref=e1014] [box=121,6435,3,17]: ·
+                - generic [ref=e1015] [box=130,6435,57,17]: 45 мин 3 с
+            - 'button "DBG Monitoring Launch 2 Выполнен #69 · 11.04, 20:15 · 0 с" [ref=e1016] [cursor=pointer] [box=0,6470,384,80]':
+              - generic [ref=e1017] [box=18,6487,350,22]:
+                - generic [ref=e1018] [box=18,6488,171,20]: DBG Monitoring Launch 2
+                - generic [ref=e1019] [box=272,6487,96,22]
+              - generic [ref=e1023] [box=18,6515,350,17]:
+                - generic [ref=e1024] [box=18,6515,20,17]: "#69"
+                - generic [ref=e1025] [box=44,6515,3,17]: ·
+                - generic [ref=e1026] [box=53,6515,60,17]: 11.04, 20:15
+                - generic [ref=e1027] [box=119,6515,3,17]: ·
+                - generic [ref=e1028] [box=128,6515,16,17]: 0 с
+            - 'button "Docker Recovery: mini-prod-mcp-demo Остановлен #68 · 11.04, 20:10 · 5 мин 42 с" [ref=e1029] [cursor=pointer] [box=0,6550,384,80]':
+              - generic [ref=e1030] [box=18,6567,350,22]:
+                - generic [ref=e1031] [box=18,6568,235,20]: "Docker Recovery: mini-prod-mcp-demo"
+                - generic [ref=e1032] [box=261,6567,107,22]
+              - generic [ref=e1035] [box=18,6595,350,17]:
+                - generic [ref=e1036] [box=18,6595,20,17]: "#68"
+                - generic [ref=e1037] [box=44,6595,3,17]: ·
+                - generic [ref=e1038] [box=53,6595,60,17]: 11.04, 20:10
+                - generic [ref=e1039] [box=119,6595,3,17]: ·
+                - generic [ref=e1040] [box=128,6595,57,17]: 5 мин 42 с
+            - 'button "Docker Recovery: mini-prod-mcp-demo Остановлен #67 · 11.04, 20:03 · 3 мин 40 с" [ref=e1041] [cursor=pointer] [box=0,6630,384,80]':
+              - generic [ref=e1042] [box=18,6647,350,22]:
+                - generic [ref=e1043] [box=18,6648,235,20]: "Docker Recovery: mini-prod-mcp-demo"
+                - generic [ref=e1044] [box=261,6647,107,22]
+              - generic [ref=e1047] [box=18,6675,350,17]:
+                - generic [ref=e1048] [box=18,6675,20,17]: "#67"
+                - generic [ref=e1049] [box=44,6675,3,17]: ·
+                - generic [ref=e1050] [box=53,6675,62,17]: 11.04, 20:03
+                - generic [ref=e1051] [box=121,6675,3,17]: ·
+                - generic [ref=e1052] [box=130,6675,58,17]: 3 мин 40 с
+            - 'button "DBG Monitoring Launch 2 Выполнен #66 · 11.04, 20:00 · 0 с" [ref=e1053] [cursor=pointer] [box=0,6710,384,80]':
+              - generic [ref=e1054] [box=18,6727,350,22]:
+                - generic [ref=e1055] [box=18,6728,171,20]: DBG Monitoring Launch 2
+                - generic [ref=e1056] [box=272,6727,96,22]
+              - generic [ref=e1060] [box=18,6755,350,17]:
+                - generic [ref=e1061] [box=18,6755,20,17]: "#66"
+                - generic [ref=e1062] [box=44,6755,3,17]: ·
+                - generic [ref=e1063] [box=53,6755,62,17]: 11.04, 20:00
+                - generic [ref=e1064] [box=121,6755,3,17]: ·
+                - generic [ref=e1065] [box=131,6755,16,17]: 0 с
+            - 'button "Docker Recovery: mini-prod-mcp-demo Остановлен #65 · 11.04, 19:58 · 7 мин 49 с" [ref=e1066] [cursor=pointer] [box=0,6790,384,80]':
+              - generic [ref=e1067] [box=18,6807,350,22]:
+                - generic [ref=e1068] [box=18,6808,235,20]: "Docker Recovery: mini-prod-mcp-demo"
+                - generic [ref=e1069] [box=261,6807,107,22]
+              - generic [ref=e1072] [box=18,6835,350,17]:
+                - generic [ref=e1073] [box=18,6835,20,17]: "#65"
+                - generic [ref=e1074] [box=44,6835,3,17]: ·
+                - generic [ref=e1075] [box=53,6835,60,17]: 11.04, 19:58
+                - generic [ref=e1076] [box=119,6835,3,17]: ·
+                - generic [ref=e1077] [box=128,6835,57,17]: 7 мин 49 с
+            - 'button "Docker Recovery: mini-prod-mcp-demo Остановлен #64 · 11.04, 19:53 Остановлено после ручного shell-запуска" [ref=e1078] [cursor=pointer] [box=0,6870,384,92]':
+              - generic [ref=e1079] [box=18,6882,350,22]:
+                - generic [ref=e1080] [box=18,6883,235,20]: "Docker Recovery: mini-prod-mcp-demo"
+                - generic [ref=e1081] [box=261,6882,107,22]
+              - generic [ref=e1084] [box=18,6910,350,17]:
+                - generic [ref=e1085] [box=18,6910,20,17]: "#64"
+                - generic [ref=e1086] [box=44,6910,3,17]: ·
+                - generic [ref=e1087] [box=53,6910,60,17]: 11.04, 19:53
+              - generic [ref=e1090] [box=26,6933,227,17]: Остановлено после ручного shell-запуска
+            - 'button "Docker Recovery: mini-prod-mcp-demo Выполнен #63 · 11.04, 19:48 · 5 с" [ref=e1091] [cursor=pointer] [box=0,6962,384,80]':
+              - generic [ref=e1092] [box=18,6979,350,22]:
+                - generic [ref=e1093] [box=18,6980,246,20]: "Docker Recovery: mini-prod-mcp-demo"
+                - generic [ref=e1094] [box=272,6979,96,22]
+              - generic [ref=e1098] [box=18,7007,350,17]:
+                - generic [ref=e1099] [box=18,7007,20,17]: "#63"
+                - generic [ref=e1100] [box=44,7007,3,17]: ·
+                - generic [ref=e1101] [box=53,7007,60,17]: 11.04, 19:48
+                - generic [ref=e1102] [box=119,7007,3,17]: ·
+                - generic [ref=e1103] [box=128,7007,16,17]: 5 с
+            - 'button "Docker Recovery: mini-prod-mcp-demo Остановлен #62 · 11.04, 19:44 · 8 мин 44 с Остановлено после исправления monitoring trigger filters" [ref=e1104] [cursor=pointer] [box=0,7042,384,92]':
+              - generic [ref=e1105] [box=18,7054,350,22]:
+                - generic [ref=e1106] [box=18,7055,235,20]: "Docker Recovery: mini-prod-mcp-demo"
+                - generic [ref=e1107] [box=261,7054,107,22]
+              - generic [ref=e1110] [box=18,7082,350,17]:
+                - generic [ref=e1111] [box=18,7082,20,17]: "#62"
+                - generic [ref=e1112] [box=44,7082,3,17]: ·
+                - generic [ref=e1113] [box=53,7082,60,17]: 11.04, 19:44
+                - generic [ref=e1114] [box=119,7082,3,17]: ·
+                - generic [ref=e1115] [box=129,7082,58,17]: 8 мин 44 с
+              - generic [ref=e1118] [box=26,7105,309,17]: Остановлено после исправления monitoring trigger filters
+            - 'button "Docker Recovery: mini-prod-mcp-demo Выполнен #61 · 11.04, 19:44 · 10 с" [ref=e1119] [cursor=pointer] [box=0,7134,384,80]':
+              - generic [ref=e1120] [box=18,7151,350,22]:
+                - generic [ref=e1121] [box=18,7152,246,20]: "Docker Recovery: mini-prod-mcp-demo"
+                - generic [ref=e1122] [box=272,7151,96,22]
+              - generic [ref=e1126] [box=18,7179,350,17]:
+                - generic [ref=e1127] [box=18,7179,20,17]: "#61"
+                - generic [ref=e1128] [box=44,7179,3,17]: ·
+                - generic [ref=e1129] [box=53,7179,60,17]: 11.04, 19:44
+                - generic [ref=e1130] [box=119,7179,3,17]: ·
+                - generic [ref=e1131] [box=129,7179,21,17]: 10 с
+            - 'button "DBG Monitoring Launch 2 Выполнен #60 · 11.04, 19:44 · 0 с" [ref=e1132] [cursor=pointer] [box=0,7214,384,80]':
+              - generic [ref=e1133] [box=18,7231,350,22]:
+                - generic [ref=e1134] [box=18,7232,171,20]: DBG Monitoring Launch 2
+                - generic [ref=e1135] [box=272,7231,96,22]
+              - generic [ref=e1139] [box=18,7259,350,17]:
+                - generic [ref=e1140] [box=18,7259,20,17]: "#60"
+                - generic [ref=e1141] [box=44,7259,3,17]: ·
+                - generic [ref=e1142] [box=53,7259,60,17]: 11.04, 19:44
+                - generic [ref=e1143] [box=119,7259,3,17]: ·
+                - generic [ref=e1144] [box=129,7259,16,17]: 0 с
+            - 'button "Docker Recovery: mini-prod-mcp-demo Остановлен #59 · 11.04, 19:33 · 5 мин 42 с" [ref=e1145] [cursor=pointer] [box=0,7294,384,80]':
+              - generic [ref=e1146] [box=18,7311,350,22]:
+                - generic [ref=e1147] [box=18,7312,235,20]: "Docker Recovery: mini-prod-mcp-demo"
+                - generic [ref=e1148] [box=261,7311,107,22]
+              - generic [ref=e1151] [box=18,7339,350,17]:
+                - generic [ref=e1152] [box=18,7339,20,17]: "#59"
+                - generic [ref=e1153] [box=44,7339,3,17]: ·
+                - generic [ref=e1154] [box=53,7339,60,17]: 11.04, 19:33
+                - generic [ref=e1155] [box=119,7339,3,17]: ·
+                - generic [ref=e1156] [box=128,7339,57,17]: 5 мин 42 с
+            - 'button "DBG Monitoring Launch 2 Выполнен #58 · 11.04, 19:29 · 0 с" [ref=e1157] [cursor=pointer] [box=0,7374,384,80]':
+              - generic [ref=e1158] [box=18,7391,350,22]:
+                - generic [ref=e1159] [box=18,7392,171,20]: DBG Monitoring Launch 2
+                - generic [ref=e1160] [box=272,7391,96,22]
+              - generic [ref=e1164] [box=18,7419,350,17]:
+                - generic [ref=e1165] [box=18,7419,20,17]: "#58"
+                - generic [ref=e1166] [box=44,7419,3,17]: ·
+                - generic [ref=e1167] [box=53,7419,60,17]: 11.04, 19:29
+                - generic [ref=e1168] [box=119,7419,3,17]: ·
+                - generic [ref=e1169] [box=128,7419,16,17]: 0 с
+            - 'button "DBG Monitoring Launch 2 Выполнен #57 · 11.04, 19:13 · 0 с" [ref=e1170] [cursor=pointer] [box=0,7454,384,80]':
+              - generic [ref=e1171] [box=18,7471,350,22]:
+                - generic [ref=e1172] [box=18,7472,171,20]: DBG Monitoring Launch 2
+                - generic [ref=e1173] [box=272,7471,96,22]
+              - generic [ref=e1177] [box=18,7499,350,17]:
+                - generic [ref=e1178] [box=18,7499,20,17]: "#57"
+                - generic [ref=e1179] [box=44,7499,3,17]: ·
+                - generic [ref=e1180] [box=53,7499,58,17]: 11.04, 19:13
+                - generic [ref=e1181] [box=117,7499,3,17]: ·
+                - generic [ref=e1182] [box=126,7499,16,17]: 0 с
+            - 'button "All Nodes Smoke Test Выполнен #56 · 11.04, 15:01 · 40 с" [ref=e1183] [cursor=pointer] [box=0,7534,384,80]':
+              - generic [ref=e1184] [box=18,7551,350,22]:
+                - generic [ref=e1185] [box=18,7552,146,20]: All Nodes Smoke Test
+                - generic [ref=e1186] [box=272,7551,96,22]
+              - generic [ref=e1190] [box=18,7579,350,17]:
+                - generic [ref=e1191] [box=18,7579,20,17]: "#56"
+                - generic [ref=e1192] [box=44,7579,3,17]: ·
+                - generic [ref=e1193] [box=53,7579,57,17]: 11.04, 15:01
+                - generic [ref=e1194] [box=116,7579,3,17]: ·
+                - generic [ref=e1195] [box=126,7579,23,17]: 40 с
+            - 'button "All Nodes Smoke Test Выполнен #55 · 11.04, 14:46 · 19 с" [ref=e1196] [cursor=pointer] [box=0,7614,384,80]':
+              - generic [ref=e1197] [box=18,7631,350,22]:
+                - generic [ref=e1198] [box=18,7632,146,20]: All Nodes Smoke Test
+                - generic [ref=e1199] [box=272,7631,96,22]
+              - generic [ref=e1203] [box=18,7659,350,17]:
+                - generic [ref=e1204] [box=18,7659,20,17]: "#55"
+                - generic [ref=e1205] [box=44,7659,3,17]: ·
+                - generic [ref=e1206] [box=53,7659,60,17]: 11.04, 14:46
+                - generic [ref=e1207] [box=119,7659,3,17]: ·
+                - generic [ref=e1208] [box=129,7659,21,17]: 19 с
+            - 'button "All Nodes Smoke Test Выполнен #54 · 11.04, 14:17 · 27 с" [ref=e1209] [cursor=pointer] [box=0,7694,384,80]':
+              - generic [ref=e1210] [box=18,7711,350,22]:
+                - generic [ref=e1211] [box=18,7712,146,20]: All Nodes Smoke Test
+                - generic [ref=e1212] [box=272,7711,96,22]
+              - generic [ref=e1216] [box=18,7739,350,17]:
+                - generic [ref=e1217] [box=18,7739,20,17]: "#54"
+                - generic [ref=e1218] [box=44,7739,3,17]: ·
+                - generic [ref=e1219] [box=53,7739,57,17]: 11.04, 14:17
+                - generic [ref=e1220] [box=116,7739,3,17]: ·
+                - generic [ref=e1221] [box=125,7739,22,17]: 27 с
+            - 'button "All Nodes Smoke Test Остановлен #53 · 11.04, 14:08 · 1 мин 11 с" [ref=e1222] [cursor=pointer] [box=0,7774,384,80]':
+              - generic [ref=e1223] [box=18,7791,350,22]:
+                - generic [ref=e1224] [box=18,7792,146,20]: All Nodes Smoke Test
+                - generic [ref=e1225] [box=261,7791,107,22]
+              - generic [ref=e1228] [box=18,7819,350,17]:
+                - generic [ref=e1229] [box=18,7819,20,17]: "#53"
+                - generic [ref=e1230] [box=44,7819,3,17]: ·
+                - generic [ref=e1231] [box=53,7819,60,17]: 11.04, 14:08
+                - generic [ref=e1232] [box=119,7819,3,17]: ·
+                - generic [ref=e1233] [box=128,7819,50,17]: 1 мин 11 с
+            - 'button "All Nodes Smoke Test Остановлен #52 · 11.04, 13:35 · 37 с" [ref=e1234] [cursor=pointer] [box=0,7854,384,80]':
+              - generic [ref=e1235] [box=18,7871,350,22]:
+                - generic [ref=e1236] [box=18,7872,146,20]: All Nodes Smoke Test
+                - generic [ref=e1237] [box=261,7871,107,22]
+              - generic [ref=e1240] [box=18,7899,350,17]:
+                - generic [ref=e1241] [box=18,7899,20,17]: "#52"
+                - generic [ref=e1242] [box=44,7899,3,17]: ·
+                - generic [ref=e1243] [box=53,7899,60,17]: 11.04, 13:35
+                - generic [ref=e1244] [box=119,7899,3,17]: ·
+                - generic [ref=e1245] [box=128,7899,22,17]: 37 с
+            - 'button "All Nodes Smoke Test Остановлен #51 · 11.04, 13:06 · 22 мин 50 с" [ref=e1246] [cursor=pointer] [box=0,7934,384,80]':
+              - generic [ref=e1247] [box=18,7951,350,22]:
+                - generic [ref=e1248] [box=18,7952,146,20]: All Nodes Smoke Test
+                - generic [ref=e1249] [box=261,7951,107,22]
+              - generic [ref=e1252] [box=18,7979,350,17]:
+                - generic [ref=e1253] [box=18,7979,20,17]: "#51"
+                - generic [ref=e1254] [box=44,7979,3,17]: ·
+                - generic [ref=e1255] [box=53,7979,60,17]: 11.04, 13:06
+                - generic [ref=e1256] [box=119,7979,3,17]: ·
+                - generic [ref=e1257] [box=128,7979,64,17]: 22 мин 50 с

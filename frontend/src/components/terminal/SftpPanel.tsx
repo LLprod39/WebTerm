@@ -11,7 +11,6 @@ import {
 import {
   ArrowUp,
   Download,
-  ExternalLink,
   File,
   FileCode2,
   Folder,
@@ -515,21 +514,17 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
     }
   }, [currentPath, editorContent, editorPath, loadDirectory, server.id, toast]);
 
-  const handleEntryOpen = useCallback((entry: SftpEntry) => {
-    if (entry.is_dir) {
-      void loadDirectory(entry.path);
-      return;
-    }
-    void openTextEditor(entry);
-  }, [loadDirectory, openTextEditor]);
-
   const handleOpenEditor = useCallback(() => {
     if (!selectedEntry || selectedEntry.is_dir) {
       toast({ variant: "destructive", description: "Выберите текстовый файл." });
       return;
     }
+    if (onOpenInEditor) {
+      onOpenInEditor(selectedEntry.path);
+      return;
+    }
     void openTextEditor(selectedEntry);
-  }, [openTextEditor, selectedEntry, toast]);
+  }, [onOpenInEditor, openTextEditor, selectedEntry, toast]);
 
   const handleCreateFolder = useCallback(async () => {
     const folderName = window.prompt("Новая папка", "");
@@ -558,10 +553,11 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
       setEditorError("");
       toast({ description: "Файл создан." });
       void loadDirectory(currentPath);
+      onOpenInEditor?.(result.file.path);
     } catch (err) {
       toast({ variant: "destructive", description: err instanceof Error ? err.message : "Не удалось создать файл" });
     }
-  }, [currentPath, loadDirectory, server.id, toast]);
+  }, [currentPath, loadDirectory, onOpenInEditor, server.id, toast]);
 
   const handleRename = useCallback(async () => {
     if (!selectedEntry) {
@@ -613,6 +609,49 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
     }
   }, [currentPath, editorPath, loadDirectory, resetEditor, selectedEntry, server.id, toast]);
 
+  const handleChmod = useCallback(async () => {
+    if (!selectedEntry) {
+      toast({ variant: "destructive", description: "Выберите файл или папку." });
+      return;
+    }
+
+    const mode = window.prompt("Новые права доступа", defaultPermissionMode(selectedEntry));
+    if (!mode) return;
+    const normalizedMode = mode.trim();
+    if (!/^[0-7]{3,4}$/.test(normalizedMode)) {
+      toast({ variant: "destructive", description: "Введите права в формате 644, 755 или 0644." });
+      return;
+    }
+
+    try {
+      const result = await chmodServerFile(server.id, selectedEntry.path, normalizedMode);
+      toast({ description: "Права доступа обновлены." });
+      void loadDirectory(result.path || currentPath);
+    } catch (err) {
+      toast({ variant: "destructive", description: err instanceof Error ? err.message : "Не удалось обновить права" });
+    }
+  }, [currentPath, loadDirectory, selectedEntry, server.id, toast]);
+
+  const handleChown = useCallback(async () => {
+    if (!selectedEntry) {
+      toast({ variant: "destructive", description: "Выберите файл или папку." });
+      return;
+    }
+
+    const owner = window.prompt("Новый владелец или владелец:группа", "");
+    if (!owner) return;
+    const normalizedOwner = owner.trim();
+    if (!normalizedOwner) return;
+
+    try {
+      const result = await chownServerFile(server.id, selectedEntry.path, normalizedOwner, selectedEntry.is_dir);
+      toast({ description: "Владелец обновлён." });
+      void loadDirectory(result.path || currentPath);
+    } catch (err) {
+      toast({ variant: "destructive", description: err instanceof Error ? err.message : "Не удалось обновить владельца" });
+    }
+  }, [currentPath, loadDirectory, selectedEntry, server.id, toast]);
+
   const handleManualPathSubmit = useCallback(() => {
     if (!pathInput.trim()) return;
     void loadDirectory(pathInput.trim());
@@ -659,6 +698,26 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-9 border-border bg-background px-3 text-xs"
+              onClick={handleCreateFile}
+            >
+              <FileCode2 className="h-4 w-4" />
+              Новый файл
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-9 border-border bg-background px-3 text-xs"
+              onClick={handleCreateFolder}
+            >
+              <FolderPlus className="h-4 w-4" />
+              Новая папка
+            </Button>
             <Button
               type="button"
               size="sm"
@@ -730,12 +789,46 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
 
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="border-b border-border bg-secondary/20 px-4 py-2.5">
-          <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
-            <span>{formatRuCount(visibleEntries.length, "объект", "объекта", "объектов")}</span>
-            <span>•</span>
-            <span>{formatRuCount(entries.filter((entry) => entry.is_dir).length, "папка", "папки", "папок")}</span>
-            <span>•</span>
-            <span>{formatRuCount(entries.filter((entry) => !entry.is_dir).length, "файл", "файла", "файлов")}</span>
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+              <span>{formatRuCount(visibleEntries.length, "объект", "объекта", "объектов")}</span>
+              <span>•</span>
+              <span>{formatRuCount(entries.filter((entry) => entry.is_dir).length, "папка", "папки", "папок")}</span>
+              <span>•</span>
+              <span>{formatRuCount(entries.filter((entry) => !entry.is_dir).length, "файл", "файла", "файлов")}</span>
+            </div>
+            {selectedEntry ? (
+              <div className="flex flex-col gap-2 rounded-xl border border-border bg-background/80 px-3 py-2">
+                <div className="min-w-0">
+                  <div className="truncate text-xs font-medium text-foreground">{selectedEntry.name}</div>
+                  <div className="truncate font-mono text-[10px] text-muted-foreground">{selectedEntry.path}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {!selectedEntry.is_dir ? (
+                    <Button type="button" size="sm" variant="ghost" className="h-8 justify-start px-2 text-[11px]" onClick={handleOpenEditor}>
+                      <FileCode2 className="mr-1 h-3.5 w-3.5" />
+                      Редактировать
+                    </Button>
+                  ) : null}
+                  <Button type="button" size="sm" variant="ghost" className="h-8 justify-start px-2 text-[11px]" onClick={handleRename}>
+                    <Pencil className="mr-1 h-3.5 w-3.5" />
+                    Переименовать
+                  </Button>
+                  <Button type="button" size="sm" variant="ghost" className="h-8 justify-start px-2 text-[11px]" onClick={handleChmod}>
+                    <Shield className="mr-1 h-3.5 w-3.5" />
+                    Права
+                  </Button>
+                  <Button type="button" size="sm" variant="ghost" className="h-8 justify-start px-2 text-[11px]" onClick={handleChown}>
+                    <User className="mr-1 h-3.5 w-3.5" />
+                    Владелец
+                  </Button>
+                  <Button type="button" size="sm" variant="ghost" className="h-8 justify-start px-2 text-[11px] text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={handleDelete}>
+                    <Trash2 className="mr-1 h-3.5 w-3.5" />
+                    Удалить
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -765,7 +858,17 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
                       type="button"
                       className="flex min-w-0 flex-1 items-center gap-3 text-left"
                       onClick={() => setSelectedPath(entry.path)}
-                      onDoubleClick={() => (entry.is_dir ? void loadDirectory(entry.path) : queueDownload(entry))}
+                      onDoubleClick={() => {
+                        if (entry.is_dir) {
+                          void loadDirectory(entry.path);
+                          return;
+                        }
+                        if (onOpenInEditor) {
+                          onOpenInEditor(entry.path);
+                        } else {
+                          void openTextEditor(entry);
+                        }
+                      }}
                     >
                       <div className={cn("rounded-xl p-2", entry.is_dir ? "bg-primary/10 text-primary" : "bg-secondary text-muted-foreground")}>
                         <Icon className="h-4 w-4" />
@@ -791,16 +894,34 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
                         Открыть
                       </Button>
                     ) : (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="h-9 border-border bg-background px-3 text-xs"
-                        onClick={() => queueDownload(entry)}
-                      >
-                        <Download className="mr-1.5 h-3.5 w-3.5" />
-                        Скачать
-                      </Button>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-9 px-3 text-xs"
+                          onClick={() => {
+                            if (onOpenInEditor) {
+                              onOpenInEditor(entry.path);
+                            } else {
+                              void openTextEditor(entry);
+                            }
+                          }}
+                        >
+                          <FileCode2 className="mr-1.5 h-3.5 w-3.5" />
+                          Редактировать
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-9 border-border bg-background px-3 text-xs"
+                          onClick={() => queueDownload(entry)}
+                        >
+                          <Download className="mr-1.5 h-3.5 w-3.5" />
+                          Скачать
+                        </Button>
+                      </div>
                     )}
                   </div>
                 );
@@ -809,6 +930,47 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
           )}
         </div>
       </div>
+
+      {editorPath && !onOpenInEditor ? (
+        <section className="flex max-h-[45%] min-h-[14rem] flex-col border-t border-border bg-card">
+          <div className="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <FileCode2 className="h-4 w-4 text-primary" />
+                <div className="truncate text-sm font-semibold text-foreground">{editorFilename || editorPath}</div>
+                {isEditorDirty ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary">Изменён</span> : null}
+              </div>
+              <div className="mt-1 truncate font-mono text-[11px] text-muted-foreground">{editorPath}</div>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <Button type="button" size="sm" variant="outline" className="h-8 border-border bg-background px-3 text-xs" onClick={reloadEditor} disabled={isEditorLoading || isEditorSaving}>
+                <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", isEditorLoading && "animate-spin")} />
+                Перезагрузить
+              </Button>
+              <Button type="button" size="sm" className="h-8 px-3 text-xs" onClick={saveEditor} disabled={!isEditorDirty || isEditorSaving}>
+                <Save className="mr-1.5 h-3.5 w-3.5" />
+                Сохранить
+              </Button>
+              <Button type="button" size="sm" variant="ghost" className="h-8 px-3 text-xs text-muted-foreground" onClick={closeEditor}>
+                Закрыть
+              </Button>
+            </div>
+          </div>
+          {editorError ? <div className="border-b border-destructive/20 bg-destructive/10 px-4 py-2 text-xs text-destructive">{editorError}</div> : null}
+          <Textarea
+            value={editorContent}
+            onChange={(event) => setEditorContent(event.target.value)}
+            spellCheck={false}
+            className="min-h-0 flex-1 resize-none rounded-none border-0 bg-background/60 p-4 font-mono text-xs leading-5 shadow-none focus-visible:ring-0"
+            disabled={isEditorLoading}
+            aria-label="Содержимое файла"
+          />
+          <footer className="flex items-center justify-between border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
+            <span>{editorEncoding}</span>
+            <span>{formatRuCount(editorContent.split("\n").length, "строка", "строки", "строк")} • {editorSizeLabel}</span>
+          </footer>
+        </section>
+      ) : null}
 
       <SftpTransferQueue
         transfers={transfers}

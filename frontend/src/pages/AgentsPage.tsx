@@ -41,6 +41,15 @@ function formatDuration(ms: number): string {
 }
 
 const MODE_ICONS: Record<string, typeof Bot> = { mini: Zap, full: Brain, multi: Layers };
+
+function agentModeLabel(mode: "all" | "mini" | "full" | "multi" | string, lang: string) {
+  if (mode === "all") return localize(lang, "Все", "All");
+  if (mode === "mini") return localize(lang, "Мини", "Mini");
+  if (mode === "full") return localize(lang, "Полный", "Full");
+  if (mode === "multi") return localize(lang, "Пайплайн", "Pipeline");
+  return mode;
+}
+
 const AGENT_ICONS: Record<string, LucideIcon> = {
   security_audit: Shield,
   security_patrol: Shield,
@@ -178,7 +187,7 @@ export default function AgentsPage() {
                   aria-pressed={modeFilter === m}
                   onClick={() => setModeFilter(m)}
                   className={`rounded-md px-3 py-1.5 transition-all duration-150 ${modeFilter === m ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                >{m === "all" ? t("agent.all") : m === "mini" ? "Mini" : m === "full" ? "Full" : "Pipeline"}</button>
+                >{agentModeLabel(m, lang)}</button>
               ))}
             </div>
             <Button size="icon" variant="ghost" className="h-10 w-10" onClick={() => queryClient.invalidateQueries({ queryKey: ["agents"] })} aria-label={t("udash.refresh")}>
@@ -258,7 +267,7 @@ export default function AgentsPage() {
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-sm font-medium text-foreground">{ag.name}</span>
                       <span className="rounded-md border border-border/50 bg-secondary/40 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                        {ag.mode === "multi" ? "Pipeline" : ag.mode}
+                        {agentModeLabel(ag.mode, lang)}
                       </span>
                       {ag.active_run_id && (
                         <StatusBadge label="running" tone="info" />

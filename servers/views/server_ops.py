@@ -4,7 +4,7 @@ Server operational endpoints: connection test, command execution, and OS detecti
 
 import json
 
-from asgiref.sync import async_to_sync
+from asgiref.sync import async_to_sync, sync_to_async
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.http import JsonResponse
@@ -141,7 +141,7 @@ def server_execute_command(request, server_id):
                 result = await execute_tool.execute(conn_id=conn_id, command=command)
 
                 out_str = result.get("stdout", "") + (result.get("stderr") or "")
-                ServerCommandHistory.objects.create(
+                await sync_to_async(ServerCommandHistory.objects.create, thread_sensitive=True)(
                     server=server,
                     user=request.user,
                     actor_kind=ServerCommandHistory.ACTOR_HUMAN,

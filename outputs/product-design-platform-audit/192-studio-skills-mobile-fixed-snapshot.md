@@ -1,0 +1,98 @@
+- generic [ref=e2] [box=0,0,385,2221]:
+  - region "Notifications (F8)" [box=0,0,385,0]:
+    - list [box=0,0,385,32]
+  - region "Notifications alt+T" [box=0,0,385,0]
+  - generic [ref=e4] [box=0,0,385,2221]:
+    - button "Toggle Sidebar" [ref=e5] [cursor=pointer] [box=16,16,44,44]:
+      - img [box=30,30,16,16]
+      - generic [ref=e6] [box=38,38,1,1]: Toggle Sidebar
+    - main [ref=e9] [box=0,0,385,2221]:
+      - generic [ref=e10] [box=0,64,385,2157]:
+        - navigation [ref=e11] [box=0,64,385,56]:
+          - generic [ref=e12] [box=64,69,71,40]: Studio
+          - button "Обзор" [ref=e14] [cursor=pointer] [box=155,69,87,40]:
+            - img [ref=e15] [box=169,82,14,14]
+            - text: Обзор
+          - button "Черновики" [ref=e20] [cursor=pointer] [box=246,69,115,40]:
+            - img [ref=e21] [box=260,82,14,14]
+            - text: Черновики
+          - button "Скиллы" [ref=e24] [cursor=pointer] [box=366,69,96,40]:
+            - img [ref=e25] [box=380,82,14,14]
+            - text: Скиллы
+          - button "MCP" [ref=e28] [cursor=pointer] [box=465,69,77,40]:
+            - img [ref=e29] [box=479,82,14,14]
+            - text: MCP
+          - button "Агенты" [ref=e32] [cursor=pointer] [box=547,69,93,40]:
+            - img [ref=e33] [box=561,82,14,14]
+            - text: Агенты
+          - button "Запуски" [ref=e36] [cursor=pointer] [box=644,69,99,40]:
+            - img [ref=e37] [box=658,82,14,14]
+            - text: Запуски
+          - button "Оповещения" [ref=e40] [cursor=pointer] [box=747,69,126,40]:
+            - img [ref=e41] [box=761,82,14,14]
+            - text: Оповещения
+        - generic [ref=e44] [box=0,120,385,2101]:
+          - generic [ref=e48] [box=49,177,287,458]:
+            - generic [ref=e49] [box=49,177,287,282]:
+              - generic [ref=e51] [box=49,177,281,68]:
+                - generic [ref=e53] [box=49,177,154,24]: Библиотека Studio
+                - heading "Каталог скиллов" [level=1] [ref=e54] [box=49,209,281,36]
+              - paragraph [ref=e57] [box=49,261,287,122]: Скилл здесь это рабочий плейбук. Выберите сервис, проверьте ограничения и политику выполнения, а затем правьте рабочие файлы прямо из Studio.
+              - generic [ref=e58] [box=49,399,287,60]:
+                - generic [ref=e59] [box=49,399,103,24]
+                - generic [ref=e63] [box=164,399,145,24]
+                - generic [ref=e68] [box=49,435,111,24]
+            - generic [ref=e73] [box=49,483,287,152]:
+              - button "MCP Реестр" [ref=e74] [cursor=pointer] [box=49,491,143,40]:
+                - img [box=66,503,16,16]
+                - text: MCP Реестр
+              - button "Проверить" [ref=e75] [cursor=pointer] [box=49,543,134,40]:
+                - img [box=66,555,16,16]
+                - text: Проверить
+              - button "Новый скилл" [ref=e76] [cursor=pointer] [box=49,595,154,40]:
+                - img [box=69,607,16,16]
+                - text: Новый скилл
+              - button "Агенты" [ref=e77] [cursor=pointer] [box=215,595,108,40]:
+                - img [box=232,607,16,16]
+                - text: Агенты
+          - generic [ref=e78] [box=0,684,385,1537]:
+            - generic [ref=e79] [box=24,684,337,166]:
+              - generic [ref=e80] [box=41,693,307,40]:
+                - img [ref=e81] [box=41,705,16,16]
+                - textbox "Поиск скиллов по названию, сервису или тегу..." [ref=e84] [box=73,693,275,40]
+              - generic [ref=e85] [box=41,749,307,92]:
+                - combobox [ref=e86] [cursor=pointer] [box=41,749,307,40]
+                - generic [ref=e90] [box=62,809,71,25]: 7 найдено
+                - button "Создать" [ref=e91] [cursor=pointer] [box=145,801,105,40]
+            - generic [ref=e92] [box=24,874,337,1315]:
+              - button "Frontend UX/UI Structure Skill You are a senior frontend UX-focused engineer. Your job is not only to make interfaces visually attractive, but to make them easy, predictable, fast to understand, and comfortable for real users." [ref=e93] [cursor=pointer] [box=24,874,337,114]:
+                - paragraph [ref=e97] [box=41,891,217,23]: Frontend UX/UI Structure Skill
+                - paragraph [ref=e98] [box=41,931,303,39]: You are a senior frontend UX-focused engineer. Your job is not only to make interfaces visually attractive, but to make them easy, predictable, fast to understand, and comfortable for real users.
+              - button "Keycloak PROD Profile контроль keycloak · Identity and Access критичный риск Environment skill for Keycloak PROD operations. Pins work to the prod profile and requires extra caution before mutations. Pins profile=prod on Keycloak MCP calls keycloak iam prod" [ref=e99] [cursor=pointer] [box=24,1003,337,217]:
+                - generic [ref=e100] [box=41,1020,303,74]
+                - paragraph [ref=e112] [box=41,1106,303,39]: Environment skill for Keycloak PROD operations. Pins work to the prod profile and requires extra caution before mutations.
+                - generic [ref=e113] [box=41,1157,303,15]
+                - generic [ref=e117] [box=41,1185,303,19]
+              - 'button "Keycloak Safety Workflow контроль keycloak · Identity and Access высокий риск Safe operating workflow for Keycloak MCP tasks: preflight, exact target resolution, explicit profile usage, and verification after every mutation. Requires keycloak_current_environment before mutating calls keycloak iam mcp" [ref=e121] [cursor=pointer] [box=24,1237,337,217]':
+                - generic [ref=e122] [box=41,1254,303,74]
+                - paragraph [ref=e134] [box=41,1340,303,39]: "Safe operating workflow for Keycloak MCP tasks: preflight, exact target resolution, explicit profile usage, and verification after every mutation."
+                - generic [ref=e135] [box=41,1391,303,15]
+                - generic [ref=e139] [box=41,1418,303,19]
+              - button "Keycloak TEST Profile контроль keycloak · Identity and Access высокий риск Environment skill for Keycloak TEST operations. Pins work to the test profile and blocks profile switching. Pins profile=test on Keycloak MCP calls keycloak iam test" [ref=e143] [cursor=pointer] [box=24,1470,337,217]:
+                - generic [ref=e144] [box=41,1487,303,74]
+                - paragraph [ref=e156] [box=41,1573,303,39]: Environment skill for Keycloak TEST operations. Pins work to the test profile and blocks profile switching.
+                - generic [ref=e157] [box=41,1624,303,15]
+                - generic [ref=e161] [box=41,1651,303,19]
+              - 'button "lunix Docker Ops Мой lunix · docker стандартный риск Автосгенерированный operational skill на основе повторяющегося паттерна `echo ''===== DISK SPACE =====''; df -h; echo; echo ''===== RUNNING CONTAINERS =====''; docker ps --format ''table {{.Names}}\\t{{.Image}}\\t{{.Sta…` для сервера lunix. Resolve the target server before mutation. auto-generated server-memory docker" [ref=e165] [cursor=pointer] [box=24,1703,337,188]':
+                - generic [ref=e166] [box=41,1720,303,45]
+                - paragraph [ref=e178] [box=41,1777,303,39]: "Автосгенерированный operational skill на основе повторяющегося паттерна `echo '===== DISK SPACE ====='; df -h; echo; echo '===== RUNNING CONTAINERS ====='; docker ps --format 'table {{.Names}}\\t{{.Image}}\\t{{.Sta…` для сервера lunix."
+                - generic [ref=e179] [box=41,1828,303,15]
+                - generic [ref=e183] [box=41,1855,303,19]
+              - button "open-design Skill-driven design and implementation based on Open Design principles. Use when creating new applications, UI components, or design artifacts to ensure high fidelity and brand consistency through a structured Discovery Loop and DESIGN.md enforcement." [ref=e187] [cursor=pointer] [box=24,1907,337,114]:
+                - paragraph [ref=e191] [box=41,1924,92,23]: open-design
+                - paragraph [ref=e192] [box=41,1964,303,39]: Skill-driven design and implementation based on Open Design principles. Use when creating new applications, UI components, or design artifacts to ensure high fidelity and brand consistency through a structured Discovery Loop and DESIGN.md enforcement.
+              - button "test стандартный риск testse etst test" [ref=e193] [cursor=pointer] [box=24,2036,337,152]:
+                - generic [ref=e194] [box=41,2053,303,29]
+                - paragraph [ref=e199] [box=41,2094,303,20]: testse
+                - generic [ref=e200] [box=41,2125,303,15]
+                - generic [ref=e205] [box=41,2153,30,19]: test

@@ -34,4 +34,4 @@ def test_all_nodes_smoke_pipeline_contains_every_known_node_type_and_validates()
     assert errors == []
 
     trigger_types = set(pipeline.triggers.values_list("trigger_type", flat=True))
-    assert trigger_types == {"manual", "webhook", "schedule"}
+    assert trigger_types == {"manual", "webhook", "schedule", "monitoring"}

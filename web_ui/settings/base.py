@@ -186,6 +186,7 @@ INSTALLED_APPS = [
     'core_ui',
     'servers',
     'studio',
+    'mars',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -626,7 +627,49 @@ STUDIO_SKILLS_DIRS = _parse_path_list_env(
 
 # CLI runtime configuration for external agents
 def _cli_command(env_var: str, default_name: str) -> str:
-    return os.getenv(env_var) or shutil.which(default_name) or default_name
+    configured = os.getenv(env_var)
+    if configured:
+        return configured
+    discovered = shutil.which(default_name)
+    if discovered:
+        return discovered
+    if default_name == "codex":
+        wsl_users_root = Path("/mnt/c/Users")
+        if wsl_users_root.exists():
+            for user_dir in wsl_users_root.iterdir():
+                candidate = user_dir / "AppData/Local/Programs/OpenAI/Codex/bin/codex.exe"
+                try:
+                    if candidate.exists():
+                        return str(candidate)
+                except OSError:
+                    continue
+    return default_name
+
+
+MARS_CODEX_COMMAND = _cli_command("MARS_CODEX_CLI_PATH", "codex")
+MARS_GEMINI_COMMAND = _cli_command("MARS_GEMINI_CLI_PATH", "gemini")
+MARS_INTERVIEW_CODEX_COMMAND = os.getenv("MARS_INTERVIEW_CODEX_CLI_PATH") or MARS_CODEX_COMMAND
+MARS_CODEX_HOME = Path(os.getenv("MARS_CODEX_HOME", str(Path.home() / ".mars_codex_home"))).expanduser()
+MARS_GEMINI_HOME = Path(os.getenv("MARS_GEMINI_HOME", str(Path.home() / ".gemini"))).expanduser()
+MARS_USER_WORKSPACES_ROOT = Path(os.getenv("MARS_USER_WORKSPACES_ROOT", str(AGENT_PROJECTS_DIR / "mars_workspaces"))).expanduser()
+MARS_CODEX_TIMEOUT_SECONDS = _env_int("MARS_CODEX_TIMEOUT_SECONDS", 1800)
+MARS_GEMINI_TIMEOUT_SECONDS = _env_int("MARS_GEMINI_TIMEOUT_SECONDS", 900)
+MARS_TEST_TIMEOUT_SECONDS = _env_int("MARS_TEST_TIMEOUT_SECONDS", 900)
+MARS_INTERVIEW_CODEX_TIMEOUT_SECONDS = _env_int("MARS_INTERVIEW_CODEX_TIMEOUT_SECONDS", 180)
+MARS_AGENT_RUNTIME = os.getenv("MARS_AGENT_RUNTIME", "host").strip().lower()
+MARS_AGENT_DOCKER_COMMAND = os.getenv("MARS_AGENT_DOCKER_COMMAND", "docker")
+MARS_AGENT_DOCKER_IMAGE = os.getenv("MARS_AGENT_DOCKER_IMAGE", "webterm-mars-agent:latest")
+MARS_AGENT_DOCKER_NETWORK = os.getenv("MARS_AGENT_DOCKER_NETWORK", "bridge")
+MARS_AGENT_DOCKER_WORKDIR = os.getenv("MARS_AGENT_DOCKER_WORKDIR", "/workspace")
+MARS_AGENT_DOCKER_CODEX_COMMAND = os.getenv("MARS_AGENT_DOCKER_CODEX_COMMAND", "codex")
+MARS_AGENT_DOCKER_GEMINI_COMMAND = os.getenv("MARS_AGENT_DOCKER_GEMINI_COMMAND", "gemini")
+MARS_AGENT_DOCKER_CPUS = os.getenv("MARS_AGENT_DOCKER_CPUS", "2")
+MARS_AGENT_DOCKER_MEMORY = os.getenv("MARS_AGENT_DOCKER_MEMORY", "2g")
+MARS_AGENT_DOCKER_PIDS_LIMIT = _env_int("MARS_AGENT_DOCKER_PIDS_LIMIT", 512)
+MARS_AGENT_DOCKER_CODEX_HOME_VOLUME = os.getenv("MARS_AGENT_DOCKER_CODEX_HOME_VOLUME", "")
+MARS_AGENT_DOCKER_GEMINI_HOME_VOLUME = os.getenv("MARS_AGENT_DOCKER_GEMINI_HOME_VOLUME", "")
+MARS_DOCKER_CONTAINER_PATH_PREFIX = os.getenv("MARS_DOCKER_CONTAINER_PATH_PREFIX", "")
+MARS_DOCKER_HOST_PATH_PREFIX = os.getenv("MARS_DOCKER_HOST_PATH_PREFIX", "")
 
 
 # Р”РѕСЃС‚СѓРїРЅС‹Рµ РјРѕРґРµР»Рё Cursor CLI (Р°РєС‚СѓР°Р»СЊРЅС‹Р№ СЃРїРёСЃРѕРє РїРѕ РґРѕРєСѓРјРµРЅС‚Р°С†РёРё Cursor, Р±РµР· Max Mode)

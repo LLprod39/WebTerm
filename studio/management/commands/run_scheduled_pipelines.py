@@ -12,18 +12,13 @@ Run as a persistent daemon:
 """
 
 import time
-from datetime import datetime, timedelta
-from datetime import timezone as dt_timezone
-
-try:
-    from croniter import croniter
-except ModuleNotFoundError:  # pragma: no cover - optional dependency in local mini env
-    croniter = None
+from datetime import timedelta
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from app.runtime_limits import get_pipeline_run_limit_error
+from studio.cron_schedule import previous_due_datetime
 from studio.models import PipelineTrigger
 
 
@@ -63,9 +58,6 @@ class Command(BaseCommand):
                 time.sleep(interval)
 
     def _tick(self, interval_seconds: int = 60):
-        if croniter is None:
-            self.stderr.write("croniter is not installed; schedule triggers are unavailable in this environment.")
-            return
         now = timezone.now()
         window_start = now - timedelta(seconds=max(interval_seconds, 60))
         triggers = PipelineTrigger.objects.select_related("pipeline").filter(
@@ -76,11 +68,7 @@ class Command(BaseCommand):
             if not trigger.cron_expression:
                 continue
             try:
-                cron = croniter(trigger.cron_expression, now)
-                last_due_ts = cron.get_prev(float)
-                last_due_dt = datetime.fromtimestamp(last_due_ts, tz=dt_timezone.utc)
-                if timezone.is_aware(now):
-                    last_due_dt = last_due_dt.astimezone(now.tzinfo)
+                last_due_dt = previous_due_datetime(trigger.cron_expression, now)
 
                 if trigger.last_triggered_at:
                     should_fire = last_due_dt > trigger.last_triggered_at

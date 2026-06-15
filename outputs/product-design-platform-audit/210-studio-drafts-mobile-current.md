@@ -1,0 +1,93 @@
+- generic [ref=e2] [box=0,0,390,844]:
+  - region "Notifications (F8)" [box=0,0,390,0]:
+    - list [box=0,0,390,32]
+  - region "Notifications alt+T" [box=0,0,390,0]
+  - generic [ref=e4] [box=0,0,390,844]:
+    - button "Открыть навигацию" [ref=e5] [cursor=pointer] [box=16,16,44,44]:
+      - img [box=30,30,16,16]
+      - generic [ref=e6] [box=38,38,1,1]: Открыть навигацию
+    - main [ref=e9] [box=0,0,390,844]:
+      - generic [ref=e10] [box=0,64,390,780]:
+        - navigation [ref=e11] [box=0,64,390,56]:
+          - generic [ref=e12] [box=64,69,71,40]: Studio
+          - button "Обзор" [ref=e14] [cursor=pointer] [box=155,69,87,40]:
+            - img [ref=e15] [box=169,82,14,14]
+            - text: Обзор
+          - button "Черновики" [ref=e20] [cursor=pointer] [box=246,69,115,40]:
+            - img [ref=e21] [box=260,82,14,14]
+            - text: Черновики
+          - button "Скиллы" [ref=e25] [cursor=pointer] [box=366,69,96,40]:
+            - img [ref=e26] [box=380,82,14,14]
+            - text: Скиллы
+          - button "MCP" [ref=e28] [cursor=pointer] [box=465,69,77,40]:
+            - img [ref=e29] [box=479,82,14,14]
+            - text: MCP
+          - button "Агенты" [ref=e32] [cursor=pointer] [box=547,69,93,40]:
+            - img [ref=e33] [box=561,82,14,14]
+            - text: Агенты
+          - button "Запуски" [ref=e36] [cursor=pointer] [box=644,69,99,40]:
+            - img [ref=e37] [box=658,82,14,14]
+            - text: Запуски
+          - button "Оповещения" [ref=e40] [cursor=pointer] [box=747,69,126,40]:
+            - img [ref=e41] [box=761,82,14,14]
+            - text: Оповещения
+        - generic [ref=e44] [box=0,120,390,724]:
+          - generic [ref=e46] [box=16,129,358,37]:
+            - img [ref=e48] [box=26,140,16,16]
+            - generic [ref=e51] [box=64,129,155,37]:
+              - heading "Черновики пайплайнов" [level=1] [ref=e52] [box=64,129,155,20]
+              - paragraph [ref=e53] [box=64,149,155,17]: Сборка пайплайна по описанию
+            - generic [ref=e54] [box=231,137,143,22]:
+              - img [ref=e55] [box=242,142,12,12]
+              - generic [ref=e58] [box=258,140,105,16]: Ожидает запроса
+          - generic [ref=e59] [box=0,176,390,53]:
+            - button "Очередь" [pressed] [ref=e60] [cursor=pointer] [box=8,184,91,36]:
+              - generic [ref=e61] [box=27,194,52,16]: Очередь
+            - button "Граф" [ref=e62] [cursor=pointer] [box=103,184,91,36]:
+              - generic [ref=e63] [box=133,194,29,16]: Граф
+            - button "Запрос" [ref=e64] [cursor=pointer] [box=197,184,91,36]:
+              - generic [ref=e65] [box=221,194,43,16]: Запрос
+            - button "Проверка" [ref=e66] [cursor=pointer] [box=292,184,91,36]:
+              - generic [ref=e67] [box=308,194,58,16]: Проверка
+          - complementary [ref=e69] [box=0,229,390,615]:
+            - generic [ref=e70] [box=16,245,358,37]:
+              - generic [ref=e71] [box=16,245,171,37]:
+                - generic [ref=e72] [box=16,245,171,17]:
+                  - img [ref=e73] [box=16,246,14,14]
+                  - text: Очередь черновиков
+                - generic [ref=e75] [box=16,266,171,17]: 12 всего
+              - button "Новый" [ref=e76] [cursor=pointer] [box=282,246,92,36]:
+                - img [box=294,256,16,16]
+                - text: Новый
+            - generic [ref=e77] [box=16,294,358,38]:
+              - img [ref=e78] [box=29,306,14,14]
+              - textbox "Поиск черновиков" [ref=e81] [box=51,295,310,36]:
+                - /placeholder: Поиск черновиков...
+            - generic [ref=e82] [box=16,344,358,80]:
+              - button "Активные 2" [pressed] [ref=e83] [cursor=pointer] [box=16,344,175,36]:
+                - generic [ref=e84] [box=29,354,59,16]: Активные
+                - generic [ref=e85] [box=158,351,20,22]: "2"
+              - button "Готовые 5" [ref=e86] [cursor=pointer] [box=199,344,175,36]:
+                - generic [ref=e87] [box=212,354,49,16]: Готовые
+                - generic [ref=e88] [box=341,351,20,22]: "5"
+              - button "Нужны правки 1" [ref=e89] [cursor=pointer] [box=16,388,175,36]:
+                - generic [ref=e90] [box=29,398,88,16]: Нужны правки
+                - generic [ref=e91] [box=160,395,18,22]: "1"
+              - button "Применены 4" [ref=e92] [cursor=pointer] [box=199,388,175,36]:
+                - generic [ref=e93] [box=212,398,71,16]: Применены
+                - generic [ref=e94] [box=340,395,21,22]: "4"
+            - generic [ref=e98] [box=16,436,346,222]:
+              - generic [ref=e99] [box=16,436,346,107]:
+                - 'button "Operations runbook Добавь пользователю ivan роль admin в Keycloak, после approval проверь результат и сделай отчет Ответы оператора: Daily server health check with Telegram report and manual fallback 12 д назад Нужна правка 8/7" [ref=e100] [cursor=pointer] [box=29,449,280,81]':
+                  - generic [ref=e101] [box=29,449,280,16]
+                  - paragraph [ref=e106] [box=29,469,280,32]: "Добавь пользователю ivan роль admin в Keycloak, после approval проверь результат и сделай отчет Ответы оператора: Daily server health check with Telegram report and manual fallback"
+                  - generic [ref=e107] [box=29,509,280,21]
+                - button "Отбросить draft" [ref=e122] [cursor=pointer] [box=317,449,32,32]:
+                  - img [box=325,457,16,16]
+              - generic [ref=e123] [box=16,551,346,107]:
+                - 'button "Identity and access administration Create a Keycloak workflow: preflight user/group/role lookup, approval, role/group change, verification, report. 13 д назад Нужен review 9/8" [ref=e124] [cursor=pointer] [box=29,564,280,81]':
+                  - generic [ref=e125] [box=29,564,280,16]
+                  - paragraph [ref=e130] [box=29,584,280,32]: "Create a Keycloak workflow: preflight user/group/role lookup, approval, role/group change, verification, report."
+                  - generic [ref=e131] [box=29,624,280,21]
+                - button "Отбросить draft" [ref=e144] [cursor=pointer] [box=317,564,32,32]:
+                  - img [box=325,572,16,16]

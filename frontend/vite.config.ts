@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
@@ -26,7 +26,11 @@ function copyProxyHeaders(proxyReq: { setHeader: (name: string, value: string) =
 }
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), "");
+  const djangoTarget = env.VITE_DJANGO_URL || process.env.VITE_DJANGO_URL || "http://127.0.0.1:9000";
+
+  return {
   build: {
     rollupOptions: {
       output: {
@@ -108,7 +112,7 @@ export default defineConfig(({ mode }) => ({
     },
     proxy: {
       "/api": {
-        target: process.env.VITE_DJANGO_URL || "http://127.0.0.1:9000",
+        target: djangoTarget,
         changeOrigin: false,
         configure: (proxy) => {
           proxy.on("proxyReq", (proxyReq, req) => {
@@ -117,7 +121,7 @@ export default defineConfig(({ mode }) => ({
         },
       },
       "/servers/api": {
-        target: process.env.VITE_DJANGO_URL || "http://127.0.0.1:9000",
+        target: djangoTarget,
         changeOrigin: false,
         configure: (proxy) => {
           proxy.on("proxyReq", (proxyReq, req) => {
@@ -126,7 +130,7 @@ export default defineConfig(({ mode }) => ({
         },
       },
       "/ws": {
-        target: process.env.VITE_DJANGO_URL || "http://127.0.0.1:9000",
+        target: djangoTarget,
         changeOrigin: false,
         ws: true,
         configure: (proxy) => {
@@ -144,4 +148,5 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-}));
+  };
+});

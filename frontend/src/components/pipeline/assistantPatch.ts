@@ -1,9 +1,11 @@
 import type {
   PipelineEdge,
   PipelineNode,
+} from "@/lib/api";
+import type {
   StudioPipelineAssistantResponse,
   StudioPipelineGraphPatch,
-} from "@/lib/api";
+} from "@/lib/studioPipelineDraftsApi";
 
 export type AssistantPatchStats = {
   addedNodes: number;
@@ -66,7 +68,7 @@ function allowedSourceHandlesForType(nodeType: string): Set<string> {
   if (nodeType === "logic/telegram_input") return new Set(["received", "timeout"]);
   if (nodeType === "logic/wait") return new Set(["done", "out"]);
   if (nodeType === "logic/parallel" || nodeType === "logic/merge" || nodeType.startsWith("trigger/")) return new Set(["out"]);
-  if (nodeType.startsWith("agent/") || nodeType.startsWith("output/")) return new Set(["success", "error", "out"]);
+  if (nodeType.startsWith("agent/") || nodeType.startsWith("ops/") || nodeType.startsWith("output/")) return new Set(["success", "error", "out"]);
   return new Set(["out"]);
 }
 

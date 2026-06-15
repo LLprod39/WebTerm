@@ -1,0 +1,156 @@
+- generic [ref=e2] [box=0,0,1440,1000]:
+  - region "Notifications (F8)" [box=0,0,1440,0]:
+    - list [box=1020,968,420,32]
+  - region "Notifications alt+T" [box=0,0,1440,0]
+  - generic [ref=e5] [box=0,0,1440,1000]:
+    - generic [ref=e9] [box=0,0,255,1000]:
+      - generic [ref=e10] [box=0,0,255,64]:
+        - button "Свернуть меню" [ref=e11] [cursor=pointer] [box=12,12,40,40]:
+          - img [ref=e12] [box=24,24,16,16]
+        - generic [ref=e15] [box=64,13,116,37]:
+          - generic [ref=e16] [box=64,13,116,20]: WebTermAI
+          - generic [ref=e17] [box=64,33,116,17]: Платформа операций
+      - generic [ref=e18] [box=0,64,255,812]:
+        - generic [ref=e19] [box=12,80,231,241]:
+          - generic [ref=e20] [box=20,88,215,17]: Рабочее пространство
+          - list [ref=e22] [box=20,113,215,200]:
+            - listitem [ref=e23] [box=20,113,215,44]:
+              - link "Панель" [ref=e24] [cursor=pointer] [box=20,113,215,44]:
+                - /url: /dashboard
+                - img [ref=e25] [box=32,127,16,16]
+                - generic [ref=e30] [box=58,125,51,20]: Панель
+            - listitem [ref=e31] [box=20,165,215,44]:
+              - link "Серверы" [ref=e32] [cursor=pointer] [box=20,165,215,44]:
+                - /url: /servers
+                - img [ref=e33] [box=32,179,16,16]
+                - generic [ref=e36] [box=58,177,63,20]: Серверы
+            - listitem [ref=e37] [box=20,217,215,44]:
+              - link "Агенты" [ref=e38] [cursor=pointer] [box=20,217,215,44]:
+                - /url: /agents
+                - img [ref=e39] [box=32,231,16,16]
+                - generic [ref=e42] [box=58,229,49,20]: Агенты
+            - listitem [ref=e43] [box=20,269,215,44]:
+              - link "Студия" [ref=e44] [cursor=pointer] [box=20,269,215,44]:
+                - /url: /studio
+                - img [ref=e45] [box=32,283,16,16]
+                - generic [ref=e49] [box=58,281,49,20]: Студия
+        - generic [ref=e50] [box=12,345,231,85]:
+          - generic [ref=e51] [box=20,353,215,17]: Управление
+          - list [ref=e53] [box=20,377,215,44]:
+            - listitem [ref=e54] [box=20,377,215,44]:
+              - link "Настройки" [ref=e55] [cursor=pointer] [box=20,377,215,44]:
+                - /url: /settings
+                - img [ref=e56] [box=32,391,16,16]
+                - generic [ref=e59] [box=58,389,74,20]: Настройки
+      - generic [ref=e60] [box=0,876,255,124]:
+        - generic [ref=e61] [box=12,889,231,46]:
+          - button "EN" [ref=e62] [cursor=pointer] [box=17,894,109,36]
+          - button "RU" [pressed] [ref=e63] [cursor=pointer] [box=130,894,109,36]
+        - generic [ref=e64] [box=12,951,231,37]:
+          - generic [ref=e65] [box=12,952,36,36]: L
+          - generic [ref=e66] [box=58,951,139,37]:
+            - paragraph [ref=e67] [box=58,951,139,20]: lunix
+            - paragraph [ref=e68] [box=58,973,139,15]:
+              - img [ref=e69] [box=58,976,10,10]
+              - text: Администратор
+          - button "Выйти" [ref=e72] [cursor=pointer] [box=207,952,36,36]:
+            - img [ref=e73] [box=218,963,14,14]
+    - main [ref=e77] [box=256,0,1184,1000]:
+      - generic [ref=e78] [box=256,0,1184,1000]:
+        - generic [ref=e80] [box=268,8,1160,50]:
+          - link "Назад" [ref=e81] [cursor=pointer] [box=268,13,90,40]:
+            - /url: /servers
+            - img [ref=e82] [box=280,25,16,16]
+            - text: Назад
+          - generic [ref=e84] [box=366,13,254,40]:
+            - generic "Онлайн" [ref=e85] [box=379,29,8,8]
+            - generic [ref=e89] [box=395,23,79,20]: api-prod-01
+            - generic [ref=e90] [box=481,25,125,17]: lunix@172.25.173.251:22
+          - generic [ref=e92] [box=628,8,501,50]:
+            - button "api-prod-01" [ref=e94] [cursor=pointer] [box=634,14,118,38]:
+              - generic "Онлайн" [ref=e95] [box=646,29,8,8]
+              - generic [ref=e99] [box=662,23,78,20]: api-prod-01
+            - button "Подключить сервер" [ref=e100] [cursor=pointer] [box=757,13,102,40]:
+              - img [ref=e101] [box=770,25,16,16]
+              - text: Сервер
+          - generic [ref=e102] [box=1137,8,291,50]:
+            - button "SFTP" [ref=e103] [cursor=pointer] [box=1142,13,83,40]:
+              - img [box=1154,25,16,16]
+              - text: SFTP
+            - button "Linux" [ref=e104] [cursor=pointer] [box=1229,13,84,40]:
+              - img [box=1241,25,16,16]
+              - text: Linux
+            - button "AI" [ref=e105] [cursor=pointer] [box=1317,13,62,40]:
+              - img [box=1329,25,16,16]
+              - text: AI
+            - button "Настройки" [ref=e106] [cursor=pointer] [box=1383,13,40,40]:
+              - img [box=1395,25,16,16]
+        - generic [ref=e111] [box=256,67,1184,933]:
+          - generic [ref=e115] [box=256,67,1162,924]:
+            - textbox "Terminal input" [ref=e116] [box=458,903,10,22]
+            - generic [box=256,67,1162,924]:
+              - generic [box=256,67,1162,22]:
+                - generic [box=256,67,87,22]: WebTermAI
+              - generic [box=256,89,1162,22]:
+                - generic [box=256,89,259,22]: "Connecting to server #24..."
+              - generic [box=256,111,1162,22]:
+                - generic [box=256,111,423,22]: WebSocket connected. Starting SSH session...
+              - generic [box=256,133,1162,22]:
+                - generic [box=256,133,798,22]: Welcome to Ubuntu 24.04.1 LTS (GNU/Linux 5.15.153.1-microsoft-standard-WSL2 x86_64)
+              - generic [box=256,177,1162,22]:
+                - generic [box=256,177,404,22]: "* Documentation: https://help.ubuntu.com"
+              - generic [box=256,199,1162,22]:
+                - generic [box=256,199,480,22]: "* Management: https://landscape.canonical.com"
+              - generic [box=256,221,1162,22]:
+                - generic [box=256,221,394,22]: "* Support: https://ubuntu.com/pro"
+              - generic [box=256,265,1162,22]:
+                - generic [box=256,265,519,22]: System information as of Wed Jun 10 20:45:39 +05 2026
+              - generic [box=256,309,1162,22]:
+                - generic [box=256,309,586,22]: "System load: 1.14 Processes: 46"
+              - generic [box=256,331,1162,22]:
+                - generic [box=256,331,577,22]: "Usage of /: 0.4% of 1006.85GB Users logged in: 2"
+              - generic [box=256,353,1162,22]:
+                - generic [box=256,353,702,22]: "Memory usage: 7% IPv4 address for eth0: 172.25.173.251"
+              - generic [box=256,375,1162,22]:
+                - generic [box=256,375,173,22]: "Swap usage: 0%"
+              - generic [box=256,419,1162,22]:
+                - generic [box=256,419,740,22]: "* Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s"
+              - generic [box=256,441,1162,22]:
+                - generic [box=256,441,740,22]: just raised the bar for easy, resilient and secure K8s cluster deployment.
+              - generic [box=256,485,1162,22]:
+                - generic [box=256,485,557,22]: https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+              - generic [box=256,507,1162,22]:
+                - generic [box=256,507,798,22]: Welcome to Ubuntu 24.04.1 LTS (GNU/Linux 5.15.153.1-microsoft-standard-WSL2 x86_64)
+              - generic [box=256,551,1162,22]:
+                - generic [box=256,551,404,22]: "* Documentation: https://help.ubuntu.com"
+              - generic [box=256,573,1162,22]:
+                - generic [box=256,573,480,22]: "* Management: https://landscape.canonical.com"
+              - generic [box=256,595,1162,22]:
+                - generic [box=256,595,394,22]: "* Support: https://ubuntu.com/pro"
+              - generic [box=256,639,1162,22]:
+                - generic [box=256,639,519,22]: System information as of Wed Jun 10 16:44:52 +05 2026
+              - generic [box=256,683,1162,22]:
+                - generic [box=256,683,586,22]: "System load: 1.59 Processes: 45"
+              - generic [box=256,705,1162,22]:
+                - generic [box=256,705,577,22]: "Usage of /: 0.4% of 1006.85GB Users logged in: 1"
+              - generic [box=256,727,1162,22]:
+                - generic [box=256,727,702,22]: "Memory usage: 4% IPv4 address for eth0: 172.25.173.251"
+              - generic [box=256,749,1162,22]:
+                - generic [box=256,749,173,22]: "Swap usage: 0%"
+              - generic [box=256,793,1162,22]:
+                - generic [box=256,793,740,22]: "* Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s"
+              - generic [box=256,815,1162,22]:
+                - generic [box=256,815,740,22]: just raised the bar for easy, resilient and secure K8s cluster deployment.
+              - generic [box=256,859,1162,22]:
+                - generic [box=256,859,557,22]: https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+              - generic [box=256,881,1162,22]:
+                - generic [box=256,881,538,22]: "Last login: Wed Jun 10 20:44:14 2026 from 172.25.173.251"
+              - generic [box=256,903,1162,22]:
+                - generic [box=256,903,163,22]: lunix@PC-643653b3
+                - generic [box=419,903,10,22]: ":"
+                - generic [box=429,903,10,22]: ~
+                - generic [box=439,903,19,22]: $
+          - generic [box=256,67,1184,933]:
+            - generic [box=608,501,480,66]:
+              - generic [box=625,514,446,20]: Загрузка файлов
+              - generic [box=625,538,446,16]: Перетащите файлы сюда, чтобы отправить их в текущую удалённую папку.

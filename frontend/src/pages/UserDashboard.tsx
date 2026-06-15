@@ -29,6 +29,7 @@ const sectionToneStyles: Record<string, string> = {
   warning: "border-amber-500/25 bg-amber-950/5 dark:bg-amber-950/10 shadow-amber-500/5",
   danger: "border-red-500/25 bg-red-950/5 dark:bg-red-950/10 shadow-red-500/5",
 };
+type StatusTone = "neutral" | "success" | "warning" | "danger" | "info";
 
 export default function UserDashboard() {
   const { t } = useI18n();
@@ -164,7 +165,7 @@ export default function UserDashboard() {
                 {displayRuns.map((r) => {
                   const isSuccess = r.status === "succeeded" || r.status === "success";
                   const isFailed = r.status === "failed" || r.status === "error";
-                  const runTone = isSuccess ? "success" : isFailed ? "danger" : "info";
+                  const runTone: StatusTone = isSuccess ? "success" : isFailed ? "danger" : "info";
                   
                   return (
                     <Link
@@ -175,7 +176,7 @@ export default function UserDashboard() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <span className="font-semibold truncate text-xs">{r.agent_name}</span>
-                          <StatusBadge label={r.status} tone={runTone as any} />
+                          <StatusBadge label={r.status} tone={runTone} />
                         </div>
                         <p className="mt-1 truncate text-[10px] text-muted-foreground">
                           сервер: <span className="text-foreground/80">{r.server_name}</span> • итераций: {r.total_iterations}
@@ -213,7 +214,7 @@ export default function UserDashboard() {
             <SectionCard title={title} icon={<Server className="h-4 w-4" />} className={sectionToneStyles[tone]}>
               <div className="space-y-2.5">
                 {displayServers.map((s) => {
-                  const statusTone = s.status === "healthy" ? "success" : s.status === "warning" ? "warning" : s.status === "critical" ? "danger" : s.status === "unreachable" ? "danger" : "neutral";
+                  const statusTone: StatusTone = s.status === "healthy" ? "success" : s.status === "warning" ? "warning" : s.status === "critical" ? "danger" : s.status === "unreachable" ? "danger" : "neutral";
                   return (
                     <div key={s.server_id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl border border-border/80 bg-secondary/5 hover:border-primary/40 hover:bg-secondary/10 transition-all text-xs">
                       <div className="flex items-center gap-3 min-w-0">
@@ -226,7 +227,7 @@ export default function UserDashboard() {
                         </div>
                       </div>
                       <div className="flex items-center gap-3.5 shrink-0 flex-wrap sm:flex-nowrap">
-                        <StatusBadge label={s.status} tone={statusTone as any} />
+                        <StatusBadge label={s.status} tone={statusTone} />
                         {s.cpu_percent !== null && (
                           <div className="text-[10px] text-muted-foreground shrink-0 bg-card border rounded px-1.5 py-0.5 font-medium">
                             CPU: <span className={cn("font-bold", s.cpu_percent > 80 ? "text-red-500" : s.cpu_percent > 60 ? "text-amber-500" : "text-emerald-500")}>{s.cpu_percent}%</span>
@@ -306,7 +307,7 @@ export default function UserDashboard() {
             <SectionCard title={title} icon={<Play className="h-4 w-4" />} className={sectionToneStyles[tone]}>
               <div className="space-y-3">
                 {displayAlerts.map((a) => {
-                  const alertTone = a.severity === "critical" ? "danger" : a.severity === "warning" ? "warning" : "info";
+                  const alertTone: StatusTone = a.severity === "critical" ? "danger" : a.severity === "warning" ? "warning" : "info";
                   return (
                     <div key={a.id} className="flex items-start gap-3 p-3 rounded-xl border border-border/80 bg-secondary/5 hover:border-primary/30 transition-all text-xs">
                       <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-destructive text-[10px] font-bold">
@@ -315,7 +316,7 @@ export default function UserDashboard() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <strong className="font-semibold text-foreground/95 truncate">{a.title}</strong>
-                          <StatusBadge label={a.severity} tone={alertTone as any} />
+                          <StatusBadge label={a.severity} tone={alertTone} />
                         </div>
                         <p className="mt-1 text-muted-foreground text-[11px] leading-relaxed">{a.message}</p>
                         <p className="mt-1 text-[9px] text-muted-foreground/60">

@@ -1,0 +1,147 @@
+- generic [ref=e2] [box=0,0,1440,1024]:
+  - region "Notifications (F8)" [box=0,0,1440,0]:
+    - list [box=1020,992,420,32]
+  - region "Notifications alt+T" [box=0,0,1440,0]
+  - generic [ref=e5] [box=0,0,1440,1024]:
+    - generic [ref=e9] [box=0,0,255,1024]:
+      - generic [ref=e10] [box=0,0,255,64]:
+        - button "Свернуть меню" [ref=e11] [cursor=pointer] [box=12,12,40,40]:
+          - img [ref=e12] [box=24,24,16,16]
+        - generic [ref=e15] [box=64,13,116,37]:
+          - generic [ref=e16] [box=64,13,116,20]: WebTermAI
+          - generic [ref=e17] [box=64,33,116,17]: Платформа операций
+      - generic [ref=e18] [box=0,64,255,836]:
+        - generic [ref=e19] [box=12,80,231,241]:
+          - generic [ref=e20] [box=20,88,215,17]: Рабочее пространство
+          - list [ref=e22] [box=20,113,215,200]:
+            - listitem [ref=e23] [box=20,113,215,44]:
+              - link "Панель" [ref=e24] [cursor=pointer] [box=20,113,215,44]:
+                - /url: /dashboard
+                - img [ref=e25] [box=32,127,16,16]
+                - generic [ref=e30] [box=58,125,51,20]: Панель
+            - listitem [ref=e31] [box=20,165,215,44]:
+              - link "Серверы" [ref=e32] [cursor=pointer] [box=20,165,215,44]:
+                - /url: /servers
+                - img [ref=e33] [box=32,179,16,16]
+                - generic [ref=e36] [box=58,177,62,20]: Серверы
+            - listitem [ref=e37] [box=20,217,215,44]:
+              - link "Агенты" [ref=e38] [cursor=pointer] [box=20,217,215,44]:
+                - /url: /agents
+                - img [ref=e39] [box=32,231,16,16]
+                - generic [ref=e42] [box=58,229,49,20]: Агенты
+            - listitem [ref=e43] [box=20,269,215,44]:
+              - link "Студия" [ref=e44] [cursor=pointer] [box=20,269,215,44]:
+                - /url: /studio
+                - img [ref=e45] [box=32,283,16,16]
+                - generic [ref=e49] [box=58,281,51,20]: Студия
+        - generic [ref=e50] [box=12,345,231,85]:
+          - generic [ref=e51] [box=20,353,215,17]: Управление
+          - list [ref=e53] [box=20,377,215,44]:
+            - listitem [ref=e54] [box=20,377,215,44]:
+              - link "Настройки" [ref=e55] [cursor=pointer] [box=20,377,215,44]:
+                - /url: /settings
+                - img [ref=e56] [box=32,391,16,16]
+                - generic [ref=e59] [box=58,389,74,20]: Настройки
+      - generic [ref=e60] [box=0,900,255,124]:
+        - generic [ref=e61] [box=12,913,231,46]:
+          - button "EN" [ref=e62] [cursor=pointer] [box=17,918,109,36]
+          - button "RU" [pressed] [ref=e63] [cursor=pointer] [box=130,918,109,36]
+        - generic [ref=e64] [box=12,975,231,37]:
+          - generic [ref=e65] [box=12,976,36,36]: L
+          - generic [ref=e66] [box=58,975,139,37]:
+            - paragraph [ref=e67] [box=58,975,139,20]: lunix
+            - paragraph [ref=e68] [box=58,997,139,15]:
+              - img [ref=e69] [box=58,1000,10,10]
+              - text: Администратор
+          - button "Выйти" [ref=e72] [cursor=pointer] [box=207,976,36,36]:
+            - img [ref=e73] [box=218,987,14,14]
+    - main [ref=e77] [box=256,0,1184,1024]:
+      - generic [ref=e78] [box=256,0,1184,1024]:
+        - navigation [ref=e79] [box=256,0,1184,56]:
+          - generic [ref=e80] [box=272,8,71,40]: Studio
+          - button "Обзор" [ref=e82] [cursor=pointer] [box=363,8,87,40]:
+            - img [ref=e83] [box=377,21,14,14]
+            - text: Обзор
+          - button "Черновики" [ref=e88] [cursor=pointer] [box=454,8,115,40]:
+            - img [ref=e89] [box=468,21,14,14]
+            - text: Черновики
+          - button "Runbook" [ref=e92] [cursor=pointer] [box=574,8,101,40]:
+            - img [ref=e93] [box=588,21,14,14]
+            - text: Runbook
+          - button "MCP" [ref=e96] [cursor=pointer] [box=678,8,77,40]:
+            - img [ref=e97] [box=692,21,14,14]
+            - text: MCP
+          - button "Агенты" [ref=e100] [cursor=pointer] [box=760,8,93,40]:
+            - img [ref=e101] [box=774,21,14,14]
+            - text: Агенты
+          - button "Запуски" [ref=e104] [cursor=pointer] [box=857,8,99,40]:
+            - img [ref=e105] [box=871,21,14,14]
+            - text: Запуски
+          - button "Оповещения" [ref=e108] [cursor=pointer] [box=960,8,126,40]:
+            - img [ref=e109] [box=974,21,14,14]
+            - text: Оповещения
+        - generic [ref=e112] [box=256,56,1184,968]:
+          - generic [ref=e116] [box=305,113,1086,173]:
+            - generic [ref=e117] [box=305,113,572,173]:
+              - generic [ref=e119] [box=305,113,281,68]:
+                - generic [ref=e121] [box=305,113,122,24]: Studio library
+                - heading "Каталог скиллов" [level=1] [ref=e122] [box=305,145,281,36]
+              - paragraph [ref=e125] [box=305,197,572,49]: Скилл здесь это рабочий плейбук. Выберите сервис, проверьте guardrails и runtime policy, а затем правьте сам workspace прямо из Studio.
+              - generic [ref=e126] [box=305,262,572,24]:
+                - generic [ref=e127] [box=305,262,103,24]
+                - generic [ref=e131] [box=420,262,106,24]
+                - generic [ref=e136] [box=538,262,111,24]
+            - generic [ref=e141] [box=901,113,490,100]:
+              - button "MCP Реестр" [ref=e142] [cursor=pointer] [box=936,121,143,40]:
+                - img [box=953,133,16,16]
+                - text: MCP Реестр
+              - button "Проверить" [ref=e143] [cursor=pointer] [box=1091,121,134,40]:
+                - img [box=1108,133,16,16]
+                - text: Проверить
+              - button "Новый скилл" [ref=e144] [cursor=pointer] [box=1237,121,154,40]:
+                - img [box=1257,133,16,16]
+                - text: Новый скилл
+              - button "Агенты" [ref=e145] [cursor=pointer] [box=1283,173,108,40]:
+                - img [box=1300,185,16,16]
+                - text: Агенты
+          - generic [ref=e146] [box=256,335,1184,689]:
+            - generic [ref=e147] [box=280,335,1136,58]:
+              - generic [ref=e148] [box=297,344,689,40]:
+                - img [ref=e149] [box=297,356,16,16]
+                - textbox "Поиск скиллов по названию, сервису или тегу..." [ref=e152] [box=329,344,657,40]
+              - generic [ref=e153] [box=1002,344,402,40]:
+                - combobox [ref=e154] [cursor=pointer] [box=1002,344,180,40]
+                - generic [ref=e158] [box=1215,352,71,25]: 7 найдено
+                - button "Создать" [ref=e159] [cursor=pointer] [box=1298,344,105,40]
+            - generic [ref=e160] [box=280,417,1136,447]:
+              - button "Frontend UX/UI Structure Skill You are a senior frontend UX-focused engineer. Your job is not only to make interfaces visually attractive, but to make them easy, predictable, fast to understand, and comfortable for real users." [ref=e161] [cursor=pointer] [box=280,417,272,243]:
+                - paragraph [ref=e165] [box=297,498,217,23]: Frontend UX/UI Structure Skill
+                - paragraph [ref=e166] [box=297,539,238,39]: You are a senior frontend UX-focused engineer. Your job is not only to make interfaces visually attractive, but to make them easy, predictable, fast to understand, and comfortable for real users.
+              - button "Keycloak PROD Profile enforced keycloak · Identity and Access critical Environment skill for Keycloak PROD operations. Pins work to the prod profile and requires extra caution before mutations. Pins profile=prod on Keycloak MCP calls keycloak iam prod" [ref=e167] [cursor=pointer] [box=568,417,272,243]:
+                - generic [ref=e168] [box=585,447,238,74]
+                - paragraph [ref=e180] [box=585,533,238,39]: Environment skill for Keycloak PROD operations. Pins work to the prod profile and requires extra caution before mutations.
+                - generic [ref=e181] [box=585,584,238,15]
+                - generic [ref=e185] [box=585,611,238,19]
+              - 'button "Keycloak Safety Workflow enforced keycloak · Identity and Access high Safe operating workflow for Keycloak MCP tasks: preflight, exact target resolution, explicit profile usage, and verification after every mutation. Requires keycloak_current_environment before mutating calls keycloak iam mcp" [ref=e189] [cursor=pointer] [box=856,417,272,243]':
+                - generic [ref=e190] [box=873,434,238,100]
+                - paragraph [ref=e202] [box=873,545,238,39]: "Safe operating workflow for Keycloak MCP tasks: preflight, exact target resolution, explicit profile usage, and verification after every mutation."
+                - generic [ref=e203] [box=873,596,238,15]
+                - generic [ref=e207] [box=873,623,238,19]
+              - button "Keycloak TEST Profile enforced keycloak · Identity and Access high Environment skill for Keycloak TEST operations. Pins work to the test profile and blocks profile switching. Pins profile=test on Keycloak MCP calls keycloak iam test" [ref=e211] [cursor=pointer] [box=1144,417,272,243]:
+                - generic [ref=e212] [box=1161,447,238,74]
+                - paragraph [ref=e224] [box=1161,533,238,39]: Environment skill for Keycloak TEST operations. Pins work to the test profile and blocks profile switching.
+                - generic [ref=e225] [box=1161,584,238,15]
+                - generic [ref=e229] [box=1161,611,238,19]
+              - 'button "lunix Docker Ops Mine lunix · docker standard Автосгенерированный operational skill на основе повторяющегося паттерна `echo ''===== DISK SPACE =====''; df -h; echo; echo ''===== RUNNING CONTAINERS =====''; docker ps --format ''table {{.Names}}\\t{{.Image}}\\t{{.Sta…` для сервера lunix. Resolve the target server before mutation. auto-generated server-memory docker" [ref=e233] [cursor=pointer] [box=280,675,272,188]':
+                - generic [ref=e234] [box=297,692,238,45]
+                - paragraph [ref=e246] [box=297,749,238,39]: "Автосгенерированный operational skill на основе повторяющегося паттерна `echo '===== DISK SPACE ====='; df -h; echo; echo '===== RUNNING CONTAINERS ====='; docker ps --format 'table {{.Names}}\\t{{.Image}}\\t{{.Sta…` для сервера lunix."
+                - generic [ref=e247] [box=297,800,238,15]
+                - generic [ref=e251] [box=297,828,238,19]
+              - button "open-design Skill-driven design and implementation based on Open Design principles. Use when creating new applications, UI components, or design artifacts to ensure high fidelity and brand consistency through a structured Discovery Loop and DESIGN.md enforcement." [ref=e255] [cursor=pointer] [box=568,675,272,188]:
+                - paragraph [ref=e259] [box=585,730,92,23]: open-design
+                - paragraph [ref=e260] [box=585,770,238,39]: Skill-driven design and implementation based on Open Design principles. Use when creating new applications, UI components, or design artifacts to ensure high fidelity and brand consistency through a structured Discovery Loop and DESIGN.md enforcement.
+              - button "test standard testse etst test" [ref=e261] [cursor=pointer] [box=856,675,272,188]:
+                - generic [ref=e262] [box=873,710,238,29]
+                - paragraph [ref=e267] [box=873,751,238,20]: testse
+                - generic [ref=e268] [box=873,782,238,15]
+                - generic [ref=e273] [box=873,810,30,19]: test

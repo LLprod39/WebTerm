@@ -7,6 +7,7 @@ import {
   Bot,
   Clock,
   Bell,
+  Wand2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fetchAuthSession } from "@/lib/api";
@@ -15,8 +16,9 @@ import { localize, useI18n } from "@/lib/i18n";
 
 const NAV_ITEMS = [
   { path: "/studio", labelRu: "Обзор", labelEn: "Overview", icon: LayoutGrid, exact: true },
-  { path: "/studio/skills", labelRu: "OPS skills", labelEn: "OPS Skills", icon: BookOpen, feature: "studio_skills" },
-  { path: "/studio/mcp", labelRu: "MCP tools", labelEn: "MCP Tools", icon: Server, feature: "studio_mcp" },
+  { path: "/studio/drafts", labelRu: "Черновики", labelEn: "AI Drafts", icon: Wand2, feature: "studio_pipelines" },
+  { path: "/studio/skills", labelRu: "Скиллы", labelEn: "OPS Skills", icon: BookOpen, feature: "studio_skills" },
+  { path: "/studio/mcp", labelRu: "MCP", labelEn: "MCP Tools", icon: Server, feature: "studio_mcp" },
   { path: "/studio/agents", labelRu: "Агенты", labelEn: "Agents", icon: Bot, feature: "studio_agents" },
   { path: "/studio/runs", labelRu: "Запуски", labelEn: "Runs", icon: Clock, feature: "studio_runs" },
   { path: "/studio/notifications", labelRu: "Оповещения", labelEn: "Alerts", icon: Bell, feature: "studio_notifications" },

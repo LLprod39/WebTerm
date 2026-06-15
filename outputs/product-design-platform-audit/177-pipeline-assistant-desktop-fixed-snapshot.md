@@ -1,0 +1,65 @@
+- generic [ref=e2] [box=0,0,1435,2143]:
+  - region "Notifications (F8)" [box=0,0,1435,0]:
+    - list [box=1015,992,420,32]
+  - region "Notifications alt+T" [box=0,0,1435,0]
+  - generic [ref=e5] [box=0,0,1435,2143]:
+    - generic [ref=e9] [box=0,0,255,1024]:
+      - generic [ref=e10] [box=0,0,255,64]:
+        - button "Свернуть меню" [ref=e11] [cursor=pointer] [box=12,12,40,40]:
+          - img [ref=e12] [box=24,24,16,16]
+        - generic [ref=e15] [box=64,13,116,37]:
+          - generic [ref=e16] [box=64,13,116,20]: WebTermAI
+          - generic [ref=e17] [box=64,33,116,17]: Платформа операций
+      - generic [ref=e18] [box=0,64,255,836]:
+        - generic [ref=e19] [box=12,80,231,241]:
+          - generic [ref=e20] [box=20,88,215,17]: Рабочее пространство
+          - list [ref=e22] [box=20,113,215,200]:
+            - listitem [ref=e23] [box=20,113,215,44]
+            - listitem [ref=e31] [box=20,165,215,44]
+            - listitem [ref=e37] [box=20,217,215,44]
+            - listitem [ref=e43] [box=20,269,215,44]
+        - generic [ref=e50] [box=12,345,231,85]:
+          - generic [ref=e51] [box=20,353,215,17]: Управление
+          - list [ref=e53] [box=20,377,215,44]:
+            - listitem [ref=e54] [box=20,377,215,44]
+      - generic [ref=e60] [box=0,900,255,124]:
+        - generic [ref=e61] [box=12,913,231,46]:
+          - button "EN" [ref=e62] [cursor=pointer] [box=17,918,109,36]
+          - button "RU" [pressed] [ref=e63] [cursor=pointer] [box=130,918,109,36]
+        - generic [ref=e64] [box=12,975,231,37]:
+          - generic [ref=e65] [box=12,976,36,36]: L
+          - generic [ref=e66] [box=58,975,139,37]:
+            - paragraph [ref=e67] [box=58,975,139,20]: lunix
+            - paragraph [ref=e68] [box=58,997,139,15]
+          - button "Выйти" [ref=e72] [cursor=pointer] [box=207,976,36,36]:
+            - img [ref=e73] [box=218,987,14,14]
+    - main [ref=e77] [box=256,0,1179,2143]:
+      - generic [ref=e79] [box=256,0,1179,2143]:
+        - generic [ref=e80] [box=256,0,1179,61]:
+          - generic [ref=e81] [box=272,12,354,36]:
+            - button "Вернуться в Studio" [ref=e82] [cursor=pointer] [box=272,12,36,36]
+            - img [ref=e83] [box=316,23,14,14]
+            - textbox "Название pipeline…" [ref=e85] [box=338,12,288,36]
+          - generic [ref=e86] [box=1023,12,396,36]:
+            - button "Сохранить" [ref=e87] [cursor=pointer] [box=1023,12,121,36]
+            - button "Запуск" [ref=e88] [cursor=pointer] [box=1152,12,95,36]
+            - button "Помощник" [active] [ref=e89] [cursor=pointer] [box=1254,12,121,36]
+            - button "Ещё действия" [ref=e90] [cursor=pointer] [box=1383,12,36,36]
+        - generic [ref=e91] [box=256,61,1179,51]:
+          - generic [ref=e92] [box=272,71,185,30]:
+            - img [ref=e93] [box=283,79,14,14]
+            - generic [ref=e97] [box=305,78,141,16]: Нет активного триггера
+          - paragraph [ref=e98] [box=469,76,950,20]: Добавьте ручной запуск, webhook, расписание или мониторинг, чтобы подготовить pipeline к запуску.
+        - generic [ref=e99] [box=256,112,1179,2031]:
+          - generic [ref=e101] [box=256,112,256,2031]:
+            - generic [ref=e102] [box=256,112,255,81]
+            - generic [ref=e106] [box=256,193,255,1920]
+            - paragraph [ref=e431] [box=268,2122,231,14]: Кликните по ноде или перетащите её на холст
+          - application [ref=e434] [box=512,112,539,2031]:
+            - img [box=512,112,539,2031]
+            - generic "Control Panel" [ref=e437] [box=527,2024,26,104]
+            - generic [box=662,247,240,124]
+          - generic [ref=e452] [box=1052,112,383,2031]:
+            - generic [ref=e453] [box=1052,112,383,62]
+            - generic [ref=e467] [box=1052,174,383,210]
+            - generic [ref=e474] [box=1052,1974,383,169]

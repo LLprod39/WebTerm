@@ -428,7 +428,7 @@ export default function SettingsGroupsPage() {
 
         {/* ── Create group sidebar ── */}
         {editingId === null ? (
-          <div className="xl:sticky xl:top-4 h-fit rounded-xl border border-border bg-card shadow-sm">
+          <div className="order-first h-fit rounded-xl border border-border bg-card shadow-sm xl:order-none xl:sticky xl:top-4">
             <div className="flex items-center gap-3 border-b border-border/60 px-5 py-4">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/15 text-violet-400">
                 <FolderPlus className="h-4 w-4" />
@@ -483,7 +483,7 @@ export default function SettingsGroupsPage() {
             </div>
           </div>
         ) : (
-          <div className="xl:sticky xl:top-4 h-fit rounded-xl border border-dashed border-border/50 bg-secondary/5 px-5 py-8 text-center">
+          <div className="order-first h-fit rounded-xl border border-dashed border-border/50 bg-secondary/5 px-5 py-8 text-center xl:order-none xl:sticky xl:top-4">
             <p className="text-xs text-muted-foreground/50">
               {lang === "ru"
                 ? "Завершите редактирование группы, чтобы создать новую."

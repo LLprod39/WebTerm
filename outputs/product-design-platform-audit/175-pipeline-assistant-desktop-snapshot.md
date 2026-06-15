@@ -1,0 +1,166 @@
+- generic [ref=e2] [box=0,0,1435,2143]:
+  - region "Notifications (F8)" [box=0,0,1435,0]:
+    - list [box=1015,992,420,32]
+  - region "Notifications alt+T" [box=0,0,1435,0]
+  - generic [ref=e7] [box=0,0,1435,2143]:
+    - generic [ref=e80] [box=0,0,255,1024]:
+      - generic [ref=e81] [box=0,0,255,64]:
+        - button "Свернуть меню" [ref=e82] [cursor=pointer] [box=12,12,40,40]:
+          - img [ref=e83] [box=24,24,16,16]
+        - generic [ref=e86] [box=64,13,116,37]:
+          - generic [ref=e87] [box=64,13,116,20]: WebTermAI
+          - generic [ref=e88] [box=64,33,116,17]: Платформа операций
+      - generic [ref=e89] [box=0,64,255,836]:
+        - generic [ref=e90] [box=12,80,231,241]:
+          - generic [ref=e91] [box=20,88,215,17]: Рабочее пространство
+          - list [ref=e93] [box=20,113,215,200]:
+            - listitem [ref=e94] [box=20,113,215,44]:
+              - link "Панель" [ref=e95] [cursor=pointer] [box=20,113,215,44]:
+                - /url: /dashboard
+                - img [ref=e96] [box=32,127,16,16]
+                - generic [ref=e101] [box=58,125,51,20]: Панель
+            - listitem [ref=e102] [box=20,165,215,44]:
+              - link "Серверы" [ref=e103] [cursor=pointer] [box=20,165,215,44]:
+                - /url: /servers
+                - img [ref=e104] [box=32,179,16,16]
+                - generic [ref=e107] [box=58,177,62,20]: Серверы
+            - listitem [ref=e108] [box=20,217,215,44]:
+              - link "Агенты" [ref=e109] [cursor=pointer] [box=20,217,215,44]:
+                - /url: /agents
+                - img [ref=e110] [box=32,231,16,16]
+                - generic [ref=e113] [box=58,229,49,20]: Агенты
+            - listitem [ref=e114] [box=20,269,215,44]:
+              - link "Студия" [ref=e115] [cursor=pointer] [box=20,269,215,44]:
+                - /url: /studio
+                - img [ref=e116] [box=32,283,16,16]
+                - generic [ref=e120] [box=58,281,51,20]: Студия
+        - generic [ref=e121] [box=12,345,231,85]:
+          - generic [ref=e122] [box=20,353,215,17]: Управление
+          - list [ref=e124] [box=20,377,215,44]:
+            - listitem [ref=e125] [box=20,377,215,44]:
+              - link "Настройки" [ref=e126] [cursor=pointer] [box=20,377,215,44]:
+                - /url: /settings
+                - img [ref=e127] [box=32,391,16,16]
+                - generic [ref=e130] [box=58,389,74,20]: Настройки
+      - generic [ref=e131] [box=0,900,255,124]:
+        - generic [ref=e132] [box=12,913,231,46]:
+          - button "EN" [ref=e133] [cursor=pointer] [box=17,918,109,36]
+          - button "RU" [pressed] [ref=e134] [cursor=pointer] [box=130,918,109,36]
+        - generic [ref=e135] [box=12,975,231,37]:
+          - generic [ref=e136] [box=12,976,36,36]: L
+          - generic [ref=e137] [box=58,975,139,37]:
+            - paragraph [ref=e138] [box=58,975,139,20]: lunix
+            - paragraph [ref=e139] [box=58,997,139,15]:
+              - img [ref=e140] [box=58,1000,10,10]
+              - text: Администратор
+          - button "Выйти" [ref=e143] [cursor=pointer] [box=207,976,36,36]:
+            - img [ref=e144] [box=218,987,14,14]
+    - main [ref=e9] [box=256,0,1179,2143]:
+      - generic [ref=e11] [box=256,0,1179,2143]:
+        - generic [ref=e12] [box=256,0,1179,61]:
+          - generic [ref=e13] [box=272,12,354,36]:
+            - button "Вернуться в Studio" [ref=e14] [cursor=pointer] [box=272,12,36,36]:
+              - img [box=282,22,16,16]
+            - img [ref=e15] [box=316,23,14,14]
+            - textbox "Название pipeline…" [ref=e17] [box=338,12,288,36]
+          - generic [ref=e18] [box=1023,12,396,36]:
+            - button "Сохранить" [ref=e19] [cursor=pointer] [box=1023,12,121,36]:
+              - img [box=1035,22,16,16]
+              - text: Сохранить
+            - button "Запуск" [ref=e21] [cursor=pointer] [box=1152,12,95,36]:
+              - img [box=1164,22,16,16]
+              - text: Запуск
+            - button "Помощник" [active] [ref=e22] [cursor=pointer] [box=1254,12,121,36]:
+              - img [box=1266,22,16,16]
+              - text: Помощник
+            - button "Ещё действия" [ref=e23] [cursor=pointer] [box=1383,12,36,36]:
+              - img [box=1393,22,16,16]
+        - generic [ref=e24] [box=256,61,1179,51]:
+          - generic [ref=e25] [box=272,71,185,30]:
+            - img [ref=e26] [box=283,79,14,14]
+            - generic [ref=e30] [box=305,78,141,16]: Нет активного триггера
+          - paragraph [ref=e31] [box=469,76,950,20]: Добавьте ручной запуск, webhook, расписание или мониторинг, чтобы подготовить pipeline к запуску.
+        - generic [ref=e32] [box=256,112,1179,2031]:
+          - generic [ref=e148] [box=256,112,256,2031]:
+            - generic [ref=e149] [box=256,112,255,81]:
+              - heading "Добавить ноду" [level=3] [ref=e150] [box=268,124,231,16]:
+                - img [ref=e151] [box=268,126,12,12]
+                - text: Добавить ноду
+              - textbox "Поиск нод..." [ref=e152] [box=268,148,231,32]
+            - generic [ref=e153] [box=256,193,255,1920]:
+              - generic [ref=e154] [box=264,201,239,262]:
+                - button "Триггеры 4" [ref=e155] [cursor=pointer] [box=264,201,239,30]
+                - button "Ручной запуск Запуск вручную из Studio" [ref=e162] [box=264,231,239,58]
+                - button "Webhook Запуск по HTTP POST" [ref=e170] [box=264,289,239,58]
+                - button "Расписание Автозапуск по cron" [ref=e179] [box=264,347,239,58]
+                - button "Мониторинг Запуск по алерту мониторинга сервера" [ref=e188] [box=264,405,239,58]
+              - generic [ref=e197] [box=264,467,239,320]:
+                - button "Агенты 5" [ref=e198] [cursor=pointer] [box=264,467,239,30]
+                - button "ReAct-агент Агент сам выбирает инструменты и шаги" [ref=e206] [box=264,496,239,58]
+                - button "Мультиагент Координация нескольких агентов или целей" [ref=e215] [box=264,554,239,58]
+                - button "SSH-команда Точная команда по SSH без LLM-планирования" [ref=e226] [box=264,612,239,58]
+                - button "LLM-запрос Аналитический шаг без серверных действий" [ref=e234] [box=264,670,239,58]
+                - button "MCP-вызов Прямой вызов конкретного MCP-инструмента" [ref=e252] [box=264,728,239,58]
+              - generic [ref=e260] [box=264,790,239,668]:
+                - button "OPS 11" [ref=e261] [cursor=pointer] [box=264,790,239,30]
+                - button "Снимок сервера Безопасный снимок Linux, Docker, дисков и логов" [ref=e268] [box=264,820,239,58]
+                - button "Запрос логов Чтение логов Linux, сервисов и Docker" [ref=e277] [box=264,878,239,58]
+                - button "Файл Чтение или запись текстового файла через SFTP" [ref=e286] [box=264,936,239,58]
+                - button "Пакеты Просмотр, установка, обновление или удаление пакетов ОС" [ref=e295] [box=264,994,239,58]
+                - button "Очистка диска Проверка места, очистка journal или старых tmp-файлов" [ref=e305] [box=264,1052,239,58]
+                - button "Проверка backup Проверка свежести backup и целостности последнего архива" [ref=e313] [box=264,1110,239,58]
+                - button "Действие сервиса Структурированный systemctl с проверкой" [ref=e321] [box=264,1168,239,58]
+                - button "Действие Docker Start, stop или restart контейнера с проверкой" [ref=e330] [box=264,1226,239,58]
+                - button "Действие процесса Остановить процесс мягко или принудительно" [ref=e340] [box=264,1284,239,58]
+                - button "HTTP-проверка Проверка URL, статуса и текста ответа" [ref=e348] [box=264,1342,239,58]
+                - button "Обновить alert Закрыть алерт мониторинга после проверки" [ref=e359] [box=264,1400,239,58]
+              - generic [ref=e368] [box=264,1462,239,378]:
+                - button "Логика 6" [ref=e369] [cursor=pointer] [box=264,1462,239,30]
+                - button "Условие Разветвление if / else" [ref=e376] [box=264,1491,239,58]
+                - button "Параллель Запуск нескольких веток параллельно" [ref=e386] [box=264,1549,239,58]
+                - button "Слияние Явное объединение веток all / any" [ref=e394] [box=264,1607,239,58]
+                - button "Пауза Пауза на заданное время" [ref=e404] [box=264,1665,239,58]
+                - button "Подтверждение Ожидание решения оператора" [ref=e413] [box=264,1723,239,58]
+                - button "Ответ в Telegram Ожидание обычного текстового ответа оператора" [ref=e423] [box=264,1781,239,58]
+              - generic [ref=e431] [box=264,1843,239,262]:
+                - button "Выходы 4" [ref=e432] [cursor=pointer] [box=264,1843,239,30]
+                - button "Отчёт Финальный markdown-отчёт" [ref=e440] [box=264,1873,239,58]
+                - button "Исходящий webhook Отправка результата во внешний HTTP endpoint" [ref=e449] [box=264,1931,239,58]
+                - button "Письмо Отправка результата по email" [ref=e459] [box=264,1989,239,58]
+                - button "Telegram Отправка результата в Telegram" [ref=e468] [box=264,2047,239,58]
+            - paragraph [ref=e478] [box=268,2122,231,14]: Кликните по ноде или перетащите её на холст
+          - application [ref=e35] [box=512,112,539,2031]:
+            - img [box=512,112,539,2031]
+            - generic "Control Panel" [ref=e38] [box=527,2024,26,104]:
+              - button "Zoom In" [ref=e39] [cursor=pointer] [box=527,2024,26,26]:
+                - img [ref=e40] [box=534,2031,12,12]
+              - button "Zoom Out" [ref=e42] [cursor=pointer] [box=527,2050,26,26]:
+                - img [ref=e43] [box=534,2062,12,2]
+              - button "Fit View" [ref=e45] [cursor=pointer] [box=527,2076,26,26]:
+                - img [ref=e46] [box=534,2083,12,11]
+              - button "Toggle Interactivity" [ref=e48] [cursor=pointer] [box=527,2102,26,26]:
+                - img [ref=e49] [box=534,2109,12,12]
+            - generic [box=662,247,240,124]:
+              - generic [box=662,247,240,124]:
+                - img [box=758,247,48,48]
+                - paragraph [box=662,307,240,20]: Соберите OPS pipeline
+                - paragraph [box=662,339,240,32]: Добавьте шаги из палитры и соедините их в порядок выполнения.
+          - generic [ref=e53] [box=1052,112,383,2031]:
+            - generic [ref=e54] [box=1052,112,383,62]:
+              - generic [ref=e56] [box=1068,124,169,37]:
+                - img [ref=e58] [box=1074,134,16,16]
+                - generic [ref=e61] [box=1104,124,133,37]
+              - button "Закрыть помощник" [ref=e64] [cursor=pointer] [box=1383,124,36,36]:
+                - img [box=1393,134,16,16]
+            - generic [ref=e68] [box=1052,174,383,210]:
+              - generic [ref=e69] [box=1064,186,359,80]:
+                - button "Собрать" [ref=e70] [cursor=pointer] [box=1064,186,176,36]
+                - button "Улучшить" [ref=e71] [cursor=pointer] [box=1248,186,176,36]
+                - button "Проверить" [ref=e72] [cursor=pointer] [box=1064,230,176,36]
+                - button "Исправить" [ref=e73] [cursor=pointer] [box=1248,230,176,36]
+              - generic [ref=e74] [box=1064,278,359,94]: "Опишите автоматизацию: что должно запускать pipeline, какие серверы или MCP использовать, где нужен approval и куда отправить результат."
+            - generic [ref=e75] [box=1052,1974,383,169]:
+              - 'textbox "Например: проверь Docker service, попроси approval и отправь отчёт в Telegram" [ref=e76] [box=1064,1987,359,96]'
+              - button "Подготовить правку" [disabled] [box=1064,2091,359,40]:
+                - img [box=1162,2103,16,16]
+                - text: Подготовить правку

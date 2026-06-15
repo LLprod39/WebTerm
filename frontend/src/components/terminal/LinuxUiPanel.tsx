@@ -86,6 +86,7 @@ import {
   runLinuxUiServiceAction,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { localize, useI18n } from "@/lib/i18n";
 
 type WorkspaceAppId = "files" | "overview" | "services" | "processes" | "logs" | "disk" | "network" | "docker" | "packages" | "text-editor" | "quick-run" | "settings";
 type WorkspaceAppStatus = "live" | "ready" | "next" | "unavailable";
@@ -751,14 +752,14 @@ function OverviewWindow({
     {
       label: "Память",
       value: overview?.memory.percent != null ? `${overview.memory.percent.toFixed(1)}%` : "Нет данных",
-      hint: overview?.memory.used_mb != null && overview.memory.total_mb != null ? `${overview.memory.used_mb} / ${overview.memory.total_mb} MB` : "Usage unavailable",
+      hint: overview?.memory.used_mb != null && overview.memory.total_mb != null ? `${overview.memory.used_mb} / ${overview.memory.total_mb} MB` : "Использование недоступно",
     },
     {
       label: "Диск",
       value: overview?.disk.percent != null ? `${overview.disk.percent.toFixed(1)}%` : "Нет данных",
-      hint: overview?.disk.used_gb != null && overview.disk.total_gb != null ? `${overview.disk.used_gb} / ${overview.disk.total_gb} GB` : "Root filesystem",
+      hint: overview?.disk.used_gb != null && overview.disk.total_gb != null ? `${overview.disk.used_gb} / ${overview.disk.total_gb} GB` : "Корневая файловая система",
     },
-    { label: "Процессы", value: overview?.process_count != null ? String(overview.process_count) : "Нет данных", hint: overview?.cwd || "Working directory" },
+    { label: "Процессы", value: overview?.process_count != null ? String(overview.process_count) : "Нет данных", hint: overview?.cwd || "Рабочий каталог" },
   ];
 
   return (
@@ -3244,6 +3245,7 @@ function PlaceholderWindow({
 }
 
 export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelProps) {
+  const { lang } = useI18n();
   const workspaceCanvasRef = useRef<HTMLDivElement | null>(null);
   const launcherSurfaceRef = useRef<HTMLDivElement | null>(null);
   const zCounterRef = useRef(APP_IDS.length + 6);
@@ -3520,7 +3522,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
     {
       id: "packages",
       title: "Пакеты",
-      subtitle: capabilities?.package_manager ? `Инспектор ${capabilities.package_manager} доступен` : "Package manager не найден",
+      subtitle: capabilities?.package_manager ? `Инспектор ${capabilities.package_manager} доступен` : localize(lang, "Менеджер пакетов не найден", "Package manager not found"),
       status: capabilities?.package_manager ? "live" : "unavailable",
       icon: <Package className="h-5 w-5" />,
       accentClass: "from-primary/15 to-secondary",
@@ -3537,7 +3539,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
     {
       id: "quick-run",
       title: "Быстрый запуск",
-      subtitle: availableApps?.quick_run ? "Команды с выводом результата" : "Shell execution недоступен",
+      subtitle: availableApps?.quick_run ? "Команды с выводом результата" : localize(lang, "Выполнение shell-команд недоступно", "Shell execution unavailable"),
       status: availableApps?.quick_run ? "live" : "unavailable",
       icon: <Terminal className="h-5 w-5" />,
       accentClass: "from-secondary to-background",
@@ -3545,7 +3547,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
     {
       id: "settings",
       title: "Настройки",
-      subtitle: availableApps?.settings ? "Система, пользователи, cron, security" : "Снимок настроек недоступен",
+      subtitle: availableApps?.settings ? "Система, пользователи, cron, безопасность" : "Снимок настроек недоступен",
       status: availableApps?.settings ? "live" : "unavailable",
       icon: <Settings className="h-5 w-5" />,
       accentClass: "from-muted to-background",
@@ -3560,6 +3562,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
     availableApps?.settings,
     availableApps?.text_editor,
     capabilities?.package_manager,
+    lang,
   ]);
 
   const appMap = useMemo(
@@ -3880,7 +3883,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
                 <div className="flex h-full min-h-[22rem] items-center justify-center">
                   <div className="rounded-[1.5rem] border border-border bg-card px-8 py-10 text-center shadow-lg">
                     <RefreshCw className="mx-auto mb-3 h-5 w-5 animate-spin text-primary" />
-                    <div className="text-sm font-medium text-foreground">Загрузка workspace...</div>
+                    <div className="text-sm font-medium text-foreground">{localize(lang, "Загрузка рабочего пространства...", "Loading workspace...")}</div>
                     <div className="mt-1 text-xs text-muted-foreground">Собираем возможности хоста</div>
                   </div>
                 </div>
@@ -3902,7 +3905,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
                       </div>
                       <div className="mt-4 flex flex-wrap gap-2 text-[11px]">
                         <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
-                          {capabilities?.os_name || overview?.os_name || "Linux host"}
+                          {capabilities?.os_name || overview?.os_name || localize(lang, "Linux-хост", "Linux host")}
                         </span>
                         {capabilities?.package_manager ? (
                           <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
@@ -3934,7 +3937,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
                         hint={
                           overview?.disk.used_gb != null && overview.disk.total_gb != null
                             ? `${overview.disk.used_gb} / ${overview.disk.total_gb} GB`
-                            : "Root filesystem"
+                            : localize(lang, "Корневая файловая система", "Root filesystem")
                         }
                         progress={overview?.disk.percent ?? null}
                       />
@@ -4103,7 +4106,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
               type="button"
               onClick={refresh}
               className="flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-              aria-label="Обновить workspace"
+              aria-label={localize(lang, "Обновить рабочее пространство", "Refresh workspace")}
             >
               <RefreshCw className="h-4 w-4" />
             </button>
@@ -4124,7 +4127,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
 
             <div className="hidden rounded-[1rem] border border-border bg-background px-3 py-1.5 text-right xl:block">
               <div className="truncate font-mono text-[11px] text-muted-foreground">{server.username}@{server.host}</div>
-              <div className="mt-0.5 text-[11px] text-muted-foreground">{capabilities?.os_name || "Linux workspace"}</div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground">{capabilities?.os_name || localize(lang, "Рабочее пространство Linux", "Linux workspace")}</div>
             </div>
 
             <div className="rounded-[1rem] border border-border bg-background px-3 py-1.5 text-right">
@@ -4143,7 +4146,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
                 type="button"
                 onClick={onClose}
                 className="flex h-9 w-9 items-center justify-center rounded-xl border border-destructive/20 bg-destructive/10 text-destructive transition-colors hover:bg-destructive/20"
-                aria-label="Закрыть workspace"
+                aria-label={localize(lang, "Закрыть рабочее пространство", "Close workspace")}
               >
                 <X className="h-4 w-4" />
               </button>

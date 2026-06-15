@@ -78,6 +78,59 @@ function UserAvatar({ name, active }: { name: string; active: boolean }) {
   );
 }
 
+function PermissionSummary({
+  lang,
+  entries,
+  features,
+  title,
+}: {
+  lang: "en" | "ru";
+  entries: Array<[string, boolean]>;
+  features: Array<{ value: string; label: string }>;
+  title: string;
+}) {
+  const allowedCount = entries.filter(([, allowed]) => allowed).length;
+  const deniedCount = entries.length - allowedCount;
+  const previewEntries = entries.slice(0, 6);
+  const renderChip = ([feat, allowed]: [string, boolean]) => (
+    <span
+      key={feat}
+      className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium ${
+        allowed
+          ? "bg-emerald-500/10 text-emerald-400"
+          : "bg-red-500/8 text-red-400/80"
+      }`}
+    >
+      {features.find((feature) => feature.value === feat)?.label || feat}
+    </span>
+  );
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground/70">
+        <span className="font-semibold uppercase tracking-wider">{title}</span>
+        <span>
+          {allowedCount} {lang === "ru" ? "разрешено" : "allowed"}
+        </span>
+        <span>
+          {deniedCount} {lang === "ru" ? "запрещено" : "denied"}
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-1.5 sm:hidden">
+        {previewEntries.map(renderChip)}
+        {entries.length > previewEntries.length && (
+          <span className="inline-flex items-center rounded-md bg-secondary/35 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+            +{entries.length - previewEntries.length}
+          </span>
+        )}
+      </div>
+      <div className="hidden flex-wrap gap-1.5 sm:flex">
+        {entries.map(renderChip)}
+      </div>
+    </div>
+  );
+}
+
 function PermissionModeField({
   lang,
   label,
@@ -95,7 +148,7 @@ function PermissionModeField({
 }) {
   const t = ACCESS_UI_TEXT[lang].common;
   return (
-    <div className="group/perm flex items-center justify-between gap-3 rounded-lg border border-border/40 bg-secondary/10 px-3 py-2.5 transition-colors hover:bg-secondary/20">
+    <div className="group/perm flex flex-col items-stretch gap-2 rounded-lg border border-border/40 bg-secondary/10 px-3 py-2.5 transition-colors hover:bg-secondary/20 2xl:flex-row 2xl:items-center 2xl:justify-between">
       <div className="min-w-0 flex-1">
         <div className="text-[13px] font-medium text-foreground/90">{label}</div>
         <div className="mt-0.5 text-[11px] text-muted-foreground/60">
@@ -106,7 +159,7 @@ function PermissionModeField({
       <select
         value={mode}
         onChange={(e) => onChange(e.target.value as PermissionMode)}
-        className="h-8 rounded-md border border-border bg-secondary/30 px-2 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary/30"
+        className="h-8 w-full shrink-0 rounded-md border border-border bg-secondary/30 px-2 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary/30 2xl:w-36"
         aria-label={`${label} mode`}
       >
         <option value="inherit">{t.inherit}</option>
@@ -308,7 +361,7 @@ export default function SettingsUsersPage() {
         <div className="flex items-center gap-1.5">
           <div className="h-2 w-2 rounded-full bg-blue-400/80" />
           <span className="text-sm font-medium text-foreground">{staffUsers}</span>
-          <span className="text-xs text-muted-foreground/60">staff</span>
+          <span className="text-xs text-muted-foreground/60">{common.staff}</span>
         </div>
         <div className="h-4 w-px bg-border/60" />
         <div className="flex items-center gap-1.5">
@@ -361,7 +414,7 @@ export default function SettingsUsersPage() {
                       <span className="text-[15px] font-semibold text-foreground">{user.username}</span>
                       <StatusBadge label={getAccessProfileLabel(lang, user.access_profile || "custom")} dot={false} />
                       {!user.is_active && <StatusBadge label={common.inactive} tone="warning" />}
-                      {user.is_staff && <StatusBadge label="staff" tone="info" dot={false} />}
+                      {user.is_staff && <StatusBadge label={common.staff} tone="info" dot={false} />}
                     </div>
                     <div className="mt-0.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground/60">
                       <span>{user.email || common.noEmail}</span>
@@ -405,20 +458,12 @@ export default function SettingsUsersPage() {
                 {/* Effective access summary — always visible */}
                 {!isEditing && (user.effective_permissions && Object.keys(user.effective_permissions).length > 0) && (
                   <div className="border-t border-border/40 px-4 py-2.5">
-                    <div className="flex flex-wrap gap-1.5">
-                      {Object.entries(user.effective_permissions || {}).map(([feat, allowed]) => (
-                        <span
-                          key={feat}
-                          className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium ${
-                            allowed
-                              ? "bg-emerald-500/10 text-emerald-400"
-                              : "bg-red-500/8 text-red-400/80"
-                          }`}
-                        >
-                          {features.find(f => f.value === feat)?.label || feat}
-                        </span>
-                      ))}
-                    </div>
+                    <PermissionSummary
+                      lang={lang}
+                      entries={Object.entries(user.effective_permissions || {})}
+                      features={features}
+                      title={copy.effectiveAccess}
+                    />
                   </div>
                 )}
 
@@ -473,7 +518,7 @@ export default function SettingsUsersPage() {
                     <div className="flex flex-wrap gap-6">
                       <label className="flex items-center gap-2.5 text-sm text-foreground/80 cursor-pointer select-none">
                         <Switch checked={!!draft.is_staff} onCheckedChange={(v) => setEditing((s) => ({ ...s, is_staff: v }))} />
-                        Администратор
+                        {common.staff}
                       </label>
                       <label className="flex items-center gap-2.5 text-sm text-foreground/80 cursor-pointer select-none">
                         <Switch checked={!!draft.is_active} onCheckedChange={(v) => setEditing((s) => ({ ...s, is_active: v }))} />
@@ -540,7 +585,7 @@ export default function SettingsUsersPage() {
         </div>
 
         {/* ── Create user sidebar ── */}
-        <div className="xl:sticky xl:top-4 h-fit rounded-xl border border-border bg-card shadow-sm">
+        <div className="order-first h-fit rounded-xl border border-border bg-card shadow-sm xl:order-none xl:sticky xl:top-4">
           <div className="flex items-center gap-3 border-b border-border/60 px-5 py-4">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 text-primary">
               <UserPlus className="h-4 w-4" />
@@ -613,7 +658,7 @@ export default function SettingsUsersPage() {
                   checked={createForm.is_staff}
                   onCheckedChange={(v) => setCreateForm((s) => ({ ...s, is_staff: v }))}
                 />
-                Администратор
+                {common.staff}
               </label>
               <label className="flex items-center gap-2.5 text-sm text-foreground/80 cursor-pointer select-none">
                 <Switch

@@ -594,6 +594,25 @@ function formatCommandOutput(output: unknown): string {
   }
 }
 
+function formatServerCount(count: number, lang: string) {
+  if (lang !== "ru") return `${count} ${count === 1 ? "server" : "servers"}`;
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return `${count} сервер`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${count} сервера`;
+  return `${count} серверов`;
+}
+
+function displayServerGroupName(groupName: string, lang: string) {
+  const normalized = groupName.trim().toLowerCase();
+  if (!normalized || normalized === "ungrouped" || normalized === "all servers") {
+    return localize(lang, "Без группы", "Ungrouped");
+  }
+  if (normalized === "production") return localize(lang, "Продакшен", "Production");
+  if (normalized === "staging") return localize(lang, "Тестовый стенд", "Staging");
+  return groupName;
+}
+
 export default function Servers() {
   const { t, lang } = useI18n();
   const tr = useCallback((key: string, vars?: Record<string, string | number>) => {
@@ -1759,12 +1778,13 @@ export default function Servers() {
         <TabsContent value="servers" className="space-y-3">
           {Object.entries(grouped).map(([group, inGroup]) => {
             const isCollapsed = collapsed[group];
+            const groupLabel = displayServerGroupName(group, lang);
             return (
               <div key={group} className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
                 <button
                   onClick={() => toggleGroup(group)}
                   className="w-full flex items-center gap-3 px-4 py-3 transition-colors text-left hover:bg-secondary/30"
-                  aria-label={tr(isCollapsed ? "srv.expand_group" : "srv.collapse_group", { name: group })}
+                  aria-label={tr(isCollapsed ? "srv.expand_group" : "srv.collapse_group", { name: groupLabel })}
                 >
                   <span className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${isCollapsed ? "bg-secondary/40" : "bg-primary/10"}`}>
                     {isCollapsed
@@ -1774,8 +1794,8 @@ export default function Servers() {
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
                     <Server className="h-4 w-4 text-primary" />
                   </div>
-                  <span className="text-sm font-semibold tracking-tight text-foreground">{group}</span>
-                  <span className="ml-auto rounded-md border border-border/50 bg-secondary/30 px-2 py-1 text-xs font-medium text-muted-foreground">{inGroup.length} {t("srv.servers_count")}</span>
+                  <span className="text-sm font-semibold tracking-tight text-foreground">{groupLabel}</span>
+                  <span className="ml-auto rounded-md border border-border/50 bg-secondary/30 px-2 py-1 text-xs font-medium text-muted-foreground">{formatServerCount(inGroup.length, lang)}</span>
                 </button>
 
                 <AnimatePresence initial={false}>
@@ -2488,13 +2508,13 @@ export default function Servers() {
       </Tabs>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="flex max-h-[calc(100dvh-2rem)] max-w-2xl flex-col sm:max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>{editingServer ? t("srv.edit_server") : t("srv.create_server")}</DialogTitle>
             <DialogDescription>{t("srv.server_settings")}</DialogDescription>
           </DialogHeader>
 
-          <DialogBody className="space-y-5 max-h-[60vh] overflow-y-auto">
+          <DialogBody className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 pb-6 sm:px-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5 md:col-span-2">
                 <Label className="text-xs text-muted-foreground">{t("srv.name")} *</Label>
@@ -2604,7 +2624,7 @@ export default function Servers() {
             </div>
           </DialogBody>
 
-          <DialogFooter>
+          <DialogFooter className="shrink-0 px-4 sm:px-6">
             <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)}>
               {t("srv.cancel")}
             </Button>

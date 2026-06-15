@@ -296,6 +296,10 @@ export async function installPlatformMocks(page: Page, options: PlatformMockOpti
         return json(pipelines);
       }
 
+      if (req.path === "/api/studio/pipeline-drafts/" && req.method === "GET") {
+        return json([]);
+      }
+
       if (req.path === "/api/studio/runs/" && req.method === "GET") {
         return json([]);
       }

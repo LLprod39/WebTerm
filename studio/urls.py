@@ -2,9 +2,11 @@ from django.urls import path
 
 from .views import (
     agent_views,
+    capability_views,
     mcp_views,
     notification_views,
     pipeline_assistant_views,
+    pipeline_draft_views,
     pipeline_views,
     run_views,
     server_views,
@@ -17,9 +19,33 @@ from .views import (
 app_name = "studio"
 
 urlpatterns = [
+    path("capabilities/", capability_views.api_capabilities, name="capabilities"),
+    path("node-manifests/", capability_views.api_node_manifests, name="node_manifests"),
     # Pipelines
     path("pipelines/", pipeline_views.api_pipelines, name="pipelines"),
     path("pipelines/assistant/", pipeline_assistant_views.api_pipeline_assistant, name="pipeline_assistant"),
+    path("assistant/drafts/", pipeline_draft_views.api_pipeline_drafts, name="pipeline_assistant_drafts"),
+    path("assistant/drafts/<int:draft_id>/", pipeline_draft_views.api_pipeline_draft_detail, name="pipeline_assistant_draft_detail"),
+    path(
+        "assistant/drafts/<int:draft_id>/revise/",
+        pipeline_draft_views.api_pipeline_draft_revise,
+        name="pipeline_assistant_draft_revise",
+    ),
+    path(
+        "assistant/drafts/<int:draft_id>/validate/",
+        pipeline_draft_views.api_pipeline_draft_validate,
+        name="pipeline_assistant_draft_validate",
+    ),
+    path(
+        "assistant/drafts/<int:draft_id>/use-template/",
+        pipeline_draft_views.api_pipeline_draft_use_template,
+        name="pipeline_assistant_draft_use_template",
+    ),
+    path(
+        "assistant/drafts/<int:draft_id>/apply/",
+        pipeline_draft_views.api_pipeline_draft_apply,
+        name="pipeline_assistant_draft_apply",
+    ),
     path("pipelines/<int:pipeline_id>/", pipeline_views.api_pipeline_detail, name="pipeline_detail"),
     path("pipelines/<int:pipeline_id>/run/", pipeline_views.api_pipeline_run, name="pipeline_run"),
     path("pipelines/<int:pipeline_id>/clone/", pipeline_views.api_pipeline_clone, name="pipeline_clone"),

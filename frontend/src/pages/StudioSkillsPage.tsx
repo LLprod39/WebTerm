@@ -69,8 +69,82 @@ type SkillWizardState = {
   with_scripts: boolean;
   with_references: boolean;
   with_assets: boolean;
+  starter_script_enabled: boolean;
+  starter_script_path: string;
+  starter_script_content: string;
+  starter_reference_enabled: boolean;
+  starter_reference_path: string;
+  starter_reference_content: string;
   force: boolean;
 };
+
+const DEFAULT_STARTER_SCRIPT_PATH = "scripts/run-checks.sh";
+const DEFAULT_STARTER_REFERENCE_PATH = "references/runbook.md";
+
+function defaultStarterScriptContent() {
+  return [
+    "#!/usr/bin/env bash",
+    "set -euo pipefail",
+    "",
+    "# Read-only starter automation. Replace these checks with the service-specific workflow.",
+    "echo \"== context ==\"",
+    "date -Is",
+    "hostname || true",
+    "",
+    "echo \"== health ==\"",
+    "uptime || true",
+    "df -h || true",
+    "",
+    "echo \"== next steps ==\"",
+    "echo \"Add preflight checks, exact target discovery, mutation steps, and verification.\"",
+  ].join("\n");
+}
+
+function defaultStarterReferenceContent(lang: "ru" | "en" = "en") {
+  if (lang === "ru") {
+    return [
+      "# Рабочая инструкция",
+      "",
+      "## Когда использовать",
+      "",
+      "Опишите, для каких задач агент должен применять этот скилл.",
+      "",
+      "## Что нужно перед запуском",
+      "",
+      "- Целевой сервис или сервер:",
+      "- Нужные доступы или профиль:",
+      "- Когда требуется подтверждение:",
+      "",
+      "## Порядок работы",
+      "",
+      "1. Проверить контекст и точную цель без изменений.",
+      "2. Уточнить опасные или неоднозначные действия.",
+      "3. Выполнить минимальное нужное действие.",
+      "4. Проверить результат и показать доказательства.",
+    ].join("\n");
+  }
+
+  return [
+    "# Working Runbook",
+    "",
+    "## When to use",
+    "",
+    "Describe which tasks should trigger this skill.",
+    "",
+    "## Before running",
+    "",
+    "- Target service or server:",
+    "- Required access or profile:",
+    "- Approval requirements:",
+    "",
+    "## Workflow",
+    "",
+    "1. Check context and exact targets without changing anything.",
+    "2. Clarify dangerous or ambiguous actions.",
+    "3. Execute the minimum required action.",
+    "4. Verify the result and report evidence.",
+  ].join("\n");
+}
 
 function listToCsv(items?: string[]) {
   return (items || []).join(", ");
@@ -94,7 +168,7 @@ function slugifySkillName(value: string) {
     .replace(/-$/g, "");
 }
 
-function createWizardState(template?: StudioSkillTemplate | null): SkillWizardState {
+function createWizardState(template?: StudioSkillTemplate | null, lang: "ru" | "en" = "en"): SkillWizardState {
   const defaults = template?.defaults || {};
   const name = defaults.name || "";
   return {
@@ -110,8 +184,14 @@ function createWizardState(template?: StudioSkillTemplate | null): SkillWizardSt
     recommended_tools_text: listToCsv(defaults.recommended_tools),
     runtime_policy_text: JSON.stringify(defaults.runtime_policy || {}, null, 2),
     with_scripts: false,
-    with_references: true,
+    with_references: false,
     with_assets: false,
+    starter_script_enabled: false,
+    starter_script_path: DEFAULT_STARTER_SCRIPT_PATH,
+    starter_script_content: defaultStarterScriptContent(),
+    starter_reference_enabled: false,
+    starter_reference_path: DEFAULT_STARTER_REFERENCE_PATH,
+    starter_reference_content: defaultStarterReferenceContent(lang),
     force: false,
   };
 }
@@ -121,9 +201,38 @@ function parseRuntimePolicy(text: string) {
   if (!trimmed) return {};
   const parsed = JSON.parse(trimmed);
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("Runtime policy must be a JSON object.");
+    throw new Error("POLICY_OBJECT_REQUIRED");
   }
   return parsed as Record<string, unknown>;
+}
+
+function starterFilesFromWizard(wizard: SkillWizardState) {
+  return [
+    wizard.starter_script_enabled
+      ? {
+          path: wizard.starter_script_path.trim(),
+          content: wizard.starter_script_content,
+        }
+      : null,
+    wizard.starter_reference_enabled
+      ? {
+          path: wizard.starter_reference_path.trim(),
+          content: wizard.starter_reference_content,
+        }
+      : null,
+  ].filter(Boolean) as Array<{ path: string; content: string }>;
+}
+
+async function upsertSkillWorkspaceFile(slug: string, file: { path: string; content: string }) {
+  try {
+    return await studioSkills.createFile(slug, file);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message.toLowerCase().includes("already exists") || message.includes("409")) {
+      return studioSkills.updateFile(slug, file);
+    }
+    throw error;
+  }
 }
 
 function formatFileSize(size: number) {
@@ -138,14 +247,27 @@ function fileKindLabel(kind: StudioSkillWorkspaceFile["kind"], lang: "ru" | "en"
     case "skill":
       return "SKILL.md";
     case "reference":
-      return tr("reference", "reference");
+      return tr("справка", "reference");
     case "script":
-      return tr("script", "script");
+      return tr("скрипт", "script");
     case "asset":
-      return tr("asset", "asset");
+      return tr("ресурс", "asset");
     default:
-      return tr("file", "file");
+      return tr("файл", "file");
   }
+}
+
+function safetyLevelLabel(level: string | undefined, lang: "ru" | "en") {
+  if (!level) return "";
+  if (lang !== "ru") return level;
+  const labels: Record<string, string> = {
+    low: "низкий риск",
+    standard: "стандартный риск",
+    medium: "средний риск",
+    high: "высокий риск",
+    critical: "критичный риск",
+  };
+  return labels[level] || level;
 }
 
 function SkillMarkdown({ content }: { content: string }) {
@@ -209,18 +331,18 @@ function SkillCard({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <p className={`text-[15px] font-semibold ${isSelected ? "text-primary dark:text-primary/90" : "text-foreground"}`}>{skill.name}</p>
-            {skill.runtime_enforced && <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-500">{tr("enforced", "enforced")}</span>}
-            {skill.is_owner && <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">Mine</Badge>}
-            {!skill.is_owner && skill.owner_username && <Badge variant="outline" className="px-1.5 py-0 text-[10px]">Owner: {skill.owner_username}</Badge>}
-            {skill.is_shared && <Badge variant="outline" className="px-1.5 py-0 text-[10px]">Shared</Badge>}
-            {skill.can_edit === false && <Badge variant="outline" className="px-1.5 py-0 text-[10px] opacity-70">Read only</Badge>}
+            {skill.runtime_enforced && <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-500">{tr("контроль", "enforced")}</span>}
+            {skill.is_owner && <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">{tr("Мой", "Mine")}</Badge>}
+            {!skill.is_owner && skill.owner_username && <Badge variant="outline" className="px-1.5 py-0 text-[10px]">{tr("Владелец", "Owner")}: {skill.owner_username}</Badge>}
+            {skill.is_shared && <Badge variant="outline" className="px-1.5 py-0 text-[10px]">{tr("Общий", "Shared")}</Badge>}
+            {skill.can_edit === false && <Badge variant="outline" className="px-1.5 py-0 text-[10px] opacity-70">{tr("Только чтение", "Read only")}</Badge>}
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] font-medium text-muted-foreground">
             {skill.service && <span className="flex items-center gap-1"><Server className="h-3 w-3" />{skill.service}</span>}
             {skill.category && <span className="opacity-80">· {skill.category}</span>}
           </div>
         </div>
-        {skill.safety_level && <Badge variant="outline" className="shrink-0 bg-background/50 px-1.5 py-0 text-[10px] shadow-sm">{skill.safety_level}</Badge>}
+        {skill.safety_level && <Badge variant="outline" className="shrink-0 bg-background/50 px-1.5 py-0 text-[10px] shadow-sm">{safetyLevelLabel(skill.safety_level, lang)}</Badge>}
       </div>
       {skill.description && <p className="mt-3 line-clamp-2 text-[12px] leading-relaxed text-muted-foreground group-hover:text-muted-foreground/90 transition-colors">{skill.description}</p>}
       {skill.guardrail_summary?.length > 0 && (
@@ -271,7 +393,6 @@ export default function StudioSkillsPage() {
   const [search, setSearch] = useState("");
   const [serviceFilter, setServiceFilter] = useState("__all__");
   const [selectedSlug, setSelectedSlug] = useState("");
-  const [launcherTemplateSlug, setLauncherTemplateSlug] = useState("__none__");
   const [createOpen, setCreateOpen] = useState(false);
   const [validateOpen, setValidateOpen] = useState(false);
   const [createFileOpen, setCreateFileOpen] = useState(false);
@@ -280,8 +401,7 @@ export default function StudioSkillsPage() {
   const [createFilePath, setCreateFilePath] = useState("");
   const [createFileContent, setCreateFileContent] = useState("");
   const [editorValue, setEditorValue] = useState("");
-  const [wizard, setWizard] = useState<SkillWizardState>(() => createWizardState(null));
-  const [wizardSection, setWizardSection] = useState<"basics" | "policy" | "files">("basics");
+  const [wizard, setWizard] = useState<SkillWizardState>(() => createWizardState(null, lang));
   const [slugTouched, setSlugTouched] = useState(false);
   const [validationReport, setValidationReport] = useState<StudioSkillValidationResponse | null>(null);
   const [strictValidation, setStrictValidation] = useState(false);
@@ -322,11 +442,6 @@ export default function StudioSkillsPage() {
     [templates, selectedTemplateSlug],
   );
 
-  const launcherTemplate = useMemo(
-    () => templates.find((item) => item.slug === launcherTemplateSlug) || null,
-    [templates, launcherTemplateSlug],
-  );
-
   const services = Array.from(new Set(skills.map((skill) => skill.service).filter(Boolean))).sort((a, b) => a.localeCompare(b));
   const filteredSkills = skills.filter((skill) => {
     const haystack = [skill.name, skill.slug, skill.description, skill.service, skill.category, ...(skill.tags || [])]
@@ -340,6 +455,16 @@ export default function StudioSkillsPage() {
   const filteredSignature = filteredSkills.map((skill) => skill.slug).join("|");
   const runtimeEnforcedCount = skills.filter((skill) => skill.runtime_enforced).length;
   const serviceCount = new Set(skills.map((skill) => skill.service).filter(Boolean)).size;
+  const starterFiles = starterFilesFromWizard(wizard);
+  const hasDuplicateStarterPaths = new Set(starterFiles.map((file) => file.path)).size !== starterFiles.length;
+  const starterScriptPathValid = !wizard.starter_script_enabled || wizard.starter_script_path.trim().startsWith("scripts/");
+  const starterReferencePathValid = !wizard.starter_reference_enabled || wizard.starter_reference_path.trim().startsWith("references/");
+  const canSubmitWizard =
+    Boolean(wizard.name.trim()) &&
+    Boolean(wizard.description.trim()) &&
+    starterScriptPathValid &&
+    starterReferencePathValid &&
+    !hasDuplicateStarterPaths;
 
   const invalidateSkillQueries = async (slug?: string) => {
     await queryClient.invalidateQueries({ queryKey: ["studio", "skills"] });
@@ -354,14 +479,25 @@ export default function StudioSkillsPage() {
   const scaffoldMutation = useMutation({
     mutationFn: (payload: StudioSkillScaffoldPayload) => studioSkills.scaffold(payload),
     onSuccess: async (response) => {
+      const filesToCreate = starterFilesFromWizard(wizard);
+      const fileResults = filesToCreate.length
+        ? await Promise.allSettled(filesToCreate.map((file) => upsertSkillWorkspaceFile(response.skill.slug, file)))
+        : [];
+      const failedFiles = fileResults.filter((result) => result.status === "rejected").length;
       await invalidateSkillQueries(response.skill.slug);
       setSelectedSlug(response.skill.slug);
+      setSelectedFilePath(filesToCreate[0]?.path || "SKILL.md");
       setCreateOpen(false);
+      const description =
+        failedFiles > 0
+          ? tr(`Скилл создан, но файлов не создано: ${failedFiles}`, `Skill created, but ${failedFiles} file(s) failed`)
+          : filesToCreate.length > 0
+            ? tr(`Скилл создан. Добавлено файлов: ${filesToCreate.length}`, `Skill created with ${filesToCreate.length} starter file(s)`)
+            : response.validation.warnings.length > 0
+              ? tr(`Скилл создан с предупреждениями: ${response.validation.warnings.length}`, `Skill created with ${response.validation.warnings.length} warning(s)`)
+              : tr("Скилл создан", "Skill created");
       toast({
-        description:
-          response.validation.warnings.length > 0
-            ? tr(`Скилл создан с предупреждениями: ${response.validation.warnings.length}`, `Skill created with ${response.validation.warnings.length} warning(s)`)
-            : tr("Скилл создан", "Skill created"),
+        description,
       });
     },
     onError: (error: Error) => {
@@ -446,7 +582,7 @@ export default function StudioSkillsPage() {
 
   const createFileMutation = useMutation({
     mutationFn: (payload: { path: string; content: string }) => {
-      if (!selectedSlug) throw new Error("Skill is not selected");
+      if (!selectedSlug) throw new Error(tr("Скилл не выбран", "Skill is not selected"));
       return studioSkills.createFile(selectedSlug, payload);
     },
     onSuccess: async (response, variables) => {
@@ -464,7 +600,7 @@ export default function StudioSkillsPage() {
 
   const updateFileMutation = useMutation({
     mutationFn: (payload: { path: string; content: string }) => {
-      if (!selectedSlug) throw new Error("Skill is not selected");
+      if (!selectedSlug) throw new Error(tr("Скилл не выбран", "Skill is not selected"));
       return studioSkills.updateFile(selectedSlug, payload);
     },
     onSuccess: async () => {
@@ -478,7 +614,7 @@ export default function StudioSkillsPage() {
 
   const deleteFileMutation = useMutation({
     mutationFn: (path: string) => {
-      if (!selectedSlug) throw new Error("Skill is not selected");
+      if (!selectedSlug) throw new Error(tr("Скилл не выбран", "Skill is not selected"));
       return studioSkills.deleteFile(selectedSlug, path);
     },
     onSuccess: async () => {
@@ -493,7 +629,7 @@ export default function StudioSkillsPage() {
 
   const updateSkillAccessMutation = useMutation({
     mutationFn: () => {
-      if (!selectedSkill) throw new Error("Skill is not selected");
+      if (!selectedSkill) throw new Error(tr("Скилл не выбран", "Skill is not selected"));
       return studioSkills.update(selectedSkill.slug, {
         is_shared: skillAccessDraft.is_shared,
         shared_user_ids: skillAccessDraft.shared_user_ids,
@@ -510,20 +646,35 @@ export default function StudioSkillsPage() {
 
   const openCreateDialog = (template?: StudioSkillTemplate | null) => {
     setSelectedTemplateSlug(template?.slug || "__none__");
-    setWizard(createWizardState(template || null));
-    setWizardSection("basics");
+    setWizard(createWizardState(template || null, lang));
     setSlugTouched(false);
     setCreateOpen(true);
   };
 
   const submitWizard = () => {
+    if (!starterScriptPathValid) {
+      toast({ variant: "destructive", description: tr("Путь стартового скрипта должен начинаться с scripts/.", "Starter script path must start with scripts/.") });
+      return;
+    }
+    if (!starterReferencePathValid) {
+      toast({ variant: "destructive", description: tr("Путь reference-файла должен начинаться с references/.", "Reference file path must start with references/.") });
+      return;
+    }
+    if (hasDuplicateStarterPaths) {
+      toast({ variant: "destructive", description: tr("Стартовые файлы не должны иметь одинаковый путь.", "Starter files must not use the same path.") });
+      return;
+    }
+
     let runtimePolicy: Record<string, unknown>;
     try {
       runtimePolicy = parseRuntimePolicy(wizard.runtime_policy_text);
     } catch (error) {
       toast({
         variant: "destructive",
-        description: error instanceof Error ? error.message : tr("Runtime policy должен быть валидным JSON-объектом", "Runtime policy must be valid JSON"),
+        description:
+          error instanceof Error && error.message === "POLICY_OBJECT_REQUIRED"
+            ? tr("Политика выполнения должна быть JSON-объектом.", "Runtime policy must be a JSON object.")
+            : tr("Политика выполнения должна быть валидным JSON.", "Runtime policy must be valid JSON."),
       });
       return;
     }
@@ -541,8 +692,8 @@ export default function StudioSkillsPage() {
       guardrail_summary: parseCsvInput(wizard.guardrail_summary_text),
       recommended_tools: parseCsvInput(wizard.recommended_tools_text),
       runtime_policy: runtimePolicy,
-      with_scripts: wizard.with_scripts,
-      with_references: wizard.with_references,
+      with_scripts: wizard.with_scripts || wizard.starter_script_enabled,
+      with_references: wizard.with_references || wizard.starter_reference_enabled,
       with_assets: wizard.with_assets,
       force: wizard.force,
     };
@@ -582,17 +733,17 @@ export default function StudioSkillsPage() {
       {!selectedSlug ? (
         <div className="flex-1 overflow-auto flex flex-col">
           <StudioHero
-            kicker={tr("Studio library", "Studio library")}
+            kicker={tr("Библиотека Studio", "Studio library")}
             title={tr("Каталог скиллов", "Skill Catalog")}
             titleIcon={<BookOpen className="h-7 w-7 text-primary" />}
             description={tr(
-              "Скилл здесь это рабочий плейбук. Выберите сервис, проверьте guardrails и runtime policy, а затем правьте сам workspace прямо из Studio.",
+              "Скилл здесь это рабочий плейбук. Выберите сервис, проверьте ограничения и политику выполнения, а затем правьте рабочие файлы прямо из Studio.",
               "A skill here is an operating playbook. Pick the service, review guardrails and runtime policy, then edit the workspace directly from Studio.",
             )}
             stats={
               <>
                 <HeroStatChip icon={<BookOpen className="h-3.5 w-3.5" />} label={tr(`${skills.length} скиллов`, `${skills.length} skills`)} />
-                <HeroStatChip icon={<ShieldCheck className="h-3.5 w-3.5 text-amber-500/80" />} label={tr(`${runtimeEnforcedCount} enforced`, `${runtimeEnforcedCount} enforced`)} />
+                <HeroStatChip icon={<ShieldCheck className="h-3.5 w-3.5 text-amber-500/80" />} label={tr(`${runtimeEnforcedCount} под контролем`, `${runtimeEnforcedCount} enforced`)} />
                 <HeroStatChip icon={<Server className="h-3.5 w-3.5" />} label={tr(`${serviceCount} сервисов`, `${serviceCount} services`)} />
               </>
             }
@@ -715,14 +866,14 @@ export default function StudioSkillsPage() {
                         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-medium text-muted-foreground">
                           {selectedSkill.service && <span className="inline-flex items-center gap-1.5 rounded-md bg-muted/40 px-2 py-1"><Server className="h-3 w-3" /> {selectedSkill.service}</span>}
                           {selectedSkill.category && <span className="inline-flex items-center rounded-md bg-muted/40 px-2 py-1">{selectedSkill.category}</span>}
-                          {selectedSkill.runtime_enforced && <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2 py-1 text-amber-600 dark:text-amber-400"><ShieldCheck className="h-3 w-3"/> {tr("runtime enforced", "runtime enforced")}</span>}
-                          {selectedSkill.safety_level && <span className="inline-flex items-center rounded-md bg-muted/40 px-2 py-1">{tr("безопасность", "safety")}: {selectedSkill.safety_level}</span>}
+                          {selectedSkill.runtime_enforced && <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2 py-1 text-amber-600 dark:text-amber-400"><ShieldCheck className="h-3 w-3"/> {tr("контроль выполнения", "runtime enforced")}</span>}
+                          {selectedSkill.safety_level && <span className="inline-flex items-center rounded-md bg-muted/40 px-2 py-1">{tr("риск", "safety")}: {safetyLevelLabel(selectedSkill.safety_level, lang)}</span>}
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         {selectedSkill.is_owner ? <Badge variant="secondary" className="shadow-sm">{tr("Мой скилл", "My skill")}</Badge> : null}
                         {!selectedSkill.is_owner && selectedSkill.owner_username ? <Badge variant="outline" className="shadow-sm">{tr(`Владелец: ${selectedSkill.owner_username}`, `Owner: ${selectedSkill.owner_username}`)}</Badge> : null}
-                        {selectedSkill.is_shared ? <Badge variant="outline" className="shadow-sm">{tr("Shared", "Shared")}</Badge> : null}
+                        {selectedSkill.is_shared ? <Badge variant="outline" className="shadow-sm">{tr("Общий", "Shared")}</Badge> : null}
                         {selectedSkill.can_edit === false ? <Badge variant="outline" className="shadow-sm opacity-70">{tr("Только чтение", "Read only")}</Badge> : null}
                       </div>
                     </div>
@@ -775,7 +926,7 @@ export default function StudioSkillsPage() {
                            <div className="rounded-2xl border border-border/50 bg-background/40 backdrop-blur-md p-6 shadow-sm">
                              <div className="flex items-center gap-2">
                                <Shield className="h-4 w-4 text-emerald-500" />
-                               <p className="text-base font-semibold">{tr("Guardrails", "Guardrails")}</p>
+                               <p className="text-base font-semibold">{tr("Ограничения", "Guardrails")}</p>
                              </div>
                              <div className="mt-3 space-y-2 border-l-2 border-emerald-500/30 pl-4">
                                {selectedSkill.guardrail_summary.map((item) => (
@@ -802,7 +953,7 @@ export default function StudioSkillsPage() {
                            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-6 shadow-sm backdrop-blur-md">
                              <div className="flex items-center gap-2">
                                <ShieldCheck className="h-4 w-4 text-amber-500/80" />
-                               <p className="text-base font-semibold text-amber-600/90 dark:text-amber-400/90">{tr("Runtime policy", "Runtime policy")}</p>
+                               <p className="text-base font-semibold text-amber-600/90 dark:text-amber-400/90">{tr("Политика выполнения", "Runtime policy")}</p>
                              </div>
                              <pre className="mt-3 overflow-auto whitespace-pre-wrap rounded-lg bg-background/50 border border-amber-500/20 p-4 font-mono text-[12px] leading-6 text-foreground/80 shadow-inner">
                                {JSON.stringify(selectedSkill.runtime_policy, null, 2)}
@@ -837,9 +988,9 @@ export default function StudioSkillsPage() {
                            <FileCode2 className="h-4 w-4 text-primary" />
                          </div>
                          <div>
-                           <h3 className="text-sm font-semibold text-foreground">{tr("Workspace редактор", "Workspace Editor")}</h3>
+                           <h3 className="text-sm font-semibold text-foreground">{tr("Редактор файлов", "Workspace Editor")}</h3>
                            <p className="text-[11px] text-muted-foreground">
-                             {tr("Править SKILL.md и text-файлы в references/, scripts/ и assets/.", "Edit SKILL.md and text files under references/, scripts/, and assets/.")}
+                             {tr("Правьте SKILL.md и текстовые файлы в references/, scripts/ и assets/.", "Edit SKILL.md and text files under references/, scripts/, and assets/.")}
                            </p>
                          </div>
                       </div>
@@ -1002,177 +1153,290 @@ export default function StudioSkillsPage() {
       )}
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-h-[90vh] max-w-2xl overflow-auto p-0 rounded-xl border-border bg-background shadow-2xl">
-          <div className="bg-muted/30 px-6 py-5 border-b border-border/40">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-semibold flex items-center gap-2">
-                <WandSparkles className="h-5 w-5 text-primary" />
-                {tr("Создание скилла", "Create Skill")}
+        <DialogContent closeLabel={tr("Закрыть", "Close")} className="grid max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-3xl grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-xl border-border bg-background p-0 shadow-2xl">
+          <div className="border-b border-border/50 bg-card/70 px-5 py-5 sm:px-6">
+            <DialogHeader className="border-0 p-0">
+              <DialogTitle className="flex items-center gap-3 text-xl font-semibold">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-primary/20 bg-primary/10">
+                  <WandSparkles className="h-4 w-4 text-primary" />
+                </span>
+                {tr("Создать скилл", "Create skill")}
               </DialogTitle>
-              <DialogDescription className="text-[13px] mt-1.5">
-                {tr("Скилл — это рабочий плейбук агента. Заполните основные поля, а сложную конфигурацию мы спрятали в продвинутых настройках.", "A skill is an operational playbook. Fill out the basics, and we'll leave the complex configuration in advanced settings.")}
+              <DialogDescription className="mt-2 max-w-2xl text-[13px] leading-5">
+                {tr("Заполните только то, что агенту нужно понять: как называется скилл и когда его применять. Инструкции и скрипты можно добавить сейчас или позже во вкладке файлов.", "Fill only what the agent needs to understand: the skill name and when to use it. Instructions and scripts can be added now or later in the file workspace.")}
               </DialogDescription>
             </DialogHeader>
           </div>
 
-          <div className="px-6 py-6 space-y-8">
-            {/* 1. Base Info */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-[11px] font-bold text-primary">1</div>
-                <h3 className="text-sm font-medium">{tr("Основная информация", "Basic Information")}</h3>
-              </div>
-              
-              <div className="space-y-4 pl-8">
+          <div className="min-h-0 overflow-y-auto px-5 py-5 sm:px-6">
+            <div className="space-y-5">
+              <section className="space-y-4">
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">1</span>
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground">{tr("Назначение", "Purpose")}</h3>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{tr("Это попадёт в SKILL.md и поможет агенту выбрать скилл в нужный момент.", "This goes into SKILL.md and helps the agent choose the skill at the right time.")}</p>
+                  </div>
+                </div>
+
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">{tr("Если есть готовый концепт, выберите шаблон", "If you have a concept, pick a template")}</Label>
+                  <Label className="text-xs text-muted-foreground">{tr("Шаблон", "Template")}</Label>
                   <Select
                     value={selectedTemplateSlug}
                     onValueChange={(value) => {
                       setSelectedTemplateSlug(value);
                       const template = templates.find((item) => item.slug === value) || null;
-                      setWizard(createWizardState(template));
+                      setWizard(createWizardState(template, lang));
                       setSlugTouched(false);
                     }}
                   >
                     <SelectTrigger className="h-10">
-                      <SelectValue placeholder={tr("Начать с чистого листа", "Start from a blank slate")} />
+                      <SelectValue placeholder={tr("С чистого листа", "Blank slate")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__none__">{tr("С чистого листа (пустой скилл)", "Blank slate")}</SelectItem>
+                      <SelectItem value="__none__">{tr("С чистого листа", "Blank slate")}</SelectItem>
                       {templates.map((template) => (
                         <SelectItem key={template.slug} value={template.slug}>{template.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">{tr("Название (Что делает?)", "Name (What it does)")}</Label>
-                    <Input
-                      className="h-10"
-                      value={wizard.name}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        setWizard((prev) => ({ ...prev, name: value, slug: slugTouched ? prev.slug : slugifySkillName(value) }));
-                      }}
-                      placeholder={tr("Управление токенами", "Token Management")}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">{tr("Сервис (Где делает?)", "Service (Where)")}</Label>
-                    <Input className="h-10" value={wizard.service} onChange={(e) => setWizard((prev) => ({ ...prev, service: e.target.value }))} placeholder={tr("github, keycloak...", "github, keycloak...")} />
-                  </div>
+                  {selectedTemplate?.summary ? <p className="text-[11px] leading-4 text-muted-foreground">{selectedTemplate.summary}</p> : null}
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">{tr("Описание для агентов", "Description for agents")}</Label>
-                  <Textarea rows={2} className="resize-none" value={wizard.description} onChange={(e) => setWizard((prev) => ({ ...prev, description: e.target.value }))} placeholder={tr("Когда и зачем агент должен применять этот плейбук.", "When and why the agent should apply this playbook.")} />
+                  <Label className="text-xs text-muted-foreground">{tr("Название скилла", "Skill name")}</Label>
+                  <Input
+                    className="h-10"
+                    value={wizard.name}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setWizard((prev) => ({ ...prev, name: value, slug: slugTouched ? prev.slug : slugifySkillName(value) }));
+                    }}
+                    placeholder={tr("Например: Docker health-check", "Example: Docker health-check")}
+                  />
                 </div>
-              </div>
-            </div>
 
-            {/* 2. Architecture */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-[11px] font-bold text-primary">2</div>
-                <h3 className="text-sm font-medium">{tr("Структура и безопасность", "Structure & Security")}</h3>
-              </div>
-
-              <div className="pl-8 grid gap-6 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">{tr("Уровень безопасности", "Safety Level")}</Label>
-                  <Select value={wizard.safety_level} onValueChange={(value) => setWizard((prev) => ({ ...prev, safety_level: value }))}>
-                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {SAFETY_LEVELS.map((level) => (<SelectItem key={level} value={level}>{level}</SelectItem>))}
-                    </SelectContent>
-                  </Select>
+                  <Label className="text-xs text-muted-foreground">{tr("Когда применять этот скилл", "When to use this skill")}</Label>
+                  <Textarea
+                    rows={4}
+                    className="resize-none text-sm leading-6"
+                    value={wizard.description}
+                    onChange={(e) => setWizard((prev) => ({ ...prev, description: e.target.value }))}
+                    placeholder={tr("Опишите обычным языком: для каких задач, на каких серверах/сервисах и какой результат должен получить агент.", "Describe in plain language: tasks, target servers/services, and the result the agent should produce.")}
+                  />
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">2</span>
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground">{tr("Материалы к скиллу", "Skill materials")}</h3>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{tr("Необязательно. Добавьте инструкцию или готовый скрипт, если они уже есть.", "Optional. Attach a runbook or ready automation script if you already have them.")}</p>
+                  </div>
                 </div>
 
-                <div className="space-y-3 pt-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <Label className="cursor-pointer text-xs font-normal" htmlFor="tog-ref">{tr("Добавить папку references/", "Include references/ folder")}</Label>
-                    <Switch id="tog-ref" checked={wizard.with_references} onCheckedChange={(checked) => setWizard((prev) => ({ ...prev, with_references: Boolean(checked) }))} />
+                <div className={`rounded-lg border p-4 transition-colors ${wizard.starter_reference_enabled ? "border-primary/30 bg-primary/5" : "border-border/70 bg-card/35"}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 flex-1 gap-3">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-background/70 text-primary ring-1 ring-border/60">
+                        <BookMarked className="h-4 w-4" />
+                      </span>
+                      <div>
+                        <div className="text-sm font-semibold text-foreground">{tr("Рабочая инструкция", "Working runbook")}</div>
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">{tr("Markdown-файл с правилами, примерами, входными данными и порядком действий.", "Markdown file with rules, examples, inputs, and workflow steps.")}</p>
+                      </div>
+                    </div>
+                    <div className="ml-auto flex shrink-0 items-center gap-2">
+                      <Label htmlFor="starter-reference" className="text-xs text-muted-foreground">{wizard.starter_reference_enabled ? tr("Добавлена", "Added") : tr("Добавить", "Add")}</Label>
+                      <Switch
+                        id="starter-reference"
+                        checked={wizard.starter_reference_enabled}
+                        onCheckedChange={(checked) => setWizard((prev) => ({ ...prev, starter_reference_enabled: Boolean(checked), with_references: checked ? true : prev.with_references }))}
+                      />
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <Label className="cursor-pointer text-xs font-normal" htmlFor="tog-scr">{tr("Добавить папку scripts/", "Include scripts/ folder")}</Label>
-                    <Switch id="tog-scr" checked={wizard.with_scripts} onCheckedChange={(checked) => setWizard((prev) => ({ ...prev, with_scripts: Boolean(checked) }))} />
-                  </div>
+                  {wizard.starter_reference_enabled ? (
+                    <div className="mt-4 space-y-2">
+                      <div className="space-y-1.5">
+                        <Label className="text-[11px] text-muted-foreground">{tr("Куда сохранить", "Save as")}</Label>
+                        <Input
+                          className={`h-9 font-mono text-xs ${starterReferencePathValid ? "" : "border-destructive/60"}`}
+                          value={wizard.starter_reference_path}
+                          onChange={(e) => setWizard((prev) => ({ ...prev, starter_reference_path: e.target.value }))}
+                          placeholder={DEFAULT_STARTER_REFERENCE_PATH}
+                        />
+                      </div>
+                      <Textarea
+                        rows={7}
+                        className="font-mono text-[11px] leading-5"
+                        value={wizard.starter_reference_content}
+                        onChange={(e) => setWizard((prev) => ({ ...prev, starter_reference_content: e.target.value }))}
+                        spellCheck={false}
+                      />
+                    </div>
+                  ) : null}
                 </div>
-              </div>
+
+                <div className={`rounded-lg border p-4 transition-colors ${wizard.starter_script_enabled ? "border-primary/30 bg-primary/5" : "border-border/70 bg-card/35"}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 flex-1 gap-3">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-background/70 text-primary ring-1 ring-border/60">
+                        <Code2 className="h-4 w-4" />
+                      </span>
+                      <div>
+                        <div className="text-sm font-semibold text-foreground">{tr("Скрипт автоматизации", "Automation script")}</div>
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">{tr("Готовый shell/Python/JS-скрипт, который агент сможет открыть, проверить и использовать.", "A ready shell/Python/JS script the agent can open, inspect, and use.")}</p>
+                      </div>
+                    </div>
+                    <div className="ml-auto flex shrink-0 items-center gap-2">
+                      <Label htmlFor="starter-script" className="text-xs text-muted-foreground">{wizard.starter_script_enabled ? tr("Добавлен", "Added") : tr("Добавить", "Add")}</Label>
+                      <Switch
+                        id="starter-script"
+                        checked={wizard.starter_script_enabled}
+                        onCheckedChange={(checked) => setWizard((prev) => ({ ...prev, starter_script_enabled: Boolean(checked), with_scripts: checked ? true : prev.with_scripts }))}
+                      />
+                    </div>
+                  </div>
+                  {wizard.starter_script_enabled ? (
+                    <div className="mt-4 space-y-2">
+                      <div className="space-y-1.5">
+                        <Label className="text-[11px] text-muted-foreground">{tr("Куда сохранить", "Save as")}</Label>
+                        <Input
+                          className={`h-9 font-mono text-xs ${starterScriptPathValid ? "" : "border-destructive/60"}`}
+                          value={wizard.starter_script_path}
+                          onChange={(e) => setWizard((prev) => ({ ...prev, starter_script_path: e.target.value }))}
+                          placeholder={DEFAULT_STARTER_SCRIPT_PATH}
+                        />
+                      </div>
+                      <Textarea
+                        rows={7}
+                        className="font-mono text-[11px] leading-5"
+                        value={wizard.starter_script_content}
+                        onChange={(e) => setWizard((prev) => ({ ...prev, starter_script_content: e.target.value }))}
+                        spellCheck={false}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              </section>
+
+              <Accordion type="single" collapsible className="rounded-lg border border-border/70 bg-background/35 px-3">
+                <AccordionItem value="advanced" className="border-0">
+                  <AccordionTrigger className="py-4 text-sm font-semibold hover:no-underline">{tr("Дополнительно", "Advanced")}</AccordionTrigger>
+                  <AccordionContent className="space-y-4 pb-4">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground">Slug</Label>
+                        <Input
+                          className="h-9 font-mono text-xs"
+                          value={wizard.slug}
+                          onChange={(e) => {
+                            setSlugTouched(true);
+                            setWizard((prev) => ({ ...prev, slug: e.target.value }));
+                          }}
+                          placeholder="docker-health-check"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground">{tr("Уровень риска", "Safety level")}</Label>
+                        <Select value={wizard.safety_level} onValueChange={(value) => setWizard((prev) => ({ ...prev, safety_level: value }))}>
+                          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {SAFETY_LEVELS.map((level) => (<SelectItem key={level} value={level}>{safetyLevelLabel(level, lang)}</SelectItem>))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground">{tr("Сервис", "Service")}</Label>
+                        <Input className="h-9" value={wizard.service} onChange={(e) => setWizard((prev) => ({ ...prev, service: e.target.value }))} placeholder="docker, github" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground">{tr("Категория", "Category")}</Label>
+                        <Input className="h-9" value={wizard.category} onChange={(e) => setWizard((prev) => ({ ...prev, category: e.target.value }))} placeholder="Ops, IAM" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground">{tr("Теги", "Tags")}</Label>
+                        <Input className="h-9" value={wizard.tags_text} onChange={(e) => setWizard((prev) => ({ ...prev, tags_text: e.target.value }))} placeholder="docker, health" />
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground">{tr("Краткие ограничения", "Guardrail summary")}</Label>
+                        <Textarea rows={3} className="text-xs leading-5" value={wizard.guardrail_summary_text} onChange={(e) => setWizard((prev) => ({ ...prev, guardrail_summary_text: e.target.value }))} placeholder={tr("Например: только read-only проверки без подтверждения.", "Example: read-only checks only without confirmation.")} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground">{tr("Рекомендуемые инструменты", "Recommended tools")}</Label>
+                        <Textarea rows={3} className="text-xs leading-5" value={wizard.recommended_tools_text} onChange={(e) => setWizard((prev) => ({ ...prev, recommended_tools_text: e.target.value }))} placeholder="report, ask_user, analyze_output" />
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-card/35 px-3 py-2">
+                        <div>
+                          <span className="text-xs font-medium text-foreground">{tr("Создать папку assets/", "Create assets/ folder")}</span>
+                          <p className="mt-0.5 text-[11px] text-muted-foreground">{tr("Для CSV, шаблонов и примеров данных.", "For CSV, templates, and sample data.")}</p>
+                        </div>
+                        <Switch checked={wizard.with_assets} onCheckedChange={(checked) => setWizard((prev) => ({ ...prev, with_assets: Boolean(checked) }))} />
+                      </div>
+                      <div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
+                        <div>
+                          <span className="text-xs font-medium text-destructive">{tr("Перезаписать существующий slug", "Overwrite existing slug")}</span>
+                          <p className="mt-0.5 text-[11px] text-muted-foreground">{tr("Только если обновляете свой скилл.", "Only when updating your own skill.")}</p>
+                        </div>
+                        <Switch checked={wizard.force} onCheckedChange={(checked) => setWizard((prev) => ({ ...prev, force: Boolean(checked) }))} />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">{tr("Политика выполнения JSON", "Runtime policy JSON")}</Label>
+                      <Textarea rows={6} value={wizard.runtime_policy_text} onChange={(e) => setWizard((prev) => ({ ...prev, runtime_policy_text: e.target.value }))} className="font-mono text-[11px] leading-5" spellCheck={false} />
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+
+              {hasDuplicateStarterPaths || !starterScriptPathValid || !starterReferencePathValid ? (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  {hasDuplicateStarterPaths
+                    ? tr("Пути стартовых файлов должны быть уникальными.", "Starter file paths must be unique.")
+                    : !starterScriptPathValid
+                      ? tr("Скрипт должен сохраняться внутри scripts/.", "Script must be saved inside scripts/.")
+                      : tr("Инструкция должна сохраняться внутри references/.", "Runbook must be saved inside references/.")}
+                </div>
+              ) : null}
             </div>
-
-            {/* 3. Advanced Tools */}
-            <Accordion type="single" collapsible className="w-full">
-              <AccordionItem value="advanced" className="border-border/40">
-                <AccordionTrigger className="text-sm px-2 hover:bg-muted/30 rounded-md transition-colors">{tr("Продвинутые настройки (Опционально)", "Advanced Settings (Optional)")}</AccordionTrigger>
-                <AccordionContent className="pt-4 px-2 space-y-5">
-                  
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs text-muted-foreground">{tr("Slug (Уникальный ID)", "Slug (Unique ID)")}</Label>
-                      <Input className="h-9 font-mono text-xs" value={wizard.slug} onChange={(e) => { setSlugTouched(true); setWizard((prev) => ({ ...prev, slug: e.target.value })); }} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs text-muted-foreground">{tr("Категория", "Category")}</Label>
-                      <Input className="h-9 text-xs" value={wizard.category} onChange={(e) => setWizard((prev) => ({ ...prev, category: e.target.value }))} placeholder="IAM, DevOps..." />
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs text-muted-foreground">{tr("UI-подсказка", "UI Hint")}</Label>
-                      <Input className="h-9 text-xs" value={wizard.ui_hint} onChange={(e) => setWizard((prev) => ({ ...prev, ui_hint: e.target.value }))} placeholder={tr("Инструкция для списка", "Hint for list view")} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs text-muted-foreground">{tr("Теги (CSV)", "Tags (CSV)")}</Label>
-                      <Input className="h-9 text-xs" value={wizard.tags_text} onChange={(e) => setWizard((prev) => ({ ...prev, tags_text: e.target.value }))} placeholder="tag1, tag2" />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">{tr("Рекомендуемые MCP инструменты (CSV)", "Recommended MCP tools (CSV)")}</Label>
-                    <Input className="h-9 text-xs" value={wizard.recommended_tools_text} onChange={(e) => setWizard((prev) => ({ ...prev, recommended_tools_text: e.target.value }))} placeholder="github_search, ask_user" />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">{tr("Guardrail Правила", "Guardrail Rules")}</Label>
-                    <Textarea rows={2} className="text-xs" value={wizard.guardrail_summary_text} onChange={(e) => setWizard((prev) => ({ ...prev, guardrail_summary_text: e.target.value }))} placeholder={tr("Описание жестких ограничений.", "Description of hard constraints.")} />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">{tr("Runtime Policy (Конфиг среды)", "Runtime Policy (Env config)")}</Label>
-                    <Textarea rows={6} value={wizard.runtime_policy_text} onChange={(e) => setWizard((prev) => ({ ...prev, runtime_policy_text: e.target.value }))} className="font-mono text-[11px] bg-muted/20" />
-                  </div>
-
-                  <div className="flex items-center space-x-2 pt-2">
-                    <Switch id="force-overwrite" checked={wizard.force} onCheckedChange={(checked) => setWizard((prev) => ({ ...prev, force: Boolean(checked) }))} />
-                    <Label htmlFor="force-overwrite" className="text-xs text-destructive">{tr("Перезаписать скилл с таким же slug", "Overwrite skill with same slug")}</Label>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
           </div>
 
-          <div className="bg-muted/20 px-6 py-4 flex items-center justify-between border-t border-border/40">
-            <Button variant="ghost" className="text-muted-foreground" onClick={() => setCreateOpen(false)}>{tr("Отмена", "Cancel")}</Button>
-            <Button onClick={submitWizard} disabled={!wizard.name.trim() || !wizard.description.trim() || scaffoldMutation.isPending} className="gap-2 px-6">
-              {scaffoldMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
-              {tr("Создать", "Create")}
-            </Button>
+          <div className="flex flex-col gap-3 border-t border-border/50 bg-card/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <p className="text-xs leading-5 text-muted-foreground">
+              {canSubmitWizard
+                ? tr(`Будет создан SKILL.md${starterFiles.length ? ` и файлов: ${starterFiles.length}` : ""}.`, `Will create SKILL.md${starterFiles.length ? ` and ${starterFiles.length} file(s)` : ""}.`)
+                : tr("Для создания заполните название и когда применять скилл.", "Add a name and when to use the skill to continue.")}
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" className="text-muted-foreground" onClick={() => setCreateOpen(false)}>{tr("Отмена", "Cancel")}</Button>
+              <Button onClick={submitWizard} disabled={!canSubmitWizard || scaffoldMutation.isPending} className="h-10 gap-2 px-5">
+                {scaffoldMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
+                {tr("Создать", "Create")}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
 
       <Dialog open={createFileOpen} onOpenChange={setCreateFileOpen}>
-        <DialogContent className="max-h-[85vh] max-w-3xl overflow-auto rounded-md border-border bg-background/95">
+        <DialogContent closeLabel={tr("Закрыть", "Close")} className="grid max-h-[calc(100dvh-2rem)] max-w-3xl grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-md border-border bg-background/95">
           <DialogHeader>
-            <DialogTitle>{tr("Новый workspace-файл", "New workspace file")}</DialogTitle>
-            <DialogDescription>{tr("Создайте text-файл внутри references/, scripts/ или assets/. Для нового playbook-материала обычно начинайте с references/guide.md.", "Create a text file inside references/, scripts/, or assets/. For new playbook material, start with references/guide.md.")}</DialogDescription>
+            <DialogTitle>{tr("Новый файл рабочей папки", "New workspace file")}</DialogTitle>
+            <DialogDescription>{tr("Создайте текстовый файл внутри references/, scripts/ или assets/. Для нового материала плейбука обычно начинайте с references/guide.md.", "Create a text file inside references/, scripts/, or assets/. For new playbook material, start with references/guide.md.")}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="min-h-0 space-y-4 overflow-y-auto py-2">
             <div className="space-y-1.5">
               <Label className="text-xs">{tr("Путь", "Path")}</Label>
               <Input value={createFilePath} onChange={(event) => setCreateFilePath(event.target.value)} placeholder="references/guide.md" />
@@ -1182,7 +1446,7 @@ export default function StudioSkillsPage() {
               <Textarea rows={16} value={createFileContent} onChange={(event) => setCreateFileContent(event.target.value)} className="font-mono text-[12px] leading-5" />
             </div>
             <div className="rounded-xl border border-border/70 bg-background/24 px-4 py-4 text-[11px] leading-5 text-muted-foreground">
-              {tr("Разрешены только относительные пути и только text-расширения. Абсолютные пути, скрытые файлы и выход за пределы skill directory backend отклоняет.", "Only relative paths and text extensions are allowed. Absolute paths, hidden files, and escaping the skill directory are rejected by the backend.")}
+              {tr("Разрешены только относительные пути и текстовые расширения. Абсолютные пути, скрытые файлы и выход за пределы папки скилла backend отклоняет.", "Only relative paths and text extensions are allowed. Absolute paths, hidden files, and escaping the skill directory are rejected by the backend.")}
             </div>
           </div>
           <div className="mt-4 flex justify-end gap-2">
@@ -1196,7 +1460,7 @@ export default function StudioSkillsPage() {
       </Dialog>
 
       <Dialog open={validateOpen} onOpenChange={setValidateOpen}>
-        <DialogContent className="max-h-[85vh] max-w-4xl overflow-auto rounded-md border-border bg-background/95">
+        <DialogContent closeLabel={tr("Закрыть", "Close")} className="max-h-[85vh] max-w-4xl overflow-auto rounded-md border-border bg-background/95">
           <DialogHeader>
             <DialogTitle>{tr("Валидация библиотеки скиллов", "Skill Library Validation")}</DialogTitle>
             <DialogDescription>{tr("Проверьте структурные и policy-проблемы в текущей библиотеке скиллов Studio.", "Review structural and policy issues across the current Studio skill library.")}</DialogDescription>
