@@ -1,6 +1,6 @@
 # Project Audit Report
 
-Last reviewed: 2026-05-27
+Last reviewed: 2026-06-15
 
 This is the current audit snapshot for `C:\WebTrerm`. Older findings that were already fixed are kept only when they affect remaining work.
 
@@ -12,18 +12,17 @@ Current architecture is much healthier than the older audit described: most back
 
 The main open risks are now narrower:
 
-1. `python scripts/check_architecture_sizes.py --strict-new` fails because `key_mcp.py` grew beyond its pinned legacy baseline: `2094 > 2089`.
-2. Dangerous execution paths still need one shared policy/audit/redaction contract across SSH, MCP, webhooks, files, and pipeline nodes.
-3. Shared server permissions still need capability-level enforcement for connect/execute/file-write/RDP/admin.
-4. Several legacy-large files remain pinned and should shrink over time.
-5. Production worker/scheduler topology needs to stay explicit in deploy docs and compose/Render config.
+1. Dangerous execution paths still need one shared policy/audit/redaction contract across SSH, MCP, webhooks, files, and pipeline nodes.
+2. Shared server permissions still need capability-level enforcement for connect/execute/file-write/RDP/admin.
+3. Several legacy-large files remain pinned and should shrink over time.
+4. Production worker/scheduler topology needs to stay explicit in deploy docs and compose/Render config.
 
 ## Current Architecture Evidence
 
 | Area | Current state |
 | --- | --- |
-| Import boundaries | `import-linter` passed on 2026-05-27. Contracts live in `.importlinter`. |
-| Size guard | Failed only on `key_mcp.py` legacy baseline growth. |
+| Import boundaries | `import-linter` passed on 2026-06-15. Contracts live in `.importlinter`. |
+| Size guard | Green on 2026-06-15. `key_mcp.py` is 1865 lines against pinned baseline 2089. |
 | Backend views | `core_ui/views/`, `servers/views/`, and `studio/views/` are split into focused modules with compatibility shims. |
 | MCP runtime | Server agents use `MCPRuntimeProvider`; concrete implementation lives in `studio.mcp_runtime_adapter` / `studio.mcp_tool_runtime`. |
 | Passwords shim | No `passwords/` folder exists; only historical/migration references remain. |
@@ -31,14 +30,6 @@ The main open risks are now narrower:
 | Test config | `pyproject.toml` points pytest to `web_ui.settings.test`, which isolates tests on SQLite and in-memory services. |
 
 ## Findings
-
-### P0: Architecture Guard Currently Fails
-
-`key_mcp.py` is pinned at 2089 lines in `pyproject.toml`, but the file is now 2094 lines.
-
-Impact: the architecture guard fails even though import boundaries pass. This blocks using the guard as a clean CI signal.
-
-Recommended fix: either shrink `key_mcp.py` below the baseline or intentionally update the baseline with a short justification. Prefer shrinking because `key_mcp.py` is already above the standard file-size limit.
 
 ### P0: Execution Policy Is Still Cross-Cutting
 
@@ -90,6 +81,7 @@ Recommended fix: document and configure required worker processes for production
 
 ## Completed Since Older Audits
 
+- Architecture guard is green again: `python scripts/check_architecture_sizes.py --strict-new` passes.
 - `servers.mcp_tool_runtime` shim removed.
 - `passwords/` package removed.
 - Backend view monolith split is largely done.
@@ -100,10 +92,9 @@ Recommended fix: document and configure required worker processes for production
 
 ## Recommended Next Order
 
-1. Fix `key_mcp.py` architecture baseline failure.
-2. Add shared execution policy/audit/redaction contract.
-3. Add capability-based shared server permissions.
-4. Normalize egress redaction across logs/activity/pipeline/MCP.
-5. Continue pipeline executor node-registry migration.
-6. Continue frontend API/page decomposition.
-7. Make production worker topology explicit.
+1. Add shared execution policy/audit/redaction contract.
+2. Add capability-based shared server permissions.
+3. Normalize egress redaction across logs/activity/pipeline/MCP.
+4. Continue pipeline executor node-registry migration.
+5. Continue frontend API/page decomposition.
+6. Make production worker topology explicit.

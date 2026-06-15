@@ -30,7 +30,7 @@ class CustomLoginView(LoginView):
     redirect_authenticated_user = True
 
     def get_template_names(self):
-        """Return mobile or desktop login template based on device."""
+        """Return the login template variant based on device."""
         return [get_template_name(self.request, "login.html")]
 
     def get_success_url(self):

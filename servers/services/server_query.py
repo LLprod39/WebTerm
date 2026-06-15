@@ -16,6 +16,23 @@ from django.utils import timezone
 
 from servers.models import Server, ServerShare
 
+CAPABILITY_VIEW = "view"
+CAPABILITY_CONNECT_TERMINAL = "connect_terminal"
+CAPABILITY_EXECUTE_COMMAND = "execute_command"
+CAPABILITY_READ_FILES = "read_files"
+CAPABILITY_WRITE_FILES = "write_files"
+CAPABILITY_USE_RDP = "use_rdp"
+CAPABILITY_VIEW_CONTEXT = "view_context"
+CAPABILITY_ADMIN_SHARE = "admin_share"
+
+_SHARE_CAPABILITY_FIELDS = {
+    CAPABILITY_CONNECT_TERMINAL: "can_connect_terminal",
+    CAPABILITY_EXECUTE_COMMAND: "can_execute_command",
+    CAPABILITY_READ_FILES: "can_read_files",
+    CAPABILITY_WRITE_FILES: "can_write_files",
+    CAPABILITY_USE_RDP: "can_use_rdp",
+}
+
 
 def get_servers_for_user(user) -> "QuerySet[Server]":
     """
@@ -78,3 +95,31 @@ def can_access_server_context(server: Server, user, share: ServerShare | None = 
         return True
     active_share = share if share is not None else get_active_share(server, user)
     return bool(active_share and getattr(active_share, "share_context", False))
+
+
+def user_has_server_capability(
+    server: Server | None,
+    user,
+    capability: str,
+    share: ServerShare | None = None,
+) -> bool:
+    if not server or not user or not getattr(user, "is_authenticated", True):
+        return False
+    if server.user_id == user.id:
+        return True
+    active_share = share if share is not None else get_active_share(server, user)
+    if not active_share:
+        return False
+    if capability == CAPABILITY_VIEW:
+        return True
+    if capability == CAPABILITY_VIEW_CONTEXT:
+        return bool(active_share.share_context)
+    field = _SHARE_CAPABILITY_FIELDS.get(capability)
+    return bool(field and getattr(active_share, field, False))
+
+
+def get_server_for_user_capability(server_id: int, user, capability: str) -> Server | None:
+    server = get_server(server_id, user)
+    if not server:
+        return None
+    return server if user_has_server_capability(server, user, capability) else None

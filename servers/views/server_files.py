@@ -36,6 +36,7 @@ from servers.views.server_helpers import (
     _accessible_servers_queryset,
     _require_ssh_server,
     _resolve_server_secret,
+    _server_has_capability,
 )
 
 
@@ -73,11 +74,17 @@ def _sftp_error_response(exc: Exception) -> JsonResponse:
     return JsonResponse({"success": False, "error": str(exc) or "SFTP operation failed"}, status=500)
 
 
+def _missing_capability_response(capability: str) -> JsonResponse:
+    return JsonResponse({"success": False, "error": f"Missing server capability: {capability}"}, status=403)
+
+
 @login_required
 @require_feature("servers")
 @require_http_methods(["GET"])
 def server_file_list(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+    if not _server_has_capability(server, request.user, "read_files"):
+        return _missing_capability_response("read_files")
     try:
         _require_ssh_server(server)
         password = _resolve_server_secret(server, request, request.GET)
@@ -96,6 +103,8 @@ def server_file_list(request, server_id):
 @require_http_methods(["GET"])
 def server_file_read_text(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+    if not _server_has_capability(server, request.user, "read_files"):
+        return _missing_capability_response("read_files")
     try:
         _require_ssh_server(server)
         password = _resolve_server_secret(server, request, request.GET)
@@ -126,6 +135,8 @@ def server_file_read_text(request, server_id):
 @require_http_methods(["POST"])
 def server_file_write_text(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+    if not _server_has_capability(server, request.user, "write_files"):
+        return _missing_capability_response("write_files")
     try:
         _require_ssh_server(server)
         data = json.loads(request.body or "{}")
@@ -158,6 +169,8 @@ def server_file_write_text(request, server_id):
 @require_http_methods(["POST"])
 def server_file_chmod(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+    if not _server_has_capability(server, request.user, "write_files"):
+        return _missing_capability_response("write_files")
     try:
         _require_ssh_server(server)
         data = json.loads(request.body or "{}")
@@ -190,6 +203,8 @@ def server_file_chmod(request, server_id):
 @require_http_methods(["POST"])
 def server_file_chown(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+    if not _server_has_capability(server, request.user, "write_files"):
+        return _missing_capability_response("write_files")
     try:
         _require_ssh_server(server)
         data = json.loads(request.body or "{}")
@@ -234,6 +249,8 @@ def server_file_chown(request, server_id):
 @require_http_methods(["POST"])
 def server_file_upload(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+    if not _server_has_capability(server, request.user, "write_files"):
+        return _missing_capability_response("write_files")
     try:
         _require_ssh_server(server)
         password = _resolve_server_secret(server, request, request.POST)
@@ -296,6 +313,8 @@ def server_file_upload(request, server_id):
 @require_http_methods(["POST"])
 def server_file_download(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+    if not _server_has_capability(server, request.user, "read_files"):
+        return _missing_capability_response("read_files")
     try:
         _require_ssh_server(server)
         data = json.loads(request.body or "{}")
@@ -341,6 +360,8 @@ def server_file_download(request, server_id):
 @require_http_methods(["POST"])
 def server_file_rename(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+    if not _server_has_capability(server, request.user, "write_files"):
+        return _missing_capability_response("write_files")
     try:
         _require_ssh_server(server)
         data = json.loads(request.body or "{}")
@@ -373,6 +394,8 @@ def server_file_rename(request, server_id):
 @require_http_methods(["POST"])
 def server_file_delete(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+    if not _server_has_capability(server, request.user, "write_files"):
+        return _missing_capability_response("write_files")
     try:
         _require_ssh_server(server)
         data = json.loads(request.body or "{}")
@@ -410,6 +433,8 @@ def server_file_delete(request, server_id):
 @require_http_methods(["POST"])
 def server_file_mkdir(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+    if not _server_has_capability(server, request.user, "write_files"):
+        return _missing_capability_response("write_files")
     try:
         _require_ssh_server(server)
         data = json.loads(request.body or "{}")

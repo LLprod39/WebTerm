@@ -22,6 +22,7 @@ from servers.views.server_helpers import (
     _active_server_share,
     _effective_master_password,
     _get_group_role,
+    _server_capabilities,
     _shared_server_context_allowed,
 )
 
@@ -327,6 +328,7 @@ def server_get(request, server_id):
                 is_owner and server.auth_method in ["password", "key_password"] and has_saved_server_secret(server)
             ),
             "can_edit": bool(is_owner),
+            "capabilities": _server_capabilities(server, request.user, share),
             "is_shared_server": bool(share),
             "share_context_enabled": bool(share.share_context) if share else True,
             "shared_by_username": share.shared_by.username if share and share.shared_by else "",

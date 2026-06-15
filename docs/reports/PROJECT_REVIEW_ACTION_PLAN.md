@@ -1,6 +1,6 @@
 # Project Review Action Plan
 
-Last reviewed: 2026-05-27
+Last reviewed: 2026-06-15
 
 This is the current implementation backlog after refreshing the docs against the codebase. It replaces the older 2026-05-19 action list.
 
@@ -11,7 +11,7 @@ This is the current implementation backlog after refreshing the docs against the
 - Checked pipeline node contract against `studio/pipeline_validation.py`, `studio/models.py`, `studio/pipeline_executor.py`, `studio/trigger_dispatch.py`, `studio/executor/`, and frontend node metadata.
 - Ran `python scripts\check_architecture_sizes.py --strict-new`.
   - Import boundaries: passed.
-  - File-size guard: failed on `key_mcp.py` because it grew from pinned baseline `2089` to `2094` lines.
+  - File-size guard: passed.
 
 Full test suites were not run during the documentation refresh.
 
@@ -24,30 +24,6 @@ WebTerm is a web-first ops platform:
 - Servers domain for inventory, SSH/RDP, SFTP, Linux UI, monitoring, alerts, memory, snapshots, and server agents.
 - Studio domain for pipelines, triggers, runs, MCP registry, skills, reusable agents, templates, and notifications.
 - `app/` for shared LLM/runtime/safety/agent-kernel services.
-
-## P0: Fix The Broken Architecture Guard
-
-Scope:
-
-- `key_mcp.py`
-- `pyproject.toml`
-- `scripts/check_architecture_sizes.py`
-
-Problem:
-
-The guard fails because `key_mcp.py` is a legacy-pinned file and grew by 5 lines.
-
-Recommended task:
-
-1. Inspect recent growth in `key_mcp.py`.
-2. Prefer extracting/shrinking code below the pinned baseline.
-3. If growth is intentional and unavoidable, update the baseline with a short note.
-4. Re-run `python scripts\check_architecture_sizes.py --strict-new`.
-
-Acceptance:
-
-- Architecture check is green.
-- Import boundaries remain green.
 
 ## P0: Shared Execution Policy
 

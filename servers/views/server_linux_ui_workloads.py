@@ -28,8 +28,13 @@ from servers.views.server_helpers import (
     _accessible_servers_queryset,
     _require_ssh_server,
     _resolve_server_secret,
+    _server_has_capability,
 )
-from servers.views.server_linux_ui import _linux_ui_error_response, _linux_ui_server_payload
+from servers.views.server_linux_ui import (
+    _linux_ui_error_response,
+    _linux_ui_server_payload,
+    _missing_linux_ui_capability_response,
+)
 
 
 @login_required
@@ -37,6 +42,8 @@ from servers.views.server_linux_ui import _linux_ui_error_response, _linux_ui_se
 @require_http_methods(["GET"])
 def server_linux_ui_services(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+    if not _server_has_capability(server, request.user, "connect_terminal"):
+        return _missing_linux_ui_capability_response("connect_terminal")
     try:
         _require_ssh_server(server)
         secret = _resolve_server_secret(server, request, request.GET)
@@ -75,6 +82,8 @@ def server_linux_ui_services(request, server_id):
 @require_http_methods(["GET"])
 def server_linux_ui_service_logs(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+    if not _server_has_capability(server, request.user, "connect_terminal"):
+        return _missing_linux_ui_capability_response("connect_terminal")
     try:
         _require_ssh_server(server)
         secret = _resolve_server_secret(server, request, request.GET)
@@ -113,6 +122,8 @@ def server_linux_ui_service_logs(request, server_id):
 @require_http_methods(["POST"])
 def server_linux_ui_service_action(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+    if not _server_has_capability(server, request.user, "execute_command"):
+        return _missing_linux_ui_capability_response("execute_command")
     try:
         _require_ssh_server(server)
         data = json.loads(request.body or "{}")
@@ -158,6 +169,8 @@ def server_linux_ui_service_action(request, server_id):
 @require_http_methods(["GET"])
 def server_linux_ui_processes(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+    if not _server_has_capability(server, request.user, "connect_terminal"):
+        return _missing_linux_ui_capability_response("connect_terminal")
     try:
         _require_ssh_server(server)
         secret = _resolve_server_secret(server, request, request.GET)
@@ -194,6 +207,8 @@ def server_linux_ui_processes(request, server_id):
 @require_http_methods(["POST"])
 def server_linux_ui_process_action(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+    if not _server_has_capability(server, request.user, "execute_command"):
+        return _missing_linux_ui_capability_response("execute_command")
     try:
         _require_ssh_server(server)
         data = json.loads(request.body or "{}")
@@ -237,6 +252,8 @@ def server_linux_ui_process_action(request, server_id):
 @require_http_methods(["GET"])
 def server_linux_ui_docker(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+    if not _server_has_capability(server, request.user, "connect_terminal"):
+        return _missing_linux_ui_capability_response("connect_terminal")
     try:
         _require_ssh_server(server)
         secret = _resolve_server_secret(server, request, request.GET)
@@ -273,6 +290,8 @@ def server_linux_ui_docker(request, server_id):
 @require_http_methods(["GET"])
 def server_linux_ui_docker_logs(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+    if not _server_has_capability(server, request.user, "connect_terminal"):
+        return _missing_linux_ui_capability_response("connect_terminal")
     try:
         _require_ssh_server(server)
         secret = _resolve_server_secret(server, request, request.GET)
@@ -311,6 +330,8 @@ def server_linux_ui_docker_logs(request, server_id):
 @require_http_methods(["POST"])
 def server_linux_ui_docker_action(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+    if not _server_has_capability(server, request.user, "execute_command"):
+        return _missing_linux_ui_capability_response("execute_command")
     try:
         _require_ssh_server(server)
         data = json.loads(request.body or "{}")

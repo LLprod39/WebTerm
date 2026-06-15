@@ -12,7 +12,6 @@ from typing import Any
 
 from channels.db import database_sync_to_async
 from django.conf import settings
-from django.db.models import Q
 from django.utils import timezone
 
 ACTIVE_TERMINAL_CONNECTION_STATUSES = ["connected"]
@@ -119,22 +118,18 @@ get_terminal_session_limit = database_sync_to_async(get_terminal_session_limit_s
 
 
 def get_terminal_server_sync(*, user_id: int, server_id: int) -> Any:
-    from servers.models import Server
+    from django.contrib.auth.models import User
 
-    now = timezone.now()
-    return (
-        Server.objects.select_related("group", "user")
-        .filter(id=server_id, is_active=True)
-        .filter(
-            Q(user_id=user_id)
-            | (
-                Q(shares__user_id=user_id, shares__is_revoked=False)
-                & (Q(shares__expires_at__isnull=True) | Q(shares__expires_at__gt=now))
-            )
-        )
-        .distinct()
-        .get()
-    )
+    from servers.models import Server
+    from servers.services.server_query import CAPABILITY_CONNECT_TERMINAL, get_server_for_user_capability
+
+    user = User.objects.filter(id=user_id).first()
+    if not user:
+        raise Server.DoesNotExist()
+    server = get_server_for_user_capability(server_id, user, CAPABILITY_CONNECT_TERMINAL)
+    if not server:
+        raise Server.DoesNotExist()
+    return server
 
 
 get_terminal_server = database_sync_to_async(get_terminal_server_sync)

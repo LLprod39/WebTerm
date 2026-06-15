@@ -1,6 +1,6 @@
 # Architecture Notes
 
-Last reviewed: 2026-05-27
+Last reviewed: 2026-06-15
 
 This folder is the public architecture entry point. The detailed working contract currently lives in the local-only file `docs/local/ARCHITECTURE_CONTRACT.md` because it came from internal root docs and is ignored by git.
 
@@ -33,7 +33,7 @@ python scripts/check_architecture_sizes.py --strict-new
 
 ## Active Refactor Status
 
-- Current architecture command status: import boundaries pass, but the size guard fails because `key_mcp.py` is 2094 lines against pinned baseline 2089.
+- Current architecture command status: import boundaries and size guard pass.
 - Backend view endpoint groups have mostly been split into focused modules.
 - `core_ui/views/_views_all.py`, `servers/views/_views_all.py`, and `studio/views/_views_all.py` remain compatibility shims.
 - `studio/pipeline_executor.py` remains the production pipeline executor.

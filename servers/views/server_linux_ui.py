@@ -25,6 +25,7 @@ from servers.views.server_helpers import (
     _accessible_servers_queryset,
     _require_ssh_server,
     _resolve_server_secret,
+    _server_has_capability,
 )
 
 
@@ -45,11 +46,17 @@ def _linux_ui_server_payload(server) -> dict:
     }
 
 
+def _missing_linux_ui_capability_response(capability: str) -> JsonResponse:
+    return JsonResponse({"success": False, "error": f"Missing server capability: {capability}"}, status=403)
+
+
 @login_required
 @require_feature("servers")
 @require_http_methods(["GET"])
 def server_linux_ui_capabilities(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+    if not _server_has_capability(server, request.user, "connect_terminal"):
+        return _missing_linux_ui_capability_response("connect_terminal")
     try:
         _require_ssh_server(server)
         secret = _resolve_server_secret(server, request, {})
@@ -82,6 +89,8 @@ def server_linux_ui_capabilities(request, server_id):
 @require_http_methods(["GET"])
 def server_linux_ui_settings(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+    if not _server_has_capability(server, request.user, "connect_terminal"):
+        return _missing_linux_ui_capability_response("connect_terminal")
     try:
         _require_ssh_server(server)
         secret = _resolve_server_secret(server, request, {})
@@ -114,6 +123,8 @@ def server_linux_ui_settings(request, server_id):
 @require_http_methods(["GET"])
 def server_linux_ui_overview(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+    if not _server_has_capability(server, request.user, "connect_terminal"):
+        return _missing_linux_ui_capability_response("connect_terminal")
     try:
         _require_ssh_server(server)
         secret = _resolve_server_secret(server, request, {})
@@ -146,6 +157,8 @@ def server_linux_ui_overview(request, server_id):
 @require_http_methods(["GET"])
 def server_linux_ui_logs(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+    if not _server_has_capability(server, request.user, "connect_terminal"):
+        return _missing_linux_ui_capability_response("connect_terminal")
     try:
         _require_ssh_server(server)
         secret = _resolve_server_secret(server, request, request.GET)
@@ -185,6 +198,8 @@ def server_linux_ui_logs(request, server_id):
 @require_http_methods(["GET"])
 def server_linux_ui_disk(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+    if not _server_has_capability(server, request.user, "connect_terminal"):
+        return _missing_linux_ui_capability_response("connect_terminal")
     try:
         _require_ssh_server(server)
         secret = _resolve_server_secret(server, request, request.GET)
@@ -221,6 +236,8 @@ def server_linux_ui_disk(request, server_id):
 @require_http_methods(["GET"])
 def server_linux_ui_network(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+    if not _server_has_capability(server, request.user, "connect_terminal"):
+        return _missing_linux_ui_capability_response("connect_terminal")
     try:
         _require_ssh_server(server)
         secret = _resolve_server_secret(server, request, request.GET)
@@ -257,6 +274,8 @@ def server_linux_ui_network(request, server_id):
 @require_http_methods(["GET"])
 def server_linux_ui_packages(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+    if not _server_has_capability(server, request.user, "connect_terminal"):
+        return _missing_linux_ui_capability_response("connect_terminal")
     try:
         _require_ssh_server(server)
         secret = _resolve_server_secret(server, request, request.GET)

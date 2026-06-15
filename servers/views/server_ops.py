@@ -20,6 +20,7 @@ from servers.models import ServerCommandHistory
 from servers.views.server_helpers import (
     _accessible_servers_queryset,
     _resolve_server_secret,
+    _server_has_capability,
     _serialize_detected_os_fields,
 )
 
@@ -31,6 +32,8 @@ def server_test_connection(request, server_id):
     """Test connection to server."""
     try:
         server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+        if not _server_has_capability(server, request.user, "connect_terminal"):
+            return JsonResponse({"success": False, "error": "Missing server capability: connect_terminal"}, status=403)
         data = json.loads(request.body)
         refresh_host_key = bool(data.get("refresh_host_key"))
         if refresh_host_key and server.user_id != request.user.id:
@@ -114,6 +117,8 @@ def server_execute_command(request, server_id):
     """Execute command on server."""
     try:
         server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
+        if not _server_has_capability(server, request.user, "execute_command"):
+            return JsonResponse({"success": False, "error": "Missing server capability: execute_command"}, status=403)
         data = json.loads(request.body)
         command = data.get("command", "")
 

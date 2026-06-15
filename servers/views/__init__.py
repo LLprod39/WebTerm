@@ -34,7 +34,7 @@ from servers.views.server_crud import *  # noqa: F401, F403
 from servers.views.server_files import *  # noqa: F401, F403
 from servers.views.server_groups import *  # noqa: F401, F403
 
-# Explicit re-exports of private helpers consumed by core_ui.desktop_api.views
+# Explicit re-exports of private compatibility helpers.
 from servers.views.server_helpers import (  # noqa: F401
     _accessible_servers_queryset,
     _active_server_share,

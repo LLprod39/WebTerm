@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/Python-3.10%2B-2F5D8A?style=flat-square&logo=python&logoColor=white" alt="Python 3.10+" />
   <img src="https://img.shields.io/badge/Django-5.2-0F172A?style=flat-square&logo=django&logoColor=white" alt="Django 5.2" />
   <img src="https://img.shields.io/badge/React-18-0F172A?style=flat-square&logo=react&logoColor=61DAFB" alt="React 18" />
-  <img src="https://img.shields.io/badge/Vite-5-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite 5" />
+  <img src="https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite 8" />
   <img src="https://img.shields.io/badge/Channels-WebSocket-0F172A?style=flat-square" alt="Django Channels" />
   <img src="https://img.shields.io/badge/License-Apache%202.0-0F172A?style=flat-square" alt="Apache 2.0" />
 </p>

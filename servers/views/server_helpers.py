@@ -2,7 +2,7 @@
 Shared server view helpers.
 
 These helpers are intentionally kept out of the legacy `_views_all.py` module so
-focused view modules and desktop API adapters can depend on explicit names.
+focused view modules can depend on explicit names.
 """
 
 import os
@@ -13,7 +13,7 @@ from django.utils import timezone
 
 from servers.models import Server, ServerGroup, ServerGroupMember, ServerShare
 from servers.secret_utils import get_server_auth_secret
-from servers.services.server_query import can_access_server_context, get_active_share, get_servers_for_user
+from servers.services.server_query import can_access_server_context, get_active_share, get_servers_for_user, user_has_server_capability
 
 
 def _serialize_detected_os_fields(server: Server) -> dict:
@@ -50,6 +50,23 @@ def _active_server_share(server: Server, user: User) -> ServerShare | None:
 
 def _shared_server_context_allowed(server: Server, user: User, share: ServerShare | None = None) -> bool:
     return can_access_server_context(server, user, share)
+
+
+def _server_capabilities(server: Server, user: User, share: ServerShare | None = None) -> dict[str, bool]:
+    return {
+        "view": user_has_server_capability(server, user, "view", share),
+        "connect_terminal": user_has_server_capability(server, user, "connect_terminal", share),
+        "execute_command": user_has_server_capability(server, user, "execute_command", share),
+        "read_files": user_has_server_capability(server, user, "read_files", share),
+        "write_files": user_has_server_capability(server, user, "write_files", share),
+        "use_rdp": user_has_server_capability(server, user, "use_rdp", share),
+        "view_context": user_has_server_capability(server, user, "view_context", share),
+        "admin_share": user_has_server_capability(server, user, "admin_share", share),
+    }
+
+
+def _server_has_capability(server: Server, user: User, capability: str, share: ServerShare | None = None) -> bool:
+    return user_has_server_capability(server, user, capability, share)
 
 
 def _effective_master_password(request, data: dict | None = None) -> str:

@@ -1,6 +1,6 @@
 # MARS Refactoring Task Plan
 
-Last reviewed: 2026-05-27
+Last reviewed: 2026-06-15
 
 This is the current human-readable MARS refactor backlog. It replaces the old generated 41-task dump with current status.
 
@@ -17,33 +17,9 @@ This is the current human-readable MARS refactor backlog. It replaces the old ge
 | Remove `passwords/` package | Done. Folder is absent. |
 | Extract terminal support services | Substantial progress. Terminal input, lifecycle, events, preferences, snapshots, AI subservices, and access helpers exist. |
 | Add frontend domain API modules | In progress but started. `frontend/src/api/` exists. |
+| Restore architecture guard | Done. `python scripts\check_architecture_sizes.py --strict-new` passes. |
 
 ## Immediate Task
-
-### MARS-001: Restore Architecture Guard
-
-Assigned area: architecture hygiene.
-
-Target files:
-
-- `key_mcp.py`
-- `pyproject.toml`
-
-Problem:
-
-`python scripts\check_architecture_sizes.py --strict-new` fails:
-
-```text
-[LEGACY GROWTH] .\key_mcp.py
-Legacy file grew: 2094 > 2089
-```
-
-Acceptance:
-
-- Architecture check passes.
-- Import boundaries remain green.
-
-## Active Backlog
 
 ### MARS-002: Route `output/report` Through Node Registry
 
@@ -186,4 +162,3 @@ Acceptance:
 - GitOps / PR-based remediation.
 - CI/CD status visualization in Studio.
 - Time-series operational metrics.
-- Full desktop support decision: freeze, archive, or productize.

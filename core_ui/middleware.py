@@ -350,17 +350,17 @@ class MobileDetectionMiddleware:
         return response
 
 
-def get_template_name(request, desktop_template: str) -> str:
+def get_template_name(request, default_template: str) -> str:
     """
-    Возвращает мобильный или десктопный шаблон в зависимости от устройства.
+    Возвращает мобильный шаблон или базовый шаблон в зависимости от устройства.
 
     Args:
         request: Django request object
-        desktop_template: имя десктопного шаблона (например 'chat.html')
+        default_template: имя базового шаблона (например 'chat.html')
 
     Returns:
         Путь к шаблону: 'mobile/chat.html' или 'chat.html'
     """
     if getattr(request, 'is_mobile', False):
-        return f'mobile/{desktop_template}'
-    return desktop_template
+        return f'mobile/{default_template}'
+    return default_template

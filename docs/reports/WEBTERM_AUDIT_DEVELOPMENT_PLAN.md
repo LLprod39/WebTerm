@@ -1,6 +1,6 @@
 # WebTerm Audit Development Plan
 
-Last reviewed: 2026-05-27
+Last reviewed: 2026-06-15
 
 This roadmap turns the current audit into implementation-sized work. It is intentionally shorter than the old report: completed cleanup is recorded, and open work is ordered by risk.
 
@@ -9,7 +9,7 @@ This roadmap turns the current audit into implementation-sized work. It is inten
 | Area | Status |
 | --- | --- |
 | Import boundaries | Green on 2026-05-27. |
-| Architecture size guard | Red: `key_mcp.py` grew to `2094` lines against baseline `2089`. |
+| Architecture size guard | Green on 2026-06-15. |
 | Backend view split | Mostly complete; compatibility shims remain. |
 | MCP runtime shim | Complete; `servers.mcp_tool_runtime` no longer exists. |
 | `passwords/` compatibility package | Complete; folder no longer exists. |
@@ -17,26 +17,6 @@ This roadmap turns the current audit into implementation-sized work. It is inten
 | Frontend decomposition | In progress; domain API modules exist, legacy-large files remain. |
 | Security policy unification | Not complete. |
 | Production worker topology | Needs explicit deployment documentation/config. |
-
-## Phase 0: Restore Green Guardrails
-
-### A0.1 Fix `key_mcp.py` Legacy Growth
-
-Scope:
-
-- `key_mcp.py`
-- `pyproject.toml`
-
-Steps:
-
-1. Inspect recent changes around `key_mcp.py`.
-2. Shrink or extract at least 5 lines to get back under the pinned baseline.
-3. If extraction is not practical, intentionally re-pin with a note.
-4. Run `python scripts/check_architecture_sizes.py --strict-new`.
-
-Done when:
-
-- Architecture guard passes.
 
 ## Phase 1: Security And Safety
 
@@ -251,19 +231,18 @@ Read-only first:
 
 ## Recommended Work Order
 
-1. Fix `key_mcp.py` guard failure.
-2. Shared server capability checks.
-3. Unified execution policy.
-4. Egress redaction.
-5. Shell safety parser.
-6. Versioned encryption.
-7. Node-registry migration.
-8. Frontend decomposition.
-9. Worker/deploy topology.
-10. Metrics.
-11. Kubernetes read-only.
-12. GitOps remediation.
-13. CI/CD visibility.
+1. Shared server capability checks.
+2. Unified execution policy.
+3. Egress redaction.
+4. Shell safety parser.
+5. Versioned encryption.
+6. Node-registry migration.
+7. Frontend decomposition.
+8. Worker/deploy topology.
+9. Metrics.
+10. Kubernetes read-only.
+11. GitOps remediation.
+12. CI/CD visibility.
 
 ## Definition Of Done
 

@@ -21,7 +21,7 @@ Legacy callers can still import endpoint functions and private compatibility hoo
 """
 from studio.views._views_all import *  # noqa: F401, F403, F405
 
-# Explicit re-exports of private helpers consumed by core_ui.desktop_api.views
+# Explicit re-exports of private compatibility helpers.
 from studio.views._views_all import (  # noqa: F401
     _launch_pipeline_run_async,
 )

@@ -43,9 +43,21 @@ def test_get_terminal_server_sync_allows_active_share():
         user=shared_user,
         shared_by=owner,
         expires_at=timezone.now() + timedelta(hours=1),
+        can_connect_terminal=True,
     )
 
     assert get_terminal_server_sync(user_id=shared_user.id, server_id=server.id) == server
+
+
+@pytest.mark.django_db
+def test_get_terminal_server_sync_rejects_share_without_terminal_capability():
+    owner = User.objects.create_user(username="terminal-view-owner", password="x")
+    shared_user = User.objects.create_user(username="terminal-view-user", password="x")
+    server = _make_server(owner)
+    ServerShare.objects.create(server=server, user=shared_user, shared_by=owner)
+
+    with pytest.raises(ObjectDoesNotExist):
+        get_terminal_server_sync(user_id=shared_user.id, server_id=server.id)
 
 
 @pytest.mark.django_db

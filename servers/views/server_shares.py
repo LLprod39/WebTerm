@@ -29,6 +29,34 @@ def _parse_expires_at(raw_value):
     return dt
 
 
+def _parse_bool(raw_value, default: bool = False) -> bool:
+    if raw_value is None:
+        return default
+    if isinstance(raw_value, bool):
+        return raw_value
+    return str(raw_value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _share_payload(share: ServerShare, *, active: bool | None = None) -> dict:
+    if active is None:
+        active = share.is_active()
+    return {
+        "id": share.id,
+        "user_id": share.user_id,
+        "username": share.user.username,
+        "email": share.user.email or "",
+        "share_context": bool(share.share_context),
+        "can_connect_terminal": bool(share.can_connect_terminal),
+        "can_execute_command": bool(share.can_execute_command),
+        "can_read_files": bool(share.can_read_files),
+        "can_write_files": bool(share.can_write_files),
+        "can_use_rdp": bool(share.can_use_rdp),
+        "expires_at": share.expires_at.isoformat() if share.expires_at else None,
+        "created_at": share.created_at.isoformat() if share.created_at else None,
+        "is_active": active and not share.is_revoked,
+    }
+
+
 @login_required
 @require_feature("servers")
 @require_http_methods(["GET"])
@@ -44,18 +72,7 @@ def server_share_list(request, server_id):
     payload = []
     for share in shares:
         active = share.expires_at is None or share.expires_at > now
-        payload.append(
-            {
-                "id": share.id,
-                "user_id": share.user_id,
-                "username": share.user.username,
-                "email": share.user.email or "",
-                "share_context": bool(share.share_context),
-                "expires_at": share.expires_at.isoformat() if share.expires_at else None,
-                "created_at": share.created_at.isoformat() if share.created_at else None,
-                "is_active": active and not share.is_revoked,
-            }
-        )
+        payload.append(_share_payload(share, active=active))
     return JsonResponse({"success": True, "shares": payload})
 
 
@@ -91,7 +108,12 @@ def server_share_create(request, server_id):
         if expires_at and expires_at <= timezone.now():
             return JsonResponse({"error": "expires_at must be in the future"}, status=400)
 
-        share_context = bool(data.get("share_context", True))
+        share_context = _parse_bool(data.get("share_context"), True)
+        can_connect_terminal = _parse_bool(data.get("can_connect_terminal"))
+        can_execute_command = _parse_bool(data.get("can_execute_command"))
+        can_read_files = _parse_bool(data.get("can_read_files"))
+        can_write_files = _parse_bool(data.get("can_write_files"))
+        can_use_rdp = _parse_bool(data.get("can_use_rdp"))
 
         share, _ = ServerShare.objects.update_or_create(
             server=server,
@@ -99,6 +121,11 @@ def server_share_create(request, server_id):
             defaults={
                 "shared_by": request.user,
                 "share_context": share_context,
+                "can_connect_terminal": can_connect_terminal,
+                "can_execute_command": can_execute_command,
+                "can_read_files": can_read_files,
+                "can_write_files": can_write_files,
+                "can_use_rdp": can_use_rdp,
                 "expires_at": expires_at,
                 "is_revoked": False,
                 "revoked_at": None,
@@ -120,6 +147,13 @@ def server_share_create(request, server_id):
                 "shared_with_user_id": target_user.id,
                 "shared_with_username": target_user.username,
                 "share_context": bool(share_context),
+                "capabilities": {
+                    "connect_terminal": bool(can_connect_terminal),
+                    "execute_command": bool(can_execute_command),
+                    "read_files": bool(can_read_files),
+                    "write_files": bool(can_write_files),
+                    "use_rdp": bool(can_use_rdp),
+                },
                 "expires_at": share.expires_at.isoformat() if share.expires_at else None,
             },
         )
@@ -127,16 +161,7 @@ def server_share_create(request, server_id):
         return JsonResponse(
             {
                 "success": True,
-                "share": {
-                    "id": share.id,
-                    "user_id": share.user_id,
-                    "username": share.user.username,
-                    "email": share.user.email or "",
-                    "share_context": bool(share.share_context),
-                    "expires_at": share.expires_at.isoformat() if share.expires_at else None,
-                    "created_at": share.created_at.isoformat() if share.created_at else None,
-                    "is_active": share.is_active(),
-                },
+                "share": _share_payload(share),
             }
         )
     except Exception as e:

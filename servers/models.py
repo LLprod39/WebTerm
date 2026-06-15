@@ -142,7 +142,6 @@ class Server(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="servers")
     group = models.ForeignKey(ServerGroup, on_delete=models.SET_NULL, null=True, blank=True, related_name="servers")
 
-    # Server info
     name = models.CharField(max_length=200)  # Display name
     server_type = models.CharField(
         max_length=10,
@@ -154,13 +153,11 @@ class Server(models.Model):
     port = models.IntegerField(default=22)
     username = models.CharField(max_length=100)
 
-    # Authentication
     auth_method = models.CharField(max_length=20, choices=AUTH_METHOD_CHOICES, default="password")
     encrypted_password = models.TextField(blank=True)  # Encrypted password if using password auth
     key_path = models.CharField(max_length=500, blank=True)  # Path to SSH key
     salt = models.BinaryField(null=True, blank=True)  # For password encryption
 
-    # Additional info
     tags = models.CharField(max_length=500, blank=True)  # Comma-separated tags
     notes = models.TextField(blank=True)
     corporate_context = models.TextField(
@@ -168,7 +165,6 @@ class Server(models.Model):
     )
     is_active = models.BooleanField(default=True)
 
-    # Network Context для корпоративных сетей
     network_config = models.JSONField(
         default=dict, blank=True, help_text="Контекст корпоративной сети: прокси, VPN, firewall, env variables"
     )
@@ -178,18 +174,15 @@ class Server(models.Model):
         help_text="Доверенные SSH host keys для strict host verification (TOFU).",
     )
 
-    # Helper fields для UI (заполняются автоматически из network_config)
     has_proxy = models.BooleanField(default=False, help_text="Сервер работает через прокси")
     requires_vpn = models.BooleanField(default=False, help_text="Требуется VPN для подключения")
     behind_firewall = models.BooleanField(default=True, help_text="Сервер за корпоративным файрволлом")
 
-    # AI policy
     ai_read_only = models.BooleanField(
         default=False,
         help_text="AI-агент может только читать состояние сервера, но не выполнять изменяющие команды.",
     )
 
-    # Detected OS (SSH probe or RDP inference)
     detected_os = models.CharField(
         max_length=32,
         blank=True,
@@ -207,7 +200,6 @@ class Server(models.Model):
         help_text="Last automatic or manual OS detection attempt (cooldown for retries)",
     )
 
-    # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     last_connected = models.DateTimeField(null=True, blank=True)
@@ -307,6 +299,11 @@ class ServerShare(models.Model):
         default=True,
         help_text="Передавать ли AI-контекст сервера (corporate/network/group/global rules) пользователю с доступом",
     )
+    can_connect_terminal = models.BooleanField(default=False)
+    can_execute_command = models.BooleanField(default=False)
+    can_read_files = models.BooleanField(default=False)
+    can_write_files = models.BooleanField(default=False)
+    can_use_rdp = models.BooleanField(default=False)
     expires_at = models.DateTimeField(
         null=True,
         blank=True,

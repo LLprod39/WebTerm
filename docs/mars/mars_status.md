@@ -1,6 +1,6 @@
 # MARS Architecture Refactoring Status
 
-Last reviewed: 2026-05-27
+Last reviewed: 2026-06-15
 
 This folder now records the current status of the MARS-driven refactor history. It is not the live queue source of truth; live MARS queue/debug state, when needed, lives outside this docs folder.
 
@@ -9,7 +9,7 @@ This folder now records the current status of the MARS-driven refactor history. 
 | Area | Status |
 | --- | --- |
 | Import boundaries | Green. `import-linter` passed during `python scripts\check_architecture_sizes.py --strict-new`. |
-| Size guard | Red. `key_mcp.py` grew to `2094` lines against pinned baseline `2089`. |
+| Size guard | Green. `key_mcp.py` is below its pinned baseline. |
 | Memory store import path | Done. Callers use `servers.adapters.memory_store.DjangoServerMemoryStore`. |
 | MCP runtime ownership | Done. `servers.mcp_tool_runtime` is deleted; server agents use `MCPRuntimeProvider`; Studio owns concrete MCP runtime. |
 | `passwords/` package | Done. Folder is absent. |
@@ -18,25 +18,9 @@ This folder now records the current status of the MARS-driven refactor history. 
 | Studio node registry | In progress. Target registry exists; production executor is still mostly `studio/pipeline_executor.py`. |
 | Frontend decomposition | In progress. Domain API modules exist; large route/components remain pinned. |
 
-## Immediate Next Action
-
-Fix the architecture guard:
-
-```powershell
-python scripts\check_architecture_sizes.py --strict-new
-```
-
-Current known failure:
-
-```text
-[LEGACY GROWTH] .\key_mcp.py
-Legacy file grew: 2094 > 2089
-```
-
-Prefer shrinking/extracting `key_mcp.py`. Re-pin the baseline only if the growth is intentional and documented.
-
 ## Completed Refactor Themes
 
+- Architecture guard restored to green.
 - Architecture checker and import-linter contracts were added.
 - Django memory store implementation moved behind `servers.adapters.memory_store`.
 - Many memory workflows moved into focused `servers/adapters/django_memory_*.py` modules.
@@ -46,7 +30,6 @@ Prefer shrinking/extracting `key_mcp.py`. Re-pin the baseline only if the growth
 
 ## Open Refactor Themes
 
-- Restore green architecture guard.
 - Continue shrinking legacy-large files.
 - Finish Studio node-registry migration.
 - Continue frontend API/controller decomposition.

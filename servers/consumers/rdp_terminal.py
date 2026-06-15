@@ -11,14 +11,13 @@ import json
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
-from django.db.models import Q
-from django.utils import timezone
 from loguru import logger
 
 from core_ui.activity import log_user_activity_async
 from servers.guacd_tunnel import _parse_guac_instruction, connect_guacd_rdp
 from servers.models import Server
 from servers.secret_utils import get_server_auth_secret
+from servers.services.server_query import CAPABILITY_USE_RDP, get_server_for_user_capability
 
 
 class RDPTerminalConsumer(AsyncWebsocketConsumer):
@@ -68,19 +67,7 @@ class RDPTerminalConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def _get_server(self, server_id: int) -> Server | None:
-        now = timezone.now()
-        return (
-            Server.objects.filter(id=server_id, is_active=True)
-            .filter(
-                Q(user_id=self.user.id)
-                | (
-                    Q(shares__user_id=self.user.id, shares__is_revoked=False)
-                    & (Q(shares__expires_at__isnull=True) | Q(shares__expires_at__gt=now))
-                )
-            )
-            .distinct()
-            .first()
-        )
+        return get_server_for_user_capability(server_id, self.user, CAPABILITY_USE_RDP)
 
     async def receive(self, text_data=None, bytes_data=None):
         # First message is expected to be auth payload for resolving stored secrets.

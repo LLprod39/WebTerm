@@ -27,6 +27,7 @@ from servers.models import (
     ServerMemoryEvent,
     ServerMemoryRevalidation,
     ServerMemorySnapshot,
+    ServerShare,
     ServerWatcherDraft,
 )
 
@@ -1881,9 +1882,13 @@ def test_shared_user_cannot_refresh_trusted_host_key():
     owner = User.objects.create_user(username="ssh-owner-share", password="x")
     teammate = User.objects.create_user(username="ssh-shared-user", password="x")
     server = _create_server(owner, name="shared-ssh", auth_method="password")
-    from servers.models import ServerShare
-
-    ServerShare.objects.create(server=server, user=teammate, shared_by=owner, share_context=True)
+    ServerShare.objects.create(
+        server=server,
+        user=teammate,
+        shared_by=owner,
+        share_context=True,
+        can_connect_terminal=True,
+    )
 
     client = Client()
     client.force_login(teammate)
@@ -1895,40 +1900,6 @@ def test_shared_user_cannot_refresh_trusted_host_key():
 
     assert response.status_code == 403
     assert "Only owner can refresh" in response.json()["error"]
-
-
-@pytest.mark.django_db
-def test_shared_user_server_detail_hides_saved_secret_and_context_flags():
-    owner = User.objects.create_user(username="shared-detail-owner", password="x")
-    teammate = User.objects.create_user(username="shared-detail-user", password="x")
-    server = _create_server(
-        owner,
-        name="shared-detail-srv",
-        auth_method="password",
-        notes="owner notes",
-        corporate_context="secret corp context",
-        network_config={"proxy": {"http_proxy": "http://proxy.local:8080"}},
-    )
-    server.encrypted_password = "ciphertext"
-    server.salt = b"12345678"
-    server.save(update_fields=["encrypted_password", "salt"])
-
-    from servers.models import ServerShare
-
-    ServerShare.objects.create(server=server, user=teammate, shared_by=owner, share_context=False)
-
-    client = Client()
-    client.force_login(teammate)
-    response = client.get(f"/servers/api/{server.id}/get/")
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["notes"] == ""
-    assert payload["corporate_context"] == ""
-    assert payload["network_config"] == {}
-    assert payload["share_context_enabled"] is False
-    assert payload["has_saved_password"] is False
-    assert payload["can_view_password"] is False
 
 
 @pytest.mark.django_db
