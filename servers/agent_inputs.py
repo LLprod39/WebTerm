@@ -14,6 +14,16 @@ ARTIFACT_KINDS = {"document", "task_list", "script"}
 TELEGRAM_DIGEST_LIMIT = 950
 TELEGRAM_LINE_LIMIT = 180
 
+SCRIPT_MATERIAL_RUNTIME_PROTOCOL = """## Script material runtime protocol
+Если среди материалов есть `script`, это не просто справочный текст, а кандидат на выполнение.
+Работай с ним так:
+- сначала прочитай скрипт и сопоставь его с целью/описанием задачи;
+- определи, безопасно ли его запускать, какие аргументы, переменные окружения, права и серверы нужны;
+- если задача подразумевает запуск и скрипт безопасен, создай на целевом сервере временную директорию через `mktemp -d`, запиши скрипт во временный файл, выставь права через `chmod`, запусти его через `timeout`, зафиксируй exit code, stdout и stderr;
+- после запуска проверь, что ничего не сломалось: состояние затронутых сервисов, ключевые логи, файлы/процессы/порты по смыслу скрипта;
+- удали временный файл/директорию, если задача явно не требует оставить артефакты;
+- если скрипт выполняет разрушительные действия, меняет критичные конфиги, требует секреты или цель неясна — не запускай его молча, запроси подтверждение или предложи dry-run/проверку."""
+
 
 def _normalize_tasks(raw: Any) -> list[dict[str, Any]]:
     if not isinstance(raw, list):
@@ -108,6 +118,8 @@ def build_agent_materials_prompt(artifacts: Any) -> str:
         return ""
 
     sections = ["## Operator-provided materials", "Используй эти материалы как рабочий контекст агента."]
+    if any(item["kind"] == "script" for item in items):
+        sections.append(SCRIPT_MATERIAL_RUNTIME_PROTOCOL)
     used_chars = 0
     for item in items:
         raw_content = _tasks_to_markdown(item.get("tasks") or []) if item["kind"] == "task_list" and item.get("tasks") else item["content"]

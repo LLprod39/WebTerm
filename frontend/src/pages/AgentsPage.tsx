@@ -26,6 +26,7 @@ import {
   Brain, Target, Settings2, Layers, CheckCircle2,
   AlertTriangle, Activity,
   Shield, CalendarDays, BookOpen, Upload, FileCode2, Send,
+  ArrowLeft, ArrowRight, Save, Tag, ListChecks,
   type LucideIcon,
 } from "lucide-react";
 import { AgentReportModal } from "@/components/studio/AgentReportModal";
@@ -70,6 +71,9 @@ const AGENT_ICONS: Record<string, LucideIcon> = {
   multi_health: Activity,
   custom: Settings2,
 };
+
+const HIDDEN_AGENT_TEMPLATE_TYPES = new Set(["docker_status"]);
+
 const FULL_AGENT_TOOL_OPTIONS = [
   { key: "open_connection", label: "Open connection" },
   { key: "close_connection", label: "Close connection" },
@@ -384,6 +388,23 @@ function isAgentScheduled(agent: AgentItem): boolean {
   return mode !== "manual";
 }
 
+type AgentWizardStep = "template" | "basics" | "servers" | "capabilities" | "review";
+
+const AGENT_WIZARD_STEPS: Array<{
+  key: AgentWizardStep;
+  labelRu: string;
+  labelEn: string;
+  detailRu: string;
+  detailEn: string;
+  icon: LucideIcon;
+}> = [
+  { key: "template", labelRu: "Тип", labelEn: "Type", detailRu: "Шаблон агента", detailEn: "Agent template", icon: Layers },
+  { key: "basics", labelRu: "Основное", labelEn: "Basics", detailRu: "Имя, команды, права", detailEn: "Name, commands, access", icon: Tag },
+  { key: "servers", labelRu: "Серверы", labelEn: "Servers", detailRu: "Окружения и расписание", detailEn: "Targets and schedule", icon: Server },
+  { key: "capabilities", labelRu: "Возможности", labelEn: "Capabilities", detailRu: "Скиллы и материалы", detailEn: "Skills and materials", icon: BookOpen },
+  { key: "review", labelRu: "Обзор", labelEn: "Review", detailRu: "Проверка и запуск", detailEn: "Check and launch", icon: CheckCircle2 },
+];
+
 export default function AgentsPage() {
   const { t, lang } = useI18n();
   const queryClient = useQueryClient();
@@ -658,7 +679,7 @@ function CreateAgentDialog({
 }) {
   const { t, lang } = useI18n();
   const isEditing = Boolean(initialAgent);
-  const [step, setStep] = useState<"template" | "config">("template");
+  const [step, setStep] = useState<AgentWizardStep>("template");
   const [mode, setMode] = useState<"mini" | "full" | "multi">("mini");
   const [selectedType, setSelectedType] = useState("");
   const [name, setName] = useState("");
@@ -667,7 +688,6 @@ function CreateAgentDialog({
   const [goal, setGoal] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [maxIter, setMaxIter] = useState(20);
-  const [multiServer, setMultiServer] = useState(false);
   const [toolsConfig, setToolsConfig] = useState<Record<string, boolean>>(() => buildDefaultToolsConfig());
   const [sudoPolicy, setSudoPolicy] = useState<AgentSudoPolicy>("disabled");
   const [stopConditionsText, setStopConditionsText] = useState("");
@@ -681,25 +701,49 @@ function CreateAgentDialog({
   const [activeArtifactIndex, setActiveArtifactIndex] = useState<number | null>(null);
   const [telegramEnabled, setTelegramEnabled] = useState(false);
   const [telegramChatId, setTelegramChatId] = useState("");
+  const [toolsExpanded, setToolsExpanded] = useState(false);
+  const [skillsExpanded, setSkillsExpanded] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const { data: tplData } = useQuery({ queryKey: ["agents", "templates"], queryFn: fetchAgentTemplates, enabled: open });
   const { data: bootstrapData } = useQuery({ queryKey: ["frontend", "bootstrap"], queryFn: fetchFrontendBootstrap, staleTime: 30_000 });
   const { data: availableSkills = [] } = useQuery<StudioSkill[]>({ queryKey: ["studio", "skills", "agent-picker"], queryFn: studioSkills.list, enabled: open });
 
-  const templates = (tplData?.templates || []).filter((template) => template.mode === mode || (mode === "multi" && template.mode === "full"));
+  const templates = (tplData?.templates || [])
+    .filter((template) => !HIDDEN_AGENT_TEMPLATE_TYPES.has(template.type))
+    .filter((template) => template.mode === mode || (mode === "multi" && template.mode === "full"));
   const servers = bootstrapData?.servers || [];
   const allServerIds = servers.map((server) => server.id);
+  const activeArtifact = activeArtifactIndex !== null ? inputArtifacts[activeArtifactIndex] : null;
+  const currentStepIndex = Math.max(0, AGENT_WIZARD_STEPS.findIndex((item) => item.key === step));
+  const commandCount = commands.split("\n").map((item) => item.trim()).filter(Boolean).length;
+  const canSave = Boolean((name || selectedType).trim()) && selectedServers.length > 0;
 
   const resetForm = () => {
-    setStep("template"); setMode("mini"); setSelectedType(""); setName("");
-    setCommands(""); setAiPrompt(""); setGoal(""); setSystemPrompt("");
-    setMaxIter(20); setMultiServer(false); setSelectedServers([]); setSchedule(0);
-    setScheduleConfig(defaultScheduleConfig()); setSelectedSkillSlugs([]); setInputArtifacts([]);
-    setActiveArtifactIndex(null);
-    setTelegramEnabled(false); setTelegramChatId("");
+    setStep("template");
+    setMode("mini");
+    setSelectedType("");
+    setName("");
+    setCommands("");
+    setAiPrompt("");
+    setGoal("");
+    setSystemPrompt("");
+    setMaxIter(20);
+    setToolsConfig(buildDefaultToolsConfig());
     setSudoPolicy("disabled");
-    setToolsConfig(buildDefaultToolsConfig()); setStopConditionsText(""); setSessionTimeoutSeconds(600); setMaxConnections(5);
+    setStopConditionsText("");
+    setSessionTimeoutSeconds(600);
+    setMaxConnections(5);
+    setSelectedServers([]);
+    setSchedule(0);
+    setScheduleConfig(defaultScheduleConfig());
+    setSelectedSkillSlugs([]);
+    setInputArtifacts([]);
+    setActiveArtifactIndex(null);
+    setTelegramEnabled(false);
+    setTelegramChatId("");
+    setToolsExpanded(false);
+    setSkillsExpanded(false);
   };
 
   useEffect(() => {
@@ -708,8 +752,7 @@ function CreateAgentDialog({
       resetForm();
       return;
     }
-
-    setStep("config");
+    setStep("basics");
     setMode(initialAgent.mode);
     setSelectedType(initialAgent.agent_type || "custom");
     setName(initialAgent.name || "");
@@ -718,7 +761,6 @@ function CreateAgentDialog({
     setGoal(initialAgent.goal || "");
     setSystemPrompt(initialAgent.system_prompt || "");
     setMaxIter(initialAgent.max_iterations || 20);
-    setMultiServer(Boolean(initialAgent.allow_multi_server));
     setToolsConfig({ ...buildDefaultToolsConfig(), ...(initialAgent.tools_config || {}) });
     setSudoPolicy(sudoAgentOption(initialAgent.sudo_policy).value);
     setStopConditionsText((initialAgent.stop_conditions || []).join("\n"));
@@ -726,14 +768,15 @@ function CreateAgentDialog({
     setMaxConnections(initialAgent.max_connections || 5);
     setSelectedServers(initialAgent.server_ids || []);
     setSchedule(initialAgent.schedule_minutes || 0);
-    const nextScheduleConfig = initialAgent.schedule_config || scheduleConfigFromMinutes(initialAgent.schedule_minutes || 0);
-    setScheduleConfig(nextScheduleConfig);
+    setScheduleConfig(initialAgent.schedule_config || scheduleConfigFromMinutes(initialAgent.schedule_minutes || 0));
     setSelectedSkillSlugs(initialAgent.skill_slugs || []);
     setInputArtifacts((initialAgent.input_artifacts || []).map(normalizeArtifactDraft));
     setActiveArtifactIndex(null);
     const telegram = initialAgent.report_delivery?.telegram;
     setTelegramEnabled(Boolean(telegram?.enabled));
     setTelegramChatId(telegram?.chat_id || "");
+    setToolsExpanded(false);
+    setSkillsExpanded(false);
   }, [open, initialAgent]);
 
   const onSelectTemplate = (tpl: AgentTemplate) => {
@@ -741,48 +784,35 @@ function CreateAgentDialog({
     setName(tpl.name);
     setCommands(tpl.commands.join("\n"));
     setAiPrompt(tpl.ai_prompt);
-    if (tpl.mode === "full" || mode === "multi") {
-      setGoal(tpl.goal || "");
-      setSystemPrompt(tpl.system_prompt || "");
-      setMultiServer(tpl.allow_multi_server || false);
-      setStopConditionsText((tpl.stop_conditions || []).join("\n"));
-    }
-    setStep("config");
+    setGoal(tpl.goal || "");
+    setSystemPrompt(tpl.system_prompt || "");
+    setStopConditionsText((tpl.stop_conditions || []).join("\n"));
+    setStep("basics");
   };
 
   const onSave = async () => {
     setSaving(true);
     try {
-      const cmdList = commands.split("\n").map((c) => c.trim()).filter(Boolean);
       const normalizedSchedule = finalizeScheduleConfig(scheduleConfig, schedule);
       const payload = {
         name: name || localize(lang, "Новый агент", "Custom Agent"),
         mode,
         agent_type: selectedType || "custom",
         server_ids: selectedServers,
-        commands: cmdList,
+        commands: commands.split("\n").map((c) => c.trim()).filter(Boolean),
         ai_prompt: aiPrompt,
         schedule_minutes: deriveScheduleMinutes(normalizedSchedule),
         schedule_config: normalizedSchedule,
         goal,
         system_prompt: systemPrompt,
         max_iterations: maxIter,
-        allow_multi_server: multiServer,
+        allow_multi_server: selectedServers.length > 1,
         tools_config: mode === "mini" ? {} : toolsConfig,
         sudo_policy: sudoPolicy,
         stop_conditions: stopConditionsText.split("\n").map((item) => item.trim()).filter(Boolean),
         skill_slugs: selectedSkillSlugs,
-        input_artifacts: inputArtifacts
-          .map(prepareArtifactForSave)
-          .filter((item) => item.name && (item.content || item.tasks?.length)),
-        report_delivery: {
-          telegram: {
-            enabled: telegramEnabled,
-            chat_id: telegramChatId.trim(),
-            format: "brief",
-            include_link: true,
-          },
-        },
+        input_artifacts: inputArtifacts.map(prepareArtifactForSave).filter((item) => item.name && (item.content || item.tasks?.length)),
+        report_delivery: { telegram: { enabled: telegramEnabled, chat_id: telegramChatId.trim(), format: "brief", include_link: true } },
         session_timeout_seconds: sessionTimeoutSeconds,
         max_connections: maxConnections,
       };
@@ -794,18 +824,22 @@ function CreateAgentDialog({
         await onSaved({ id: created.id, mode, action: "create" });
         resetForm();
       }
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   };
 
+  const goNext = () => setStep(AGENT_WIZARD_STEPS[Math.min(currentStepIndex + 1, AGENT_WIZARD_STEPS.length - 1)].key);
+  const goBack = () => setStep(AGENT_WIZARD_STEPS[Math.max(currentStepIndex - 1, 0)].key);
   const toggleServer = (id: number) => setSelectedServers((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  const hasAllServersSelected = allServerIds.length > 0 && allServerIds.every((id) => selectedServers.includes(id));
+  const selectAll = () => setSelectedServers(hasAllServersSelected ? [] : allServerIds);
   const setScheduleMode = (modeValue: AgentScheduleMode) => {
     const nextInterval = modeValue === "interval" ? (schedule || scheduleConfig.interval_minutes || 60) : 0;
     setSchedule(nextInterval);
     setScheduleConfig(finalizeScheduleConfig({ ...scheduleConfig, mode: modeValue, interval_minutes: nextInterval }, nextInterval));
   };
-  const updateSchedule = (patch: Partial<AgentScheduleConfig>) => {
-    setScheduleConfig((current) => finalizeScheduleConfig({ ...current, ...patch }, schedule));
-  };
+  const updateSchedule = (patch: Partial<AgentScheduleConfig>) => setScheduleConfig((current) => finalizeScheduleConfig({ ...current, ...patch }, schedule));
   const toggleWeekday = (day: number) => {
     setScheduleConfig((current) => {
       const currentDays = current.weekdays || [];
@@ -813,15 +847,10 @@ function CreateAgentDialog({
       return finalizeScheduleConfig({ ...current, weekdays: weekdays.length ? weekdays : [day] }, schedule);
     });
   };
-  const toggleSkill = (slug: string) => {
-    setSelectedSkillSlugs((current) => current.includes(slug) ? current.filter((item) => item !== slug) : [...current, slug]);
-  };
+  const toggleSkill = (slug: string) => setSelectedSkillSlugs((current) => current.includes(slug) ? current.filter((item) => item !== slug) : [...current, slug]);
+  const updateArtifact = (index: number, patch: Partial<AgentInputArtifact>) => setInputArtifacts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item));
   const addArtifact = (kind: AgentInputArtifact["kind"]) => {
-    const labels = {
-      document: localize(lang, "Документ", "Document"),
-      task_list: localize(lang, "Список задач", "Task list"),
-      script: localize(lang, "Скрипт", "Script"),
-    };
+    const labels = { document: localize(lang, "Документ", "Document"), task_list: localize(lang, "Список задач", "Task list"), script: localize(lang, "Скрипт", "Script") };
     const artifact: AgentInputArtifact = kind === "task_list"
       ? { kind, name: labels[kind], content: "", run_hint: "", tasks: [{ title: "", details: "", done: false }] }
       : { kind, name: labels[kind], content: "", run_hint: "" };
@@ -829,34 +858,18 @@ function CreateAgentDialog({
     setInputArtifacts(next);
     setActiveArtifactIndex(next.length - 1);
   };
-  const updateArtifact = (index: number, patch: Partial<AgentInputArtifact>) => {
-    setInputArtifacts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item));
-  };
   const removeArtifact = (index: number) => {
     setInputArtifacts((current) => current.filter((_, itemIndex) => itemIndex !== index));
-    setActiveArtifactIndex((current) => {
-      if (current === null) return null;
-      if (current === index) return null;
-      return current > index ? current - 1 : current;
-    });
+    setActiveArtifactIndex((current) => current === index ? null : current !== null && current > index ? current - 1 : current);
   };
   const updateArtifactTask = (artifactIndex: number, taskIndex: number, patch: Partial<AgentTaskDraft>) => {
     setInputArtifacts((current) => current.map((artifact, index) => {
       if (index !== artifactIndex) return artifact;
       const tasks = artifact.tasks?.length ? artifact.tasks : [{ title: "", details: "", done: false }];
-      return {
-        ...artifact,
-        tasks: tasks.map((task, itemIndex) => itemIndex === taskIndex ? { ...task, ...patch } : task),
-      };
+      return { ...artifact, tasks: tasks.map((task, itemIndex) => itemIndex === taskIndex ? { ...task, ...patch } : task) };
     }));
   };
-  const addArtifactTask = (artifactIndex: number) => {
-    setInputArtifacts((current) => current.map((artifact, index) => (
-      index === artifactIndex
-        ? { ...artifact, tasks: [...(artifact.tasks || []), { title: "", details: "", done: false }] }
-        : artifact
-    )));
-  };
+  const addArtifactTask = (artifactIndex: number) => setInputArtifacts((current) => current.map((artifact, index) => index === artifactIndex ? { ...artifact, tasks: [...(artifact.tasks || []), { title: "", details: "", done: false }] } : artifact));
   const removeArtifactTask = (artifactIndex: number, taskIndex: number) => {
     setInputArtifacts((current) => current.map((artifact, index) => {
       if (index !== artifactIndex) return artifact;
@@ -869,663 +882,461 @@ function CreateAgentDialog({
     const added: AgentInputArtifact[] = [];
     for (const file of Array.from(files).slice(0, Math.max(0, 10 - inputArtifacts.length))) {
       const content = await file.text();
-      const lowerName = file.name.toLowerCase();
-      const kind: AgentInputArtifact["kind"] = lowerName.match(/\.(sh|py|js|ts|sql|ps1)$/) ? "script" : "document";
-      added.push({
-        kind,
-        name: file.name,
-        source_name: file.name,
-        size_bytes: file.size,
-        content: content.slice(0, 12_000),
-        run_hint: kind === "script" ? localize(lang, "Проверить и запускать только если требуется задачей", "Review and run only when required") : "",
-      });
+      const kind: AgentInputArtifact["kind"] = file.name.toLowerCase().match(/\.(sh|py|js|ts|sql|ps1)$/) ? "script" : "document";
+      added.push({ kind, name: file.name, source_name: file.name, size_bytes: file.size, content: content.slice(0, 12_000), run_hint: "" });
     }
     const next = [...inputArtifacts, ...added].slice(0, 10);
     setInputArtifacts(next);
     if (added.length) setActiveArtifactIndex(Math.min(inputArtifacts.length, next.length - 1));
   };
-  const selectAll = () => {
-    if (!allServerIds.length) return;
-    const hasAllServers = allServerIds.every((id) => selectedServers.includes(id));
-    setSelectedServers(hasAllServers ? [] : allServerIds);
-  };
-  const hasAllServersSelected = allServerIds.length > 0 && allServerIds.every((id) => selectedServers.includes(id));
-  const activeArtifact = activeArtifactIndex !== null ? inputArtifacts[activeArtifactIndex] : null;
+
+  const summaryRows = [
+    { icon: Tag, label: localize(lang, "Название", "Name"), value: name || localize(lang, "Новый агент", "New agent") },
+    { icon: Layers, label: localize(lang, "Тип", "Type"), value: agentModeLabel(mode, lang) },
+    { icon: Server, label: localize(lang, "Серверы", "Servers"), value: selectedServers.length ? localize(lang, `${selectedServers.length} выбрано`, `${selectedServers.length} selected`) : localize(lang, "Не выбраны", "Not selected") },
+    { icon: Shield, label: localize(lang, "Права запуска", "Run access"), value: localize(lang, sudoAgentOption(sudoPolicy).labelRu, sudoAgentOption(sudoPolicy).labelEn) },
+  ];
+  const enabledToolCount = Object.values(toolsConfig).filter(Boolean).length;
+  const visibleSkills = skillsExpanded ? availableSkills : availableSkills.slice(0, 4);
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
-      <DialogContent className="max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>
-            {isEditing
-              ? localize(lang, "Редактировать агента", "Edit agent")
-              : step === "template"
-              ? t("agent.create")
-              : localize(
-                lang,
-                `Настроить ${mode === "multi" ? "пайплайн" : mode === "full" ? "полного агента" : "mini-агента"}`,
-                `Configure ${mode === "multi" ? "Pipeline" : mode === "full" ? "Full" : "Mini"} Agent`,
-              )}
-          </DialogTitle>
-          <DialogDescription>
-            {isEditing
-              ? localize(lang, "Измените серверы, расписание, команды, инструкции и лимиты запуска.", "Update servers, schedule, commands, instructions, and run limits.")
-              : step === "template"
-              ? localize(lang, "Выберите тип агента или начните с ручной настройки.", "Choose an agent type or start with a custom setup.")
-              : localize(lang, "Настройте цель, лимиты, доступ к инструментам и серверы для запуска.", "Set the goal, limits, tool access, and servers for this run.")}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogBody className="max-h-[70vh] overflow-y-auto">
-          {step === "template" ? (
-            <div className="space-y-4">
-              {/* Mode selector */}
-              <div className="flex gap-3 flex-wrap">
-                <button
-                  type="button"
-                  aria-pressed={mode === "mini"}
-                  onClick={() => setMode("mini")}
-                  className={`flex-1 min-w-[140px] text-left border rounded-lg p-4 transition-colors ${mode === "mini" ? "border-primary bg-primary/10" : "border-border hover:border-primary/40"}`}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <Zap className="h-4 w-4 text-primary" />
-                    <span className="text-sm font-semibold">{localize(lang, "Mini-агент", "Mini Agent")}</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{localize(lang, "Выполняет список команд и готовит краткий разбор.", "Runs commands and returns a short analysis.")}</p>
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={mode === "full"}
-                  onClick={() => setMode("full")}
-                  className={`flex-1 min-w-[140px] text-left border rounded-lg p-4 transition-colors ${mode === "full" ? "border-primary bg-primary/10" : "border-border hover:border-primary/40"}`}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <Brain className="h-4 w-4 text-primary" />
-                    <span className="text-sm font-semibold">{localize(lang, "Полный агент", "Full Agent")}</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{localize(lang, "Сам выбирает шаги, инструменты и проверки.", "Chooses steps, tools, and checks.")}</p>
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={mode === "multi"}
-                  onClick={() => setMode("multi")}
-                  className={`flex-1 min-w-[140px] text-left border rounded-lg p-4 transition-colors ${mode === "multi" ? "border-primary bg-primary/10" : "border-border hover:border-primary/40"}`}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <Layers className="h-4 w-4 text-primary" />
-                    <span className="text-sm font-semibold">Pipeline</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{localize(lang, "Координирует несколько агентов и серверов.", "Coordinates multiple agents and servers.")}</p>
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                {templates.map((tpl) => (
-                  <button
-                    key={tpl.type}
-                    type="button"
-                    onClick={() => onSelectTemplate(tpl)}
-                    className="text-left bg-secondary/40 border border-border rounded-lg p-4 hover:border-primary/50 transition-colors">
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-background text-muted-foreground">
-                        {(() => {
-                          const TemplateIcon = AGENT_ICONS[tpl.type] || Settings2;
-                          return <TemplateIcon className="h-4 w-4" />;
-                        })()}
-                      </span>
-                      <span className="text-sm font-semibold text-foreground">{tpl.name}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {tpl.mode === "full"
-                        ? ((tpl.goal || localize(lang, "Автономная OPS-задача", "Autonomous OPS task")).slice(0, 80))
-                        : localize(lang, `${tpl.command_count} команд`, `${tpl.command_count} commands`)}
-                    </p>
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => { setSelectedType("custom"); setStep("config"); }}
-                  className="text-left bg-secondary/40 border border-dashed border-border rounded-lg p-4 hover:border-primary/50 transition-colors">
-                  <div className="flex items-center gap-3 mb-2">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-background text-muted-foreground">
-                      <Settings2 className="h-4 w-4" />
-                    </span>
-                    <span className="text-sm font-semibold text-foreground">{localize(lang, "Настроить вручную", "Custom Agent")}</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{localize(lang, "Задайте команды, цель и серверы сами.", "Define commands, goal, and servers yourself.")}</p>
-                </button>
-              </div>
+      <DialogContent className="max-h-[calc(100vh-32px)] max-w-[min(1420px,calc(100vw-32px))] rounded-lg border-primary/10 bg-card/95 p-0 shadow-[0_24px_90px_hsl(var(--background)_/_0.72)]">
+        <DialogHeader className="px-6 py-5">
+          <div className="flex items-start gap-4 pr-12">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/15 text-primary shadow-[0_0_28px_hsl(var(--primary)_/_0.16)]">
+              <Bot className="h-6 w-6" />
+            </span>
+            <div className="min-w-0">
+              <DialogTitle className="text-xl">{isEditing ? localize(lang, "Редактирование агента", "Edit agent") : localize(lang, "Создание агента", "Create agent")}</DialogTitle>
+              <DialogDescription>{localize(lang, "Настройте поведение, окружения, возможности и запуск.", "Configure behavior, targets, capabilities, and launch.")}</DialogDescription>
             </div>
-          ) : (
-            <div className="space-y-5">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">{localize(lang, "Название", "Name")}</label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={localize(lang, "Проверка места на диске", "Disk space check")} className="bg-secondary/30 h-10" />
-              </div>
+          </div>
+        </DialogHeader>
 
-              {(mode === "full" || mode === "multi") && (
+        <div className="border-b border-border/70 bg-secondary/10 px-6 py-4">
+          <div className="grid gap-3 md:grid-cols-5">
+            {AGENT_WIZARD_STEPS.map((item, index) => {
+              const Icon = item.icon;
+              const active = item.key === step;
+              const complete = index < currentStepIndex;
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setStep(item.key)}
+                  className={`flex min-h-[58px] items-center gap-3 rounded-lg border px-3 text-left transition-colors ${
+                    active ? "border-primary/80 bg-primary/10 text-foreground" : complete ? "border-primary/25 bg-secondary/30 text-foreground hover:border-primary/50" : "border-border/60 bg-background/20 text-muted-foreground hover:border-primary/35 hover:text-foreground"
+                  }`}
+                >
+                  <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-sm font-semibold ${active || complete ? "border-primary bg-primary/15 text-primary" : "border-border/80 bg-secondary/30"}`}>
+                    {complete ? <CheckCircle2 className="h-4 w-4" /> : active ? index + 1 : <Icon className="h-4 w-4" />}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold">{localize(lang, item.labelRu, item.labelEn)}</span>
+                    <span className="block truncate text-[11px] text-muted-foreground">{localize(lang, item.detailRu, item.detailEn)}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <DialogBody className="max-h-[calc(100vh-250px)] overflow-y-auto px-6 py-4">
+          <div className={step === "template" ? "space-y-4" : "grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]"}>
+            <div className="space-y-4">
+              {step === "template" && (
                 <>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground flex items-center gap-2">
-                      <Target className="h-4 w-4 text-primary" /> {localize(lang, "Цель", "Goal")}
-                    </label>
-                    <Textarea value={goal} onChange={(e) => setGoal(e.target.value)} rows={3} className="bg-secondary/30 text-sm"
-                      placeholder={mode === "multi" ? localize(lang, "Что нужно проверить или исправить. Задача будет разложена на шаги.", "What to check or fix. The task will be split into steps.") : localize(lang, "Что должен сделать агент и какой результат вернуть.", "What the agent should do and report back.")} />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground flex items-center gap-2"><Settings2 className="h-4 w-4 text-muted-foreground" /> {localize(lang, "Системные инструкции", "System instructions")}</label>
-                    <Textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} rows={2} className="bg-secondary/30 text-sm"
-                      placeholder={localize(lang, "Роль, ограничения, формат отчёта. Необязательно.", "Role, limits, report format. Optional.")} />
-                  </div>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <div className="flex-1 space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">{localize(lang, "Макс. итераций", "Max iterations")}</label>
-                      <Input type="number" min={1} max={100} value={maxIter} onChange={(e) => setMaxIter(Number(e.target.value))} className="bg-secondary/50 h-8 text-sm" />
+                  <section className="rounded-lg border border-border/70 bg-secondary/15 p-4">
+                    <h3 className="mb-4 text-lg font-semibold text-foreground">{localize(lang, "Тип агента", "Agent type")}</h3>
+                    <div className="grid gap-3 md:grid-cols-3">
+                      {[
+                        { key: "mini" as const, icon: Zap, label: localize(lang, "Mini-агент", "Mini Agent"), text: localize(lang, "Команды и краткий разбор", "Commands and short analysis") },
+                        { key: "full" as const, icon: Brain, label: localize(lang, "Полный агент", "Full Agent"), text: localize(lang, "Цель, инструменты и проверки", "Goal, tools, and checks") },
+                        { key: "multi" as const, icon: Layers, label: "Pipeline", text: localize(lang, "Несколько агентов и серверов", "Multiple agents and servers") },
+                      ].map((item) => {
+                        const Icon = item.icon;
+                        const active = mode === item.key;
+                        return (
+                          <button key={item.key} type="button" aria-pressed={active} onClick={() => setMode(item.key)} className={`min-h-[92px] rounded-lg border p-4 text-left transition-colors ${active ? "border-primary bg-primary/10 text-foreground" : "border-border/70 bg-background/30 text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>
+                            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg border border-border/70 bg-secondary/50 text-primary"><Icon className="h-4 w-4" /></span>
+                            <span className="block text-sm font-semibold">{item.label}</span>
+                            <span className="mt-1 block text-xs text-muted-foreground">{item.text}</span>
+                          </button>
+                        );
+                      })}
                     </div>
-                    <div className="flex-1 space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">{localize(lang, "Таймаут сессии, сек.", "Session timeout, sec")}</label>
-                      <Input type="number" min={30} max={3600} value={sessionTimeoutSeconds} onChange={(e) => setSessionTimeoutSeconds(Number(e.target.value))} className="bg-secondary/50 h-8 text-sm" />
+                  </section>
+
+                  <section className="rounded-lg border border-border/70 bg-secondary/15 p-4">
+                    <div className="mb-4">
+                      <h3 className="text-lg font-semibold text-foreground">{localize(lang, "Шаблон", "Template")}</h3>
                     </div>
-                    <div className="flex-1 space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">{localize(lang, "Макс. подключений", "Max connections")}</label>
-                      <Input type="number" min={1} max={10} value={maxConnections} onChange={(e) => setMaxConnections(Number(e.target.value))} className="bg-secondary/50 h-8 text-sm" />
-                    </div>
-                    <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer rounded-lg border border-border/50 bg-secondary/30 px-3 py-2 xl:mt-5">
-                      <input type="checkbox" checked={multiServer} onChange={(e) => setMultiServer(e.target.checked)} className="rounded" />
-                      {localize(lang, "Несколько серверов", "Multi-server")}
-                    </label>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-muted-foreground">{localize(lang, "Условия остановки", "Stop conditions")}</label>
-                    <Textarea
-                      value={stopConditionsText}
-                      onChange={(e) => setStopConditionsText(e.target.value)}
-                      rows={3}
-                      className="bg-secondary/50 text-xs"
-                      placeholder={localize(lang, "По одному условию на строку. Например: health checks зелёные", "One condition per line. Example: health checks are green")}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-medium text-muted-foreground">{localize(lang, "Доступ к инструментам", "Tool access")}</label>
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                       <button
                         type="button"
-                        className="min-h-8 rounded-md px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
-                        onClick={() => setToolsConfig(buildDefaultToolsConfig())}
+                        onClick={() => { setSelectedType("custom"); setStep("basics"); }}
+                        className="min-h-[104px] rounded-lg border border-dashed border-primary/35 bg-primary/5 p-4 text-left transition-colors hover:border-primary/60 hover:bg-primary/10"
                       >
-                        {localize(lang, "Включить все", "Enable all")}
+                        <div className="mb-3 flex items-center gap-3">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10 text-primary">
+                            <Settings2 className="h-4 w-4" />
+                          </span>
+                          <span className="min-w-0 truncate text-sm font-semibold text-foreground">{localize(lang, "Вручную", "Custom")}</span>
+                        </div>
+                        <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">
+                          {localize(lang, "Создать агента без шаблона", "Create an agent without a template")}
+                        </p>
                       </button>
+                      {templates.map((tpl) => {
+                        const TemplateIcon = AGENT_ICONS[tpl.type] || Settings2;
+                        return (
+                          <button key={tpl.type} type="button" onClick={() => onSelectTemplate(tpl)} className="min-h-[104px] rounded-lg border border-border/70 bg-background/30 p-4 text-left transition-colors hover:border-primary/50 hover:bg-primary/5">
+                            <div className="mb-3 flex items-center gap-3">
+                              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-secondary/50 text-primary"><TemplateIcon className="h-4 w-4" /></span>
+                              <span className="min-w-0 truncate text-sm font-semibold text-foreground">{tpl.name}</span>
+                            </div>
+                            <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">{tpl.mode === "full" ? (tpl.goal || localize(lang, "Автономная OPS-задача", "Autonomous OPS task")) : localize(lang, `${tpl.command_count} команд`, `${tpl.command_count} commands`)}</p>
+                          </button>
+                        );
+                      })}
                     </div>
-                    <div className="grid grid-cols-2 gap-2 rounded-lg border border-border/70 bg-secondary/20 p-3">
-                      {FULL_AGENT_TOOL_OPTIONS.map((tool) => (
-                        <label key={tool.key} className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(toolsConfig[tool.key])}
-                            onChange={(event) =>
-                              setToolsConfig((current) => ({ ...current, [tool.key]: event.target.checked }))
-                            }
-                          />
-                          {tool.label}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
+                  </section>
                 </>
               )}
 
-              {mode === "mini" && (
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-muted-foreground">{t("agent.commands_label")}</label>
-                  <Textarea value={commands} onChange={(e) => setCommands(e.target.value)} rows={5} className="bg-secondary/50 font-mono text-[11px]"
-                    placeholder="hostname&#10;uptime&#10;free -m" />
-                </div>
+              {step === "basics" && (
+                <section className="space-y-4 rounded-lg border border-border/70 bg-secondary/15 p-4">
+                  <h3 className="text-lg font-semibold text-foreground">{localize(lang, "Основные настройки", "Basics")}</h3>
+                  <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
+                    <label className="pt-2 text-sm font-medium text-muted-foreground">{localize(lang, "Название агента", "Agent name")} <span className="text-primary">*</span></label>
+                    <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={localize(lang, "Анализ логов", "Log analysis")} className="h-10 bg-background/60" />
+                  </div>
+                  {mode === "mini" ? (
+                    <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
+                      <label className="pt-2 text-sm font-medium text-muted-foreground">{t("agent.commands_label")} <span className="text-primary">*</span></label>
+                      <Textarea value={commands} onChange={(e) => setCommands(e.target.value)} rows={7} className="bg-background/60 font-mono text-xs" placeholder={"hostname\nuptime\nfree -m"} />
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
+                        <label className="pt-2 text-sm font-medium text-muted-foreground">{localize(lang, "Цель", "Goal")}</label>
+                        <Textarea value={goal} onChange={(e) => setGoal(e.target.value)} rows={3} className="bg-background/60 text-sm" />
+                      </div>
+                      <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
+                        <label className="pt-2 text-sm font-medium text-muted-foreground">{localize(lang, "Системные инструкции", "System instructions")}</label>
+                        <Textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} rows={3} className="bg-background/60 text-sm" />
+                      </div>
+                      <div className="grid gap-3 lg:grid-cols-3 lg:pl-[236px]">
+                        <Input type="number" min={1} max={100} value={maxIter} onChange={(e) => setMaxIter(Number(e.target.value))} className="h-10 bg-background/60" aria-label={localize(lang, "Максимум итераций", "Max iterations")} />
+                        <Input type="number" min={30} max={3600} value={sessionTimeoutSeconds} onChange={(e) => setSessionTimeoutSeconds(Number(e.target.value))} className="h-10 bg-background/60" aria-label={localize(lang, "Таймаут сессии", "Session timeout")} />
+                        <Input type="number" min={1} max={10} value={maxConnections} onChange={(e) => setMaxConnections(Number(e.target.value))} className="h-10 bg-background/60" aria-label={localize(lang, "Максимум подключений", "Max connections")} />
+                      </div>
+                    </>
+                  )}
+                  <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
+                    <label className="pt-2 text-sm font-medium text-muted-foreground">{localize(lang, "Инструкции к анализу", "Analysis instructions")}</label>
+                    <Textarea value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} rows={4} className="bg-background/60 text-sm" />
+                  </div>
+                  <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
+                    <label className="pt-2 text-sm font-medium text-muted-foreground">{localize(lang, "Права запуска", "Run access")}</label>
+                    <div className="grid gap-3 md:grid-cols-3">
+                      {SUDO_AGENT_OPTIONS.map((option) => {
+                        const active = sudoPolicy === option.value;
+                        return (
+                          <button key={option.value} type="button" aria-pressed={active} onClick={() => setSudoPolicy(option.value)} className={`min-h-[76px] rounded-lg border p-3 text-left transition-colors ${active ? "border-primary bg-primary/10 text-foreground" : "border-border/70 bg-background/30 text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>
+                            <Shield className="mb-2 h-4 w-4 text-primary" />
+                            <span className="block text-sm font-semibold">{localize(lang, option.labelRu, option.labelEn)}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </section>
               )}
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">{localize(lang, "Инструкции к анализу", "Analysis instructions")}</label>
-                <Textarea value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} rows={2} className="bg-secondary/50 text-xs"
-                  placeholder={localize(lang, "На что обратить внимание в выводе команд. Необязательно.", "What to focus on in command output. Optional.")} />
-              </div>
-
-              <div className="space-y-3 rounded-lg border border-border/70 bg-secondary/20 p-3">
-                <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                  <Shield className="h-3.5 w-3.5 text-primary" /> Controlled sudo
-                </label>
-                <div className="grid gap-2 sm:grid-cols-3">
-                  {SUDO_AGENT_OPTIONS.map((option) => {
-                    const active = sudoPolicy === option.value;
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        aria-pressed={active}
-                        onClick={() => setSudoPolicy(option.value)}
-                        className={`min-h-[58px] rounded-lg border px-3 py-2 text-left transition-colors ${
-                          active
-                            ? "border-primary bg-primary/10 text-foreground"
-                            : "border-border/70 bg-background/35 text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                        }`}
-                      >
-                        <span className="block text-xs font-semibold">{localize(lang, option.labelRu, option.labelEn)}</span>
-                        <span className="mt-0.5 block text-[11px] leading-4 text-muted-foreground">
-                          {localize(lang, option.hintRu, option.hintEn)}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">{t("nav.servers")}</label>
-                <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={selectAll} className={`min-h-8 rounded-md border px-3 py-1 text-xs font-medium transition-colors ${hasAllServersSelected ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>{t("agent.all")}</button>
-                  {servers.map((s) => (
-                    <button
-                      key={s.id}
-                      type="button"
-                      aria-pressed={selectedServers.includes(s.id)}
-                      onClick={() => toggleServer(s.id)}
-                      className={`min-h-8 rounded-md border px-3 py-1 text-xs font-medium transition-colors ${selectedServers.includes(s.id) ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>
-                      {s.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-3 rounded-lg border border-border/70 bg-secondary/20 p-3">
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                  <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                    <CalendarDays className="h-3.5 w-3.5 text-primary" /> {t("agent.schedule")}
-                  </label>
-                  <span className="inline-flex min-h-7 items-center rounded-md border border-primary/25 bg-primary/10 px-2 text-xs font-medium text-primary">
-                    {formatScheduleConfigLabel(scheduleConfig, schedule, lang)}
-                  </span>
-                </div>
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {SCHEDULE_MODES.map((option) => {
-                    const active = scheduleConfig.mode === option.mode;
-                    return (
-                      <button
-                        key={option.mode}
-                        type="button"
-                        aria-pressed={active}
-                        onClick={() => setScheduleMode(option.mode)}
-                        className={`min-h-[58px] rounded-lg border px-3 py-2 text-left transition-colors ${
-                          active
-                            ? "border-primary bg-primary/10 text-foreground"
-                            : "border-border/70 bg-background/35 text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                        }`}
-                      >
-                        <span className="block text-xs font-semibold">{localize(lang, option.labelRu, option.labelEn)}</span>
-                        <span className="mt-0.5 block text-[11px] leading-4 text-muted-foreground">{localize(lang, option.hintRu, option.hintEn)}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-                {scheduleConfig.mode === "interval" && (
-                  <>
-                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                      {SCHEDULE_PRESETS.filter((option) => option.minutes > 0).map((option) => {
-                        const active = schedule === option.minutes;
-                        return (
-                          <button
-                            key={option.minutes}
-                            type="button"
-                            aria-pressed={active}
-                            onClick={() => {
-                              setSchedule(option.minutes);
-                              setScheduleConfig(finalizeScheduleConfig({ ...scheduleConfig, mode: "interval", interval_minutes: option.minutes }, option.minutes));
-                            }}
-                            className={`min-h-[54px] rounded-lg border px-3 py-2 text-left transition-colors ${
-                              active
-                                ? "border-primary bg-primary/10 text-foreground"
-                                : "border-border/70 bg-background/35 text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                            }`}
-                          >
-                            <span className="block text-xs font-semibold">{localize(lang, option.labelRu, option.labelEn)}</span>
-                            <span className="mt-0.5 block text-[11px] leading-4 text-muted-foreground">{localize(lang, option.hintRu, option.hintEn)}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <div className="grid gap-2 sm:grid-cols-[1fr_160px] sm:items-end">
-                      <div>
-                        <div className="text-xs font-medium text-muted-foreground">{localize(lang, "Свой интервал", "Custom interval")}</div>
-                        <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
-                          {localize(lang, "Если нужен другой период, укажите количество минут.", "Use minutes when you need a different cadence.")}
-                        </p>
-                      </div>
-                      <Input
-                        type="number"
-                        min={1}
-                        max={10080}
-                        step={5}
-                        value={schedule || scheduleConfig.interval_minutes || 60}
-                        onChange={(e) => {
-                          const value = Math.max(1, Number(e.target.value) || 1);
-                          setSchedule(value);
-                          setScheduleConfig(finalizeScheduleConfig({ ...scheduleConfig, mode: "interval", interval_minutes: value }, value));
-                        }}
-                        className="h-9 bg-background/60 text-sm"
-                        aria-label={localize(lang, "Интервал запуска в минутах", "Run interval in minutes")}
-                      />
-                    </div>
-                  </>
-                )}
-                {(["daily", "weekly", "monthly"] as AgentScheduleMode[]).includes(scheduleConfig.mode) && (
-                  <div className="grid gap-3 sm:grid-cols-[1fr_180px]">
-                    <div className="space-y-2">
-                      <div className="text-xs font-medium text-muted-foreground">{localize(lang, "Время запуска", "Run time")}</div>
-                      <div className="flex flex-wrap gap-2">
-                        {QUICK_TIMES.map((timeValue) => (
-                          <button
-                            key={timeValue}
-                            type="button"
-                            onClick={() => updateSchedule({ time: timeValue })}
-                            className={`min-h-8 rounded-md border px-3 text-xs font-medium transition-colors ${
-                              scheduleConfig.time === timeValue ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                            }`}
-                          >
-                            {timeValue}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <Input
-                      type="time"
-                      value={scheduleConfig.time || "09:00"}
-                      onChange={(e) => updateSchedule({ time: e.target.value })}
-                      className="h-9 bg-background/60 text-sm sm:mt-6"
-                    />
+              {step === "servers" && (
+                <section className="space-y-4 rounded-lg border border-border/70 bg-secondary/15 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <h3 className="text-lg font-semibold text-foreground">{localize(lang, "Выбор серверов", "Server selection")}</h3>
+                    <button type="button" onClick={selectAll} className={`min-h-9 rounded-md border px-3 text-sm font-semibold transition-colors ${hasAllServersSelected ? "border-primary bg-primary/10 text-primary" : "border-border/70 text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>{hasAllServersSelected ? localize(lang, "Снять выбор", "Clear") : localize(lang, "Выбрать все", "Select all")}</button>
                   </div>
-                )}
-                {scheduleConfig.mode === "weekly" && (
-                  <div className="space-y-2">
-                    <div className="text-xs font-medium text-muted-foreground">{localize(lang, "Дни недели", "Weekdays")}</div>
-                    <div className="flex flex-wrap gap-2">
-                      {WEEKDAYS.map((day) => {
-                        const active = (scheduleConfig.weekdays || []).includes(day.value);
-                        return (
-                          <button
-                            key={day.value}
-                            type="button"
-                            aria-pressed={active}
-                            onClick={() => toggleWeekday(day.value)}
-                            className={`min-h-8 rounded-md border px-3 text-xs font-medium transition-colors ${
-                              active ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                            }`}
-                          >
-                            {localize(lang, day.ru, day.en)}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-                {scheduleConfig.mode === "monthly" && (
-                  <div className="grid gap-2 sm:grid-cols-[1fr_120px] sm:items-end">
-                    <div>
-                      <div className="text-xs font-medium text-muted-foreground">{localize(lang, "День месяца", "Day of month")}</div>
-                      <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
-                        {localize(lang, "Если в месяце нет такого числа, запуск будет пропущен.", "Months without that date are skipped.")}
-                      </p>
-                    </div>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={31}
-                      value={scheduleConfig.day_of_month || 1}
-                      onChange={(e) => updateSchedule({ day_of_month: Math.min(31, Math.max(1, Number(e.target.value) || 1)) })}
-                      className="h-9 bg-background/60 text-sm"
-                    />
-                  </div>
-                )}
-                {scheduleConfig.mode === "once" && (
-                  <div className="grid gap-2 sm:grid-cols-[1fr_240px] sm:items-end">
-                    <div>
-                      <div className="text-xs font-medium text-muted-foreground">{localize(lang, "Дата и время запуска", "Run date and time")}</div>
-                      <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
-                        {localize(lang, "Агент запустится один раз и больше не будет считаться due.", "The agent will run once and then stop being due.")}
-                      </p>
-                    </div>
-                    <Input
-                      type="datetime-local"
-                      value={scheduleConfig.run_at || ""}
-                      onChange={(e) => updateSchedule({ run_at: e.target.value })}
-                      className="h-9 bg-background/60 text-sm"
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-3 rounded-lg border border-border/70 bg-secondary/20 p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                    <BookOpen className="h-3.5 w-3.5 text-primary" /> {localize(lang, "Скиллы агента", "Agent skills")}
-                  </label>
-                  <span className="text-[11px] text-muted-foreground">{selectedSkillSlugs.length}</span>
-                </div>
-                {availableSkills.length ? (
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {availableSkills.map((skill) => {
-                      const active = selectedSkillSlugs.includes(skill.slug);
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {servers.map((server) => {
+                      const active = selectedServers.includes(server.id);
                       return (
-                        <button
-                          key={skill.slug}
-                          type="button"
-                          aria-pressed={active}
-                          onClick={() => toggleSkill(skill.slug)}
-                          className={`min-h-[58px] rounded-lg border px-3 py-2 text-left transition-colors ${
-                            active ? "border-primary bg-primary/10 text-foreground" : "border-border/70 bg-background/35 text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                          }`}
-                        >
-                          <span className="block truncate text-xs font-semibold">{skill.name}</span>
-                          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{skill.service || skill.category || skill.slug}</span>
+                        <button key={server.id} type="button" aria-pressed={active} onClick={() => toggleServer(server.id)} className={`flex min-h-[64px] items-center gap-3 rounded-lg border p-3 text-left transition-colors ${active ? "border-primary bg-primary/10 text-foreground" : "border-border/70 bg-background/30 text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-secondary/50 text-muted-foreground"><Server className="h-4 w-4" /></span>
+                          <span className="min-w-0 flex-1 truncate text-sm font-semibold">{server.name}</span>
+                          {active && <CheckCircle2 className="h-5 w-5 shrink-0 text-primary" />}
                         </button>
                       );
                     })}
                   </div>
-                ) : (
-                  <div className="rounded-lg border border-dashed border-border/70 px-3 py-3 text-xs text-muted-foreground">
-                    {localize(lang, "Доступных скиллов пока нет.", "No available skills yet.")}
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-3 rounded-lg border border-border/70 bg-secondary/20 p-3">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                    <Upload className="h-3.5 w-3.5 text-primary" /> {localize(lang, "Материалы агента", "Agent materials")}
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    <label className="inline-flex min-h-8 cursor-pointer items-center rounded-md border border-primary/40 bg-primary/10 px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/15">
-                      <Upload className="mr-1 h-3 w-3" /> {localize(lang, "Прикрепить файл", "Attach file")}
-                      <input
-                        type="file"
-                        multiple
-                        className="hidden"
-                        accept=".txt,.md,.csv,.json,.yaml,.yml,.sh,.py,.js,.ts,.sql,.log,.ps1"
-                        onChange={(e) => {
-                          void onMaterialFiles(e.currentTarget.files);
-                          e.currentTarget.value = "";
-                        }}
-                      />
-                    </label>
-                    <button type="button" onClick={() => addArtifact("document")} className="min-h-8 rounded-md border border-border px-2 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground">
-                      <FileText className="mr-1 inline h-3 w-3" /> {localize(lang, "Документ", "Document")}
-                    </button>
-                    <button type="button" onClick={() => addArtifact("script")} className="min-h-8 rounded-md border border-border px-2 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground">
-                      <FileCode2 className="mr-1 inline h-3 w-3" /> {localize(lang, "Скрипт", "Script")}
-                    </button>
-                    <button type="button" onClick={() => addArtifact("task_list")} className="min-h-8 rounded-md border border-border px-2 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground">
-                      <CheckCircle2 className="mr-1 inline h-3 w-3" /> {localize(lang, "Список задач", "Task list")}
-                    </button>
-                  </div>
-                </div>
-                {inputArtifacts.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-border/70 px-3 py-3 text-xs text-muted-foreground">
-                    {localize(lang, "Прикрепите файл или создайте документ, скрипт либо список задач.", "Attach a file or create a document, script, or task list.")}
-                  </div>
-                ) : (
-                  <div className="grid gap-3 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.35fr)]">
-                    <div className="space-y-2">
-                      {inputArtifacts.map((artifact, index) => {
-                        const KindIcon = artifactKindIcon(artifact.kind);
-                        const active = activeArtifactIndex === index;
+                  <div className="space-y-4 rounded-lg border border-border/70 bg-background/25 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground"><CalendarDays className="h-4 w-4 text-primary" /> {t("agent.schedule")}</h4>
+                      <span className="rounded-md border border-primary/25 bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">{formatScheduleConfigLabel(scheduleConfig, schedule, lang)}</span>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+                      {SCHEDULE_MODES.map((option) => {
+                        const active = scheduleConfig.mode === option.mode;
                         return (
-                          <div key={`${artifact.kind}-${index}-${artifact.name}`} className={`rounded-lg border p-3 transition-colors ${active ? "border-primary bg-primary/10" : "border-border/70 bg-background/35"}`}>
-                            <div className="flex items-start gap-3">
-                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-secondary/40 text-primary">
-                                <KindIcon className="h-4 w-4" />
-                              </span>
-                              <div className="min-w-0 flex-1">
-                                <div className="truncate text-xs font-semibold text-foreground">{artifact.name || artifactKindLabel(artifact.kind, lang)}</div>
-                                <div className="mt-0.5 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
-                                  <span>{artifactKindLabel(artifact.kind, lang)}</span>
-                                  <span>{artifactSummary(artifact, lang)}</span>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="mt-3 flex items-center justify-end gap-2">
-                              <Button type="button" size="xs" variant={active ? "default" : "outline"} className="gap-1" onClick={() => setActiveArtifactIndex(index)}>
-                                <Eye className="h-3 w-3" /> {localize(lang, "Открыть", "Open")}
-                              </Button>
-                              <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground" onClick={() => removeArtifact(index)} aria-label={localize(lang, "Удалить материал", "Remove material")}>
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                          </div>
+                          <button key={option.mode} type="button" aria-pressed={active} onClick={() => setScheduleMode(option.mode)} className={`min-h-[76px] rounded-lg border p-3 text-left transition-colors ${active ? "border-primary bg-primary/10 text-foreground" : "border-border/70 bg-background/30 text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>
+                            <span className="block text-sm font-semibold">{localize(lang, option.labelRu, option.labelEn)}</span>
+                            <span className="mt-1 block text-[11px] text-muted-foreground">{localize(lang, option.hintRu, option.hintEn)}</span>
+                          </button>
                         );
                       })}
                     </div>
-
-                    {activeArtifact && activeArtifactIndex !== null ? (
-                      <div className="space-y-3 rounded-lg border border-border/70 bg-background/35 p-3">
-                        <div className="grid gap-2 sm:grid-cols-[140px_1fr]">
-                          <select
-                            value={activeArtifact.kind}
-                            onChange={(e) => {
-                              const nextKind = e.target.value as AgentInputArtifact["kind"];
-                              const nextTasks = nextKind === "task_list"
-                                ? (activeArtifact.tasks?.length ? activeArtifact.tasks : parseTasksFromContent(activeArtifact.content || ""))
-                                : undefined;
-                              updateArtifact(activeArtifactIndex, {
-                                kind: nextKind,
-                                tasks: nextKind === "task_list" ? (nextTasks?.length ? nextTasks : [{ title: "", details: "", done: false }]) : undefined,
-                                content: nextKind === "task_list" ? activeArtifact.content : activeArtifact.content || tasksToContent(activeArtifact.tasks),
-                              });
-                            }}
-                            className="h-9 rounded-md border border-border bg-secondary/50 px-2 text-xs text-foreground"
-                          >
-                            {ARTIFACT_KINDS.map((item) => <option key={item.kind} value={item.kind}>{localize(lang, item.labelRu, item.labelEn)}</option>)}
-                          </select>
-                          <Input value={activeArtifact.name} onChange={(e) => updateArtifact(activeArtifactIndex, { name: e.target.value })} className="h-9 bg-secondary/50 text-sm" />
+                    {scheduleConfig.mode === "interval" && (
+                      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_150px]">
+                        <div className="grid gap-2 sm:grid-cols-4">
+                          {SCHEDULE_PRESETS.filter((option) => option.minutes > 0).map((option) => (
+                            <button key={option.minutes} type="button" aria-pressed={schedule === option.minutes} onClick={() => { setSchedule(option.minutes); setScheduleConfig(finalizeScheduleConfig({ ...scheduleConfig, mode: "interval", interval_minutes: option.minutes }, option.minutes)); }} className={`min-h-10 rounded-md border px-3 text-sm font-semibold transition-colors ${schedule === option.minutes ? "border-primary bg-primary/10 text-primary" : "border-border/70 text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>
+                              {localize(lang, option.labelRu, option.labelEn)}
+                            </button>
+                          ))}
                         </div>
-                        <Input
-                          value={activeArtifact.run_hint || ""}
-                          onChange={(e) => updateArtifact(activeArtifactIndex, { run_hint: e.target.value })}
-                          className="h-8 bg-secondary/50 text-xs"
-                          placeholder={localize(lang, "Подсказка агенту: когда и как использовать материал", "Hint for the agent: when and how to use this material")}
-                        />
-
-                        {activeArtifact.kind === "task_list" ? (
-                          <div className="space-y-2">
-                            {(activeArtifact.tasks?.length ? activeArtifact.tasks : [{ title: "", details: "", done: false }]).map((task, taskIndex) => (
-                              <div key={taskIndex} className="rounded-lg border border-border/60 bg-secondary/20 p-2">
-                                <div className="grid gap-2 sm:grid-cols-[auto_1fr_auto] sm:items-center">
-                                  <input
-                                    type="checkbox"
-                                    checked={Boolean(task.done)}
-                                    onChange={(e) => updateArtifactTask(activeArtifactIndex, taskIndex, { done: e.target.checked })}
-                                    className="rounded"
-                                    aria-label={localize(lang, "Задача выполнена", "Task done")}
-                                  />
-                                  <Input
-                                    value={task.title}
-                                    onChange={(e) => updateArtifactTask(activeArtifactIndex, taskIndex, { title: e.target.value })}
-                                    className="h-8 bg-background/60 text-xs"
-                                    placeholder={localize(lang, "Название задачи", "Task title")}
-                                  />
-                                  <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground" onClick={() => removeArtifactTask(activeArtifactIndex, taskIndex)} aria-label={localize(lang, "Удалить задачу", "Remove task")}>
-                                    <X className="h-3.5 w-3.5" />
-                                  </Button>
-                                </div>
-                                <Textarea
-                                  value={task.details || ""}
-                                  onChange={(e) => updateArtifactTask(activeArtifactIndex, taskIndex, { details: e.target.value })}
-                                  rows={2}
-                                  className="mt-2 bg-background/60 text-xs"
-                                  placeholder={localize(lang, "Детали, сервер, ссылка, критерий готовности", "Details, server, link, ready criteria")}
-                                />
-                              </div>
-                            ))}
-                            <Button type="button" size="sm" variant="outline" className="w-full gap-1" onClick={() => addArtifactTask(activeArtifactIndex)}>
-                              <Plus className="h-3.5 w-3.5" /> {localize(lang, "Добавить задачу", "Add task")}
-                            </Button>
-                          </div>
-                        ) : (
-                          <Textarea
-                            value={activeArtifact.content}
-                            onChange={(e) => updateArtifact(activeArtifactIndex, { content: e.target.value })}
-                            rows={activeArtifact.kind === "script" ? 10 : 8}
-                            className={`bg-secondary/50 text-xs ${activeArtifact.kind === "script" ? "font-mono" : ""}`}
-                            placeholder={activeArtifact.kind === "script" ? localize(lang, "Содержимое скрипта", "Script content") : localize(lang, "Содержимое документа", "Document content")}
-                          />
-                        )}
+                        <Input type="number" min={1} max={10080} step={5} value={schedule || scheduleConfig.interval_minutes || 60} onChange={(e) => { const value = Math.max(1, Number(e.target.value) || 1); setSchedule(value); setScheduleConfig(finalizeScheduleConfig({ ...scheduleConfig, mode: "interval", interval_minutes: value }, value)); }} className="h-10 bg-background/60" aria-label={localize(lang, "Интервал запуска в минутах", "Run interval in minutes")} />
                       </div>
+                    )}
+                    {(["daily", "weekly", "monthly"] as AgentScheduleMode[]).includes(scheduleConfig.mode) && (
+                      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px]">
+                        <div className="flex flex-wrap gap-2">
+                          {QUICK_TIMES.map((timeValue) => (
+                            <button key={timeValue} type="button" onClick={() => updateSchedule({ time: timeValue })} className={`min-h-9 rounded-md border px-3 text-xs font-semibold transition-colors ${scheduleConfig.time === timeValue ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>{timeValue}</button>
+                          ))}
+                        </div>
+                        <Input type="time" value={scheduleConfig.time || "09:00"} onChange={(e) => updateSchedule({ time: e.target.value })} className="h-9 bg-background/60" />
+                      </div>
+                    )}
+                    {scheduleConfig.mode === "weekly" && (
+                      <div className="flex flex-wrap gap-2">
+                        {WEEKDAYS.map((day) => {
+                          const active = (scheduleConfig.weekdays || []).includes(day.value);
+                          return <button key={day.value} type="button" aria-pressed={active} onClick={() => toggleWeekday(day.value)} className={`min-h-9 rounded-md border px-3 text-xs font-semibold transition-colors ${active ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>{localize(lang, day.ru, day.en)}</button>;
+                        })}
+                      </div>
+                    )}
+                    {scheduleConfig.mode === "monthly" && <Input type="number" min={1} max={31} value={scheduleConfig.day_of_month || 1} onChange={(e) => updateSchedule({ day_of_month: Math.min(31, Math.max(1, Number(e.target.value) || 1)) })} className="h-9 max-w-32 bg-background/60" />}
+                    {scheduleConfig.mode === "once" && <Input type="datetime-local" value={scheduleConfig.run_at || ""} onChange={(e) => updateSchedule({ run_at: e.target.value })} className="h-9 max-w-64 bg-background/60" />}
+                  </div>
+                </section>
+              )}
+
+              {step === "capabilities" && (
+                <section className="space-y-4 rounded-lg border border-border/70 bg-secondary/15 p-4">
+                  <h3 className="text-lg font-semibold text-foreground">{localize(lang, "Возможности", "Capabilities")}</h3>
+                  {(mode === "full" || mode === "multi") && (
+                    <div className="space-y-3 rounded-lg border border-border/70 bg-background/25 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <h4 className="text-sm font-semibold text-foreground">{localize(lang, "Доступ к инструментам", "Tool access")}</h4>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {localize(lang, `${enabledToolCount} из ${FULL_AGENT_TOOL_OPTIONS.length} включено`, `${enabledToolCount} of ${FULL_AGENT_TOOL_OPTIONS.length} enabled`)}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <button type="button" className="min-h-8 rounded-md px-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/10" onClick={() => setToolsConfig(buildDefaultToolsConfig())}>{localize(lang, "Включить все", "Enable all")}</button>
+                          <button type="button" className="min-h-8 rounded-md border border-border/70 px-3 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground" onClick={() => setToolsExpanded((current) => !current)}>
+                            {toolsExpanded ? localize(lang, "Свернуть", "Collapse") : localize(lang, "Развернуть", "Expand")}
+                          </button>
+                        </div>
+                      </div>
+                      {toolsExpanded && (
+                        <>
+                          <div className="grid gap-2 md:grid-cols-2">
+                            {FULL_AGENT_TOOL_OPTIONS.map((tool) => (
+                              <label key={tool.key} className="flex min-h-10 items-center gap-2 rounded-md border border-border/70 bg-background/35 px-3 text-xs text-muted-foreground">
+                                <input type="checkbox" checked={Boolean(toolsConfig[tool.key])} onChange={(event) => setToolsConfig((current) => ({ ...current, [tool.key]: event.target.checked }))} />
+                                {tool.label}
+                              </label>
+                            ))}
+                          </div>
+                          <Textarea value={stopConditionsText} onChange={(e) => setStopConditionsText(e.target.value)} rows={3} className="bg-background/60 text-xs" placeholder={localize(lang, "Условия остановки", "Stop conditions")} />
+                        </>
+                      )}
+                    </div>
+                  )}
+                  <div className="space-y-3 rounded-lg border border-border/70 bg-background/25 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground"><BookOpen className="h-4 w-4 text-primary" /> {localize(lang, "Скиллы агента", "Agent skills")}</h4>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {localize(lang, `${selectedSkillSlugs.length} выбрано · ${availableSkills.length} доступно`, `${selectedSkillSlugs.length} selected · ${availableSkills.length} available`)}
+                        </p>
+                      </div>
+                      {availableSkills.length > 4 && (
+                        <button type="button" className="min-h-8 shrink-0 rounded-md border border-border/70 px-3 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground" onClick={() => setSkillsExpanded((current) => !current)}>
+                          {skillsExpanded ? localize(lang, "Свернуть", "Collapse") : localize(lang, "Показать все", "Show all")}
+                        </button>
+                      )}
+                    </div>
+                    {availableSkills.length ? (
+                      <div className="grid gap-2 md:grid-cols-2">
+                        {visibleSkills.map((skill) => {
+                          const active = selectedSkillSlugs.includes(skill.slug);
+                          return (
+                            <button key={skill.slug} type="button" aria-pressed={active} onClick={() => toggleSkill(skill.slug)} className={`min-h-[58px] rounded-lg border px-3 py-2 text-left transition-colors ${active ? "border-primary bg-primary/10 text-foreground" : "border-border/70 bg-background/35 text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>
+                              <span className="block truncate text-xs font-semibold">{skill.name}</span>
+                              <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{skill.service || skill.category || skill.slug}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : <div className="rounded-lg border border-dashed border-border/70 px-3 py-3 text-xs text-muted-foreground">{localize(lang, "Доступных скиллов пока нет.", "No available skills yet.")}</div>}
+                  </div>
+                  <div className="space-y-3 rounded-lg border border-border/70 bg-background/25 p-4">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground"><Upload className="h-4 w-4 text-primary" /> {localize(lang, "Материалы агента", "Agent materials")}</h4>
+                      <div className="flex flex-wrap gap-2">
+                        <label className="inline-flex min-h-8 cursor-pointer items-center rounded-md border border-primary/40 bg-primary/10 px-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/15">
+                          <Upload className="mr-1 h-3 w-3" /> {localize(lang, "Файл", "File")}
+                          <input type="file" multiple className="hidden" accept=".txt,.md,.csv,.json,.yaml,.yml,.sh,.py,.js,.ts,.sql,.log,.ps1" onChange={(e) => { void onMaterialFiles(e.currentTarget.files); e.currentTarget.value = ""; }} />
+                        </label>
+                        <button type="button" onClick={() => addArtifact("document")} className="min-h-8 rounded-md border border-border px-2 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"><FileText className="mr-1 inline h-3 w-3" /> {localize(lang, "Документ", "Document")}</button>
+                        <button type="button" onClick={() => addArtifact("script")} className="min-h-8 rounded-md border border-border px-2 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"><FileCode2 className="mr-1 inline h-3 w-3" /> {localize(lang, "Скрипт", "Script")}</button>
+                        <button type="button" onClick={() => addArtifact("task_list")} className="min-h-8 rounded-md border border-border px-2 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"><ListChecks className="mr-1 inline h-3 w-3" /> {localize(lang, "Задачи", "Tasks")}</button>
+                      </div>
+                    </div>
+                    {inputArtifacts.length === 0 ? (
+                      <div className="rounded-lg border border-dashed border-border/70 px-3 py-4 text-xs text-muted-foreground">{localize(lang, "Материалы не добавлены.", "No materials added.")}</div>
                     ) : (
-                      <div className="flex min-h-[180px] items-center justify-center rounded-lg border border-dashed border-border/70 px-4 py-6 text-center text-xs text-muted-foreground">
-                        {localize(lang, "Выберите вложение слева, чтобы посмотреть или изменить содержимое.", "Select an attachment on the left to view or edit it.")}
+                      <div className="grid gap-3 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.35fr)]">
+                        <div className="space-y-2">
+                          {inputArtifacts.map((artifact, index) => {
+                            const KindIcon = artifactKindIcon(artifact.kind);
+                            const active = activeArtifactIndex === index;
+                            return (
+                              <div key={`${artifact.kind}-${index}-${artifact.name}`} className={`rounded-lg border p-3 transition-colors ${active ? "border-primary bg-primary/10" : "border-border/70 bg-background/35"}`}>
+                                <div className="flex items-start gap-3">
+                                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-secondary/40 text-primary"><KindIcon className="h-4 w-4" /></span>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="truncate text-xs font-semibold text-foreground">{artifact.name || artifactKindLabel(artifact.kind, lang)}</div>
+                                    <div className="mt-0.5 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground"><span>{artifactKindLabel(artifact.kind, lang)}</span><span>{artifactSummary(artifact, lang)}</span></div>
+                                  </div>
+                                </div>
+                                <div className="mt-3 flex items-center justify-end gap-2">
+                                  <Button type="button" size="xs" variant={active ? "default" : "outline"} className="gap-1" onClick={() => setActiveArtifactIndex(index)}><Eye className="h-3 w-3" /> {localize(lang, "Открыть", "Open")}</Button>
+                                  <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground" onClick={() => removeArtifact(index)} aria-label={localize(lang, "Удалить материал", "Remove material")}><Trash2 className="h-3.5 w-3.5" /></Button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {activeArtifact && activeArtifactIndex !== null ? (
+                          <div className="space-y-3 rounded-lg border border-border/70 bg-background/35 p-3">
+                            <div className="grid gap-2 sm:grid-cols-[140px_1fr]">
+                              <select value={activeArtifact.kind} onChange={(e) => {
+                                const nextKind = e.target.value as AgentInputArtifact["kind"];
+                                const nextTasks = nextKind === "task_list" ? (activeArtifact.tasks?.length ? activeArtifact.tasks : parseTasksFromContent(activeArtifact.content || "")) : undefined;
+                                updateArtifact(activeArtifactIndex, { kind: nextKind, tasks: nextKind === "task_list" ? (nextTasks?.length ? nextTasks : [{ title: "", details: "", done: false }]) : undefined, content: nextKind === "task_list" ? activeArtifact.content : activeArtifact.content || tasksToContent(activeArtifact.tasks) });
+                              }} className="h-9 rounded-md border border-border bg-secondary/50 px-2 text-xs text-foreground">
+                                {ARTIFACT_KINDS.map((item) => <option key={item.kind} value={item.kind}>{localize(lang, item.labelRu, item.labelEn)}</option>)}
+                              </select>
+                              <Input value={activeArtifact.name} onChange={(e) => updateArtifact(activeArtifactIndex, { name: e.target.value })} className="h-9 bg-secondary/50 text-sm" />
+                            </div>
+                            {activeArtifact.kind === "task_list" ? (
+                              <div className="space-y-2">
+                                {(activeArtifact.tasks?.length ? activeArtifact.tasks : [{ title: "", details: "", done: false }]).map((task, taskIndex) => (
+                                  <div key={taskIndex} className="rounded-lg border border-border/60 bg-secondary/20 p-2">
+                                    <div className="grid gap-2 sm:grid-cols-[auto_1fr_auto] sm:items-center">
+                                      <input type="checkbox" checked={Boolean(task.done)} onChange={(e) => updateArtifactTask(activeArtifactIndex, taskIndex, { done: e.target.checked })} className="rounded" aria-label={localize(lang, "Задача выполнена", "Task done")} />
+                                      <Input value={task.title} onChange={(e) => updateArtifactTask(activeArtifactIndex, taskIndex, { title: e.target.value })} className="h-8 bg-background/60 text-xs" placeholder={localize(lang, "Название задачи", "Task title")} />
+                                      <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground" onClick={() => removeArtifactTask(activeArtifactIndex, taskIndex)} aria-label={localize(lang, "Удалить задачу", "Remove task")}><X className="h-3.5 w-3.5" /></Button>
+                                    </div>
+                                    <Textarea value={task.details || ""} onChange={(e) => updateArtifactTask(activeArtifactIndex, taskIndex, { details: e.target.value })} rows={2} className="mt-2 bg-background/60 text-xs" />
+                                  </div>
+                                ))}
+                                <Button type="button" size="sm" variant="outline" className="w-full gap-1" onClick={() => addArtifactTask(activeArtifactIndex)}><Plus className="h-3.5 w-3.5" /> {localize(lang, "Добавить задачу", "Add task")}</Button>
+                              </div>
+                            ) : <Textarea value={activeArtifact.content} onChange={(e) => updateArtifact(activeArtifactIndex, { content: e.target.value })} rows={activeArtifact.kind === "script" ? 10 : 8} className={`bg-secondary/50 text-xs ${activeArtifact.kind === "script" ? "font-mono" : ""}`} />}
+                          </div>
+                        ) : <div className="flex min-h-[180px] items-center justify-center rounded-lg border border-dashed border-border/70 px-4 py-6 text-center text-xs text-muted-foreground">{localize(lang, "Выберите материал слева.", "Select a material on the left.")}</div>}
                       </div>
                     )}
                   </div>
-                )}
-              </div>
+                  <div className="rounded-lg border border-border/70 bg-background/25 p-4">
+                    <label className="flex cursor-pointer items-center gap-3">
+                      <input type="checkbox" checked={telegramEnabled} onChange={(e) => setTelegramEnabled(e.target.checked)} className="rounded" />
+                      <span className="flex items-center gap-2 text-sm font-semibold text-foreground"><Send className="h-4 w-4 text-primary" /> {localize(lang, "Отправлять отчет в Telegram", "Send report to Telegram")}</span>
+                    </label>
+                    {telegramEnabled && <Input value={telegramChatId} onChange={(e) => setTelegramChatId(e.target.value)} className="mt-3 h-9 bg-background/60 text-sm" placeholder="Chat ID" />}
+                  </div>
+                </section>
+              )}
 
-              <div className="space-y-3 rounded-lg border border-border/70 bg-secondary/20 p-3">
-                <label className="flex cursor-pointer items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={telegramEnabled}
-                    onChange={(e) => setTelegramEnabled(e.target.checked)}
-                    className="mt-1 rounded"
-                  />
-                  <span className="min-w-0">
-                    <span className="flex items-center gap-2 text-xs font-medium text-foreground">
-                      <Send className="h-3.5 w-3.5 text-primary" /> {localize(lang, "Отправлять отчет в Telegram", "Send report to Telegram")}
-                    </span>
-                    <span className="mt-1 block text-[11px] leading-4 text-muted-foreground">
-                      {localize(lang, "Используется Telegram bot token из настроек уведомлений Studio.", "Uses the Telegram bot token from Studio notification settings.")}
-                    </span>
-                  </span>
-                </label>
-                {telegramEnabled && (
-                  <Input
-                    value={telegramChatId}
-                    onChange={(e) => setTelegramChatId(e.target.value)}
-                    className="h-9 bg-background/60 text-sm"
-                    placeholder={localize(lang, "Chat ID, если нужен не общий канал", "Chat ID, when different from the default channel")}
-                  />
-                )}
-              </div>
+              {step === "review" && (
+                <section className="space-y-4 rounded-lg border border-border/70 bg-secondary/15 p-4">
+                  <h3 className="text-lg font-semibold text-foreground">{localize(lang, "Обзор", "Review")}</h3>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {summaryRows.map((row) => {
+                      const Icon = row.icon;
+                      return (
+                        <div key={row.label} className="rounded-lg border border-border/70 bg-background/30 p-4">
+                          <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg border border-border/70 bg-secondary/50 text-primary"><Icon className="h-4 w-4" /></div>
+                          <div className="text-xs text-muted-foreground">{row.label}</div>
+                          <div className="mt-1 text-sm font-semibold text-foreground">{row.value}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="rounded-lg border border-border/70 bg-background/30 p-4">
+                    <div className="grid gap-3 text-sm md:grid-cols-4">
+                      <div><span className="block text-xs text-muted-foreground">{localize(lang, "Команды", "Commands")}</span><strong>{commandCount}</strong></div>
+                      <div><span className="block text-xs text-muted-foreground">{localize(lang, "Скиллы", "Skills")}</span><strong>{selectedSkillSlugs.length}</strong></div>
+                      <div><span className="block text-xs text-muted-foreground">{localize(lang, "Материалы", "Materials")}</span><strong>{inputArtifacts.length}</strong></div>
+                      <div><span className="block text-xs text-muted-foreground">Telegram</span><strong>{telegramEnabled ? localize(lang, "Да", "Yes") : localize(lang, "Нет", "No")}</strong></div>
+                    </div>
+                  </div>
+                </section>
+              )}
             </div>
-          )}
+
+            {step !== "template" && (
+              <aside className="space-y-4">
+                <section className="rounded-lg border border-border/70 bg-secondary/20 p-4">
+                  <h3 className="mb-4 text-base font-semibold text-foreground">{localize(lang, "Краткий обзор", "Quick summary")}</h3>
+                  <div className="space-y-4">
+                    {summaryRows.map((row) => {
+                      const Icon = row.icon;
+                      return (
+                        <div key={row.label} className="flex gap-3">
+                          <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                          <div className="min-w-0">
+                            <div className="text-xs text-muted-foreground">{row.label}</div>
+                            <div className="truncate text-sm text-foreground">{row.value}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              </aside>
+            )}
+          </div>
         </DialogBody>
-        {step === "config" && (
-          <DialogFooter>
-            <Button size="sm" variant="outline" className="min-w-24" onClick={isEditing ? onClose : () => setStep("template")}>
-              {isEditing ? localize(lang, "Отмена", "Cancel") : t("agent.back")}
+
+        <DialogFooter className="items-center justify-between gap-3 px-6 py-4 sm:flex-row">
+          <Button size="sm" variant="outline" className="min-w-28 gap-2" onClick={currentStepIndex === 0 ? onClose : goBack}>
+            <ArrowLeft className="h-4 w-4" /> {currentStepIndex === 0 ? localize(lang, "Отмена", "Cancel") : t("agent.back")}
+          </Button>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" className="min-w-44 gap-2" onClick={onSave} disabled={saving || !canSave}>
+              <Save className="h-4 w-4" /> {saving ? localize(lang, "Сохраняем...", "Saving...") : localize(lang, "Сохранить", "Save")}
             </Button>
-            <Button size="sm" className="min-w-32" onClick={onSave} disabled={saving || !selectedServers.length}>
-              {saving
-                ? localize(lang, isEditing ? "Сохраняем..." : "Создаём...", isEditing ? "Saving..." : "Creating...")
-                : isEditing
-                ? localize(lang, "Сохранить", "Save changes")
-                : t("agent.create")}
-            </Button>
-          </DialogFooter>
-        )}
+            {step === "review" ? (
+              <Button size="sm" className="min-w-36 gap-2" onClick={onSave} disabled={saving || !canSave}>
+                {saving ? localize(lang, "Сохраняем...", "Saving...") : isEditing ? localize(lang, "Сохранить", "Save") : t("agent.create")}
+              </Button>
+            ) : (
+              <Button size="sm" className="min-w-32 gap-2" onClick={goNext}>
+                {localize(lang, "Далее", "Next")} <ArrowRight className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
