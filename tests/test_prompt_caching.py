@@ -202,3 +202,57 @@ class TestStreamChatSystemPrompt:
                 pass
 
         assert captured_data["messages"][0]["content"] == "You are a helpful assistant."
+
+    @pytest.mark.asyncio
+    async def test_grok_43_defaults_reasoning_effort_to_none(self):
+        """grok-4.3 should stream normal content immediately for terminal-style usage."""
+        import json
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from django.test import override_settings
+
+        from app.core.llm import LLMProvider
+
+        provider = LLMProvider()
+        provider.grok_api_key = "test-key"
+
+        captured_data: dict = {}
+
+        mock_response = AsyncMock()
+        mock_response.status = 200
+
+        async def fake_content():
+            line = json.dumps({"choices": [{"delta": {"content": "ok"}}]})
+            yield f"data: {line}\n".encode()
+            yield b"data: [DONE]\n"
+
+        mock_response.content = fake_content()
+        mock_response.text = AsyncMock(return_value="")
+
+        mock_session_ctx = AsyncMock()
+        mock_session_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_session_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = MagicMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        def capture_post(url, headers=None, json=None):
+            captured_data.update(json or {})
+            return mock_session_ctx
+
+        mock_session.post = capture_post
+
+        with (
+            override_settings(LLM_GROK_REASONING_EFFORT="none"),
+            patch("aiohttp.ClientSession", return_value=mock_session) as client_session,
+            patch("app.core.llm.model_manager") as mm,
+        ):
+            mm.config = MagicMock()
+            mm.config.grok_enabled = True
+            mm.get_chat_model.return_value = "grok-4.3"
+            async for _ in provider.stream_chat("user msg", model="grok"):
+                pass
+
+        assert captured_data["reasoning_effort"] == "none"
+        assert client_session.call_args.kwargs["trust_env"] is True

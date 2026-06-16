@@ -237,7 +237,11 @@ def _default_test_mcp_connection(mcp: MCPServerPool) -> tuple[bool, str | None]:
         if not url:
             return False, "SSE URL is required"
         try:
-            httpx.get(url, timeout=10)
+            response = httpx.get(url, timeout=10)
+            response.raise_for_status()
+            content_type = (response.headers.get("content-type") or "").lower()
+            if "text/html" in content_type:
+                return False, "MCP endpoint returned HTML instead of JSON/SSE"
             return True, None
         except Exception as exc:
             return False, str(exc)

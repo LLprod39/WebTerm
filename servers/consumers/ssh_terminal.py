@@ -1422,6 +1422,10 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             exec_mode=exec_mode,
         )
 
+    def _legacy_direct_exec_enabled(self) -> bool:
+        """Whether legacy Terminal AI may use the non-PTY direct executor."""
+        return self._normalize_execution_mode(getattr(self, "_ai_execution_mode", "step")) != "fast"
+
     @staticmethod
     def _normalize_command_text(cmd: str) -> str:
         from servers.services.terminal_ai import normalize_command_text
@@ -1434,7 +1438,9 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         Pauses when a command requires confirmation.
         """
         send_idle = True
-        step_mode = self._normalize_execution_mode(getattr(self, "_ai_execution_mode", "step")) == "step"
+        execution_mode = self._normalize_execution_mode(getattr(self, "_ai_execution_mode", "step"))
+        step_mode = execution_mode == "step"
+        direct_exec_enabled = self._legacy_direct_exec_enabled()
         try:
             while True:
                 if not self._ssh_proc:
@@ -1448,7 +1454,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                 async with self._ai_lock:
                     if not self._ai_plan or self._ai_plan_index >= len(self._ai_plan):
                         break
-                    if not step_mode and self._ssh_conn:
+                    if direct_exec_enabled and not step_mode and self._ssh_conn:
                         from servers.services.parallel_executor import collect_parallel_batch
 
                         batch_indices = collect_parallel_batch(
@@ -1513,6 +1519,8 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                 # channel so the interactive shell is not polluted by
                 # diagnostic reads (df -h, ps aux, systemctl status…).
                 item_exec_mode = str(item.get("exec_mode") or "pty").strip().lower()
+                if not direct_exec_enabled and item_exec_mode == "direct":
+                    item_exec_mode = "pty"
                 # A5: dry-run short-circuit. We do NOT touch the remote
                 # host at all — neither via PTY nor via exec_direct. The
                 # fake output makes downstream history/report/memory work

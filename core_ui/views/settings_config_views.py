@@ -14,7 +14,95 @@ from loguru import logger
 from app.core.model_config import model_manager
 from core_ui.activity import log_user_activity
 from core_ui.context_processors import user_can_feature
+from core_ui.managed_secrets import delete_llm_api_key, has_llm_api_key, set_llm_api_key
 from core_ui.models import UserActivityLog
+
+
+LLM_API_KEY_PROVIDERS = {"gemini", "grok", "openai", "claude", "fair", "ollama"}
+
+
+def _has_api_key(provider: str, *env_names: str) -> bool:
+    if any((os.getenv(env_name) or "").strip() for env_name in env_names):
+        return True
+    try:
+        return has_llm_api_key(provider)
+    except Exception as exc:
+        logger.debug("Failed to read managed LLM API key status for %s: %s", provider, exc)
+        return False
+
+
+def _set_runtime_api_key(provider: str, value: str) -> None:
+    resolved = (value or "").strip()
+    if provider == "gemini":
+        model_manager.gemini_api_key = resolved or None
+        model_manager.set_api_keys(gemini_key=resolved or None)
+    elif provider == "grok":
+        model_manager.grok_api_key = resolved or None
+        model_manager.set_api_keys(grok_key=resolved or None)
+    elif provider == "openai":
+        model_manager.openai_api_key = resolved or None
+        model_manager.set_api_keys(openai_key=resolved or None)
+    elif provider == "fair":
+        model_manager.fair_api_key = resolved or None
+        model_manager.set_api_keys(fair_key=resolved or None)
+    elif provider == "claude":
+        model_manager.anthropic_api_key = resolved or None
+        model_manager.set_api_keys(anthropic_key=resolved or None)
+    elif provider == "ollama":
+        model_manager.ollama_api_key = resolved or None
+        model_manager.set_api_keys(ollama_key=resolved or None)
+
+
+def _reset_llm_provider_cache() -> None:
+    try:
+        from app.core.llm import reset_provider_cache
+
+        reset_provider_cache()
+    except Exception as exc:
+        logger.debug("Failed to reset LLM provider cache: %s", exc)
+
+
+def _save_api_keys_from_payload(data: dict) -> list[str]:
+    changed: list[str] = []
+    api_keys = data.get("api_keys")
+    if isinstance(api_keys, dict):
+        for provider, raw_value in api_keys.items():
+            provider_key = str(provider or "").strip().lower()
+            if provider_key not in LLM_API_KEY_PROVIDERS:
+                continue
+            value = str(raw_value or "").strip()
+            if not value:
+                continue
+            set_llm_api_key(provider_key, value)
+            _set_runtime_api_key(provider_key, value)
+            changed.append(f"{provider_key}_api_key")
+
+    clear_api_keys = data.get("clear_api_keys")
+    if isinstance(clear_api_keys, list):
+        for provider in clear_api_keys:
+            provider_key = str(provider or "").strip().lower()
+            if provider_key not in LLM_API_KEY_PROVIDERS:
+                continue
+            delete_llm_api_key(provider_key)
+            fallback = ""
+            if provider_key == "gemini":
+                fallback = (os.getenv("GEMINI_API_KEY") or "").strip()
+            elif provider_key == "grok":
+                fallback = (os.getenv("GROK_API_KEY") or "").strip()
+            elif provider_key == "openai":
+                fallback = (os.getenv("OPENAI_API_KEY") or "").strip() or (os.getenv("CODEX_API_KEY") or "").strip()
+            elif provider_key == "fair":
+                fallback = (os.getenv("FAIR_HYPERION_API_KEY") or "").strip() or (os.getenv("FAIR_API_KEY") or "").strip()
+            elif provider_key == "claude":
+                fallback = (os.getenv("ANTHROPIC_API_KEY") or "").strip()
+            elif provider_key == "ollama":
+                fallback = (os.getenv("OLLAMA_API_KEY") or "").strip()
+            _set_runtime_api_key(provider_key, fallback)
+            changed.append(f"{provider_key}_api_key_cleared")
+
+    if changed:
+        _reset_llm_provider_cache()
+    return changed
 
 
 def _load_delegate_ui_preference(user) -> str:
@@ -34,19 +122,20 @@ def _load_delegate_ui_preference(user) -> str:
 
 def _api_key_status(config) -> dict:
     return {
-        "gemini_set": bool(os.getenv("GEMINI_API_KEY")),
-        "grok_set": bool(os.getenv("GROK_API_KEY")),
-        "openai_set": bool(os.getenv("OPENAI_API_KEY") or os.getenv("CODEX_API_KEY")),
-        "anthropic_set": bool(os.getenv("ANTHROPIC_API_KEY")),
-        "claude_set": bool(os.getenv("ANTHROPIC_API_KEY")),
+        "gemini_set": _has_api_key("gemini", "GEMINI_API_KEY"),
+        "grok_set": _has_api_key("grok", "GROK_API_KEY"),
+        "openai_set": _has_api_key("openai", "OPENAI_API_KEY", "CODEX_API_KEY"),
+        "fair_set": _has_api_key("fair", "FAIR_HYPERION_API_KEY", "FAIR_API_KEY"),
+        "anthropic_set": _has_api_key("claude", "ANTHROPIC_API_KEY"),
+        "claude_set": _has_api_key("claude", "ANTHROPIC_API_KEY"),
         "ollama_local_set": bool(
             getattr(config, "ollama_base_url", "") or os.getenv("OLLAMA_BASE_URL") or "http://127.0.0.1:11434"
         ),
-        "ollama_cloud_set": bool(os.getenv("OLLAMA_API_KEY")),
+        "ollama_cloud_set": _has_api_key("ollama", "OLLAMA_API_KEY"),
         "ollama_set": bool(
             getattr(config, "ollama_base_url", "") or os.getenv("OLLAMA_BASE_URL") or "http://127.0.0.1:11434"
         )
-        or bool(os.getenv("OLLAMA_API_KEY")),
+        or _has_api_key("ollama", "OLLAMA_API_KEY"),
         "cursor_set": bool(os.getenv("CURSOR_API_KEY")),
         "codex_set": bool(os.getenv("CODEX_API_KEY") or os.getenv("OPENAI_API_KEY")),
     }
@@ -55,7 +144,7 @@ def _api_key_status(config) -> dict:
 def _settings_config_payload(config, delegate_ui: str) -> dict:
     return {
         "default_provider": config.default_provider,
-        "internal_llm_provider": getattr(config, "internal_llm_provider", "grok") or "grok",
+        "internal_llm_provider": getattr(config, "internal_llm_provider", "fair") or "fair",
         "default_orchestrator_mode": getattr(config, "default_orchestrator_mode", "ralph_internal")
         or "ralph_internal",
         "ralph_max_iterations": getattr(config, "ralph_max_iterations", 20) or 20,
@@ -63,18 +152,27 @@ def _settings_config_payload(config, delegate_ui: str) -> dict:
         "gemini_enabled": getattr(config, "gemini_enabled", False),
         "grok_enabled": getattr(config, "grok_enabled", True),
         "openai_enabled": getattr(config, "openai_enabled", False),
+        "fair_enabled": getattr(config, "fair_enabled", True),
         "claude_enabled": getattr(config, "claude_enabled", False),
         "ollama_enabled": getattr(config, "ollama_enabled", False),
         "chat_model_gemini": config.chat_model_gemini,
         "chat_model_grok": config.chat_model_grok,
         "chat_model_openai": getattr(config, "chat_model_openai", "gpt-5-mini"),
+        "chat_model_fair": getattr(config, "chat_model_fair", "qwen3:14b"),
         "chat_model_claude": getattr(config, "chat_model_claude", "claude-sonnet-4-6"),
         "chat_model_ollama": getattr(config, "chat_model_ollama", "") or "",
         "rag_model": config.rag_model,
         "agent_model_gemini": config.agent_model_gemini,
         "agent_model_grok": config.agent_model_grok,
         "agent_model_openai": getattr(config, "agent_model_openai", "gpt-5-mini"),
+        "agent_model_fair": getattr(config, "agent_model_fair", "fair-spark"),
         "agent_model_ollama": getattr(config, "agent_model_ollama", "") or "",
+        "fair_base_url": getattr(
+            config,
+            "fair_base_url",
+            "https://fair-hyperion.dev.k8s.erg.kz/api/hyperion/openai/v1",
+        )
+        or "https://fair-hyperion.dev.k8s.erg.kz/api/hyperion/openai/v1",
         "ollama_base_url": getattr(config, "ollama_base_url", "http://127.0.0.1:11434")
         or "http://127.0.0.1:11434",
         "ollama_runtime_mode": getattr(config, "ollama_runtime_mode", "auto") or "auto",
@@ -140,10 +238,12 @@ def _allowed_settings_keys() -> set[str]:
         "chat_model_gemini",
         "chat_model_grok",
         "chat_model_openai",
+        "chat_model_fair",
         "rag_model",
         "agent_model_gemini",
         "agent_model_grok",
         "agent_model_openai",
+        "agent_model_fair",
         "default_agent_output_path",
         "cursor_chat_mode",
         "cursor_sandbox",
@@ -153,6 +253,7 @@ def _allowed_settings_keys() -> set[str]:
         "gemini_enabled",
         "grok_enabled",
         "openai_enabled",
+        "fair_enabled",
         "claude_enabled",
         "ollama_enabled",
         "chat_model_claude",
@@ -160,6 +261,7 @@ def _allowed_settings_keys() -> set[str]:
         "default_orchestrator_mode",
         "ralph_max_iterations",
         "ralph_completion_promise",
+        "fair_base_url",
         "ollama_base_url",
         "ollama_runtime_mode",
         "ollama_cloud_enabled",
@@ -230,6 +332,11 @@ def _normalize_settings_update(data: dict) -> JsonResponse | None:
         data["export_format"] = export_format
     if "ollama_base_url" in data and data["ollama_base_url"] is not None:
         data["ollama_base_url"] = str(data["ollama_base_url"]).strip().rstrip("/") or "http://127.0.0.1:11434"
+    if "fair_base_url" in data and data["fair_base_url"] is not None:
+        data["fair_base_url"] = (
+            str(data["fair_base_url"]).strip().rstrip("/")
+            or "https://fair-hyperion.dev.k8s.erg.kz/api/hyperion/openai/v1"
+        )
     if "ollama_cloud_base_url" in data and data["ollama_cloud_base_url"] is not None:
         data["ollama_cloud_base_url"] = str(data["ollama_cloud_base_url"]).strip().rstrip("/") or "https://ollama.com"
     if "ollama_runtime_mode" in data and data["ollama_runtime_mode"] is not None:
@@ -253,7 +360,7 @@ def _enable_selected_providers(data: dict) -> None:
         "internal_llm_provider",
     ):
         provider = data.get(provider_key)
-        if provider in ("gemini", "grok", "openai", "claude", "ollama"):
+        if provider in ("gemini", "grok", "openai", "fair", "claude", "ollama"):
             data[f"{provider}_enabled"] = True
 
 
@@ -299,9 +406,16 @@ def api_settings(request):
                 {"success": False, "error": "Only admins can update audit logging settings"},
                 status=403,
             )
+        requested_api_key_update = bool(data.get("api_keys")) or bool(data.get("clear_api_keys"))
+        if requested_api_key_update and not request.user.is_staff:
+            return JsonResponse(
+                {"success": False, "error": "Only admins can update API keys"},
+                status=403,
+            )
         validation_error = _normalize_settings_update(data)
         if validation_error is not None:
             return validation_error
+        api_key_changed_keys = _save_api_keys_from_payload(data) if requested_api_key_update else []
         _enable_selected_providers(data)
 
         allowed = _allowed_settings_keys()
@@ -314,6 +428,7 @@ def api_settings(request):
             _save_delegate_ui_preference(request.user, data["delegate_ui"])
 
         changed_keys = sorted([key for key, value in data.items() if key in allowed and value is not None])
+        changed_keys.extend(api_key_changed_keys)
         if "delegate_ui" in data and data.get("delegate_ui") in ("chat", "task_form"):
             changed_keys.append("delegate_ui")
         log_user_activity(
@@ -347,8 +462,8 @@ def api_settings_check(request):
     if not user_can_feature(request.user, "settings"):
         return JsonResponse({"configured": False, "missing": ["gemini_key", "grok_key"]}, status=403)
     try:
-        gemini_ok = bool((os.getenv("GEMINI_API_KEY") or "").strip())
-        grok_ok = bool((os.getenv("GROK_API_KEY") or "").strip())
+        gemini_ok = _has_api_key("gemini", "GEMINI_API_KEY")
+        grok_ok = _has_api_key("grok", "GROK_API_KEY")
         missing = []
         if not gemini_ok:
             missing.append("gemini_key")

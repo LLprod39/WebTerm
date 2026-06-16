@@ -32,6 +32,18 @@ def _setting_int(name: str, default: int, *, minimum: int = 1) -> int:
     return max(value, minimum)
 
 
+def _setting_str(name: str, default: str = "") -> str:
+    try:
+        raw = getattr(django_settings, name, None)
+    except Exception:
+        raw = None
+    if raw in (None, ""):
+        raw = os.getenv(name)
+    if raw in (None, ""):
+        return default
+    return str(raw).strip()
+
+
 def _retry_attempts() -> int:
     return _setting_int("LLM_MAX_RETRY_ATTEMPTS", 3, minimum=1)
 
@@ -40,7 +52,7 @@ def _provider_timeout_seconds(provider: str, *, endpoint_name: str | None = None
     if provider == "gemini":
         return _setting_int("LLM_GEMINI_STREAM_TIMEOUT_SECONDS", GEMINI_STREAM_TIMEOUT, minimum=1)
     if provider == "grok":
-        return _setting_int("LLM_GROK_STREAM_TIMEOUT_SECONDS", 60, minimum=1)
+        return _setting_int("LLM_GROK_STREAM_TIMEOUT_SECONDS", 3600, minimum=1)
     if provider == "claude":
         return _setting_int("LLM_CLAUDE_STREAM_TIMEOUT_SECONDS", 120, minimum=1)
     if provider == "ollama":
@@ -49,7 +61,25 @@ def _provider_timeout_seconds(provider: str, *, endpoint_name: str | None = None
         return _setting_int("LLM_OPENAI_RESPONSES_TIMEOUT_SECONDS", 300, minimum=1)
     if provider == "openai":
         return _setting_int("LLM_OPENAI_STREAM_TIMEOUT_SECONDS", 90, minimum=1)
+    if provider == "fair":
+        return _setting_int("LLM_FAIR_STREAM_TIMEOUT_SECONDS", 120, minimum=1)
     return _setting_int("LLM_PROVIDER_TIMEOUT_SECONDS", 90, minimum=1)
+
+
+def _grok_reasoning_effort(model: str) -> str | None:
+    """Return Chat Completions reasoning_effort for Grok reasoning models."""
+    normalized_model = (model or "").strip().lower()
+    if not normalized_model.startswith("grok-4.3"):
+        return None
+
+    value = _setting_str("LLM_GROK_REASONING_EFFORT", "none").lower()
+    if value in {"", "default", "auto"}:
+        return None
+    if value in {"none", "low", "medium", "high"}:
+        return value
+
+    logger.warning("Invalid LLM_GROK_REASONING_EFFORT=%r; using 'none'", value)
+    return "none"
 
 
 def _is_timeout_error(e: Exception) -> bool:
@@ -143,6 +173,12 @@ def get_provider() -> "LLMProvider":
     return _provider_instance
 
 
+def reset_provider_cache() -> None:
+    """Drop cached provider so changed Settings API keys are picked up."""
+    global _provider_instance
+    _provider_instance = None
+
+
 class LLMProvider:
     def __init__(self):
         # Direct LLMProvider() callers are used by agents and tools. Keep them
@@ -153,13 +189,17 @@ class LLMProvider:
         self.grok_api_key = os.getenv("GROK_API_KEY")
         self.anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
         self.openai_api_key = os.getenv("OPENAI_API_KEY") or os.getenv("CODEX_API_KEY")
+        self.fair_api_key = os.getenv("FAIR_HYPERION_API_KEY") or os.getenv("FAIR_API_KEY")
+        self.ollama_api_key = os.getenv("OLLAMA_API_KEY")
 
         # Set keys in model manager
         model_manager.set_api_keys(
-            self.gemini_api_key,
-            self.grok_api_key,
-            self.anthropic_api_key,
-            self.openai_api_key,
+            gemini_key=self.gemini_api_key,
+            grok_key=self.grok_api_key,
+            anthropic_key=self.anthropic_api_key,
+            openai_key=self.openai_api_key,
+            fair_key=self.fair_api_key,
+            ollama_key=self.ollama_api_key,
         )
 
         # Lazy initialization of clients
@@ -181,6 +221,10 @@ class LLMProvider:
     @staticmethod
     def _get_ollama_runtime_mode() -> str:
         return model_manager._get_ollama_runtime_mode()
+
+    @staticmethod
+    def _get_fair_base_url() -> str:
+        return model_manager._get_fair_base_url()
 
     @staticmethod
     def _get_ollama_think_value() -> Any | None:
@@ -260,6 +304,67 @@ class LLMProvider:
                 self._anthropic_client = None
         return self._anthropic_client
 
+    async def _load_managed_api_keys(self) -> None:
+        """Load UI-managed API keys from encrypted DB storage.
+
+        Stored keys override env vars so admins can rotate providers from Settings
+        without editing deployment files.
+        """
+        try:
+            from asgiref.sync import sync_to_async
+
+            def _read_keys() -> dict[str, str]:
+                from core_ui.managed_secrets import get_llm_api_key
+
+                return {
+                    "gemini": get_llm_api_key("gemini"),
+                    "grok": get_llm_api_key("grok"),
+                    "openai": get_llm_api_key("openai"),
+                    "fair": get_llm_api_key("fair"),
+                    "claude": get_llm_api_key("claude"),
+                    "ollama": get_llm_api_key("ollama"),
+                }
+
+            keys = await sync_to_async(_read_keys, thread_sensitive=True)()
+        except Exception as exc:
+            logger.debug("Managed LLM API keys unavailable: %s", exc)
+            return
+
+        gemini_key = (keys.get("gemini") or "").strip()
+        if gemini_key and gemini_key != self.gemini_api_key:
+            self.gemini_api_key = gemini_key
+            self._gemini_client = None
+
+        grok_key = (keys.get("grok") or "").strip()
+        if grok_key:
+            self.grok_api_key = grok_key
+
+        openai_key = (keys.get("openai") or "").strip()
+        if openai_key:
+            self.openai_api_key = openai_key
+
+        fair_key = (keys.get("fair") or "").strip()
+        if fair_key:
+            self.fair_api_key = fair_key
+
+        ollama_key = (keys.get("ollama") or "").strip()
+        if ollama_key:
+            self.ollama_api_key = ollama_key
+
+        claude_key = (keys.get("claude") or "").strip()
+        if claude_key and claude_key != self.anthropic_api_key:
+            self.anthropic_api_key = claude_key
+            self._anthropic_client = None
+
+        model_manager.set_api_keys(
+            gemini_key=gemini_key or None,
+            grok_key=grok_key or None,
+            anthropic_key=claude_key or None,
+            openai_key=openai_key or None,
+            fair_key=fair_key or None,
+            ollama_key=ollama_key or None,
+        )
+
     def set_api_key(self, model: str, key: str):
         if model == "gemini":
             self.gemini_api_key = key
@@ -275,6 +380,12 @@ class LLMProvider:
         elif model == "openai":
             self.openai_api_key = key
             model_manager.set_api_keys(openai_key=key)
+        elif model == "fair":
+            self.fair_api_key = key
+            model_manager.set_api_keys(fair_key=key)
+        elif model == "ollama":
+            self.ollama_api_key = key
+            model_manager.set_api_keys(ollama_key=key)
 
     async def stream_chat(
         self,
@@ -290,7 +401,7 @@ class LLMProvider:
 
         Args:
             prompt: The prompt to send (user message when system_prompt is given)
-            model: Provider name (auto/gemini/grok/openai/claude/ollama). «auto» resolves via purpose.
+            model: Provider name (auto/gemini/grok/openai/fair/claude/ollama). «auto» resolves via purpose.
             specific_model: Specific model version to use (overrides config)
             purpose: One of 'chat', 'agent', 'orchestrator' — used when model=='auto'
             system_prompt: Optional system-level instructions. When provided,
@@ -311,6 +422,8 @@ class LLMProvider:
                 return bool(self.anthropic_api_key)
             if p == "openai":
                 return bool(self.openai_api_key)
+            if p == "fair":
+                return bool(self.fair_api_key)
             if p == "ollama":
                 return False
             return False
@@ -324,9 +437,13 @@ class LLMProvider:
                 return model_manager.config.claude_enabled and bool(self.anthropic_api_key)
             if p == "openai":
                 return model_manager.config.openai_enabled and bool(self.openai_api_key)
+            if p == "fair":
+                return model_manager.config.fair_enabled and bool(self.fair_api_key)
             if p == "ollama":
                 return model_manager.config.ollama_enabled and bool(self._get_ollama_base_url())
             return False
+
+        await self._load_managed_api_keys()
 
         if model == "auto" or not model:
             # Resolve provider + model via purpose-based config
@@ -339,7 +456,7 @@ class LLMProvider:
                 model = preferred
             else:
                 # Fallback: pick first enabled provider
-                for candidate in ("openai", "claude", "grok", "gemini", "ollama"):
+                for candidate in ("fair", "openai", "claude", "grok", "gemini", "ollama"):
                     if _enabled(candidate):
                         model = candidate
                         logger.warning(
@@ -487,6 +604,9 @@ class LLMProvider:
             # 3.1: JSON mode — Grok uses OpenAI-compatible response_format.
             if json_mode:
                 data["response_format"] = {"type": "json_object"}
+            reasoning_effort = _grok_reasoning_effort(grok_model)
+            if reasoning_effort:
+                data["reasoning_effort"] = reasoning_effort
             timeout = aiohttp.ClientTimeout(total=float(_provider_timeout_seconds("grok")))
             max_attempts = _retry_attempts()
             _t0 = time.monotonic()
@@ -494,7 +614,7 @@ class LLMProvider:
             for attempt in range(max_attempts):
                 try:
                     async with (
-                        aiohttp.ClientSession(timeout=timeout) as session,
+                        aiohttp.ClientSession(timeout=timeout, trust_env=True) as session,
                         session.post("https://api.x.ai/v1/chat/completions", headers=headers, json=data) as response,
                     ):
                         if response.status == 200:
@@ -631,6 +751,127 @@ class LLMProvider:
                             yield "Error: Timeout (Claude stream)."
                         else:
                             yield f"Error calling Claude: {str(e)}"
+                        return
+
+        elif model == "fair":
+            if not model_manager.config.fair_enabled:
+                yield "Error: FAIR.Hyperion API disabled. Enable in settings."
+                return
+
+            if not self.fair_api_key:
+                yield "Error: FAIR.Hyperion API Key not configured."
+                return
+
+            import json
+
+            import aiohttp
+
+            target_model = specific_model or model_manager.get_chat_model("fair")
+            base_url = self._get_fair_base_url()
+            api_url = f"{base_url}/chat/completions"
+            request_data: dict[str, Any] = {
+                "model": target_model,
+                "messages": [
+                    {"role": "system", "content": system_prompt or "You are a helpful assistant."},
+                    {"role": "user", "content": prompt},
+                ],
+                "stream": True,
+                "temperature": 0.7,
+            }
+            if json_mode:
+                request_data["response_format"] = {"type": "json_object"}
+
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.fair_api_key}",
+            }
+            timeout = aiohttp.ClientTimeout(total=float(_provider_timeout_seconds("fair")))
+            max_attempts = _retry_attempts()
+            _t0 = time.monotonic()
+            logger.info("FAIR.Hyperion: model={}, endpoint=chat, api_key=configured", target_model)
+
+            for attempt in range(max_attempts):
+                try:
+                    async with (
+                        aiohttp.ClientSession(timeout=timeout) as session,
+                        session.post(api_url, headers=headers, json=request_data) as response,
+                    ):
+                        if response.status == 200:
+                            _output = ""
+                            async for line_bytes in response.content:
+                                line = line_bytes.decode("utf-8").strip()
+                                if not line or line.startswith("event:"):
+                                    continue
+                                if not line.startswith("data: "):
+                                    continue
+                                chunk_str = line[6:]
+                                if chunk_str == "[DONE]":
+                                    break
+                                try:
+                                    chunk_json = json.loads(chunk_str)
+                                except json.JSONDecodeError:
+                                    logger.debug(
+                                        "FAIR.Hyperion: stream JSON decode skipped: {}",
+                                        redacted_log_text(chunk_str, limit=120),
+                                    )
+                                    continue
+                                content = chunk_json.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                                if content:
+                                    _output += content
+                                    yield content
+
+                            _log_llm_usage(
+                                "fair",
+                                target_model,
+                                prompt,
+                                _output,
+                                int((time.monotonic() - _t0) * 1000),
+                                purpose=purpose,
+                                metadata={"base_url": base_url},
+                            )
+                            return
+
+                        error_text = redacted_log_text(await response.text())
+                        is_retryable = response.status == 429 or (500 <= response.status < 600)
+                        if is_retryable and attempt < max_attempts - 1:
+                            yield "[Повтор попытки...]"
+                            delay = RETRY_BACKOFF[min(attempt, len(RETRY_BACKOFF) - 1)]
+                            await asyncio.sleep(delay)
+                        else:
+                            _log_llm_usage(
+                                "fair",
+                                target_model,
+                                prompt,
+                                "",
+                                int((time.monotonic() - _t0) * 1000),
+                                "error",
+                                purpose=purpose,
+                                metadata={"base_url": base_url},
+                            )
+                            yield f"Error from FAIR.Hyperion API: {response.status} - {error_text}"
+                            return
+                except Exception as e:
+                    err_retryable = _is_retryable_error(e) and attempt < max_attempts - 1
+                    if err_retryable:
+                        yield "[Повтор попытки...]"
+                        delay = RETRY_BACKOFF[min(attempt, len(RETRY_BACKOFF) - 1)]
+                        await asyncio.sleep(delay)
+                    else:
+                        logger.error(f"FAIR.Hyperion Error: {e}")
+                        _log_llm_usage(
+                            "fair",
+                            target_model,
+                            prompt,
+                            "",
+                            int((time.monotonic() - _t0) * 1000),
+                            "timeout" if _is_timeout_error(e) else "error",
+                            purpose=purpose,
+                            metadata={"base_url": base_url},
+                        )
+                        if _is_timeout_error(e):
+                            yield "Error: Timeout (FAIR.Hyperion stream)."
+                        else:
+                            yield f"Error calling FAIR.Hyperion: {str(e)}"
                         return
 
         elif model == "openai":

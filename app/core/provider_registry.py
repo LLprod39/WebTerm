@@ -38,6 +38,13 @@ class ProviderRegistry:
             "requires_key": "OPENAI_API_KEY",
             "check_method": "api"
         },
+        "fair": {
+            "type": "api",
+            "name": "FAIR.Hyperion",
+            "enabled_by_default": True,
+            "requires_key": "FAIR_HYPERION_API_KEY",
+            "check_method": "api"
+        },
         "ollama": {
             "type": "api",
             "name": "Ollama",
@@ -93,6 +100,8 @@ class ProviderRegistry:
                 return model_manager.config.grok_enabled
             elif provider == "openai":
                 return model_manager.config.openai_enabled
+            elif provider == "fair":
+                return model_manager.config.fair_enabled
             elif provider == "ollama":
                 return model_manager.config.ollama_enabled
 
@@ -112,9 +121,13 @@ class ProviderRegistry:
         # Проверяем API key
         if info.get("requires_key"):
             if provider == "openai":
-                key = os.getenv("OPENAI_API_KEY", "").strip() or os.getenv("CODEX_API_KEY", "").strip()
+                key = self._get_api_key("openai", "OPENAI_API_KEY", "CODEX_API_KEY")
+            elif provider == "fair":
+                key = self._get_api_key("fair", "FAIR_HYPERION_API_KEY", "FAIR_API_KEY")
+            elif provider == "claude":
+                key = self._get_api_key("claude", "ANTHROPIC_API_KEY")
             else:
-                key = os.getenv(info["requires_key"], "").strip()
+                key = self._get_api_key(provider, info["requires_key"])
             if not key:
                 return False
 
@@ -125,11 +138,27 @@ class ProviderRegistry:
                 or "http://127.0.0.1:11434"
             )
             cloud_enabled = bool(getattr(model_manager.config, "ollama_cloud_enabled", False))
-            cloud_api_key = bool((os.getenv("OLLAMA_API_KEY") or "").strip())
+            cloud_api_key = bool(self._get_api_key("ollama", "OLLAMA_API_KEY"))
             return bool(base_url) or (cloud_enabled and cloud_api_key)
 
         # Проверяем binary
         return not (info.get("requires_binary") and not self.is_binary_available(provider))
+
+    @staticmethod
+    def _get_api_key(provider: str, *env_names: str) -> str:
+        try:
+            from core_ui.managed_secrets import get_llm_api_key
+
+            managed_key = (get_llm_api_key(provider) or "").strip()
+            if managed_key:
+                return managed_key
+        except Exception as exc:
+            logger.debug("Managed LLM API key lookup skipped for %s: %s", provider, exc)
+        for env_name in env_names:
+            value = os.getenv(env_name, "").strip()
+            if value:
+                return value
+        return ""
 
     def is_binary_available(self, provider: str) -> bool:
         """Проверка доступности бинарника CLI"""
@@ -227,11 +256,21 @@ class ProviderRegistry:
         if info.get("requires_key"):
             key_name = info["requires_key"]
             if provider == "openai":
-                result["api_key_set"] = bool(os.getenv("OPENAI_API_KEY", "").strip() or os.getenv("CODEX_API_KEY", "").strip())
+                result["api_key_set"] = bool(self._get_api_key("openai", "OPENAI_API_KEY", "CODEX_API_KEY"))
                 result["api_key_name"] = "OPENAI_API_KEY/CODEX_API_KEY"
+            elif provider == "fair":
+                result["api_key_set"] = bool(self._get_api_key("fair", "FAIR_HYPERION_API_KEY", "FAIR_API_KEY"))
+                result["api_key_name"] = "FAIR_HYPERION_API_KEY"
             else:
-                result["api_key_set"] = bool(os.getenv(key_name, "").strip())
+                result["api_key_set"] = bool(self._get_api_key(provider, key_name))
                 result["api_key_name"] = key_name
+
+        if provider == "fair":
+            result["base_url"] = (
+                getattr(model_manager.config, "fair_base_url", "").strip()
+                or os.getenv("FAIR_HYPERION_BASE_URL", "").strip()
+                or "https://fair-hyperion.dev.k8s.erg.kz/api/hyperion/openai/v1"
+            )
 
         if provider == "ollama":
             result["base_url"] = (
@@ -241,7 +280,7 @@ class ProviderRegistry:
             )
             result["runtime_mode"] = getattr(model_manager.config, "ollama_runtime_mode", "auto") or "auto"
             result["cloud_enabled"] = bool(getattr(model_manager.config, "ollama_cloud_enabled", False))
-            result["cloud_api_key_set"] = bool((os.getenv("OLLAMA_API_KEY") or "").strip())
+            result["cloud_api_key_set"] = bool(self._get_api_key("ollama", "OLLAMA_API_KEY"))
             result["cloud_base_url"] = (
                 getattr(model_manager.config, "ollama_cloud_base_url", "").strip()
                 or os.getenv("OLLAMA_CLOUD_BASE_URL", "").strip()
@@ -273,20 +312,11 @@ class ProviderRegistry:
         if self.is_enabled(default) and self.is_configured(default):
             return default
 
-        # Fallback: первый доступный CLI провайдер
-        for provider in ["ralph", "cursor", "claude"]:
+        # Fallback: первый доступный API/CLI провайдер
+        for provider in ["fair", "openai", "grok", "gemini", "ollama", "ralph", "cursor", "claude"]:
             if self.is_enabled(provider) and self.is_configured(provider):
                 logger.warning(f"Default provider {default} not available, using {provider}")
                 return provider
-
-        # Fallback: Grok для внутренних вызовов
-        if self.is_enabled("grok") and self.is_configured("grok"):
-            logger.warning("No CLI provider available, using Grok")
-            return "grok"
-
-        if self.is_enabled("openai") and self.is_configured("openai"):
-            logger.warning("No CLI provider available, using OpenAI")
-            return "openai"
 
         logger.error("No providers available!")
         return None

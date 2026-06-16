@@ -73,6 +73,7 @@ def chat_view(request):
         "is_auto_default": default_provider == "auto",
         "is_gemini_default": default_provider == "gemini",
         "is_grok_default": default_provider == "grok",
+        "is_fair_default": default_provider == "fair",
         "rag_available": rag.available,
         "rag_build": getattr(rag, "rag_build", "full"),
     }

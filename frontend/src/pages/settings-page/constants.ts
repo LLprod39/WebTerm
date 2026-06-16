@@ -15,6 +15,7 @@ import {
 import type { SettingsConfig } from "@/lib/api";
 
 export const LLM_PROVIDERS = [
+  { value: "fair", label: "FAIR.Hyperion" },
   { value: "grok", label: "Grok (xAI)" },
   { value: "gemini", label: "Gemini (Google)" },
   { value: "openai", label: "OpenAI" },
@@ -45,9 +46,19 @@ export const PROVIDER_API_STATUS_KEY: Record<string, string> = {
   gemini: "gemini_set",
   grok: "grok_set",
   openai: "openai_set",
+  fair: "fair_set",
   claude: "claude_set",
   ollama: "ollama_set",
 };
+
+export const API_KEY_PROVIDERS = [
+  { value: "fair", name: "FAIR.Hyperion", statusKey: "fair_set", envName: "FAIR_HYPERION_API_KEY", placeholder: "sk-fair-..." },
+  { value: "gemini", name: "Gemini", statusKey: "gemini_set", envName: "GEMINI_API_KEY", placeholder: "AIza..." },
+  { value: "grok", name: "Grok", statusKey: "grok_set", envName: "GROK_API_KEY", placeholder: "xai-..." },
+  { value: "openai", name: "OpenAI", statusKey: "openai_set", envName: "OPENAI_API_KEY", placeholder: "sk-..." },
+  { value: "claude", name: "Claude", statusKey: "claude_set", envName: "ANTHROPIC_API_KEY", placeholder: "sk-ant-..." },
+  { value: "ollama", name: "Ollama Cloud", statusKey: "ollama_cloud_set", envName: "OLLAMA_API_KEY", placeholder: "ollama key" },
+];
 
 export const CATEGORY_ICONS: Record<string, ElementType> = {
   terminal: Terminal,
@@ -114,6 +125,7 @@ export function getProviderLabel(value: string): string {
 export function getProviderEnabled(config: SettingsConfig, provider: string): boolean {
   if (provider === "gemini") return config.gemini_enabled;
   if (provider === "openai") return config.openai_enabled;
+  if (provider === "fair") return config.fair_enabled;
   if (provider === "claude") return config.claude_enabled;
   if (provider === "ollama") return config.ollama_enabled;
   return config.grok_enabled;
@@ -122,6 +134,7 @@ export function getProviderEnabled(config: SettingsConfig, provider: string): bo
 export function getSavedModelForProvider(config: SettingsConfig, provider: string): string {
   if (provider === "gemini") return config.chat_model_gemini || "";
   if (provider === "openai") return config.chat_model_openai || "";
+  if (provider === "fair") return config.chat_model_fair || "";
   if (provider === "claude") return config.chat_model_claude || "";
   if (provider === "ollama") return config.chat_model_ollama || "";
   return config.chat_model_grok || "";

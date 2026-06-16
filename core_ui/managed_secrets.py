@@ -13,6 +13,17 @@ from core_ui.models import ManagedSecret
 
 SERVER_AUTH_NAMESPACE = "server_auth_secret"
 MCP_ENV_NAMESPACE = "mcp_secret_env"
+LLM_API_KEY_NAMESPACE = "llm_api_key"
+LLM_API_KEY_OBJECT_ID = 1
+LLM_API_KEY_PROVIDERS = {
+    "gemini": "GEMINI_API_KEY",
+    "grok": "GROK_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "claude": "ANTHROPIC_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+    "fair": "FAIR_HYPERION_API_KEY",
+    "ollama": "OLLAMA_API_KEY",
+}
 
 
 class ManagedSecretError(RuntimeError):
@@ -129,3 +140,49 @@ def get_mcp_secret_env_keys(mcp_id: int) -> list[str]:
 
 def has_mcp_secret_env(mcp_id: int) -> bool:
     return _has(MCP_ENV_NAMESPACE, mcp_id)
+
+
+def _normalize_llm_provider(provider: str) -> str:
+    value = (provider or "").strip().lower()
+    if value == "anthropic":
+        value = "claude"
+    if value not in LLM_API_KEY_PROVIDERS:
+        raise ManagedSecretError(f"Unsupported LLM API key provider: {provider}")
+    return value
+
+
+def set_llm_api_key(provider: str, api_key: str) -> None:
+    provider_key = _normalize_llm_provider(provider)
+    value = (api_key or "").strip()
+    if not value:
+        _delete(LLM_API_KEY_NAMESPACE, LLM_API_KEY_OBJECT_ID, key=provider_key)
+        return
+    _upsert(
+        LLM_API_KEY_NAMESPACE,
+        LLM_API_KEY_OBJECT_ID,
+        {"api_key": value},
+        key=provider_key,
+        metadata={
+            "kind": "llm_api_key",
+            "provider": provider_key,
+            "env_name": LLM_API_KEY_PROVIDERS[provider_key],
+        },
+    )
+
+
+def delete_llm_api_key(provider: str) -> None:
+    provider_key = _normalize_llm_provider(provider)
+    _delete(LLM_API_KEY_NAMESPACE, LLM_API_KEY_OBJECT_ID, key=provider_key)
+
+
+def get_llm_api_key(provider: str) -> str:
+    provider_key = _normalize_llm_provider(provider)
+    payload = _get(LLM_API_KEY_NAMESPACE, LLM_API_KEY_OBJECT_ID, key=provider_key, default={})
+    if isinstance(payload, dict):
+        return str(payload.get("api_key") or "")
+    return ""
+
+
+def has_llm_api_key(provider: str) -> bool:
+    provider_key = _normalize_llm_provider(provider)
+    return _has(LLM_API_KEY_NAMESPACE, LLM_API_KEY_OBJECT_ID, key=provider_key)

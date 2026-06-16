@@ -37,6 +37,7 @@ import { QueryStateBlock } from "@/components/ui/page-shell";
 // ─────────────────────────────────────────────────────────────────────────────
 
 const LLM_PROVIDERS = [
+  { value: "fair", label: "FAIR.Hyperion" },
   { value: "grok", label: "Grok (xAI)" },
   { value: "gemini", label: "Gemini (Google)" },
   { value: "openai", label: "OpenAI" },
@@ -67,9 +68,19 @@ const PROVIDER_API_STATUS_KEY: Record<string, string> = {
   gemini: "gemini_set",
   grok: "grok_set",
   openai: "openai_set",
+  fair: "fair_set",
   claude: "claude_set",
   ollama: "ollama_set",
 };
+
+const API_KEY_PROVIDERS = [
+  { value: "fair", name: "FAIR.Hyperion", statusKey: "fair_set", envName: "FAIR_HYPERION_API_KEY", placeholder: "sk-fair-..." },
+  { value: "gemini", name: "Gemini", statusKey: "gemini_set", envName: "GEMINI_API_KEY", placeholder: "AIza..." },
+  { value: "grok", name: "Grok", statusKey: "grok_set", envName: "GROK_API_KEY", placeholder: "xai-..." },
+  { value: "openai", name: "OpenAI", statusKey: "openai_set", envName: "OPENAI_API_KEY", placeholder: "sk-..." },
+  { value: "claude", name: "Claude", statusKey: "claude_set", envName: "ANTHROPIC_API_KEY", placeholder: "sk-ant-..." },
+  { value: "ollama", name: "Ollama Cloud", statusKey: "ollama_cloud_set", envName: "OLLAMA_API_KEY", placeholder: "ollama key" },
+];
 
 // Plain operational metadata for provider cards.
 const PROVIDER_METADATA: Record<string, {
@@ -99,6 +110,13 @@ const PROVIDER_METADATA: Record<string, {
     badge: "Инструменты и логика",
     brand: "OpenAI",
     slogan: "Хороший выбор для вызова инструментов, проверок и структурированных ответов.",
+  },
+  fair: {
+    accentColor: "bg-cyan-500",
+    textColor: "text-cyan-500",
+    badge: "Корпоративный API",
+    brand: "ERG",
+    slogan: "OpenAI-compatible доступ к моделям FAIR.Hyperion.",
   },
   claude: {
     accentColor: "bg-orange-500",
@@ -146,6 +164,7 @@ function getProviderLabel(value: string): string {
 function getProviderEnabled(config: SettingsConfig, provider: string): boolean {
   if (provider === "gemini") return config.gemini_enabled;
   if (provider === "openai") return config.openai_enabled;
+  if (provider === "fair") return config.fair_enabled;
   if (provider === "claude") return config.claude_enabled;
   if (provider === "ollama") return config.ollama_enabled;
   return config.grok_enabled;
@@ -154,6 +173,7 @@ function getProviderEnabled(config: SettingsConfig, provider: string): boolean {
 function getSavedModelForProvider(config: SettingsConfig, provider: string): string {
   if (provider === "gemini") return config.chat_model_gemini || "";
   if (provider === "openai") return config.chat_model_openai || "";
+  if (provider === "fair") return config.chat_model_fair || "";
   if (provider === "claude") return config.chat_model_claude || "";
   if (provider === "ollama") return config.chat_model_ollama || "";
   return config.chat_model_grok || "";
@@ -211,6 +231,7 @@ function PurposeModelSelector({
     grok: "bg-amber-500",
     gemini: "bg-violet-500",
     openai: "bg-emerald-500",
+    fair: "bg-cyan-500",
     claude: "bg-orange-500",
     ollama: "bg-sky-500",
   };
@@ -359,6 +380,7 @@ export default function SettingsAIPage() {
   const [agentModel, setAgentModel] = useState("");
   const [orchProvider, setOrchProvider] = useState("grok");
   const [orchModel, setOrchModel] = useState("");
+  const [fairBaseUrl, setFairBaseUrl] = useState("https://fair-hyperion.dev.k8s.erg.kz/api/hyperion/openai/v1");
   const [ollamaBaseUrl, setOllamaBaseUrl] = useState("http://127.0.0.1:11434");
   const [ollamaRuntimeMode, setOllamaRuntimeMode] = useState("auto");
   const [ollamaCloudEnabled, setOllamaCloudEnabled] = useState(false);
@@ -366,6 +388,8 @@ export default function SettingsAIPage() {
   const [ollamaThinkMode, setOllamaThinkMode] = useState<string>(AUTO_OLLAMA_THINKING_VALUE);
   const [refreshingPurpose, setRefreshingPurpose] = useState<string | null>(null);
   const [reasoningEffort, setReasoningEffort] = useState<string>(AUTO_REASONING_VALUE);
+  const [apiKeyDrafts, setApiKeyDrafts] = useState<Record<string, string>>({});
+  const [savingApiKey, setSavingApiKey] = useState<string | null>(null);
 
   const hydrateAiForm = useCallback((config: SettingsConfig) => {
     const activeProvider = LLM_PROVIDER_VALUES.includes(config.internal_llm_provider || "")
@@ -381,6 +405,7 @@ export default function SettingsAIPage() {
     setAgentModel(config.agent_llm_model || "");
     setOrchProvider(config.orchestrator_llm_provider || activeProvider);
     setOrchModel(config.orchestrator_llm_model || "");
+    setFairBaseUrl(config.fair_base_url || "https://fair-hyperion.dev.k8s.erg.kz/api/hyperion/openai/v1");
     setOllamaBaseUrl(config.ollama_base_url || "http://127.0.0.1:11434");
     setOllamaRuntimeMode(config.ollama_runtime_mode || "auto");
     setOllamaCloudEnabled(Boolean(config.ollama_cloud_enabled));
@@ -398,6 +423,7 @@ export default function SettingsAIPage() {
     if (!modelsData) return [];
     if (p === "gemini") return modelsData.gemini || [];
     if (p === "openai") return modelsData.openai || [];
+    if (p === "fair") return modelsData.fair || [];
     if (p === "claude") return modelsData.claude || [];
     if (p === "ollama") {
       const localModels = modelsData.ollama_local || [];
@@ -444,7 +470,7 @@ export default function SettingsAIPage() {
   const onRefreshPurpose = async (p: string) => {
     setRefreshingPurpose(p);
     try {
-      await refreshModels(p as "gemini" | "grok" | "openai" | "claude" | "ollama");
+      await refreshModels(p as "gemini" | "grok" | "openai" | "fair" | "claude" | "ollama");
       await queryClient.invalidateQueries({ queryKey: ["settings", "models"] });
     } finally { setRefreshingPurpose(null); }
   };
@@ -457,6 +483,7 @@ export default function SettingsAIPage() {
         agent_llm_provider: agentProvider, agent_llm_model: agentModel,
         orchestrator_llm_provider: orchProvider, orchestrator_llm_model: orchModel,
         internal_llm_provider: chatProvider,
+        fair_base_url: fairBaseUrl,
         ollama_base_url: ollamaBaseUrl,
         ollama_runtime_mode: ollamaRuntimeMode,
         ollama_cloud_enabled: ollamaCloudEnabled,
@@ -472,6 +499,7 @@ export default function SettingsAIPage() {
     setSaving(true);
     try {
       await saveSettings({
+        fair_base_url: fairBaseUrl,
         ollama_base_url: ollamaBaseUrl,
         ollama_runtime_mode: ollamaRuntimeMode,
         ollama_cloud_enabled: ollamaCloudEnabled,
@@ -480,6 +508,40 @@ export default function SettingsAIPage() {
       });
       await queryClient.invalidateQueries({ queryKey: ["settings", "config"] });
     } finally { setSaving(false); }
+  };
+
+  const setApiKeyDraft = (providerKey: string, value: string) => {
+    setApiKeyDrafts((current) => ({ ...current, [providerKey]: value }));
+  };
+
+  const onSaveApiKey = async (providerKey: string) => {
+    const value = (apiKeyDrafts[providerKey] || "").trim();
+    if (!value) return;
+    setSavingApiKey(providerKey);
+    try {
+      await saveSettings({ api_keys: { [providerKey]: value } });
+      setApiKeyDrafts((current) => ({ ...current, [providerKey]: "" }));
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["settings", "config"] }),
+        queryClient.invalidateQueries({ queryKey: ["settings", "models"] }),
+      ]);
+    } finally {
+      setSavingApiKey(null);
+    }
+  };
+
+  const onClearApiKey = async (providerKey: string) => {
+    setSavingApiKey(providerKey);
+    try {
+      await saveSettings({ clear_api_keys: [providerKey] });
+      setApiKeyDrafts((current) => ({ ...current, [providerKey]: "" }));
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["settings", "config"] }),
+        queryClient.invalidateQueries({ queryKey: ["settings", "models"] }),
+      ]);
+    } finally {
+      setSavingApiKey(null);
+    }
   };
 
   if (settingsLoading || settingsError || !settingsData?.success) {
@@ -540,6 +602,7 @@ export default function SettingsAIPage() {
     agentModel !== (config.agent_llm_model || "") ||
     orchProvider !== (config.orchestrator_llm_provider || savedActiveProvider) ||
     orchModel !== (config.orchestrator_llm_model || "") ||
+    fairBaseUrl !== (config.fair_base_url || "https://fair-hyperion.dev.k8s.erg.kz/api/hyperion/openai/v1") ||
     ollamaBaseUrl !== (config.ollama_base_url || "http://127.0.0.1:11434") ||
     ollamaRuntimeMode !== (config.ollama_runtime_mode || "auto") ||
     ollamaCloudEnabled !== Boolean(config.ollama_cloud_enabled) ||
@@ -583,7 +646,7 @@ export default function SettingsAIPage() {
         description="Эта модель используется там, где отдельная роль не задана."
       >
         <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
             {providerOverview.map((providerItem) => {
               const meta = PROVIDER_METADATA[providerItem.value as keyof typeof PROVIDER_METADATA] || PROVIDER_METADATA.grok;
               return (
@@ -746,6 +809,40 @@ export default function SettingsAIPage() {
             refreshing={refreshingPurpose === orchProvider}
             features={ROLE_FEATURES["Пайплайны"]}
           />
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        title="Подключение FAIR.Hyperion"
+        icon={Globe}
+        description="OpenAI-compatible endpoint и каталог моделей."
+      >
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">BaseURL</label>
+            <Input
+              value={fairBaseUrl}
+              onChange={(event) => setFairBaseUrl(event.target.value)}
+              placeholder="https://fair-hyperion.dev.k8s.erg.kz/api/hyperion/openai/v1"
+              className="h-9 text-xs font-mono bg-background/50"
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5 text-xs"
+              onClick={() => onRefreshPurpose("fair")}
+              disabled={refreshingPurpose === "fair"}
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5", refreshingPurpose === "fair" && "animate-spin")} />
+              Обновить модели
+            </Button>
+            <Button size="sm" className="gap-1.5 text-xs" onClick={onSaveOllama} disabled={saving}>
+              <Save className="h-3.5 w-3.5" />
+              {saving ? "Сохранение..." : "Сохранить"}
+            </Button>
+          </div>
         </div>
       </SectionCard>
 
@@ -974,20 +1071,22 @@ export default function SettingsAIPage() {
           description="Показывает, какие ключи доступны. Значения ключей здесь не выводятся."
         >
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {[
-              { name: "Gemini Pro", key: "gemini_set", enabled: config.gemini_enabled, desc: "Google AI Studio / Vertex AI" },
-              { name: "Grok xAI", key: "grok_set", enabled: config.grok_enabled, desc: "xAI API" },
-              { name: "OpenAI GPT", key: "openai_set", enabled: config.openai_enabled, desc: "OpenAI API (GPT & o-series)" },
-              { name: "Claude Anthropic", key: "claude_set", enabled: config.claude_enabled, desc: "Anthropic API (Claude)" },
-              { name: "Ollama локальный узел", key: "ollama_local_set", enabled: config.ollama_enabled && ollamaRuntimeMode !== "cloud", desc: "Локальный адрес Ollama" },
-              { name: "Ollama облачный хаб", key: "ollama_cloud_set", enabled: config.ollama_enabled && ollamaCloudEnabled, desc: "Удалённый API-адрес Ollama" },
-            ].map((p) => {
-              const active = apiKeys[p.key];
+            {API_KEY_PROVIDERS.map((p) => {
+              const active = Boolean(apiKeys[p.statusKey]);
+              const enabled =
+                p.value === "gemini" ? config.gemini_enabled
+                  : p.value === "grok" ? config.grok_enabled
+                    : p.value === "openai" ? config.openai_enabled
+                      : p.value === "fair" ? config.fair_enabled
+                        : p.value === "claude" ? config.claude_enabled
+                          : config.ollama_enabled && ollamaCloudEnabled;
+              const draft = apiKeyDrafts[p.value] || "";
+              const savingCurrentKey = savingApiKey === p.value;
               return (
                 <div 
-                  key={p.name} 
+                  key={p.value} 
                   className={cn(
-                    "relative overflow-hidden rounded-xl border p-4 transition-all duration-200 bg-card/40 border-border/60",
+                    "relative overflow-hidden rounded-xl border p-4 transition-all duration-200 bg-card/40 border-border/60 space-y-3",
                     active ? "hover:border-emerald-500/30" : "hover:border-border/85"
                   )}
                 >
@@ -995,11 +1094,11 @@ export default function SettingsAIPage() {
                     <div className="space-y-0.5">
                       <div className="flex items-center gap-2">
                         <h4 className="text-xs font-semibold text-foreground">{p.name}</h4>
-                        {!p.enabled && (
+                        {!enabled && (
                           <span className="rounded bg-muted-foreground/10 px-1 py-0.2 text-[8px] font-semibold text-muted-foreground">Откл.</span>
                         )}
                       </div>
-                      <p className="text-[10px] text-muted-foreground/80 leading-normal">{p.desc}</p>
+                      <p className="text-[10px] text-muted-foreground/80 leading-normal">{p.envName}</p>
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0 text-[10px] font-medium">
@@ -1009,6 +1108,37 @@ export default function SettingsAIPage() {
                       )} />
                       <span className="text-muted-foreground">{active ? "Подключен" : "Не настроен"}</span>
                     </div>
+                  </div>
+                  <Input
+                    type="password"
+                    autoComplete="new-password"
+                    value={draft}
+                    onChange={(event) => setApiKeyDraft(p.value, event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && draft.trim()) onSaveApiKey(p.value);
+                    }}
+                    placeholder={p.placeholder}
+                    className="h-9 text-xs font-mono bg-background/50"
+                  />
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs"
+                      onClick={() => onClearApiKey(p.value)}
+                      disabled={savingCurrentKey || !active}
+                    >
+                      Очистить
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="gap-1.5 text-xs"
+                      onClick={() => onSaveApiKey(p.value)}
+                      disabled={savingCurrentKey || !draft.trim()}
+                    >
+                      <Save className="h-3.5 w-3.5" />
+                      {savingCurrentKey ? "Сохранение..." : "Сохранить"}
+                    </Button>
                   </div>
                 </div>
               );

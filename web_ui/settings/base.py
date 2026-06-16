@@ -50,6 +50,13 @@ def _env_int(name: str, default: int = 0) -> int:
     return int(raw.strip())
 
 
+def _env_float(name: str, default: float = 0.0) -> float:
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return default
+    return float(raw.strip())
+
+
 def _append_unique(values: list[str], *items: str) -> list[str]:
     for item in items:
         value = (item or "").strip()
@@ -252,10 +259,25 @@ if not DEBUG and not CHANNEL_REDIS_URL:
     )
 
 if CHANNEL_REDIS_URL:
+    # redis-py 6 defaults socket_timeout to 5s. channels_redis also uses a
+    # blocking receive loop around 5s, so the socket timeout must be higher
+    # or idle WebSockets are closed by a Redis timeout.
+    _CHANNEL_REDIS_SOCKET_TIMEOUT = max(_env_float("CHANNEL_REDIS_SOCKET_TIMEOUT_SECONDS", 30.0), 6.0)
+    _CHANNEL_REDIS_CONNECT_TIMEOUT = max(_env_float("CHANNEL_REDIS_CONNECT_TIMEOUT_SECONDS", 5.0), 1.0)
+    _CHANNEL_REDIS_HEALTH_CHECK_INTERVAL = max(_env_int("CHANNEL_REDIS_HEALTH_CHECK_INTERVAL_SECONDS", 30), 0)
     CHANNEL_LAYERS = {
         "default": {
             "BACKEND": "channels_redis.core.RedisChannelLayer",
-            "CONFIG": {"hosts": [CHANNEL_REDIS_URL]},
+            "CONFIG": {
+                "hosts": [
+                    {
+                        "address": CHANNEL_REDIS_URL,
+                        "socket_timeout": _CHANNEL_REDIS_SOCKET_TIMEOUT,
+                        "socket_connect_timeout": _CHANNEL_REDIS_CONNECT_TIMEOUT,
+                        "health_check_interval": _CHANNEL_REDIS_HEALTH_CHECK_INTERVAL,
+                    }
+                ]
+            },
         }
     }
 else:
@@ -432,6 +454,8 @@ LDAP_FULL_NAME_ATTRIBUTE = (os.getenv("LDAP_FULL_NAME_ATTRIBUTE", "cn") or "cn")
 LDAP_START_TLS = _env_bool("LDAP_START_TLS", False)
 LDAP_IGNORE_CERT = _env_bool("LDAP_IGNORE_CERT", False)
 LDAP_NETWORK_TIMEOUT_SECONDS = int((os.getenv("LDAP_NETWORK_TIMEOUT_SECONDS", "3") or "3").strip() or "3")
+LDAP_CA_CERT_FILE = (os.getenv("LDAP_CA_CERT_FILE", "") or "").strip()
+LDAP_CA_CERT_DIR = (os.getenv("LDAP_CA_CERT_DIR", "") or "").strip()
 
 if LDAP_ENABLED:
     try:
@@ -468,6 +492,10 @@ if LDAP_ENABLED:
         AUTH_LDAP_GLOBAL_OPTIONS = {
             ldap.OPT_REFERRALS: 0,
         }
+        if LDAP_CA_CERT_FILE:
+            AUTH_LDAP_GLOBAL_OPTIONS[ldap.OPT_X_TLS_CACERTFILE] = LDAP_CA_CERT_FILE
+        if LDAP_CA_CERT_DIR:
+            AUTH_LDAP_GLOBAL_OPTIONS[ldap.OPT_X_TLS_CACERTDIR] = LDAP_CA_CERT_DIR
         if LDAP_IGNORE_CERT:
             AUTH_LDAP_GLOBAL_OPTIONS[ldap.OPT_X_TLS_REQUIRE_CERT] = ldap.OPT_X_TLS_NEVER
 
@@ -567,7 +595,8 @@ MCP_HTTP_RETRY_ATTEMPTS = _env_int("MCP_HTTP_RETRY_ATTEMPTS", 2)
 LLM_MAX_RETRY_ATTEMPTS = _env_int("LLM_MAX_RETRY_ATTEMPTS", 3)
 LLM_PROVIDER_TIMEOUT_SECONDS = _env_int("LLM_PROVIDER_TIMEOUT_SECONDS", 90)
 LLM_GEMINI_STREAM_TIMEOUT_SECONDS = _env_int("LLM_GEMINI_STREAM_TIMEOUT_SECONDS", 90)
-LLM_GROK_STREAM_TIMEOUT_SECONDS = _env_int("LLM_GROK_STREAM_TIMEOUT_SECONDS", 60)
+LLM_GROK_STREAM_TIMEOUT_SECONDS = _env_int("LLM_GROK_STREAM_TIMEOUT_SECONDS", 3600)
+LLM_GROK_REASONING_EFFORT = os.getenv("LLM_GROK_REASONING_EFFORT", "none").strip().lower()
 LLM_CLAUDE_STREAM_TIMEOUT_SECONDS = _env_int("LLM_CLAUDE_STREAM_TIMEOUT_SECONDS", 120)
 LLM_OPENAI_STREAM_TIMEOUT_SECONDS = _env_int("LLM_OPENAI_STREAM_TIMEOUT_SECONDS", 90)
 LLM_OPENAI_RESPONSES_TIMEOUT_SECONDS = _env_int("LLM_OPENAI_RESPONSES_TIMEOUT_SECONDS", 300)

@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import type { SettingsConfig } from "@/lib/api";
-import { getProviderLabel, LLM_PROVIDERS } from "./constants";
+import { API_KEY_PROVIDERS, getProviderLabel, LLM_PROVIDERS } from "./constants";
 import { OllamaRuntimeSettings } from "./OllamaRuntimeSettings";
 import { PurposeModelSelector } from "./PurposeModelSelector";
 import { SectionCard } from "./SectionCard";
@@ -38,7 +38,7 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
 
       <SectionCard title="Провайдер по умолчанию" icon={Bot} description="Выбор основного провайдера и модели для общего режима">
         <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3">
             {form.providerOverview.map((providerItem) => (
               <button
                 key={providerItem.value}
@@ -209,6 +209,28 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
         </div>
       </SectionCard>
 
+      <SectionCard title="Подключение FAIR.Hyperion" icon={Globe} description="OpenAI-compatible endpoint и каталог моделей">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-medium text-muted-foreground uppercase">BaseURL</label>
+            <Input
+              value={form.fairBaseUrl}
+              onChange={(event) => form.setFairBaseUrl(event.target.value)}
+              placeholder="https://fair-hyperion.dev.k8s.erg.kz/api/hyperion/openai/v1"
+              className="h-9 font-mono text-xs"
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => form.onRefreshPurpose("fair")} disabled={form.refreshingPurpose === "fair"}>
+              <RefreshCw className={cn("h-3.5 w-3.5", form.refreshingPurpose === "fair" && "animate-spin")} /> Обновить модели
+            </Button>
+            <Button size="sm" className="gap-1.5" onClick={form.onSaveOllama} disabled={form.saving}>
+              <Save className="h-3.5 w-3.5" /> {form.saving ? "Сохранение..." : "Сохранить"}
+            </Button>
+          </div>
+        </div>
+      </SectionCard>
+
       <OllamaRuntimeSettings
         ollamaRoutingActive={form.ollamaRoutingActive}
         openAiRoutingActive={form.openAiRoutingActive}
@@ -235,44 +257,70 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
       />
 
       {apiKeys && isAdmin && (
-        <SectionCard title="API ключи" icon={Key} description="Статус подключения провайдеров">
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3">
-            {[
-              { name: "Gemini", key: "gemini_set", enabled: config.gemini_enabled },
-              { name: "Grok", key: "grok_set", enabled: config.grok_enabled },
-              { name: "OpenAI", key: "openai_set", enabled: config.openai_enabled },
-              { name: "Claude", key: "claude_set", enabled: config.claude_enabled },
-              { name: "Ollama Local", key: "ollama_local_set", enabled: config.ollama_enabled && form.ollamaRuntimeMode !== "cloud" },
-              { name: "Ollama Cloud", key: "ollama_cloud_set", enabled: config.ollama_enabled && form.ollamaCloudEnabled },
-            ].map((providerItem) => (
-              <div key={providerItem.name} className="rounded-lg border border-border px-3 py-3">
-                <div className="flex items-center gap-3">
-                  <div className={cn("h-2.5 w-2.5 rounded-full", apiKeys[providerItem.key] ? "bg-green-500" : "bg-red-500")} />
-                  <div>
-                    <p className="text-xs font-medium">{providerItem.name}</p>
+        <SectionCard title="API ключи" icon={Key} description="Подключение и ротация ключей провайдеров">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+            {API_KEY_PROVIDERS.map((providerItem) => {
+              const enabled =
+                providerItem.value === "gemini" ? config.gemini_enabled
+                  : providerItem.value === "grok" ? config.grok_enabled
+                    : providerItem.value === "openai" ? config.openai_enabled
+                      : providerItem.value === "fair" ? config.fair_enabled
+                        : providerItem.value === "claude" ? config.claude_enabled
+                          : config.ollama_enabled && form.ollamaCloudEnabled;
+              const connected = Boolean(apiKeys[providerItem.statusKey]);
+              const draft = form.apiKeyDrafts[providerItem.value] || "";
+              const saving = form.savingApiKey === providerItem.value;
+              return (
+                <div key={providerItem.value} className="space-y-3 rounded-lg border border-border px-3 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium">{providerItem.name}</p>
+                      <p className="truncate text-[10px] text-muted-foreground">{providerItem.envName}</p>
+                    </div>
+                    <Badge variant={connected ? "default" : "secondary"} className="shrink-0">
+                      {connected ? "Подключен" : "Не задан"}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className={cn("h-2.5 w-2.5 rounded-full", connected ? "bg-green-500" : "bg-red-500")} />
                     <p className="text-[10px] text-muted-foreground">
-                      {apiKeys[providerItem.key]
-                        ? "Подключен"
-                        : providerItem.name === "Ollama Local"
-                          ? "Нужен Base URL"
-                          : providerItem.name === "Ollama Cloud"
-                            ? "Нужен OLLAMA_API_KEY"
-                            : "Не задан"}
-                      {providerItem.enabled ? " · Активен" : ""}
+                      {enabled ? "Активен" : "Отключен"} · значение ключа не выводится
                     </p>
                   </div>
+                  <div className="space-y-2">
+                    <Input
+                      type="password"
+                      autoComplete="new-password"
+                      value={draft}
+                      onChange={(event) => form.setApiKeyDraft(providerItem.value, event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && draft.trim()) form.onSaveApiKey(providerItem.value);
+                      }}
+                      placeholder={providerItem.placeholder}
+                      className="h-9 font-mono text-xs"
+                    />
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => form.onClearApiKey(providerItem.value)}
+                        disabled={saving || !connected}
+                      >
+                        Очистить
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={() => form.onSaveApiKey(providerItem.value)}
+                        disabled={saving || !draft.trim()}
+                      >
+                        <Save className="h-3.5 w-3.5" /> {saving ? "Сохранение..." : "Сохранить"}
+                      </Button>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <p className="mt-3 text-[10px] text-muted-foreground">
-                    {providerItem.name === "Ollama Local"
-                      ? (form.ollamaBaseUrl || "http://127.0.0.1:11434")
-                      : providerItem.name === "Ollama Cloud"
-                        ? (form.ollamaCloudBaseUrl || "https://ollama.com")
-                        : "Ключ сохранен в backend"}
-                  </p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </SectionCard>
       )}

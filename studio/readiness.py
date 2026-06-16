@@ -19,8 +19,10 @@ from studio import readiness_issues as ri
 _LLM_PROVIDER_KEYS = {
     "gemini": ("GEMINI_API_KEY",),
     "openai": ("OPENAI_API_KEY", "CODEX_API_KEY"),
+    "fair": ("FAIR_HYPERION_API_KEY", "FAIR_API_KEY"),
     "grok": ("GROK_API_KEY",),
     "claude": ("ANTHROPIC_API_KEY",),
+    "ollama": ("OLLAMA_API_KEY",),
 }
 _SEVERITY_RANK = {"ready": 0, "warning": 1, "error": 2}
 _MONITORING_CONTEXT_FIELDS = set(
@@ -72,13 +74,27 @@ def _first_nonblank(*values: Any) -> Any:
 def _env_any(keys: tuple[str, ...]) -> bool: return any(_has_value(os.getenv(key)) for key in keys)
 
 
+def _managed_llm_key(provider: str) -> bool:
+    try:
+        from core_ui.managed_secrets import has_llm_api_key
+
+        return has_llm_api_key(provider)
+    except Exception:
+        return False
+
+
 def _llm_provider_ready(provider: str) -> bool:
     if provider == "auto":
-        return any(_llm_provider_ready(item) for item in ("gemini", "openai", "grok", "claude", "ollama"))
+        return any(_llm_provider_ready(item) for item in ("fair", "gemini", "openai", "grok", "claude", "ollama"))
     if provider == "ollama":
-        return _has_value(os.getenv("OLLAMA_BASE_URL")) or _has_value(getattr(settings, "OLLAMA_BASE_URL", ""))
+        return (
+            _has_value(os.getenv("OLLAMA_BASE_URL"))
+            or _has_value(getattr(settings, "OLLAMA_BASE_URL", ""))
+            or _managed_llm_key("ollama")
+            or _env_any(_LLM_PROVIDER_KEYS["ollama"])
+        )
     keys = _LLM_PROVIDER_KEYS.get(provider)
-    return bool(keys and _env_any(keys))
+    return bool(keys and (_env_any(keys) or _managed_llm_key(provider)))
 
 
 def _email_backend_needs_smtp() -> bool:

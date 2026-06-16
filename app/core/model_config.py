@@ -22,6 +22,7 @@ class ModelConfig(BaseModel):
     gemini_enabled: bool = False
     grok_enabled: bool = True  # Fallback for internal calls
     openai_enabled: bool = False
+    fair_enabled: bool = True
     claude_enabled: bool = False
     ollama_enabled: bool = False
 
@@ -29,6 +30,7 @@ class ModelConfig(BaseModel):
     chat_model_gemini: str = "models/gemini-3-flash-preview"
     chat_model_grok: str = "grok-3"
     chat_model_openai: str = "gpt-5-mini"
+    chat_model_fair: str = "qwen3:14b"
     chat_model_claude: str = "claude-sonnet-4-6"
     chat_model_ollama: str = ""
 
@@ -39,16 +41,17 @@ class ModelConfig(BaseModel):
     agent_model_gemini: str = "models/gemini-3-flash-preview"
     agent_model_grok: str = "grok-3"
     agent_model_openai: str = "gpt-5-mini"
+    agent_model_fair: str = "fair-spark"
     agent_model_ollama: str = ""
 
-    # Default provider (CLI agent): cursor = Cursor CLI, claude = Claude Code CLI
+    # Default provider for internal chat/agent routing.
     # Note: "ralph" is NOT a valid provider - it's an orchestrator mode
-    default_provider: str = "cursor"
+    default_provider: str = "fair"
 
     # Провайдер для ВНУТРЕННИХ вызовов LLM (генерация workflow, анализ задач).
     # Когда default_provider - CLI agent, внутренние вызовы используют этот провайдер.
-    # Варианты: "gemini", "grok", "openai", "claude", "ollama"
-    internal_llm_provider: str = "grok"
+    # Варианты: "gemini", "grok", "openai", "fair", "claude", "ollama"
+    internal_llm_provider: str = "fair"
 
     # Default orchestrator mode: react | ralph_internal | ralph_cli
     default_orchestrator_mode: str = "ralph_internal"
@@ -74,12 +77,12 @@ class ModelConfig(BaseModel):
 
     # Purpose-based LLM configuration (provider + specific model per use-case)
     # Empty string means "inherit from internal_llm_provider / default chat model"
-    chat_llm_provider: str = ""
-    chat_llm_model: str = ""
-    agent_llm_provider: str = ""
-    agent_llm_model: str = ""
-    orchestrator_llm_provider: str = ""
-    orchestrator_llm_model: str = ""
+    chat_llm_provider: str = "fair"
+    chat_llm_model: str = "qwen3:14b"
+    agent_llm_provider: str = "fair"
+    agent_llm_model: str = "fair-spark"
+    orchestrator_llm_provider: str = "fair"
+    orchestrator_llm_model: str = "fair-spark"
 
     # Domain SSO settings (None => use Django settings/.env fallback)
     domain_auth_enabled: bool | None = None
@@ -89,6 +92,7 @@ class ModelConfig(BaseModel):
     domain_auth_default_profile: str | None = None
 
     # Ollama runtime
+    fair_base_url: str = "https://fair-hyperion.dev.k8s.erg.kz/api/hyperion/openai/v1"
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_runtime_mode: str = "auto"
     ollama_cloud_enabled: bool = False
@@ -119,6 +123,7 @@ class ModelManager:
         self.available_gemini_models: list[str] = []
         self.available_grok_models: list[str] = []
         self.available_openai_models: list[str] = []
+        self.available_fair_models: list[str] = []
         self.available_claude_models: list[str] = []
         self.available_ollama_models: list[str] = []
         self.available_ollama_local_models: list[str] = []
@@ -126,6 +131,8 @@ class ModelManager:
         self.gemini_api_key: str | None = None
         self.grok_api_key: str | None = None
         self.openai_api_key: str | None = None
+        self.fair_api_key: str | None = None
+        self.ollama_api_key: str | None = None
         self.anthropic_api_key: str | None = None
 
     def set_api_keys(
@@ -134,6 +141,8 @@ class ModelManager:
         grok_key: str | None = None,
         anthropic_key: str | None = None,
         openai_key: str | None = None,
+        fair_key: str | None = None,
+        ollama_key: str | None = None,
     ):
         """Set API keys"""
         if gemini_key:
@@ -144,6 +153,10 @@ class ModelManager:
             self.anthropic_api_key = anthropic_key
         if openai_key:
             self.openai_api_key = openai_key
+        if fair_key:
+            self.fair_api_key = fair_key
+        if ollama_key:
+            self.ollama_api_key = ollama_key
 
     @staticmethod
     def _extract_model_ids(payload: dict) -> list[str]:
@@ -220,9 +233,49 @@ class ModelManager:
             return value
         return ""
 
+    def _get_ollama_api_key(self) -> str:
+        return (self.ollama_api_key or "").strip() or (os.getenv("OLLAMA_API_KEY") or "").strip()
+
     @staticmethod
-    def _get_ollama_api_key() -> str:
-        return (os.getenv("OLLAMA_API_KEY") or "").strip()
+    def _normalize_fair_base_url(raw: str | None = None) -> str:
+        value = (
+            (raw or "").strip()
+            or (os.getenv("FAIR_HYPERION_BASE_URL") or "").strip()
+            or "https://fair-hyperion.dev.k8s.erg.kz/api/hyperion/openai/v1"
+        ).rstrip("/")
+        if "://" not in value:
+            value = f"https://{value}"
+        return value.rstrip("/")
+
+    def _get_fair_base_url(self) -> str:
+        return self._normalize_fair_base_url(self.config.fair_base_url)
+
+    @staticmethod
+    def _get_fair_api_key() -> str:
+        return (
+            (os.getenv("FAIR_HYPERION_API_KEY") or "").strip()
+            or (os.getenv("FAIR_API_KEY") or "").strip()
+        )
+
+    @staticmethod
+    def _get_managed_llm_api_key(provider: str) -> str:
+        try:
+            from core_ui.managed_secrets import get_llm_api_key
+
+            return (get_llm_api_key(provider) or "").strip()
+        except Exception as exc:
+            logger.debug(f"Managed LLM API key lookup skipped for {provider}: {exc}")
+            return ""
+
+    @classmethod
+    async def _aget_managed_llm_api_key(cls, provider: str) -> str:
+        try:
+            from asgiref.sync import sync_to_async
+
+            return await sync_to_async(cls._get_managed_llm_api_key, thread_sensitive=True)(provider)
+        except Exception as exc:
+            logger.debug(f"Async managed LLM API key lookup skipped for {provider}: {exc}")
+            return ""
 
     @staticmethod
     def _encode_ollama_cloud_model(model_id: str) -> str:
@@ -369,7 +422,7 @@ class ModelManager:
         """
         Fetch available Gemini models via REST API.
         """
-        key = self.gemini_api_key or (os.getenv("GEMINI_API_KEY") or "").strip()
+        key = await self._aget_managed_llm_api_key("gemini") or self.gemini_api_key or (os.getenv("GEMINI_API_KEY") or "").strip()
         if key:
             self.gemini_api_key = key
         if not key:
@@ -421,7 +474,7 @@ class ModelManager:
         """
         Fetch available Grok models from xAI API
         """
-        key = self.grok_api_key or (os.getenv("GROK_API_KEY") or "").strip()
+        key = await self._aget_managed_llm_api_key("grok") or self.grok_api_key or (os.getenv("GROK_API_KEY") or "").strip()
         if key:
             self.grok_api_key = key
         if not key:
@@ -459,7 +512,7 @@ class ModelManager:
 
     async def fetch_available_claude_models(self) -> list[str]:
         """Fetch available Claude models from Anthropic API."""
-        key = self.anthropic_api_key or (os.getenv("ANTHROPIC_API_KEY") or "").strip()
+        key = await self._aget_managed_llm_api_key("claude") or self.anthropic_api_key or (os.getenv("ANTHROPIC_API_KEY") or "").strip()
         if key:
             self.anthropic_api_key = key
         if not key:
@@ -503,7 +556,7 @@ class ModelManager:
         """
         Fetch available OpenAI models from OpenAI Models API.
         """
-        key = self.openai_api_key or (os.getenv("OPENAI_API_KEY") or "").strip() or (os.getenv("CODEX_API_KEY") or "").strip()
+        key = await self._aget_managed_llm_api_key("openai") or self.openai_api_key or (os.getenv("OPENAI_API_KEY") or "").strip() or (os.getenv("CODEX_API_KEY") or "").strip()
         if key:
             self.openai_api_key = key
         if not key:
@@ -541,6 +594,44 @@ class ModelManager:
             logger.error(f"Failed to fetch OpenAI models: {e}")
             return self._get_default_openai_models()
 
+    async def fetch_available_fair_models(self) -> list[str]:
+        """Fetch available FAIR.Hyperion models via OpenAI-compatible Models API."""
+        key = await self._aget_managed_llm_api_key("fair") or self.fair_api_key or self._get_fair_api_key()
+        if key:
+            self.fair_api_key = key
+        if not key:
+            logger.warning("FAIR.Hyperion API key not set")
+            return self._get_default_fair_models()
+
+        base_url = self._get_fair_base_url()
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(
+                    f"{base_url}/models",
+                    headers={"Authorization": f"Bearer {key}"},
+                )
+
+                if response.status_code != 200:
+                    logger.error(
+                        "FAIR.Hyperion API returned status {}: {}",
+                        response.status_code,
+                        redacted_log_text(response.text),
+                    )
+                    return self._get_default_fair_models()
+
+                payload = response.json()
+                models = sorted(set(self._extract_model_ids(payload)))
+                if not models:
+                    logger.warning("FAIR.Hyperion API returned empty model list; using defaults")
+                    return self._get_default_fair_models()
+
+                self.available_fair_models = models
+                logger.success(f"Fetched {len(models)} FAIR.Hyperion models")
+                return models
+        except Exception as e:
+            logger.error(f"Failed to fetch FAIR.Hyperion models: {e}")
+            return self._get_default_fair_models()
+
     async def fetch_available_ollama_models(self) -> list[str]:
         """Fetch Ollama models from local runtime and optional ollama.com cloud catalog."""
         local_models: list[str] = []
@@ -572,6 +663,9 @@ class ModelManager:
             self.available_ollama_local_models = []
 
         if self.config.ollama_cloud_enabled:
+            managed_ollama_key = await self._aget_managed_llm_api_key("ollama")
+            if managed_ollama_key:
+                self.ollama_api_key = managed_ollama_key
             api_key = self._get_ollama_api_key()
             if not api_key:
                 errors.append("cloud https://ollama.com -> OLLAMA_API_KEY is not configured")
@@ -625,6 +719,32 @@ class ModelManager:
             "gpt-5-nano",
         ]
 
+    def _get_default_fair_models(self) -> list[str]:
+        """Default FAIR.Hyperion models list (fallback)."""
+        return [
+            "google/gemini-3.1-pro-preview",
+            "google/gemini-3-flash-preview",
+            "google/gemini-3-pro-preview",
+            "google/gemini-embedding-001",
+            "google/gemini-2.5-pro",
+            "google/gemini-2.5-flash",
+            "qwen3-embedding:0.6b",
+            "mxbai-embed-large:latest",
+            "qwen3:14b",
+            "xai/grok-4-fast-reasoning",
+            "xai/grok-4-fast-non-reasoning",
+            "xai/grok-code-fast-1",
+            "anthropic/claude-opus-4-6",
+            "anthropic/claude-sonnet-4-6",
+            "anthropic/claude-sonnet-4-5",
+            "openai/gpt-5.2-codex",
+            "openai/gpt-5.2",
+            "fair-spark-vllm",
+            "BAAI/bge-reranker-v2-m3",
+            "fair-spark-thinking",
+            "fair-spark",
+        ]
+
     def _get_default_ollama_models(self) -> list[str]:
         """Ollama models are local-install specific; default to no cached models."""
         return []
@@ -633,16 +753,24 @@ class ModelManager:
         """Refresh available models from both providers"""
         logger.info("Refreshing available models...")
 
-        if self.gemini_api_key or (os.getenv("GEMINI_API_KEY") or "").strip():
+        if self.gemini_api_key or (os.getenv("GEMINI_API_KEY") or "").strip() or await self._aget_managed_llm_api_key("gemini"):
             await self.fetch_available_gemini_models()
 
-        if self.grok_api_key or (os.getenv("GROK_API_KEY") or "").strip():
+        if self.grok_api_key or (os.getenv("GROK_API_KEY") or "").strip() or await self._aget_managed_llm_api_key("grok"):
             await self.fetch_available_grok_models()
 
-        if self.openai_api_key or (os.getenv("OPENAI_API_KEY") or "").strip() or (os.getenv("CODEX_API_KEY") or "").strip():
+        if (
+            self.openai_api_key
+            or (os.getenv("OPENAI_API_KEY") or "").strip()
+            or (os.getenv("CODEX_API_KEY") or "").strip()
+            or await self._aget_managed_llm_api_key("openai")
+        ):
             await self.fetch_available_openai_models()
 
-        if self.anthropic_api_key or (os.getenv("ANTHROPIC_API_KEY") or "").strip():
+        if self.fair_api_key or self._get_fair_api_key() or await self._aget_managed_llm_api_key("fair"):
+            await self.fetch_available_fair_models()
+
+        if self.anthropic_api_key or (os.getenv("ANTHROPIC_API_KEY") or "").strip() or await self._aget_managed_llm_api_key("claude"):
             await self.fetch_available_claude_models()
 
         if self.config.ollama_enabled:
@@ -712,6 +840,8 @@ class ModelManager:
             return self.config.chat_model_gemini
         if provider == "openai":
             return self.config.chat_model_openai
+        if provider == "fair":
+            return self.config.chat_model_fair
         if provider == "claude":
             return self.config.chat_model_claude
         if provider == "ollama":
@@ -727,6 +857,8 @@ class ModelManager:
             return self.config.agent_model_gemini
         if provider == "openai":
             return self.config.agent_model_openai
+        if provider == "fair":
+            return self.config.agent_model_fair
         if provider == "claude":
             return self.config.chat_model_claude
         if provider == "ollama":
@@ -799,6 +931,10 @@ class ModelManager:
             if not self.available_openai_models:
                 return self._get_default_openai_models()
             return self.available_openai_models
+        if provider == "fair":
+            if not self.available_fair_models:
+                return self._get_default_fair_models()
+            return self.available_fair_models
         if provider == "claude":
             if not self.available_claude_models:
                 return self._get_default_claude_models()
@@ -819,6 +955,8 @@ class ModelManager:
             return self.config.grok_enabled
         elif provider == "openai":
             return self.config.openai_enabled
+        elif provider == "fair":
+            return self.config.fair_enabled
         elif provider == "claude":
             return self.config.claude_enabled
         elif provider == "ollama":

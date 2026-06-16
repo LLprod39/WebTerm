@@ -18,7 +18,7 @@ import {
   PROVIDER_API_STATUS_KEY,
 } from "./constants";
 
-type RefreshableProvider = "gemini" | "grok" | "openai" | "claude" | "ollama";
+type RefreshableProvider = "gemini" | "grok" | "openai" | "fair" | "claude" | "ollama";
 
 export type RouteModelConfig = {
   key: "chat" | "agent" | "orchestrator";
@@ -66,6 +66,7 @@ export function useAiSettingsForm({
   const [agentModel, setAgentModel] = useState("");
   const [orchProvider, setOrchProvider] = useState("grok");
   const [orchModel, setOrchModel] = useState("");
+  const [fairBaseUrl, setFairBaseUrl] = useState("https://fair-hyperion.dev.k8s.erg.kz/api/hyperion/openai/v1");
   const [ollamaBaseUrl, setOllamaBaseUrl] = useState("http://127.0.0.1:11434");
   const [ollamaRuntimeMode, setOllamaRuntimeMode] = useState("auto");
   const [ollamaCloudEnabled, setOllamaCloudEnabled] = useState(false);
@@ -74,6 +75,8 @@ export function useAiSettingsForm({
   const [refreshingPurpose, setRefreshingPurpose] = useState<string | null>(null);
   const [reasoningEffort, setReasoningEffort] = useState<string>(AUTO_REASONING_VALUE);
   const [refreshing, setRefreshing] = useState(false);
+  const [apiKeyDrafts, setApiKeyDrafts] = useState<Record<string, string>>({});
+  const [savingApiKey, setSavingApiKey] = useState<string | null>(null);
 
   const hydrateAiForm = useCallback((config: SettingsConfig) => {
     const activeProvider = LLM_PROVIDER_VALUES.includes(config.internal_llm_provider || "")
@@ -89,6 +92,7 @@ export function useAiSettingsForm({
     setAgentModel(config.agent_llm_model || "");
     setOrchProvider(config.orchestrator_llm_provider || activeProvider);
     setOrchModel(config.orchestrator_llm_model || "");
+    setFairBaseUrl(config.fair_base_url || "https://fair-hyperion.dev.k8s.erg.kz/api/hyperion/openai/v1");
     setOllamaBaseUrl(config.ollama_base_url || "http://127.0.0.1:11434");
     setOllamaRuntimeMode(config.ollama_runtime_mode || "auto");
     setOllamaCloudEnabled(Boolean(config.ollama_cloud_enabled));
@@ -106,6 +110,7 @@ export function useAiSettingsForm({
     if (!modelsData) return [];
     if (nextProvider === "gemini") return modelsData.gemini || [];
     if (nextProvider === "openai") return modelsData.openai || [];
+    if (nextProvider === "fair") return modelsData.fair || [];
     if (nextProvider === "claude") return modelsData.claude || [];
     if (nextProvider === "ollama") {
       const localModels = modelsData.ollama_local || [];
@@ -191,6 +196,7 @@ export function useAiSettingsForm({
         orchestrator_llm_provider: orchProvider,
         orchestrator_llm_model: orchModel,
         internal_llm_provider: chatProvider,
+        fair_base_url: fairBaseUrl,
         ollama_base_url: ollamaBaseUrl,
         ollama_runtime_mode: ollamaRuntimeMode,
         ollama_cloud_enabled: ollamaCloudEnabled,
@@ -207,6 +213,7 @@ export function useAiSettingsForm({
     agentProvider,
     chatModel,
     chatProvider,
+    fairBaseUrl,
     ollamaBaseUrl,
     ollamaCloudBaseUrl,
     ollamaCloudEnabled,
@@ -225,6 +232,7 @@ export function useAiSettingsForm({
       const isLlmProvider = LLM_PROVIDER_VALUES.includes(provider);
       const payload: Record<string, unknown> = {
         default_provider: provider,
+        fair_base_url: fairBaseUrl,
         ollama_base_url: ollamaBaseUrl,
         ollama_runtime_mode: ollamaRuntimeMode,
         ollama_cloud_enabled: ollamaCloudEnabled,
@@ -234,6 +242,7 @@ export function useAiSettingsForm({
       if (provider === "gemini") payload.chat_model_gemini = model;
       if (provider === "grok") payload.chat_model_grok = model;
       if (provider === "openai") payload.chat_model_openai = model;
+      if (provider === "fair") payload.chat_model_fair = model;
       if (provider === "claude") payload.chat_model_claude = model;
       if (provider === "ollama") payload.chat_model_ollama = model;
       if (isLlmProvider) {
@@ -241,6 +250,7 @@ export function useAiSettingsForm({
         payload.gemini_enabled = provider === "gemini";
         payload.grok_enabled = provider === "grok";
         payload.openai_enabled = provider === "openai";
+        payload.fair_enabled = provider === "fair";
         payload.claude_enabled = provider === "claude";
         payload.ollama_enabled = provider === "ollama";
       }
@@ -250,6 +260,7 @@ export function useAiSettingsForm({
       setSaving(false);
     }
   }, [
+    fairBaseUrl,
     model,
     ollamaBaseUrl,
     ollamaCloudBaseUrl,
@@ -265,6 +276,7 @@ export function useAiSettingsForm({
     setSaving(true);
     try {
       await saveSettings({
+        fair_base_url: fairBaseUrl,
         ollama_base_url: ollamaBaseUrl,
         ollama_runtime_mode: ollamaRuntimeMode,
         ollama_cloud_enabled: ollamaCloudEnabled,
@@ -277,6 +289,7 @@ export function useAiSettingsForm({
       setSaving(false);
     }
   }, [
+    fairBaseUrl,
     ollamaBaseUrl,
     ollamaCloudBaseUrl,
     ollamaCloudEnabled,
@@ -296,6 +309,40 @@ export function useAiSettingsForm({
       setRefreshing(false);
     }
   }, [provider, queryClient]);
+
+  const setApiKeyDraft = useCallback((providerKey: string, value: string) => {
+    setApiKeyDrafts((current) => ({ ...current, [providerKey]: value }));
+  }, []);
+
+  const onSaveApiKey = useCallback(async (providerKey: string) => {
+    const value = (apiKeyDrafts[providerKey] || "").trim();
+    if (!value) return;
+    setSavingApiKey(providerKey);
+    try {
+      await saveSettings({ api_keys: { [providerKey]: value } });
+      setApiKeyDrafts((current) => ({ ...current, [providerKey]: "" }));
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["settings", "config"] }),
+        queryClient.invalidateQueries({ queryKey: ["settings", "models"] }),
+      ]);
+    } finally {
+      setSavingApiKey(null);
+    }
+  }, [apiKeyDrafts, queryClient]);
+
+  const onClearApiKey = useCallback(async (providerKey: string) => {
+    setSavingApiKey(providerKey);
+    try {
+      await saveSettings({ clear_api_keys: [providerKey] });
+      setApiKeyDrafts((current) => ({ ...current, [providerKey]: "" }));
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["settings", "config"] }),
+        queryClient.invalidateQueries({ queryKey: ["settings", "models"] }),
+      ]);
+    } finally {
+      setSavingApiKey(null);
+    }
+  }, [queryClient]);
 
   const savedActiveProvider = useMemo(() => {
     if (!currentConfig) return "grok";
@@ -379,6 +426,7 @@ export function useAiSettingsForm({
     agentModel !== ((currentConfig as SettingsConfig).agent_llm_model || "") ||
     orchProvider !== ((currentConfig as SettingsConfig).orchestrator_llm_provider || savedActiveProvider) ||
     orchModel !== ((currentConfig as SettingsConfig).orchestrator_llm_model || "") ||
+    fairBaseUrl !== ((currentConfig as SettingsConfig).fair_base_url || "https://fair-hyperion.dev.k8s.erg.kz/api/hyperion/openai/v1") ||
     ollamaBaseUrl !== ((currentConfig as SettingsConfig).ollama_base_url || "http://127.0.0.1:11434") ||
     ollamaRuntimeMode !== ((currentConfig as SettingsConfig).ollama_runtime_mode || "auto") ||
     ollamaCloudEnabled !== Boolean((currentConfig as SettingsConfig).ollama_cloud_enabled) ||
@@ -397,6 +445,7 @@ export function useAiSettingsForm({
     agentModel,
     orchProvider,
     orchModel,
+    fairBaseUrl,
     ollamaBaseUrl,
     ollamaRuntimeMode,
     ollamaCloudEnabled,
@@ -406,6 +455,8 @@ export function useAiSettingsForm({
     reasoningEffort,
     refreshing,
     saving,
+    apiKeyDrafts,
+    savingApiKey,
     availableModels,
     routeConfigs,
     uniqueRouteProviders,
@@ -425,6 +476,7 @@ export function useAiSettingsForm({
     setAgentModel,
     setOrchProvider,
     setOrchModel,
+    setFairBaseUrl,
     setOllamaBaseUrl,
     setOllamaRuntimeMode,
     setOllamaCloudEnabled,
@@ -442,5 +494,8 @@ export function useAiSettingsForm({
     onSave,
     onSaveOllama,
     onRefreshModels,
+    setApiKeyDraft,
+    onSaveApiKey,
+    onClearApiKey,
   };
 }

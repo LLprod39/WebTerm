@@ -55,6 +55,20 @@ def _run(coro):
     return asyncio.new_event_loop().run_until_complete(coro)
 
 
+class TestLegacyDirectExecModeGate:
+    def test_fast_mode_disables_legacy_direct_exec(self):
+        cons = SSHTerminalConsumer.__new__(SSHTerminalConsumer)
+        cons._ai_execution_mode = "fast"  # type: ignore[attr-defined]
+
+        assert cons._legacy_direct_exec_enabled() is False
+
+    def test_step_mode_keeps_legacy_direct_exec_available(self):
+        cons = SSHTerminalConsumer.__new__(SSHTerminalConsumer)
+        cons._ai_execution_mode = "step"  # type: ignore[attr-defined]
+
+        assert cons._legacy_direct_exec_enabled() is True
+
+
 class TestExecDirectHappyPath:
     def test_returns_stdout_and_zero_exit_code(self):
         conn = _FakeConn(stdout="Filesystem  Size\n/dev/sda1  50G\n", exit_status=0)
