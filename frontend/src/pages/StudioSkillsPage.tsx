@@ -19,7 +19,6 @@ import {
   Sparkles,
   Trash2,
   WandSparkles,
-  Copy,
   BookMarked,
   Code2,
   Settings2,
@@ -44,6 +43,7 @@ import {
   studioSkills,
   studioShareUsers,
   type StudioSkill,
+  type StudioSkillDetail,
   type StudioSkillScaffoldPayload,
   type StudioSkillTemplate,
   type StudioSkillValidationResponse,
@@ -70,12 +70,23 @@ type SkillWizardState = {
   with_references: boolean;
   with_assets: boolean;
   starter_script_enabled: boolean;
-  starter_script_path: string;
   starter_script_content: string;
   starter_reference_enabled: boolean;
-  starter_reference_path: string;
   starter_reference_content: string;
   force: boolean;
+};
+
+type SkillSettingsDraft = {
+  name: string;
+  description: string;
+  service: string;
+  category: string;
+  safety_level: string;
+  ui_hint: string;
+  tags_text: string;
+  guardrail_summary_text: string;
+  recommended_tools_text: string;
+  runtime_policy_text: string;
 };
 
 const DEFAULT_STARTER_SCRIPT_PATH = "scripts/run-checks.sh";
@@ -152,9 +163,24 @@ function listToCsv(items?: string[]) {
 
 function parseCsvInput(text: string) {
   return text
-    .split(",")
+    .split(/[,\n]/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function createSkillSettingsDraft(skill?: StudioSkillDetail | null): SkillSettingsDraft {
+  return {
+    name: skill?.name || "",
+    description: skill?.description || "",
+    service: skill?.service || "",
+    category: skill?.category || "",
+    safety_level: skill?.safety_level || "standard",
+    ui_hint: skill?.ui_hint || "",
+    tags_text: listToCsv(skill?.tags),
+    guardrail_summary_text: (skill?.guardrail_summary || []).join("\n"),
+    recommended_tools_text: listToCsv(skill?.recommended_tools),
+    runtime_policy_text: JSON.stringify(skill?.runtime_policy || {}, null, 2),
+  };
 }
 
 function slugifySkillName(value: string) {
@@ -187,10 +213,8 @@ function createWizardState(template?: StudioSkillTemplate | null, lang: "ru" | "
     with_references: false,
     with_assets: false,
     starter_script_enabled: false,
-    starter_script_path: DEFAULT_STARTER_SCRIPT_PATH,
     starter_script_content: defaultStarterScriptContent(),
     starter_reference_enabled: false,
-    starter_reference_path: DEFAULT_STARTER_REFERENCE_PATH,
     starter_reference_content: defaultStarterReferenceContent(lang),
     force: false,
   };
@@ -210,13 +234,13 @@ function starterFilesFromWizard(wizard: SkillWizardState) {
   return [
     wizard.starter_script_enabled
       ? {
-          path: wizard.starter_script_path.trim(),
+          path: DEFAULT_STARTER_SCRIPT_PATH,
           content: wizard.starter_script_content,
         }
       : null,
     wizard.starter_reference_enabled
       ? {
-          path: wizard.starter_reference_path.trim(),
+          path: DEFAULT_STARTER_REFERENCE_PATH,
           content: wizard.starter_reference_content,
         }
       : null,
@@ -405,6 +429,7 @@ export default function StudioSkillsPage() {
   const [slugTouched, setSlugTouched] = useState(false);
   const [validationReport, setValidationReport] = useState<StudioSkillValidationResponse | null>(null);
   const [strictValidation, setStrictValidation] = useState(false);
+  const [skillSettingsDraft, setSkillSettingsDraft] = useState<SkillSettingsDraft>(() => createSkillSettingsDraft(null));
   const [skillAccessDraft, setSkillAccessDraft] = useState({
     is_shared: false,
     shared_user_ids: [] as number[],
@@ -456,15 +481,9 @@ export default function StudioSkillsPage() {
   const runtimeEnforcedCount = skills.filter((skill) => skill.runtime_enforced).length;
   const serviceCount = new Set(skills.map((skill) => skill.service).filter(Boolean)).size;
   const starterFiles = starterFilesFromWizard(wizard);
-  const hasDuplicateStarterPaths = new Set(starterFiles.map((file) => file.path)).size !== starterFiles.length;
-  const starterScriptPathValid = !wizard.starter_script_enabled || wizard.starter_script_path.trim().startsWith("scripts/");
-  const starterReferencePathValid = !wizard.starter_reference_enabled || wizard.starter_reference_path.trim().startsWith("references/");
   const canSubmitWizard =
     Boolean(wizard.name.trim()) &&
-    Boolean(wizard.description.trim()) &&
-    starterScriptPathValid &&
-    starterReferencePathValid &&
-    !hasDuplicateStarterPaths;
+    Boolean(wizard.description.trim());
 
   const invalidateSkillQueries = async (slug?: string) => {
     await queryClient.invalidateQueries({ queryKey: ["studio", "skills"] });
@@ -538,6 +557,7 @@ export default function StudioSkillsPage() {
 
   useEffect(() => {
     if (!selectedSkill) return;
+    setSkillSettingsDraft(createSkillSettingsDraft(selectedSkill));
     setSkillAccessDraft({
       is_shared: Boolean(selectedSkill.is_shared),
       shared_user_ids: selectedSkill.shared_user_ids || [],
@@ -644,6 +664,61 @@ export default function StudioSkillsPage() {
     },
   });
 
+  const updateSkillSettingsMutation = useMutation({
+    mutationFn: (payload: Partial<StudioSkillDetail>) => {
+      if (!selectedSkill) throw new Error(tr("Скилл не выбран", "Skill is not selected"));
+      return studioSkills.update(selectedSkill.slug, payload);
+    },
+    onSuccess: async (response) => {
+      await invalidateSkillQueries(response.slug);
+      toast({ description: tr("Настройки скилла сохранены", "Skill settings saved") });
+    },
+    onError: (error: Error) => {
+      toast({ variant: "destructive", description: error.message });
+    },
+  });
+
+  const saveSkillSettings = () => {
+    if (!selectedSkill || !canEditSkill) return;
+    const name = skillSettingsDraft.name.trim();
+    const description = skillSettingsDraft.description.trim();
+    if (!name) {
+      toast({ variant: "destructive", description: tr("Название скилла обязательно.", "Skill name is required.") });
+      return;
+    }
+    if (!description) {
+      toast({ variant: "destructive", description: tr("Описание скилла обязательно.", "Skill description is required.") });
+      return;
+    }
+
+    let runtimePolicy: Record<string, unknown>;
+    try {
+      runtimePolicy = parseRuntimePolicy(skillSettingsDraft.runtime_policy_text);
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        description:
+          error instanceof Error && error.message === "POLICY_OBJECT_REQUIRED"
+            ? tr("Политика выполнения должна быть JSON-объектом.", "Runtime policy must be a JSON object.")
+            : tr("Политика выполнения должна быть валидным JSON.", "Runtime policy must be valid JSON."),
+      });
+      return;
+    }
+
+    updateSkillSettingsMutation.mutate({
+      name,
+      description,
+      service: skillSettingsDraft.service.trim(),
+      category: skillSettingsDraft.category.trim(),
+      safety_level: skillSettingsDraft.safety_level || "standard",
+      ui_hint: skillSettingsDraft.ui_hint.trim(),
+      tags: parseCsvInput(skillSettingsDraft.tags_text),
+      guardrail_summary: parseCsvInput(skillSettingsDraft.guardrail_summary_text),
+      recommended_tools: parseCsvInput(skillSettingsDraft.recommended_tools_text),
+      runtime_policy: runtimePolicy,
+    });
+  };
+
   const openCreateDialog = (template?: StudioSkillTemplate | null) => {
     setSelectedTemplateSlug(template?.slug || "__none__");
     setWizard(createWizardState(template || null, lang));
@@ -652,19 +727,6 @@ export default function StudioSkillsPage() {
   };
 
   const submitWizard = () => {
-    if (!starterScriptPathValid) {
-      toast({ variant: "destructive", description: tr("Путь стартового скрипта должен начинаться с scripts/.", "Starter script path must start with scripts/.") });
-      return;
-    }
-    if (!starterReferencePathValid) {
-      toast({ variant: "destructive", description: tr("Путь reference-файла должен начинаться с references/.", "Reference file path must start with references/.") });
-      return;
-    }
-    if (hasDuplicateStarterPaths) {
-      toast({ variant: "destructive", description: tr("Стартовые файлы не должны иметь одинаковый путь.", "Starter files must not use the same path.") });
-      return;
-    }
-
     let runtimePolicy: Record<string, unknown>;
     try {
       runtimePolicy = parseRuntimePolicy(wizard.runtime_policy_text);
@@ -907,18 +969,6 @@ export default function StudioSkillsPage() {
                            )}
                          </div>
 
-                         <div className="rounded-2xl border border-border/50 bg-background/40 backdrop-blur-md p-6 shadow-sm">
-                           <p className="text-base font-semibold">{tr("Путь в системе", "System Path")}</p>
-                           <div className="mt-3 flex items-center gap-2 rounded-lg border border-border/60 bg-background/40 p-2 pl-3">
-                             <div className="flex-1 break-all font-mono text-[12px] text-foreground">{selectedSkill.path}</div>
-                             <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0 rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20 hover:bg-background/80" aria-label={tr("Путь скопирован", "Copy path")} onClick={() => {
-                               navigator.clipboard.writeText(selectedSkill.path);
-                               toast({description: tr("Путь скопирован", "Path copied")});
-                             }}>
-                               <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-                             </Button>
-                           </div>
-                         </div>
                        </div>
 
                        <div className="flex flex-col gap-5">
@@ -1126,19 +1176,246 @@ export default function StudioSkillsPage() {
                     </div>
                   </TabsContent>
 
-                  <TabsContent value="settings" className="m-0 space-y-4 outline-none">
-                    <div className="rounded-xl border border-border/50 bg-background/40 backdrop-blur-md p-6 shadow-sm">
-                      <div className="mb-6 flex items-center gap-3 border-b border-border/50 pb-4">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 ring-1 ring-primary/20 shadow-inner">
-                          <Settings2 className="h-5 w-5 text-primary" />
-                        </div>
-                        <div>
-                          <h3 className="text-base font-semibold text-foreground">{tr("Настройки доступа", "Access Settings")}</h3>
-                          <p className="text-[12px] text-muted-foreground">{tr("Текущее управление доступом пока не реализовано в Studio, перейдите в Access Management.", "Access control is managed in Access Management.")}</p>
-                        </div>
+                  <TabsContent value="settings" className="m-0 space-y-5 outline-none">
+                    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+                      <div className="space-y-5">
+                        <section className="rounded-2xl border border-border/50 bg-background/40 p-6 shadow-sm backdrop-blur-md">
+                          <div className="mb-5 flex items-start justify-between gap-3 border-b border-border/50 pb-4">
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 ring-1 ring-primary/20 shadow-inner">
+                                <Settings2 className="h-5 w-5 text-primary" />
+                              </div>
+                              <div>
+                                <h3 className="text-base font-semibold text-foreground">{tr("Основные настройки", "General settings")}</h3>
+                                <p className="text-[12px] text-muted-foreground">
+                                  {tr("Эти поля сохраняются в описании скилла и видны в каталоге.", "These fields are saved to the skill definition and shown in the catalog.")}
+                                </p>
+                              </div>
+                            </div>
+                            {!canEditSkill ? <Badge variant="outline">{tr("Только чтение", "Read only")}</Badge> : null}
+                          </div>
+
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-muted-foreground">{tr("Название", "Name")}</Label>
+                              <Input
+                                value={skillSettingsDraft.name}
+                                onChange={(event) => setSkillSettingsDraft((prev) => ({ ...prev, name: event.target.value }))}
+                                disabled={!canEditSkill}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-muted-foreground">Slug</Label>
+                              <Input value={selectedSkill.slug} disabled className="font-mono text-xs" />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-muted-foreground">{tr("Сервис", "Service")}</Label>
+                              <Input
+                                value={skillSettingsDraft.service}
+                                onChange={(event) => setSkillSettingsDraft((prev) => ({ ...prev, service: event.target.value }))}
+                                placeholder="docker, gitlab, keycloak"
+                                disabled={!canEditSkill}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-muted-foreground">{tr("Категория", "Category")}</Label>
+                              <Input
+                                value={skillSettingsDraft.category}
+                                onChange={(event) => setSkillSettingsDraft((prev) => ({ ...prev, category: event.target.value }))}
+                                placeholder="server_ops"
+                                disabled={!canEditSkill}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-muted-foreground">{tr("Уровень риска", "Safety level")}</Label>
+                              <Select
+                                value={skillSettingsDraft.safety_level || "standard"}
+                                onValueChange={(value) => setSkillSettingsDraft((prev) => ({ ...prev, safety_level: value }))}
+                                disabled={!canEditSkill}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {SAFETY_LEVELS.map((level) => (
+                                    <SelectItem key={level} value={level}>{safetyLevelLabel(level, lang)}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-muted-foreground">{tr("Теги", "Tags")}</Label>
+                              <Input
+                                value={skillSettingsDraft.tags_text}
+                                onChange={(event) => setSkillSettingsDraft((prev) => ({ ...prev, tags_text: event.target.value }))}
+                                placeholder="docker, ops, recovery"
+                                disabled={!canEditSkill}
+                              />
+                            </div>
+                            <div className="space-y-1.5 md:col-span-2">
+                              <Label className="text-xs text-muted-foreground">{tr("Описание", "Description")}</Label>
+                              <Textarea
+                                rows={4}
+                                value={skillSettingsDraft.description}
+                                onChange={(event) => setSkillSettingsDraft((prev) => ({ ...prev, description: event.target.value }))}
+                                className="resize-none text-sm leading-6"
+                                disabled={!canEditSkill}
+                              />
+                            </div>
+                            <div className="space-y-1.5 md:col-span-2">
+                              <Label className="text-xs text-muted-foreground">UI hint</Label>
+                              <Input
+                                value={skillSettingsDraft.ui_hint}
+                                onChange={(event) => setSkillSettingsDraft((prev) => ({ ...prev, ui_hint: event.target.value }))}
+                                placeholder={tr("Короткая подсказка для операторов", "Short operator-facing hint")}
+                                disabled={!canEditSkill}
+                              />
+                            </div>
+                          </div>
+                        </section>
+
+                        <section className="rounded-2xl border border-border/50 bg-background/40 p-6 shadow-sm backdrop-blur-md">
+                          <div className="mb-5 flex items-center gap-3 border-b border-border/50 pb-4">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 ring-1 ring-primary/20 shadow-inner">
+                              <Shield className="h-5 w-5 text-primary" />
+                            </div>
+                            <div>
+                              <h3 className="text-base font-semibold text-foreground">{tr("Политика и инструменты", "Policy and tools")}</h3>
+                              <p className="text-[12px] text-muted-foreground">
+                                {tr("Ограничения, рекомендуемые инструменты и runtime policy для безопасного запуска.", "Guardrails, recommended tools, and runtime policy for safe execution.")}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-muted-foreground">{tr("Ограничения", "Guardrails")}</Label>
+                              <Textarea
+                                rows={6}
+                                value={skillSettingsDraft.guardrail_summary_text}
+                                onChange={(event) => setSkillSettingsDraft((prev) => ({ ...prev, guardrail_summary_text: event.target.value }))}
+                                placeholder={tr("По одному правилу на строку", "One rule per line")}
+                                className="resize-none text-xs leading-5"
+                                disabled={!canEditSkill}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-muted-foreground">{tr("Инструменты агента", "Agent tools")}</Label>
+                              <Textarea
+                                rows={6}
+                                value={skillSettingsDraft.recommended_tools_text}
+                                onChange={(event) => setSkillSettingsDraft((prev) => ({ ...prev, recommended_tools_text: event.target.value }))}
+                                placeholder="read_console, ssh_execute, report"
+                                className="resize-none font-mono text-xs leading-5"
+                                disabled={!canEditSkill}
+                              />
+                            </div>
+                            <div className="space-y-1.5 md:col-span-2">
+                              <Label className="text-xs text-muted-foreground">Runtime policy JSON</Label>
+                              <Textarea
+                                rows={9}
+                                value={skillSettingsDraft.runtime_policy_text}
+                                onChange={(event) => setSkillSettingsDraft((prev) => ({ ...prev, runtime_policy_text: event.target.value }))}
+                                className="font-mono text-[11px] leading-5"
+                                spellCheck={false}
+                                disabled={!canEditSkill}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
+                            <Button
+                              variant="outline"
+                              onClick={() => setSkillSettingsDraft(createSkillSettingsDraft(selectedSkill))}
+                              disabled={updateSkillSettingsMutation.isPending}
+                            >
+                              {tr("Сбросить", "Reset")}
+                            </Button>
+                            <Button
+                              className="gap-2"
+                              onClick={saveSkillSettings}
+                              disabled={!canEditSkill || updateSkillSettingsMutation.isPending}
+                            >
+                              {updateSkillSettingsMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                              {tr("Сохранить настройки", "Save settings")}
+                            </Button>
+                          </div>
+                        </section>
                       </div>
-                      <div className="text-[13px] text-muted-foreground">
-                        {tr("В будущем здесь можно будет детально управлять настройками скилла, владельцем и привязками.", "In the future, detailed skill settings, ownership, and bindings will be manageable here.")}
+
+                      <div className="space-y-5">
+                        <section className="rounded-2xl border border-border/50 bg-background/40 p-5 shadow-sm backdrop-blur-md">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+                              <BookOpen className="h-4 w-4 text-primary" />
+                            </div>
+                            <div>
+                              <h3 className="text-sm font-semibold text-foreground">{tr("Состояние", "Status")}</h3>
+                              <p className="text-[11px] text-muted-foreground">{tr("Краткая информация без системных путей.", "Short summary without system paths.")}</p>
+                            </div>
+                          </div>
+                          <div className="mt-4 space-y-2 text-xs text-muted-foreground">
+                            <div className="flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-background/40 px-3 py-2">
+                              <span>{tr("Владелец", "Owner")}</span>
+                              <span className="text-foreground">{selectedSkill.owner_username || tr("не указан", "not set")}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-background/40 px-3 py-2">
+                              <span>{tr("Доступ", "Access")}</span>
+                              <span className="text-foreground">{selectedSkill.is_shared ? tr("общий", "shared") : tr("личный", "private")}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-background/40 px-3 py-2">
+                              <span>{tr("Файлов", "Files")}</span>
+                              <span className="text-foreground">{workspace?.files.length || 0}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-background/40 px-3 py-2">
+                              <span>{tr("Валидация", "Validation")}</span>
+                              <span className={workspaceErrors.length ? "text-red-400" : workspaceWarnings.length ? "text-amber-300" : "text-emerald-300"}>
+                                {workspaceErrors.length
+                                  ? tr(`${workspaceErrors.length} ошибок`, `${workspaceErrors.length} errors`)
+                                  : workspaceWarnings.length
+                                    ? tr(`${workspaceWarnings.length} предупреждений`, `${workspaceWarnings.length} warnings`)
+                                    : tr("OK", "OK")}
+                              </span>
+                            </div>
+                          </div>
+                        </section>
+
+                        {canShareSkill ? (
+                          <section className="space-y-3">
+                            <ShareAccessEditor
+                              title={tr("Доступ к скиллу", "Skill access")}
+                              description={tr("Откройте скилл всем пользователям Studio или только выбранным людям.", "Expose this skill to all Studio users or only selected people.")}
+                              isShared={skillAccessDraft.is_shared}
+                              sharedUserIds={skillAccessDraft.shared_user_ids}
+                              users={shareUsers}
+                              disabled={updateSkillAccessMutation.isPending}
+                              onSharedChange={(value) => setSkillAccessDraft((prev) => ({ ...prev, is_shared: value }))}
+                              onToggleUser={(userId) =>
+                                setSkillAccessDraft((prev) => ({
+                                  ...prev,
+                                  shared_user_ids: prev.shared_user_ids.includes(userId)
+                                    ? prev.shared_user_ids.filter((id) => id !== userId)
+                                    : [...prev.shared_user_ids, userId],
+                                }))
+                              }
+                            />
+                            <Button
+                              className="w-full gap-2"
+                              onClick={() => updateSkillAccessMutation.mutate()}
+                              disabled={updateSkillAccessMutation.isPending}
+                            >
+                              {updateSkillAccessMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                              {tr("Сохранить доступ", "Save access")}
+                            </Button>
+                          </section>
+                        ) : (
+                          <section className="rounded-2xl border border-border/50 bg-background/40 p-5 shadow-sm backdrop-blur-md">
+                            <h3 className="text-sm font-semibold text-foreground">{tr("Доступ", "Access")}</h3>
+                            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                              {tr("Управлять доступом может только администратор.", "Only an administrator can manage sharing.")}
+                            </p>
+                          </section>
+                        )}
                       </div>
                     </div>
                   </TabsContent>
@@ -1259,15 +1536,7 @@ export default function StudioSkillsPage() {
                   </div>
                   {wizard.starter_reference_enabled ? (
                     <div className="mt-4 space-y-2">
-                      <div className="space-y-1.5">
-                        <Label className="text-[11px] text-muted-foreground">{tr("Куда сохранить", "Save as")}</Label>
-                        <Input
-                          className={`h-9 font-mono text-xs ${starterReferencePathValid ? "" : "border-destructive/60"}`}
-                          value={wizard.starter_reference_path}
-                          onChange={(e) => setWizard((prev) => ({ ...prev, starter_reference_path: e.target.value }))}
-                          placeholder={DEFAULT_STARTER_REFERENCE_PATH}
-                        />
-                      </div>
+                      <Label className="text-[11px] text-muted-foreground">{tr("Текст инструкции", "Runbook content")}</Label>
                       <Textarea
                         rows={7}
                         className="font-mono text-[11px] leading-5"
@@ -1301,15 +1570,7 @@ export default function StudioSkillsPage() {
                   </div>
                   {wizard.starter_script_enabled ? (
                     <div className="mt-4 space-y-2">
-                      <div className="space-y-1.5">
-                        <Label className="text-[11px] text-muted-foreground">{tr("Куда сохранить", "Save as")}</Label>
-                        <Input
-                          className={`h-9 font-mono text-xs ${starterScriptPathValid ? "" : "border-destructive/60"}`}
-                          value={wizard.starter_script_path}
-                          onChange={(e) => setWizard((prev) => ({ ...prev, starter_script_path: e.target.value }))}
-                          placeholder={DEFAULT_STARTER_SCRIPT_PATH}
-                        />
-                      </div>
+                      <Label className="text-[11px] text-muted-foreground">{tr("Текст скрипта", "Script content")}</Label>
                       <Textarea
                         rows={7}
                         className="font-mono text-[11px] leading-5"
@@ -1400,16 +1661,6 @@ export default function StudioSkillsPage() {
                   </AccordionContent>
                 </AccordionItem>
               </Accordion>
-
-              {hasDuplicateStarterPaths || !starterScriptPathValid || !starterReferencePathValid ? (
-                <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                  {hasDuplicateStarterPaths
-                    ? tr("Пути стартовых файлов должны быть уникальными.", "Starter file paths must be unique.")
-                    : !starterScriptPathValid
-                      ? tr("Скрипт должен сохраняться внутри scripts/.", "Script must be saved inside scripts/.")
-                      : tr("Инструкция должна сохраняться внутри references/.", "Runbook must be saved inside references/.")}
-                </div>
-              ) : null}
             </div>
           </div>
 

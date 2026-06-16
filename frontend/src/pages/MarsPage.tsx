@@ -369,7 +369,7 @@ export default function MarsPage() {
   return (
     <PageShell
       width="full"
-      className="-mx-4 -my-5 min-h-[calc(100vh-2rem)] space-y-5 bg-[radial-gradient(circle_at_18%_9%,rgba(20,184,166,0.13),transparent_27%),linear-gradient(180deg,#0a0f14_0%,#0b1117_100%)] px-4 py-5 md:-mx-6 md:px-6 xl:-mx-8 xl:px-8"
+      className="-my-5 min-h-[calc(100vh-2rem)] space-y-5 bg-[radial-gradient(circle_at_18%_9%,rgba(20,184,166,0.13),transparent_27%),linear-gradient(180deg,#0a0f14_0%,#0b1117_100%)] px-4 py-5 md:px-6 xl:px-8"
     >
       <section className="px-0 py-2">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">

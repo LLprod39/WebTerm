@@ -53,7 +53,6 @@ import { localize, useI18n } from "@/lib/i18n";
 const ALL_TOOLS = [
   { id: "ssh_execute", labelRu: "SSH-команды", labelEn: "SSH Execute", descriptionRu: "Запуск команд на серверах", descriptionEn: "Run commands on servers" },
   { id: "read_console", labelRu: "Чтение консоли", labelEn: "Read Console", descriptionRu: "Чтение вывода терминала", descriptionEn: "Read terminal output" },
-  { id: "send_ctrl_c", labelRu: "Ctrl+C", labelEn: "Send Ctrl+C", descriptionRu: "Прерывание запущенных процессов", descriptionEn: "Interrupt running processes" },
   { id: "open_connection", labelRu: "Открыть SSH", labelEn: "Open Connection", descriptionRu: "Открытие SSH-подключений", descriptionEn: "Open SSH connections" },
   { id: "close_connection", labelRu: "Закрыть SSH", labelEn: "Close Connection", descriptionRu: "Закрытие SSH-подключений", descriptionEn: "Close SSH connections" },
   { id: "wait_for_output", labelRu: "Ожидать вывод", labelEn: "Wait for Output", descriptionRu: "Ожидание нужного текста в терминале", descriptionEn: "Wait for terminal patterns" },
@@ -61,6 +60,10 @@ const ALL_TOOLS = [
   { id: "ask_user", labelRu: "Спросить пользователя", labelEn: "Ask User", descriptionRu: "Пауза до ответа пользователя", descriptionEn: "Pause for user input" },
   { id: "analyze_output", labelRu: "Анализ вывода", labelEn: "Analyze Output", descriptionRu: "LLM-анализ полученного вывода", descriptionEn: "Run LLM analysis over output" },
 ];
+
+function visibleAllowedTools(tools?: string[]) {
+  return Array.isArray(tools) ? tools.filter((tool) => tool !== "send_ctrl_c") : undefined;
+}
 
 const MODEL_OPTIONS = [
   "gemini-2.0-flash-exp",
@@ -106,13 +109,13 @@ function AgentForm({
     instructions: "",
     model: MODEL_OPTIONS[0],
     max_iterations: 10,
-    allowed_tools: ["ssh_execute", "report"],
     skill_slugs: [],
     mcp_servers: [],
     server_scope: [],
     is_shared: false,
     shared_user_ids: [],
     ...initial,
+    allowed_tools: visibleAllowedTools(initial.allowed_tools) ?? ["ssh_execute", "report"],
   });
   const readOnly = !canEdit;
 
@@ -589,7 +592,9 @@ export default function AgentConfigPage() {
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {agents.map((agent) => (
+          {agents.map((agent) => {
+            const visibleTools = visibleAllowedTools(agent.allowed_tools) || [];
+            return (
             <div key={agent.id} className="group overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-all duration-150 hover:shadow-md">
               <div className="p-4">
                 <div className="flex items-start justify-between gap-3">
@@ -657,10 +662,10 @@ export default function AgentConfigPage() {
                     </span>
                   ) : null}
                 </div>
-                {agent.allowed_tools?.length ? (
+                {visibleTools.length ? (
                   <p className="text-[11px] text-muted-foreground/70">
-                    {agent.allowed_tools.slice(0, 4).map((item) => toolLabel(item, lang)).join(", ")}
-                    {agent.allowed_tools.length > 4 ? ` +${agent.allowed_tools.length - 4}` : ""}
+                    {visibleTools.slice(0, 4).map((item) => toolLabel(item, lang)).join(", ")}
+                    {visibleTools.length > 4 ? ` +${visibleTools.length - 4}` : ""}
                   </p>
                 ) : null}
                 {agent.skill_errors?.length ? (
@@ -672,7 +677,8 @@ export default function AgentConfigPage() {
                 ) : null}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

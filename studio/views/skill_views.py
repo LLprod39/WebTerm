@@ -9,7 +9,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
 from core_ui.decorators import require_feature
-from studio.skill_authoring import scaffold_skill, validate_skill_dir, validate_skills
+from studio.skill_authoring import KNOWN_SAFETY_LEVELS, _render_frontmatter_value, scaffold_skill, validate_skill_dir, validate_skills
 from studio.skill_registry import SkillNotFoundError, get_skill, list_skills
 from studio.skill_templates import get_skill_template, list_skill_templates
 from studio.views.common import (
@@ -38,6 +38,124 @@ from studio.views.skill_helpers import (
 )
 
 STUDIO_FEATURE_SKILLS = "studio_skills"
+
+_SKILL_METADATA_ORDER = (
+    "name",
+    "description",
+    "service",
+    "category",
+    "safety_level",
+    "ui_hint",
+    "guardrail_summary",
+    "recommended_tools",
+    "runtime_policy",
+    "tags",
+)
+_SKILL_METADATA_FIELDS = set(_SKILL_METADATA_ORDER)
+
+
+def _has_skill_metadata_update(data: dict) -> bool:
+    return any(key in data for key in _SKILL_METADATA_FIELDS)
+
+
+def _normalise_skill_metadata_update(skill, data: dict) -> tuple[dict | None, str | None]:
+    metadata = dict(skill.metadata or {})
+
+    def set_text(key: str, *, required: bool = False) -> str | None:
+        if key not in data:
+            return None
+        value = str(data.get(key) or "").strip()
+        if required and not value:
+            return f"{key} is required"
+        if value:
+            metadata[key] = value
+        else:
+            metadata.pop(key, None)
+        return None
+
+    for key, required in (("name", True), ("description", True), ("service", False), ("category", False), ("ui_hint", False)):
+        error = set_text(key, required=required)
+        if error:
+            return None, error
+
+    if "safety_level" in data:
+        safety_level = str(data.get("safety_level") or "standard").strip() or "standard"
+        if safety_level not in KNOWN_SAFETY_LEVELS:
+            return None, f"safety_level must be one of: {', '.join(sorted(KNOWN_SAFETY_LEVELS))}"
+        metadata["safety_level"] = safety_level
+
+    for key in ("tags", "guardrail_summary", "recommended_tools"):
+        if key in data:
+            value = _normalise_string_list(data.get(key))
+            if value:
+                metadata[key] = value
+            else:
+                metadata.pop(key, None)
+
+    if "runtime_policy" in data:
+        raw_runtime_policy = data.get("runtime_policy")
+        if raw_runtime_policy in (None, ""):
+            metadata.pop("runtime_policy", None)
+        elif not isinstance(raw_runtime_policy, dict):
+            return None, "runtime_policy must be a JSON object"
+        elif raw_runtime_policy:
+            metadata["runtime_policy"] = dict(raw_runtime_policy)
+        else:
+            metadata.pop("runtime_policy", None)
+
+    name = str(metadata.get("name") or skill.name or "").strip()
+    description = str(metadata.get("description") or skill.description or "").strip()
+    if not name:
+        return None, "name is required"
+    if not description:
+        return None, "description is required"
+    metadata["name"] = name
+    metadata["description"] = description
+    metadata["safety_level"] = str(metadata.get("safety_level") or skill.safety_level or "standard").strip() or "standard"
+    return metadata, None
+
+
+def _render_skill_metadata(metadata: dict) -> str:
+    lines = ["---"]
+    rendered_keys: set[str] = set()
+    for key in _SKILL_METADATA_ORDER:
+        if key not in metadata:
+            continue
+        value = metadata.get(key)
+        if value in ("", [], {}):
+            continue
+        lines.append(f"{key}: {_render_frontmatter_value(value)}")
+        rendered_keys.add(key)
+    for key in sorted(set(metadata) - rendered_keys):
+        value = metadata.get(key)
+        if value in ("", [], {}):
+            continue
+        lines.append(f"{key}: {_render_frontmatter_value(value)}")
+    lines.append("---")
+    return "\n".join(lines)
+
+
+def _update_skill_metadata_file(skill, data: dict) -> tuple[object | None, str | None]:
+    metadata, error = _normalise_skill_metadata_update(skill, data)
+    if error:
+        return None, error
+
+    skill_file = _skill_dir_from_slug(skill.slug) / "SKILL.md"
+    original_content = skill_file.read_text(encoding="utf-8")
+    body = str(skill.content or "").rstrip()
+    next_content = f"{_render_skill_metadata(metadata)}\n{body}\n"
+    skill_file.write_text(next_content, encoding="utf-8")
+
+    validation = validate_skill_dir(skill_file.parent)
+    if validation.errors:
+        skill_file.write_text(original_content, encoding="utf-8")
+        return None, "; ".join(validation.errors)
+
+    try:
+        return get_skill(skill.slug), None
+    except SkillNotFoundError:
+        skill_file.write_text(original_content, encoding="utf-8")
+        return None, "Skill was updated but could not be reloaded"
 
 
 @require_feature(STUDIO_FEATURE_SKILLS)
@@ -68,16 +186,25 @@ def api_skill_detail(request, slug: str):
     if request.method == "GET":
         return _ok(_skill_to_detail_dict(skill, request.user, access))
 
-    admin_error = _require_admin(request, message="Only admin can change skill sharing")
-    if admin_error:
-        return admin_error
     data = _json_body(request)
-    access = _ensure_skill_access(skill.slug, owner=access.owner if access else None)
-    if "is_shared" in data:
-        access.is_shared = bool(data.get("is_shared"))
-        access.save(update_fields=["is_shared"])
-    if "shared_user_ids" in data:
-        _apply_shared_users(access, _normalise_related_ids(data.get("shared_user_ids")))
+    if _has_skill_metadata_update(data):
+        if not _can_edit_skill(request.user, access):
+            return _err("You can edit only your own skills", 403)
+        skill, error = _update_skill_metadata_file(skill, data)
+        if error:
+            return _err(error)
+
+    if "is_shared" in data or "shared_user_ids" in data:
+        admin_error = _require_admin(request, message="Only admin can change skill sharing")
+        if admin_error:
+            return admin_error
+        access = _ensure_skill_access(skill.slug, owner=access.owner if access else None)
+        if "is_shared" in data:
+            access.is_shared = bool(data.get("is_shared"))
+            access.save(update_fields=["is_shared"])
+        if "shared_user_ids" in data:
+            _apply_shared_users(access, _normalise_related_ids(data.get("shared_user_ids")))
+
     access = _get_skill_access(skill.slug)
     return _ok(_skill_to_detail_dict(skill, request.user, access))
 

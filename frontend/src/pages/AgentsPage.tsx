@@ -1,17 +1,23 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   fetchAgents,
   fetchAgentTemplates,
   fetchFrontendBootstrap,
   createAgent,
+  updateAgent,
   deleteAgent,
   runAgent,
   stopAgent,
+  studioSkills,
   type AgentItem,
+  type AgentInputArtifact,
+  type AgentScheduleConfig,
+  type AgentScheduleMode,
   type AgentTemplate,
   type AgentRunResult,
+  type StudioSkill,
 } from "@/lib/api";
 import { localize, useI18n } from "@/lib/i18n";
 import {
@@ -19,7 +25,7 @@ import {
   FileText, Server, X, Square,
   Brain, Target, Settings2, Layers, CheckCircle2,
   AlertTriangle, Activity,
-  Shield,
+  Shield, CalendarDays, BookOpen, Upload, FileCode2, Send,
   type LucideIcon,
 } from "lucide-react";
 import { AgentReportModal } from "@/components/studio/AgentReportModal";
@@ -70,13 +76,177 @@ const FULL_AGENT_TOOL_OPTIONS = [
   { key: "ssh_execute", label: "SSH execute" },
   { key: "read_console", label: "Read console" },
   { key: "wait_for_output", label: "Wait for output" },
-  { key: "send_ctrl_c", label: "Send Ctrl+C" },
   { key: "report", label: "Progress report" },
   { key: "ask_user", label: "Ask user" },
   { key: "analyze_output", label: "Analyze output" },
   { key: "list_skills", label: "List skills" },
   { key: "read_skill", label: "Read skill" },
 ] as const;
+
+const SCHEDULE_PRESETS = [
+  {
+    minutes: 0,
+    labelRu: "Вручную",
+    labelEn: "Manual",
+    hintRu: "Только кнопкой запуска",
+    hintEn: "Run only from button",
+  },
+  {
+    minutes: 15,
+    labelRu: "15 минут",
+    labelEn: "15 minutes",
+    hintRu: "Частый мониторинг",
+    hintEn: "Frequent checks",
+  },
+  {
+    minutes: 30,
+    labelRu: "30 минут",
+    labelEn: "30 minutes",
+    hintRu: "Оперативные проверки",
+    hintEn: "Operational checks",
+  },
+  {
+    minutes: 60,
+    labelRu: "1 час",
+    labelEn: "1 hour",
+    hintRu: "Стандартный режим",
+    hintEn: "Standard cadence",
+  },
+  {
+    minutes: 180,
+    labelRu: "3 часа",
+    labelEn: "3 hours",
+    hintRu: "Периодический обзор",
+    hintEn: "Periodic review",
+  },
+  {
+    minutes: 360,
+    labelRu: "6 часов",
+    labelEn: "6 hours",
+    hintRu: "Несколько раз в день",
+    hintEn: "Several times a day",
+  },
+  {
+    minutes: 720,
+    labelRu: "12 часов",
+    labelEn: "12 hours",
+    hintRu: "Утро и вечер",
+    hintEn: "Morning and evening",
+  },
+  {
+    minutes: 1440,
+    labelRu: "1 день",
+    labelEn: "1 day",
+    hintRu: "Ежедневная проверка",
+    hintEn: "Daily check",
+  },
+] as const;
+
+const SCHEDULE_MODES: Array<{ mode: AgentScheduleMode; labelRu: string; labelEn: string; hintRu: string; hintEn: string }> = [
+  { mode: "manual", labelRu: "Вручную", labelEn: "Manual", hintRu: "Только кнопкой", hintEn: "Button only" },
+  { mode: "interval", labelRu: "Интервал", labelEn: "Interval", hintRu: "Каждые N минут", hintEn: "Every N minutes" },
+  { mode: "daily", labelRu: "Ежедневно", labelEn: "Daily", hintRu: "В выбранное время", hintEn: "At selected time" },
+  { mode: "weekly", labelRu: "По дням", labelEn: "Weekly", hintRu: "Дни недели", hintEn: "Weekdays" },
+  { mode: "monthly", labelRu: "Месяц", labelEn: "Monthly", hintRu: "День месяца", hintEn: "Day of month" },
+  { mode: "once", labelRu: "Разово", labelEn: "Once", hintRu: "Дата и время", hintEn: "Date and time" },
+];
+
+const WEEKDAYS = [
+  { value: 0, ru: "Пн", en: "Mon" },
+  { value: 1, ru: "Вт", en: "Tue" },
+  { value: 2, ru: "Ср", en: "Wed" },
+  { value: 3, ru: "Чт", en: "Thu" },
+  { value: 4, ru: "Пт", en: "Fri" },
+  { value: 5, ru: "Сб", en: "Sat" },
+  { value: 6, ru: "Вс", en: "Sun" },
+] as const;
+
+const QUICK_TIMES = ["08:00", "09:00", "10:00", "18:00"] as const;
+
+const ARTIFACT_KINDS: Array<{ kind: AgentInputArtifact["kind"]; labelRu: string; labelEn: string; icon: LucideIcon }> = [
+  { kind: "document", labelRu: "Документ", labelEn: "Document", icon: FileText },
+  { kind: "task_list", labelRu: "Список задач", labelEn: "Task list", icon: CheckCircle2 },
+  { kind: "script", labelRu: "Скрипт", labelEn: "Script", icon: FileCode2 },
+];
+
+type AgentTaskDraft = NonNullable<AgentInputArtifact["tasks"]>[number];
+
+function artifactKindLabel(kind: AgentInputArtifact["kind"], lang: string) {
+  const match = ARTIFACT_KINDS.find((item) => item.kind === kind);
+  return match ? localize(lang, match.labelRu, match.labelEn) : kind;
+}
+
+function artifactKindIcon(kind: AgentInputArtifact["kind"]) {
+  return ARTIFACT_KINDS.find((item) => item.kind === kind)?.icon || FileText;
+}
+
+function parseTasksFromContent(content: string): AgentTaskDraft[] {
+  return String(content || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const clean = line.replace(/^[-*]\s*(\[[ xX]\])?\s*/, "");
+      const [title, ...detailsParts] = clean.split(/\s+[—-]\s+/);
+      return {
+        title: (title || clean).trim(),
+        details: detailsParts.join(" - ").trim(),
+        done: /^\s*[-*]\s*\[[xX]\]/.test(line),
+      };
+    })
+    .filter((task) => task.title);
+}
+
+function tasksToContent(tasks: AgentTaskDraft[] | undefined): string {
+  return (tasks || [])
+    .filter((task) => task.title.trim() || (task.details || "").trim())
+    .map((task) => {
+      const details = (task.details || "").trim();
+      return `- [${task.done ? "x" : " "}] ${task.title.trim()}${details ? ` — ${details}` : ""}`;
+    })
+    .join("\n");
+}
+
+function normalizeArtifactDraft(item: AgentInputArtifact): AgentInputArtifact {
+  if (item.kind !== "task_list") return item;
+  const tasks = item.tasks?.length ? item.tasks : parseTasksFromContent(item.content || "");
+  return { ...item, tasks };
+}
+
+function prepareArtifactForSave(item: AgentInputArtifact): AgentInputArtifact {
+  const name = item.name.trim();
+  const run_hint = (item.run_hint || "").trim();
+  if (item.kind === "task_list") {
+    const tasks = (item.tasks || [])
+      .map((task) => ({
+        title: task.title.trim(),
+        details: (task.details || "").trim(),
+        done: Boolean(task.done),
+      }))
+      .filter((task) => task.title || task.details);
+    return {
+      ...item,
+      name,
+      run_hint,
+      tasks,
+      content: tasksToContent(tasks),
+    };
+  }
+  return { ...item, name, run_hint, content: item.content.trim() };
+}
+
+function artifactSummary(item: AgentInputArtifact, lang: string) {
+  if (item.kind === "task_list") {
+    const total = item.tasks?.length || parseTasksFromContent(item.content || "").length;
+    return localize(lang, `${total} задач`, `${total} tasks`);
+  }
+  const chars = (item.content || "").length;
+  if (item.size_bytes) {
+    const kb = Math.max(1, Math.round(item.size_bytes / 1024));
+    return `${kb} KB · ${chars} chars`;
+  }
+  return `${chars} chars`;
+}
 
 function buildDefaultToolsConfig() {
   return Object.fromEntries(FULL_AGENT_TOOL_OPTIONS.map((tool) => [tool.key, true]));
@@ -101,12 +271,90 @@ function formatRoleLabel(role: string): string {
     .join(" ");
 }
 
+function formatScheduleLabel(minutes: number, lang: string): string {
+  if (!minutes) return localize(lang, "Только ручной запуск", "Manual only");
+  if (minutes < 60) return localize(lang, `Каждые ${minutes} мин`, `Every ${minutes} min`);
+  if (minutes % 1440 === 0) {
+    const days = minutes / 1440;
+    return localize(lang, days === 1 ? "Каждый день" : `Каждые ${days} дн.`, days === 1 ? "Daily" : `Every ${days} days`);
+  }
+  if (minutes % 60 === 0) {
+    const hours = minutes / 60;
+    return localize(lang, hours === 1 ? "Каждый час" : `Каждые ${hours} ч`, hours === 1 ? "Hourly" : `Every ${hours} h`);
+  }
+  return localize(lang, `Каждые ${minutes} мин`, `Every ${minutes} min`);
+}
+
+function browserTimezone() {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+}
+
+function defaultScheduleConfig(): AgentScheduleConfig {
+  return {
+    mode: "manual",
+    timezone: browserTimezone(),
+    interval_minutes: 0,
+    time: "09:00",
+    weekdays: [0, 1, 2, 3, 4],
+    day_of_month: 1,
+    run_at: "",
+  };
+}
+
+function scheduleConfigFromMinutes(minutes: number): AgentScheduleConfig {
+  const base = defaultScheduleConfig();
+  if (!minutes) return base;
+  return { ...base, mode: "interval", interval_minutes: minutes };
+}
+
+function deriveScheduleMinutes(config: AgentScheduleConfig): number {
+  if (config.mode === "manual") return 0;
+  if (config.mode === "interval") return Math.max(0, Number(config.interval_minutes || 0));
+  if (config.mode === "daily") return 1440;
+  if (config.mode === "weekly" || config.mode === "monthly") return 10080;
+  if (config.mode === "once") return 1;
+  return 0;
+}
+
+function finalizeScheduleConfig(config: AgentScheduleConfig, intervalMinutes: number): AgentScheduleConfig {
+  const base = defaultScheduleConfig();
+  const next: AgentScheduleConfig = {
+    ...base,
+    ...config,
+    timezone: config.timezone || browserTimezone(),
+    time: config.time || "09:00",
+    weekdays: Array.isArray(config.weekdays) && config.weekdays.length ? config.weekdays : [0, 1, 2, 3, 4],
+    day_of_month: Math.min(31, Math.max(1, Number(config.day_of_month || 1))),
+    run_at: config.run_at || "",
+  };
+  if (next.mode === "manual") next.interval_minutes = 0;
+  if (next.mode === "interval") next.interval_minutes = Math.max(0, Number(intervalMinutes || next.interval_minutes || 0));
+  return next;
+}
+
+function formatScheduleConfigLabel(config: AgentScheduleConfig | undefined, minutes: number, lang: string): string {
+  const current = config || scheduleConfigFromMinutes(minutes);
+  if (current.mode === "manual") return localize(lang, "Только ручной запуск", "Manual only");
+  if (current.mode === "interval") return formatScheduleLabel(Number(current.interval_minutes || minutes || 0), lang);
+  if (current.mode === "daily") return localize(lang, `Каждый день в ${current.time || "09:00"}`, `Daily at ${current.time || "09:00"}`);
+  if (current.mode === "weekly") return localize(lang, `По дням недели в ${current.time || "09:00"}`, `Weekly at ${current.time || "09:00"}`);
+  if (current.mode === "monthly") return localize(lang, `${current.day_of_month || 1} числа в ${current.time || "09:00"}`, `Day ${current.day_of_month || 1} at ${current.time || "09:00"}`);
+  if (current.mode === "once") return localize(lang, "Разовый запуск", "One-time run");
+  return formatScheduleLabel(minutes, lang);
+}
+
+function isAgentScheduled(agent: AgentItem): boolean {
+  const mode = agent.schedule_config?.mode || (agent.schedule_minutes > 0 ? "interval" : "manual");
+  return mode !== "manual";
+}
+
 export default function AgentsPage() {
   const { t, lang } = useI18n();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [modeFilter, setModeFilter] = useState<"all" | "mini" | "full" | "multi">("all");
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingAgent, setEditingAgent] = useState<AgentItem | null>(null);
   const [createdAgentId, setCreatedAgentId] = useState<number | null>(null);
   const [runningId, setRunningId] = useState<number | null>(null);
   const [result, setResult] = useState<AgentRunResult | null>(null);
@@ -123,7 +371,7 @@ export default function AgentsPage() {
     (a) => modeFilter === "all" || a.mode === modeFilter,
   );
   const activeAgents = allAgents.filter((agent) => agent.active_run_id).length;
-  const scheduledAgents = allAgents.filter((agent) => agent.schedule_minutes > 0).length;
+  const scheduledAgents = allAgents.filter(isAgentScheduled).length;
   const serverScopeCount = allAgents.reduce((sum, agent) => sum + agent.server_count, 0);
 
   const onRun = async (ag: AgentItem) => {
@@ -276,7 +524,7 @@ export default function AgentsPage() {
                     <div className="flex items-center gap-3 text-[10px] text-muted-foreground mt-0.5">
                       <span className="flex items-center gap-0.5"><Server className="h-2.5 w-2.5" /> {ag.server_count}</span>
                       {ag.last_run_at && <span className="flex items-center gap-0.5"><Clock className="h-2.5 w-2.5" /> {relativeTime(ag.last_run_at)}</span>}
-                      {ag.schedule_minutes > 0 && <span className="flex items-center gap-0.5"><RefreshCw className="h-2.5 w-2.5" /> {ag.schedule_minutes}m</span>}
+                      {isAgentScheduled(ag) && <span className="flex items-center gap-0.5"><RefreshCw className="h-2.5 w-2.5" /> {formatScheduleConfigLabel(ag.schedule_config, ag.schedule_minutes, lang)}</span>}
                     </div>
                     {ag.goal && <p className="text-[10px] text-muted-foreground mt-0.5 truncate max-w-md">{ag.goal}</p>}
                   </div>
@@ -301,10 +549,18 @@ export default function AgentsPage() {
                             </Link>
                           </Button>
                         )}
+                        <Button size="xs" variant="ghost" className="gap-1 text-muted-foreground hover:text-foreground" onClick={() => setEditingAgent(ag)}>
+                          <Settings2 className="h-3 w-3" /> {localize(lang, "Править", "Edit")}
+                        </Button>
                         <Button size="xs" variant="outline" className="gap-1" disabled={isRunning} onClick={() => onRun(ag)}>
                           {isRunning ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />} {t("agent.run")}
                         </Button>
                       </>
+                    )}
+                    {ag.active_run_id && (
+                      <Button size="xs" variant="ghost" className="gap-1 text-muted-foreground hover:text-foreground" onClick={() => setEditingAgent(ag)}>
+                        <Settings2 className="h-3 w-3" /> {localize(lang, "Править", "Edit")}
+                      </Button>
                     )}
                     <Button
                       size="icon"
@@ -324,7 +580,7 @@ export default function AgentsPage() {
       )}
 
       <CreateAgentDialog open={createOpen} onClose={() => setCreateOpen(false)}
-        onCreated={async ({ id, mode }) => {
+        onSaved={async ({ id, mode }) => {
           setModeFilter("all");
           setCreatedAgentId(id);
           setCreateOpen(false);
@@ -334,6 +590,17 @@ export default function AgentsPage() {
           }
           window.setTimeout(() => setCreatedAgentId((current) => (current === id ? null : current)), 8000);
         }} />
+      <CreateAgentDialog
+        open={Boolean(editingAgent)}
+        initialAgent={editingAgent}
+        onClose={() => setEditingAgent(null)}
+        onSaved={async ({ id }) => {
+          setCreatedAgentId(id);
+          setEditingAgent(null);
+          await queryClient.invalidateQueries({ queryKey: ["agents", "list"] });
+          window.setTimeout(() => setCreatedAgentId((current) => (current === id ? null : current)), 8000);
+        }}
+      />
     </PageShell>
   );
 }
@@ -342,13 +609,16 @@ export default function AgentsPage() {
 function CreateAgentDialog({
   open,
   onClose,
-  onCreated,
+  onSaved,
+  initialAgent = null,
 }: {
   open: boolean;
   onClose: () => void;
-  onCreated: (created: { id: number; mode: "mini" | "full" | "multi" }) => Promise<void> | void;
+  initialAgent?: AgentItem | null;
+  onSaved: (saved: { id: number; mode: "mini" | "full" | "multi"; action: "create" | "update" }) => Promise<void> | void;
 }) {
   const { t, lang } = useI18n();
+  const isEditing = Boolean(initialAgent);
   const [step, setStep] = useState<"template" | "config">("template");
   const [mode, setMode] = useState<"mini" | "full" | "multi">("mini");
   const [selectedType, setSelectedType] = useState("");
@@ -365,13 +635,64 @@ function CreateAgentDialog({
   const [maxConnections, setMaxConnections] = useState(5);
   const [selectedServers, setSelectedServers] = useState<number[]>([]);
   const [schedule, setSchedule] = useState(0);
+  const [scheduleConfig, setScheduleConfig] = useState<AgentScheduleConfig>(() => defaultScheduleConfig());
+  const [selectedSkillSlugs, setSelectedSkillSlugs] = useState<string[]>([]);
+  const [inputArtifacts, setInputArtifacts] = useState<AgentInputArtifact[]>([]);
+  const [activeArtifactIndex, setActiveArtifactIndex] = useState<number | null>(null);
+  const [telegramEnabled, setTelegramEnabled] = useState(false);
+  const [telegramChatId, setTelegramChatId] = useState("");
   const [saving, setSaving] = useState(false);
 
   const { data: tplData } = useQuery({ queryKey: ["agents", "templates"], queryFn: fetchAgentTemplates, enabled: open });
   const { data: bootstrapData } = useQuery({ queryKey: ["frontend", "bootstrap"], queryFn: fetchFrontendBootstrap, staleTime: 30_000 });
+  const { data: availableSkills = [] } = useQuery<StudioSkill[]>({ queryKey: ["studio", "skills", "agent-picker"], queryFn: studioSkills.list, enabled: open });
 
   const templates = (tplData?.templates || []).filter((template) => template.mode === mode || (mode === "multi" && template.mode === "full"));
   const servers = bootstrapData?.servers || [];
+  const allServerIds = servers.map((server) => server.id);
+
+  const resetForm = () => {
+    setStep("template"); setMode("mini"); setSelectedType(""); setName("");
+    setCommands(""); setAiPrompt(""); setGoal(""); setSystemPrompt("");
+    setMaxIter(20); setMultiServer(false); setSelectedServers([]); setSchedule(0);
+    setScheduleConfig(defaultScheduleConfig()); setSelectedSkillSlugs([]); setInputArtifacts([]);
+    setActiveArtifactIndex(null);
+    setTelegramEnabled(false); setTelegramChatId("");
+    setToolsConfig(buildDefaultToolsConfig()); setStopConditionsText(""); setSessionTimeoutSeconds(600); setMaxConnections(5);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    if (!initialAgent) {
+      resetForm();
+      return;
+    }
+
+    setStep("config");
+    setMode(initialAgent.mode);
+    setSelectedType(initialAgent.agent_type || "custom");
+    setName(initialAgent.name || "");
+    setCommands((initialAgent.commands || []).join("\n"));
+    setAiPrompt(initialAgent.ai_prompt || "");
+    setGoal(initialAgent.goal || "");
+    setSystemPrompt(initialAgent.system_prompt || "");
+    setMaxIter(initialAgent.max_iterations || 20);
+    setMultiServer(Boolean(initialAgent.allow_multi_server));
+    setToolsConfig({ ...buildDefaultToolsConfig(), ...(initialAgent.tools_config || {}) });
+    setStopConditionsText((initialAgent.stop_conditions || []).join("\n"));
+    setSessionTimeoutSeconds(initialAgent.session_timeout_seconds || 600);
+    setMaxConnections(initialAgent.max_connections || 5);
+    setSelectedServers(initialAgent.server_ids || []);
+    setSchedule(initialAgent.schedule_minutes || 0);
+    const nextScheduleConfig = initialAgent.schedule_config || scheduleConfigFromMinutes(initialAgent.schedule_minutes || 0);
+    setScheduleConfig(nextScheduleConfig);
+    setSelectedSkillSlugs(initialAgent.skill_slugs || []);
+    setInputArtifacts((initialAgent.input_artifacts || []).map(normalizeArtifactDraft));
+    setActiveArtifactIndex(null);
+    const telegram = initialAgent.report_delivery?.telegram;
+    setTelegramEnabled(Boolean(telegram?.enabled));
+    setTelegramChatId(telegram?.chat_id || "");
+  }, [open, initialAgent]);
 
   const onSelectTemplate = (tpl: AgentTemplate) => {
     setSelectedType(tpl.type);
@@ -391,44 +712,151 @@ function CreateAgentDialog({
     setSaving(true);
     try {
       const cmdList = commands.split("\n").map((c) => c.trim()).filter(Boolean);
-      const created = await createAgent({
+      const normalizedSchedule = finalizeScheduleConfig(scheduleConfig, schedule);
+      const payload = {
         name: name || localize(lang, "Новый агент", "Custom Agent"),
         mode,
         agent_type: selectedType || "custom",
         server_ids: selectedServers,
         commands: cmdList,
         ai_prompt: aiPrompt,
-        schedule_minutes: schedule,
+        schedule_minutes: deriveScheduleMinutes(normalizedSchedule),
+        schedule_config: normalizedSchedule,
         goal,
         system_prompt: systemPrompt,
         max_iterations: maxIter,
         allow_multi_server: multiServer,
         tools_config: mode === "mini" ? {} : toolsConfig,
         stop_conditions: stopConditionsText.split("\n").map((item) => item.trim()).filter(Boolean),
+        skill_slugs: selectedSkillSlugs,
+        input_artifacts: inputArtifacts
+          .map(prepareArtifactForSave)
+          .filter((item) => item.name && (item.content || item.tasks?.length)),
+        report_delivery: {
+          telegram: {
+            enabled: telegramEnabled,
+            chat_id: telegramChatId.trim(),
+            format: "brief",
+            include_link: true,
+          },
+        },
         session_timeout_seconds: sessionTimeoutSeconds,
         max_connections: maxConnections,
-      });
-      await onCreated({ id: created.id, mode });
-      resetForm();
+      };
+      if (initialAgent) {
+        await updateAgent(initialAgent.id, payload);
+        await onSaved({ id: initialAgent.id, mode, action: "update" });
+      } else {
+        const created = await createAgent(payload);
+        await onSaved({ id: created.id, mode, action: "create" });
+        resetForm();
+      }
     } finally { setSaving(false); }
   };
 
-  const resetForm = () => {
-    setStep("template"); setMode("mini"); setSelectedType(""); setName("");
-    setCommands(""); setAiPrompt(""); setGoal(""); setSystemPrompt("");
-    setMaxIter(20); setMultiServer(false); setSelectedServers([]); setSchedule(0);
-    setToolsConfig(buildDefaultToolsConfig()); setStopConditionsText(""); setSessionTimeoutSeconds(600); setMaxConnections(5);
-  };
-
   const toggleServer = (id: number) => setSelectedServers((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
-  const selectAll = () => { if (selectedServers.length === servers.length) setSelectedServers([]); else setSelectedServers(servers.map((s) => s.id)); };
+  const setScheduleMode = (modeValue: AgentScheduleMode) => {
+    const nextInterval = modeValue === "interval" ? (schedule || scheduleConfig.interval_minutes || 60) : 0;
+    setSchedule(nextInterval);
+    setScheduleConfig(finalizeScheduleConfig({ ...scheduleConfig, mode: modeValue, interval_minutes: nextInterval }, nextInterval));
+  };
+  const updateSchedule = (patch: Partial<AgentScheduleConfig>) => {
+    setScheduleConfig((current) => finalizeScheduleConfig({ ...current, ...patch }, schedule));
+  };
+  const toggleWeekday = (day: number) => {
+    setScheduleConfig((current) => {
+      const currentDays = current.weekdays || [];
+      const weekdays = currentDays.includes(day) ? currentDays.filter((item) => item !== day) : [...currentDays, day].sort();
+      return finalizeScheduleConfig({ ...current, weekdays: weekdays.length ? weekdays : [day] }, schedule);
+    });
+  };
+  const toggleSkill = (slug: string) => {
+    setSelectedSkillSlugs((current) => current.includes(slug) ? current.filter((item) => item !== slug) : [...current, slug]);
+  };
+  const addArtifact = (kind: AgentInputArtifact["kind"]) => {
+    const labels = {
+      document: localize(lang, "Документ", "Document"),
+      task_list: localize(lang, "Список задач", "Task list"),
+      script: localize(lang, "Скрипт", "Script"),
+    };
+    const artifact: AgentInputArtifact = kind === "task_list"
+      ? { kind, name: labels[kind], content: "", run_hint: "", tasks: [{ title: "", details: "", done: false }] }
+      : { kind, name: labels[kind], content: "", run_hint: "" };
+    const next = [...inputArtifacts, artifact].slice(0, 10);
+    setInputArtifacts(next);
+    setActiveArtifactIndex(next.length - 1);
+  };
+  const updateArtifact = (index: number, patch: Partial<AgentInputArtifact>) => {
+    setInputArtifacts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item));
+  };
+  const removeArtifact = (index: number) => {
+    setInputArtifacts((current) => current.filter((_, itemIndex) => itemIndex !== index));
+    setActiveArtifactIndex((current) => {
+      if (current === null) return null;
+      if (current === index) return null;
+      return current > index ? current - 1 : current;
+    });
+  };
+  const updateArtifactTask = (artifactIndex: number, taskIndex: number, patch: Partial<AgentTaskDraft>) => {
+    setInputArtifacts((current) => current.map((artifact, index) => {
+      if (index !== artifactIndex) return artifact;
+      const tasks = artifact.tasks?.length ? artifact.tasks : [{ title: "", details: "", done: false }];
+      return {
+        ...artifact,
+        tasks: tasks.map((task, itemIndex) => itemIndex === taskIndex ? { ...task, ...patch } : task),
+      };
+    }));
+  };
+  const addArtifactTask = (artifactIndex: number) => {
+    setInputArtifacts((current) => current.map((artifact, index) => (
+      index === artifactIndex
+        ? { ...artifact, tasks: [...(artifact.tasks || []), { title: "", details: "", done: false }] }
+        : artifact
+    )));
+  };
+  const removeArtifactTask = (artifactIndex: number, taskIndex: number) => {
+    setInputArtifacts((current) => current.map((artifact, index) => {
+      if (index !== artifactIndex) return artifact;
+      const tasks = (artifact.tasks || []).filter((_, itemIndex) => itemIndex !== taskIndex);
+      return { ...artifact, tasks: tasks.length ? tasks : [{ title: "", details: "", done: false }] };
+    }));
+  };
+  const onMaterialFiles = async (files: FileList | null) => {
+    if (!files?.length) return;
+    const added: AgentInputArtifact[] = [];
+    for (const file of Array.from(files).slice(0, Math.max(0, 10 - inputArtifacts.length))) {
+      const content = await file.text();
+      const lowerName = file.name.toLowerCase();
+      const kind: AgentInputArtifact["kind"] = lowerName.match(/\.(sh|py|js|ts|sql|ps1)$/) ? "script" : "document";
+      added.push({
+        kind,
+        name: file.name,
+        source_name: file.name,
+        size_bytes: file.size,
+        content: content.slice(0, 12_000),
+        run_hint: kind === "script" ? localize(lang, "Проверить и запускать только если требуется задачей", "Review and run only when required") : "",
+      });
+    }
+    const next = [...inputArtifacts, ...added].slice(0, 10);
+    setInputArtifacts(next);
+    if (added.length) setActiveArtifactIndex(Math.min(inputArtifacts.length, next.length - 1));
+  };
+  const selectAll = () => {
+    if (!allServerIds.length) return;
+    const hasAllServers = allServerIds.every((id) => selectedServers.includes(id));
+    setSelectedServers(hasAllServers ? [] : allServerIds);
+  };
+  const hasAllServersSelected = allServerIds.length > 0 && allServerIds.every((id) => selectedServers.includes(id));
+  const activeArtifact = activeArtifactIndex !== null ? inputArtifacts[activeArtifactIndex] : null;
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>
-            {step === "template"
+            {isEditing
+              ? localize(lang, "Редактировать агента", "Edit agent")
+              : step === "template"
               ? t("agent.create")
               : localize(
                 lang,
@@ -437,7 +865,9 @@ function CreateAgentDialog({
               )}
           </DialogTitle>
           <DialogDescription>
-            {step === "template"
+            {isEditing
+              ? localize(lang, "Измените серверы, расписание, команды, инструкции и лимиты запуска.", "Update servers, schedule, commands, instructions, and run limits.")
+              : step === "template"
               ? localize(lang, "Выберите тип агента или начните с ручной настройки.", "Choose an agent type or start with a custom setup.")
               : localize(lang, "Настройте цель, лимиты, доступ к инструментам и серверы для запуска.", "Set the goal, limits, tool access, and servers for this run.")}
           </DialogDescription>
@@ -617,7 +1047,7 @@ function CreateAgentDialog({
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground">{t("nav.servers")}</label>
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={selectAll} className={`min-h-8 rounded-md border px-3 py-1 text-xs font-medium transition-colors ${selectedServers.length === servers.length ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>{t("agent.all")}</button>
+                  <button type="button" onClick={selectAll} className={`min-h-8 rounded-md border px-3 py-1 text-xs font-medium transition-colors ${hasAllServersSelected ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>{t("agent.all")}</button>
                   {servers.map((s) => (
                     <button
                       key={s.id}
@@ -631,22 +1061,396 @@ function CreateAgentDialog({
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-medium text-muted-foreground">{t("agent.schedule")}</label>
-                  <span className="text-xs font-mono text-foreground">{schedule === 0 ? t("agent.manual") : `${schedule} min`}</span>
+              <div className="space-y-3 rounded-lg border border-border/70 bg-secondary/20 p-3">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <CalendarDays className="h-3.5 w-3.5 text-primary" /> {t("agent.schedule")}
+                  </label>
+                  <span className="inline-flex min-h-7 items-center rounded-md border border-primary/25 bg-primary/10 px-2 text-xs font-medium text-primary">
+                    {formatScheduleConfigLabel(scheduleConfig, schedule, lang)}
+                  </span>
                 </div>
-                <input type="range" min={0} max={1440} step={5} value={schedule} onChange={(e) => setSchedule(Number(e.target.value))}
-                  className="w-full h-1.5 bg-secondary rounded-full appearance-none cursor-pointer accent-primary" />
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {SCHEDULE_MODES.map((option) => {
+                    const active = scheduleConfig.mode === option.mode;
+                    return (
+                      <button
+                        key={option.mode}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => setScheduleMode(option.mode)}
+                        className={`min-h-[58px] rounded-lg border px-3 py-2 text-left transition-colors ${
+                          active
+                            ? "border-primary bg-primary/10 text-foreground"
+                            : "border-border/70 bg-background/35 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                        }`}
+                      >
+                        <span className="block text-xs font-semibold">{localize(lang, option.labelRu, option.labelEn)}</span>
+                        <span className="mt-0.5 block text-[11px] leading-4 text-muted-foreground">{localize(lang, option.hintRu, option.hintEn)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {scheduleConfig.mode === "interval" && (
+                  <>
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                      {SCHEDULE_PRESETS.filter((option) => option.minutes > 0).map((option) => {
+                        const active = schedule === option.minutes;
+                        return (
+                          <button
+                            key={option.minutes}
+                            type="button"
+                            aria-pressed={active}
+                            onClick={() => {
+                              setSchedule(option.minutes);
+                              setScheduleConfig(finalizeScheduleConfig({ ...scheduleConfig, mode: "interval", interval_minutes: option.minutes }, option.minutes));
+                            }}
+                            className={`min-h-[54px] rounded-lg border px-3 py-2 text-left transition-colors ${
+                              active
+                                ? "border-primary bg-primary/10 text-foreground"
+                                : "border-border/70 bg-background/35 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                            }`}
+                          >
+                            <span className="block text-xs font-semibold">{localize(lang, option.labelRu, option.labelEn)}</span>
+                            <span className="mt-0.5 block text-[11px] leading-4 text-muted-foreground">{localize(lang, option.hintRu, option.hintEn)}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-[1fr_160px] sm:items-end">
+                      <div>
+                        <div className="text-xs font-medium text-muted-foreground">{localize(lang, "Свой интервал", "Custom interval")}</div>
+                        <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                          {localize(lang, "Если нужен другой период, укажите количество минут.", "Use minutes when you need a different cadence.")}
+                        </p>
+                      </div>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={10080}
+                        step={5}
+                        value={schedule || scheduleConfig.interval_minutes || 60}
+                        onChange={(e) => {
+                          const value = Math.max(1, Number(e.target.value) || 1);
+                          setSchedule(value);
+                          setScheduleConfig(finalizeScheduleConfig({ ...scheduleConfig, mode: "interval", interval_minutes: value }, value));
+                        }}
+                        className="h-9 bg-background/60 text-sm"
+                        aria-label={localize(lang, "Интервал запуска в минутах", "Run interval in minutes")}
+                      />
+                    </div>
+                  </>
+                )}
+                {(["daily", "weekly", "monthly"] as AgentScheduleMode[]).includes(scheduleConfig.mode) && (
+                  <div className="grid gap-3 sm:grid-cols-[1fr_180px]">
+                    <div className="space-y-2">
+                      <div className="text-xs font-medium text-muted-foreground">{localize(lang, "Время запуска", "Run time")}</div>
+                      <div className="flex flex-wrap gap-2">
+                        {QUICK_TIMES.map((timeValue) => (
+                          <button
+                            key={timeValue}
+                            type="button"
+                            onClick={() => updateSchedule({ time: timeValue })}
+                            className={`min-h-8 rounded-md border px-3 text-xs font-medium transition-colors ${
+                              scheduleConfig.time === timeValue ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                            }`}
+                          >
+                            {timeValue}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <Input
+                      type="time"
+                      value={scheduleConfig.time || "09:00"}
+                      onChange={(e) => updateSchedule({ time: e.target.value })}
+                      className="h-9 bg-background/60 text-sm sm:mt-6"
+                    />
+                  </div>
+                )}
+                {scheduleConfig.mode === "weekly" && (
+                  <div className="space-y-2">
+                    <div className="text-xs font-medium text-muted-foreground">{localize(lang, "Дни недели", "Weekdays")}</div>
+                    <div className="flex flex-wrap gap-2">
+                      {WEEKDAYS.map((day) => {
+                        const active = (scheduleConfig.weekdays || []).includes(day.value);
+                        return (
+                          <button
+                            key={day.value}
+                            type="button"
+                            aria-pressed={active}
+                            onClick={() => toggleWeekday(day.value)}
+                            className={`min-h-8 rounded-md border px-3 text-xs font-medium transition-colors ${
+                              active ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                            }`}
+                          >
+                            {localize(lang, day.ru, day.en)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {scheduleConfig.mode === "monthly" && (
+                  <div className="grid gap-2 sm:grid-cols-[1fr_120px] sm:items-end">
+                    <div>
+                      <div className="text-xs font-medium text-muted-foreground">{localize(lang, "День месяца", "Day of month")}</div>
+                      <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                        {localize(lang, "Если в месяце нет такого числа, запуск будет пропущен.", "Months without that date are skipped.")}
+                      </p>
+                    </div>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={31}
+                      value={scheduleConfig.day_of_month || 1}
+                      onChange={(e) => updateSchedule({ day_of_month: Math.min(31, Math.max(1, Number(e.target.value) || 1)) })}
+                      className="h-9 bg-background/60 text-sm"
+                    />
+                  </div>
+                )}
+                {scheduleConfig.mode === "once" && (
+                  <div className="grid gap-2 sm:grid-cols-[1fr_240px] sm:items-end">
+                    <div>
+                      <div className="text-xs font-medium text-muted-foreground">{localize(lang, "Дата и время запуска", "Run date and time")}</div>
+                      <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                        {localize(lang, "Агент запустится один раз и больше не будет считаться due.", "The agent will run once and then stop being due.")}
+                      </p>
+                    </div>
+                    <Input
+                      type="datetime-local"
+                      value={scheduleConfig.run_at || ""}
+                      onChange={(e) => updateSchedule({ run_at: e.target.value })}
+                      className="h-9 bg-background/60 text-sm"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3 rounded-lg border border-border/70 bg-secondary/20 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <BookOpen className="h-3.5 w-3.5 text-primary" /> {localize(lang, "Скиллы агента", "Agent skills")}
+                  </label>
+                  <span className="text-[11px] text-muted-foreground">{selectedSkillSlugs.length}</span>
+                </div>
+                {availableSkills.length ? (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {availableSkills.map((skill) => {
+                      const active = selectedSkillSlugs.includes(skill.slug);
+                      return (
+                        <button
+                          key={skill.slug}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => toggleSkill(skill.slug)}
+                          className={`min-h-[58px] rounded-lg border px-3 py-2 text-left transition-colors ${
+                            active ? "border-primary bg-primary/10 text-foreground" : "border-border/70 bg-background/35 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                          }`}
+                        >
+                          <span className="block truncate text-xs font-semibold">{skill.name}</span>
+                          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{skill.service || skill.category || skill.slug}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-border/70 px-3 py-3 text-xs text-muted-foreground">
+                    {localize(lang, "Доступных скиллов пока нет.", "No available skills yet.")}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3 rounded-lg border border-border/70 bg-secondary/20 p-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <Upload className="h-3.5 w-3.5 text-primary" /> {localize(lang, "Материалы агента", "Agent materials")}
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    <label className="inline-flex min-h-8 cursor-pointer items-center rounded-md border border-primary/40 bg-primary/10 px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/15">
+                      <Upload className="mr-1 h-3 w-3" /> {localize(lang, "Прикрепить файл", "Attach file")}
+                      <input
+                        type="file"
+                        multiple
+                        className="hidden"
+                        accept=".txt,.md,.csv,.json,.yaml,.yml,.sh,.py,.js,.ts,.sql,.log,.ps1"
+                        onChange={(e) => {
+                          void onMaterialFiles(e.currentTarget.files);
+                          e.currentTarget.value = "";
+                        }}
+                      />
+                    </label>
+                    <button type="button" onClick={() => addArtifact("document")} className="min-h-8 rounded-md border border-border px-2 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground">
+                      <FileText className="mr-1 inline h-3 w-3" /> {localize(lang, "Документ", "Document")}
+                    </button>
+                    <button type="button" onClick={() => addArtifact("script")} className="min-h-8 rounded-md border border-border px-2 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground">
+                      <FileCode2 className="mr-1 inline h-3 w-3" /> {localize(lang, "Скрипт", "Script")}
+                    </button>
+                    <button type="button" onClick={() => addArtifact("task_list")} className="min-h-8 rounded-md border border-border px-2 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground">
+                      <CheckCircle2 className="mr-1 inline h-3 w-3" /> {localize(lang, "Список задач", "Task list")}
+                    </button>
+                  </div>
+                </div>
+                {inputArtifacts.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-border/70 px-3 py-3 text-xs text-muted-foreground">
+                    {localize(lang, "Прикрепите файл или создайте документ, скрипт либо список задач.", "Attach a file or create a document, script, or task list.")}
+                  </div>
+                ) : (
+                  <div className="grid gap-3 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.35fr)]">
+                    <div className="space-y-2">
+                      {inputArtifacts.map((artifact, index) => {
+                        const KindIcon = artifactKindIcon(artifact.kind);
+                        const active = activeArtifactIndex === index;
+                        return (
+                          <div key={`${artifact.kind}-${index}-${artifact.name}`} className={`rounded-lg border p-3 transition-colors ${active ? "border-primary bg-primary/10" : "border-border/70 bg-background/35"}`}>
+                            <div className="flex items-start gap-3">
+                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-secondary/40 text-primary">
+                                <KindIcon className="h-4 w-4" />
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate text-xs font-semibold text-foreground">{artifact.name || artifactKindLabel(artifact.kind, lang)}</div>
+                                <div className="mt-0.5 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
+                                  <span>{artifactKindLabel(artifact.kind, lang)}</span>
+                                  <span>{artifactSummary(artifact, lang)}</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="mt-3 flex items-center justify-end gap-2">
+                              <Button type="button" size="xs" variant={active ? "default" : "outline"} className="gap-1" onClick={() => setActiveArtifactIndex(index)}>
+                                <Eye className="h-3 w-3" /> {localize(lang, "Открыть", "Open")}
+                              </Button>
+                              <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground" onClick={() => removeArtifact(index)} aria-label={localize(lang, "Удалить материал", "Remove material")}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {activeArtifact && activeArtifactIndex !== null ? (
+                      <div className="space-y-3 rounded-lg border border-border/70 bg-background/35 p-3">
+                        <div className="grid gap-2 sm:grid-cols-[140px_1fr]">
+                          <select
+                            value={activeArtifact.kind}
+                            onChange={(e) => {
+                              const nextKind = e.target.value as AgentInputArtifact["kind"];
+                              const nextTasks = nextKind === "task_list"
+                                ? (activeArtifact.tasks?.length ? activeArtifact.tasks : parseTasksFromContent(activeArtifact.content || ""))
+                                : undefined;
+                              updateArtifact(activeArtifactIndex, {
+                                kind: nextKind,
+                                tasks: nextKind === "task_list" ? (nextTasks?.length ? nextTasks : [{ title: "", details: "", done: false }]) : undefined,
+                                content: nextKind === "task_list" ? activeArtifact.content : activeArtifact.content || tasksToContent(activeArtifact.tasks),
+                              });
+                            }}
+                            className="h-9 rounded-md border border-border bg-secondary/50 px-2 text-xs text-foreground"
+                          >
+                            {ARTIFACT_KINDS.map((item) => <option key={item.kind} value={item.kind}>{localize(lang, item.labelRu, item.labelEn)}</option>)}
+                          </select>
+                          <Input value={activeArtifact.name} onChange={(e) => updateArtifact(activeArtifactIndex, { name: e.target.value })} className="h-9 bg-secondary/50 text-sm" />
+                        </div>
+                        <Input
+                          value={activeArtifact.run_hint || ""}
+                          onChange={(e) => updateArtifact(activeArtifactIndex, { run_hint: e.target.value })}
+                          className="h-8 bg-secondary/50 text-xs"
+                          placeholder={localize(lang, "Подсказка агенту: когда и как использовать материал", "Hint for the agent: when and how to use this material")}
+                        />
+
+                        {activeArtifact.kind === "task_list" ? (
+                          <div className="space-y-2">
+                            {(activeArtifact.tasks?.length ? activeArtifact.tasks : [{ title: "", details: "", done: false }]).map((task, taskIndex) => (
+                              <div key={taskIndex} className="rounded-lg border border-border/60 bg-secondary/20 p-2">
+                                <div className="grid gap-2 sm:grid-cols-[auto_1fr_auto] sm:items-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(task.done)}
+                                    onChange={(e) => updateArtifactTask(activeArtifactIndex, taskIndex, { done: e.target.checked })}
+                                    className="rounded"
+                                    aria-label={localize(lang, "Задача выполнена", "Task done")}
+                                  />
+                                  <Input
+                                    value={task.title}
+                                    onChange={(e) => updateArtifactTask(activeArtifactIndex, taskIndex, { title: e.target.value })}
+                                    className="h-8 bg-background/60 text-xs"
+                                    placeholder={localize(lang, "Название задачи", "Task title")}
+                                  />
+                                  <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground" onClick={() => removeArtifactTask(activeArtifactIndex, taskIndex)} aria-label={localize(lang, "Удалить задачу", "Remove task")}>
+                                    <X className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                                <Textarea
+                                  value={task.details || ""}
+                                  onChange={(e) => updateArtifactTask(activeArtifactIndex, taskIndex, { details: e.target.value })}
+                                  rows={2}
+                                  className="mt-2 bg-background/60 text-xs"
+                                  placeholder={localize(lang, "Детали, сервер, ссылка, критерий готовности", "Details, server, link, ready criteria")}
+                                />
+                              </div>
+                            ))}
+                            <Button type="button" size="sm" variant="outline" className="w-full gap-1" onClick={() => addArtifactTask(activeArtifactIndex)}>
+                              <Plus className="h-3.5 w-3.5" /> {localize(lang, "Добавить задачу", "Add task")}
+                            </Button>
+                          </div>
+                        ) : (
+                          <Textarea
+                            value={activeArtifact.content}
+                            onChange={(e) => updateArtifact(activeArtifactIndex, { content: e.target.value })}
+                            rows={activeArtifact.kind === "script" ? 10 : 8}
+                            className={`bg-secondary/50 text-xs ${activeArtifact.kind === "script" ? "font-mono" : ""}`}
+                            placeholder={activeArtifact.kind === "script" ? localize(lang, "Содержимое скрипта", "Script content") : localize(lang, "Содержимое документа", "Document content")}
+                          />
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex min-h-[180px] items-center justify-center rounded-lg border border-dashed border-border/70 px-4 py-6 text-center text-xs text-muted-foreground">
+                        {localize(lang, "Выберите вложение слева, чтобы посмотреть или изменить содержимое.", "Select an attachment on the left to view or edit it.")}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3 rounded-lg border border-border/70 bg-secondary/20 p-3">
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={telegramEnabled}
+                    onChange={(e) => setTelegramEnabled(e.target.checked)}
+                    className="mt-1 rounded"
+                  />
+                  <span className="min-w-0">
+                    <span className="flex items-center gap-2 text-xs font-medium text-foreground">
+                      <Send className="h-3.5 w-3.5 text-primary" /> {localize(lang, "Отправлять отчет в Telegram", "Send report to Telegram")}
+                    </span>
+                    <span className="mt-1 block text-[11px] leading-4 text-muted-foreground">
+                      {localize(lang, "Используется Telegram bot token из настроек уведомлений Studio.", "Uses the Telegram bot token from Studio notification settings.")}
+                    </span>
+                  </span>
+                </label>
+                {telegramEnabled && (
+                  <Input
+                    value={telegramChatId}
+                    onChange={(e) => setTelegramChatId(e.target.value)}
+                    className="h-9 bg-background/60 text-sm"
+                    placeholder={localize(lang, "Chat ID, если нужен не общий канал", "Chat ID, when different from the default channel")}
+                  />
+                )}
               </div>
             </div>
           )}
         </DialogBody>
         {step === "config" && (
           <DialogFooter>
-            <Button size="sm" variant="outline" className="min-w-24" onClick={() => setStep("template")}>{t("agent.back")}</Button>
+            <Button size="sm" variant="outline" className="min-w-24" onClick={isEditing ? onClose : () => setStep("template")}>
+              {isEditing ? localize(lang, "Отмена", "Cancel") : t("agent.back")}
+            </Button>
             <Button size="sm" className="min-w-32" onClick={onSave} disabled={saving || !selectedServers.length}>
-              {saving ? localize(lang, "Создаём...", "Creating...") : t("agent.create")}
+              {saving
+                ? localize(lang, isEditing ? "Сохраняем..." : "Создаём...", isEditing ? "Saving..." : "Creating...")
+                : isEditing
+                ? localize(lang, "Сохранить", "Save changes")
+                : t("agent.create")}
             </Button>
           </DialogFooter>
         )}

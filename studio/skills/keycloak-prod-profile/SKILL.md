@@ -5,10 +5,10 @@ service: keycloak
 category: Identity and Access
 safety_level: critical
 ui_hint: Use this for PROD-only bots. The runtime pins profile=prod and prevents environment drift during Keycloak runs.
-guardrail_summary: ["Pins profile=prod on Keycloak MCP calls", "Blocks profile switching", "Combines with Keycloak Safety Workflow for mandatory preflight before mutations"]
-recommended_tools: ["report", "ask_user", "analyze_output"]
+guardrail_summary: ["Pins profile=prod on Keycloak MCP calls","Blocks profile switching","Combines with Keycloak Safety Workflow for mandatory preflight before mutations"]
+recommended_tools: ["report","ask_user","analyze_output"]
 runtime_policy: {"applicable_tool_patterns":["^keycloak_"],"blocked_tool_patterns":["^keycloak_use_profile$"],"pinned_arguments":{"profile":"prod"},"auto_inject_pinned_arguments":true}
-tags: [keycloak, iam, prod, environment]
+tags: ["keycloak","iam","prod","environment"]
 ---
 # Keycloak PROD Profile
 

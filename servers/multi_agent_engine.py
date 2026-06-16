@@ -42,6 +42,8 @@ from app.core.llm import LLMProvider
 from app.core.model_utils import resolve_provider_and_model
 from core_ui.audit import audit_context
 from servers.adapters.memory_store import DjangoServerMemoryStore
+from servers.agent_inputs import build_agent_materials_prompt
+from servers.report_delivery import deliver_agent_report_async
 from servers.agent_runtime import (
     build_runtime_control_state,
     is_runtime_stop_requested,
@@ -492,6 +494,7 @@ class MultiAgentEngine:
                 final_report=final_report,
                 plan_tasks=plan_tasks,
             )
+            await deliver_agent_report_async(run)
 
             await sync_to_async(self._touch_agent_last_run)()
             await self._emit("agent_status", {"status": final_status})
@@ -512,6 +515,7 @@ class MultiAgentEngine:
                 final_report=run.ai_analysis,
                 plan_tasks=plan_tasks,
             )
+            await deliver_agent_report_async(run)
             await self._emit("agent_status", {"status": "failed", "error": str(exc)})
         finally:
             unregister_engine(run.id, self)
@@ -724,6 +728,7 @@ class MultiAgentEngine:
                 final_report=final_report,
                 plan_tasks=plan_tasks,
             )
+            await deliver_agent_report_async(run)
 
             await sync_to_async(self._touch_agent_last_run)()
             await self._emit("agent_status", {"status": final_status})
@@ -744,6 +749,7 @@ class MultiAgentEngine:
                 final_report=run.ai_analysis,
                 plan_tasks=plan_tasks,
             )
+            await deliver_agent_report_async(run)
             await self._emit("agent_status", {"status": "failed", "error": str(exc)})
         finally:
             unregister_engine(run.id, self)
@@ -767,6 +773,7 @@ class MultiAgentEngine:
         connected = self.session.get_connected_info()
         servers_desc = "\n".join(f"- {c['server_name']} (id: {c['server_id']})" for c in connected)
         custom_system = self.agent.system_prompt or ""
+        materials_prompt = build_agent_materials_prompt(self.agent.input_artifacts)
         skills_desc = self._skill_provider.build_skill_catalog_description(self.skills) if self._skill_provider else ""
         role_options = "\n".join(
             f"- {slug}: {spec.title}; фокус: {', '.join(spec.focus_areas)}"
@@ -782,6 +789,7 @@ class MultiAgentEngine:
 Отвечай ТОЛЬКО валидным JSON-массивом. Без пояснений до или после JSON.
 {self.ops_prompt_context}
 {custom_system}
+{materials_prompt}
 
 Подключённые серверы:
 {servers_desc}
@@ -963,11 +971,13 @@ Attached skills:
         skill_errors = ""
         if self.skill_errors:
             skill_errors = "\nНедоступные skills:\n" + "\n".join(f"- {item}" for item in self.skill_errors)
+        materials_prompt = build_agent_materials_prompt(self.agent.input_artifacts)
 
         system_prompt = f"""Ты — subagent роли {task_role_spec.title}, выполняющий одну конкретную задачу внутри orchestrated DevOps pipeline.
 Работай только в пределах своей роли, permission mode и выданного tool slice. Отвечай на русском языке.
 
 {self._build_subagent_prompt_context(task_subagent)}
+{materials_prompt}
 
 Подключённые серверы:
 {servers_desc}

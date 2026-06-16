@@ -48,6 +48,13 @@ export function MCPForm({
       .join("\n"),
   );
   const [sharedUserIds, setSharedUserIds] = useState<number[]>(initial.shared_user_ids || []);
+  const transport = form.transport || "stdio";
+  const connectionPreview =
+    transport === "stdio"
+      ? [form.command, ...argsText.split("\n").map((line) => line.trim()).filter(Boolean)]
+          .filter(Boolean)
+          .join(" ") || localize(lang, "Команда пока не указана", "Command is not set yet")
+      : form.url || localize(lang, "SSE URL пока не указан", "SSE URL is not set yet");
 
   const setField = (key: keyof MCPServer, value: unknown) => setForm((current) => ({ ...current, [key]: value }));
 
@@ -62,8 +69,29 @@ export function MCPForm({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_9rem]">
+    <div className="space-y-5">
+      <div className="rounded-xl border border-border/70 bg-background/40 p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              {localize(lang, "Подключение", "Connection")}
+            </div>
+            <div className="mt-1 text-sm font-medium text-foreground">
+              {transport === "stdio"
+                ? localize(lang, "Локальная stdio-команда", "Local stdio command")
+                : localize(lang, "Удалённый SSE endpoint", "Remote SSE endpoint")}
+            </div>
+          </div>
+          <div className="rounded-md border border-border/70 bg-card px-2.5 py-1 font-mono text-[11px] text-muted-foreground">
+            {transport}
+          </div>
+        </div>
+        <div className="mt-3 overflow-hidden rounded-lg border border-border/70 bg-card px-3 py-2 font-mono text-xs text-muted-foreground">
+          <div className="truncate">{connectionPreview}</div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
         <div className="flex-1 space-y-1.5">
           <Label className="text-xs">{localize(lang, "Название", "Name")}</Label>
           <Input
@@ -75,7 +103,7 @@ export function MCPForm({
         </div>
         <div className="w-36 space-y-1.5">
           <Label className="text-xs">{localize(lang, "Транспорт", "Transport")}</Label>
-          <Select value={form.transport || "stdio"} onValueChange={(value) => setField("transport", value)} disabled={readOnly}>
+          <Select value={transport} onValueChange={(value) => setField("transport", value)} disabled={readOnly}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -97,7 +125,7 @@ export function MCPForm({
         />
       </div>
 
-      {form.transport === "stdio" ? (
+      {transport === "stdio" ? (
         <>
           <div className="space-y-1.5">
             <Label className="text-xs">{localize(lang, "Команда", "Command")}</Label>
@@ -108,13 +136,29 @@ export function MCPForm({
               disabled={readOnly}
             />
           </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">{localize(lang, "Аргументы, по одному на строку", "Arguments, one per line")}</Label>
-            <Textarea value={argsText} onChange={(event) => setArgsText(event.target.value)} rows={3} disabled={readOnly} />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">{localize(lang, "Переменные окружения (KEY=value)", "Environment variables (KEY=value)")}</Label>
-            <Textarea value={envText} onChange={(event) => setEnvText(event.target.value)} rows={3} disabled={readOnly} />
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">{localize(lang, "Аргументы", "Arguments")}</Label>
+              <Textarea
+                value={argsText}
+                onChange={(event) => setArgsText(event.target.value)}
+                rows={5}
+                placeholder={localize(lang, "По одному аргументу на строку", "One argument per line")}
+                disabled={readOnly}
+                className="font-mono text-xs"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">{localize(lang, "Переменные окружения", "Environment variables")}</Label>
+              <Textarea
+                value={envText}
+                onChange={(event) => setEnvText(event.target.value)}
+                rows={5}
+                placeholder="KEY=value"
+                disabled={readOnly}
+                className="font-mono text-xs"
+              />
+            </div>
           </div>
         </>
       ) : (
@@ -146,11 +190,11 @@ export function MCPForm({
         />
       ) : null}
 
-      <div className="rounded-2xl border border-border/70 bg-background/30 px-4 py-3 text-sm text-muted-foreground">
+      <div className="rounded-xl border border-border/70 bg-background/30 px-4 py-3 text-xs leading-5 text-muted-foreground">
         {localize(lang, "Шаблон заполняет стартовые поля. Перед сохранением проверьте команду, аргументы, URL и переменные окружения.", "Templates fill the starter fields. Review the command, arguments, URL, and environment variables before saving.")}
       </div>
 
-      <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
+      <div className="sticky bottom-0 -mx-6 -mb-4 flex flex-col-reverse gap-2 border-t border-border/70 bg-card/95 px-6 py-4 backdrop-blur sm:flex-row sm:justify-end">
         <Button variant="outline" size="sm" onClick={onCancel}>
           {localize(lang, "Отмена", "Cancel")}
         </Button>

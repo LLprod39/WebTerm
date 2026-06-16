@@ -17,8 +17,10 @@ from loguru import logger
 from app.tools.safety import is_dangerous_command
 from core_ui.activity import log_user_activity
 from core_ui.audit import audit_context
+from servers.agent_inputs import build_agent_materials_prompt
 from servers.models import AgentRun, Server, ServerAgent
 from servers.monitor import _build_connect_kwargs
+from servers.report_delivery import deliver_agent_report_async
 
 
 def sync_to_async(func, thread_sensitive=False):
@@ -292,6 +294,7 @@ async def run_agent(agent: ServerAgent, server: Server, user) -> AgentRun:
         run.completed_at = timezone.now()
         run.duration_ms = int((time.monotonic() - t0) * 1000)
         await sync_to_async(run.save)()
+        await deliver_agent_report_async(run)
         return run
 
     try:
@@ -343,6 +346,7 @@ async def run_agent(agent: ServerAgent, server: Server, user) -> AgentRun:
         run.completed_at = timezone.now()
         run.duration_ms = int((time.monotonic() - t0) * 1000)
         await sync_to_async(run.save)()
+        await deliver_agent_report_async(run)
         return run
 
     with audit_context(
@@ -362,6 +366,7 @@ async def run_agent(agent: ServerAgent, server: Server, user) -> AgentRun:
     run.completed_at = timezone.now()
     run.duration_ms = int((time.monotonic() - t0) * 1000)
     await sync_to_async(run.save)()
+    await deliver_agent_report_async(run)
 
     await sync_to_async(lambda: setattr(agent, "last_run_at", timezone.now()) or agent.save(update_fields=["last_run_at"]))()
 
@@ -417,10 +422,13 @@ async def run_agent(agent: ServerAgent, server: Server, user) -> AgentRun:
 
 async def _get_ai_analysis(agent: ServerAgent, server: Server, outputs: list[dict]) -> str:
     from app.core.llm import LLMProvider
+    from studio.skill_registry import build_skill_catalog_description, resolve_skills
 
     tpl = get_template(agent.agent_type)
     system_prompt = (tpl or {}).get("ai_prompt", "")
     user_extra = agent.ai_prompt or ""
+    skills, skill_errors = await sync_to_async(lambda: resolve_skills(list(agent.skill_slugs or [])), thread_sensitive=True)()
+    skills_desc = build_skill_catalog_description(skills)
 
     prompt_parts = [
         f"# Agent: {agent.name}",
@@ -434,6 +442,19 @@ async def _get_ai_analysis(agent: ServerAgent, server: Server, outputs: list[dic
 
     if user_extra:
         prompt_parts.append(f"Additional instructions: {user_extra}")
+        prompt_parts.append("")
+
+    materials_prompt = build_agent_materials_prompt(agent.input_artifacts)
+    if materials_prompt:
+        prompt_parts.append(materials_prompt)
+        prompt_parts.append("")
+
+    if skills_desc or skill_errors:
+        prompt_parts.append("## Attached skills")
+        prompt_parts.append(skills_desc or "- Skills не подключены")
+        if skill_errors:
+            prompt_parts.append("Недоступные skills:")
+            prompt_parts.extend(f"- {item}" for item in skill_errors)
         prompt_parts.append("")
 
     prompt_parts.append("## Command outputs:\n")

@@ -21,13 +21,14 @@ import {
 } from "@/components/ui/card";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { EmptyState, SectionCard, StatusBadge } from "@/components/ui/page-shell";
+import { EmptyState, StatusBadge } from "@/components/ui/page-shell";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MCPForm } from "@/components/studio/MCPForm";
 import { useToast } from "@/hooks/use-toast";
@@ -159,6 +160,11 @@ export default function MCPHubPage() {
     setEditorOpen(true);
   };
 
+  const closeEditorDialog = () => {
+    setEditorOpen(false);
+    setEditMcp(null);
+  };
+
   const handleUseTemplate = (template: MCPTemplate) => {
     openEditDialog({
       name: template.name,
@@ -170,6 +176,13 @@ export default function MCPHubPage() {
       url: template.url || "",
     });
   };
+
+  const editorMcp = editMcp as MCPServer | null;
+  const editorTitle = editorMcp?.id
+    ? editorMcp.can_edit === false
+      ? localize(lang, "Просмотр MCP-сервера", "View MCP server")
+      : localize(lang, "Редактировать MCP-сервер", "Edit MCP server")
+    : localize(lang, "Добавить MCP-сервер", "Add MCP server");
 
   return (
     <div className="flex flex-col h-full">
@@ -200,33 +213,6 @@ export default function MCPHubPage() {
         }
       />
       <div className="flex-1 px-6 pb-8 space-y-5">
-        {editorOpen && editMcp ? (
-          <SectionCard
-            title={
-              (editMcp as MCPServer | null)?.id
-                ? (editMcp as MCPServer | null)?.can_edit === false
-                  ? localize(lang, "Просмотр MCP-сервера", "View MCP server")
-                  : localize(lang, "Редактировать MCP-сервер", "Edit MCP server")
-                : localize(lang, "Добавить MCP-сервер", "Add MCP server")
-            }
-            description={localize(lang, "Укажите локальную stdio-команду или удалённый SSE endpoint.", "Configure either a local stdio command or a remote SSE endpoint.")}
-            icon={<Pencil className="h-5 w-5" />}
-          >
-            <MCPForm
-              initial={editMcp}
-              onSave={handleSave}
-              onCancel={() => {
-                setEditorOpen(false);
-                setEditMcp(null);
-              }}
-              isPending={createMutation.isPending || updateMutation.isPending}
-              shareUsers={shareUsers}
-              isAdmin={isAdmin}
-              canEdit={(editMcp as MCPServer | null)?.can_edit !== false}
-            />
-          </SectionCard>
-        ) : null}
-
         <Tabs defaultValue="mine" className="space-y-5">
           <TabsList>
             <TabsTrigger value="mine">{localize(lang, "Подключения", "My servers")} ({mcpList.length})</TabsTrigger>
@@ -431,6 +417,45 @@ export default function MCPHubPage() {
             )}
           </TabsContent>
         </Tabs>
+
+      <Dialog open={editorOpen && Boolean(editMcp)} onOpenChange={(nextOpen) => !nextOpen && closeEditorDialog()}>
+        <DialogContent
+          closeLabel={localize(lang, "Закрыть", "Close")}
+          className="grid max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-4xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border-border bg-card p-0"
+        >
+          <DialogHeader className="pr-14">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10">
+                <Pencil className="h-4 w-4 text-primary" />
+              </div>
+              <div className="min-w-0">
+                <DialogTitle>{editorTitle}</DialogTitle>
+                <DialogDescription>
+                  {localize(
+                    lang,
+                    "Настройте stdio-команду или SSE endpoint без растягивания всей страницы.",
+                    "Configure a stdio command or SSE endpoint without stretching the whole page.",
+                  )}
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          <DialogBody className="min-h-0 overflow-y-auto">
+            {editMcp ? (
+              <MCPForm
+                key={editorMcp?.id || editMcp.name || "new-mcp"}
+                initial={editMcp}
+                onSave={handleSave}
+                onCancel={closeEditorDialog}
+                isPending={createMutation.isPending || updateMutation.isPending}
+                shareUsers={shareUsers}
+                isAdmin={isAdmin}
+                canEdit={editorMcp?.can_edit !== false}
+              />
+            ) : null}
+          </DialogBody>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={deleteTarget !== null} onOpenChange={(nextOpen) => !nextOpen && setDeleteTarget(null)}>
         <DialogContent className="max-w-sm">

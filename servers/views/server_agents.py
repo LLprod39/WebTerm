@@ -11,6 +11,8 @@ from django.views.decorators.http import require_http_methods
 
 from core_ui.activity import log_user_activity
 from core_ui.decorators import require_feature
+from servers.agent_inputs import normalize_input_artifacts, normalize_report_delivery
+from servers.agent_schedule import normalize_schedule_config, schedule_minutes_for_config
 from servers.agent_service import (
     dispatch_scheduled_agents_for_user,
     list_agents_for_user,
@@ -20,6 +22,7 @@ from servers.agent_service import (
 from servers.agents import get_all_templates, get_template
 from servers.models import ServerAgent
 from servers.views.server_helpers import _accessible_servers_queryset
+from studio.views.skill_helpers import _normalise_skill_payload, _sanitize_accessible_skill_slugs
 
 
 @login_required
@@ -108,7 +111,12 @@ def agent_create(request):
     server_ids = data.get("server_ids", [])
     custom_commands = data.get("commands", [])
     ai_prompt = data.get("ai_prompt", "")
-    schedule = int(data.get("schedule_minutes", 0))
+    try:
+        requested_schedule_minutes = int(data.get("schedule_minutes", 0) or 0)
+    except (TypeError, ValueError):
+        requested_schedule_minutes = 0
+    schedule_config = normalize_schedule_config(data.get("schedule_config"), fallback_minutes=requested_schedule_minutes)
+    schedule = schedule_minutes_for_config(schedule_config, requested_schedule_minutes)
 
     tpl = get_template(agent_type)
     if not name:
@@ -133,6 +141,12 @@ def agent_create(request):
     stop_conditions = data.get("stop_conditions", [])
     session_timeout = int(data.get("session_timeout_seconds", 600))
     max_connections = min(int(data.get("max_connections", 5)), 10)
+    skill_slugs = _sanitize_accessible_skill_slugs(
+        request.user,
+        _normalise_skill_payload(data.get("skill_slugs") if "skill_slugs" in data else data.get("skills")),
+    )
+    input_artifacts = normalize_input_artifacts(data.get("input_artifacts"))
+    report_delivery = normalize_report_delivery(data.get("report_delivery"))
 
     if mode == "full" and tpl:
         if not goal:
@@ -158,6 +172,10 @@ def agent_create(request):
         session_timeout_seconds=session_timeout,
         max_connections=max_connections,
         schedule_minutes=schedule,
+        schedule_config=schedule_config,
+        skill_slugs=skill_slugs,
+        input_artifacts=input_artifacts,
+        report_delivery=report_delivery,
     )
 
     accessible = _accessible_servers_queryset(request.user).filter(id__in=server_ids)
@@ -215,6 +233,31 @@ def agent_update(request, agent_id):
     for field, (lo, hi) in int_fields.items():
         if field in data:
             setattr(agent, field, max(lo, min(hi, int(data[field]))))
+
+    if "schedule_config" in data:
+        fallback_minutes = int(agent.schedule_minutes or 0)
+        if "schedule_minutes" in data:
+            with contextlib.suppress(TypeError, ValueError):
+                fallback_minutes = int(data.get("schedule_minutes") or 0)
+        schedule_config = normalize_schedule_config(data.get("schedule_config"), fallback_minutes=fallback_minutes)
+        agent.schedule_config = schedule_config
+        agent.schedule_minutes = schedule_minutes_for_config(schedule_config, fallback_minutes)
+    elif "schedule_minutes" in data:
+        minutes = int(agent.schedule_minutes or 0)
+        agent.schedule_config = normalize_schedule_config(
+            {"mode": "interval", "interval_minutes": minutes} if minutes > 0 else {"mode": "manual"},
+            fallback_minutes=minutes,
+        )
+
+    if "skill_slugs" in data or "skills" in data:
+        agent.skill_slugs = _sanitize_accessible_skill_slugs(
+            request.user,
+            _normalise_skill_payload(data.get("skill_slugs") if "skill_slugs" in data else data.get("skills")),
+        )
+    if "input_artifacts" in data:
+        agent.input_artifacts = normalize_input_artifacts(data.get("input_artifacts"))
+    if "report_delivery" in data:
+        agent.report_delivery = normalize_report_delivery(data.get("report_delivery"))
 
     if "server_ids" in data:
         accessible = _accessible_servers_queryset(request.user).filter(id__in=data["server_ids"])

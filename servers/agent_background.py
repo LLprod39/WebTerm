@@ -30,6 +30,7 @@ from servers.models import AgentRun, AgentRunDispatch, Server, ServerAgent
 from servers.multi_agent_engine import MultiAgentEngine
 from servers.run_events import record_run_event, record_run_event_async
 from servers.worker_state import heartbeat_background_worker
+from studio.skill_registry import resolve_skills
 
 
 def _make_event_callback(run_id: int):
@@ -101,13 +102,17 @@ async def _run_agent_background(run_id: int, agent_id: int, server_ids: list[int
         lambda: _load_servers_in_order(server_ids),
         thread_sensitive=True,
     )()
+    skills, skill_errors = await sync_to_async(
+        lambda: resolve_skills(list(agent.skill_slugs or [])),
+        thread_sensitive=True,
+    )()
 
     callback = _make_event_callback(run_id)
     if agent.is_multi:
-        engine = MultiAgentEngine(agent, servers, user, event_callback=callback)
+        engine = MultiAgentEngine(agent, servers, user, event_callback=callback, skills=skills, skill_errors=skill_errors)
         await engine.run(plan_only=plan_only, run_record=run)
     else:
-        engine = AgentEngine(agent, servers, user, event_callback=callback)
+        engine = AgentEngine(agent, servers, user, event_callback=callback, skills=skills, skill_errors=skill_errors)
         await engine.run(run_record=run)
 
 
@@ -142,9 +147,13 @@ async def _run_plan_execution_background(run_id: int, agent_id: int, server_ids:
         lambda: _load_servers_in_order(server_ids),
         thread_sensitive=True,
     )()
+    skills, skill_errors = await sync_to_async(
+        lambda: resolve_skills(list(agent.skill_slugs or [])),
+        thread_sensitive=True,
+    )()
 
     callback = _make_event_callback(run_id)
-    engine = MultiAgentEngine(agent, servers, user, event_callback=callback)
+    engine = MultiAgentEngine(agent, servers, user, event_callback=callback, skills=skills, skill_errors=skill_errors)
     await engine.execute_existing_plan(run)
 
 

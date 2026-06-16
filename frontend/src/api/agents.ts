@@ -5,6 +5,37 @@ import type { BackgroundWorkerStateRecord } from "@/api/server-memory";
 // Agents API (mini + full)
 // ---------------------------------------------------------------------------
 
+export type AgentScheduleMode = "manual" | "interval" | "daily" | "weekly" | "monthly" | "once";
+
+export interface AgentScheduleConfig {
+  mode: AgentScheduleMode;
+  timezone?: string;
+  interval_minutes?: number;
+  time?: string;
+  weekdays?: number[];
+  day_of_month?: number;
+  run_at?: string;
+}
+
+export interface AgentInputArtifact {
+  kind: "document" | "task_list" | "script";
+  name: string;
+  content: string;
+  run_hint?: string;
+  tasks?: Array<{ title: string; details?: string; done?: boolean }>;
+  source_name?: string;
+  size_bytes?: number;
+}
+
+export interface AgentReportDelivery {
+  telegram?: {
+    enabled: boolean;
+    chat_id?: string;
+    format?: string;
+    include_link?: boolean;
+  };
+}
+
 export interface AgentItem {
   id: number;
   name: string;
@@ -13,8 +44,10 @@ export interface AgentItem {
   agent_type: string;
   agent_type_display: string;
   server_count: number;
+  server_ids: number[];
   server_names: string[];
   schedule_minutes: number;
+  schedule_config: AgentScheduleConfig;
   is_enabled: boolean;
   commands: string[];
   ai_prompt: string;
@@ -22,6 +55,13 @@ export interface AgentItem {
   system_prompt: string;
   max_iterations: number;
   allow_multi_server: boolean;
+  tools_config: Record<string, boolean>;
+  stop_conditions: string[];
+  skill_slugs: string[];
+  input_artifacts: AgentInputArtifact[];
+  report_delivery: AgentReportDelivery;
+  session_timeout_seconds: number;
+  max_connections: number;
   last_run_at: string | null;
   last_run_status: string | null;
   last_run_id: number | null;
@@ -199,12 +239,16 @@ export async function createAgent(payload: {
   commands?: string[];
   ai_prompt?: string;
   schedule_minutes?: number;
+  schedule_config?: AgentScheduleConfig;
   goal?: string;
   system_prompt?: string;
   max_iterations?: number;
   allow_multi_server?: boolean;
   tools_config?: Record<string, boolean>;
   stop_conditions?: string[];
+  skill_slugs?: string[];
+  input_artifacts?: AgentInputArtifact[];
+  report_delivery?: AgentReportDelivery;
   session_timeout_seconds?: number;
   max_connections?: number;
 }) {

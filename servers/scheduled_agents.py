@@ -1,27 +1,18 @@
 from __future__ import annotations
 
-from datetime import timedelta
-
 from asgiref.sync import async_to_sync
 from django.utils import timezone
 
 from app.runtime_limits import ACTIVE_AGENT_RUN_STATUSES, get_agent_run_limit_error
 from servers.agent_launch import launch_full_agent_run
+from servers.agent_schedule import is_agent_due_by_schedule
 from servers.agents import run_agent_on_all_servers
 from servers.models import AgentRun, Server, ServerAgent
 from servers.run_events import record_run_event
 
 
 def is_agent_due(agent: ServerAgent, now=None) -> bool:
-    current_time = now or timezone.now()
-    if not agent.is_enabled:
-        return False
-    schedule_minutes = max(int(agent.schedule_minutes or 0), 0)
-    if schedule_minutes <= 0:
-        return False
-    if agent.last_run_at is None:
-        return True
-    return agent.last_run_at <= current_time - timedelta(minutes=schedule_minutes)
+    return is_agent_due_by_schedule(agent, now)
 
 
 def dispatch_scheduled_agents(*, now=None, limit: int = 50, agent_ids: list[int] | None = None, user_ids: list[int] | None = None) -> dict:
@@ -106,8 +97,9 @@ def dispatch_scheduled_agents(*, now=None, limit: int = 50, agent_ids: list[int]
                     run.id,
                     "agent_scheduled_dispatch",
                     {
-                        "source": "schedule_minutes",
+                        "source": "schedule_config",
                         "schedule_minutes": int(agent.schedule_minutes or 0),
+                        "schedule_config": agent.schedule_config or {},
                         "agent_id": agent.id,
                         "agent_name": agent.name,
                         "agent_mode": agent.mode,
@@ -125,8 +117,9 @@ def dispatch_scheduled_agents(*, now=None, limit: int = 50, agent_ids: list[int]
                     run.id,
                     "agent_scheduled_dispatch",
                     {
-                        "source": "schedule_minutes",
+                        "source": "schedule_config",
                         "schedule_minutes": int(agent.schedule_minutes or 0),
+                        "schedule_config": agent.schedule_config or {},
                         "agent_id": agent.id,
                         "agent_name": agent.name,
                         "agent_mode": agent.mode,

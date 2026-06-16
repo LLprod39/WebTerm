@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import contextlib
-from datetime import timedelta
 
 from asgiref.sync import async_to_sync
 from django.utils import timezone
 
 from app.runtime_limits import ACTIVE_AGENT_RUN_STATUSES, get_agent_run_limit_error
+from servers.agent_inputs import normalize_input_artifacts, normalize_report_delivery
+from servers.agent_schedule import compute_next_due_by_schedule, normalize_schedule_config
 from servers.agent_background import launch_plan_execution_background
 from servers.agent_dispatch import cancel_agent_dispatches_for_run, serialize_agent_dispatch
 from servers.agent_launch import launch_full_agent_run
@@ -20,13 +21,7 @@ from servers.worker_state import serialize_background_worker_state
 
 
 def compute_next_due_at(agent: ServerAgent, now=None):
-    current_time = now or timezone.now()
-    schedule_minutes = max(int(agent.schedule_minutes or 0), 0)
-    if schedule_minutes <= 0:
-        return None
-    if agent.last_run_at is None:
-        return current_time
-    return agent.last_run_at + timedelta(minutes=schedule_minutes)
+    return compute_next_due_by_schedule(agent, now)
 
 
 def compute_schedule_state(agent: ServerAgent, now=None) -> str:
@@ -71,8 +66,10 @@ def serialize_agent_item(agent: ServerAgent, *, now=None, last_run: AgentRun | N
         "agent_type": agent.agent_type,
         "agent_type_display": agent.get_agent_type_display(),
         "server_count": agent.servers.count(),
+        "server_ids": list(agent.servers.values_list("id", flat=True)),
         "server_names": list(agent.servers.values_list("name", flat=True)),
         "schedule_minutes": int(agent.schedule_minutes or 0),
+        "schedule_config": normalize_schedule_config(agent.schedule_config, fallback_minutes=int(agent.schedule_minutes or 0)),
         "is_enabled": bool(agent.is_enabled),
         "commands": agent.commands,
         "ai_prompt": agent.ai_prompt,
@@ -80,6 +77,13 @@ def serialize_agent_item(agent: ServerAgent, *, now=None, last_run: AgentRun | N
         "system_prompt": agent.system_prompt,
         "max_iterations": agent.max_iterations,
         "allow_multi_server": agent.allow_multi_server,
+        "tools_config": agent.tools_config,
+        "stop_conditions": agent.stop_conditions,
+        "skill_slugs": list(agent.skill_slugs or []),
+        "input_artifacts": normalize_input_artifacts(agent.input_artifacts),
+        "report_delivery": normalize_report_delivery(agent.report_delivery),
+        "session_timeout_seconds": agent.session_timeout_seconds,
+        "max_connections": agent.max_connections,
         "last_run_at": agent.last_run_at.isoformat() if agent.last_run_at else None,
         "last_run_status": last_run.status if last_run else None,
         "last_run_id": last_run.id if last_run else None,

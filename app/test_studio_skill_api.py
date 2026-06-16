@@ -71,3 +71,61 @@ def test_skill_scaffold_and_validate_endpoints(settings):
         assert validate_payload["results"][0]["slug"] == "gitlab-runner-access-workflow"
     finally:
         shutil.rmtree(temp_root, ignore_errors=True)
+
+
+@pytest.mark.django_db
+def test_skill_detail_update_rewrites_skill_metadata(settings):
+    temp_root = _make_workspace_temp_dir(settings, "skill_update")
+    try:
+        settings.STUDIO_SKILLS_DIRS = [temp_root / "skills"]
+        user = User.objects.create_user(username="skill-update-admin", password="x", is_staff=True)
+        client = Client()
+        client.force_login(user)
+
+        create_response = client.post(
+            "/api/studio/skills/scaffold/",
+            data=json.dumps(
+                {
+                    "name": "Docker Ops",
+                    "description": "Safe Docker operational workflow with discovery and verification.",
+                    "with_references": True,
+                }
+            ),
+            content_type="application/json",
+        )
+        assert create_response.status_code == 201
+        slug = create_response.json()["skill"]["slug"]
+
+        update_response = client.put(
+            f"/api/studio/skills/{slug}/",
+            data=json.dumps(
+                {
+                    "name": "Docker Recovery Ops",
+                    "description": "Updated safe Docker recovery workflow with discovery and verification.",
+                    "service": "docker",
+                    "category": "server_ops",
+                    "safety_level": "high",
+                    "ui_hint": "Use for Docker incident recovery.",
+                    "tags": ["docker", "recovery"],
+                    "guardrail_summary": ["Resolve exact container first"],
+                    "recommended_tools": ["read_console", "ssh_execute", "report"],
+                    "runtime_policy": {"pinned_arguments": {"profile": "prod"}},
+                }
+            ),
+            content_type="application/json",
+        )
+
+        assert update_response.status_code == 200
+        payload = update_response.json()
+        assert payload["name"] == "Docker Recovery Ops"
+        assert payload["service"] == "docker"
+        assert payload["tags"] == ["docker", "recovery"]
+        assert payload["runtime_policy"]["pinned_arguments"]["profile"] == "prod"
+
+        skill_text = (temp_root / "skills" / slug / "SKILL.md").read_text(encoding="utf-8")
+        assert "name: Docker Recovery Ops" in skill_text
+        assert "service: docker" in skill_text
+        assert 'runtime_policy: {"pinned_arguments":{"profile":"prod"}}' in skill_text
+        assert "## Mandatory workflow" in skill_text
+    finally:
+        shutil.rmtree(temp_root, ignore_errors=True)

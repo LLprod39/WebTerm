@@ -309,7 +309,7 @@ describe("StudioPage quick run", () => {
     expect(api.studioPipelines.run).not.toHaveBeenCalled();
   });
 
-  it("shows the dedicated AI Drafts cockpit entry instead of the full drafter workspace", async () => {
+  it("shows the pipeline list without launchpad or template starter panels", async () => {
     vi.mocked(draftApi.studioPipelineDrafts.list).mockResolvedValue([
       {
         id: 5,
@@ -353,54 +353,14 @@ describe("StudioPage quick run", () => {
 
     renderPage();
 
-    expect(await screen.findByRole("heading", { name: "Automation launchpad" })).toBeInTheDocument();
-    expect(await screen.findByText(/Graph-first cockpit for AI automations/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Open AI Drafts/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Run history/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /MCP tools/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "All pipelines" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Search pipelines" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Automation launchpad" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Graph-first cockpit for AI automations/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Open AI Drafts/i })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Automation request")).not.toBeInTheDocument();
-  });
-
-  it("creates a pipeline from a quick-start template", async () => {
-    vi.mocked(api.studioTemplates.list).mockResolvedValue([
-      {
-        slug: "healthcheck-sweep",
-        name: "Healthcheck Sweep",
-        description: "Checks CPU, RAM, disk and load.",
-        icon: "H",
-        category: "Monitoring",
-        tags: ["health", "monitoring"],
-        node_count: 4,
-        graph_version: 2,
-      },
-    ]);
-    vi.mocked(api.studioTemplates.use).mockResolvedValue({
-      id: 99,
-      name: "Healthcheck Sweep",
-      description: "Checks CPU, RAM, disk and load.",
-      icon: "H",
-      tags: ["health", "monitoring"],
-      is_shared: false,
-      node_count: 4,
-      updated_at: "2026-04-10T10:00:00Z",
-      last_run: null,
-      graph_version: 2,
-      nodes: [],
-      edges: [],
-      triggers: [],
-    });
-
-    renderPage();
-
-    expect(await screen.findByRole("heading", { name: "Template quick start" })).toBeInTheDocument();
-    expect(screen.getByText("Healthcheck Sweep")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /Use template Healthcheck Sweep/i }));
-
-    await waitFor(() => {
-      expect(api.studioTemplates.use).toHaveBeenCalledWith("healthcheck-sweep");
-    });
-    expect(navigateMock).toHaveBeenCalledWith("/studio/pipeline/99");
+    expect(screen.queryByRole("heading", { name: "Template quick start" })).not.toBeInTheDocument();
+    expect(api.studioTemplates.list).not.toHaveBeenCalled();
   });
 
   it("opens the editor run dialog instead of blind-running templates that need context", async () => {

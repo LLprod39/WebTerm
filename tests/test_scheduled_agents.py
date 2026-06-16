@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 
 import pytest
 from asgiref.sync import sync_to_async
@@ -44,6 +44,26 @@ def test_is_agent_due_respects_schedule_and_last_run_at():
 
     agent.last_run_at = now - timedelta(minutes=16)
     assert is_agent_due(agent, now) is True
+
+
+@pytest.mark.django_db
+def test_is_agent_due_respects_daily_schedule_config():
+    user = User.objects.create_user(username="sched-daily-user", password="x")
+    agent = ServerAgent.objects.create(
+        user=user,
+        name="Daily Scheduled Agent",
+        mode=ServerAgent.MODE_FULL,
+        goal="Inspect every morning",
+        schedule_minutes=1440,
+        schedule_config={"mode": "daily", "time": "08:00", "timezone": "UTC"},
+        is_enabled=True,
+    )
+
+    assert is_agent_due(agent, datetime(2026, 6, 16, 7, 59, tzinfo=dt_timezone.utc)) is False
+    assert is_agent_due(agent, datetime(2026, 6, 16, 8, 1, tzinfo=dt_timezone.utc)) is True
+
+    agent.last_run_at = datetime(2026, 6, 16, 8, 0, tzinfo=dt_timezone.utc)
+    assert is_agent_due(agent, datetime(2026, 6, 16, 9, 0, tzinfo=dt_timezone.utc)) is False
 
 
 @pytest.mark.django_db

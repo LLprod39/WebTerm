@@ -35,6 +35,8 @@ from app.core.llm import LLMProvider
 from app.core.model_utils import resolve_provider_and_model
 from core_ui.audit import audit_context
 from servers.adapters.memory_store import DjangoServerMemoryStore
+from servers.agent_inputs import build_agent_materials_prompt
+from servers.report_delivery import deliver_agent_report_async
 from servers.agent_runtime import (
     build_runtime_control_state,
     is_runtime_stop_requested,
@@ -480,6 +482,7 @@ class AgentEngine:
                 iterations_log=iterations_log,
                 tool_calls_log=tool_calls_log,
             )
+            await deliver_agent_report_async(run)
             logger.info(
                 "agent_run {} saved: status={} duration_ms={} report_chars={}",
                 run.pk,
@@ -510,6 +513,7 @@ class AgentEngine:
                 iterations_log=iterations_log,
                 tool_calls_log=tool_calls_log,
             )
+            await deliver_agent_report_async(run)
             await self._emit("agent_status", {"status": "failed", "error": str(exc)})
         finally:
             unregister_engine(run.id, self)
@@ -719,6 +723,7 @@ class AgentEngine:
         )
 
         custom_system = self.agent.system_prompt or ""
+        materials_prompt = build_agent_materials_prompt(self.agent.input_artifacts)
         tools_desc = get_tools_description(self.enabled_tools)
         mcp_tools_desc = describe_mcp_bindings(self._mcp_runtime_provider, self.mcp_tools)
         skills_desc = self._skill_provider.build_skill_catalog_description(self.skills) if self._skill_provider else ""
@@ -768,6 +773,8 @@ class AgentEngine:
 {self.ops_prompt_context}
 
 {custom_system}
+
+{materials_prompt}
 
 ## Подключённые серверы
 {servers_desc}

@@ -1414,6 +1414,7 @@ def test_agent_endpoints_crud_run_and_control_flow(monkeypatch):
     client = Client()
     client.force_login(user)
     server = _create_server(user, name="agent-srv", server_type="ssh")
+    second_server = _create_server(user, name="agent-srv-2", server_type="ssh")
 
     templates = client.get("/servers/api/agents/templates/")
     assert templates.status_code == 200
@@ -1441,14 +1442,66 @@ def test_agent_endpoints_crud_run_and_control_flow(monkeypatch):
     assert list_agents.json()["success"] is True
     listed_agent = next(item for item in list_agents.json()["agents"] if item["id"] == agent_id)
     assert listed_agent["schedule_state"] == "manual"
+    assert listed_agent["server_ids"] == [server.id]
+    assert listed_agent["commands"] == ["uname -a"]
+    assert listed_agent["tools_config"] == {}
+    assert listed_agent["stop_conditions"] == []
+    assert listed_agent["schedule_config"]["mode"] == "manual"
+    assert listed_agent["skill_slugs"] == []
+    assert listed_agent["input_artifacts"] == []
+    assert listed_agent["report_delivery"]["telegram"]["enabled"] is False
+    assert listed_agent["session_timeout_seconds"] == 600
+    assert listed_agent["max_connections"] == 5
 
     update_agent = client.post(
         f"/servers/api/agents/{agent_id}/update/",
-        data=_json({"name": "Ops Agent v2", "max_iterations": 25}),
+        data=_json(
+            {
+                "name": "Ops Agent v2",
+                "max_iterations": 25,
+                "server_ids": [second_server.id],
+                "schedule_minutes": 30,
+                "schedule_config": {"mode": "daily", "time": "08:30", "timezone": "UTC"},
+                "session_timeout_seconds": 900,
+                "max_connections": 3,
+                "tools_config": {"ssh_execute": True, "ask_user": False},
+                "stop_conditions": ["report ready"],
+                "skill_slugs": ["missing-skill"],
+                "input_artifacts": [
+                    {
+                        "kind": "task_list",
+                        "name": "CVE closeout",
+                        "content": "",
+                        "run_hint": "Use as checklist",
+                        "tasks": [
+                            {"title": "Close CVE-2026-0001", "details": "Patch api-prod-01 and verify", "done": False},
+                        ],
+                    }
+                ],
+                "report_delivery": {"telegram": {"enabled": True, "chat_id": "12345", "format": "brief", "include_link": True}},
+            }
+        ),
         content_type="application/json",
     )
     assert update_agent.status_code == 200
     assert update_agent.json()["success"] is True
+    agent = ServerAgent.objects.get(pk=agent_id)
+    assert agent.name == "Ops Agent v2"
+    assert list(agent.servers.values_list("id", flat=True)) == [second_server.id]
+    assert agent.schedule_minutes == 1440
+    assert agent.schedule_config["mode"] == "daily"
+    assert agent.schedule_config["time"] == "08:30"
+    assert agent.input_artifacts[0]["name"] == "CVE closeout"
+    assert agent.input_artifacts[0]["tasks"][0]["title"] == "Close CVE-2026-0001"
+    assert "Close CVE-2026-0001" in agent.input_artifacts[0]["content"]
+    assert agent.report_delivery["telegram"]["enabled"] is True
+    assert agent.report_delivery["telegram"]["chat_id"] == "12345"
+    assert agent.skill_slugs == []
+    assert agent.max_iterations == 25
+    assert agent.session_timeout_seconds == 900
+    assert agent.max_connections == 3
+    assert agent.tools_config == {"ssh_execute": True, "ask_user": False}
+    assert agent.stop_conditions == ["report ready"]
 
     def _build_run(status: str) -> AgentRun:
         return AgentRun.objects.create(

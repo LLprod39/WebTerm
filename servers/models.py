@@ -1058,6 +1058,17 @@ class ServerAgent(models.Model):
     stop_conditions = models.JSONField(default=list, blank=True, help_text="Conditions to stop the agent early")
     session_timeout_seconds = models.IntegerField(default=600, help_text="Max session duration in seconds")
     max_connections = models.IntegerField(default=5, help_text="Max simultaneous SSH connections")
+    skill_slugs = models.JSONField(default=list, blank=True, help_text="Studio skills attached to this agent")
+    input_artifacts = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Operator-provided documents, task lists and scripts available to the agent",
+    )
+    report_delivery = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Report delivery settings, for example Telegram delivery",
+    )
 
     # GAP 7: per-agent memory policy overrides
     memory_policy_override = models.JSONField(
@@ -1073,6 +1084,7 @@ class ServerAgent(models.Model):
     )
 
     schedule_minutes = models.IntegerField(default=0, help_text="0 = manual only")
+    schedule_config = models.JSONField(default=dict, blank=True, help_text="Flexible schedule configuration")
     is_enabled = models.BooleanField(default=True)
     last_run_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
