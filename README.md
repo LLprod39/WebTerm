@@ -144,21 +144,40 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
+Этот compose поднимает не только web, но и рабочие фоновые процессы: расписания Studio,
+расписания агентов, execution-plane для full/multi agents, monitor и Celery worker.
+Если локально уже запущены Vite/Django на `8080`/`9000`, остановите их перед запуском
+compose или поменяйте порты в `.env`.
+
 Сервисы:
 
 | Сервис | Порт | Назначение |
 | --- | --- | --- |
 | nginx / frontend | `8080` | Основная точка входа в SPA |
 | backend | `9000` | Django API, admin, health, WebSocket backend |
-| postgres | `5432` | Основная БД для compose-стека |
+| postgres | `${POSTGRES_PORT:-5432}` | Основная БД для compose-стека; внутри Docker всегда `postgres:5432` |
 | redis | `6379` | Channels и runtime control |
 | mcp-demo | `8765` | Демонстрационный MCP HTTP server |
 | mcp-keycloak | `8766` | Keycloak MCP server |
 | scheduled-pipelines | - | Фоновый запуск `trigger/schedule` в Studio pipelines |
 | scheduled-agents | - | Планировщик server agents |
+| celery-worker | - | Очереди памяти/фоновых задач через Redis |
 | monitor | - | Health checks, alerts и cleanup старых monitoring данных |
 | ops-supervisor | - | Memory dreams, agent execution plane и watcher drafts |
 | telegram-bot | - | Optional profile для long-poll Telegram bot pipeline |
+
+Проверка после старта:
+
+```bash
+docker compose ps
+curl http://127.0.0.1:8080/api/health/
+```
+
+Telegram bot в dev не стартует по умолчанию. Если токен и chat_id уже заполнены:
+
+```bash
+docker compose --profile telegram-bot up -d telegram-bot
+```
 
 Production-заготовка:
 

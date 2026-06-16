@@ -1,8 +1,81 @@
-# Только PostgreSQL для локальной разработки mini_prod.
-# Запуск: docker compose up -d
+# Минимальный dev-стек mini_prod.
+# Запуск: docker compose up -d --build
 # Остановка: docker compose down
 #
-# В .env задайте POSTGRES_HOST=localhost (или не задавайте — по умолчанию подставится при запуске приложения).
+# POSTGRES_PORT в .env — это host-port для доступа с Windows/WSL.
+# Внутри docker-сети backend и workers всегда ходят в postgres:5432.
+
+x-backend-worker: &backend-worker
+  image: webtrerm-backend-dev:latest
+  build:
+    context: .
+    dockerfile: docker/backend.Dockerfile
+    args:
+      http_proxy: ${http_proxy:-}
+      https_proxy: ${https_proxy:-}
+      ftp_proxy: ${ftp_proxy:-}
+      no_proxy: ${no_proxy:-localhost,127.0.0.1,::1}
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      FTP_PROXY: ${FTP_PROXY:-}
+      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1}
+  working_dir: /workspace
+  environment:
+    http_proxy: ${http_proxy:-}
+    https_proxy: ${https_proxy:-}
+    ftp_proxy: ${ftp_proxy:-}
+    no_proxy: ${no_proxy:-localhost,127.0.0.1,::1,postgres,redis,mcp-demo,mcp-keycloak,backend,frontend}
+    HTTP_PROXY: ${HTTP_PROXY:-}
+    HTTPS_PROXY: ${HTTPS_PROXY:-}
+    FTP_PROXY: ${FTP_PROXY:-}
+    NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1,postgres,redis,mcp-demo,mcp-keycloak,backend,frontend}
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: "5432"
+    POSTGRES_DB: ${POSTGRES_DB:-weu_platform}
+    POSTGRES_USER: ${POSTGRES_USER:-weu}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-weu_secret_change_me}
+    DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-local-compose-only-change-this-secret-before-public-deploy-2026-03-12}
+    CHANNEL_REDIS_URL: redis://redis:6379/1
+    CELERY_BROKER_URL: redis://redis:6379/0
+    CELERY_RESULT_BACKEND: redis://redis:6379/0
+    CELERY_TASK_ALWAYS_EAGER: "false"
+    SITE_URL: ${SITE_URL:-http://127.0.0.1:8080}
+    FRONTEND_APP_URL: ${FRONTEND_APP_URL:-http://127.0.0.1:8080}
+    ALLOWED_HOSTS: ${ALLOWED_HOSTS:-127.0.0.1,localhost,10.169.66.211,26.71.166.145,192.168.0.19,172.25.160.1}
+    CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-http://127.0.0.1:8080,http://localhost:8080,http://10.169.66.211:8080}
+    DJANGO_PORT: 9000
+    PORT: 9000
+    DJANGO_DEBUG: ${DJANGO_DEBUG:-false}
+    DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-web_ui.settings.production}
+    MARS_AGENT_RUNTIME: ${MARS_AGENT_RUNTIME:-docker}
+    MARS_AGENT_DOCKER_IMAGE: ${MARS_AGENT_DOCKER_IMAGE:-webterm-mars-agent:latest}
+    MARS_AGENT_DOCKER_NETWORK: ${MARS_AGENT_DOCKER_NETWORK:-bridge}
+    MARS_AGENT_DOCKER_CPUS: ${MARS_AGENT_DOCKER_CPUS:-2}
+    MARS_AGENT_DOCKER_MEMORY: ${MARS_AGENT_DOCKER_MEMORY:-2g}
+    MARS_AGENT_DOCKER_CODEX_HOME_VOLUME: ${MARS_AGENT_DOCKER_CODEX_HOME_VOLUME:-mini-prod-mars-codex-home}
+    MARS_AGENT_DOCKER_GEMINI_HOME_VOLUME: ${MARS_AGENT_DOCKER_GEMINI_HOME_VOLUME:-mini-prod-mars-gemini-home}
+    MARS_CODEX_HOME: ${MARS_CODEX_HOME:-/mars-codex-home}
+    MARS_GEMINI_HOME: ${MARS_GEMINI_HOME:-/mars-gemini-home}
+    MARS_DOCKER_CONTAINER_PATH_PREFIX: ${MARS_DOCKER_CONTAINER_PATH_PREFIX:-/workspace}
+    MARS_DOCKER_HOST_PATH_PREFIX: ${MARS_DOCKER_HOST_PATH_PREFIX:-}
+    OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+    GROK_API_KEY: ${GROK_API_KEY:-}
+    ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  volumes:
+    - .:/workspace
+    - /var/run/docker.sock:/var/run/docker.sock
+    - mars_codex_home:/mars-codex-home
+    - mars_gemini_home:/mars-gemini-home
+  depends_on:
+    backend:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    postgres:
+      condition: service_healthy
+  restart: unless-stopped
 
 services:
   postgres:
@@ -43,6 +116,7 @@ services:
       retries: 10
 
   backend:
+    image: webtrerm-backend-dev:latest
     build:
       context: .
       dockerfile: docker/backend.Dockerfile
@@ -68,12 +142,15 @@ services:
       FTP_PROXY: ${FTP_PROXY:-}
       NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1,postgres,redis,mcp-demo,mcp-keycloak,backend,frontend}
       POSTGRES_HOST: postgres
-      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_PORT: "5432"
       POSTGRES_DB: ${POSTGRES_DB:-weu_platform}
       POSTGRES_USER: ${POSTGRES_USER:-weu}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-weu_secret_change_me}
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-local-compose-only-change-this-secret-before-public-deploy-2026-03-12}
-      CHANNEL_REDIS_URL: ${CHANNEL_REDIS_URL:-redis://redis:6379/1}
+      CHANNEL_REDIS_URL: redis://redis:6379/1
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      CELERY_TASK_ALWAYS_EAGER: "false"
       SITE_URL: ${SITE_URL:-http://127.0.0.1:8080}
       FRONTEND_APP_URL: ${FRONTEND_APP_URL:-http://127.0.0.1:8080}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-127.0.0.1,localhost,10.169.66.211,26.71.166.145,192.168.0.19,172.25.160.1}
@@ -119,6 +196,62 @@ services:
       interval: 15s
       timeout: 5s
       retries: 10
+
+  scheduled-pipelines:
+    <<: *backend-worker
+    container_name: mini-prod-scheduled-pipelines
+    command:
+      [
+        "sh",
+        "-lc",
+        "python manage.py run_scheduled_pipelines --daemon --interval ${PIPELINE_SCHEDULER_INTERVAL:-60}",
+      ]
+
+  scheduled-agents:
+    <<: *backend-worker
+    container_name: mini-prod-scheduled-agents
+    command:
+      [
+        "sh",
+        "-lc",
+        "python manage.py run_scheduled_agents --daemon --interval ${SCHEDULED_AGENTS_INTERVAL:-60} --limit ${SCHEDULED_AGENTS_LIMIT:-100}",
+      ]
+
+  ops-supervisor:
+    <<: *backend-worker
+    container_name: mini-prod-ops-supervisor
+    command:
+      [
+        "sh",
+        "-lc",
+        "python manage.py run_ops_supervisor --with-watchers --dream-interval ${MEMORY_DREAM_INTERVAL:-300} --execution-interval ${AGENT_EXECUTION_INTERVAL:-5} --watchers-interval ${WATCHERS_INTERVAL:-120} --watchers-limit ${WATCHERS_LIMIT:-100}",
+      ]
+
+  celery-worker:
+    <<: *backend-worker
+    container_name: mini-prod-celery-worker
+    command:
+      [
+        "sh",
+        "-lc",
+        "python -m celery -A web_ui worker -l ${CELERY_LOG_LEVEL:-info} --concurrency ${CELERY_WORKER_CONCURRENCY:-2}",
+      ]
+
+  monitor:
+    <<: *backend-worker
+    container_name: mini-prod-monitor
+    command:
+      [
+        "sh",
+        "-lc",
+        "python manage.py run_monitor --quick-interval ${MONITOR_QUICK_INTERVAL:-300} --deep-interval ${MONITOR_DEEP_INTERVAL:-600} --cleanup-interval ${MONITOR_CLEANUP_INTERVAL:-86400} --concurrency ${MONITOR_CONCURRENCY:-5}",
+      ]
+
+  telegram-bot:
+    <<: *backend-worker
+    container_name: mini-prod-telegram-bot
+    profiles: ["telegram-bot"]
+    command: ["sh", "-lc", "python manage.py run_telegram_bot"]
 
   mars-agent:
     build:

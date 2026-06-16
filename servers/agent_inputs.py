@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from html import escape
 from typing import Any
 
@@ -10,6 +11,8 @@ MAX_ARTIFACT_CONTENT = 12000
 MAX_PROMPT_CONTENT = 18000
 MAX_TASKS = 80
 ARTIFACT_KINDS = {"document", "task_list", "script"}
+TELEGRAM_DIGEST_LIMIT = 950
+TELEGRAM_LINE_LIMIT = 180
 
 
 def _normalize_tasks(raw: Any) -> list[dict[str, Any]]:
@@ -123,11 +126,141 @@ def build_agent_materials_prompt(artifacts: Any) -> str:
     return "\n".join(sections)
 
 
-def compact_text_for_telegram(text: str, *, limit: int = 2600) -> str:
+def _truncate_line(text: str, *, limit: int = TELEGRAM_LINE_LIMIT) -> str:
     value = str(text or "").strip()
     if len(value) <= limit:
         return value
-    return value[: limit - 40].rstrip() + "\n\n... отчет сокращен для Telegram"
+    return value[: max(20, limit - 1)].rstrip(" ,.;:-") + "..."
+
+
+def _looks_like_shell_command(text: str) -> bool:
+    value = str(text or "").strip()
+    if not value:
+        return False
+    parts = value.split()
+    first = parts[0].lower()
+    command_words = {
+        "apt",
+        "cat",
+        "cd",
+        "curl",
+        "df",
+        "docker",
+        "grep",
+        "journalctl",
+        "kubectl",
+        "npm",
+        "python",
+        "python3",
+        "rm",
+        "ssh",
+        "sudo",
+        "systemctl",
+    }
+    if first not in command_words or len(parts) < 2:
+        return False
+    return any(token.startswith("-") or "/" in token or token in {"&&", "|", "||", ";"} for token in parts[1:])
+
+
+def _clean_report_line(line: str) -> str:
+    value = str(line or "").strip()
+    if not value:
+        return ""
+    if value.startswith("```") or value.startswith("|") or re.fullmatch(r"[-:| ]+", value):
+        return ""
+    value = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", value)
+    value = re.sub(r"`([^`]*)`", r"\1", value)
+    value = re.sub(r"\*\*([^*]+)\*\*", r"\1", value)
+    value = value.replace("**", "")
+    value = re.sub(r"^\s{0,3}#{1,6}\s*", "", value)
+    value = re.sub(r"^\s*(?:[-*•]+|\d+[.)]|[a-zA-Zа-яА-Я][.)])\s*", "", value)
+    value = re.sub(r"\s+", " ", value).strip(" -")
+    if not value or _looks_like_shell_command(value):
+        return ""
+    return value
+
+
+def _report_section_key(line: str) -> str:
+    normalized = _clean_report_line(line).lower().strip(":")
+    if not normalized:
+        return ""
+    if any(word in normalized for word in ("резюме", "итог", "результат")):
+        return "summary"
+    if any(word in normalized for word in ("обнаруж", "ключевые наход", "находки", "проблем")):
+        return "findings"
+    if any(word in normalized for word in ("рекоменда", "следующ", "что сделать", "действ")):
+        return "actions"
+    if any(word in normalized for word in ("риск", "severity", "критич")):
+        return "risk"
+    return ""
+
+
+def _extract_report_digest(report: str) -> dict[str, list[str] | str]:
+    sections: dict[str, list[str]] = {"summary": [], "findings": [], "actions": [], "risk": [], "fallback": []}
+    current = "fallback"
+    in_code = False
+    for raw_line in str(report or "").splitlines():
+        stripped = raw_line.strip()
+        if stripped.startswith("```"):
+            in_code = not in_code
+            continue
+        if in_code:
+            continue
+        section_key = _report_section_key(stripped)
+        if section_key and (stripped.startswith("#") or len(_clean_report_line(stripped)) <= 70):
+            current = section_key
+            continue
+        cleaned = _clean_report_line(stripped)
+        if not cleaned:
+            continue
+        target = current if current in sections else "fallback"
+        if cleaned not in sections[target]:
+            sections[target].append(cleaned)
+
+    summary = ""
+    for key in ("summary", "fallback", "findings"):
+        if sections[key]:
+            summary = _truncate_line(sections[key][0], limit=210)
+            break
+
+    findings = [_truncate_line(item, limit=175) for item in sections["findings"][:2]]
+    if not findings:
+        findings = [_truncate_line(item, limit=175) for item in sections["fallback"][1:3]]
+
+    action = ""
+    for item in sections["actions"]:
+        lowered = item.lower()
+        if "восстановить" in lowered or "провер" in lowered or "очист" in lowered or len(item) <= 170:
+            action = _truncate_line(item, limit=180)
+            break
+    if not action and sections["actions"]:
+        action = _truncate_line(sections["actions"][0], limit=180)
+
+    risk = _truncate_line(sections["risk"][0], limit=100) if sections["risk"] else ""
+    return {"summary": summary, "findings": findings[:2], "action": action, "risk": risk}
+
+
+def compact_text_for_telegram(text: str, *, limit: int = TELEGRAM_DIGEST_LIMIT) -> str:
+    """Return a short plain-text digest, not a truncated copy of the full report."""
+    digest = _extract_report_digest(text)
+    lines: list[str] = []
+    summary = str(digest.get("summary") or "").strip()
+    if summary:
+        lines.append(f"Главное: {summary}")
+    risk = str(digest.get("risk") or "").strip()
+    if risk:
+        lines.append(f"Риск: {risk}")
+    findings = [str(item).strip() for item in digest.get("findings", []) if str(item).strip()]
+    for item in findings[:2]:
+        lines.append(f"- {item}")
+    action = str(digest.get("action") or "").strip()
+    if action:
+        lines.append(f"Дальше: {action}")
+
+    value = "\n".join(lines).strip() or _truncate_line(str(text or "Отчет пуст."), limit=220)
+    if len(value) > limit:
+        value = value[: max(40, limit - 1)].rstrip(" ,.;:-") + "..."
+    return value
 
 
 def format_telegram_report_message(run, *, site_url: str = "", include_link: bool = True) -> str:
@@ -136,12 +269,19 @@ def format_telegram_report_message(run, *, site_url: str = "", include_link: boo
     status = getattr(run, "status", "") or "unknown"
     report = getattr(run, "final_report", "") or getattr(run, "ai_analysis", "") or "Отчет пуст."
     report = compact_text_for_telegram(report)
-    title = escape(f"Отчет агента: {agent_name}")
+    status_icon = {
+        "completed": "OK",
+        "failed": "ERROR",
+        "stopped": "STOPPED",
+        "running": "RUNNING",
+        "pending": "PENDING",
+    }.get(str(status).lower(), str(status).upper() or "STATUS")
+    title = escape(f"Отчет: {agent_name}")
     status_text = escape(status)
     body = escape(report)
     parts = [
         f"<b>{title}</b>",
-        f"<b>Статус:</b> {status_text}",
+        f"<b>Статус:</b> {escape(status_icon)} ({status_text})",
         "",
         body,
     ]

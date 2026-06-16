@@ -145,6 +145,10 @@ def get_provider() -> "LLMProvider":
 
 class LLMProvider:
     def __init__(self):
+        # Direct LLMProvider() callers are used by agents and tools. Keep them
+        # aligned with Settings/.model_config.json, not only get_provider().
+        with contextlib.suppress(Exception):
+            model_manager.load_config()
         self.gemini_api_key = os.getenv("GEMINI_API_KEY")
         self.grok_api_key = os.getenv("GROK_API_KEY")
         self.anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
