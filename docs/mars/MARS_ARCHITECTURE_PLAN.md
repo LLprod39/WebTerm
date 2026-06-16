@@ -1,6 +1,6 @@
 # MARS Architecture Review And Migration Plan
 
-Last reviewed: 2026-05-27
+Last reviewed: 2026-06-15
 
 This plan is the current architecture migration map after the MARS refactor work. Older statements about deleted shims or completed splits were rechecked against this checkout.
 
@@ -9,7 +9,7 @@ This plan is the current architecture migration map after the MARS refactor work
 Keep WebTerm modular enough for safe ops automation:
 
 - `core_ui` owns auth, access, settings, admin, and shared UI redirects.
-- `servers` owns server inventory, terminal/RDP/SFTP/Linux UI, monitoring, alerts, memory, snapshots, and server agents.
+- `servers` owns server inventory, SSH terminal/SFTP/Linux UI, monitoring, alerts, memory, snapshots, and server agents.
 - `studio` owns pipelines, triggers, runs, MCP registry, reusable agent configs, skills, templates, and notifications.
 - `app` owns shared runtime, LLM, policy, safety, and agent-kernel abstractions.
 - `web_ui` wires the Django project, settings, URLs, ASGI/WSGI, Channels, and Celery.
@@ -23,7 +23,8 @@ Keep WebTerm modular enough for safe ops automation:
 - Server agents depend on `MCPRuntimeProvider`.
 - `servers.adapters.memory_store` is the canonical memory store import path.
 - Import boundaries pass.
-- Architecture size guard currently fails only on `key_mcp.py` legacy growth.
+- Architecture size guard currently passes; legacy-large files remain pinned while they shrink.
+- MARS CLI subprocess execution supports Windows Selector event loops through `mars/subprocess_compat.py` capture fallback and threaded worker streaming fallback.
 - `studio/pipeline_executor.py` remains active production execution logic.
 - `studio/executor/` is the target node-registry architecture.
 
@@ -54,33 +55,29 @@ Rules:
 
 | File/area | Why it matters |
 | --- | --- |
-| `key_mcp.py` | Currently breaks the size guard by growing past baseline. |
-| `studio/pipeline_executor.py` | Still centralizes most node-specific runtime logic. |
+| `key_mcp.py` | Large legacy MCP entry point; currently below its pinned baseline but should keep shrinking. |
 | `frontend/src/lib/api.ts` | Large compatibility API surface while domain modules exist. |
 | `frontend/src/pages/PipelineEditorPage.tsx` | Large route component with graph/editor/run orchestration. |
 | `frontend/src/components/terminal/LinuxUiPanel.tsx` | Large operational UI component. |
 | `servers/consumers/ssh_terminal.py` | Smaller than old state but still a large protocol adapter/queue runner. |
-| `servers/adapters/django_memory_store.py` | Facade remains large even after many extractions. |
+| `mars/worker.py` | Current orchestration flow only; process and CLI phase helpers live in `mars/worker_phases.py`. |
 
 ## Migration Roadmap
 
-### Phase 0: Restore Green Guardrails
+### Phase 0: Keep Green Guardrails
 
-- Shrink or intentionally re-pin `key_mcp.py`.
 - Run `python scripts/check_architecture_sizes.py --strict-new`.
 - Keep import-linter green.
 
-### Phase 1: Finish Studio Node Registry
+### Phase 1: Keep Studio Executor Thin
 
-- Ensure migrated nodes are auto-registered.
-- Route `output/report` and `output/webhook` through registry.
-- Migrate `logic/condition`.
-- Migrate `logic/merge`.
-- Continue one node type per change.
+- Keep current executable node handlers routed through registry while `studio/pipeline_executor.py` stays below the standard architecture limit.
+- Keep compatibility aliases in the executor thin; implementations belong in focused `studio/pipeline_*` modules.
+- Keep node-specific execution in `studio/executor/nodes/`.
 
 Acceptance:
 
-- `studio/pipeline_executor.py` loses node-specific branches incrementally.
+- `studio/pipeline_executor.py` stays below the standard architecture limit without re-centralizing node-specific execution logic.
 - `tests/test_studio_node_executors.py`, `tests/test_studio_pipeline_v2.py`, and all-node smoke stay green.
 
 ### Phase 2: Tighten Execution Policy
@@ -95,9 +92,8 @@ Acceptance:
 
 ### Phase 3: Capability-Based Server Sharing
 
-- Define view/connect/execute/file-read/file-write/RDP/context/admin capabilities.
-- Enforce capabilities in views, consumers, and tools.
-- Add negative tests for shared users.
+- Keep view/connect/execute/file-read/file-write/context/admin capabilities enforced in views, consumers, and tools.
+- Add negative tests for shared users when new server operations are introduced.
 
 ### Phase 4: Continue Frontend Decomposition
 

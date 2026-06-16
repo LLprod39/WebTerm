@@ -386,16 +386,6 @@ export default function SettingsMemoryPage() {
                   />
                 </label>
 
-                <label className="flex cursor-pointer items-center justify-between rounded-lg border border-border px-3 py-3 transition-colors hover:bg-secondary/30">
-                  <div>
-                    <p className="text-xs font-medium">Анализ RDP-активности</p>
-                    <p className="text-[10px] text-muted-foreground">Фиксация событий RDP-сессий</p>
-                  </div>
-                  <Switch
-                    checked={memoryPolicyDraft.rdp_semantic_enabled}
-                    onCheckedChange={(v) => setMemoryPolicyDraft((d) => d ? { ...d, rdp_semantic_enabled: v } : null)}
-                  />
-                </label>
               </div>
             </div>
           ) : null}

@@ -70,13 +70,13 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar">
+    <Sidebar collapsible="icon" className="border-r border-sidebar-border/90 bg-sidebar">
       {/* Logo area */}
-      <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-3">
+      <div className="flex h-16 items-center gap-3 border-b border-sidebar-border/80 px-3">
         <button
           type="button"
           onClick={toggleSidebar}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sidebar-border bg-sidebar-primary/10 transition-colors hover:bg-sidebar-primary/20"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-sidebar-primary/20 bg-sidebar-primary/15 text-sidebar-primary shadow-[0_0_24px_hsl(var(--sidebar-primary)_/_0.08)] transition-colors hover:bg-sidebar-primary/20"
           aria-label={collapsed ? localize(lang, "Развернуть меню", "Expand sidebar") : localize(lang, "Свернуть меню", "Collapse sidebar")}
           title={collapsed ? localize(lang, "Развернуть меню", "Expand sidebar") : localize(lang, "Свернуть меню", "Collapse sidebar")}
         >
@@ -107,8 +107,8 @@ export function AppSidebar() {
                       <NavLink
                         to={item.url}
                         end={item.url === "/dashboard"}
-                        className="group relative flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm text-sidebar-foreground/70 transition-all duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                        activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-sm before:absolute before:left-0 before:top-1/2 before:h-6 before:w-0.5 before:-translate-y-1/2 before:rounded-r before:bg-sidebar-primary"
+                        className="group relative flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-sidebar-foreground/70 transition-all duration-150 hover:bg-sidebar-accent/80 hover:text-sidebar-foreground"
+                        activeClassName="bg-sidebar-accent/95 text-sidebar-accent-foreground font-semibold shadow-[inset_0_0_0_1px_hsl(var(--sidebar-border)),0_8px_24px_hsl(var(--background)_/_0.18)] before:absolute before:left-0 before:top-1/2 before:h-6 before:w-0.5 before:-translate-y-1/2 before:rounded-r before:bg-sidebar-primary"
                         title={collapsed ? t(item.titleKey) : undefined}
                       >
                         <item.icon className="h-4 w-4 shrink-0 transition-colors" />
@@ -124,13 +124,13 @@ export function AppSidebar() {
       </SidebarContent>
 
       {/* Footer */}
-      <SidebarFooter className="space-y-2 border-t border-sidebar-border px-3 py-3">
+      <SidebarFooter className="space-y-2 border-t border-sidebar-border/80 px-3 py-3">
         {!collapsed ? (
-          <div className="grid grid-cols-2 gap-1 rounded-lg border border-sidebar-border bg-sidebar-accent/35 p-1 text-xs">
+          <div className="grid grid-cols-2 gap-1 rounded-lg border border-sidebar-border/80 bg-sidebar-accent/40 p-1 text-xs">
             <button
               type="button"
               onClick={() => setLang("en")}
-              className={`min-h-9 rounded-md px-2 py-1.5 transition-colors ${lang === "en" ? "bg-sidebar text-sidebar-primary" : "text-sidebar-foreground/60 hover:text-sidebar-foreground"}`}
+              className={`min-h-9 rounded-md px-2 py-1.5 transition-colors ${lang === "en" ? "bg-sidebar text-sidebar-primary shadow-sm" : "text-sidebar-foreground/60 hover:text-sidebar-foreground"}`}
               aria-pressed={lang === "en"}
             >
               EN
@@ -138,7 +138,7 @@ export function AppSidebar() {
             <button
               type="button"
               onClick={() => setLang("ru")}
-              className={`min-h-9 rounded-md px-2 py-1.5 transition-colors ${lang === "ru" ? "bg-sidebar text-sidebar-primary" : "text-sidebar-foreground/60 hover:text-sidebar-foreground"}`}
+              className={`min-h-9 rounded-md px-2 py-1.5 transition-colors ${lang === "ru" ? "bg-sidebar text-sidebar-primary shadow-sm" : "text-sidebar-foreground/60 hover:text-sidebar-foreground"}`}
               aria-pressed={lang === "ru"}
             >
               RU
@@ -157,7 +157,7 @@ export function AppSidebar() {
         )}
 
         <div className={collapsed ? "flex flex-col items-center gap-2" : "flex items-center gap-2.5"}>
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-sidebar-border bg-primary/15 text-xs font-bold text-primary">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-sidebar-primary/20 bg-primary/15 text-xs font-bold text-primary">
             {(data?.user?.username || "U").slice(0, 1).toUpperCase()}
           </div>
           {!collapsed && (

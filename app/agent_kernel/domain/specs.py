@@ -109,6 +109,7 @@ class PermissionDecision:
     reason: str = ""
     requires_approval: bool = False
     notes: tuple[str, ...] = ()
+    audit_metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

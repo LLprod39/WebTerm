@@ -34,8 +34,8 @@ def _default_pipeline_draft_nodes() -> list[dict]:
             "position": {"x": 280, "y": 80},
             "data": {
                 "label": "Manual Start",
-                "is_active": True,
-                "description": "Select this trigger to launch the pipeline manually.",
+                "is_active": False,
+                "description": "Connect the draft, then enable this trigger to launch the pipeline manually.",
             },
         }
     ]

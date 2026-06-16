@@ -7,8 +7,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import StudioPage from "@/pages/StudioPage";
 import * as api from "@/lib/api";
 import * as draftApi from "@/lib/studioPipelineDraftsApi";
+import {
+  authSession,
+  multiTriggerPipelineDetail,
+  multiTriggerPipelineListItem,
+  pendingManualPipelineRun,
+  ticketReportPipelineDetail,
+  ticketReportPipelineListItem,
+} from "./studioPageTestFixtures";
 
 const toastMock = vi.fn();
+const navigateMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/components/StudioNav", () => ({
   StudioNav: () => <div>StudioNav</div>,
@@ -17,6 +26,14 @@ vi.mock("@/components/StudioNav", () => ({
 vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: toastMock }),
 }));
+
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
+  return {
+    ...actual,
+    useNavigate: () => navigateMock,
+  };
+});
 
 vi.mock("@/lib/featureAccess", () => ({
   hasFeatureAccess: () => true,
@@ -88,108 +105,12 @@ function renderPage() {
 describe("StudioPage quick run", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    navigateMock.mockClear();
 
-    vi.mocked(api.fetchAuthSession).mockResolvedValue({
-      authenticated: true,
-      user: {
-        id: 1,
-        username: "admin",
-        email: "admin@example.com",
-        is_staff: true,
-        features: {},
-      },
-    });
-
-    vi.mocked(api.studioPipelines.list).mockResolvedValue([
-      {
-        id: 42,
-        name: "Multi Trigger Pipeline",
-        description: "demo",
-        icon: "W",
-        tags: [],
-        is_shared: false,
-        node_count: 4,
-        updated_at: "2026-04-10T10:00:00Z",
-        last_run: null,
-        graph_version: 2,
-        trigger_summary: {
-          active_total: 2,
-          active_manual: 2,
-          active_webhook: 0,
-          active_schedule: 0,
-          last_triggered_at: null,
-        },
-      },
-    ]);
-    vi.mocked(api.studioPipelines.get).mockResolvedValue({
-      id: 42,
-      name: "Multi Trigger Pipeline",
-      description: "demo",
-      icon: "W",
-      tags: [],
-      is_shared: false,
-      node_count: 4,
-      updated_at: "2026-04-10T10:00:00Z",
-      last_run: null,
-      graph_version: 2,
-      nodes: [
-        {
-          id: "manual_a",
-          type: "trigger/manual",
-          position: { x: 0, y: 0 },
-          data: { label: "Manual A" },
-        },
-        {
-          id: "manual_b",
-          type: "trigger/manual",
-          position: { x: 0, y: 100 },
-          data: { label: "Manual B" },
-        },
-        {
-          id: "merge",
-          type: "logic/merge",
-          position: { x: 100, y: 50 },
-          data: { mode: "any" },
-        },
-        {
-          id: "report",
-          type: "output/report",
-          position: { x: 200, y: 50 },
-          data: {},
-        },
-      ],
-      edges: [
-        { id: "e1", source: "manual_a", target: "merge", sourceHandle: "out" },
-        { id: "e2", source: "manual_b", target: "merge", sourceHandle: "out" },
-        { id: "e3", source: "merge", target: "report", sourceHandle: "out" },
-      ],
-      triggers: [],
-    });
-    vi.mocked(api.studioPipelines.run).mockResolvedValue({
-      id: 700,
-      pipeline_id: 42,
-      pipeline_name: "Multi Trigger Pipeline",
-      status: "pending",
-      current_node_id: null,
-      current_node_label: null,
-      report_markdown: "",
-      error: "",
-      trigger_data: {},
-      node_states: {},
-      created_at: "2026-04-10T10:00:00Z",
-      updated_at: "2026-04-10T10:00:00Z",
-      started_at: null,
-      finished_at: null,
-      shared_via_pipeline: false,
-      is_owner: true,
-      owner: null,
-      owner_username: "admin",
-      trigger_id: null,
-      entry_node_id: "manual_b",
-      trigger_type: "manual",
-      trigger_name: "Manual B",
-      trigger_node_id: "manual_b",
-    });
+    vi.mocked(api.fetchAuthSession).mockResolvedValue(authSession());
+    vi.mocked(api.studioPipelines.list).mockResolvedValue([multiTriggerPipelineListItem()]);
+    vi.mocked(api.studioPipelines.get).mockResolvedValue(multiTriggerPipelineDetail());
+    vi.mocked(api.studioPipelines.run).mockResolvedValue(pendingManualPipelineRun() as never);
 
     vi.mocked(api.studioTemplates.list).mockResolvedValue([]);
     vi.mocked(api.studioTemplates.use).mockResolvedValue({} as never);
@@ -432,8 +353,72 @@ describe("StudioPage quick run", () => {
 
     renderPage();
 
+    expect(await screen.findByRole("heading", { name: "Automation launchpad" })).toBeInTheDocument();
     expect(await screen.findByText(/Graph-first cockpit for AI automations/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Open AI Drafts/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Run history/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /MCP tools/i })).toBeInTheDocument();
     expect(screen.queryByLabelText("Automation request")).not.toBeInTheDocument();
+  });
+
+  it("creates a pipeline from a quick-start template", async () => {
+    vi.mocked(api.studioTemplates.list).mockResolvedValue([
+      {
+        slug: "healthcheck-sweep",
+        name: "Healthcheck Sweep",
+        description: "Checks CPU, RAM, disk and load.",
+        icon: "H",
+        category: "Monitoring",
+        tags: ["health", "monitoring"],
+        node_count: 4,
+        graph_version: 2,
+      },
+    ]);
+    vi.mocked(api.studioTemplates.use).mockResolvedValue({
+      id: 99,
+      name: "Healthcheck Sweep",
+      description: "Checks CPU, RAM, disk and load.",
+      icon: "H",
+      tags: ["health", "monitoring"],
+      is_shared: false,
+      node_count: 4,
+      updated_at: "2026-04-10T10:00:00Z",
+      last_run: null,
+      graph_version: 2,
+      nodes: [],
+      edges: [],
+      triggers: [],
+    });
+
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: "Template quick start" })).toBeInTheDocument();
+    expect(screen.getByText("Healthcheck Sweep")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Use template Healthcheck Sweep/i }));
+
+    await waitFor(() => {
+      expect(api.studioTemplates.use).toHaveBeenCalledWith("healthcheck-sweep");
+    });
+    expect(navigateMock).toHaveBeenCalledWith("/studio/pipeline/99");
+  });
+
+  it("opens the editor run dialog instead of blind-running templates that need context", async () => {
+    vi.mocked(api.studioPipelines.list).mockResolvedValue([ticketReportPipelineListItem()] as never);
+    vi.mocked(api.studioPipelines.get).mockResolvedValue(ticketReportPipelineDetail() as never);
+
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /^Run$/ }));
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith("/studio/pipeline/66", { state: { openRunDialog: true } });
+    });
+    expect(api.studioPipelines.run).not.toHaveBeenCalled();
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: expect.stringMatching(/Fill context fields before running: ticket_id/i),
+      }),
+    );
   });
 });

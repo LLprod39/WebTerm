@@ -55,7 +55,7 @@ export function PageHero({
   className?: string;
 }) {
   return (
-    <section className={cn("relative overflow-hidden rounded-xl border border-border bg-card px-5 py-5 shadow-sm sm:px-6", className)}>
+    <section className={cn("relative overflow-hidden rounded-lg border border-border/80 bg-card/95 px-5 py-5 shadow-[0_18px_60px_hsl(var(--background)_/_0.24)] sm:px-6", className)}>
       <div className="absolute left-0 top-0 h-full w-0.5 bg-primary/60" />
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0 space-y-1.5 pl-1">
@@ -99,11 +99,11 @@ export function MetricCard({
     warning: { card: "border-amber-500/20 bg-amber-500/6", icon: "bg-amber-500/12 text-amber-400", bar: "bg-amber-500" },
     danger: { card: "border-red-500/20 bg-red-500/6", icon: "bg-red-500/12 text-red-400", bar: "bg-red-500" },
     info: { card: "border-primary/20 bg-primary/6", icon: "bg-primary/12 text-primary", bar: "bg-primary" },
-    default: { card: "border-border bg-card", icon: "bg-secondary/60 text-muted-foreground", bar: "bg-border" },
+    default: { card: "border-border/80 bg-card/95", icon: "border border-border/70 bg-secondary/70 text-muted-foreground", bar: "bg-border" },
   }[tone];
 
   return (
-    <div className={cn("group relative overflow-hidden rounded-xl border transition-all duration-200 hover:shadow-sm", toneStyles.card, className)}>
+    <div className={cn("group relative overflow-hidden rounded-lg border transition-all duration-200 hover:shadow-[0_14px_42px_hsl(var(--background)_/_0.22)]", toneStyles.card, className)}>
       <div className={cn("absolute left-0 top-0 h-full w-0.5", toneStyles.bar)} />
       <div className="px-5 py-4">
         <div className="flex items-start justify-between gap-3">
@@ -113,7 +113,7 @@ export function MetricCard({
             <div className="mt-1.5 text-xs leading-5 text-muted-foreground/80">{description}</div>
           </div>
           {icon ? (
-            <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors", toneStyles.icon)}>
+            <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors", toneStyles.icon)}>
               {icon}
             </div>
           ) : null}
@@ -141,8 +141,8 @@ export function SectionCard({
   bodyClassName?: string;
 }) {
   return (
-    <section className={cn("overflow-hidden rounded-xl border border-border bg-card shadow-sm", className)}>
-      <div className="flex flex-col gap-3 border-b border-border/60 bg-secondary/15 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+    <section className={cn("overflow-hidden rounded-lg border border-border/80 bg-card/95 shadow-[0_14px_42px_hsl(var(--background)_/_0.2)]", className)}>
+      <div className="flex flex-col gap-3 border-b border-border/70 bg-secondary/25 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2.5">
           {icon ? (
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -207,9 +207,9 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <div className={cn("flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-border/50 bg-secondary/10 px-6 py-12 text-center", className)}>
+    <div className={cn("flex flex-col items-center justify-center gap-4 rounded-lg border border-dashed border-border/60 bg-secondary/20 px-6 py-12 text-center", className)}>
       {icon ? (
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-border/60 bg-card text-muted-foreground/50 shadow-sm">
+        <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-border/70 bg-card/90 text-muted-foreground/60 shadow-sm">
           {icon}
         </div>
       ) : null}
@@ -239,7 +239,7 @@ export function StatusBadge({
     warning: { badge: "bg-amber-500/10 text-amber-400 border-amber-500/20", dot: "bg-amber-400", pulse: false },
     danger: { badge: "bg-red-500/10 text-red-400 border-red-500/20", dot: "bg-red-400", pulse: false },
     info: { badge: "bg-primary/10 text-primary border-primary/20", dot: "bg-primary", pulse: true },
-    neutral: { badge: "bg-secondary/50 text-muted-foreground border-border/50", dot: "bg-muted-foreground/50", pulse: false },
+    neutral: { badge: "bg-secondary/60 text-muted-foreground border-border/70", dot: "bg-muted-foreground/50", pulse: false },
   }[tone];
 
   return (

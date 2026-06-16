@@ -183,7 +183,7 @@ test_suites:
       - "OS detection and read-only server AI policy."
     manual:
       - "Real SSH session against a sandbox server."
-      - "Real RDP interaction."
+      - "Real SSH interaction."
       - "SFTP upload/download/edit/delete against a sandbox path."
 
   - suite: "Linux UI workspace"
@@ -268,7 +268,7 @@ test_suites:
       - "Render deployment variables and startup script verification."
 
 known_gaps:
-  - "Real RDP and live SSH are intentionally manual or sandbox-only."
+  - "Live SSH is intentionally manual or sandbox-only."
   - "External SMTP, Telegram, and MCP delivery need live sandbox validation before release."
   - "Architecture check depends on import-linter being installed in the current Python environment."
   - "Playwright visual snapshots must be updated intentionally, never as incidental churn."

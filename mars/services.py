@@ -15,8 +15,12 @@ from channels.layers import get_channel_layer
 from django.conf import settings
 from django.db import transaction
 
+from mars.git_config import ensure_git_config, run_git
 from mars.models import MarsRun, MarsRunEvent, MarsSession, MarsWorkspace, default_deny_globs
+from mars.orchestrator import merge_runtime_orchestration
 from mars.policy import MarsPolicyError, build_workspace_policy, git_status
+from mars.skill_catalog import recommend_task_skills
+from mars.subprocess_compat import run_process_capture
 
 CURATED_SKILLS = ["frontend-design", "frontend-dev", "react-best-practices", "frontend-testing-debugging"]
 PERSONAL_WORKSPACE_NAME = "Personal workspace"
@@ -206,7 +210,7 @@ def _docker_named_volume_mount(volume_name: str, target: str, readonly: bool = F
     clean_name = volume_name.strip()
     if not clean_name or any(char in clean_name for char in " ,"):
         raise MarsPolicyError("Invalid Docker volume name for MARS agent runtime.")
-    parts = [f"type=volume", f"src={clean_name}", f"dst={target}"]
+    parts = ["type=volume", f"src={clean_name}", f"dst={target}"]
     if readonly:
         parts.append("readonly")
     return ",".join(parts)
@@ -388,11 +392,11 @@ def _base_dynamic_questions(task_brief: str, domains: set[str]) -> list[dict[str
         success_options = ["Рабочий MVP", "Минимальный прототип", "Полированный UI", "Исправленная проблема"]
         scope_options = ["Основной flow", "UI states", "Тесты", "Документация", "Адаптив", "Интеграции"]
 
-    platform_options = ["Desktop browser", "Mobile browser", "Desktop + mobile", "Только локальный dev"]
+    platform_options = ["Web browser", "Mobile browser", "Responsive web", "Только локальный dev"]
     if "backend" in domains:
         platform_options = ["Django API", "Frontend + API", "Локальный dev", "Production-like path"]
     elif "mobile" in domains:
-        platform_options = ["Mobile first", "Desktop + mobile", "Touch browser", "Responsive web"]
+        platform_options = ["Mobile first", "Touch browser", "Responsive web"]
 
     return [
         _question(
@@ -829,30 +833,19 @@ async def _run_codex_interview_process(
         prompt = _build_codex_interview_prompt(task_brief, workspace_root, selected_skills)
 
         try:
-            process = await asyncio.create_subprocess_exec(
-                *codex_cmd,
+            returncode, stdout_text, stderr_text = await run_process_capture(
+                codex_cmd,
                 cwd=str(workspace_root),
                 env=None if mars_agent_uses_docker() else subprocess_env_for_cli(command),
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                stdin_text=prompt,
+                timeout_seconds=timeout_seconds,
             )
         except OSError as exc:
             raise MarsInterviewError(f"Codex CLI is not available for MARS interview: {exc}") from exc
-
-        try:
-            stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                process.communicate(prompt.encode("utf-8")),
-                timeout=timeout_seconds,
-            )
-        except asyncio.TimeoutError as exc:
-            process.kill()
-            await process.wait()
+        except subprocess.TimeoutExpired as exc:
             raise MarsInterviewError("Codex CLI interview timed out.") from exc
 
-        stdout_text = stdout_bytes.decode("utf-8", errors="replace")
-        stderr_text = stderr_bytes.decode("utf-8", errors="replace")
-        if process.returncode != 0:
+        if returncode != 0:
             combined_output = "\n".join(
                 part for part in [stderr_text.strip(), stdout_text.strip()] if part
             ) or "No Codex output."
@@ -887,20 +880,6 @@ def _build_codex_interview_questions(
         loop.close()
 
 
-def _run_git(root: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    result = subprocess.run(
-        ["git", "-C", str(root), *args],
-        capture_output=True,
-        text=True,
-        timeout=20,
-        check=False,
-    )
-    if check and result.returncode != 0:
-        message = (result.stderr or result.stdout or "Git command failed.").strip()
-        raise MarsPolicyError(message)
-    return result
-
-
 def mars_user_workspaces_base() -> Path:
     configured = Path(getattr(settings, "MARS_USER_WORKSPACES_ROOT", "agent_projects/mars_workspaces")).expanduser()
     if not configured.is_absolute():
@@ -928,10 +907,10 @@ def ensure_personal_workspace_directory(user) -> Path:
         if init.returncode != 0:
             raise MarsPolicyError((init.stderr or init.stdout or "Unable to initialize personal workspace.").strip())
 
-    _run_git(root, "config", "user.email", f"mars-user-{user.id}@local.invalid")
-    _run_git(root, "config", "user.name", f"MARS User {user.id}")
+    ensure_git_config(root, "user.email", f"mars-user-{user.id}@local.invalid")
+    ensure_git_config(root, "user.name", f"MARS User {user.id}")
 
-    has_head = _run_git(root, "rev-parse", "--verify", "HEAD", check=False).returncode == 0
+    has_head = run_git(root, "rev-parse", "--verify", "HEAD", check=False).returncode == 0
     if not has_head:
         readme = root / "README.md"
         if not readme.exists():
@@ -939,11 +918,18 @@ def ensure_personal_workspace_directory(user) -> Path:
                 "# MARS personal workspace\n\nFiles created by MARS for this user stay in this repository.\n",
                 encoding="utf-8",
             )
-        _run_git(root, "add", "README.md")
-        commit = _run_git(root, "commit", "-m", "Initialize MARS personal workspace", check=False)
+        run_git(root, "add", "README.md")
+        commit = run_git(root, "commit", "-m", "Initialize MARS personal workspace", check=False)
         if commit.returncode != 0 and "nothing to commit" not in (commit.stdout + commit.stderr).lower():
             raise MarsPolicyError((commit.stderr or commit.stdout or "Unable to initialize personal workspace.").strip())
     return root
+
+
+def existing_personal_workspace(user) -> MarsWorkspace | None:
+    for workspace in MarsWorkspace.objects.filter(user=user, name=PERSONAL_WORKSPACE_NAME):
+        if workspace_is_personal(user, workspace):
+            return workspace
+    return None
 
 
 def ensure_personal_workspace(user) -> MarsWorkspace:
@@ -1006,12 +992,20 @@ def serialize_session(session: MarsSession) -> dict[str, Any]:
         "task_brief": session.task_brief,
         "answers": session.answers or {},
         "interview_questions": session.interview_questions or [],
-        "selected_skill_slugs": session.selected_skill_slugs or [],
+        "selected_skill_slugs": [],
         "generated_plan": session.generated_plan,
         "status": session.status,
         "created_at": session.created_at.isoformat() if session.created_at else None,
         "updated_at": session.updated_at.isoformat() if session.updated_at else None,
     }
+
+
+def _public_runtime_control(runtime_control: dict[str, Any] | None) -> dict[str, Any]:
+    control = dict(runtime_control or {})
+    control.pop("orchestration", None)
+    control.pop("skill_routing", None)
+    control.pop("skill_catalog", None)
+    return control
 
 
 def serialize_run(run: MarsRun) -> dict[str, Any]:
@@ -1020,9 +1014,9 @@ def serialize_run(run: MarsRun) -> dict[str, Any]:
         "session_id": run.session_id,
         "workspace_id": run.workspace_id,
         "workspace": serialize_workspace(run.workspace),
-        "cli_roles": run.cli_roles or {},
+        "cli_roles": {},
         "status": run.status,
-        "runtime_control": run.runtime_control or {},
+        "runtime_control": _public_runtime_control(run.runtime_control),
         "allow_dirty": run.allow_dirty,
         "final_report": run.final_report,
         "codex_summary": run.codex_summary,
@@ -1037,12 +1031,14 @@ def serialize_run(run: MarsRun) -> dict[str, Any]:
 
 
 def serialize_event(event: MarsRunEvent) -> dict[str, Any]:
+    payload = dict(event.payload or {})
+    payload.pop("command", None)
     return {
         "id": event.id,
         "run_id": event.run_id,
         "event_type": event.event_type,
         "message": event.message,
-        "payload": event.payload or {},
+        "payload": payload,
         "created_at": event.created_at.isoformat() if event.created_at else None,
     }
 
@@ -1068,18 +1064,7 @@ def normalize_workspace_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def recommend_skills(task_brief: str) -> list[str]:
-    text = (task_brief or "").lower()
-    skills: list[str] = []
-    if any(token in text for token in ("react", "frontend", "ui", "ux", "vite", "page", "sidebar")):
-        skills.extend(["frontend-design", "react-best-practices"])
-    if any(token in text for token in ("test", "bug", "qa", "playwright", "render", "browser")):
-        skills.append("frontend-testing-debugging")
-    if any(token in text for token in ("app", "build", "component", "dashboard", "workflow")):
-        skills.append("frontend-dev")
-    for skill in CURATED_SKILLS:
-        if skill not in skills:
-            skills.append(skill)
-    return skills[:4]
+    return recommend_task_skills(task_brief)
 
 
 def build_interview_questions(
@@ -1166,7 +1151,10 @@ def create_run_for_session(session: MarsSession, *, allow_dirty: bool, test_comm
     dirty_status = git_status(session.workspace.root_path)
     if dirty_status and not allow_dirty:
         raise MarsPolicyError("Workspace has uncommitted changes. Confirm dirty worktree before running MARS.")
-    runtime_control = {"stop_requested": False, "test_command": test_command[:500]}
+    runtime_control = merge_runtime_orchestration(
+        {"stop_requested": False, "test_command": test_command[:500]},
+        selected_skills=session.selected_skill_slugs,
+    )
     run = MarsRun.objects.create(
         session=session,
         workspace=session.workspace,

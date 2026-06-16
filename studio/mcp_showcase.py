@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from .models import CURRENT_PIPELINE_GRAPH_VERSION, MCPServerPool, Pipeline, PipelineRun
 from .pipeline_executor import PipelineExecutor
+from .trigger_dispatch import create_pipeline_run
 
 DEMO_SERVER_NAME = "Studio Local MCP Demo"
 DEMO_PIPELINE_NAME = "MCP Workspace Forge"
@@ -374,23 +375,13 @@ def ensure_showcase_pipeline(user, mcp_server: MCPServerPool) -> Pipeline:
 def create_showcase_run(pipeline: Pipeline, user) -> PipelineRun:
     manual_trigger = pipeline.triggers.filter(trigger_type="manual", is_active=True).order_by("created_at", "id").first()
     entry_node_id = manual_trigger.node_id if manual_trigger else ""
-    return PipelineRun.objects.create(
+    return create_pipeline_run(
         pipeline=pipeline,
         triggered_by=user,
-        status=PipelineRun.STATUS_PENDING,
-        nodes_snapshot=json.loads(json.dumps(pipeline.nodes or [])),
-        edges_snapshot=json.loads(json.dumps(pipeline.edges or [])),
         context={},
         trigger_data={"source": "manual", "showcase": "mcp"},
         trigger=manual_trigger,
         entry_node_id=entry_node_id,
-        routing_state={
-            "entry_node_id": entry_node_id,
-            "activated_nodes": [entry_node_id] if entry_node_id else [],
-            "completed_nodes": [],
-            "queued_nodes": [],
-            "pending_merges": {},
-        },
     )
 
 

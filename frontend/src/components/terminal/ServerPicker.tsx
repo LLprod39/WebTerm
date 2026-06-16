@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Monitor, Search, Server, X } from "lucide-react";
+import { Search, Server, X } from "lucide-react";
 
 import { StatusIndicator } from "@/components/StatusIndicator";
 import { Button } from "@/components/ui/button";
@@ -142,16 +142,8 @@ export function ServerPicker({ servers, open, onClose, onSelect, openSessionCoun
                       }}
                       className="flex min-h-16 w-full items-center gap-3 border-b border-border/30 px-5 py-3 text-left transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset active:bg-primary/10"
                     >
-                      <div
-                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
-                          server.server_type === "rdp" ? "bg-blue-500/10" : "bg-primary/10"
-                        }`}
-                      >
-                        {server.server_type === "rdp" ? (
-                          <Monitor className="h-4 w-4 text-blue-500" />
-                        ) : (
-                          <Server className="h-4 w-4 text-primary" />
-                        )}
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                        <Server className="h-4 w-4 text-primary" />
                       </div>
 
                       <div className="min-w-0 flex-1">

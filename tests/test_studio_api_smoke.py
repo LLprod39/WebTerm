@@ -35,12 +35,12 @@ def _grant_feature(user: User, *features: str) -> None:
 
 @pytest.mark.django_db
 def test_studio_pipeline_trigger_template_and_servers_endpoints(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "test-gemini")
     user = User.objects.create_user(username="studio-user", password="x")
     _grant_feature(user, "studio", "studio_pipelines", "studio_runs", "agents")
     server = Server.objects.create(user=user, name="studio-srv", host="10.0.0.55", username="root")
     client = Client()
     client.force_login(user)
-
     monkeypatch.setattr("studio.views._launch_pipeline_run_async", lambda _run: None)
 
     create = client.post(

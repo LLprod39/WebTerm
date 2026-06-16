@@ -13,7 +13,8 @@ from servers.models import Server
 from studio.consumers import PipelineRunConsumer
 from studio.management.commands.run_scheduled_pipelines import Command
 from studio.models import AgentConfig, MCPServerPool, Pipeline, PipelineRun, PipelineTrigger
-from studio.pipeline_executor import PipelineExecutor, _execute_agent_ssh_cmd
+from studio.pipeline_agent_runtime import execute_agent_ssh_cmd
+from studio.pipeline_executor import PipelineExecutor
 
 
 def _llm_node(node_id: str) -> dict:
@@ -230,11 +231,11 @@ def test_execute_agent_ssh_cmd_awaits_async_connect_kwargs(monkeypatch):
         return DummyConn()
 
     monkeypatch.setattr("servers.monitor._build_connect_kwargs", fake_build_connect_kwargs)
-    monkeypatch.setattr("studio.pipeline_executor._log_pipeline_ssh_command", fake_log_pipeline_ssh_command)
+    monkeypatch.setattr("studio.pipeline_agent_runtime._log_pipeline_ssh_command", fake_log_pipeline_ssh_command)
     monkeypatch.setattr(Server.objects, "get", lambda *args, **kwargs: server)
     monkeypatch.setattr(asyncssh, "connect", fake_connect)
 
-    result = asyncio.run(_execute_agent_ssh_cmd(node, {"load_user": "smoke-user-01", "run_index": 1}, run))
+    result = asyncio.run(execute_agent_ssh_cmd(node, {"load_user": "smoke-user-01", "run_index": 1}, run))
 
     assert result["status"] == "completed", result
     assert "PIPELINE_OK smoke-user-01 1" in result["output"]

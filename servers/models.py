@@ -130,7 +130,6 @@ class Server(models.Model):
 
     SERVER_TYPE_CHOICES = [
         ("ssh", "SSH (Linux)"),
-        ("rdp", "RDP (Windows)"),
     ]
 
     AUTH_METHOD_CHOICES = [
@@ -147,7 +146,7 @@ class Server(models.Model):
         max_length=10,
         choices=SERVER_TYPE_CHOICES,
         default="ssh",
-        help_text="SSH для Linux, RDP для Windows",
+        help_text="SSH-сервер Linux",
     )
     host = models.CharField(max_length=255)
     port = models.IntegerField(default=22)
@@ -214,22 +213,8 @@ class Server(models.Model):
     def __str__(self):
         return f"{self.name} ({self.host}:{self.port})"
 
-    def is_rdp(self) -> bool:
-        return (self.server_type or "ssh") == "rdp"
-
     def is_ssh(self) -> bool:
-        return not self.is_rdp()
-
-    def get_rdp_port(self) -> int:
-        if self.is_rdp():
-            try:
-                return int(self.port or 3389)
-            except Exception:
-                return 3389
-        try:
-            return int(self.port or 22)
-        except Exception:
-            return 22
+        return (self.server_type or "ssh") == "ssh"
 
     def get_connection_string(self) -> str:
         """Get SSH connection string"""
@@ -303,7 +288,6 @@ class ServerShare(models.Model):
     can_execute_command = models.BooleanField(default=False)
     can_read_files = models.BooleanField(default=False)
     can_write_files = models.BooleanField(default=False)
-    can_use_rdp = models.BooleanField(default=False)
     expires_at = models.DateTimeField(
         null=True,
         blank=True,
@@ -701,7 +685,6 @@ class ServerMemoryPolicy(models.Model):
     raw_event_retention_days = models.IntegerField(default=30)
     episode_retention_days = models.IntegerField(default=90)
     allow_sensitive_raw = models.BooleanField(default=False)
-    rdp_semantic_capture_enabled = models.BooleanField(default=False)
     human_habits_capture_enabled = models.BooleanField(default=True)
     is_enabled = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -775,7 +758,6 @@ class ServerMemoryEvent(models.Model):
     SOURCE_MONITORING = "monitoring"
     SOURCE_WATCHER = "watcher"
     SOURCE_PIPELINE = "pipeline"
-    SOURCE_RDP = "rdp"
     SOURCE_MANUAL = "manual_knowledge"
     SOURCE_SYSTEM = "system"
     SOURCE_CHOICES = [
@@ -785,7 +767,6 @@ class ServerMemoryEvent(models.Model):
         (SOURCE_MONITORING, "Monitoring"),
         (SOURCE_WATCHER, "Watcher"),
         (SOURCE_PIPELINE, "Pipeline"),
-        (SOURCE_RDP, "RDP"),
         (SOURCE_MANUAL, "Manual Knowledge"),
         (SOURCE_SYSTEM, "System"),
     ]
@@ -844,7 +825,6 @@ class ServerMemoryEpisode(models.Model):
     KIND_DEPLOY = "deploy_operation"
     KIND_INCIDENT = "incident"
     KIND_MONITORING = "monitoring_window"
-    KIND_RDP = "rdp_session"
     KIND_PIPELINE = "pipeline_operation"
     KIND_MISC = "misc"
     KIND_CHOICES = [
@@ -853,7 +833,6 @@ class ServerMemoryEpisode(models.Model):
         (KIND_DEPLOY, "Deploy Operation"),
         (KIND_INCIDENT, "Incident"),
         (KIND_MONITORING, "Monitoring Window"),
-        (KIND_RDP, "RDP Session"),
         (KIND_PIPELINE, "Pipeline Operation"),
         (KIND_MISC, "Misc"),
     ]
@@ -1088,7 +1067,7 @@ class ServerAgent(models.Model):
             "Per-agent memory policy overrides. Supported keys: "
             "nearline_event_threshold (int), dream_mode (str: heuristic|nightly_llm|hybrid), "
             "raw_event_retention_days (int), episode_retention_days (int), "
-            "rdp_semantic_capture_enabled (bool), human_habits_capture_enabled (bool), "
+            "human_habits_capture_enabled (bool), "
             "is_enabled (bool). Empty dict = use user-level policy."
         ),
     )

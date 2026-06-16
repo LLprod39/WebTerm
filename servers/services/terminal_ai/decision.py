@@ -12,6 +12,7 @@ from typing import Any
 from loguru import logger
 from pydantic import BaseModel
 
+from app.egress_redaction import redact_egress_text
 from servers.services.terminal_ai.prompts import build_recovery_prompt, build_step_decision_prompt
 from servers.services.terminal_ai.schemas import RecoveryDecision, StepDecision, parse_or_repair
 
@@ -53,7 +54,7 @@ async def _stream_decision(
 
     decision, err = parse_or_repair(out, schema)
     if decision is None:
-        logger.warning("%s parse failed: %s, output: %.200s", warning_label, err, out)
+        logger.warning("%s parse failed: %s, output: %.200s", warning_label, err, redact_egress_text(out).text)
         return fallback
     return decision.model_dump()
 

@@ -48,7 +48,6 @@ This file is no longer a raw generated dump of every repository file. Use `rg --
 - `servers/urls.py`
 - `servers/routing.py`
 - `servers/consumers/ssh_terminal.py`
-- `servers/consumers/rdp_terminal.py`
 - `servers/consumers/agent_live.py`
 - `servers/views/server_helpers.py`
 - `servers/views/server_crud.py`

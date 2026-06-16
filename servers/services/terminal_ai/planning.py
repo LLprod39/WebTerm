@@ -14,6 +14,7 @@ from typing import Any
 
 from loguru import logger
 
+from app.egress_redaction import redact_egress_text
 from servers.services.terminal_ai.prompts import build_planner_prompt_parts
 from servers.services.terminal_ai.schemas import TerminalPlanResponse, parse_or_repair
 
@@ -119,7 +120,7 @@ async def plan_terminal_commands(
     if plan is not None:
         return _normalize_plan_payload(plan)
 
-    logger.warning("plan_terminal_commands parse failed: %s, output: %.200s", err, out)
+    logger.warning("plan_terminal_commands parse failed: %s, output: %.200s", err, redact_egress_text(out).text)
     try:
         return extract_json_object(out)
     except Exception:

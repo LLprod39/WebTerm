@@ -17,13 +17,13 @@ class AgentReactNode(BaseNode):
     node_type = "agent/react"
 
     async def execute(self, ctx: "ExecutionContext") -> NodeResult:
-        from studio.pipeline_executor import _execute_agent_react
+        from studio.pipeline_agent_runtime import execute_agent_react
 
         run = ctx.extra.get("run")
         if not isinstance(run, PipelineRun):
             run = await sync_to_async(lambda: PipelineRun.objects.get(pk=ctx.run_id), thread_sensitive=False)()
 
-        result = await _execute_agent_react(
+        result = await execute_agent_react(
             {"id": self.node_id, "type": self.node_type, "data": self.node_data},
             dict(ctx.extra.get("context") or {}),
             run,

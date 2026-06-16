@@ -49,7 +49,7 @@ def test_ensure_keycloak_pipeline_wires_manual_webhook_and_agent_mcp_server():
 
 
 @pytest.mark.django_db
-def test_ensure_keycloak_ops_pipelines_create_fixed_test_and_prod_without_approval():
+def test_ensure_keycloak_ops_pipelines_create_fixed_test_and_prod_with_manual_approval():
     user = User.objects.create_user(username="kc-ops", password="x")
     server = ensure_keycloak_mcp_server(user)
 
@@ -73,7 +73,8 @@ def test_ensure_keycloak_ops_pipelines_create_fixed_test_and_prod_without_approv
         assert nodes["execute_platform_actions"]["type"] == "agent/react"
         assert nodes["execute_platform_actions"]["data"]["mcp_server_ids"] == [server.id]
         assert profile_name in nodes["execute_platform_actions"]["data"]["goal"]
-        assert "logic/human_approval" not in node_types
+        assert nodes["await_execution_approval"]["type"] == "logic/human_approval"
+        assert nodes["await_execution_approval"]["data"]["manual_link_only"] is True
         assert "output/email" not in node_types
         assert "output/telegram" not in node_types
 

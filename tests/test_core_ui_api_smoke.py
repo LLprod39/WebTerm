@@ -230,6 +230,33 @@ def test_log_user_activity_normalizes_datetime_metadata_and_uses_audit_context()
 
 
 @pytest.mark.django_db
+def test_log_user_activity_redacts_description_and_metadata_secrets():
+    user = User.objects.create_user(username="audit-redact-user", password="x")
+
+    log_user_activity(
+        user=user,
+        category="servers",
+        action="server_secret_seen",
+        description="Command failed with password=SuperSecret123 and token=sk-proj-abc123def456ghi789jkl012mno",
+        metadata={
+            "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload",
+            "nested": {"api_key": "plain-secret-value"},
+            "safe": "uptime ok",
+        },
+    )
+
+    entry = UserActivityLog.objects.latest("id")
+    serialized = json.dumps(entry.metadata, ensure_ascii=False)
+    assert "SuperSecret123" not in entry.description
+    assert "sk-proj-" not in entry.description
+    assert "Bearer eyJ" not in serialized
+    assert "plain-secret-value" not in serialized
+    assert entry.metadata["safe"] == "uptime ok"
+    assert entry.metadata["_redaction_report"]["secret_assignment"] >= 1
+    assert entry.metadata["_redaction_report"]["key_hint"] >= 2
+
+
+@pytest.mark.django_db
 def test_request_audit_middleware_sets_request_id_header_and_logs_it():
     user = User.objects.create_user(username="request-audit-user", password="x")
     client = Client()

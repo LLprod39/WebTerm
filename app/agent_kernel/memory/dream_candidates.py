@@ -81,7 +81,7 @@ def build_snapshot_candidates(
         lines = filter_memory_lines(str(item.summary or ""), limit=4)
         if not lines:
             continue
-        if item.episode_kind in {"terminal_session", "rdp_session"}:
+        if item.episode_kind == "terminal_session":
             access_points.extend([line for line in lines if looks_like_access_signal(line)][:2])
             runbook_points.extend([line for line in lines if is_runbook_safe_line(line)][:2])
         elif item.episode_kind == "deploy_operation":

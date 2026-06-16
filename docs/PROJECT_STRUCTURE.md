@@ -23,8 +23,9 @@ This repository is a Django + Channels backend, React/Vite SPA, and Studio autom
 | --- | --- |
 | `web_ui/` | Django project shell: settings, URLs, ASGI/WSGI, Celery, WebSocket routing. `web_ui/settings.py` is a compatibility shim; prefer `web_ui.settings.development`, `.production`, or `.test`. |
 | `core_ui/` | Auth/session APIs, settings/access/admin endpoints, audit/activity, shared UI redirects and middleware. |
-| `servers/` | Server inventory, SSH/RDP terminal flows, SFTP/file actions, monitoring, alerts, watcher drafts, server memory, snapshots, and server-bound agents. |
+| `servers/` | Server inventory, SSH terminal flows, SFTP/file actions, monitoring, alerts, watcher drafts, server memory, snapshots, and server-bound agents. |
 | `studio/` | Pipelines, triggers, runs, MCP registry, reusable agents, skill authoring, pipeline templates, notifications. |
+| `mars/` | MARS guided agent workflow, personal workspaces, run orchestration, worker phases, and live run APIs. |
 | `app/` | Shared LLM/runtime/safety/agent-kernel code. Keep this layer as independent from Django feature apps as possible. |
 | `frontend/` | React 18 + Vite + TypeScript SPA, TanStack Query, Tailwind/Radix local components, Vitest and Playwright tests. |
 | `docker/` | Dockerfiles, nginx configs, and operational smoke scripts. |
@@ -39,7 +40,7 @@ This repository is a Django + Channels backend, React/Vite SPA, and Studio autom
 - `servers` and `studio` should not import each other directly except for explicitly tracked legacy exceptions.
 - `app.agent_kernel` should remain pure Python/domain logic and avoid Django ORM dependencies.
 - Large legacy files are pinned in `[tool.architecture.legacy_baselines]`; they may shrink, but they should not grow.
-- `studio/pipeline_executor.py` is still the active executor for most node types. `studio/executor/` is the target node-registry architecture and currently contains migrated node implementations for selected output nodes.
+- `studio/pipeline_executor.py` is still the active run lifecycle wrapper and registry dispatch point, but it is below the standard architecture limit. Current executable node handlers dispatch through `studio/executor/nodes/`; shared notification, Telegram polling, interactive approval/input, pipeline redaction, routing, context, run-state/event, run setup, run loop/finalization, direct MCP agent helpers, direct LLM agent helpers, server-backed agent runtime helpers, output compatibility helpers, and simple logic helpers live outside the executor.
 
 ## Generated, Local, and Ignored Paths
 

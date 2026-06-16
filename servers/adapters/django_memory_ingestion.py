@@ -67,7 +67,6 @@ def maybe_compact_event_group(event, *, threshold: int, force: bool) -> None:
     count = ServerMemoryEvent.objects.filter(**filters, is_archived=False).count()
     if force or count >= threshold or event.event_type in {
         "session_closed",
-        "rdp_session_closed",
         "run_completed",
         "run_failed",
         "run_stopped",
@@ -141,7 +140,7 @@ def compact_group(
         episode_kind = episode_kind_for_source(source_kind, events)
         summary_lines = episode_summary_lines(events)
         commands = extract_commands(events)[:12]
-        if episode_kind in {"terminal_session", "rdp_session"} and not summary_lines and not commands:
+        if episode_kind == "terminal_session" and not summary_lines and not commands:
             return 0
         title = episode_title(source_kind, episode_kind, events)
         summary = build_episode_summary(events, summary_lines=summary_lines)
@@ -209,8 +208,6 @@ def compact_group(
 def episode_kind_for_source(source_kind: str, events: list[Any]) -> str:
     if source_kind == "terminal":
         return "terminal_session"
-    if source_kind == "rdp":
-        return "rdp_session"
     if source_kind in {"agent_run", "agent_event"}:
         text_blob = "\n".join((event.raw_text_redacted or "") for event in events).lower()
         if any(term in text_blob for term in ("deploy", "rollout", "rollback", "release")):
@@ -229,8 +226,6 @@ def episode_title(source_kind: str, episode_kind: str, events: list[Any]) -> str
     first = events[0]
     if episode_kind == "terminal_session":
         return f"Human terminal session ({first.created_at:%Y-%m-%d %H:%M})"
-    if episode_kind == "rdp_session":
-        return f"RDP session ({first.created_at:%Y-%m-%d %H:%M})"
     if episode_kind == "deploy_operation":
         return f"Deploy operation ({first.created_at:%Y-%m-%d %H:%M})"
     if episode_kind == "incident":
@@ -243,7 +238,7 @@ def episode_title(source_kind: str, episode_kind: str, events: list[Any]) -> str
 
 
 def is_transport_event_type(event_type: str) -> bool:
-    return event_type in {"session_opened", "session_closed", "rdp_session_opened", "rdp_session_closed"}
+    return event_type in {"session_opened", "session_closed"}
 
 
 def episode_summary_lines(events: list[Any]) -> list[str]:

@@ -12,6 +12,8 @@ from app.runtime_limits import get_pipeline_run_limit_error
 from servers.services.alert_query import ServerAlertSnapshot, get_alert_snapshot, get_open_alert_snapshot
 
 from .models import PipelineRun, PipelineTrigger
+from .pipeline_preflight import pipeline_integration_diagnostics
+from .pipeline_runtime_context import validate_pipeline_entry_branch, validate_pipeline_runtime_context
 from .pipeline_validation import validate_pipeline_definition
 
 
@@ -30,6 +32,50 @@ def _initial_routing_state(entry_node_id: str) -> dict[str, Any]:
     }
 
 
+def pipeline_run_creation_error_details(exc: ValueError) -> list[str]:
+    message = str(exc).strip() or "Pipeline is not runnable."
+    prefix = "Pipeline is not runnable: "
+    if message.startswith(prefix):
+        message = message[len(prefix) :]
+    details = [item.strip() for item in message.split(";") if item.strip()]
+    return details or [message]
+
+
+def validate_pipeline_run_creation(
+    *,
+    pipeline,
+    context: dict[str, Any] | None,
+    entry_node_id: str,
+) -> list[str]:
+    entry = str(entry_node_id or "").strip()
+    if not entry:
+        return ["entry_node_id is required"]
+    if context is not None and not isinstance(context, dict):
+        return ["Pipeline run context must be a JSON object."]
+
+    validation_errors = validate_pipeline_definition(
+        nodes=pipeline.nodes,
+        edges=pipeline.edges,
+        owner=pipeline.owner,
+        graph_version=pipeline.graph_version,
+    )
+    if validation_errors:
+        return validation_errors
+
+    branch_errors = validate_pipeline_entry_branch(pipeline.nodes, pipeline.edges, entry)
+    if branch_errors:
+        return branch_errors
+
+    context_errors = validate_pipeline_runtime_context(
+        pipeline.nodes,
+        context or {},
+        edges=pipeline.edges,
+        entry_node_id=entry,
+    )
+    integration = pipeline_integration_diagnostics(pipeline, entry_node_id=entry)
+    return [*context_errors, *integration["errors"]]
+
+
 def create_pipeline_run(
     *,
     pipeline,
@@ -40,8 +86,14 @@ def create_pipeline_run(
     entry_node_id: str,
 ) -> PipelineRun:
     entry = str(entry_node_id or "").strip()
-    if not entry:
-        raise ValueError("entry_node_id is required")
+    preflight_errors = validate_pipeline_run_creation(
+        pipeline=pipeline,
+        context=context,
+        entry_node_id=entry,
+    )
+    if preflight_errors:
+        raise ValueError(f"Pipeline is not runnable: {'; '.join(preflight_errors)}")
+
     return PipelineRun.objects.create(
         pipeline=pipeline,
         triggered_by=triggered_by,
@@ -225,23 +277,35 @@ def launch_monitoring_triggers_for_alert(alert: ServerAlertSnapshot) -> list[Pip
         )
         if validation_errors:
             continue
+        if validate_pipeline_entry_branch(trigger.pipeline.nodes, trigger.pipeline.edges, trigger.node_id):
+            continue
         if get_pipeline_run_limit_error(trigger.pipeline.owner):
             continue
 
         context = build_monitoring_alert_context(alert)
-        run = create_pipeline_run(
-            pipeline=trigger.pipeline,
-            trigger=trigger,
-            context=context,
-            trigger_data={
-                "source": "monitoring",
-                "alert_id": alert.alert_id,
-                "alert_type": alert.alert_type,
-                "severity": alert.severity,
-                "server_id": alert.server_id,
-            },
+        if validate_pipeline_runtime_context(
+            trigger.pipeline.nodes,
+            context,
+            edges=trigger.pipeline.edges,
             entry_node_id=trigger.node_id,
-        )
+        ):
+            continue
+        try:
+            run = create_pipeline_run(
+                pipeline=trigger.pipeline,
+                trigger=trigger,
+                context=context,
+                trigger_data={
+                    "source": "monitoring",
+                    "alert_id": alert.alert_id,
+                    "alert_type": alert.alert_type,
+                    "severity": alert.severity,
+                    "server_id": alert.server_id,
+                },
+                entry_node_id=trigger.node_id,
+            )
+        except ValueError:
+            continue
         trigger.last_triggered_at = timezone.now()
         trigger.save(update_fields=["last_triggered_at"])
         launch_pipeline_run_async(run)

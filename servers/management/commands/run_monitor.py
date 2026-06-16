@@ -14,10 +14,13 @@ import asyncio
 import signal
 import sys
 
+from asgiref.sync import sync_to_async
 from django.core.management.base import BaseCommand
 from loguru import logger
 
+from app.background_workers import STUDIO_MONITOR_WORKER
 from servers.monitor import check_all_servers, cleanup_old_data
+from servers.worker_state import claim_background_worker, heartbeat_background_worker, stop_background_worker
 
 
 class Command(BaseCommand):
@@ -36,6 +39,8 @@ class Command(BaseCommand):
             action="store_true",
             help="Use full SSH quick check instead of lite TCP for quick cycles",
         )
+        parser.add_argument("--lease-seconds", type=int, default=180, help="Worker heartbeat lease duration")
+        parser.add_argument("--worker-key", type=str, default="default", help="Worker instance key")
 
     def handle(self, *args, **options):
         quick_interval = options["quick_interval"]
@@ -46,39 +51,71 @@ class Command(BaseCommand):
         once = options["once"]
         deep = options["deep"]
         lite_quick = not options.get("full_quick")
+        lease_seconds = max(30, int(options.get("lease_seconds") or 180))
+        worker_key = str(options.get("worker_key") or "default").strip() or "default"
         scope_text = f"servers={','.join(str(item) for item in server_ids)}" if server_ids else "all active servers"
 
-        if once:
-            mode = "deep" if deep else ("lite" if lite_quick else "quick")
-            self.stdout.write(f"Running {mode} check for {scope_text}...")
-            results = asyncio.run(
-                check_all_servers(
-                    deep=deep,
-                    lite=lite_quick and not deep,
-                    concurrency=concurrency,
-                    server_ids=server_ids,
-                )
-            )
-            self.stdout.write(self.style.SUCCESS(f"Checked {len(results)} servers"))
+        state = claim_background_worker(
+            STUDIO_MONITOR_WORKER,
+            worker_key=worker_key,
+            command="python manage.py run_monitor",
+            lease_seconds=lease_seconds,
+        )
+        if state is None:
+            self.stdout.write(self.style.WARNING(f"Monitor worker {worker_key!r} is already leased by another process"))
             return
 
-        self.stdout.write(self.style.SUCCESS(
-            f"Starting server monitor (quick={quick_interval}s, deep={deep_interval}s, concurrency={concurrency}, scope={scope_text})"
-        ))
-
+        summary = {}
         try:
-            asyncio.run(
-                self._run_loop(
-                    quick_interval,
-                    deep_interval,
-                    cleanup_interval,
-                    concurrency,
-                    server_ids,
-                    lite_quick,
+            if once:
+                mode = "deep" if deep else ("lite" if lite_quick else "quick")
+                self.stdout.write(f"Running {mode} check for {scope_text}...")
+                heartbeat_background_worker(
+                    STUDIO_MONITOR_WORKER,
+                    worker_key=worker_key,
+                    lease_seconds=lease_seconds,
+                    cycle_started=True,
                 )
-            )
-        except KeyboardInterrupt:
-            self.stdout.write(self.style.WARNING("\nMonitor stopped by user"))
+                results = asyncio.run(
+                    check_all_servers(
+                        deep=deep,
+                        lite=lite_quick and not deep,
+                        concurrency=concurrency,
+                        server_ids=server_ids,
+                    )
+                )
+                summary = {"mode": mode, "checked": len(results), "errors": 0}
+                heartbeat_background_worker(
+                    STUDIO_MONITOR_WORKER,
+                    worker_key=worker_key,
+                    lease_seconds=lease_seconds,
+                    summary=summary,
+                    cycle_finished=True,
+                )
+                self.stdout.write(self.style.SUCCESS(f"Checked {len(results)} servers"))
+                return
+
+            self.stdout.write(self.style.SUCCESS(
+                f"Starting server monitor (quick={quick_interval}s, deep={deep_interval}s, concurrency={concurrency}, scope={scope_text})"
+            ))
+
+            try:
+                summary = asyncio.run(
+                    self._run_loop(
+                        quick_interval,
+                        deep_interval,
+                        cleanup_interval,
+                        concurrency,
+                        server_ids,
+                        lite_quick,
+                        worker_key,
+                        lease_seconds,
+                    )
+                )
+            except KeyboardInterrupt:
+                self.stdout.write(self.style.WARNING("\nMonitor stopped by user"))
+        finally:
+            stop_background_worker(STUDIO_MONITOR_WORKER, worker_key=worker_key, summary=summary)
 
     async def _run_loop(
         self,
@@ -88,7 +125,9 @@ class Command(BaseCommand):
         concurrency: int,
         server_ids: list[int] | None = None,
         lite_quick: bool = True,
-    ):
+        worker_key: str = "default",
+        lease_seconds: int = 180,
+    ) -> dict:
         stop = asyncio.Event()
 
         loop = asyncio.get_running_loop()
@@ -101,6 +140,7 @@ class Command(BaseCommand):
         deep_every_n = max(1, deep_interval // quick_interval)
         cleanup_counter = 0
         cleanup_every_n = max(1, cleanup_interval // quick_interval)
+        summary = {"cycle": 0, "mode": "", "checked": 0, "errors": 0, "cleanup_errors": 0}
 
         while not stop.is_set():
             quick_counter += 1
@@ -110,14 +150,43 @@ class Command(BaseCommand):
             try:
                 check_type = "deep" if is_deep else ("lite" if lite_quick else "quick")
                 logger.info("Monitor: starting {} check (cycle {})", check_type, quick_counter)
+                await sync_to_async(heartbeat_background_worker, thread_sensitive=True)(
+                    STUDIO_MONITOR_WORKER,
+                    worker_key=worker_key,
+                    lease_seconds=lease_seconds,
+                    summary=summary | {"cycle": quick_counter, "mode": check_type},
+                    cycle_started=True,
+                )
                 results = await check_all_servers(
                     deep=is_deep,
                     lite=lite_quick and not is_deep,
                     concurrency=concurrency,
                     server_ids=server_ids,
                 )
+                summary = {
+                    "cycle": quick_counter,
+                    "mode": check_type,
+                    "checked": len(results),
+                    "errors": summary["errors"],
+                    "cleanup_errors": summary["cleanup_errors"],
+                }
+                await sync_to_async(heartbeat_background_worker, thread_sensitive=True)(
+                    STUDIO_MONITOR_WORKER,
+                    worker_key=worker_key,
+                    lease_seconds=lease_seconds,
+                    summary=summary,
+                    cycle_finished=True,
+                )
                 logger.info("Monitor: {} check done, {} servers checked", check_type, len(results))
             except Exception as exc:
+                summary["errors"] += 1
+                await sync_to_async(heartbeat_background_worker, thread_sensitive=True)(
+                    STUDIO_MONITOR_WORKER,
+                    worker_key=worker_key,
+                    lease_seconds=lease_seconds,
+                    summary=summary | {"last_error": str(exc)[:300]},
+                    cycle_finished=True,
+                )
                 logger.error("Monitor: check cycle failed: {}", exc)
 
             if cleanup_counter >= cleanup_every_n:
@@ -125,6 +194,7 @@ class Command(BaseCommand):
                 try:
                     await cleanup_old_data(days=7)
                 except Exception as exc:
+                    summary["cleanup_errors"] += 1
                     logger.error("Monitor: cleanup failed: {}", exc)
 
             try:
@@ -134,3 +204,4 @@ class Command(BaseCommand):
                 pass
 
         logger.info("Monitor: graceful shutdown complete")
+        return summary

@@ -25,7 +25,6 @@ SERVERS = [
     ("db-prod", "192.168.1.20", 22, "postgres", "ssh", 0),
     ("test-web-01", "10.0.0.101", 22, "dev", "ssh", 1),
     ("test-web-02", "10.0.0.102", 22, "dev", "ssh", 1),
-    ("test-rdp-win", "10.0.0.201", 3389, "administrator", "rdp", 1),
 ]
 
 

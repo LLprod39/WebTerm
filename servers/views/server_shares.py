@@ -6,7 +6,7 @@ import json
 
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -50,7 +50,6 @@ def _share_payload(share: ServerShare, *, active: bool | None = None) -> dict:
         "can_execute_command": bool(share.can_execute_command),
         "can_read_files": bool(share.can_read_files),
         "can_write_files": bool(share.can_write_files),
-        "can_use_rdp": bool(share.can_use_rdp),
         "expires_at": share.expires_at.isoformat() if share.expires_at else None,
         "created_at": share.created_at.isoformat() if share.created_at else None,
         "is_active": active and not share.is_revoked,
@@ -113,7 +112,6 @@ def server_share_create(request, server_id):
         can_execute_command = _parse_bool(data.get("can_execute_command"))
         can_read_files = _parse_bool(data.get("can_read_files"))
         can_write_files = _parse_bool(data.get("can_write_files"))
-        can_use_rdp = _parse_bool(data.get("can_use_rdp"))
 
         share, _ = ServerShare.objects.update_or_create(
             server=server,
@@ -125,7 +123,6 @@ def server_share_create(request, server_id):
                 "can_execute_command": can_execute_command,
                 "can_read_files": can_read_files,
                 "can_write_files": can_write_files,
-                "can_use_rdp": can_use_rdp,
                 "expires_at": expires_at,
                 "is_revoked": False,
                 "revoked_at": None,
@@ -152,7 +149,6 @@ def server_share_create(request, server_id):
                     "execute_command": bool(can_execute_command),
                     "read_files": bool(can_read_files),
                     "write_files": bool(can_write_files),
-                    "use_rdp": bool(can_use_rdp),
                 },
                 "expires_at": share.expires_at.isoformat() if share.expires_at else None,
             },
@@ -164,6 +160,8 @@ def server_share_create(request, server_id):
                 "share": _share_payload(share),
             }
         )
+    except Http404:
+        raise
     except Exception as e:
         log_user_activity(
             user=request.user,

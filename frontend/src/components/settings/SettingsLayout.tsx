@@ -124,7 +124,7 @@ export default function SettingsLayout() {
 
   return (
     <div className="flex h-full bg-background">
-      {/* Desktop sidebar */}
+      {/* Large-screen sidebar */}
       <aside className="z-10 hidden w-[304px] shrink-0 border-r border-border/40 bg-card/50 lg:block">
         <SettingsSidebar isAdmin={isAdmin} />
       </aside>

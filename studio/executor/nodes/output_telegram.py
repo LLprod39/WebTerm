@@ -1,36 +1,22 @@
 from __future__ import annotations
 
-import contextlib
-from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
-import httpx
-from django.conf import settings
-
-from app.agent_kernel.memory.redaction import sanitize_observation_text
 from studio.executor.nodes.base import BaseNode, NodeResult
 from studio.executor.registry import registry
+from studio.pipeline_notifications import (
+    _global_tg_defaults,
+    _load_notif_cfg,
+    _send_telegram_message,
+    httpx,
+)
+from studio.pipeline_redaction import (
+    redact_pipeline_text as _redact_pipeline_text,
+    redacted_execution_context as _redacted_context,
+)
 
 if TYPE_CHECKING:
     from studio.executor.context import ExecutionContext
-
-
-def _load_notif_cfg() -> dict[str, Any]:
-    try:
-        from studio.views import _load_notif_config
-
-        cfg = _load_notif_config()
-        return cfg if isinstance(cfg, dict) else {}
-    except Exception:
-        return {
-            "telegram_bot_token": getattr(settings, "TELEGRAM_BOT_TOKEN", "") or "",
-            "telegram_chat_id": getattr(settings, "TELEGRAM_CHAT_ID", "") or "",
-        }
-
-
-def _global_tg_defaults() -> tuple[str, str]:
-    cfg = _load_notif_cfg()
-    return str(cfg.get("telegram_bot_token") or ""), str(cfg.get("telegram_chat_id") or "")
 
 
 def _resolve_telegram_target(config: dict[str, Any], *, token_keys: tuple[str, ...], chat_keys: tuple[str, ...]) -> tuple[str, str]:
@@ -44,95 +30,6 @@ def _resolve_telegram_target(config: dict[str, Any], *, token_keys: tuple[str, .
         return str(fallback or "").strip()
 
     return _first_non_empty(token_keys, global_token), _first_non_empty(chat_keys, global_chat)
-
-
-def _redact_pipeline_text(value: Any, *, limit: int | None = None, preserve_values: list[str] | None = None) -> str:
-    text = str(value or "")
-    placeholders: dict[str, str] = {}
-    for index, raw_value in enumerate(preserve_values or []):
-        preserved = str(raw_value or "")
-        if not preserved or preserved not in text:
-            continue
-        placeholder = f"__PIPELINE_REDACTION_PRESERVE_{index}__"
-        placeholders[placeholder] = preserved
-        text = text.replace(preserved, placeholder)
-
-    redacted = sanitize_observation_text(text).text
-    for placeholder, preserved in placeholders.items():
-        redacted = redacted.replace(placeholder, preserved)
-    if limit is not None:
-        return redacted[: max(0, int(limit))]
-    return redacted
-
-
-def _redact_pipeline_value(value: Any, *, key: str = "", preserve_keys: set[str] | None = None) -> Any:
-    if preserve_keys and key in preserve_keys:
-        return value
-    if value is None:
-        return None
-    if isinstance(value, dict):
-        return {str(child_key): _redact_pipeline_value(item, key=str(child_key), preserve_keys=preserve_keys) for child_key, item in value.items()}
-    if isinstance(value, list):
-        return [_redact_pipeline_value(item, preserve_keys=preserve_keys) for item in value]
-    if isinstance(value, tuple):
-        return [_redact_pipeline_value(item, preserve_keys=preserve_keys) for item in value]
-    if isinstance(value, (int, float, bool)):
-        return value
-    return _redact_pipeline_text(value)
-
-
-def _redacted_context(ctx: "ExecutionContext", *, preserve_keys: set[str] | None = None) -> defaultdict[str, Any]:
-    raw_context = ctx.extra.get("context")
-    if not isinstance(raw_context, dict):
-        raw_context = {}
-    return defaultdict(
-        str,
-        {
-            str(key): _redact_pipeline_value(value, key=str(key), preserve_keys=preserve_keys)
-            for key, value in raw_context.items()
-        },
-    )
-
-
-async def _send_telegram_message(
-    *,
-    bot_token: str,
-    chat_id: str,
-    message: str,
-    parse_mode: str = "Markdown",
-    reply_markup: dict[str, Any] | None = None,
-    disable_web_page_preview: bool = False,
-) -> dict[str, Any]:
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    chunks = [message[i : i + 4000] for i in range(0, len(message), 4000)] or [""]
-    sent = 0
-    message_ids: list[int] = []
-
-    async with httpx.AsyncClient(timeout=30) as client:
-        for index, chunk in enumerate(chunks):
-            payload: dict[str, Any] = {"chat_id": chat_id, "text": chunk}
-            if parse_mode:
-                payload["parse_mode"] = parse_mode
-            if disable_web_page_preview:
-                payload["disable_web_page_preview"] = True
-            if reply_markup and index == len(chunks) - 1:
-                payload["reply_markup"] = reply_markup
-
-            resp = await client.post(url, json=payload)
-            if resp.status_code != 200:
-                return {"status": "failed", "error": f"Telegram API error {resp.status_code}: {str(resp.text or '')[:200]}"}
-            with contextlib.suppress(Exception):
-                resp_payload = resp.json()
-                message_id = int(((resp_payload.get("result") or {}) or {}).get("message_id"))
-                message_ids.append(message_id)
-            sent += 1
-
-    return {
-        "status": "completed",
-        "output": f"Telegram message sent to {chat_id} ({sent} chunk(s))",
-        "message_ids": message_ids,
-        "last_message_id": message_ids[-1] if message_ids else None,
-    }
 
 
 @registry.register

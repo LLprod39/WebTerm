@@ -6,6 +6,8 @@ from typing import Any, Literal
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from app.tools.safety import evaluate_command_safety
+from studio.execution_policy_agents import classify_dynamic_agent_policy
+from studio.execution_policy_audit import decision_audit_metadata
 
 PolicyRiskLevel = Literal["review", "dangerous"]
 PolicyActionClass = Literal["external", "mutating", "dangerous"]
@@ -58,6 +60,7 @@ class ExecutionPolicyDecision:
             "has_approved_approval_path": self.has_approved_approval_path,
             "allowed": self.allowed,
             "action_class": self.action_class,
+            "audit_metadata": decision_audit_metadata(self),
         }
 
 
@@ -246,6 +249,34 @@ def _classify_mcp_call(
     ]
 
 
+def _classify_dynamic_agent(
+    node: dict[str, Any],
+    *,
+    has_approved_approval_path: bool | None,
+) -> list[ExecutionPolicyDecision]:
+    policy = classify_dynamic_agent_policy(_node_data(node))
+    if policy is None:
+        return []
+    reasons = list(policy.reasons)
+    if has_approved_approval_path is False:
+        reasons.append("Missing approved human approval path.")
+
+    return [
+        _decision(
+            node,
+            stage="agent_runtime",
+            action_class="mutating",
+            level="review",
+            requires_approval=True,
+            has_approved_approval_path=has_approved_approval_path,
+            command=policy.command,
+            categories=("dynamic_agent",),
+            matched_patterns=policy.risky_tools,
+            reasons=tuple(reasons),
+        )
+    ]
+
+
 def _classify_external_output(
     node: dict[str, Any],
     *,
@@ -411,6 +442,8 @@ def build_execution_policy_decisions(
         )
         if node_type == "agent/mcp_call":
             decisions.extend(_classify_mcp_call(node, has_approved_approval_path=has_approval))
+        elif node_type in {"agent/react", "agent/multi"}:
+            decisions.extend(_classify_dynamic_agent(node, has_approved_approval_path=has_approval))
         elif node_type == "agent/ssh_cmd":
             decisions.extend(_classify_ssh_cmd(node, has_approved_approval_path=has_approval))
         elif node_type in {"ops/service_action", "ops/docker_action", "ops/process_action", "ops/file_action", "ops/package_action", "ops/disk_cleanup", "ops/alert_update"}:

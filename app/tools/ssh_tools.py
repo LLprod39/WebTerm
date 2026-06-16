@@ -12,8 +12,9 @@ from asgiref.sync import sync_to_async
 from django.conf import settings
 from loguru import logger
 
+from app.execution_policy import build_execution_policy_audit_metadata
 from app.tools.base import BaseTool, ToolMetadata, ToolParameter
-from app.tools.safety import is_dangerous_command
+from app.tools.safety import evaluate_command_safety
 from core_ui.activity import log_user_activity
 from core_ui.audit import get_audit_context
 from servers.ssh_host_keys import ensure_server_known_hosts, parse_host_port_value, tofu_known_hosts_for_host
@@ -268,7 +269,20 @@ class SSHExecuteTool(BaseTool):
     async def execute(self, conn_id: str, command: str, allow_destructive: bool = False) -> dict[str, Any]:
         """Execute command over SSH"""
         audit_ctx = get_audit_context()
-        if is_dangerous_command(command) and not allow_destructive:
+        command_risk = evaluate_command_safety(command)
+        policy_metadata = build_execution_policy_audit_metadata(
+            tool_name="ssh_execute",
+            args={"conn_id": conn_id, "command": command},
+            mode="DIRECT",
+            allowed=not command_risk.is_dangerous or allow_destructive,
+            sandbox_profile="ops_mutation" if command_risk.is_dangerous and allow_destructive else "ops_read",
+            reason="dangerous_command_requires_allow_destructive" if command_risk.is_dangerous and not allow_destructive else "",
+            requires_approval=command_risk.is_dangerous,
+            risk_categories=command_risk.categories,
+            matched_patterns=command_risk.matched_patterns,
+            actor=str(audit_ctx.get("user_id") or ""),
+        )
+        if command_risk.is_dangerous and not allow_destructive:
             await sync_to_async(log_user_activity, thread_sensitive=True)(
                 user_id=audit_ctx.get("user_id"),
                 username_snapshot=str(audit_ctx.get("username_snapshot") or ""),
@@ -283,6 +297,7 @@ class SSHExecuteTool(BaseTool):
                     "tool": "ssh_execute",
                     "blocked": True,
                     "reason": "dangerous_command_requires_allow_destructive",
+                    "execution_policy": policy_metadata,
                 },
             )
             return {"success": False, "stderr": "Команда выглядит опасной. Нужен явный допуск allow_destructive=true.", "stdout": "", "exit_code": -1}
@@ -302,6 +317,7 @@ class SSHExecuteTool(BaseTool):
                 "tool": "ssh_execute",
                 "exit_code": result.get("exit_code"),
                 "output_excerpt": output_text[:4000],
+                "execution_policy": policy_metadata,
             },
         )
         return result

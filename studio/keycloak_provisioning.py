@@ -5,6 +5,12 @@ import os
 
 from django.conf import settings
 
+from .keycloak_ops_approval import (
+    build_keycloak_ops_edges,
+    build_ops_approval_node,
+    build_ops_rejected_report_node,
+    build_ops_timeout_report_node,
+)
 from .models import CURRENT_PIPELINE_GRAPH_VERSION, MCPServerPool, Pipeline
 
 KEYCLOAK_MCP_NAME = "Keycloak Admin"
@@ -978,17 +984,18 @@ def build_keycloak_ops_nodes(mcp_server_id: int, *, fixed_profile: str, environm
         {
             "id": "execution_split",
             "type": "logic/parallel",
-            "position": {"x": 480, "y": 960},
+            "position": {"x": 480, "y": 1080},
             "data": {
                 "label": "Execution Fan-Out",
             },
         },
+        build_ops_approval_node(environment_label),
         {
             "id": "execute_identity_actions",
             "type": "agent/react",
-            "position": {"x": 240, "y": 1080},
+            "position": {"x": 240, "y": 1200},
             "data": {
-                "label": "8. Execute Identity Actions",
+                "label": "9. Execute Identity Actions",
                 "provider": "openai",
                 "model": "gpt-5-mini",
                 "mcp_server_ids": [mcp_server_id],
@@ -1005,9 +1012,9 @@ def build_keycloak_ops_nodes(mcp_server_id: int, *, fixed_profile: str, environm
         {
             "id": "execute_platform_actions",
             "type": "agent/react",
-            "position": {"x": 720, "y": 1080},
+            "position": {"x": 720, "y": 1200},
             "data": {
-                "label": "9. Execute Platform Actions",
+                "label": "10. Execute Platform Actions",
                 "provider": "openai",
                 "model": "gpt-5-mini",
                 "mcp_server_ids": [mcp_server_id],
@@ -1024,9 +1031,9 @@ def build_keycloak_ops_nodes(mcp_server_id: int, *, fixed_profile: str, environm
         {
             "id": "verify_identity_state",
             "type": "agent/react",
-            "position": {"x": 240, "y": 1320},
+            "position": {"x": 240, "y": 1440},
             "data": {
-                "label": "10. Verify Identity State",
+                "label": "11. Verify Identity State",
                 "provider": "openai",
                 "model": "gpt-5-mini",
                 "mcp_server_ids": [mcp_server_id],
@@ -1043,9 +1050,9 @@ def build_keycloak_ops_nodes(mcp_server_id: int, *, fixed_profile: str, environm
         {
             "id": "verify_platform_state",
             "type": "agent/react",
-            "position": {"x": 720, "y": 1320},
+            "position": {"x": 720, "y": 1440},
             "data": {
-                "label": "11. Verify Platform State",
+                "label": "12. Verify Platform State",
                 "provider": "openai",
                 "model": "gpt-5-mini",
                 "mcp_server_ids": [mcp_server_id],
@@ -1062,7 +1069,7 @@ def build_keycloak_ops_nodes(mcp_server_id: int, *, fixed_profile: str, environm
         {
             "id": "verification_merge",
             "type": "logic/merge",
-            "position": {"x": 480, "y": 1460},
+            "position": {"x": 480, "y": 1580},
             "data": {
                 "label": "Verification Ready",
                 "mode": "all",
@@ -1071,9 +1078,9 @@ def build_keycloak_ops_nodes(mcp_server_id: int, *, fixed_profile: str, environm
         {
             "id": "final_report",
             "type": "output/report",
-            "position": {"x": 480, "y": 1580},
+            "position": {"x": 480, "y": 1700},
             "data": {
-                "label": "12. Final Report",
+                "label": "13. Final Report",
                 "template": (
                     f"# Keycloak {environment_label} Execution Report\n\n"
                     f"- fixed_profile: {fixed_profile}\n"
@@ -1102,6 +1109,10 @@ def build_keycloak_ops_nodes(mcp_server_id: int, *, fixed_profile: str, environm
                     "{discover_protocol_mappers_output}\n\n"
                     "## Execution Plan\n"
                     "{build_execution_plan_output}\n\n"
+                    "## Approval\n"
+                    "- status: {await_execution_approval_status}\n"
+                    "- output: {await_execution_approval_output}\n"
+                    "- error: {await_execution_approval_error}\n\n"
                     "## Execution: Identity Actions\n"
                     "- status: {execute_identity_actions_status}\n"
                     "- error: {execute_identity_actions_error}\n\n"
@@ -1121,39 +1132,8 @@ def build_keycloak_ops_nodes(mcp_server_id: int, *, fixed_profile: str, environm
                 ),
             },
         },
-    ]
-
-
-def build_keycloak_ops_edges() -> list[dict]:
-    return [
-        {"id": "e1", "source": "start_manual", "target": "entry_join", "sourceHandle": "out", "animated": True},
-        {"id": "e2", "source": "start_webhook", "target": "entry_join", "sourceHandle": "out", "animated": True},
-        {"id": "e3", "source": "entry_join", "target": "environment_preflight", "sourceHandle": "out", "animated": True},
-        {"id": "e4", "source": "environment_preflight", "target": "normalize_request", "sourceHandle": "success", "animated": True},
-        {"id": "e5", "source": "normalize_request", "target": "discovery_split", "sourceHandle": "success", "animated": True},
-        {"id": "e6", "source": "discovery_split", "target": "discover_clients_roles", "sourceHandle": "out", "animated": True},
-        {"id": "e7", "source": "discovery_split", "target": "discover_users", "sourceHandle": "out", "animated": True},
-        {"id": "e8", "source": "discovery_split", "target": "discover_groups_roles", "sourceHandle": "out", "animated": True},
-        {"id": "e9", "source": "discover_clients_roles", "target": "discover_protocol_mappers", "sourceHandle": "success", "animated": True},
-        {"id": "e10", "source": "discover_clients_roles", "target": "discoveries_ready", "sourceHandle": "success", "animated": True},
-        {"id": "e11", "source": "discover_clients_roles", "target": "discoveries_ready", "sourceHandle": "error", "animated": True},
-        {"id": "e12", "source": "discover_users", "target": "discoveries_ready", "sourceHandle": "success", "animated": True},
-        {"id": "e13", "source": "discover_users", "target": "discoveries_ready", "sourceHandle": "error", "animated": True},
-        {"id": "e14", "source": "discover_groups_roles", "target": "discoveries_ready", "sourceHandle": "success", "animated": True},
-        {"id": "e15", "source": "discover_groups_roles", "target": "discoveries_ready", "sourceHandle": "error", "animated": True},
-        {"id": "e16", "source": "discover_protocol_mappers", "target": "discoveries_ready", "sourceHandle": "success", "animated": True},
-        {"id": "e17", "source": "discover_protocol_mappers", "target": "discoveries_ready", "sourceHandle": "error", "animated": True},
-        {"id": "e18", "source": "discoveries_ready", "target": "build_execution_plan", "sourceHandle": "out", "animated": True},
-        {"id": "e19", "source": "build_execution_plan", "target": "execution_split", "sourceHandle": "success", "animated": True},
-        {"id": "e20", "source": "execution_split", "target": "execute_identity_actions", "sourceHandle": "out", "animated": True},
-        {"id": "e21", "source": "execution_split", "target": "execute_platform_actions", "sourceHandle": "out", "animated": True},
-        {"id": "e22", "source": "execute_identity_actions", "target": "verify_identity_state", "sourceHandle": "success", "animated": True},
-        {"id": "e23", "source": "execute_platform_actions", "target": "verify_platform_state", "sourceHandle": "success", "animated": True},
-        {"id": "e24", "source": "verify_identity_state", "target": "verification_merge", "sourceHandle": "success", "animated": True},
-        {"id": "e25", "source": "verify_identity_state", "target": "verification_merge", "sourceHandle": "error", "animated": True},
-        {"id": "e26", "source": "verify_platform_state", "target": "verification_merge", "sourceHandle": "success", "animated": True},
-        {"id": "e27", "source": "verify_platform_state", "target": "verification_merge", "sourceHandle": "error", "animated": True},
-        {"id": "e28", "source": "verification_merge", "target": "final_report", "sourceHandle": "out", "animated": True},
+        build_ops_rejected_report_node(environment_label),
+        build_ops_timeout_report_node(environment_label),
     ]
 
 

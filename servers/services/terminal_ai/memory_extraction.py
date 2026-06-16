@@ -13,6 +13,7 @@ from typing import Any
 
 from loguru import logger
 
+from app.egress_redaction import redact_egress_text
 from servers.services.terminal_ai.memory import sanitize_memory_line, save_server_profile
 from servers.services.terminal_ai.prompts import build_memory_extraction_prompt
 from servers.services.terminal_ai.schemas import MemoryExtraction, parse_or_repair
@@ -78,7 +79,7 @@ async def extract_server_memory(
 
     extraction, err = parse_or_repair(out, MemoryExtraction)
     if extraction is None:
-        logger.warning("extract_server_memory parse failed: %s, output: %.200s", err, out)
+        logger.warning("extract_server_memory parse failed: %s, output: %.200s", err, redact_egress_text(out).text)
         return {"summary": "", "facts": [], "issues": []}
 
     return {

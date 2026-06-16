@@ -1,23 +1,80 @@
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import os
-import sys
 import time
 from collections.abc import Callable, Iterable
 from contextlib import contextmanager
-from dataclasses import dataclass
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from threading import RLock
 from typing import Any
-from urllib.parse import urlparse, urlunparse
 
 import requests
 from requests import Response, Session
 from requests.exceptions import RequestException
+
+from key_mcp_config import (
+    KeycloakConfig,
+    KeycloakConfigDefaults,
+    _RUNTIME_DEFAULT,
+    _RUNTIME_DEFAULT_LOCK,
+    clean_text as _clean_text,
+    current_environment_payload as _current_environment_payload_impl,
+    first_non_empty as _first_non_empty,
+    get_runtime_default as _get_runtime_default,
+    load_profiles as _load_profiles_impl,
+    normalize_base_url as _normalize_base_url_impl,
+    parse_bool as _parse_bool_impl,
+    resolve_config as _resolve_config_impl,
+    resolve_profile as _resolve_profile_impl,
+    resolve_secret as _resolve_secret_impl,
+    resolve_value as _resolve_value_impl,
+    set_runtime_default as _set_runtime_default,
+)
+from key_mcp_protocol import (  # noqa: F401 - private compatibility exports
+    _emit_stdio_payload,
+    _error_payload,
+    _json_text,
+    _result_payload,
+    _tool_result,
+)
+from key_mcp_roles import (
+    RoleHandlerContext,
+    _parse_roles_table as _parse_roles_table_impl,
+    _select_client_roles as _select_client_roles_impl,
+    handle_assign_realm_roles as _handle_assign_realm_roles_impl,
+    handle_assign_roles as _handle_assign_roles_impl,
+    handle_assign_roles_from_table as _handle_assign_roles_from_table_impl,
+    handle_assign_service_account_roles as _handle_assign_service_account_roles_impl,
+    handle_bulk_assign_roles as _handle_bulk_assign_roles_impl,
+    handle_create_client_role as _handle_create_client_role_impl,
+    handle_create_realm_role as _handle_create_realm_role_impl,
+    handle_get_realm_roles as _handle_get_realm_roles_impl,
+    handle_get_user_realm_roles as _handle_get_user_realm_roles_impl,
+    handle_get_user_roles as _handle_get_user_roles_impl,
+    handle_list_client_roles as _handle_list_client_roles_impl,
+)
+from key_mcp_server import (
+    MCPServerRuntime,
+    _build_response as _build_response_impl,
+    _handle_stdio_request as _handle_stdio_request_impl,
+    create_mcp_request_handler as _create_mcp_request_handler,
+    run_http_server as _run_http_server_impl,
+    run_stdio_server as _run_stdio_server_impl,
+)
+from key_mcp_summaries import (  # noqa: F401 - private compatibility exports
+    _client_summary,
+    _group_summary,
+    _protocol_mapper_summary,
+    _user_summary,
+)
+from key_mcp_summaries import _profile_public_summary as _profile_public_summary_impl
+from key_mcp_tools import (  # noqa: F401 - private compatibility exports
+    PROFILE_PROPERTY,
+    USER_REFERENCE_PROPERTIES,
+    _tool,
+    build_keycloak_tools,
+)
 
 MCP_PROTOCOL_VERSION = os.getenv("MCP_PROTOCOL_VERSION", "2025-06-18")
 DEFAULT_KEYCLOAK_URL = (os.getenv("KEYCLOAK_URL") or os.getenv("KEYCLOAK_HOST") or "").strip()
@@ -50,103 +107,23 @@ HTTP_PROXIES = {
 LOGGER = logging.getLogger("keycloak-mcp")
 logging.basicConfig(level=logging.INFO)
 
+TOOLS = build_keycloak_tools(
+    default_keycloak_url=DEFAULT_KEYCLOAK_URL,
+    default_realm=DEFAULT_REALM,
+    default_token_realm=DEFAULT_TOKEN_REALM,
+    default_client_id=DEFAULT_CLIENT_ID,
+    default_verify_ssl=DEFAULT_VERIFY_SSL,
+    max_search_results=MAX_SEARCH_RESULTS,
+    default_group_page_size=DEFAULT_GROUP_PAGE_SIZE,
+)
+
 
 class ToolError(RuntimeError):
     pass
 
 
-@dataclass(frozen=True)
-class KeycloakConfig:
-    base_url: str
-    realm: str
-    token_realm: str
-    client_id: str
-    admin_user: str
-    admin_password: str
-    verify_ssl: bool
-    client_secret: str = ""
-    profile_name: str = ""
-
-    @property
-    def admin_base_url(self) -> str:
-        return f"{self.base_url}/admin/realms/{self.realm}"
-
-    @property
-    def token_url(self) -> str:
-        return f"{self.base_url}/realms/{self.token_realm}/protocol/openid-connect/token"
-
-    def safe_summary(self) -> dict[str, Any]:
-        return {
-            "profile": self.profile_name or None,
-            "base_url": self.base_url,
-            "realm": self.realm,
-            "token_realm": self.token_realm,
-            "client_id": self.client_id,
-            "admin_user": self.admin_user,
-            "verify_ssl": self.verify_ssl,
-            "has_client_secret": bool(self.client_secret),
-            "password_source": "configured",
-        }
-
-
-_RUNTIME_DEFAULT_LOCK = RLock()
-_RUNTIME_DEFAULT: dict[str, Any] = {}
-
-
-def _json_text(payload: Any) -> str:
-    return json.dumps(payload, ensure_ascii=False, indent=2)
-
-
-def _tool_result(payload: dict[str, Any], *, is_error: bool = False) -> dict[str, Any]:
-    result: dict[str, Any] = {
-        "content": [{"type": "text", "text": _json_text(payload)}],
-        "structuredContent": payload,
-    }
-    if is_error:
-        result["isError"] = True
-    return result
-
-
-def _result_payload(message_id: Any, result: dict[str, Any] | None = None) -> dict[str, Any]:
-    return {"jsonrpc": "2.0", "id": message_id, "result": result or {}}
-
-
-def _error_payload(message_id: Any, error: str, *, code: int = -32000) -> dict[str, Any]:
-    return {"jsonrpc": "2.0", "id": message_id, "error": {"code": code, "message": error}}
-
-
-def _emit_stdio_payload(payload: dict[str, Any]) -> None:
-    sys.stdout.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    sys.stdout.flush()
-
-
 def _parse_bool(value: Any, *, default: bool | None = None) -> bool:
-    if value is None:
-        if default is None:
-            raise ToolError("Boolean value is required")
-        return default
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return bool(value)
-    raw = str(value).strip().lower()
-    if raw in {"1", "true", "yes", "on"}:
-        return True
-    if raw in {"0", "false", "no", "off"}:
-        return False
-    raise ToolError(f"Invalid boolean value: {value}")
-
-
-def _clean_text(value: Any) -> str:
-    return str(value or "").strip()
-
-
-def _first_non_empty(*values: Any) -> str:
-    for value in values:
-        text = _clean_text(value)
-        if text:
-            return text
-    return ""
+    return _parse_bool_impl(value, default=default, error_cls=ToolError)
 
 
 def _looks_like_uuid(value: str) -> bool:
@@ -155,20 +132,7 @@ def _looks_like_uuid(value: str) -> bool:
 
 
 def _normalize_base_url(raw_url: str) -> str:
-    raw = _clean_text(raw_url)
-    if not raw:
-        raise ToolError("Keycloak base_url/host is not configured")
-    candidate = raw if "://" in raw else f"https://{raw}"
-    parsed = urlparse(candidate)
-    if not parsed.netloc:
-        raise ToolError(f"Invalid Keycloak URL: {raw_url}")
-    if parsed.scheme not in {"http", "https"}:
-        raise ToolError("Keycloak URL must use http or https")
-    hostname = (parsed.hostname or "").lower()
-    if parsed.scheme == "http" and not ALLOW_INSECURE_HTTP and hostname not in {"localhost", "127.0.0.1"}:
-        raise ToolError("Plain HTTP Keycloak URL is disabled. Use https or set KEYCLOAK_ALLOW_INSECURE_HTTP=true")
-    path = parsed.path.rstrip("/")
-    return urlunparse((parsed.scheme, parsed.netloc, path, "", "", ""))
+    return _normalize_base_url_impl(raw_url, allow_insecure_http=ALLOW_INSECURE_HTTP, error_cls=ToolError)
 
 
 def _dedupe_by_key(items: Iterable[dict[str, Any]], key: str = "id") -> list[dict[str, Any]]:
@@ -183,32 +147,34 @@ def _dedupe_by_key(items: Iterable[dict[str, Any]], key: str = "id") -> list[dic
     return unique
 
 
+def _config_defaults() -> KeycloakConfigDefaults:
+    return KeycloakConfigDefaults(
+        default_keycloak_url=DEFAULT_KEYCLOAK_URL,
+        default_realm=DEFAULT_REALM,
+        default_token_realm=DEFAULT_TOKEN_REALM,
+        default_client_id=DEFAULT_CLIENT_ID,
+        default_admin_user=DEFAULT_ADMIN_USER,
+        default_admin_password=DEFAULT_ADMIN_PASSWORD,
+        default_client_secret=DEFAULT_CLIENT_SECRET,
+        default_profile=DEFAULT_PROFILE,
+        default_verify_ssl=DEFAULT_VERIFY_SSL,
+        allow_insecure_http=ALLOW_INSECURE_HTTP,
+        profile_file=Path(PROFILE_FILE),
+    )
+
+
 def _load_profiles() -> dict[str, Any]:
-    if not PROFILE_FILE.exists():
-        return {"profiles": {}, "default_profile": DEFAULT_PROFILE or None}
-    try:
-        with PROFILE_FILE.open("r", encoding="utf-8") as handle:
-            payload = json.load(handle)
-    except Exception as exc:
-        LOGGER.warning("Failed to load Keycloak profiles from %s: %s", PROFILE_FILE, exc)
-        return {"profiles": {}, "default_profile": DEFAULT_PROFILE or None}
-    if not isinstance(payload, dict):
-        return {"profiles": {}, "default_profile": DEFAULT_PROFILE or None}
-    payload.setdefault("profiles", {})
-    if "default_profile" not in payload:
-        payload["default_profile"] = DEFAULT_PROFILE or None
-    return payload
+    defaults = _config_defaults()
+    return _load_profiles_impl(profile_file=defaults.profile_file, default_profile=defaults.default_profile, logger=LOGGER)
 
 
 def _resolve_profile(profile_name: str | None) -> tuple[str, dict[str, Any]]:
-    profiles_payload = _load_profiles()
-    selected = _clean_text(profile_name or profiles_payload.get("default_profile") or DEFAULT_PROFILE)
-    if not selected:
-        return "", {}
-    profile = profiles_payload.get("profiles", {}).get(selected)
-    if not isinstance(profile, dict):
-        raise ToolError(f"Profile '{selected}' not found")
-    return selected, profile
+    return _resolve_profile_impl(
+        profile_name,
+        load_profiles_func=_load_profiles,
+        default_profile=DEFAULT_PROFILE,
+        error_cls=ToolError,
+    )
 
 
 def _resolve_secret(
@@ -221,34 +187,17 @@ def _resolve_secret(
     legacy_field: str,
     env_field: str,
 ) -> str:
-    explicit_text = _clean_text(explicit_value)
-    if explicit_text:
-        return explicit_text
-    env_name = _clean_text(explicit_env_name)
-    if env_name:
-        env_value = os.getenv(env_name, "").strip()
-        if not env_value:
-            raise ToolError(f"Secret env var '{env_name}' is empty or not set")
-        return env_value
-    profile_env_name = _clean_text(profile.get(env_field))
-    if profile_env_name:
-        env_value = os.getenv(profile_env_name, "").strip()
-        if not env_value:
-            raise ToolError(f"Secret env var '{profile_env_name}' is empty or not set")
-        return env_value
-    runtime_text = _clean_text(runtime_value)
-    if runtime_text:
-        return runtime_text
-    legacy_value = _clean_text(profile.get(legacy_field))
-    if legacy_value:
-        LOGGER.warning(
-            "Profile '%s' stores '%s' in plain text. Move it to '%s'.",
-            profile.get("name") or "unknown",
-            legacy_field,
-            env_field,
-        )
-        return legacy_value
-    return default_value.strip()
+    return _resolve_secret_impl(
+        explicit_value=explicit_value,
+        explicit_env_name=explicit_env_name,
+        profile=profile,
+        runtime_value=runtime_value,
+        default_value=default_value,
+        legacy_field=legacy_field,
+        env_field=env_field,
+        logger=LOGGER,
+        error_cls=ToolError,
+    )
 
 
 def _resolve_value(
@@ -261,261 +210,42 @@ def _resolve_value(
     default_value: Any,
     label: str,
 ) -> str:
-    explicit_text = _clean_text(explicit_value)
-    if explicit_text:
-        return explicit_text
-    env_name = _clean_text(explicit_env_name)
-    if env_name:
-        env_value = os.getenv(env_name, "").strip()
-        if not env_value:
-            raise ToolError(f"Config env var '{env_name}' for {label} is empty or not set")
-        return env_value
-    for profile_env_name in profile_env_names:
-        resolved_env_name = _clean_text(profile_env_name)
-        if not resolved_env_name:
-            continue
-        env_value = os.getenv(resolved_env_name, "").strip()
-        if not env_value:
-            raise ToolError(f"Config env var '{resolved_env_name}' for {label} is empty or not set")
-        return env_value
-    profile_text = _first_non_empty(*profile_values)
-    if profile_text:
-        return profile_text
-    runtime_text = _clean_text(runtime_value)
-    if runtime_text:
-        return runtime_text
-    return _clean_text(default_value)
-
-
-def _set_runtime_default(config: KeycloakConfig) -> None:
-    state = {
-        "profile": config.profile_name,
-        "base_url": config.base_url,
-        "realm": config.realm,
-        "token_realm": config.token_realm,
-        "client_id": config.client_id,
-        "admin_user": config.admin_user,
-        "admin_password": config.admin_password,
-        "client_secret": config.client_secret,
-        "verify_ssl": config.verify_ssl,
-    }
-    with _RUNTIME_DEFAULT_LOCK:
-        _RUNTIME_DEFAULT.clear()
-        _RUNTIME_DEFAULT.update(state)
-
-
-def _get_runtime_default() -> dict[str, Any]:
-    with _RUNTIME_DEFAULT_LOCK:
-        return dict(_RUNTIME_DEFAULT)
+    return _resolve_value_impl(
+        explicit_value=explicit_value,
+        explicit_env_name=explicit_env_name,
+        profile_values=profile_values,
+        profile_env_names=profile_env_names,
+        runtime_value=runtime_value,
+        default_value=default_value,
+        label=label,
+        error_cls=ToolError,
+    )
 
 
 def _current_environment_payload() -> dict[str, Any]:
-    runtime = _get_runtime_default()
-    profiles = _load_profiles()
-    configured_profiles = sorted(name for name, profile in profiles.get("profiles", {}).items() if isinstance(profile, dict))
-    return {
-        "success": True,
-        "runtime_default": {
-            "configured": bool(runtime),
-            "profile": runtime.get("profile") or None,
-            "base_url": runtime.get("base_url") or None,
-            "realm": runtime.get("realm") or None,
-            "token_realm": runtime.get("token_realm") or None,
-            "client_id": runtime.get("client_id") or None,
-            "admin_user": runtime.get("admin_user") or None,
-            "verify_ssl": runtime.get("verify_ssl") if runtime else None,
-        },
-        "defaults": {
-            "base_url": DEFAULT_KEYCLOAK_URL or None,
-            "realm": DEFAULT_REALM or None,
-            "token_realm": DEFAULT_TOKEN_REALM or None,
-            "client_id": DEFAULT_CLIENT_ID,
-            "admin_user": DEFAULT_ADMIN_USER or None,
-            "verify_ssl": DEFAULT_VERIFY_SSL,
-            "default_profile": profiles.get("default_profile") or None,
-            "configured_profiles": configured_profiles,
-        },
-    }
+    return _current_environment_payload_impl(
+        defaults=_config_defaults(),
+        get_runtime_default_func=_get_runtime_default,
+        load_profiles_func=_load_profiles,
+    )
 
 
 def _resolve_config(arguments: dict[str, Any] | None = None) -> KeycloakConfig:
-    args = arguments or {}
-    if not isinstance(args, dict):
-        raise ToolError("Tool arguments must be an object")
-
-    runtime = _get_runtime_default()
-    profile_name, profile = _resolve_profile(args.get("profile") or runtime.get("profile"))
-    base_url = _resolve_value(
-        explicit_value=_first_non_empty(args.get("base_url"), args.get("host")),
-        explicit_env_name=_first_non_empty(args.get("base_url_env"), args.get("host_env")),
-        profile_values=(profile.get("base_url"), profile.get("host")),
-        profile_env_names=(profile.get("base_url_env"), profile.get("host_env")),
-        runtime_value=_first_non_empty(runtime.get("base_url"), runtime.get("host")),
-        default_value=DEFAULT_KEYCLOAK_URL,
-        label="base_url",
-    )
-    realm = _resolve_value(
-        explicit_value=args.get("realm"),
-        explicit_env_name=args.get("realm_env"),
-        profile_values=(profile.get("realm"),),
-        profile_env_names=(profile.get("realm_env"),),
-        runtime_value=runtime.get("realm"),
-        default_value=DEFAULT_REALM,
-        label="realm",
-    )
-    token_realm = _resolve_value(
-        explicit_value=args.get("token_realm"),
-        explicit_env_name=args.get("token_realm_env"),
-        profile_values=(profile.get("token_realm"),),
-        profile_env_names=(profile.get("token_realm_env"),),
-        runtime_value=runtime.get("token_realm"),
-        default_value=DEFAULT_TOKEN_REALM or realm,
-        label="token_realm",
-    )
-    client_id = _resolve_value(
-        explicit_value=args.get("client_id"),
-        explicit_env_name=args.get("client_id_env"),
-        profile_values=(profile.get("client_id"),),
-        profile_env_names=(profile.get("client_id_env"),),
-        runtime_value=runtime.get("client_id"),
-        default_value=DEFAULT_CLIENT_ID,
-        label="client_id",
-    )
-    admin_user = _resolve_value(
-        explicit_value=args.get("admin_user"),
-        explicit_env_name=args.get("admin_user_env"),
-        profile_values=(profile.get("admin_user"),),
-        profile_env_names=(profile.get("admin_user_env"),),
-        runtime_value=runtime.get("admin_user"),
-        default_value=DEFAULT_ADMIN_USER,
-        label="admin_user",
-    )
-    verify_ssl = args.get("verify_ssl")
-    if verify_ssl is None and _clean_text(args.get("verify_ssl_env")):
-        verify_ssl = os.getenv(_clean_text(args.get("verify_ssl_env")))
-        if verify_ssl in {None, ""}:
-            raise ToolError(f"Config env var '{_clean_text(args.get('verify_ssl_env'))}' for verify_ssl is empty or not set")
-    if verify_ssl is None and _clean_text(profile.get("verify_ssl_env")):
-        profile_verify_ssl_env = _clean_text(profile.get("verify_ssl_env"))
-        verify_ssl = os.getenv(profile_verify_ssl_env)
-        if verify_ssl in {None, ""}:
-            raise ToolError(f"Config env var '{profile_verify_ssl_env}' for verify_ssl is empty or not set")
-    if verify_ssl is None and "verify_ssl" in profile:
-        verify_ssl = profile.get("verify_ssl")
-    if verify_ssl is None and "verify_ssl" in runtime:
-        verify_ssl = runtime.get("verify_ssl")
-    verify_ssl = _parse_bool(verify_ssl, default=DEFAULT_VERIFY_SSL)
-    admin_password = _resolve_secret(
-        explicit_value=args.get("admin_password"),
-        explicit_env_name=args.get("admin_password_env"),
-        profile=profile,
-        runtime_value=runtime.get("admin_password"),
-        default_value=DEFAULT_ADMIN_PASSWORD,
-        legacy_field="admin_password",
-        env_field="admin_password_env",
-    )
-    client_secret = _resolve_secret(
-        explicit_value=args.get("client_secret"),
-        explicit_env_name=args.get("client_secret_env"),
-        profile=profile,
-        runtime_value=runtime.get("client_secret"),
-        default_value=DEFAULT_CLIENT_SECRET,
-        legacy_field="client_secret",
-        env_field="client_secret_env",
-    )
-
-    if not base_url:
-        raise ToolError("Keycloak host/base_url is required")
-    if not realm:
-        raise ToolError("Keycloak realm is required")
-    if not token_realm:
-        raise ToolError("Keycloak token_realm is required")
-    if not admin_user:
-        raise ToolError("Keycloak admin_user is required")
-    if not admin_password:
-        raise ToolError("Keycloak admin_password is required")
-
-    return KeycloakConfig(
-        base_url=_normalize_base_url(base_url),
-        realm=realm,
-        token_realm=token_realm,
-        client_id=client_id or "admin-cli",
-        admin_user=admin_user,
-        admin_password=admin_password,
-        client_secret=client_secret,
-        verify_ssl=verify_ssl,
-        profile_name=profile_name,
+    return _resolve_config_impl(
+        arguments,
+        defaults=_config_defaults(),
+        get_runtime_default_func=_get_runtime_default,
+        resolve_profile_func=_resolve_profile,
+        resolve_value_func=_resolve_value,
+        resolve_secret_func=_resolve_secret,
+        parse_bool_func=_parse_bool,
+        normalize_base_url_func=_normalize_base_url,
+        error_cls=ToolError,
     )
 
 
 def _profile_public_summary(profile_name: str, profile: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "name": profile_name,
-        "display_name": _clean_text(profile.get("name")) or profile_name,
-        "base_url": _first_non_empty(profile.get("base_url"), profile.get("host")) or None,
-        "base_url_env": _first_non_empty(profile.get("base_url_env"), profile.get("host_env")) or None,
-        "realm": _clean_text(profile.get("realm")) or None,
-        "realm_env": _clean_text(profile.get("realm_env")) or None,
-        "token_realm": _clean_text(profile.get("token_realm")) or None,
-        "token_realm_env": _clean_text(profile.get("token_realm_env")) or None,
-        "client_id": _clean_text(profile.get("client_id")) or None,
-        "client_id_env": _clean_text(profile.get("client_id_env")) or None,
-        "admin_user": _clean_text(profile.get("admin_user")) or None,
-        "admin_user_env": _clean_text(profile.get("admin_user_env")) or None,
-        "uses_admin_password_env": bool(_clean_text(profile.get("admin_password_env"))),
-        "uses_client_secret_env": bool(_clean_text(profile.get("client_secret_env"))),
-        "uses_verify_ssl_env": bool(_clean_text(profile.get("verify_ssl_env"))),
-        "has_legacy_admin_password": bool(_clean_text(profile.get("admin_password"))),
-        "has_legacy_client_secret": bool(_clean_text(profile.get("client_secret"))),
-        "verify_ssl": profile.get("verify_ssl", DEFAULT_VERIFY_SSL),
-    }
-
-
-def _user_summary(user: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "id": user.get("id"),
-        "username": user.get("username"),
-        "email": user.get("email"),
-        "firstName": user.get("firstName"),
-        "lastName": user.get("lastName"),
-        "enabled": user.get("enabled"),
-    }
-
-
-def _group_summary(group: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "id": group.get("id"),
-        "name": group.get("name"),
-        "path": group.get("path"),
-        "subGroupCount": len(group.get("subGroups") or []),
-    }
-
-
-def _client_summary(client: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "id": client.get("id"),
-        "clientId": client.get("clientId"),
-        "name": client.get("name"),
-        "description": client.get("description"),
-        "enabled": client.get("enabled"),
-        "protocol": client.get("protocol"),
-        "publicClient": client.get("publicClient"),
-    }
-
-
-def _protocol_mapper_summary(mapper: dict[str, Any]) -> dict[str, Any]:
-    config = mapper.get("config") if isinstance(mapper.get("config"), dict) else {}
-    return {
-        "id": mapper.get("id"),
-        "name": mapper.get("name"),
-        "protocol": mapper.get("protocol"),
-        "protocolMapper": mapper.get("protocolMapper"),
-        "userAttribute": config.get("user.attribute"),
-        "tokenClaim": config.get("claim.name"),
-        "addToIdToken": config.get("id.token.claim"),
-        "addToAccessToken": config.get("access.token.claim"),
-        "addToUserInfo": config.get("userinfo.token.claim"),
-    }
+    return _profile_public_summary_impl(profile_name, profile, default_verify_ssl=DEFAULT_VERIFY_SSL)
 
 
 class KeycloakAdminClient:
@@ -1161,39 +891,22 @@ def _client_from_args(arguments: dict[str, Any], *, strip_target_client_id: bool
 
 
 def _parse_roles_table(text: str) -> dict[str, list[str]]:
-    roles_by_client: dict[str, list[str]] = {}
-    for raw_line in str(text or "").splitlines():
-        line = raw_line.strip()
-        if not line or "---" in line or "Клиент" in line or "Client" in line:
-            continue
-        if not line.startswith("|"):
-            continue
-        parts = [item.strip() for item in line.split("|")[1:-1]]
-        if len(parts) < 2:
-            continue
-        client_id, role_name = parts[0], parts[1]
-        if not client_id or not role_name:
-            continue
-        roles_by_client.setdefault(client_id, []).append(role_name)
-    return roles_by_client
+    return _parse_roles_table_impl(text)
 
 
 def _select_client_roles(role_map: dict[str, dict[str, Any]], current_roles: list[dict[str, Any]], requested_names: list[str]):
-    current_role_names = {_clean_text(role.get("name")) for role in current_roles}
-    roles_to_add: list[dict[str, Any]] = []
-    already_has: list[str] = []
-    not_found: list[str] = []
-    for role_name in requested_names:
-        name = _clean_text(role_name)
-        if not name:
-            continue
-        if name in current_role_names:
-            already_has.append(name)
-        elif name in role_map:
-            roles_to_add.append(role_map[name])
-        else:
-            not_found.append(name)
-    return roles_to_add, already_has, not_found
+    return _select_client_roles_impl(role_map, current_roles, requested_names, clean_text=_clean_text)
+
+
+def _role_handler_context() -> RoleHandlerContext:
+    return RoleHandlerContext(
+        client_from_args=_client_from_args,
+        clean_text=_clean_text,
+        parse_bool=_parse_bool,
+        tool_result=_tool_result,
+        user_summary=_user_summary,
+        tool_error=ToolError,
+    )
 
 
 def handle_configure(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -1361,253 +1074,42 @@ def handle_create_user(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def handle_list_client_roles(arguments: dict[str, Any]) -> dict[str, Any]:
-    client_id = _clean_text(arguments.get("client_id"))
-    with _client_from_args(arguments, strip_target_client_id=True) as client:
-        resolved_client_id = client_id or client.config.client_id
-        client_uuid = client.get_client_uuid(client_id or None)
-        role_map = client.get_client_roles(client_uuid)
-    payload = {
-        "success": True,
-        "client_id": resolved_client_id,
-        "client_uuid": client_uuid,
-        "count": len(role_map),
-        "roles": sorted(role_map),
-    }
-    return _tool_result(payload)
+    return _handle_list_client_roles_impl(arguments, context=_role_handler_context())
 
 
 def handle_assign_roles(arguments: dict[str, Any]) -> dict[str, Any]:
-    roles = arguments.get("roles")
-    if not isinstance(roles, list) or not roles:
-        raise ToolError("roles must be a non-empty array")
-    login = _clean_text(arguments.get("login"))
-    user_id = _clean_text(arguments.get("user_id")) or None
-    allow_fuzzy = _parse_bool(arguments.get("allow_fuzzy_user_match"), default=False)
-    client_id = _clean_text(arguments.get("client_id"))
-    with _client_from_args(arguments, strip_target_client_id=True) as client:
-        resolved_client_id = client_id or client.config.client_id
-        user = client.resolve_user(login=login, user_id=user_id, allow_fuzzy=allow_fuzzy)
-        client_uuid = client.get_client_uuid(client_id or None)
-        role_map = client.get_client_roles(client_uuid)
-        current_roles = client.get_user_client_roles(_clean_text(user.get("id")), client_uuid)
-        roles_to_add, already_has, not_found = _select_client_roles(role_map, current_roles, list(roles))
-        if roles_to_add:
-            client.assign_client_roles(_clean_text(user.get("id")), client_uuid, roles_to_add)
-    payload = {
-        "success": True,
-        "user": _user_summary(user),
-        "client_id": resolved_client_id,
-        "roles_added": [_clean_text(role.get("name")) for role in roles_to_add],
-        "roles_already_assigned": already_has,
-        "roles_not_found": not_found,
-    }
-    return _tool_result(payload)
+    return _handle_assign_roles_impl(arguments, context=_role_handler_context())
 
 
 def handle_get_user_roles(arguments: dict[str, Any]) -> dict[str, Any]:
-    login = _clean_text(arguments.get("login"))
-    user_id = _clean_text(arguments.get("user_id")) or None
-    client_id = _clean_text(arguments.get("client_id"))
-    allow_fuzzy = _parse_bool(arguments.get("allow_fuzzy_user_match"), default=False)
-    with _client_from_args(arguments, strip_target_client_id=True) as client:
-        resolved_client_id = client_id or client.config.client_id
-        user = client.resolve_user(login=login, user_id=user_id, allow_fuzzy=allow_fuzzy)
-        client_uuid = client.get_client_uuid(client_id or None)
-        roles = client.get_user_client_roles(_clean_text(user.get("id")), client_uuid)
-    payload = {
-        "success": True,
-        "user": _user_summary(user),
-        "client_id": resolved_client_id,
-        "roles": sorted(_clean_text(role.get("name")) for role in roles if _clean_text(role.get("name"))),
-    }
-    return _tool_result(payload)
+    return _handle_get_user_roles_impl(arguments, context=_role_handler_context())
 
 
 def handle_bulk_assign_roles(arguments: dict[str, Any]) -> dict[str, Any]:
-    users = arguments.get("users")
-    if not isinstance(users, list) or not users:
-        raise ToolError("users must be a non-empty array")
-    client_id = _clean_text(arguments.get("client_id"))
-    results = {"assigned": [], "errors": [], "skipped": []}
-    with _client_from_args(arguments, strip_target_client_id=True) as client:
-        resolved_client_id = client_id or client.config.client_id
-        client_uuid = client.get_client_uuid(client_id or None)
-        role_map = client.get_client_roles(client_uuid)
-        for item in users:
-            if not isinstance(item, dict):
-                results["errors"].append({"item": item, "error": "user entry must be an object"})
-                continue
-            login = _clean_text(item.get("login"))
-            user_id = _clean_text(item.get("user_id")) or None
-            role_names = item.get("roles")
-            if not isinstance(role_names, list) or not role_names:
-                results["errors"].append({"login": login or None, "user_id": user_id, "error": "roles must be a non-empty array"})
-                continue
-            try:
-                user = client.resolve_user(
-                    login=login,
-                    user_id=user_id,
-                    allow_fuzzy=_parse_bool(item.get("allow_fuzzy_user_match"), default=False),
-                )
-                current_roles = client.get_user_client_roles(_clean_text(user.get("id")), client_uuid)
-                roles_to_add, already_has, not_found = _select_client_roles(role_map, current_roles, list(role_names))
-                if roles_to_add:
-                    client.assign_client_roles(_clean_text(user.get("id")), client_uuid, roles_to_add)
-                    results["assigned"].append(
-                        {
-                            "user": _user_summary(user),
-                            "roles_added": [_clean_text(role.get("name")) for role in roles_to_add],
-                            "roles_already_assigned": already_has,
-                            "roles_not_found": not_found,
-                        }
-                    )
-                else:
-                    results["skipped"].append(
-                        {
-                            "user": _user_summary(user),
-                            "roles_already_assigned": already_has,
-                            "roles_not_found": not_found,
-                            "reason": "all_roles_already_assigned" if already_has else "no_valid_roles",
-                        }
-                    )
-            except Exception as exc:
-                results["errors"].append({"login": login or None, "user_id": user_id, "error": str(exc), "roles": role_names})
-    payload = {
-        "success": not results["errors"],
-        "client_id": resolved_client_id,
-        "total_processed": len(users),
-        "assigned_count": len(results["assigned"]),
-        "skipped_count": len(results["skipped"]),
-        "error_count": len(results["errors"]),
-        "details": results,
-    }
-    return _tool_result(payload, is_error=bool(results["errors"]))
+    return _handle_bulk_assign_roles_impl(arguments, context=_role_handler_context())
 
 
 def handle_assign_roles_from_table(arguments: dict[str, Any]) -> dict[str, Any]:
-    login = _clean_text(arguments.get("login"))
-    user_id = _clean_text(arguments.get("user_id")) or None
-    roles_table = _clean_text(arguments.get("roles_table"))
-    if not roles_table:
-        raise ToolError("roles_table is required")
-    roles_by_client = _parse_roles_table(roles_table)
-    if not roles_by_client:
-        raise ToolError("Could not parse roles table. Expected format: | Client | Role |")
-    allow_fuzzy = _parse_bool(arguments.get("allow_fuzzy_user_match"), default=False)
-    results = {"assigned": [], "errors": [], "skipped": []}
-    with _client_from_args(arguments) as client:
-        user = client.resolve_user(login=login, user_id=user_id, allow_fuzzy=allow_fuzzy)
-        resolved_user_id = _clean_text(user.get("id"))
-        for client_key, role_names in roles_by_client.items():
-            try:
-                client_uuid = client.get_client_uuid(client_key)
-                role_map = client.get_client_roles(client_uuid)
-                current_roles = client.get_user_client_roles(resolved_user_id, client_uuid)
-                roles_to_add, already_has, not_found = _select_client_roles(role_map, current_roles, role_names)
-                if roles_to_add:
-                    client.assign_client_roles(resolved_user_id, client_uuid, roles_to_add)
-                    results["assigned"].append(
-                        {
-                            "client_id": client_key,
-                            "roles_added": [_clean_text(role.get("name")) for role in roles_to_add],
-                            "roles_already_assigned": already_has,
-                            "roles_not_found": not_found,
-                        }
-                    )
-                else:
-                    results["skipped"].append(
-                        {
-                            "client_id": client_key,
-                            "roles_already_assigned": already_has,
-                            "roles_not_found": not_found,
-                            "reason": "all_roles_already_assigned" if already_has else "no_valid_roles",
-                        }
-                    )
-            except Exception as exc:
-                results["errors"].append({"client_id": client_key, "error": str(exc), "roles": role_names})
-    payload = {
-        "success": not results["errors"],
-        "user": _user_summary(user),
-        "total_clients_processed": len(roles_by_client),
-        "clients_with_changes": len(results["assigned"]),
-        "clients_skipped": len(results["skipped"]),
-        "clients_with_errors": len(results["errors"]),
-        "details": results,
-    }
-    return _tool_result(payload, is_error=bool(results["errors"]))
+    return _handle_assign_roles_from_table_impl(arguments, context=_role_handler_context())
 
 def handle_create_realm_role(arguments: dict[str, Any]) -> dict[str, Any]:
-    role_name = _clean_text(arguments.get("role_name"))
-    if not role_name:
-        raise ToolError("role_name is required")
-    description = _clean_text(arguments.get("description"))
-    with _client_from_args(arguments) as client:
-        role = client.create_realm_role(role_name, description)
-    payload = {"success": True, "message": "Realm role created successfully", "role": role}
-    return _tool_result(payload)
+    return _handle_create_realm_role_impl(arguments, context=_role_handler_context())
 
 
 def handle_assign_realm_roles(arguments: dict[str, Any]) -> dict[str, Any]:
-    roles = arguments.get("roles")
-    if not isinstance(roles, list) or not roles:
-        raise ToolError("roles must be a non-empty array")
-    login = _clean_text(arguments.get("login"))
-    user_id = _clean_text(arguments.get("user_id")) or None
-    allow_fuzzy = _parse_bool(arguments.get("allow_fuzzy_user_match"), default=False)
-    with _client_from_args(arguments) as client:
-        user = client.resolve_user(login=login, user_id=user_id, allow_fuzzy=allow_fuzzy)
-        role_map = client.get_realm_roles()
-        current_roles = client.get_user_realm_roles(_clean_text(user.get("id")))
-        roles_to_add, already_has, not_found = _select_client_roles(role_map, current_roles, list(roles))
-        if roles_to_add:
-            client.assign_realm_roles(_clean_text(user.get("id")), roles_to_add)
-    payload = {
-        "success": True,
-        "user": _user_summary(user),
-        "roles_added": [_clean_text(role.get("name")) for role in roles_to_add],
-        "roles_already_assigned": already_has,
-        "roles_not_found": not_found,
-    }
-    return _tool_result(payload)
+    return _handle_assign_realm_roles_impl(arguments, context=_role_handler_context())
 
 
 def handle_get_realm_roles(arguments: dict[str, Any]) -> dict[str, Any]:
-    with _client_from_args(arguments) as client:
-        role_map = client.get_realm_roles()
-    payload = {
-        "success": True,
-        "count": len(role_map),
-        "roles": [{"name": name, "description": role.get("description", "")} for name, role in sorted(role_map.items())],
-    }
-    return _tool_result(payload)
+    return _handle_get_realm_roles_impl(arguments, context=_role_handler_context())
 
 
 def handle_get_user_realm_roles(arguments: dict[str, Any]) -> dict[str, Any]:
-    login = _clean_text(arguments.get("login"))
-    user_id = _clean_text(arguments.get("user_id")) or None
-    allow_fuzzy = _parse_bool(arguments.get("allow_fuzzy_user_match"), default=False)
-    with _client_from_args(arguments) as client:
-        user = client.resolve_user(login=login, user_id=user_id, allow_fuzzy=allow_fuzzy)
-        roles = client.get_user_realm_roles(_clean_text(user.get("id")))
-    payload = {
-        "success": True,
-        "user": _user_summary(user),
-        "roles": sorted(_clean_text(role.get("name")) for role in roles if _clean_text(role.get("name"))),
-    }
-    return _tool_result(payload)
+    return _handle_get_user_realm_roles_impl(arguments, context=_role_handler_context())
 
 
 def handle_create_client_role(arguments: dict[str, Any]) -> dict[str, Any]:
-    client_id = _clean_text(arguments.get("client_id"))
-    role_name = _clean_text(arguments.get("role_name"))
-    if not client_id or not role_name:
-        raise ToolError("client_id and role_name are required")
-    description = _clean_text(arguments.get("description"))
-    with _client_from_args(arguments, strip_target_client_id=True) as client:
-        client_uuid = client.get_client_uuid(client_id)
-        role = client.create_client_role(client_uuid, role_name, description)
-    payload = {"success": True, "message": "Client role created successfully", "client_id": client_id, "role": role}
-    return _tool_result(payload)
+    return _handle_create_client_role_impl(arguments, context=_role_handler_context())
 
 
 def handle_create_client(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -1663,28 +1165,7 @@ def handle_add_protocol_mapper(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def handle_assign_service_account_roles(arguments: dict[str, Any]) -> dict[str, Any]:
-    client_id = _clean_text(arguments.get("client_id"))
-    roles = arguments.get("roles")
-    if not client_id or not isinstance(roles, list) or not roles:
-        raise ToolError("client_id and roles are required")
-    with _client_from_args(arguments, strip_target_client_id=True) as client:
-        client_uuid = client.get_client_uuid(client_id)
-        service_account_user = client.get_client_service_account_user(client_uuid)
-        role_map = client.get_client_roles(client_uuid)
-        current_roles = client.get_user_client_roles(_clean_text(service_account_user.get("id")), client_uuid)
-        roles_to_add, already_has, not_found = _select_client_roles(role_map, current_roles, list(roles))
-        if roles_to_add:
-            client.assign_client_roles(_clean_text(service_account_user.get("id")), client_uuid, roles_to_add)
-    payload = {
-        "success": True,
-        "message": "Service account roles assigned successfully",
-        "client_id": client_id,
-        "service_account_user": _user_summary(service_account_user),
-        "roles_added": [_clean_text(role.get("name")) for role in roles_to_add],
-        "roles_already_assigned": already_has,
-        "roles_not_found": not_found,
-    }
-    return _tool_result(payload)
+    return _handle_assign_service_account_roles_impl(arguments, context=_role_handler_context())
 
 
 def handle_list_groups(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -1743,176 +1224,6 @@ def handle_create_group(arguments: dict[str, Any]) -> dict[str, Any]:
     return _tool_result(payload)
 
 
-PROFILE_PROPERTY = {
-    "profile": {
-        "type": "string",
-        "description": "Optional profile name from config/keycloak_profiles.json. Safer than mutating process defaults on shared HTTP servers.",
-    }
-}
-USER_REFERENCE_PROPERTIES = {
-    "login": {"type": "string", "description": "Username or email. For write operations exact match is required by default."},
-    "user_id": {"type": "string", "description": "Exact Keycloak user UUID. Preferred for write operations."},
-    "allow_fuzzy_user_match": {
-        "type": "boolean",
-        "description": "Allow fuzzy login match. Use only after verifying the target user explicitly.",
-    },
-}
-
-
-def _tool(name: str, description: str, properties: dict[str, Any], required: list[str]) -> dict[str, Any]:
-    return {
-        "name": name,
-        "description": description,
-        "inputSchema": {
-            "type": "object",
-            "properties": properties,
-            "required": required,
-            "additionalProperties": False,
-        },
-    }
-
-
-TOOLS = [
-    _tool(
-        "keycloak_configure",
-        "Validate Keycloak connection settings and store them as the current process default. Prefer env defaults or profiles for shared HTTP deployment.",
-        {
-            "base_url": {"type": "string", "description": f"Keycloak base URL or host. Default: {DEFAULT_KEYCLOAK_URL or '(not set)'}"},
-            "host": {"type": "string", "description": "Legacy alias for base_url."},
-            "base_url_env": {"type": "string", "description": "Environment variable that contains Keycloak base_url"},
-            "host_env": {"type": "string", "description": "Legacy alias for base_url_env."},
-            "realm": {"type": "string", "description": f"Target realm. Default: {DEFAULT_REALM or '(not set)'}"},
-            "realm_env": {"type": "string", "description": "Environment variable that contains target realm"},
-            "token_realm": {"type": "string", "description": f"Realm used for token grant. Default: {DEFAULT_TOKEN_REALM or DEFAULT_REALM or '(not set)'}"},
-            "token_realm_env": {"type": "string", "description": "Environment variable that contains token realm"},
-            "client_id": {"type": "string", "description": f"Admin client_id. Default: {DEFAULT_CLIENT_ID}"},
-            "client_id_env": {"type": "string", "description": "Environment variable that contains admin client_id"},
-            "admin_user": {"type": "string", "description": "Keycloak admin username"},
-            "admin_user_env": {"type": "string", "description": "Environment variable that contains Keycloak admin username"},
-            "admin_password": {"type": "string", "description": "Keycloak admin password"},
-            "admin_password_env": {"type": "string", "description": "Environment variable that contains Keycloak admin password"},
-            "client_secret": {"type": "string", "description": "Optional client secret for confidential admin client"},
-            "client_secret_env": {"type": "string", "description": "Environment variable that contains the client secret"},
-            "verify_ssl": {"type": "boolean", "description": f"Verify TLS certificate. Default: {DEFAULT_VERIFY_SSL}"},
-            "verify_ssl_env": {"type": "string", "description": "Environment variable that contains verify_ssl flag"},
-            "profile": PROFILE_PROPERTY["profile"],
-        },
-        ["admin_user"],
-    ),
-    _tool("keycloak_use_profile", "Validate a named profile and make it the current process default.", {"profile": {"type": "string", "description": "Profile name from config/keycloak_profiles.json"}}, ["profile"]),
-    _tool("keycloak_list_profiles", "List available Keycloak profiles without exposing secrets.", {}, []),
-    _tool("keycloak_current_environment", "Show runtime default and environment-level Keycloak configuration.", {}, []),
-    _tool(
-        "keycloak_list_clients",
-        "List or search Keycloak clients in the current realm.",
-        {
-            "search": {"type": "string", "description": "Optional free-text search against clientId, name, or description"},
-            "max_results": {"type": "integer", "description": "Maximum number of clients to return. Default: 50"},
-            **PROFILE_PROPERTY,
-        },
-        [],
-    ),
-    _tool(
-        "keycloak_find_clients_with_role",
-        "Find clients that contain a specific client role, optionally limited by a search hint.",
-        {
-            "role_name": {"type": "string", "description": "Exact client role name to look for"},
-            "search": {"type": "string", "description": "Optional client search hint"},
-            "max_results": {"type": "integer", "description": "Maximum number of candidate clients to inspect. Default: 50"},
-            **PROFILE_PROPERTY,
-        },
-        ["role_name"],
-    ),
-    _tool(
-        "keycloak_list_protocol_mappers",
-        "List protocol mappers configured on a client.",
-        {
-            "client_id": {"type": "string", "description": "Target client_id"},
-            **PROFILE_PROPERTY,
-        },
-        ["client_id"],
-    ),
-    _tool(
-        "keycloak_search_users",
-        "Search users in Keycloak by username, email, or free text.",
-        {
-            "query": {"type": "string", "description": "Search text"},
-            "exact": {"type": "boolean", "description": "Prefer exact Keycloak search"},
-            "max_results": {"type": "integer", "description": f"Maximum number of users. Default: {MAX_SEARCH_RESULTS}"},
-            **PROFILE_PROPERTY,
-        },
-        ["query"],
-    ),
-    _tool("keycloak_find_user", "Find the best matching Keycloak user and return ranked candidates for verification.", {"login": {"type": "string", "description": "Username, email, or partial login"}, **PROFILE_PROPERTY}, ["login"]),
-    _tool(
-        "keycloak_create_user",
-        "Create a Keycloak user. Returns the created user id.",
-        {
-            "username": {"type": "string", "description": "Login / username"},
-            "email": {"type": "string", "description": "Email"},
-            "first_name": {"type": "string", "description": "First name"},
-            "last_name": {"type": "string", "description": "Last name"},
-            "enabled": {"type": "boolean", "description": "Whether the user is enabled"},
-            "temporary_password": {"type": "string", "description": "Temporary password to set after creation"},
-            "attributes": {"type": "object", "description": "Optional Keycloak user attributes"},
-            "required_actions": {"type": "array", "items": {"type": "string"}, "description": "Optional required actions such as UPDATE_PASSWORD"},
-            **PROFILE_PROPERTY,
-        },
-        ["username", "email"],
-    ),
-    _tool("keycloak_list_client_roles", "List all roles for a client.", {"client_id": {"type": "string", "description": "Target client_id. Defaults to configured client."}, **PROFILE_PROPERTY}, []),
-    _tool(
-        "keycloak_assign_roles",
-        "Assign client roles to a user. Exact user match is required unless allow_fuzzy_user_match=true.",
-        {
-            **USER_REFERENCE_PROPERTIES,
-            "roles": {"type": "array", "items": {"type": "string"}, "description": "Client role names"},
-            "client_id": {"type": "string", "description": "Target client_id. Defaults to configured client."},
-            **PROFILE_PROPERTY,
-        },
-        ["roles"],
-    ),
-    _tool("keycloak_get_user_roles", "Get client roles assigned to a user.", {**USER_REFERENCE_PROPERTIES, "client_id": {"type": "string", "description": "Target client_id. Defaults to configured client."}, **PROFILE_PROPERTY}, []),
-    _tool(
-        "keycloak_bulk_assign_roles",
-        "Bulk assign client roles to multiple users.",
-        {
-            "users": {
-                "type": "array",
-                "description": "List of users to update",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "login": {"type": "string"},
-                        "user_id": {"type": "string"},
-                        "allow_fuzzy_user_match": {"type": "boolean"},
-                        "roles": {"type": "array", "items": {"type": "string"}},
-                    },
-                    "required": ["roles"],
-                    "additionalProperties": False,
-                },
-            },
-            "client_id": {"type": "string", "description": "Target client_id. Defaults to configured client."},
-            **PROFILE_PROPERTY,
-        },
-        ["users"],
-    ),
-    _tool("keycloak_assign_roles_from_table", "Parse a markdown table '| Client | Role |' and assign listed roles to a user.", {**USER_REFERENCE_PROPERTIES, "roles_table": {"type": "string", "description": "Markdown table with client and role columns"}, **PROFILE_PROPERTY}, ["roles_table"]),
-    _tool("keycloak_create_realm_role", "Create a realm role in the current realm.", {"role_name": {"type": "string", "description": "Realm role name"}, "description": {"type": "string", "description": "Optional role description"}, **PROFILE_PROPERTY}, ["role_name"]),
-    _tool("keycloak_get_realm_roles", "List all realm roles.", PROFILE_PROPERTY, []),
-    _tool("keycloak_assign_realm_roles", "Assign realm roles to a user.", {**USER_REFERENCE_PROPERTIES, "roles": {"type": "array", "items": {"type": "string"}, "description": "Realm role names"}, **PROFILE_PROPERTY}, ["roles"]),
-    _tool("keycloak_get_user_realm_roles", "List realm roles assigned to a user.", {**USER_REFERENCE_PROPERTIES, **PROFILE_PROPERTY}, []),
-    _tool("keycloak_create_client_role", "Create a client role.", {"client_id": {"type": "string", "description": "Target client_id"}, "role_name": {"type": "string", "description": "Role name"}, "description": {"type": "string", "description": "Optional role description"}, **PROFILE_PROPERTY}, ["client_id", "role_name"]),
-    _tool("keycloak_create_client", "Create a Keycloak client with configurable service-account and grant flags.", {"client_id": {"type": "string", "description": "Unique client_id"}, "name": {"type": "string", "description": "Display name"}, "description": {"type": "string", "description": "Description"}, "service_accounts_enabled": {"type": "boolean", "description": "Enable service account"}, "direct_access_grants_enabled": {"type": "boolean", "description": "Enable password grant"}, "standard_flow_enabled": {"type": "boolean", "description": "Enable authorization code flow"}, "public_client": {"type": "boolean", "description": "Mark as public client"}, **PROFILE_PROPERTY}, ["client_id"]),
-    _tool("keycloak_add_protocol_mapper", "Add an OIDC user-attribute protocol mapper to a client.", {"client_id": {"type": "string", "description": "Target client_id"}, "mapper_name": {"type": "string", "description": "Mapper name"}, "user_attribute": {"type": "string", "description": "Keycloak user attribute name"}, "token_claim": {"type": "string", "description": "Claim name in token"}, "add_to_id_token": {"type": "boolean", "description": "Expose in ID token"}, "add_to_access_token": {"type": "boolean", "description": "Expose in access token"}, **PROFILE_PROPERTY}, ["client_id", "mapper_name", "user_attribute", "token_claim"]),
-    _tool("keycloak_assign_service_account_roles", "Assign client roles to a client's service account user.", {"client_id": {"type": "string", "description": "Target client_id"}, "roles": {"type": "array", "items": {"type": "string"}, "description": "Client role names"}, **PROFILE_PROPERTY}, ["client_id", "roles"]),
-    _tool("keycloak_list_groups", "List groups and subgroup paths.", {"search": {"type": "string", "description": "Optional search term"}, "max_results": {"type": "integer", "description": f"Maximum number of groups. Default: {DEFAULT_GROUP_PAGE_SIZE}"}, **PROFILE_PROPERTY}, []),
-    _tool("keycloak_get_user_groups", "List groups assigned to a user.", {**USER_REFERENCE_PROPERTIES, **PROFILE_PROPERTY}, []),
-    _tool("keycloak_add_user_to_groups", "Add a user to one or more groups by exact id, name, or path.", {**USER_REFERENCE_PROPERTIES, "groups": {"type": "array", "items": {"type": "string"}, "description": "Group ids, names, or paths"}, **PROFILE_PROPERTY}, ["groups"]),
-    _tool("keycloak_create_group", "Create a top-level group or subgroup.", {"group_name": {"type": "string", "description": "New group name"}, "parent_group": {"type": "string", "description": "Optional parent group id, name, or path"}, **PROFILE_PROPERTY}, ["group_name"]),
-]
-
-
 TOOL_HANDLERS: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
     "keycloak_configure": handle_configure,
     "keycloak_use_profile": handle_use_profile,
@@ -1944,132 +1255,38 @@ TOOL_HANDLERS: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
 }
 
 
+def _server_runtime() -> MCPServerRuntime:
+    return MCPServerRuntime(
+        protocol_version=MCP_PROTOCOL_VERSION,
+        tools=TOOLS,
+        tool_handlers=TOOL_HANDLERS,
+        clean_text=_clean_text,
+        result_payload=_result_payload,
+        error_payload=_error_payload,
+        tool_result=_tool_result,
+        tool_error=ToolError,
+        logger=LOGGER,
+    )
+
+
 def _build_response(message: dict[str, Any]) -> dict[str, Any] | None:
-    method = message.get("method")
-    message_id = message.get("id")
-    params = message.get("params") or {}
-
-    if method == "initialize":
-        return _result_payload(
-            message_id,
-            {
-                "protocolVersion": MCP_PROTOCOL_VERSION,
-                "serverInfo": {"name": "keycloak-admin-mcp", "version": "2.0"},
-                "capabilities": {"tools": {"listChanged": False}},
-            },
-        )
-
-    if method == "tools/list":
-        return _result_payload(message_id, {"tools": TOOLS})
-
-    if method == "tools/call":
-        tool_name = _clean_text(params.get("name"))
-        arguments = params.get("arguments") or {}
-        handler = TOOL_HANDLERS.get(tool_name)
-        if not handler:
-            return _error_payload(message_id, f"Unknown tool: {tool_name}")
-        if not isinstance(arguments, dict):
-            return _error_payload(message_id, "Tool arguments must be an object")
-        try:
-            return _result_payload(message_id, handler(arguments))
-        except ToolError as exc:
-            LOGGER.warning("Keycloak MCP tool error in %s: %s", tool_name, exc)
-            return _result_payload(
-                message_id,
-                _tool_result({"success": False, "error": str(exc), "tool": tool_name}, is_error=True),
-            )
-        except Exception as exc:
-            LOGGER.exception("Keycloak MCP unexpected error in %s", tool_name)
-            return _error_payload(message_id, str(exc))
-
-    if message_id is None:
-        return None
-    return _error_payload(message_id, f"Unsupported method: {method}")
+    return _build_response_impl(message, runtime=_server_runtime())
 
 
 def _handle_stdio_request(message: dict[str, Any]) -> None:
-    payload = _build_response(message)
-    if payload is not None:
-        _emit_stdio_payload(payload)
+    _handle_stdio_request_impl(message, runtime=_server_runtime(), emit_stdio_payload=_emit_stdio_payload)
 
 
-class _MCPRequestHandler(BaseHTTPRequestHandler):
-    server_version = "KeycloakAdminMCP/2.0"
-
-    def do_GET(self):
-        if self.path.startswith("/health"):
-            self._write_json(200, {"ok": True, "service": "keycloak-admin-mcp"})
-            return
-        if self.path.startswith("/mcp"):
-            self._write_json(
-                200,
-                {
-                    "ok": True,
-                    "service": "keycloak-admin-mcp",
-                    "transport": "http",
-                    "tools": [tool["name"] for tool in TOOLS],
-                },
-            )
-            return
-        self._write_json(404, {"error": "Not found"})
-
-    def do_POST(self):
-        if not self.path.startswith("/mcp"):
-            self._write_json(404, {"error": "Not found"})
-            return
-        length = int(self.headers.get("content-length") or "0")
-        raw_body = self.rfile.read(length)
-        try:
-            message = json.loads(raw_body.decode("utf-8"))
-        except json.JSONDecodeError:
-            self._write_json(400, {"error": "Invalid JSON"})
-            return
-        if not isinstance(message, dict):
-            self._write_json(400, {"error": "JSON-RPC payload must be an object"})
-            return
-        payload = _build_response(message)
-        if payload is None:
-            self.send_response(202)
-            self.send_header("Content-Length", "0")
-            self.end_headers()
-            return
-        self._write_json(200, payload)
-
-    def log_message(self, format: str, *args: Any) -> None:
-        return
-
-    def _write_json(self, status: int, payload: dict[str, Any]) -> None:
-        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+_MCPRequestHandler = _create_mcp_request_handler(_server_runtime)
+_MCPRequestHandler.__module__ = __name__
 
 
 def run_stdio_server() -> int:
-    for raw_line in sys.stdin:
-        line = raw_line.strip()
-        if not line:
-            continue
-        try:
-            message = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(message, dict):
-            _handle_stdio_request(message)
-    return 0
+    return _run_stdio_server_impl(runtime_provider=_server_runtime, emit_stdio_payload=_emit_stdio_payload)
 
 
 def run_http_server(host: str, port: int) -> int:
-    server = ThreadingHTTPServer((host, port), _MCPRequestHandler)
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        server.server_close()
-    return 0
+    return _run_http_server_impl(host, port, request_handler_cls=_MCPRequestHandler)
 
 
 def main(argv: list[str] | None = None) -> int:

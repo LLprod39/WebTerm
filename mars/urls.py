@@ -7,6 +7,7 @@ app_name = "mars"
 urlpatterns = [
     path("workspaces/", views.api_workspaces, name="workspaces"),
     path("workspaces/<int:workspace_id>/", views.api_workspace_detail, name="workspace_detail"),
+    path("projects/", views.api_projects, name="projects"),
     path("sessions/", views.api_sessions, name="sessions"),
     path("sessions/<int:session_id>/", views.api_session_detail, name="session_detail"),
     path("sessions/<int:session_id>/answer/", views.api_session_answer, name="session_answer"),

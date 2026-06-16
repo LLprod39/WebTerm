@@ -74,7 +74,7 @@ def _disable_activity_logging(monkeypatch):
     async def _noop(*args, **kwargs):
         return None
 
-    monkeypatch.setattr("studio.pipeline_executor.log_user_activity_async", _noop)
+    monkeypatch.setattr("studio.pipeline_agent_runtime.log_user_activity_async", _noop)
 
 
 @pytest.mark.django_db(transaction=True)
@@ -575,7 +575,7 @@ def test_manual_run_validate_only_does_not_create_or_launch_run(monkeypatch):
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["validation"] == {"ok": True, "errors": []}
+    assert payload["validation"] == {"ok": True, "errors": [], "issues": []}
     assert payload["dry_run"]["executed"] is False
     assert payload["dry_run"]["mode"] == "validate_only"
     assert payload["entry_node_id"] == "manual"

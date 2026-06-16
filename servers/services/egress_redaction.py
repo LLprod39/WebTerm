@@ -48,7 +48,7 @@ def redact_ai_event(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, 
         return payload, {}
 
     try:
-        from app.agent_kernel.memory.redaction import redact_text
+        from app.egress_redaction import redact_egress_text
     except Exception:  # noqa: BLE001
         return payload, {}
 
@@ -57,7 +57,7 @@ def redact_ai_event(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, 
         raw = payload.get(field)
         if not raw or not isinstance(raw, str):
             continue
-        result = redact_text(raw)
+        result = redact_egress_text(raw)
         if result.report:
             payload[field] = result.text
             for label, count in result.report.items():

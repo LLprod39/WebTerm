@@ -50,12 +50,14 @@ class MarsRunConsumer(AsyncWebsocketConsumer):
 
         from core_ui.context_processors import user_can_feature
         from mars.models import MarsRun
-        from mars.services import ensure_personal_workspace
+        from mars.services import existing_personal_workspace
 
         user = User.objects.filter(id=user_id).first()
         if not user or not user_can_feature(user, "mars"):
             return False
-        workspace = ensure_personal_workspace(user)
+        workspace = existing_personal_workspace(user)
+        if workspace is None:
+            return False
         return MarsRun.objects.filter(pk=run_id, user_id=user_id, workspace=workspace).exists()
 
     @database_sync_to_async

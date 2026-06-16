@@ -4,6 +4,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.db.models import Q
 from django.utils import timezone
 
 from servers.models import AgentRun, ServerConnection
@@ -45,6 +46,31 @@ def _terminal_session_stale_seconds() -> int:
     return _limit_value("SSH_TERMINAL_SESSION_STALE_SECONDS")
 
 
+def _pipeline_run_stale_seconds() -> int:
+    return _limit_value("PIPELINE_RUN_STALE_SECONDS")
+
+
+def cleanup_stale_pipeline_runs() -> int:
+    stale_seconds = _pipeline_run_stale_seconds()
+    if stale_seconds <= 0:
+        return 0
+
+    now = timezone.now()
+    cutoff = now - timedelta(seconds=stale_seconds)
+    stale_runs = PipelineRun.objects.filter(
+        status__in=ACTIVE_PIPELINE_RUN_STATUSES,
+    ).filter(
+        Q(status=PipelineRun.STATUS_PENDING, created_at__lt=cutoff)
+        | Q(status=PipelineRun.STATUS_RUNNING, started_at__lt=cutoff)
+        | Q(status=PipelineRun.STATUS_RUNNING, started_at__isnull=True, created_at__lt=cutoff)
+    )
+    return stale_runs.update(
+        status=PipelineRun.STATUS_FAILED,
+        error=f"Pipeline run exceeded stale runtime threshold ({stale_seconds} seconds).",
+        finished_at=now,
+    )
+
+
 def cleanup_stale_terminal_sessions() -> int:
     stale_seconds = _terminal_session_stale_seconds()
     if stale_seconds <= 0:
@@ -73,6 +99,22 @@ def get_active_terminal_connections_queryset():
 
     cutoff = timezone.now() - timedelta(seconds=stale_seconds)
     return queryset.filter(last_seen_at__gte=cutoff)
+
+
+def get_active_pipeline_runs_queryset(*, cleanup_stale: bool = True):
+    if cleanup_stale:
+        cleanup_stale_pipeline_runs()
+    queryset = PipelineRun.objects.filter(status__in=ACTIVE_PIPELINE_RUN_STATUSES)
+    stale_seconds = _pipeline_run_stale_seconds()
+    if stale_seconds <= 0:
+        return queryset
+
+    cutoff = timezone.now() - timedelta(seconds=stale_seconds)
+    return queryset.exclude(
+        Q(status=PipelineRun.STATUS_PENDING, created_at__lt=cutoff)
+        | Q(status=PipelineRun.STATUS_RUNNING, started_at__lt=cutoff)
+        | Q(status=PipelineRun.STATUS_RUNNING, started_at__isnull=True, created_at__lt=cutoff)
+    )
 
 
 def get_agent_run_limit_error(user: User | None) -> dict[str, object] | None:
@@ -107,13 +149,14 @@ def get_agent_run_limit_error(user: User | None) -> dict[str, object] | None:
     return None
 
 
-def get_pipeline_run_limit_error(owner: User | None) -> dict[str, object] | None:
+def get_pipeline_run_limit_error(owner: User | None, *, cleanup_stale: bool = True) -> dict[str, object] | None:
+    active_queryset = get_active_pipeline_runs_queryset(cleanup_stale=cleanup_stale)
+
     if owner is not None:
         per_user_limit = _limit_value("PIPELINE_ACTIVE_RUNS_PER_USER_LIMIT")
         if per_user_limit:
-            active_for_owner = PipelineRun.objects.filter(
+            active_for_owner = active_queryset.filter(
                 pipeline__owner=owner,
-                status__in=ACTIVE_PIPELINE_RUN_STATUSES,
             ).count()
             if active_for_owner >= per_user_limit:
                 return _limit_error(
@@ -126,7 +169,7 @@ def get_pipeline_run_limit_error(owner: User | None) -> dict[str, object] | None
 
     global_limit = _limit_value("PIPELINE_ACTIVE_RUNS_GLOBAL_LIMIT")
     if global_limit:
-        active_global = PipelineRun.objects.filter(status__in=ACTIVE_PIPELINE_RUN_STATUSES).count()
+        active_global = active_queryset.count()
         if active_global >= global_limit:
             return _limit_error(
                 code="pipeline_global_limit_reached",

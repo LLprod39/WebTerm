@@ -20,6 +20,46 @@ x-json-logging: &json-logging
     max-size: "10m"
     max-file: "5"
 
+x-backend-build: &backend-build
+  context: .
+  dockerfile: docker/backend.Dockerfile
+  args:
+    http_proxy: ${http_proxy:-}
+    https_proxy: ${https_proxy:-}
+    ftp_proxy: ${ftp_proxy:-}
+    no_proxy: ${no_proxy:-localhost,127.0.0.1,::1}
+    HTTP_PROXY: ${HTTP_PROXY:-}
+    HTTPS_PROXY: ${HTTPS_PROXY:-}
+    FTP_PROXY: ${FTP_PROXY:-}
+    NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1}
+
+x-backend-worker: &backend-worker
+  build: *backend-build
+  env_file:
+    - .env.production
+  environment:
+    <<: *proxy-env
+    WEU_BUILD: ${WEU_BUILD:-prod}
+    DJANGO_DEBUG: ${DJANGO_DEBUG:-false}
+    DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-web_ui.settings.production}
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: "5432"
+    CHANNEL_REDIS_URL: ${CHANNEL_REDIS_URL:-redis://redis:6379/1}
+  volumes:
+    - mini_prod_media:/workspace/media
+    - mini_prod_staticfiles:/workspace/staticfiles
+    - mini_prod_logs:/workspace/logs
+  depends_on:
+    backend:
+      condition: service_healthy
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  restart: unless-stopped
+  stop_grace_period: 45s
+  logging: *json-logging
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -64,18 +104,7 @@ services:
     logging: *json-logging
 
   backend:
-    build:
-      context: .
-      dockerfile: docker/backend.Dockerfile
-      args:
-        http_proxy: ${http_proxy:-}
-        https_proxy: ${https_proxy:-}
-        ftp_proxy: ${ftp_proxy:-}
-        no_proxy: ${no_proxy:-localhost,127.0.0.1,::1}
-        HTTP_PROXY: ${HTTP_PROXY:-}
-        HTTPS_PROXY: ${HTTPS_PROXY:-}
-        FTP_PROXY: ${FTP_PROXY:-}
-        NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1}
+    build: *backend-build
     container_name: mini-prod-backend
     command: ["sh", "-lc", "./docker/render-backend-start.sh"]
     environment:
@@ -183,6 +212,52 @@ services:
       timeout: 5s
       retries: 10
     logging: *json-logging
+
+  scheduled-pipelines:
+    <<: *backend-worker
+    container_name: mini-prod-scheduled-pipelines
+    command:
+      [
+        "sh",
+        "-lc",
+        "python manage.py run_scheduled_pipelines --daemon --interval ${PIPELINE_SCHEDULER_INTERVAL:-60}",
+      ]
+
+  scheduled-agents:
+    <<: *backend-worker
+    container_name: mini-prod-scheduled-agents
+    command:
+      [
+        "sh",
+        "-lc",
+        "python manage.py run_scheduled_agents --daemon --interval ${SCHEDULED_AGENTS_INTERVAL:-60} --limit ${SCHEDULED_AGENTS_LIMIT:-100}",
+      ]
+
+  monitor:
+    <<: *backend-worker
+    container_name: mini-prod-monitor
+    command:
+      [
+        "sh",
+        "-lc",
+        "python manage.py run_monitor --quick-interval ${MONITOR_QUICK_INTERVAL:-300} --deep-interval ${MONITOR_DEEP_INTERVAL:-600} --cleanup-interval ${MONITOR_CLEANUP_INTERVAL:-86400} --concurrency ${MONITOR_CONCURRENCY:-5}",
+      ]
+
+  ops-supervisor:
+    <<: *backend-worker
+    container_name: mini-prod-ops-supervisor
+    command:
+      [
+        "sh",
+        "-lc",
+        "python manage.py run_ops_supervisor --with-watchers --dream-interval ${MEMORY_DREAM_INTERVAL:-300} --execution-interval ${AGENT_EXECUTION_INTERVAL:-5} --watchers-interval ${WATCHERS_INTERVAL:-120} --watchers-limit ${WATCHERS_LIMIT:-100}",
+      ]
+
+  telegram-bot:
+    <<: *backend-worker
+    container_name: mini-prod-telegram-bot
+    profiles: ["telegram-bot"]
+    command: ["sh", "-lc", "python manage.py run_telegram_bot"]
 
   frontend:
     build:

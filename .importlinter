@@ -144,11 +144,10 @@ forbidden_modules =
 ignore_imports =
     # Legacy violations to be resolved in subsequent refactoring tasks:
     studio.apps -> servers.signals
-    studio.pipeline_executor -> app.agent_kernel.memory.server_cards
-    studio.pipeline_executor -> servers.services.command_history
-    studio.pipeline_executor -> servers.services.pipeline_agents
-    studio.pipeline_executor -> servers.services.pipeline_memory
-    studio.pipeline_executor -> servers.services.ssh_connection
+    studio.pipeline_agent_llm -> servers.services.pipeline_memory
+    studio.pipeline_agent_runtime -> servers.services.command_history
+    studio.pipeline_agent_runtime -> servers.services.pipeline_agents
+    studio.pipeline_agent_runtime -> servers.services.ssh_connection
     studio.services.server_access -> servers.services.server_query
     studio.skill_authoring -> servers.services.tool_catalog
     studio.trigger_dispatch -> servers.services.alert_query

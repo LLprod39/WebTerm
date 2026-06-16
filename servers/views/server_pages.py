@@ -175,7 +175,6 @@ def frontend_bootstrap(request):
             "port": int(server.port or 0),
             "username": server.username,
             "server_type": server.server_type or "ssh",
-            "rdp": bool(server.is_rdp()),
             "status": status,
             "group_id": server.group_id,
             "group_name": group_name,
@@ -226,15 +225,6 @@ def frontend_bootstrap(request):
 @require_feature("servers", redirect_on_forbidden=True)
 def server_terminal_page(request, server_id: int):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
-    if server.is_rdp():
-        return render(
-            request,
-            "servers/rdp_terminal.html",
-            {
-                "server": server,
-                "has_master_password": bool(request.session.get("_mp")),
-            },
-        )
     all_servers = list(_accessible_servers_queryset(request.user).order_by("name"))
     has_master_password = bool(request.session.get("_mp"))
     return render(
@@ -266,15 +256,6 @@ def multi_terminal(request):
 @require_feature("servers", redirect_on_forbidden=True)
 def terminal_minimal(request, server_id: int):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
-    if server.is_rdp():
-        return render(
-            request,
-            "servers/rdp_terminal_minimal.html",
-            {
-                "server": server,
-                "has_master_password": bool(request.session.get("_mp")),
-            },
-        )
     all_servers = list(_accessible_servers_queryset(request.user).order_by("name"))
     return render(
         request,

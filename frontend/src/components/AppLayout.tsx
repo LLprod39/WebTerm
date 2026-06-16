@@ -7,7 +7,6 @@ import { localize, useI18n } from "@/lib/i18n";
 const immersiveMeta: Array<{ match: RegExp; title: string; backTo: string; hideHeader?: boolean }> = [
   { match: /^\/servers\/hub$/, title: "Terminal Hub", backTo: "/servers", hideHeader: true },
   { match: /^\/servers\/\d+\/terminal$/, title: "Terminal", backTo: "/servers", hideHeader: true },
-  { match: /^\/servers\/\d+\/rdp$/, title: "RDP", backTo: "/servers", hideHeader: true },
   { match: /^\/agents\/run\/\d+$/, title: "Agent Run", backTo: "/agents" },
   { match: /^\/studio\/pipeline\/(?:new|\d+)$/, title: "Pipeline Editor", backTo: "/studio", hideHeader: true },
 ];
@@ -31,11 +30,11 @@ export default function AppLayout() {
     return (
       <SidebarProvider>
         {mobileSidebarTrigger}
-        <div className="flex h-screen min-h-0 w-full overflow-hidden bg-background">
+        <div className="app-shell-bg flex h-screen min-h-0 w-full overflow-hidden">
           <AppSidebar />
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             {!immersive.hideHeader && (
-              <header className="flex h-12 items-center gap-3 border-b border-border bg-card/70 px-3">
+              <header className="flex h-12 items-center gap-3 border-b border-border/70 bg-card/75 px-3 backdrop-blur">
                 <SidebarTrigger className="h-9 w-9 text-muted-foreground hover:text-foreground" />
                 <Link
                   to={immersive.backTo}
@@ -59,7 +58,7 @@ export default function AppLayout() {
   return (
     <SidebarProvider>
       {mobileSidebarTrigger}
-      <div className="flex min-h-screen w-full bg-background">
+      <div className="app-shell-bg flex min-h-screen w-full">
         <AppSidebar />
         <div className="flex min-w-0 flex-1 flex-col">
           <main className="min-h-0 flex-1 overflow-auto pt-16 animate-in fade-in duration-200 md:pt-0">

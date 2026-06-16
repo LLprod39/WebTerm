@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from app.agent_kernel.permissions.engine import PermissionEngine
 from servers.agent_engine import AgentEngine
 from servers.models import ServerAgent
 from servers.multi_agent_engine import MultiAgentEngine
@@ -32,6 +33,7 @@ async def run_pipeline_react_agent(
     mcp_servers: list[Any],
     skills: list[Any],
     skill_errors: list[str],
+    permission_mode: str = "",
 ) -> AgentRunSnapshot:
     agent = ServerAgent(
         name=f"pipeline_node_{node_id}",
@@ -54,6 +56,8 @@ async def run_pipeline_react_agent(
         skills=skills,
         skill_errors=skill_errors,
     )
+    if permission_mode:
+        engine.permission_engine = PermissionEngine(mode=permission_mode)
     agent_run = await engine.run()
     return AgentRunSnapshot(
         agent_run_id=agent_run.pk,
@@ -78,6 +82,7 @@ async def run_pipeline_multi_agent(
     mcp_servers: list[Any],
     skills: list[Any],
     skill_errors: list[str],
+    permission_mode: str = "",
 ) -> AgentRunSnapshot:
     agent = ServerAgent(
         name=f"pipeline_multi_{node_id}",
@@ -99,6 +104,8 @@ async def run_pipeline_multi_agent(
         skills=skills,
         skill_errors=skill_errors,
     )
+    if permission_mode:
+        engine.permission_engine = PermissionEngine(mode=permission_mode)
     agent_run = await engine.run()
     return AgentRunSnapshot(
         agent_run_id=agent_run.pk,

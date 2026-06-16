@@ -26,6 +26,27 @@ function isCliEvent(event: MarsRunEvent): boolean {
   return event.event_type.includes("_stdout") || event.event_type.includes("_stderr");
 }
 
+function publicEventLabel(eventType: string, lang: string): string {
+  if (eventType.includes("architect")) return localize(lang, "Понимание задачи", "Understanding");
+  if (eventType.includes("repair")) return localize(lang, "Исправление", "Repair");
+  if (eventType.includes("tests")) return localize(lang, "Проверка", "Verification");
+  if (eventType.includes("gemini") || eventType.includes("review")) return localize(lang, "Проверка качества", "Quality check");
+  if (eventType.includes("codex") || eventType.includes("build")) return localize(lang, "Создание", "Build");
+  if (eventType.includes("orchestrator")) return localize(lang, "Подготовка процесса", "Workflow setup");
+  if (eventType.includes("mars_run_completed")) return localize(lang, "Готово", "Completed");
+  if (eventType.includes("mars_run_failed")) return localize(lang, "Ошибка", "Failed");
+  if (eventType.includes("mars_run_started")) return localize(lang, "Запуск", "Started");
+  if (eventType.includes("mars_run_queued")) return localize(lang, "В очереди", "Queued");
+  return eventType.replaceAll("_", " ");
+}
+
+function publicEventMessage(event: MarsRunEvent, lang: string): string {
+  if (/(codex|gemini|orchestrator)/i.test(event.event_type) || /(codex|gemini)/i.test(event.message)) {
+    return publicEventLabel(event.event_type, lang);
+  }
+  return event.message;
+}
+
 function parseChangedFiles(statusText?: string): string[] {
   return (statusText || "")
     .split("\n")
@@ -106,9 +127,9 @@ export default function MarsRunPage() {
   });
   const checklist = [
     { label: localize(lang, "Рабочая папка", "Workspace policy"), done: events.some((event) => event.event_type === "mars_run_started") },
-    { label: localize(lang, "Агент", "Agent"), done: events.some((event) => event.event_type === "codex_finished") || Boolean(run?.codex_summary) },
+    { label: localize(lang, "Создание", "Build"), done: events.some((event) => event.event_type === "codex_finished") || Boolean(run?.codex_summary) },
     { label: localize(lang, "Verification", "Verification"), done: events.some((event) => event.event_type.startsWith("tests_")) || Boolean(run?.test_output) },
-    { label: "Gemini", done: events.some((event) => event.event_type === "gemini_finished") || Boolean(run?.gemini_review) },
+    { label: localize(lang, "Качество", "Quality"), done: events.some((event) => event.event_type === "gemini_finished") || Boolean(run?.gemini_review) },
     { label: localize(lang, "Final report", "Final report"), done: Boolean(run?.final_report) },
   ];
   const progress = Math.round((checklist.filter((item) => item.done).length / checklist.length) * 100);
@@ -145,8 +166,8 @@ export default function MarsRunPage() {
         <PageGrid sidebar>
           <div className="space-y-5">
             <SectionCard
-              title={localize(lang, "Timeline", "Timeline")}
-              description={localize(lang, "События worker, CLI и review.", "Worker, CLI, and review events.")}
+              title={localize(lang, "Ход работы", "Progress")}
+              description={localize(lang, "Основные события запуска без внутренних деталей.", "Main run events without internal details.")}
               icon={<BrainCircuit className="h-4 w-4" />}
             >
               <div className="space-y-4">
@@ -163,10 +184,10 @@ export default function MarsRunPage() {
                   {events.filter((event) => !isCliEvent(event)).slice(-40).map((event) => (
                     <div key={event.id} className="rounded-lg border border-border bg-secondary/15 px-3 py-2">
                       <div className="flex items-center justify-between gap-3">
-                        <span className="truncate text-xs font-semibold text-foreground">{event.event_type}</span>
+                        <span className="truncate text-xs font-semibold text-foreground">{publicEventLabel(event.event_type, lang)}</span>
                         <span className="shrink-0 text-[10px] text-muted-foreground">{event.created_at ? new Date(event.created_at).toLocaleTimeString() : ""}</span>
                       </div>
-                      {event.message ? <div className="mt-1 text-xs leading-5 text-muted-foreground">{event.message}</div> : null}
+                      {event.message ? <div className="mt-1 text-xs leading-5 text-muted-foreground">{publicEventMessage(event, lang)}</div> : null}
                     </div>
                   ))}
                   {events.length === 0 ? (
@@ -178,19 +199,19 @@ export default function MarsRunPage() {
               </div>
             </SectionCard>
 
-            <SectionCard title={localize(lang, "CLI log stream", "CLI log stream")} icon={<Terminal className="h-4 w-4" />}>
+            <SectionCard title={localize(lang, "Журнал выполнения", "Execution log")} icon={<Terminal className="h-4 w-4" />}>
               <pre className="max-h-[460px] overflow-auto rounded-lg bg-black p-4 text-xs leading-5 text-zinc-100">
                 {cliLines.length ? cliLines.join("\n") : localize(lang, "CLI stdout/stderr появится здесь.", "CLI stdout/stderr appears here.")}
               </pre>
             </SectionCard>
 
             <div className="grid gap-5 xl:grid-cols-2">
-              <SectionCard title={localize(lang, "Результат агента", "Agent result")} icon={<BrainCircuit className="h-4 w-4" />}>
+              <SectionCard title={localize(lang, "Результат выполнения", "Run result")} icon={<BrainCircuit className="h-4 w-4" />}>
                 <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded-lg bg-secondary/20 p-4 text-xs leading-5 text-foreground">
-                  {run?.codex_summary || localize(lang, "Результат пока пуст.", "No agent result yet.")}
+                  {run?.codex_summary || localize(lang, "Результат пока пуст.", "No result yet.")}
                 </pre>
               </SectionCard>
-              <SectionCard title="Gemini review" icon={<BrainCircuit className="h-4 w-4" />}>
+              <SectionCard title={localize(lang, "Проверка качества", "Quality check")} icon={<BrainCircuit className="h-4 w-4" />}>
                 <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded-lg bg-secondary/20 p-4 text-xs leading-5 text-foreground">
                   {run?.gemini_review || localize(lang, "Review еще не готов.", "Review is not ready yet.")}
                 </pre>

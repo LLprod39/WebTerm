@@ -12,6 +12,8 @@ from asgiref.sync import sync_to_async as _s2a
 from django.conf import settings as django_settings
 from loguru import logger
 
+from app.egress_redaction import redact_egress_text
+from app.execution_policy import safe_payload_preview
 from core_ui.managed_secrets import get_mcp_secret_env
 from studio.mcp_security import validate_mcp_runtime_policy
 
@@ -321,7 +323,8 @@ class _HttpMCPClient:
                 if attempt < retries and _should_retry_http_status(status):
                     await asyncio.sleep(_retry_delay(attempt))
                     continue
-                raise MCPClientError(f"MCP HTTP error {status}: {exc.response.text[:300]}") from exc
+                safe_body = redact_egress_text(exc.response.text).text[:300]
+                raise MCPClientError(f"MCP HTTP error {status}: {safe_body}") from exc
             except httpx.HTTPError as exc:
                 if attempt < retries and _is_retryable_http_error(exc):
                     await asyncio.sleep(_retry_delay(attempt))
@@ -417,7 +420,7 @@ async def call_mcp_tool(server: MCPServerPool, tool_name: str, arguments: dict[s
         server.name,
         server.transport,
         tool_name,
-        json.dumps(arguments, ensure_ascii=False)[:1000],
+        safe_payload_preview(arguments, limit=1000),
     )
     async with await _with_client(server) as client:
         await client.initialize()

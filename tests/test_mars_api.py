@@ -1,16 +1,25 @@
 import json
+import os
 import subprocess
 import sys
 import textwrap
+import time
 
+from asgiref.sync import async_to_sync
 import pytest
 from django.contrib.auth.models import User
 from django.test import Client
 from django.test import override_settings
 
 from core_ui.models import UserAppPermission
-from mars.models import MarsRun, MarsRunEvent, MarsWorkspace
-from mars.services import build_interview_questions
+from mars.consumers import MarsRunConsumer
+from mars.models import MarsRun, MarsRunEvent, MarsSession, MarsWorkspace, default_deny_globs
+from mars.services import (
+    PERSONAL_WORKSPACE_NAME,
+    build_interview_questions,
+    ensure_personal_workspace,
+    personal_workspace_root,
+)
 
 
 def _json(payload: dict) -> str:
@@ -72,6 +81,30 @@ def _init_git_repo(tmp_path):
     subprocess.run(["git", "add", "README.md"], cwd=root, check=True)
     subprocess.run(["git", "commit", "-m", "init"], cwd=root, check=True, capture_output=True, text=True)
     return root
+
+
+def _create_personal_workspace_run(user: User):
+    root = personal_workspace_root(user)
+    root.mkdir(parents=True)
+    subprocess.run(["git", "init", str(root)], check=True, capture_output=True, text=True)
+    workspace = MarsWorkspace.objects.create(
+        user=user,
+        name=PERSONAL_WORKSPACE_NAME,
+        root_path=str(root),
+        read_allow_roots=[str(root)],
+        write_allow_roots=[str(root)],
+        deny_globs=default_deny_globs(),
+        enabled=True,
+    )
+    session = MarsSession.objects.create(
+        user=user,
+        workspace=workspace,
+        task_brief="Read existing MARS run",
+        status=MarsSession.STATUS_APPROVED,
+    )
+    run = MarsRun.objects.create(user=user, workspace=workspace, session=session)
+    MarsRunEvent.objects.create(run=run, event_type="mars_run_queued", message="Queued")
+    return root, run
 
 
 def _create_workspace(client: Client, root) -> int:
@@ -159,6 +192,147 @@ def test_mars_session_fails_closed_when_codex_interview_fails(tmp_path):
 
 
 @pytest.mark.django_db
+def test_ensure_personal_workspace_recovers_stale_git_config_lock(tmp_path):
+    user = User.objects.create_user(username="mars-stale-lock", password="x")
+
+    with override_settings(
+        MARS_USER_WORKSPACES_ROOT=tmp_path / "mars_workspaces",
+        MARS_GIT_CONFIG_LOCK_STALE_SECONDS=1,
+        MARS_GIT_CONFIG_LOCK_RETRIES=2,
+        MARS_GIT_CONFIG_LOCK_RETRY_DELAY_SECONDS=0,
+    ):
+        root = personal_workspace_root(user)
+        root.mkdir(parents=True)
+        subprocess.run(["git", "init", str(root)], check=True, capture_output=True, text=True)
+        lock_path = root / ".git" / "config.lock"
+        lock_path.write_text("stale\n", encoding="utf-8")
+        old_time = time.time() - 10
+        os.utime(lock_path, (old_time, old_time))
+
+        workspace = ensure_personal_workspace(user)
+
+        email = subprocess.run(
+            ["git", "-C", str(root), "config", "--get", "user.email"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        head = subprocess.run(["git", "-C", str(root), "rev-parse", "--verify", "HEAD"], check=False)
+
+    assert workspace.root_path == str(root)
+    assert email == f"mars-user-{user.id}@local.invalid"
+    assert head.returncode == 0
+    assert not lock_path.exists()
+
+
+@pytest.mark.django_db
+def test_mars_run_events_use_existing_workspace_when_git_config_lock_blocks_init(tmp_path):
+    user = User.objects.create_user(username="mars-events-lock", password="x")
+    _grant_feature(user, "mars")
+    client = Client()
+    client.force_login(user)
+
+    with override_settings(
+        MARS_USER_WORKSPACES_ROOT=tmp_path / "mars_workspaces",
+        MARS_GIT_CONFIG_LOCK_STALE_SECONDS=600,
+        MARS_GIT_CONFIG_LOCK_RETRIES=1,
+        MARS_GIT_CONFIG_LOCK_RETRY_DELAY_SECONDS=0,
+    ):
+        root, run = _create_personal_workspace_run(user)
+        lock_path = root / ".git" / "config.lock"
+        lock_path.write_text("active\n", encoding="utf-8")
+
+        response = client.get(f"/api/mars/runs/{run.id}/events/")
+
+    assert response.status_code == 200, response.content
+    assert response.json()["events"][0]["event_type"] == "mars_run_queued"
+    assert lock_path.exists()
+
+
+@pytest.mark.django_db
+def test_mars_readonly_detail_endpoints_use_existing_workspace_when_git_config_lock_blocks_init(tmp_path):
+    user = User.objects.create_user(username="mars-detail-lock", password="x")
+    _grant_feature(user, "mars")
+    client = Client()
+    client.force_login(user)
+
+    with override_settings(
+        MARS_USER_WORKSPACES_ROOT=tmp_path / "mars_workspaces",
+        MARS_GIT_CONFIG_LOCK_STALE_SECONDS=600,
+        MARS_GIT_CONFIG_LOCK_RETRIES=1,
+        MARS_GIT_CONFIG_LOCK_RETRY_DELAY_SECONDS=0,
+    ):
+        root, run = _create_personal_workspace_run(user)
+        lock_path = root / ".git" / "config.lock"
+        lock_path.write_text("active\n", encoding="utf-8")
+
+        workspaces_response = client.get("/api/mars/workspaces/")
+        workspace_response = client.get(f"/api/mars/workspaces/{run.workspace_id}/")
+        session_response = client.get(f"/api/mars/sessions/{run.session_id}/")
+
+    assert workspaces_response.status_code == 200, workspaces_response.content
+    assert workspaces_response.json()["workspaces"][0]["id"] == run.workspace_id
+    assert workspace_response.status_code == 200, workspace_response.content
+    assert workspace_response.json()["workspace"]["id"] == run.workspace_id
+    assert session_response.status_code == 200, session_response.content
+    assert session_response.json()["session"]["id"] == run.session_id
+    assert lock_path.exists()
+
+
+@pytest.mark.django_db
+def test_mars_session_create_uses_existing_workspace_when_git_config_lock_blocks_init(tmp_path):
+    script = _write_fake_interview_codex(tmp_path)
+    user = User.objects.create_user(username="mars-session-lock", password="x")
+    _grant_feature(user, "mars")
+    client = Client()
+    client.force_login(user)
+
+    with override_settings(
+        MARS_USER_WORKSPACES_ROOT=tmp_path / "mars_workspaces",
+        MARS_GIT_CONFIG_LOCK_STALE_SECONDS=600,
+        MARS_GIT_CONFIG_LOCK_RETRIES=1,
+        MARS_GIT_CONFIG_LOCK_RETRY_DELAY_SECONDS=0,
+        MARS_INTERVIEW_CODEX_COMMAND=[sys.executable, str(script)],
+        MEDIA_ROOT=tmp_path / "media",
+    ):
+        root, run = _create_personal_workspace_run(user)
+        lock_path = root / ".git" / "config.lock"
+        lock_path.write_text("active\n", encoding="utf-8")
+
+        response = client.post(
+            "/api/mars/sessions/",
+            data=_json({"workspace_id": run.workspace_id, "task_brief": "Build a React page"}),
+            content_type="application/json",
+        )
+
+    assert response.status_code == 201, response.content
+    assert response.json()["session"]["workspace_id"] == run.workspace_id
+    assert len(response.json()["session"]["interview_questions"]) >= 5
+    assert lock_path.exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_mars_websocket_access_uses_existing_workspace_when_git_config_lock_blocks_init(tmp_path):
+    user = User.objects.create_user(username="mars-ws-lock", password="x")
+    _grant_feature(user, "mars")
+
+    with override_settings(
+        MARS_USER_WORKSPACES_ROOT=tmp_path / "mars_workspaces",
+        MARS_GIT_CONFIG_LOCK_STALE_SECONDS=600,
+        MARS_GIT_CONFIG_LOCK_RETRIES=1,
+        MARS_GIT_CONFIG_LOCK_RETRY_DELAY_SECONDS=0,
+    ):
+        root, run = _create_personal_workspace_run(user)
+        lock_path = root / ".git" / "config.lock"
+        lock_path.write_text("active\n", encoding="utf-8")
+
+        allowed = async_to_sync(MarsRunConsumer()._user_can_access_run)(user.id, run.id)
+
+    assert allowed is True
+    assert lock_path.exists()
+
+
+@pytest.mark.django_db
 def test_mars_feature_denies_non_staff_without_permission():
     user = User.objects.create_user(username="no-mars", password="x")
     client = Client()
@@ -195,6 +369,20 @@ def test_mars_workspace_session_run_stop_and_events_flow(tmp_path):
         assert run_response.status_code == 201, run_response.content
         run_id = run_response.json()["run"]["id"]
         assert run_response.json()["run"]["status"] == "queued"
+        assert "orchestration" not in run_response.json()["run"]["runtime_control"]
+
+        orchestration = MarsRun.objects.get(pk=run_id).runtime_control["orchestration"]
+        assert orchestration["visibility"] == "internal"
+        assert orchestration["skill_catalog"]["hidden_from_user"] is True
+        assert orchestration["skill_catalog"]["available_count"] > 4
+        assert orchestration["skill_routing"]["architect"]
+        assert orchestration["skill_routing"]["executor"]
+
+        projects = client.get("/api/mars/projects/")
+        assert projects.status_code == 200
+        assert projects.json()["projects"][0]["session"]["id"] == session_id
+        assert projects.json()["projects"][0]["latest_run"]["id"] == run_id
+        assert projects.json()["projects"][0]["run_count"] == 1
 
         events = client.get(f"/api/mars/runs/{run_id}/events/")
         assert events.status_code == 200

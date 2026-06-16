@@ -11,6 +11,7 @@ from loguru import logger
 
 from app.core.llm_usage import log_llm_usage as _log_llm_usage
 from app.core.model_config import model_manager
+from app.core.redacted_logging import redacted_log_text
 
 # Таймаут для стрима Gemini (сек), экспоненциальная задержка при retry
 GEMINI_STREAM_TIMEOUT = 90  # в диапазоне 60–120 сек
@@ -344,7 +345,7 @@ class LLMProvider:
                 else:
                     model = preferred
             logger.info(f"[{purpose}] using provider: {model}, model: {specific_model or '(default)'}")
-        logger.info(f"Streaming chat from {model} with prompt: {prompt[:50]}...")
+        logger.info("Streaming chat from {} with prompt: {}...", model, redacted_log_text(prompt, limit=50))
 
         # B2: per-user daily token budget pre-flight. Best-effort — never let
         # a budget-service failure break a real LLM call (lazy import + try).
@@ -517,7 +518,7 @@ class LLMProvider:
                                 purpose=purpose,
                             )
                             return
-                        error_text = await response.text()
+                        error_text = redacted_log_text(await response.text())
                         is_retryable = response.status == 429 or (500 <= response.status < 600)
                         if is_retryable and attempt < max_attempts - 1:
                             yield "[Повтор попытки...]"
@@ -642,7 +643,6 @@ class LLMProvider:
             import aiohttp
 
             target_model = specific_model or model_manager.get_chat_model("openai")
-            key_preview = self.openai_api_key[:8] + "..." if self.openai_api_key else "—"
 
             # Определяем эндпоинт:
             # - gpt-5.x (все модели нового поколения) → Responses API (/v1/responses)
@@ -706,7 +706,7 @@ class LLMProvider:
                 if json_mode:
                     request_data["response_format"] = {"type": "json_object"}
 
-            logger.info(f"OpenAI: model={target_model}, endpoint={endpoint_name}, key_prefix={key_preview}")
+            logger.info(f"OpenAI: model={target_model}, endpoint={endpoint_name}, api_key=configured")
 
             headers = {
                 "Content-Type": "application/json",
@@ -744,7 +744,11 @@ class LLMProvider:
                                 try:
                                     chunk_json = json.loads(chunk_str)
                                 except json.JSONDecodeError as je:
-                                    logger.warning(f"OpenAI: JSON decode error: {je} | raw={chunk_str[:120]}")
+                                    logger.warning(
+                                        "OpenAI: JSON decode error: {} | raw={}",
+                                        je,
+                                        redacted_log_text(chunk_str, limit=120),
+                                    )
                                     continue
 
                                 if endpoint_name == "responses":
@@ -779,10 +783,13 @@ class LLMProvider:
                             )
                             return
 
-                        error_text = await response.text()
+                        error_text = redacted_log_text(await response.text())
                         is_retryable = response.status == 429 or (500 <= response.status < 600)
                         logger.error(
-                            f"OpenAI: HTTP error {response.status}, retryable={is_retryable}, body={error_text[:500]}"
+                            "OpenAI: HTTP error {}, retryable={}, body={}",
+                            response.status,
+                            is_retryable,
+                            redacted_log_text(error_text, limit=500),
                         )
                         if is_retryable and attempt < max_attempts - 1:
                             yield "[Повтор попытки...]"
@@ -907,7 +914,10 @@ class LLMProvider:
                                             _output += content
                                             yield content
                                     except json.JSONDecodeError:
-                                        logger.debug(f"Ollama: trailing stream fragment ignored: {pending[:160]}")
+                                        logger.debug(
+                                            "Ollama: trailing stream fragment ignored: {}",
+                                            redacted_log_text(pending, limit=160),
+                                        )
 
                                 if (
                                     request_target["kind"] == "local"
@@ -934,7 +944,7 @@ class LLMProvider:
                                 )
                                 return
 
-                            error_text = await response.text()
+                            error_text = redacted_log_text(await response.text())
                             is_retryable = response.status == 429 or (500 <= response.status < 600)
                             if is_retryable and attempt < max_attempts - 1:
                                 yield "[Повтор попытки...]"

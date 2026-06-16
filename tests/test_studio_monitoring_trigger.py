@@ -237,6 +237,41 @@ def test_launch_monitoring_triggers_creates_run_with_entry_node(monkeypatch):
     assert stored_run.trigger_data["source"] == "monitoring"
 
 
+def test_launch_monitoring_triggers_skips_trigger_without_downstream_nodes(monkeypatch):
+    owner = User.objects.create_user(username="monitoring-empty-branch", password="x")
+    server = Server.objects.create(user=owner, name="docker-srv", host="10.0.0.23", username="root")
+    pipeline = Pipeline.objects.create(
+        owner=owner,
+        name="Monitoring Empty Branch",
+        graph_version=2,
+        nodes=[
+            {
+                "id": "monitoring_start",
+                "type": "trigger/monitoring",
+                "position": {"x": 0, "y": 0},
+                "data": {"label": "Monitoring", "monitoring_filters": {}},
+            }
+        ],
+        edges=[],
+    )
+    pipeline.sync_triggers_from_nodes()
+    monkeypatch.setattr("studio.trigger_dispatch.launch_pipeline_run_async", lambda _run: pytest.fail("empty monitoring launched"))
+
+    alert = ServerAlert.objects.create(
+        server=server,
+        alert_type=ServerAlert.TYPE_SERVICE,
+        severity=ServerAlert.SEVERITY_CRITICAL,
+        title="Service down",
+        message="service unhealthy",
+        metadata={},
+    )
+
+    runs = launch_monitoring_triggers_for_alert(alert)
+
+    assert runs == []
+    assert PipelineRun.objects.filter(pipeline=pipeline).count() == 0
+
+
 def test_create_alerts_resolves_stale_docker_alert_when_container_recovers():
     owner = User.objects.create_user(username="monitoring-resolve", password="x")
     server = Server.objects.create(user=owner, name="docker-srv", host="10.0.0.21", username="root")

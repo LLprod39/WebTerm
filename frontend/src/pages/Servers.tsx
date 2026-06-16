@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import yaml from "js-yaml";
-import { Link } from "react-router-dom";
 import {
   addServerGroupMember,
   bulkDeleteServerMemorySnapshots,
@@ -44,43 +42,25 @@ import {
   type ServerDetailsResponse,
   type ServerGroupRole,
 } from "@/lib/api";
-import { FleetHealthIndicator, StatusIndicator } from "@/components/StatusIndicator";
-import { ServerOsBadge } from "@/components/servers/ServerOsBadge";
-import { resolveServerOs, serverOsLabelKey } from "@/lib/server-os";
-import { localize, useI18n } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
 import {
   Terminal,
-  Monitor,
-  ChevronDown,
-  ChevronRight,
   Plus,
   Search,
   Server,
   Settings,
   Trash2,
-  Plug,
   Sparkles,
   Layers,
-  Play,
   BookOpen,
-  GripVertical,
-  Copy,
-  CheckCircle2,
-  XCircle,
   Loader2,
-  Save,
-  FolderOpen,
   Upload,
-  Download,
-  FileJson,
-  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { motion, AnimatePresence } from "framer-motion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
@@ -92,533 +72,39 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { EmptyState, PageHero, PageShell, QueryStateBlock } from "@/components/ui/page-shell";
-
-interface ServerForm {
-  name: string;
-  server_type: "ssh" | "rdp";
-  host: string;
-  port: number;
-  username: string;
-  auth_method: "password" | "key" | "key_password";
-  key_path: string;
-  ssh_private_key: string;
-  password: string;
-  tags: string;
-  notes: string;
-  group_id: number | null;
-  is_active: boolean;
-  ai_read_only: boolean;
-}
-
-interface ServerGroupForm {
-  name: string;
-  description: string;
-  color: string;
-}
-
-interface ShareItem {
-  id: number;
-  user_id: number;
-  username: string;
-  email: string;
-  share_context: boolean;
-  expires_at: string | null;
-  created_at: string | null;
-  is_active: boolean;
-}
-
-interface KnowledgeItem {
-  id: number;
-  title: string;
-  content: string;
-  category: string;
-  category_label: string;
-  source: string;
-  source_label: string;
-  confidence: number;
-  updated_at: string | null;
-  is_active: boolean;
-}
-
-interface KnowledgeCategoryOption {
-  value: string;
-  label: string;
-}
-
-type AdvancedTab = "access" | "knowledge" | "context" | "security" | "execute";
-type MainTab = "servers" | "groups" | "rules" | "playbook";
-
-interface PlaybookTask {
-  id: string;
-  command: string;
-  description: string;
-  continueOnError: boolean;
-}
-
-interface Playbook {
-  id: string;
-  name: string;
-  description: string;
-  tasks: PlaybookTask[];
-  createdAt: string;
-}
-
-interface PlaybookRunResult {
-  serverId: number;
-  serverName: string;
-  taskResults: {
-    taskId: string;
-    command: string;
-    status: "pending" | "running" | "success" | "error" | "skipped";
-    output: string;
-    exitCode?: number;
-  }[];
-}
-
-function loadPlaybooks(): Playbook[] {
-  try {
-    const raw = localStorage.getItem("weu_playbooks");
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function savePlaybooks(playbooks: Playbook[]) {
-  localStorage.setItem("weu_playbooks", JSON.stringify(playbooks));
-}
-
-function newTaskId() {
-  return `t_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-}
-
-function newPlaybookId() {
-  return `pb_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-}
-
-function matchesKnowledgeQuery(parts: Array<string | null | undefined>, query: string) {
-  if (!query) return true;
-  return parts.some((part) => String(part || "").toLowerCase().includes(query));
-}
-
-type UserKnowledgeFilter = "all" | "summary" | "access" | "risks" | "changes" | "instructions";
-
-function renderMemorySnapshotContent(item: MemorySnapshotItem) {
-  const lines = String(item.content || "")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  if (String(item.memory_key || "").toLowerCase() === "human_habits") {
-    const normalized = lines.map((line) => line.replace(/^-+\s*/, "").trim());
-    if (
-      normalized.length === 1 &&
-      normalized[0].toLowerCase() === "повторяющиеся ручные привычки пока не выделены."
-    ) {
-      return normalized[0];
-    }
-  }
-
-  if (String(item.memory_key || "").toLowerCase() === "access") {
-    const filtered = lines.filter((line) => {
-      const normalized = line.replace(/^-+\s*/, "").trim().toLowerCase();
-      if (normalized.startsWith("command used:") || normalized.startsWith("команда:")) {
-        return false;
-      }
-      return !/^(systemctl|journalctl|ss|curl|docker|uptime|df|free|ip)\b/.test(normalized);
-    });
-    return filtered.join("\n") || String(item.content || "");
-  }
-
-  return String(item.content || "");
-}
-
-function memorySnapshotAudienceKind(item: MemorySnapshotItem): Exclude<UserKnowledgeFilter, "all"> {
-  const memoryKey = String(item.memory_key || "").toLowerCase();
-  const title = String(item.title || "").toLowerCase();
-  const blob = `${item.title || ""}\n${item.content || ""}`.toLowerCase();
-  if (/профиль|profile|summary|сводка|overview/.test(title)) {
-    return "summary";
-  }
-  if (/риск|risk|issue|incident|alert|замечан/.test(title)) {
-    return "risks";
-  }
-  if (/доступ|access|network|ssh|vpn|порт/.test(title)) {
-    return "access";
-  }
-  if (/инструк|runbook|playbook|workflow|skill|checklist|чеклист/.test(title)) {
-    return "instructions";
-  }
-  if (/изменен|change|deploy|release|migration|rollout|обновл/.test(title)) {
-    return "changes";
-  }
-  if (memoryKey === "access" || /доступ|ssh|порт|network|host:|docker publish/.test(blob)) {
-    return "access";
-  }
-  if (memoryKey === "risks" || /риск|warning|critical|incident|проблем|ошиб/.test(blob)) {
-    return "risks";
-  }
-  if (memoryKey === "recent_changes" || /измен|обновл|запущен контейнер|reload|restart|rollout/.test(blob)) {
-    return "changes";
-  }
-  if (
-    memoryKey === "runbook" ||
-    item.kind === "pattern" ||
-    item.kind === "automation" ||
-    item.kind === "skill_draft"
-  ) {
-    return "instructions";
-  }
-  return "summary";
-}
-
-function memorySnapshotAudienceLabel(item: MemorySnapshotItem, t: (key: string) => string) {
-  switch (memorySnapshotAudienceKind(item)) {
-    case "access":
-      return t("srv.knowledge_filter_access");
-    case "risks":
-      return t("srv.knowledge_filter_risks");
-    case "changes":
-      return t("srv.knowledge_filter_changes");
-    case "instructions":
-      return t("srv.knowledge_filter_instructions");
-    default:
-      return t("srv.knowledge_filter_summary");
-  }
-}
-
-function memorySnapshotAudienceBadgeClass(item: MemorySnapshotItem) {
-  switch (memorySnapshotAudienceKind(item)) {
-    case "access":
-      return "bg-secondary text-foreground";
-    case "risks":
-      return "bg-destructive/15 text-destructive";
-    case "changes":
-      return "bg-secondary text-foreground";
-    case "instructions":
-      return "bg-primary/15 text-primary";
-    default:
-      return "bg-secondary text-foreground";
-  }
-}
-
-/** Parse Ansible playbook (YAML or JSON) into our Playbook format */
-function parseAnsiblePlaybook(content: string, filename: string): Playbook {
-  // Try YAML first, then JSON
-  let parsed: unknown;
-  try {
-    parsed = yaml.load(content);
-  } catch {
-    parsed = JSON.parse(content);
-  }
-
-  const tasks: PlaybookTask[] = [];
-  let playbookName = filename.replace(/\.(ya?ml|json)$/i, "");
-  let playbookDesc = "";
-
-  // Ansible playbooks are arrays of plays
-  const plays = Array.isArray(parsed) ? parsed : [parsed];
-
-  for (const play of plays) {
-    if (!play || typeof play !== "object") continue;
-    const p = play as Record<string, unknown>;
-
-    if (p.name && typeof p.name === "string" && !playbookDesc) {
-      playbookName = p.name;
-    }
-    if (p.hosts && typeof p.hosts === "string") {
-      playbookDesc = `hosts: ${p.hosts}`;
-    }
-
-    // Extract tasks from "tasks", "pre_tasks", "post_tasks", "handlers"
-    for (const section of ["pre_tasks", "tasks", "post_tasks", "handlers"]) {
-      const sectionTasks = (p as Record<string, unknown>)[section];
-      if (!Array.isArray(sectionTasks)) continue;
-
-      for (const task of sectionTasks) {
-        if (!task || typeof task !== "object") continue;
-        const t = task as Record<string, unknown>;
-        const taskName = (t.name as string) || "";
-        let command = "";
-        const continueOnError = Boolean(t.ignore_errors);
-
-        // Extract command from common Ansible modules
-        if (typeof t.shell === "string") {
-          command = t.shell;
-        } else if (typeof t.command === "string") {
-          command = t.command;
-        } else if (typeof t.raw === "string") {
-          command = t.raw;
-        } else if (typeof t.script === "string") {
-          command = t.script;
-        } else if (t.shell && typeof t.shell === "object") {
-          command = (t.shell as Record<string, unknown>).cmd as string || "";
-        } else if (t.command && typeof t.command === "object") {
-          command = (t.command as Record<string, unknown>).cmd as string || "";
-        } else if (typeof t.apt === "object" || typeof t.apt === "string") {
-          const apt = typeof t.apt === "string" ? { name: t.apt } : t.apt as Record<string, unknown>;
-          const pkg = apt.name || apt.pkg || "";
-          const state = apt.state || "present";
-          command = `apt-get ${state === "absent" ? "remove" : "install"} -y ${pkg}`;
-        } else if (typeof t.yum === "object" || typeof t.yum === "string") {
-          const yum = typeof t.yum === "string" ? { name: t.yum } : t.yum as Record<string, unknown>;
-          const pkg = yum.name || "";
-          const state = yum.state || "present";
-          command = `yum ${state === "absent" ? "remove" : "install"} -y ${pkg}`;
-        } else if (typeof t.systemd === "object" || typeof t.service === "object") {
-          const svc = (t.systemd || t.service) as Record<string, unknown>;
-          const name = svc.name || "";
-          const state = svc.state || "started";
-          const stateMap: Record<string, string> = { started: "start", stopped: "stop", restarted: "restart", reloaded: "reload" };
-          command = `systemctl ${stateMap[state as string] || state} ${name}`;
-          if (svc.enabled === true) command += ` && systemctl enable ${name}`;
-        } else if (typeof t.copy === "object") {
-          const cp = t.copy as Record<string, unknown>;
-          if (cp.content && cp.dest) {
-            const escaped = String(cp.content).replace(/'/g, "'\\''");
-            command = `echo '${escaped}' > ${cp.dest}`;
-          } else if (cp.src && cp.dest) {
-            command = `cp ${cp.src} ${cp.dest}`;
-          }
-        } else if (typeof t.file === "object") {
-          const f = t.file as Record<string, unknown>;
-          if (f.state === "directory") command = `mkdir -p ${f.path || f.dest || ""}`;
-          else if (f.state === "absent") command = `rm -rf ${f.path || f.dest || ""}`;
-          else if (f.mode) command = `chmod ${f.mode} ${f.path || f.dest || ""}`;
-        } else if (typeof t.lineinfile === "object") {
-          const l = t.lineinfile as Record<string, unknown>;
-          command = `# lineinfile: ${l.path || l.dest || ""} line="${l.line || ""}"`;
-        } else if (typeof t.template === "object") {
-          const tmpl = t.template as Record<string, unknown>;
-          command = `# template: ${tmpl.src} -> ${tmpl.dest}`;
-        } else if (typeof t.git === "object") {
-          const g = t.git as Record<string, unknown>;
-          command = `git clone ${g.repo || ""} ${g.dest || ""}${g.version ? ` -b ${g.version}` : ""}`;
-        } else if (typeof t.pip === "object") {
-          const pip = t.pip as Record<string, unknown>;
-          command = `pip install ${pip.name || ""}${pip.requirements ? ` -r ${pip.requirements}` : ""}`;
-        } else if (typeof t.docker_container === "object") {
-          const dc = t.docker_container as Record<string, unknown>;
-          command = `# docker: ${dc.name} image=${dc.image || ""} state=${dc.state || "started"}`;
-        } else {
-          // Unknown module — show as comment with module name
-          const moduleKeys = Object.keys(t).filter((k) => !["name", "when", "register", "become", "become_user", "tags", "notify", "ignore_errors", "changed_when", "failed_when", "loop", "with_items", "vars", "environment", "no_log", "delegate_to", "run_once", "block", "rescue", "always"].includes(k));
-          if (moduleKeys.length > 0) {
-            const mod = moduleKeys[0];
-            const val = t[mod];
-            command = `# ansible.${mod}: ${typeof val === "string" ? val : JSON.stringify(val)}`;
-          }
-        }
-
-        if (command || taskName) {
-          tasks.push({
-            id: newTaskId(),
-            command: command || `# ${taskName}`,
-            description: taskName,
-            continueOnError,
-          });
-        }
-      }
-    }
-  }
-
-  if (tasks.length === 0) {
-    throw new Error("No tasks found in playbook. Ensure it contains tasks with shell/command/apt/systemd modules.");
-  }
-
-  return {
-    id: newPlaybookId(),
-    name: playbookName,
-    description: playbookDesc,
-    tasks,
-    createdAt: new Date().toISOString(),
-  };
-}
-
-/** Export playbook to JSON */
-function exportPlaybookAsJson(pb: Playbook) {
-  const ansible = [{
-    name: pb.name,
-    hosts: "all",
-    become: true,
-    tasks: pb.tasks.map((t) => {
-      const task: Record<string, unknown> = { name: t.description || t.command };
-      if (t.command.startsWith("#")) {
-        task.debug = { msg: t.command };
-      } else {
-        task.shell = t.command;
-      }
-      if (t.continueOnError) task.ignore_errors = true;
-      return task;
-    }),
-  }];
-  const blob = new Blob([JSON.stringify(ansible, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${pb.name.replace(/\s+/g, "_").toLowerCase()}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function initialForm(): ServerForm {
-  return {
-    name: "",
-    server_type: "ssh",
-    host: "",
-    port: 22,
-    username: "root",
-    auth_method: "password",
-    key_path: "",
-    ssh_private_key: "",
-    password: "",
-    tags: "",
-    notes: "",
-    group_id: null,
-    is_active: true,
-    ai_read_only: false,
-  };
-}
-
-function initialGroupForm(): ServerGroupForm {
-  return {
-    name: "",
-    description: "",
-    color: "#3b82f6",
-  };
-}
-
-function asPayload(form: ServerForm) {
-  const payload: Record<string, unknown> = {
-    name: form.name,
-    server_type: form.server_type,
-    host: form.host,
-    port: form.port,
-    username: form.username,
-    auth_method: form.auth_method,
-    key_path: form.key_path,
-    password: form.password,
-    tags: form.tags,
-    notes: form.notes,
-    group_id: form.group_id,
-    is_active: form.is_active,
-    ai_read_only: form.ai_read_only,
-  };
-  const privateKey = form.ssh_private_key.trim();
-  if (form.auth_method !== "password" && privateKey) {
-    payload.ssh_private_key = privateKey;
-  }
-  return payload;
-}
-
-function toJson(text: string): Record<string, string> {
-  const trimmed = text.trim();
-  if (!trimmed) return {};
-  return JSON.parse(trimmed) as Record<string, string>;
-}
-
-function toUnknownJson(text: string): Record<string, unknown> {
-  const trimmed = text.trim();
-  if (!trimmed) return {};
-  return JSON.parse(trimmed) as Record<string, unknown>;
-}
-
-function jsonText(value: unknown): string {
-  return JSON.stringify(value ?? {}, null, 2);
-}
-
-function splitLines(text: string): string[] {
-  return text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-}
-
-function uniqueLines(lines: string[]): string[] {
-  const seen = new Set<string>();
-  const next: string[] = [];
-  for (const line of lines) {
-    const key = line.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    next.push(line);
-  }
-  return next;
-}
-
-function getServerEnvironmentVars(networkConfig: Record<string, unknown> | null | undefined): Record<string, string> {
-  if (!networkConfig || typeof networkConfig !== "object") return {};
-
-  const fromEnvVars =
-    networkConfig.env_vars && typeof networkConfig.env_vars === "object"
-      ? (networkConfig.env_vars as Record<string, unknown>)
-      : {};
-  const fromEnvironment =
-    networkConfig.environment && typeof networkConfig.environment === "object"
-      ? (networkConfig.environment as Record<string, unknown>)
-      : {};
-
-  return Object.fromEntries(
-    Object.entries({ ...fromEnvVars, ...fromEnvironment }).map(([key, value]) => [key, String(value ?? "")]),
-  );
-}
-
-function mergeEnvironments(...layers: Array<Record<string, string>>) {
-  return Object.assign({}, ...layers);
-}
-
-function formatScopedRulesPreview(layers: Array<{ label: string; value: string }>) {
-  const sections = layers
-    .map(({ label, value }) => ({ label, value: value.trim() }))
-    .filter(({ value }) => Boolean(value))
-    .map(({ label, value }) => `[${label}]\n${value}`);
-
-  return sections.join("\n\n");
-}
-
-function formatCommandOutput(output: unknown): string {
-  if (typeof output === "string") return output;
-  if (!output || typeof output !== "object") return "(no output)";
-
-  const value = output as Record<string, unknown>;
-  const stdout = typeof value.stdout === "string" ? value.stdout : "";
-  const stderr = typeof value.stderr === "string" ? value.stderr : "";
-  const exitCode = value.exit_code;
-
-  if (stdout || stderr || exitCode !== undefined) {
-    const parts: string[] = [];
-    if (stdout) parts.push(`STDOUT:\n${stdout}`);
-    if (stderr) parts.push(`STDERR:\n${stderr}`);
-    if (exitCode !== undefined) parts.push(`EXIT CODE: ${String(exitCode)}`);
-    return parts.join("\n\n");
-  }
-
-  try {
-    return JSON.stringify(output, null, 2);
-  } catch {
-    return String(output);
-  }
-}
-
-function formatServerCount(count: number, lang: string) {
-  if (lang !== "ru") return `${count} ${count === 1 ? "server" : "servers"}`;
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  if (mod10 === 1 && mod100 !== 11) return `${count} сервер`;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${count} сервера`;
-  return `${count} серверов`;
-}
-
-function displayServerGroupName(groupName: string, lang: string) {
-  const normalized = groupName.trim().toLowerCase();
-  if (!normalized || normalized === "ungrouped" || normalized === "all servers") {
-    return localize(lang, "Без группы", "Ungrouped");
-  }
-  if (normalized === "production") return localize(lang, "Продакшен", "Production");
-  if (normalized === "staging") return localize(lang, "Тестовый стенд", "Staging");
-  return groupName;
-}
+import { PageHero, PageShell, QueryStateBlock } from "@/components/ui/page-shell";
+import { formatCommandOutput } from "./servers/formatters";
+import {
+  matchesKnowledgeQuery,
+  memorySnapshotAudienceBadgeClass,
+  memorySnapshotAudienceKind,
+  memorySnapshotAudienceLabel,
+  renderMemorySnapshotContent,
+} from "./servers/memorySnapshots";
+import { PlaybooksPanel, usePlaybooksPanel } from "./servers/PlaybooksPanel";
+import {
+  formatScopedRulesPreview,
+  getServerEnvironmentVars,
+  jsonText,
+  mergeEnvironments,
+  splitLines,
+  toJson,
+  toUnknownJson,
+  uniqueLines,
+} from "./servers/rules";
+import { asPayload, initialForm, initialGroupForm } from "./servers/serverForm";
+import { ServerGroupDialog } from "./servers/ServerGroupDialog";
+import { ServersListTab } from "./servers/ServersListTab";
+import type {
+  AdvancedTab,
+  KnowledgeCategoryOption,
+  KnowledgeItem,
+  MainTab,
+  ServerForm,
+  ServerGroupForm,
+  ShareItem,
+  UserKnowledgeFilter,
+} from "./servers/types";
 
 export default function Servers() {
   const { t, lang } = useI18n();
@@ -643,16 +129,6 @@ export default function Servers() {
   const [groupDeleteTarget, setGroupDeleteTarget] = useState<FrontendGroup | null>(null);
   const [groupForm, setGroupForm] = useState<ServerGroupForm>(initialGroupForm());
   const [groupSaving, setGroupSaving] = useState(false);
-  // Playbook state
-  const [playbooks, setPlaybooks] = useState<Playbook[]>(loadPlaybooks);
-  const [activePlaybook, setActivePlaybook] = useState<Playbook | null>(null);
-  const [playbookName, setPlaybookName] = useState("");
-  const [playbookDesc, setPlaybookDesc] = useState("");
-  const [playbookTasks, setPlaybookTasks] = useState<PlaybookTask[]>([]);
-  const [playbookTargets, setPlaybookTargets] = useState<Set<number>>(new Set());
-  const [playbookRunning, setPlaybookRunning] = useState(false);
-  const [playbookResults, setPlaybookResults] = useState<PlaybookRunResult[]>([]);
-  const [playbookView, setPlaybookView] = useState<"list" | "edit" | "run">("list");
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingServer, setEditingServer] = useState<FrontendServer | null>(null);
@@ -744,6 +220,7 @@ export default function Servers() {
     return map;
   }, [monitoringStatus]);
   const servers = useMemo(() => data?.servers ?? [], [data?.servers]);
+  const playbooksPanel = usePlaybooksPanel({ servers, t, tr, lang });
   const groups = useMemo(() => data?.groups ?? [], [data?.groups]);
   const manageableGroups = useMemo(
     () =>
@@ -1176,198 +653,6 @@ export default function Servers() {
     await reload();
   };
 
-  // Playbook helpers
-  const addPlaybookTask = () => {
-    setPlaybookTasks((prev) => [...prev, { id: newTaskId(), command: "", description: "", continueOnError: false }]);
-  };
-
-  const updatePlaybookTask = (id: string, patch: Partial<PlaybookTask>) => {
-    setPlaybookTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
-  };
-
-  const removePlaybookTask = (id: string) => {
-    setPlaybookTasks((prev) => prev.filter((t) => t.id !== id));
-  };
-
-  const moveTask = (idx: number, dir: -1 | 1) => {
-    setPlaybookTasks((prev) => {
-      const next = [...prev];
-      const target = idx + dir;
-      if (target < 0 || target >= next.length) return prev;
-      [next[idx], next[target]] = [next[target], next[idx]];
-      return next;
-    });
-  };
-
-  const toggleTarget = (id: number) => {
-    setPlaybookTargets((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const selectAllTargets = () => {
-    setPlaybookTargets(new Set(servers.filter((s) => s.status === "online").map((s) => s.id)));
-  };
-
-  const clearTargets = () => setPlaybookTargets(new Set());
-
-  const openNewPlaybook = () => {
-    setActivePlaybook(null);
-    setPlaybookName("");
-    setPlaybookDesc("");
-    setPlaybookTasks([{ id: newTaskId(), command: "", description: "", continueOnError: false }]);
-    setPlaybookTargets(new Set());
-    setPlaybookResults([]);
-    setPlaybookView("edit");
-  };
-
-  const openEditPlaybook = (pb: Playbook) => {
-    setActivePlaybook(pb);
-    setPlaybookName(pb.name);
-    setPlaybookDesc(pb.description);
-    setPlaybookTasks([...pb.tasks]);
-    setPlaybookTargets(new Set());
-    setPlaybookResults([]);
-    setPlaybookView("edit");
-  };
-
-  const onSavePlaybook = () => {
-    if (!playbookName.trim() || playbookTasks.length === 0) return;
-    const pb: Playbook = {
-      id: activePlaybook?.id || newPlaybookId(),
-      name: playbookName.trim(),
-      description: playbookDesc.trim(),
-      tasks: playbookTasks.filter((t) => t.command.trim()),
-      createdAt: activePlaybook?.createdAt || new Date().toISOString(),
-    };
-    const updated = activePlaybook
-      ? playbooks.map((p) => (p.id === activePlaybook.id ? pb : p))
-      : [...playbooks, pb];
-    setPlaybooks(updated);
-    savePlaybooks(updated);
-    setActivePlaybook(pb);
-  };
-
-  const onDeletePlaybook = (id: string) => {
-    if (!confirm(t("pb.delete_confirm"))) return;
-    const updated = playbooks.filter((p) => p.id !== id);
-    setPlaybooks(updated);
-    savePlaybooks(updated);
-    if (activePlaybook?.id === id) setPlaybookView("list");
-  };
-
-  const onDuplicatePlaybook = (pb: Playbook) => {
-    const dup: Playbook = {
-      ...pb,
-      id: newPlaybookId(),
-      name: tr("pb.copy_name", { name: pb.name }),
-      createdAt: new Date().toISOString(),
-      tasks: pb.tasks.map((t) => ({ ...t, id: newTaskId() })),
-    };
-    const updated = [...playbooks, dup];
-    setPlaybooks(updated);
-    savePlaybooks(updated);
-  };
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const onImportFile = async (file: File) => {
-    try {
-      const text = await file.text();
-      const pb = parseAnsiblePlaybook(text, file.name);
-      const updated = [...playbooks, pb];
-      setPlaybooks(updated);
-      savePlaybooks(updated);
-      setActivePlaybook(pb);
-      setPlaybookName(pb.name);
-      setPlaybookDesc(pb.description);
-      setPlaybookTasks([...pb.tasks]);
-      setPlaybookTargets(new Set());
-      setPlaybookResults([]);
-      setPlaybookView("edit");
-    } catch (err) {
-      alert(tr("pb.parse_failed", { error: err instanceof Error ? err.message : String(err) }));
-    }
-  };
-
-  const onFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) onImportFile(file);
-    e.target.value = "";
-  };
-
-  const onDropPlaybook = (e: React.DragEvent) => {
-    e.preventDefault();
-    const file = e.dataTransfer.files[0];
-    if (file) onImportFile(file);
-  };
-
-  const onRunPlaybook = async () => {
-    const validTasks = playbookTasks.filter((t) => t.command.trim());
-    const targetIds = Array.from(playbookTargets);
-    if (!validTasks.length || !targetIds.length) return;
-
-    setPlaybookRunning(true);
-    setPlaybookView("run");
-
-    const results: PlaybookRunResult[] = targetIds.map((sid) => {
-      const srv = servers.find((s) => s.id === sid);
-      return {
-        serverId: sid,
-        serverName: srv?.name || `Server #${sid}`,
-        taskResults: validTasks.map((t) => ({
-          taskId: t.id,
-          command: t.command,
-          status: "pending" as const,
-          output: "",
-        })),
-      };
-    });
-    setPlaybookResults([...results]);
-
-    for (let si = 0; si < results.length; si++) {
-      const sr = results[si];
-      let shouldSkip = false;
-      for (let ti = 0; ti < validTasks.length; ti++) {
-        const task = validTasks[ti];
-        if (shouldSkip) {
-          sr.taskResults[ti].status = "skipped";
-          sr.taskResults[ti].output = t("pb.skipped_due_previous_error");
-          setPlaybookResults([...results]);
-          continue;
-        }
-
-        sr.taskResults[ti].status = "running";
-        setPlaybookResults([...results]);
-
-        try {
-          const resp = await executeServerCommand(sr.serverId, task.command, "");
-          if (resp.success) {
-            sr.taskResults[ti].status = "success";
-            sr.taskResults[ti].output = formatCommandOutput(resp.output);
-            sr.taskResults[ti].exitCode = 0;
-          } else {
-            sr.taskResults[ti].status = "error";
-            sr.taskResults[ti].output = resp.error || t("pb.command_failed");
-            sr.taskResults[ti].exitCode = 1;
-            if (!task.continueOnError) shouldSkip = true;
-          }
-        } catch (err) {
-          sr.taskResults[ti].status = "error";
-          sr.taskResults[ti].output = String(err);
-          sr.taskResults[ti].exitCode = 1;
-          if (!task.continueOnError) shouldSkip = true;
-        }
-        setPlaybookResults([...results]);
-      }
-    }
-
-    setPlaybookRunning(false);
-  };
-
   const openAdvanced = async (server: FrontendServer) => {
     const hasGroupRulesAccess = Boolean(server.group_id && manageableGroups.some((group) => group.id === server.group_id));
     setAdvancedServer(server);
@@ -1798,163 +1083,22 @@ export default function Servers() {
         </TabsList>
 
         <TabsContent value="servers" className="space-y-3">
-          {Object.entries(grouped).map(([group, inGroup]) => {
-            const isCollapsed = collapsed[group];
-            const groupLabel = displayServerGroupName(group, lang);
-            return (
-              <div key={group} className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-                <button
-                  onClick={() => toggleGroup(group)}
-                  className="w-full flex items-center gap-3 px-4 py-3 transition-colors text-left hover:bg-secondary/30"
-                  aria-label={tr(isCollapsed ? "srv.expand_group" : "srv.collapse_group", { name: groupLabel })}
-                >
-                  <span className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${isCollapsed ? "bg-secondary/40" : "bg-primary/10"}`}>
-                    {isCollapsed
-                      ? <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                      : <ChevronDown className="h-4 w-4 text-primary" />}
-                  </span>
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-                    <Server className="h-4 w-4 text-primary" />
-                  </div>
-                  <span className="text-sm font-semibold tracking-tight text-foreground">{groupLabel}</span>
-                  <span className="ml-auto rounded-md border border-border/50 bg-secondary/30 px-2 py-1 text-xs font-medium text-muted-foreground">{formatServerCount(inGroup.length, lang)}</span>
-                </button>
-
-                <AnimatePresence initial={false}>
-                  {!isCollapsed && (
-                    <motion.div
-                      initial={{ height: 0 }}
-                      animate={{ height: "auto" }}
-                      exit={{ height: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="overflow-hidden"
-                    >
-                      <div className="border-t border-border">
-                        {inGroup.map((server, i) => {
-                          const displayStatus = server.status;
-                          const fleetHealth = fleetHealthByServerId.get(server.id);
-                          const osKind = resolveServerOs(server);
-                          const connLabel =
-                            server.server_type === "rdp" || server.rdp
-                              ? t("srv.conn.rdp")
-                              : t("srv.conn.ssh");
-                          return (
-                            <div
-                              key={server.id}
-                              className={`group flex flex-col gap-3 px-4 py-3 transition-all duration-150 hover:bg-secondary/20 sm:flex-row sm:items-center ${
-                                i < inGroup.length - 1 ? "border-b border-border/40" : ""
-                              }`}
-                            >
-                              <div className="flex min-w-0 flex-1 items-start gap-3 sm:items-center">
-                                <ServerOsBadge kind={osKind} size="md" />
-                                <div className="min-w-0 flex-1 space-y-1">
-                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                    <p className="truncate text-sm font-semibold tracking-tight text-foreground">
-                                      {server.name}
-                                    </p>
-                                    {server.is_shared ? (
-                                      <span className="rounded-full border border-border bg-secondary/30 px-2 py-0.5 text-[10px] text-muted-foreground">
-                                        {t("srv.shared_badge")}
-                                      </span>
-                                    ) : null}
-                                    <span className="hidden rounded-md border border-border/60 bg-background/80 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline">
-                                      {connLabel}
-                                    </span>
-                                  </div>
-                                  <p className="font-mono text-[11px] text-muted-foreground">
-                                    {server.host}:{server.port}
-                                  </p>
-                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px]">
-                                    <span className="font-medium text-muted-foreground">
-                                      {t(serverOsLabelKey(osKind))}
-                                    </span>
-                                    <span className="text-border" aria-hidden>
-                                      ·
-                                    </span>
-                                    <span className="text-muted-foreground sm:hidden">{connLabel}</span>
-                                    <span className="hidden text-border sm:inline" aria-hidden>
-                                      ·
-                                    </span>
-                                    <span className="hidden sm:inline">
-                                      {fleetHealth ? (
-                                        <FleetHealthIndicator
-                                          status={fleetHealth.status}
-                                          stale={fleetHealth.is_stale}
-                                          showLabel
-                                        />
-                                      ) : (
-                                        <StatusIndicator status={displayStatus} showLabel />
-                                      )}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
-                                <span className="sm:hidden">
-                                  {fleetHealth ? (
-                                    <FleetHealthIndicator
-                                      status={fleetHealth.status}
-                                      stale={fleetHealth.is_stale}
-                                    />
-                                  ) : (
-                                    <StatusIndicator status={displayStatus} />
-                                  )}
-                                </span>
-                                <Button asChild size="xs" variant="outline" className="h-9 gap-1.5 border-border hover:border-primary hover:text-primary">
-                                  <Link to={`/servers/${server.id}/terminal`}>
-                                    <Terminal className="h-3 w-3" /> SSH
-                                  </Link>
-                                </Button>
-                                {server.rdp && (
-                                  <Button asChild size="xs" variant="outline" className="h-9 gap-1.5 border-border hover:border-info hover:text-info">
-                                    <Link to={`/servers/${server.id}/rdp`}>
-                                      <Monitor className="h-3 w-3" /> RDP
-                                    </Link>
-                                  </Button>
-                                )}
-                                <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => openAdvanced(server)} aria-label={tr("srv.open_advanced_for", { name: server.name })} title={t("srv.advanced")}>
-                                  <Sparkles className="h-3.5 w-3.5" />
-                                </Button>
-                                {server.can_edit && (
-                                  <>
-                                    <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => openEdit(server)} aria-label={tr("srv.edit_server_for", { name: server.name })} title={t("srv.edit_server")}>
-                                      <Settings className="h-3.5 w-3.5" />
-                                    </Button>
-                                    <Button size="icon" variant="destructive" className="h-9 w-9" onClick={() => requestDeleteServer(server)} aria-label={tr("srv.delete_server_for", { name: server.name })} title={t("srv.delete")}>
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </Button>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            );
-          })}
-          {!filtered.length ? (
-            <EmptyState
-              icon={<Server className="h-5 w-5" />}
-              title={servers.length ? t("srv.empty_filtered_title") : t("srv.empty_title")}
-              description={servers.length ? t("srv.empty_filtered_text") : t("srv.empty_text")}
-              actions={
-                <>
-                {servers.length ? (
-                  <Button size="sm" variant="outline" className="h-9" onClick={() => setSearch("")}>
-                    {t("srv.clear_search")}
-                  </Button>
-                ) : null}
-                <Button size="sm" className="h-9 gap-1.5" onClick={openCreate}>
-                  <Plus className="h-3.5 w-3.5" /> {t("srv.add")}
-                </Button>
-                </>
-              }
-            />
-          ) : null}
+          <ServersListTab
+            grouped={grouped}
+            filteredCount={filtered.length}
+            totalServers={servers.length}
+            collapsed={collapsed}
+            fleetHealthByServerId={fleetHealthByServerId}
+            t={t}
+            tr={tr}
+            lang={lang}
+            onToggleGroup={toggleGroup}
+            onOpenCreate={openCreate}
+            onOpenAdvanced={openAdvanced}
+            onOpenEdit={openEdit}
+            onRequestDeleteServer={requestDeleteServer}
+            onClearSearch={() => setSearch("")}
+          />
         </TabsContent>
 
         <TabsContent value="groups" className="space-y-3">
@@ -2266,266 +1410,7 @@ export default function Servers() {
         </TabsContent>
 
         <TabsContent value="playbook" className="space-y-3">
-          {/* Hidden file input */}
-          <input ref={fileInputRef} type="file" accept=".yml,.yaml,.json" className="hidden" onChange={onFileInputChange} />
-
-          {/* PLAYBOOK LIST */}
-          {playbookView === "list" && (
-            <section className="bg-card border border-border rounded-lg p-5 space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-sm font-semibold text-foreground">{t("pb.title")}</h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">{t("pb.subtitle")}</p>
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" className="h-10 gap-1.5 text-xs" onClick={() => fileInputRef.current?.click()}>
-                    <Upload className="h-3.5 w-3.5" /> {t("pb.import")}
-                  </Button>
-                  <Button size="sm" className="h-10 gap-1.5 text-xs" onClick={openNewPlaybook}>
-                    <Plus className="h-3.5 w-3.5" /> {t("pb.new")}
-                  </Button>
-                </div>
-              </div>
-
-              {/* Drag & drop zone */}
-              <div
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={onDropPlaybook}
-                className="border-2 border-dashed border-border rounded-lg p-6 text-center transition-colors hover:border-primary/40 hover:bg-primary/5 cursor-pointer"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <FileJson className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40" />
-                <p className="text-xs text-muted-foreground">
-                  {t("pb.drop_help")} <span className="text-primary underline">{t("pb.browse")}</span>
-                </p>
-                <p className="text-[10px] text-muted-foreground/60 mt-1">
-                  {t("pb.supports")}
-                </p>
-              </div>
-
-              {playbooks.length === 0 ? (
-                <div className="text-center py-6 text-muted-foreground">
-                  <p className="text-sm">{t("pb.empty_title")}</p>
-                  <p className="text-xs mt-1">{t("pb.empty_help")}</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {playbooks.map((pb) => (
-                    <div key={pb.id} className="flex items-center gap-4 px-4 py-3 rounded-lg border border-border bg-secondary/10 hover:bg-secondary/30 transition-colors">
-                      <BookOpen className="h-4 w-4 text-primary shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{pb.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {tr(pb.tasks.length === 1 ? "pb.task_count_one" : "pb.task_count_other", { count: pb.tasks.length })} · {new Date(pb.createdAt).toLocaleDateString()}
-                          {pb.description && ` · ${pb.description}`}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 gap-2">
-                        <Button size="xs" variant="outline" className="h-9 gap-1" onClick={() => openEditPlaybook(pb)}>
-                          <Settings className="h-3 w-3" /> {t("pb.edit")}
-                        </Button>
-                        <Button size="icon" variant="outline" className="h-9 w-9" title={t("pb.export_json")} aria-label={t("pb.export_json")} onClick={() => exportPlaybookAsJson(pb)}>
-                          <Download className="h-3 w-3" />
-                        </Button>
-                        <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => onDuplicatePlaybook(pb)} aria-label={localize(lang, "Дублировать плейбук", "Duplicate playbook")}>
-                          <Copy className="h-3 w-3" />
-                        </Button>
-                        <Button size="icon" variant="outline" className="h-9 w-9 border-destructive/30 text-destructive hover:bg-destructive/10" onClick={() => onDeletePlaybook(pb.id)} aria-label={localize(lang, "Удалить плейбук", "Delete playbook")}>
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-          )}
-
-          {/* PLAYBOOK EDITOR */}
-          {playbookView === "edit" && (
-            <section className="space-y-4">
-              <div className="flex items-center gap-2">
-                <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => setPlaybookView("list")} aria-label={localize(lang, "Вернуться к списку плейбуков", "Back to playbook list")}>
-                  <ChevronRight className="h-4 w-4 rotate-180" />
-                </Button>
-                <h2 className="text-sm font-semibold text-foreground">
-                  {activePlaybook ? t("pb.edit_title") : t("pb.new_title")}
-                </h2>
-              </div>
-
-              {/* Meta */}
-              <div className="bg-card border border-border rounded-lg p-4 space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">{t("pb.name")} *</Label>
-                    <Input placeholder={t("pb.name_placeholder")} value={playbookName} onChange={(e) => setPlaybookName(e.target.value)} className="bg-secondary/50 h-9" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">{t("pb.description")}</Label>
-                    <Input placeholder={t("pb.description_placeholder")} value={playbookDesc} onChange={(e) => setPlaybookDesc(e.target.value)} className="bg-secondary/50 h-9" />
-                  </div>
-                </div>
-              </div>
-
-              {/* Tasks */}
-              <div className="bg-card border border-border rounded-lg p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tr("pb.tasks_title", { count: playbookTasks.length })}</h3>
-                  <Button size="xs" variant="outline" className="h-9 gap-1" onClick={addPlaybookTask}>
-                    <Plus className="h-3 w-3" /> {t("pb.add_task")}
-                  </Button>
-                </div>
-
-                <div className="space-y-2">
-                  {playbookTasks.map((task, idx) => (
-                    <div key={task.id} className="flex items-start gap-2 p-3 rounded-lg border border-border bg-secondary/10">
-                      <div className="flex flex-col gap-1 pt-1.5 shrink-0">
-                        <button type="button" onClick={() => moveTask(idx, -1)} disabled={idx === 0} className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-20">
-                          <ChevronDown className="h-3 w-3 rotate-180" />
-                        </button>
-                        <GripVertical className="h-3 w-3 text-muted-foreground/40 mx-auto" />
-                        <button type="button" onClick={() => moveTask(idx, 1)} disabled={idx === playbookTasks.length - 1} className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-20">
-                          <ChevronDown className="h-3 w-3" />
-                        </button>
-                      </div>
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-mono text-muted-foreground bg-secondary rounded px-1.5 py-0.5 shrink-0">#{idx + 1}</span>
-                          <Input
-                            placeholder={t("pb.task_description_placeholder")}
-                            value={task.description}
-                            onChange={(e) => updatePlaybookTask(task.id, { description: e.target.value })}
-                            className="h-8 flex-1 bg-secondary/50 text-xs"
-                          />
-                        </div>
-                        <Input
-                          placeholder={t("pb.task_command_placeholder")}
-                          value={task.command}
-                          onChange={(e) => updatePlaybookTask(task.id, { command: e.target.value })}
-                          className="bg-background h-9 font-mono text-sm border-border"
-                        />
-                        <label className="text-[11px] flex items-center gap-1.5 text-muted-foreground cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={task.continueOnError}
-                            onChange={(e) => updatePlaybookTask(task.id, { continueOnError: e.target.checked })}
-                            className="rounded"
-                          />
-                          {t("pb.continue_on_error")}
-                        </label>
-                      </div>
-                      <button type="button" onClick={() => removePlaybookTask(task.id)} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive">
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Target Servers */}
-              <div className="bg-card border border-border rounded-lg p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    {tr("pb.targets_title", { count: playbookTargets.size })}
-                  </h3>
-                  <div className="flex gap-1.5">
-                    <Button size="xs" variant="outline" className="h-8" onClick={selectAllTargets}>{t("pb.select_online")}</Button>
-                    <Button size="xs" variant="outline" className="h-8" onClick={clearTargets}>{t("pb.clear")}</Button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                  {servers.map((srv) => (
-                    <button
-                      key={srv.id}
-                      onClick={() => toggleTarget(srv.id)}
-                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border text-left transition-all text-xs ${
-                        playbookTargets.has(srv.id)
-                          ? "border-primary bg-primary/5 text-foreground"
-                          : "border-border bg-secondary/10 text-muted-foreground hover:text-foreground hover:border-border"
-                      }`}
-                    >
-                      <ServerOsBadge kind={resolveServerOs(srv)} size="sm" />
-                      <StatusIndicator status={srv.status} showLabel={false} />
-                      <span className="font-medium truncate">{srv.name}</span>
-                      <span className="text-[10px] font-mono ml-auto opacity-60">{srv.host}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center gap-2 justify-end">
-                <Button size="sm" variant="outline" className="h-9 gap-1.5" onClick={onSavePlaybook} disabled={!playbookName.trim() || playbookTasks.length === 0}>
-                  <Save className="h-3.5 w-3.5" /> {t("pb.save")}
-                </Button>
-                <Button
-                  size="sm"
-                  className="h-9 gap-1.5 px-6"
-                  onClick={onRunPlaybook}
-                  disabled={playbookRunning || playbookTargets.size === 0 || playbookTasks.filter((t) => t.command.trim()).length === 0}
-                >
-                  <Play className="h-3.5 w-3.5" /> {tr(playbookTargets.size === 1 ? "pb.run_on_one" : "pb.run_on_many", { count: playbookTargets.size })}
-                </Button>
-              </div>
-            </section>
-          )}
-
-          {/* PLAYBOOK RUN RESULTS */}
-          {playbookView === "run" && (
-            <section className="space-y-4">
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => setPlaybookView("edit")}>
-                  <ChevronRight className="h-4 w-4 rotate-180" />
-                </Button>
-                <h2 className="text-sm font-semibold text-foreground">
-                  {t("pb.run_results")} {playbookRunning && <Loader2 className="inline h-3.5 w-3.5 ml-1.5 animate-spin text-primary" />}
-                </h2>
-                <span className="text-xs text-muted-foreground ml-auto">
-                  {tr(playbookResults.length === 1 ? "pb.server_count_one" : "pb.server_count_other", { count: playbookResults.length })}
-                </span>
-              </div>
-
-              {playbookResults.map((sr) => {
-                const allDone = sr.taskResults.every((tr) => tr.status !== "pending" && tr.status !== "running");
-                const allOk = sr.taskResults.every((tr) => tr.status === "success");
-                const hasError = sr.taskResults.some((tr) => tr.status === "error");
-                return (
-                  <div key={sr.serverId} className="bg-card border border-border rounded-lg overflow-hidden">
-                    <div className={`flex items-center gap-3 px-4 py-3 border-b border-border ${allDone ? (allOk ? "bg-primary/5" : hasError ? "bg-destructive/5" : "bg-secondary/20") : ""}`}>
-                      <Server className="h-4 w-4 text-primary" />
-                      <span className="text-sm font-medium text-foreground">{sr.serverName}</span>
-                      <div className="ml-auto flex items-center gap-1.5">
-                        {allDone && allOk && <CheckCircle2 className="h-4 w-4 text-primary" />}
-                        {allDone && hasError && <XCircle className="h-4 w-4 text-destructive" />}
-                        {!allDone && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-                      </div>
-                    </div>
-                    <div className="divide-y divide-border">
-                      {sr.taskResults.map((tr, ti) => (
-                        <div key={tr.taskId} className="px-4 py-3">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-[10px] font-mono text-muted-foreground bg-secondary rounded px-1.5 py-0.5">#{ti + 1}</span>
-                            <code className="text-xs font-mono text-foreground">{tr.command}</code>
-                            <span className="ml-auto">
-                              {tr.status === "success" && <CheckCircle2 className="h-3.5 w-3.5 text-primary" />}
-                              {tr.status === "error" && <XCircle className="h-3.5 w-3.5 text-destructive" />}
-                              {tr.status === "running" && <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />}
-                              {tr.status === "pending" && <span className="h-3.5 w-3.5 rounded-full bg-muted-foreground/20 inline-block" />}
-                              {tr.status === "skipped" && <span className="text-[10px] text-muted-foreground">{t("pb.skipped")}</span>}
-                            </span>
-                          </div>
-                          {tr.output && (
-                            <pre className="mt-2 p-2.5 rounded bg-background border border-border text-[11px] font-mono text-muted-foreground overflow-x-auto max-h-32 whitespace-pre-wrap">{tr.output}</pre>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </section>
-          )}
+          <PlaybooksPanel {...playbooksPanel} />
         </TabsContent>
       </Tabs>
 
@@ -2558,11 +1443,10 @@ export default function Servers() {
                 <Label className="text-xs text-muted-foreground">{t("srv.server_type")}</Label>
                 <select
                   value={form.server_type}
-                  onChange={(e) => setForm((s) => ({ ...s, server_type: e.target.value as "ssh" | "rdp" }))}
+                  onChange={() => setForm((s) => ({ ...s, server_type: "ssh" }))}
                   className="flex h-10 w-full rounded-md border border-input bg-secondary/50 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   <option value="ssh">SSH</option>
-                  <option value="rdp">RDP</option>
                 </select>
               </div>
             </div>
@@ -2673,72 +1557,18 @@ export default function Servers() {
         </DialogContent>
       </Dialog>
 
-      <Dialog
+      <ServerGroupDialog
         open={groupDialogOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            closeGroupDialog();
-            return;
-          }
-          setGroupDialogOpen(true);
-        }}
-      >
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>{editingGroup ? t("srv.edit_group") : t("srv.create_group")}</DialogTitle>
-            <DialogDescription>{t("srv.group_settings")}</DialogDescription>
-          </DialogHeader>
-
-          <DialogBody className="space-y-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">{t("srv.group_name")} *</Label>
-              <Input
-                value={groupForm.name}
-                onChange={(e) => setGroupForm((state) => ({ ...state, name: e.target.value }))}
-                placeholder={t("srv.group_name")}
-                className="bg-secondary/50"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">{t("srv.description")}</Label>
-              <Textarea
-                value={groupForm.description}
-                onChange={(e) => setGroupForm((state) => ({ ...state, description: e.target.value }))}
-                placeholder={t("srv.description")}
-                className="min-h-24 bg-secondary/50"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">{t("srv.group_color")}</Label>
-              <div className="flex items-center gap-3 rounded-md border border-border bg-secondary/30 px-3 py-2">
-                <Input
-                  type="color"
-                  value={groupForm.color}
-                  onChange={(e) => setGroupForm((state) => ({ ...state, color: e.target.value }))}
-                  className="h-8 w-12 cursor-pointer rounded border-0 bg-transparent p-0"
-                />
-                <div className="text-xs text-muted-foreground">{groupForm.color}</div>
-              </div>
-            </div>
-          </DialogBody>
-
-          <DialogFooter>
-            {editingGroup?.id && (
-              <Button variant="outline" size="sm" onClick={() => openGroupRules(editingGroup.id!)} className="mr-auto gap-1.5">
-                <Layers className="h-3.5 w-3.5" /> {t("srv.rules_tab")}
-              </Button>
-            )}
-            <Button variant="outline" size="sm" onClick={closeGroupDialog}>
-              {t("srv.cancel")}
-            </Button>
-            <Button size="sm" onClick={onSaveGroup} disabled={groupSaving || !groupForm.name.trim()}>
-              {groupSaving ? t("srv.saving") : editingGroup ? t("srv.update") : t("srv.create")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        editingGroup={editingGroup}
+        groupForm={groupForm}
+        groupSaving={groupSaving}
+        t={t}
+        setGroupDialogOpen={setGroupDialogOpen}
+        setGroupForm={setGroupForm}
+        closeGroupDialog={closeGroupDialog}
+        onSaveGroup={onSaveGroup}
+        openGroupRules={openGroupRules}
+      />
 
       <Dialog open={advancedOpen} onOpenChange={setAdvancedOpen}>
         <DialogContent className="flex h-[88vh] max-w-5xl flex-col p-0 sm:h-[85vh]">

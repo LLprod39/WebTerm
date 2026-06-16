@@ -11,8 +11,9 @@ from django.db.models import Q
 from django.utils import timezone
 from loguru import logger
 
+from app.execution_policy import build_execution_policy_audit_metadata
 from app.tools.base import BaseTool, ToolMetadata, ToolParameter
-from app.tools.safety import is_dangerous_command
+from app.tools.safety import evaluate_command_safety
 from app.tools.ssh_tools import ssh_manager
 from core_ui.activity import log_user_activity
 from servers.secret_utils import get_server_auth_secret
@@ -147,7 +148,36 @@ class ServerExecuteTool(BaseTool):
 
         if not server_name_or_id or not command:
             return "Нужны server_name_or_id и command."
-        if is_dangerous_command(command) and not allow_destructive:
+        command_risk = evaluate_command_safety(command)
+        policy_metadata = build_execution_policy_audit_metadata(
+            tool_name="server_execute",
+            args={"server_name_or_id": server_name_or_id, "command": command},
+            mode=str(ctx.get("permission_mode") or "DIRECT"),
+            allowed=not command_risk.is_dangerous or allow_destructive,
+            sandbox_profile="ops_mutation" if command_risk.is_dangerous and allow_destructive else "ops_read",
+            reason="dangerous_command_requires_allow_destructive" if command_risk.is_dangerous and not allow_destructive else "",
+            requires_approval=command_risk.is_dangerous,
+            risk_categories=command_risk.categories,
+            matched_patterns=command_risk.matched_patterns,
+            actor=str(user_id or ""),
+        )
+        if command_risk.is_dangerous and not allow_destructive:
+            await sync_to_async(log_user_activity, thread_sensitive=True)(
+                user_id=user_id,
+                category="terminal",
+                action="server_tool_execute",
+                status="error",
+                description=command[:4000],
+                entity_type="server",
+                entity_id=str(server_name_or_id),
+                entity_name=str(server_name_or_id),
+                metadata={
+                    "tool": "server_execute",
+                    "blocked": True,
+                    "reason": "dangerous_command_requires_allow_destructive",
+                    "execution_policy": policy_metadata,
+                },
+            )
             return "Команда выглядит опасной. Нужен явный допуск allow_destructive=true после подтверждения пользователя."
 
         # Проверяем, есть ли ограничение на конкретный сервер (из workflow/task или env)
@@ -227,6 +257,7 @@ class ServerExecuteTool(BaseTool):
                     "tool": "server_execute",
                     "exit_code": code,
                     "output_excerpt": out[:4000],
+                    "execution_policy": policy_metadata,
                 },
             )
 
@@ -265,6 +296,7 @@ class ServerExecuteTool(BaseTool):
                 metadata={
                     "tool": "server_execute",
                     "error": str(e)[:4000],
+                    "execution_policy": policy_metadata,
                 },
             )
             return f"Ошибка выполнения на {server.name}: {e}"

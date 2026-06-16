@@ -34,7 +34,7 @@ export function ConfirmActionDialog({
 }) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className={cn("rounded-lg border-border bg-background", contentClassName)}>
+      <AlertDialogContent className={cn("rounded-lg border-border/80 bg-card/95", contentClassName)}>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription className="leading-6">

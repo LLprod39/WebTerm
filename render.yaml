@@ -7,19 +7,32 @@ services:
     dockerContext: .
     healthCheckPath: /api/health/
     envVars:
-      - key: DJANGO_DEBUG
-        value: "false"
+      - fromGroup: mini-prod-backend-common
       - key: DJANGO_SECRET_KEY
         generateValue: true
-      - key: SERVE_STATIC_FILES
-        value: "true"
-      - key: CROSS_SITE_AUTH
-        value: "true"
-      # Update if Render assigns a different frontend URL or you later attach a custom domain.
+      - key: SITE_URL
+        value: https://mini-prod-backend.onrender.com
       - key: FRONTEND_APP_URL
         value: https://mini-prod-frontend.onrender.com
-      - key: EMAIL_BACKEND
-        value: django.core.mail.backends.console.EmailBackend
+      - key: ALLOWED_HOSTS
+        value: mini-prod-backend.onrender.com
+      - key: CSRF_TRUSTED_ORIGINS
+        value: https://mini-prod-frontend.onrender.com,https://mini-prod-backend.onrender.com
+      - key: CHANNEL_REDIS_URL
+        fromService:
+          name: mini-prod-redis
+          type: keyvalue
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: mini-prod-redis
+          type: keyvalue
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          name: mini-prod-redis
+          type: keyvalue
+          property: connectionString
       - key: POSTGRES_HOST
         fromDatabase:
           name: mini-prod-postgres
@@ -42,6 +55,378 @@ services:
           property: password
       - key: GEMINI_API_KEY
         sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: CODEX_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GROK_API_KEY
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+
+  - type: worker
+    name: mini-prod-scheduled-pipelines
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./docker/backend.Dockerfile
+    dockerContext: .
+    dockerCommand: python manage.py run_scheduled_pipelines --daemon --interval 60
+    envVars:
+      - fromGroup: mini-prod-backend-common
+      - key: DJANGO_SECRET_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: DJANGO_SECRET_KEY
+      - key: CHANNEL_REDIS_URL
+        fromService:
+          name: mini-prod-redis
+          type: keyvalue
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: mini-prod-redis
+          type: keyvalue
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          name: mini-prod-redis
+          type: keyvalue
+          property: connectionString
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: mini-prod-postgres
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: mini-prod-postgres
+          property: port
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: mini-prod-postgres
+          property: database
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: mini-prod-postgres
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: mini-prod-postgres
+          property: password
+      - key: GEMINI_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: GEMINI_API_KEY
+      - key: OPENAI_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: OPENAI_API_KEY
+      - key: CODEX_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: CODEX_API_KEY
+      - key: ANTHROPIC_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: ANTHROPIC_API_KEY
+      - key: GROK_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: GROK_API_KEY
+      - key: TELEGRAM_BOT_TOKEN
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: TELEGRAM_BOT_TOKEN
+      - key: TELEGRAM_CHAT_ID
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: TELEGRAM_CHAT_ID
+
+  - type: worker
+    name: mini-prod-scheduled-agents
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./docker/backend.Dockerfile
+    dockerContext: .
+    dockerCommand: python manage.py run_scheduled_agents --daemon --interval 60 --limit 100
+    envVars:
+      - fromGroup: mini-prod-backend-common
+      - key: DJANGO_SECRET_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: DJANGO_SECRET_KEY
+      - key: CHANNEL_REDIS_URL
+        fromService:
+          name: mini-prod-redis
+          type: keyvalue
+          property: connectionString
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: mini-prod-postgres
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: mini-prod-postgres
+          property: port
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: mini-prod-postgres
+          property: database
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: mini-prod-postgres
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: mini-prod-postgres
+          property: password
+      - key: GEMINI_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: GEMINI_API_KEY
+      - key: OPENAI_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: OPENAI_API_KEY
+      - key: ANTHROPIC_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: ANTHROPIC_API_KEY
+
+  - type: worker
+    name: mini-prod-monitor
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./docker/backend.Dockerfile
+    dockerContext: .
+    dockerCommand: python manage.py run_monitor --quick-interval 300 --deep-interval 600 --cleanup-interval 86400 --concurrency 5
+    envVars:
+      - fromGroup: mini-prod-backend-common
+      - key: DJANGO_SECRET_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: DJANGO_SECRET_KEY
+      - key: CHANNEL_REDIS_URL
+        fromService:
+          name: mini-prod-redis
+          type: keyvalue
+          property: connectionString
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: mini-prod-postgres
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: mini-prod-postgres
+          property: port
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: mini-prod-postgres
+          property: database
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: mini-prod-postgres
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: mini-prod-postgres
+          property: password
+      - key: GEMINI_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: GEMINI_API_KEY
+      - key: OPENAI_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: OPENAI_API_KEY
+      - key: CODEX_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: CODEX_API_KEY
+      - key: ANTHROPIC_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: ANTHROPIC_API_KEY
+      - key: GROK_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: GROK_API_KEY
+      - key: TELEGRAM_BOT_TOKEN
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: TELEGRAM_BOT_TOKEN
+      - key: TELEGRAM_CHAT_ID
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: TELEGRAM_CHAT_ID
+
+  - type: worker
+    name: mini-prod-telegram-bot
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./docker/backend.Dockerfile
+    dockerContext: .
+    dockerCommand: python manage.py run_telegram_bot
+    envVars:
+      - fromGroup: mini-prod-backend-common
+      - key: DJANGO_SECRET_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: DJANGO_SECRET_KEY
+      - key: CHANNEL_REDIS_URL
+        fromService:
+          name: mini-prod-redis
+          type: keyvalue
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: mini-prod-redis
+          type: keyvalue
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          name: mini-prod-redis
+          type: keyvalue
+          property: connectionString
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: mini-prod-postgres
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: mini-prod-postgres
+          property: port
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: mini-prod-postgres
+          property: database
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: mini-prod-postgres
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: mini-prod-postgres
+          property: password
+      - key: GEMINI_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: GEMINI_API_KEY
+      - key: OPENAI_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: OPENAI_API_KEY
+      - key: CODEX_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: CODEX_API_KEY
+      - key: ANTHROPIC_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: ANTHROPIC_API_KEY
+      - key: GROK_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: GROK_API_KEY
+      - key: TELEGRAM_BOT_TOKEN
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: TELEGRAM_BOT_TOKEN
+      - key: TELEGRAM_CHAT_ID
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: TELEGRAM_CHAT_ID
+
+  - type: worker
+    name: mini-prod-ops-supervisor
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./docker/backend.Dockerfile
+    dockerContext: .
+    dockerCommand: python manage.py run_ops_supervisor --with-watchers --dream-interval 300 --execution-interval 5 --watchers-interval 120 --watchers-limit 100
+    envVars:
+      - fromGroup: mini-prod-backend-common
+      - key: DJANGO_SECRET_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: DJANGO_SECRET_KEY
+      - key: CHANNEL_REDIS_URL
+        fromService:
+          name: mini-prod-redis
+          type: keyvalue
+          property: connectionString
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: mini-prod-postgres
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: mini-prod-postgres
+          property: port
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: mini-prod-postgres
+          property: database
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: mini-prod-postgres
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: mini-prod-postgres
+          property: password
+      - key: GEMINI_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: GEMINI_API_KEY
+      - key: OPENAI_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: OPENAI_API_KEY
+      - key: ANTHROPIC_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: ANTHROPIC_API_KEY
+
+  - type: keyvalue
+    name: mini-prod-redis
+    plan: free
+    ipAllowList: []
 
   - type: web
     name: mini-prod-frontend
@@ -62,7 +447,6 @@ services:
         name: Cache-Control
         value: no-cache, no-store, must-revalidate
     envVars:
-      # Update if the backend service URL differs from the default hostname based on its name.
       - key: VITE_API_BASE
         value: https://mini-prod-backend.onrender.com
       - key: VITE_BACKEND_ORIGIN
@@ -77,3 +461,39 @@ databases:
     plan: free
     postgresMajorVersion: "16"
     ipAllowList: []
+
+envVarGroups:
+  - name: mini-prod-backend-common
+    envVars:
+      - key: DJANGO_DEBUG
+        value: "false"
+      - key: DJANGO_SETTINGS_MODULE
+        value: web_ui.settings.production
+      - key: SERVE_STATIC_FILES
+        value: "true"
+      - key: CROSS_SITE_AUTH
+        value: "true"
+      - key: EMAIL_BACKEND
+        value: django.core.mail.backends.console.EmailBackend
+      - key: PIPELINE_SCHEDULER_INTERVAL
+        value: "60"
+      - key: SCHEDULED_AGENTS_INTERVAL
+        value: "60"
+      - key: SCHEDULED_AGENTS_LIMIT
+        value: "100"
+      - key: MONITOR_QUICK_INTERVAL
+        value: "300"
+      - key: MONITOR_DEEP_INTERVAL
+        value: "600"
+      - key: MONITOR_CLEANUP_INTERVAL
+        value: "86400"
+      - key: MONITOR_CONCURRENCY
+        value: "5"
+      - key: MEMORY_DREAM_INTERVAL
+        value: "300"
+      - key: AGENT_EXECUTION_INTERVAL
+        value: "5"
+      - key: WATCHERS_INTERVAL
+        value: "120"
+      - key: WATCHERS_LIMIT
+        value: "100"

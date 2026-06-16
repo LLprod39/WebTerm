@@ -10,11 +10,11 @@ from urllib.parse import urlsplit, urlunsplit
 import httpx
 from loguru import logger
 from pydantic import BaseModel
+from app.core.redacted_logging import redacted_config_value, redacted_log_text
 
 OLLAMA_CLOUD_MODEL_SUFFIX = " (cloud)"
 OLLAMA_RUNTIME_MODES = {"auto", "local", "cloud"}
 OLLAMA_THINK_MODES = {"", "off", "on", "low", "medium", "high"}
-
 
 class ModelConfig(BaseModel):
     """Configuration for models"""
@@ -390,7 +390,7 @@ class ModelManager:
                         params=params,
                     )
                     if response.status_code != 200:
-                        logger.error(f"Gemini API returned status {response.status_code}: {response.text}")
+                        logger.error("Gemini API returned status {}: {}", response.status_code, redacted_log_text(response.text))
                         return self._get_default_gemini_models()
 
                     payload = response.json()
@@ -476,7 +476,7 @@ class ModelManager:
                     },
                 )
                 if response.status_code != 200:
-                    logger.error(f"Anthropic API returned status {response.status_code}: {response.text}")
+                    logger.error("Anthropic API returned status {}: {}", response.status_code, redacted_log_text(response.text))
                     return self._get_default_claude_models()
 
                 payload = response.json()
@@ -518,7 +518,7 @@ class ModelManager:
                 )
 
                 if response.status_code != 200:
-                    logger.error(f"OpenAI API returned status {response.status_code}: {response.text}")
+                    logger.error("OpenAI API returned status {}: {}", response.status_code, redacted_log_text(response.text))
                     return self._get_default_openai_models()
 
                 payload = response.json()
@@ -756,7 +756,7 @@ class ModelManager:
         for key, value in kwargs.items():
             if hasattr(self.config, key):
                 setattr(self.config, key, value)
-                logger.info(f"Updated {key} to {value}")
+                logger.info("Updated {} to {}", key, redacted_config_value(key, value))
 
     def save_config(self, filepath: str = ".model_config.json"):
         """Save configuration to file"""

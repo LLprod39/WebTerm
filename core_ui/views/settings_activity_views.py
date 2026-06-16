@@ -171,7 +171,7 @@ def api_settings_activity_logs(request):
             "assistant_requests": filtered.filter(
                 action__in=["chat_request", "terminal_ai_request", "llm_request"]
             ).count(),
-            "server_connections": filtered.filter(action__in=["terminal_connect", "rdp_connect"]).count(),
+            "server_connections": filtered.filter(action="terminal_connect").count(),
             "server_changes": filtered.filter(
                 action__in=["server_create", "server_update", "server_delete", "servers_bulk_update"]
             ).count(),
@@ -183,7 +183,7 @@ def api_settings_activity_logs(request):
                 events_total=Count("id"),
                 logins=Count("id", filter=Q(action="login")),
                 ai_requests=Count("id", filter=Q(action__in=["chat_request", "terminal_ai_request", "llm_request"])),
-                server_connections=Count("id", filter=Q(action__in=["terminal_connect", "rdp_connect"])),
+                server_connections=Count("id", filter=Q(action="terminal_connect")),
                 server_changes=Count(
                     "id",
                     filter=Q(action__in=["server_create", "server_update", "server_delete", "servers_bulk_update"]),

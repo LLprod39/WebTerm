@@ -101,7 +101,6 @@ test.describe("Auth flows", () => {
               port: 22,
               username: "root",
               server_type: "ssh",
-              rdp: false,
               status: "online",
               group_id: null,
               group_name: "Ungrouped",

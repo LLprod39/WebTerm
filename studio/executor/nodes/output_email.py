@@ -2,122 +2,27 @@ from __future__ import annotations
 
 import asyncio
 import smtplib
-from collections import defaultdict
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import TYPE_CHECKING, Any
 
 from django.conf import settings
 
-from app.agent_kernel.memory.redaction import sanitize_observation_text
 from studio.executor.nodes.base import BaseNode, NodeResult
 from studio.executor.registry import registry
+from studio.pipeline_notifications import (
+    _global_email_defaults,
+    _load_notif_cfg,
+    _normalize_email_recipient,
+    _resolve_from_email,
+)
+from studio.pipeline_redaction import (
+    redact_pipeline_text as _redact_pipeline_text,
+    redacted_execution_context as _redacted_context,
+)
 
 if TYPE_CHECKING:
     from studio.executor.context import ExecutionContext
-
-
-def _load_notif_cfg() -> dict[str, Any]:
-    try:
-        from studio.views import _load_notif_config
-
-        cfg = _load_notif_config()
-        return cfg if isinstance(cfg, dict) else {}
-    except Exception:
-        return {
-            "notify_email": getattr(settings, "PIPELINE_NOTIFY_EMAIL", "") or getattr(settings, "EMAIL_HOST_USER", "") or "",
-            "smtp_host": getattr(settings, "EMAIL_HOST", "") or "",
-            "smtp_user": getattr(settings, "EMAIL_HOST_USER", "") or "",
-            "smtp_password": getattr(settings, "EMAIL_HOST_PASSWORD", "") or "",
-            "from_email": getattr(settings, "DEFAULT_FROM_EMAIL", "") or "",
-        }
-
-
-def _global_email_defaults() -> tuple[str, str, str, str, str]:
-    cfg = _load_notif_cfg()
-    return (
-        str(cfg.get("notify_email") or ""),
-        str(cfg.get("smtp_host") or ""),
-        str(cfg.get("smtp_user") or ""),
-        str(cfg.get("smtp_password") or ""),
-        str(cfg.get("from_email") or ""),
-    )
-
-
-def _resolve_from_email(from_email: str, smtp_user: str, smtp_host: str) -> str:
-    if not from_email or "weuai.site" in from_email or "noreply@" in (from_email or "").lower():
-        if not smtp_user:
-            return from_email or "pipeline@noreply.local"
-        user = (smtp_user or "").strip()
-        if "@" in user:
-            return user
-        host = (smtp_host or "").lower()
-        if "yandex" in host:
-            return f"{user}@yandex.ru"
-        if "gmail" in host:
-            return f"{user}@gmail.com"
-        return user
-    return from_email
-
-
-def _normalize_email_recipient(to_email: str, smtp_host: str) -> str:
-    to_email = (to_email or "").strip()
-    if not to_email or "@" in to_email:
-        return to_email
-    host = (smtp_host or "").lower()
-    if "yandex" in host:
-        return f"{to_email}@yandex.ru"
-    if "gmail" in host:
-        return f"{to_email}@gmail.com"
-    return to_email
-
-
-def _redact_pipeline_text(value: Any, *, limit: int | None = None, preserve_values: list[str] | None = None) -> str:
-    text = str(value or "")
-    placeholders: dict[str, str] = {}
-    for index, raw_value in enumerate(preserve_values or []):
-        preserved = str(raw_value or "")
-        if not preserved or preserved not in text:
-            continue
-        placeholder = f"__PIPELINE_REDACTION_PRESERVE_{index}__"
-        placeholders[placeholder] = preserved
-        text = text.replace(preserved, placeholder)
-
-    redacted = sanitize_observation_text(text).text
-    for placeholder, preserved in placeholders.items():
-        redacted = redacted.replace(placeholder, preserved)
-    if limit is not None:
-        return redacted[: max(0, int(limit))]
-    return redacted
-
-
-def _redact_pipeline_value(value: Any, *, key: str = "", preserve_keys: set[str] | None = None) -> Any:
-    if preserve_keys and key in preserve_keys:
-        return value
-    if value is None:
-        return None
-    if isinstance(value, dict):
-        return {str(child_key): _redact_pipeline_value(item, key=str(child_key), preserve_keys=preserve_keys) for child_key, item in value.items()}
-    if isinstance(value, list):
-        return [_redact_pipeline_value(item, preserve_keys=preserve_keys) for item in value]
-    if isinstance(value, tuple):
-        return [_redact_pipeline_value(item, preserve_keys=preserve_keys) for item in value]
-    if isinstance(value, (int, float, bool)):
-        return value
-    return _redact_pipeline_text(value)
-
-
-def _redacted_context(ctx: "ExecutionContext", *, preserve_keys: set[str] | None = None) -> defaultdict[str, Any]:
-    raw_context = ctx.extra.get("context")
-    if not isinstance(raw_context, dict):
-        raw_context = {}
-    return defaultdict(
-        str,
-        {
-            str(key): _redact_pipeline_value(value, key=str(key), preserve_keys=preserve_keys)
-            for key, value in raw_context.items()
-        },
-    )
 
 
 def _coerce_smtp_port(value: Any) -> int:
@@ -210,4 +115,4 @@ class OutputEmailNode(BaseNode):
             await asyncio.get_event_loop().run_in_executor(None, _send_sync)
             return NodeResult(output={"status": "completed", "output": f"Email sent to {to_email} | Subject: {subject}"})
         except Exception as exc:
-            return NodeResult(error=f"SMTP error: {exc}")
+            return NodeResult(error=f"SMTP error: {_redact_pipeline_text(str(exc))}")

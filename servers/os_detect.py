@@ -217,25 +217,9 @@ def detection_is_stale(server: Server, *, max_age_days: int = 7) -> bool:
 
 
 async def detect_server_os(server: Server) -> dict[str, Any]:
-    """Connect via SSH (or infer RDP) and persist detected OS on the server."""
+    """Connect via SSH and persist detected OS on the server."""
     if not server.is_active:
         return {"success": False, "server_id": server.id, "error": "Server is inactive"}
-
-    if server.is_rdp():
-        meta = {
-            "pretty_name": "Windows (RDP)",
-            "id": "windows",
-            "detected_at": timezone.now().isoformat(),
-            "source": "rdp",
-        }
-        await sync_to_async(_save_detection)(server, "windows", meta)
-        return {
-            "success": True,
-            "server_id": server.id,
-            "detected_os": "windows",
-            "detected_os_pretty": meta["pretty_name"],
-            "meta": meta,
-        }
 
     secret = await sync_to_async(get_server_auth_secret, thread_sensitive=True)(server)
     try:

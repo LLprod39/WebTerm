@@ -262,9 +262,9 @@ def build_all_nodes_smoke_nodes(
                     "Ты осторожный QA-агент. Без записи, без установок, без рестартов и без изменений файлов. "
                     "Держи запуск коротким и используй не больше двух безопасных проверок."
                 ),
-                "server_ids": primary_server_ids,
-                "max_iterations": 2,
-                "on_failure": "continue",
+                "server_ids": primary_server_ids, "permission_mode": "PLAN",
+                "allowed_tools": ["ssh_execute", "read_console", "wait_for_output", "report", "ask_user", "analyze_output"],
+                "max_iterations": 2, "on_failure": "continue",
             },
         },
         {
@@ -282,9 +282,9 @@ def build_all_nodes_smoke_nodes(
                     "Ты QA-координатор. Без записи, без установок, без рестартов. "
                     "Собери только минимальный read-only контекст и кратко опиши различия."
                 ),
-                "server_ids": multi_server_ids,
-                "max_iterations": 2,
-                "on_failure": "continue",
+                "server_ids": multi_server_ids, "permission_mode": "PLAN",
+                "allowed_tools": ["ssh_execute", "read_console", "wait_for_output", "report", "ask_user", "analyze_output"],
+                "max_iterations": 2, "on_failure": "continue",
             },
         },
         {
@@ -340,7 +340,7 @@ def build_all_nodes_smoke_nodes(
             "data": {
                 "label": "Email Node (Disabled Safe)",
                 "label_ru": "Email-узел (безопасно отключен)",
-                "to_email": " ",
+                "to_email": "smoke@example.test",
                 "subject": "Smoke-проверка всех узлов",
                 "body": "Этот email-узел намеренно отключен для безопасной проверки.\n\nКонтекст:\n{all_outputs}",
                 "on_failure": "continue",

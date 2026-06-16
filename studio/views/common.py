@@ -8,6 +8,7 @@ from django.contrib.auth.models import User
 from django.http import JsonResponse
 
 from core_ui.access import feature_allowed_for_user
+from studio.readiness_issues import runtime_limit_issue, validation_issues
 from studio.skill_authoring import parse_csv_items
 
 STUDIO_FEATURE_PIPELINES = "studio_pipelines"
@@ -31,9 +32,15 @@ def _ok(data, status: int = 200) -> JsonResponse:
     return JsonResponse(data, safe=False, status=status)
 
 
-def _validation_err(errors: list[str], *, prefix: str = "Validation failed") -> JsonResponse:
+def _validation_err(errors: list[str], *, prefix: str = "Validation failed", issues: list[dict] | None = None) -> JsonResponse:
     message = f"{prefix}: {'; '.join(errors)}"
-    return JsonResponse({"error": message, "details": errors}, status=400)
+    return JsonResponse({"error": message, "details": errors, "issues": issues or validation_issues(errors)}, status=400)
+
+
+def _limit_err(limit_error: dict) -> JsonResponse:
+    payload = dict(limit_error)
+    payload["issues"] = [runtime_limit_issue(payload)]
+    return JsonResponse(payload, status=429)
 
 
 def _require_admin(request, *, message: str = "Admin access required") -> JsonResponse | None:

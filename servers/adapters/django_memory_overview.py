@@ -49,7 +49,6 @@ def build_memory_overview_payload(server_id: int, policy: Any) -> dict[str, Any]
             "sleep_end_hour": policy.sleep_end_hour,
             "raw_event_retention_days": policy.raw_event_retention_days,
             "episode_retention_days": policy.episode_retention_days,
-            "rdp_semantic_capture_enabled": policy.rdp_semantic_capture_enabled,
             "human_habits_capture_enabled": policy.human_habits_capture_enabled,
             "is_enabled": policy.is_enabled,
         },

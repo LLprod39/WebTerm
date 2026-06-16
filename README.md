@@ -18,7 +18,7 @@
   <img src="https://img.shields.io/badge/License-Apache%202.0-0F172A?style=flat-square" alt="Apache 2.0" />
 </p>
 
-WebTerm собирает в одном месте то, что в обычной ops-работе часто живет в разных окнах: список серверов, SSH/RDP-доступ, мониторинг, заметки по инфраструктуре, AI-запуски, Studio pipelines, MCP-интеграции и уведомления. Это не отдельный SSH-клиент и не витрина для демо. Это рабочий интерфейс поверх Django backend, где сервер, его контекст и автоматизация находятся рядом.
+WebTerm собирает в одном месте то, что в обычной ops-работе часто живет в разных окнах: список серверов, SSH-доступ, мониторинг, заметки по инфраструктуре, AI-запуски, Studio pipelines, MCP-интеграции и уведомления. Это не отдельный SSH-клиент и не витрина для демо. Это рабочий интерфейс поверх Django backend, где сервер, его контекст и автоматизация находятся рядом.
 
 ## Как это выглядит
 
@@ -26,7 +26,7 @@ WebTerm собирает в одном месте то, что в обычной
   <tr>
     <td width="50%" valign="top">
       <img src=".github/assets/servers-page.png" alt="Servers page" />
-      <p><strong>Servers</strong><br />Инвентарь, группы, доступы, health-checks, SSH/RDP и быстрые действия по серверу.</p>
+      <p><strong>Servers</strong><br />Инвентарь, группы, доступы, health-checks, SSH и быстрые действия по серверу.</p>
     </td>
     <td width="50%" valign="top">
       <img src=".github/assets/studio-page.png" alt="Studio page" />
@@ -41,7 +41,6 @@ WebTerm собирает в одном месте то, что в обычной
 | --- | --- |
 | Servers | Инвентарь серверов, группы, shares, проверка подключения, OS-detect, health history, контекст и knowledge по серверу. |
 | Terminal | SSH через WebSocket, xterm.js на фронтенде, SFTP/file actions, snapshots перед рискованными изменениями. |
-| RDP | RDP-сценарии рядом с серверной карточкой и остальными ops-действиями. |
 | Nova / Agents | AI-режимы для объяснения, планирования и выполнения задач по серверу с guardrails и подтверждениями. |
 | Monitoring | Dashboard, alerts, watcher drafts и ручной запуск health-checks. |
 | Studio | Визуальные pipeline-графы, triggers, node executors, run history, MCP tools, reusable agent configs и skill authoring. |
@@ -49,7 +48,7 @@ WebTerm собирает в одном месте то, что в обычной
 
 ## Типовые сценарии
 
-- Открыть сервер, проверить состояние, перейти в SSH/RDP и сохранить контекст в одном месте.
+- Открыть сервер, проверить состояние, перейти в SSH и сохранить контекст в одном месте.
 - Запустить AI-агента по серверу, посмотреть live-лог, подтвердить план и получить отчет по выполнению.
 - Собрать pipeline в Studio: webhook или schedule trigger, SSH-команда, MCP-вызов, human approval, Telegram или email на выходе.
 - Поддерживать базу знаний по инфраструктуре: server context, memory events, runbooks и результаты прошлых действий.
@@ -60,7 +59,7 @@ WebTerm собирает в одном месте то, что в обычной
 ```mermaid
 flowchart LR
     UI["React / Vite SPA"] --> API["Django + Channels"]
-    API --> Servers["Servers<br/>SSH / RDP / Monitoring / Memory"]
+    API --> Servers["Servers<br/>SSH / Monitoring / Memory"]
     API --> Studio["Studio<br/>Pipelines / Agents / Skills"]
     Studio --> MCP["MCP services<br/>demo / keycloak / custom"]
     API --> DB[("SQLite for dev<br/>PostgreSQL for prod")]
@@ -155,12 +154,23 @@ docker compose up -d --build
 | redis | `6379` | Channels и runtime control |
 | mcp-demo | `8765` | Демонстрационный MCP HTTP server |
 | mcp-keycloak | `8766` | Keycloak MCP server |
+| scheduled-pipelines | - | Фоновый запуск `trigger/schedule` в Studio pipelines |
+| scheduled-agents | - | Планировщик server agents |
+| monitor | - | Health checks, alerts и cleanup старых monitoring данных |
+| ops-supervisor | - | Memory dreams, agent execution plane и watcher drafts |
+| telegram-bot | - | Optional profile для long-poll Telegram bot pipeline |
 
 Production-заготовка:
 
 ```bash
 cp .env.production.example .env.production
 docker compose --env-file .env.production -f docker-compose.production.yml up -d --build
+```
+
+Telegram bot не стартует по умолчанию. Если pipeline и токен уже настроены, включай отдельный profile:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.production.yml --profile telegram-bot up -d telegram-bot
 ```
 
 При `DJANGO_DEBUG=false` backend специально требует нормальный `DJANGO_SECRET_KEY`, корректные `ALLOWED_HOSTS` и `CHANNEL_REDIS_URL` или `CELERY_BROKER_URL`.
@@ -185,6 +195,8 @@ docker compose --env-file .env.production -f docker-compose.production.yml up -d
 | `CSRF_TRUSTED_ORIGINS` | Нужен при разных origin у frontend/backend. |
 | `POSTGRES_*` | Переключают backend с SQLite на PostgreSQL. |
 | `CHANNEL_REDIS_URL` | Нужен для production и multi-worker WebSocket control. |
+| `PIPELINE_SCHEDULER_INTERVAL`, `SCHEDULED_AGENTS_INTERVAL` | Интервалы production worker-ов для schedule triggers и server agents. |
+| `MONITOR_*`, `WATCHERS_*`, `MEMORY_DREAM_INTERVAL`, `AGENT_EXECUTION_INTERVAL` | Интервалы production monitor/ops-supervisor worker-ов. |
 | `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GROK_API_KEY` | Провайдеры LLM-функций. |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Telegram-уведомления. |
 | `EMAIL_*`, `PIPELINE_NOTIFY_EMAIL` | Email-уведомления. |
@@ -200,8 +212,12 @@ python manage.py createsuperuser
 python manage.py runserver
 python manage.py run_scheduled_pipelines
 python manage.py run_scheduled_agents
+python manage.py run_monitor
+python manage.py run_telegram_bot
 python manage.py run_watchers
 python manage.py run_memory_dreams
+python manage.py run_agent_execution_plane
+python manage.py run_ops_supervisor --with-watchers
 ```
 
 Frontend:
@@ -231,7 +247,7 @@ ruff format .
 | [`frontend/`](./frontend) | React/Vite SPA, Playwright/Vitest, Tailwind, UI-компоненты. |
 | [`web_ui/`](./web_ui) | Django settings, root URLs, ASGI/WSGI, WebSocket routing. |
 | [`core_ui/`](./core_ui) | Auth/session API, redirects, settings/access/admin endpoints, middleware. |
-| [`servers/`](./servers) | Серверы, группы, SSH/RDP, monitoring, memory, server agents. |
+| [`servers/`](./servers) | Серверы, группы, SSH, monitoring, memory, server agents. |
 | [`studio/`](./studio) | Pipelines, runs, triggers, MCP registry, skills, notifications. |
 | [`app/`](./app) | Общие LLM, SSH, runtime, policy и safety сервисы. |
 | [`docker/`](./docker) | Dockerfiles, nginx configs, startup scripts. |

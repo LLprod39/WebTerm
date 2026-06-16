@@ -152,8 +152,7 @@ async def test_ssh_connection_manager_execute_handles_connection_errors():
 
 
 @pytest.mark.asyncio
-async def test_ssh_execute_tool_blocks_dangerous_command(monkeypatch):
-    monkeypatch.setattr("app.tools.ssh_tools.is_dangerous_command", lambda _cmd: True)
+async def test_ssh_execute_tool_blocks_dangerous_command():
     tool = SSHExecuteTool()
 
     result = await tool.execute(conn_id="conn-1", command="rm -rf /")

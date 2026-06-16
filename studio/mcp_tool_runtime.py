@@ -7,6 +7,7 @@ from typing import Any
 
 from loguru import logger
 
+from app.execution_policy import safe_payload_preview
 from studio.mcp_client import call_mcp_tool, list_mcp_tools
 from studio.models import MCPServerPool
 
@@ -149,7 +150,7 @@ async def execute_bound_mcp_tool(bindings: dict[str, MCPBoundTool], action_name:
             action_name,
             binding.server.name,
             binding.tool_name,
-            json.dumps(args, ensure_ascii=False)[:1000],
+            safe_payload_preview(args, limit=1000),
         )
         result = await call_mcp_tool(binding.server, binding.tool_name, args)
     except Exception as exc:

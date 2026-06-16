@@ -15,7 +15,6 @@ const Login = lazy(() => import("./pages/Login"));
 const Servers = lazy(() => import("./pages/Servers"));
 const TerminalPage = lazy(() => import("./pages/TerminalPage"));
 const DashboardRouter = lazy(() => import("./pages/DashboardRouter"));
-const RdpPage = lazy(() => import("./pages/RdpPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const SettingsUsersPage = lazy(() => import("./pages/SettingsUsersPage"));
 const SettingsGroupsPage = lazy(() => import("./pages/SettingsGroupsPage"));
@@ -147,7 +146,6 @@ const App = () => (
                 <Route path="/servers" element={<Servers />} />
                 <Route path="/servers/hub" element={<TerminalPage />} />
                 <Route path="/servers/:id/terminal" element={<TerminalPage />} />
-                <Route path="/servers/:id/rdp" element={<RdpPage />} />
                 <Route
                   path="/agents"
                   element={(

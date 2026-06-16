@@ -4,8 +4,9 @@ import re
 from dataclasses import dataclass
 
 from app.agent_kernel.domain.specs import PermissionDecision, ToolSpec
+from app.execution_policy import build_execution_policy_audit_metadata
 from app.agent_kernel.permissions.modes import MODE_AUTO_GUARDED, MODE_PLAN, MODE_SAFE, MUTATION_SANDBOX
-from app.tools.safety import is_dangerous_command
+from app.tools.safety import evaluate_command_safety
 
 _MUTATING_PATTERNS: tuple[tuple[re.Pattern[str], str, tuple[str, ...], tuple[str, ...]], ...] = (
     (
@@ -88,29 +89,36 @@ class PermissionEngine:
 
     def evaluate(self, spec: ToolSpec, args: dict) -> PermissionDecision:
         command = str(args.get("command") or "")
+        command_risk = evaluate_command_safety(command)
 
-        if command and is_dangerous_command(command):
-            return PermissionDecision(
+        if command and command_risk.is_dangerous:
+            return self._decision(
+                spec,
+                args,
                 allowed=False,
-                mode=self.mode,
-                sandbox_profile=MUTATION_SANDBOX.get(self.mode, "ops_read"),
                 reason="Команда классифицирована как опасная и заблокирована политикой безопасности.",
+                requires_approval=True,
+                risk_categories=command_risk.categories,
+                matched_patterns=command_risk.matched_patterns,
             )
 
         if self.mode == MODE_PLAN and (spec.mutates_state or spec.risk in {"write", "admin"} or self._is_mutating_command(command)):
-            return PermissionDecision(
+            return self._decision(
+                spec,
+                args,
                 allowed=False,
-                mode=self.mode,
-                sandbox_profile=MUTATION_SANDBOX[self.mode],
                 reason="PLAN mode: разрешены только исследование, чтение и построение плана.",
+                requires_approval=True,
+                risk_categories=self._risk_categories(spec, command),
             )
 
         if spec.name.startswith("mcp_") and self.mode == MODE_SAFE:
-            return PermissionDecision(
+            return self._decision(
+                spec,
+                args,
                 allowed=True,
-                mode=self.mode,
-                sandbox_profile=MUTATION_SANDBOX[self.mode],
                 notes=("MCP вызов разрешен в SAFE mode, но агент должен явно подтвердить цель и последствия.",),
+                risk_categories=("mcp_call",),
             )
 
         if spec.name == "ssh_execute":
@@ -119,42 +127,52 @@ class PermissionEngine:
                 _kind, preflights, _verifications = mutation
                 missing = [marker for marker in preflights if marker not in self.observed_markers]
                 if missing:
-                    return PermissionDecision(
+                    return self._decision(
+                        spec,
+                        args,
                         allowed=False,
-                        mode=self.mode,
-                        sandbox_profile=MUTATION_SANDBOX[self.mode],
                         reason="Сначала собери preflight факты перед изменением: " + ", ".join(missing),
+                        requires_approval=True,
+                        risk_categories=(_kind,),
                     )
-                return PermissionDecision(
+                return self._decision(
+                    spec,
+                    args,
                     allowed=True,
-                    mode=self.mode,
                     sandbox_profile="ops_mutation",
+                    risk_categories=(_kind,),
                     notes=("После изменения обязательно выполни post-change verification.",),
                 )
 
         if self.mode == MODE_SAFE and spec.risk == "admin":
-            return PermissionDecision(
+            return self._decision(
+                spec,
+                args,
                 allowed=False,
-                mode=self.mode,
-                sandbox_profile=MUTATION_SANDBOX[self.mode],
                 reason="SAFE mode блокирует административные изменения до явного плана.",
+                requires_approval=True,
+                risk_categories=("admin",),
             )
 
         if self.mode == MODE_AUTO_GUARDED:
             if spec.risk == "admin" and not _SAFE_ADMIN_TOOL_NAME.search(spec.name):
-                return PermissionDecision(
+                return self._decision(
+                    spec,
+                    args,
                     allowed=False,
-                    mode=self.mode,
-                    sandbox_profile=MUTATION_SANDBOX[self.mode],
                     reason="AUTO_GUARDED блокирует административные операции без явной allowlisted semantics.",
+                    requires_approval=True,
+                    risk_categories=("admin",),
                 )
 
             if spec.name == "ssh_execute":
                 if command and self._is_read_only_command(command):
-                    return PermissionDecision(
+                    return self._decision(
+                        spec,
+                        args,
                         allowed=True,
-                        mode=self.mode,
                         sandbox_profile="ops_read",
+                        risk_categories=("read_only",),
                         notes=("Команда классифицирована как read-only и разрешена в AUTO_GUARDED.",),
                     )
 
@@ -163,29 +181,34 @@ class PermissionEngine:
                     _kind, preflights, _verifications = mutation
                     missing = [marker for marker in preflights if marker not in self.observed_markers]
                     if missing:
-                        return PermissionDecision(
+                        return self._decision(
+                            spec,
+                            args,
                             allowed=False,
-                            mode=self.mode,
-                            sandbox_profile=MUTATION_SANDBOX[self.mode],
                             reason="AUTO_GUARDED требует preflight перед изменением: " + ", ".join(missing),
+                            requires_approval=True,
+                            risk_categories=(_kind,),
                         )
-                    return PermissionDecision(
+                    return self._decision(
+                        spec,
+                        args,
                         allowed=True,
-                        mode=self.mode,
                         sandbox_profile="ops_mutation",
+                        risk_categories=(_kind,),
                         notes=("Изменение разрешено в AUTO_GUARDED после preflight; post-change verification обязательно.",),
                     )
 
                 if command and _UNKNOWN_MUTATION_PATTERN.search(command):
-                    return PermissionDecision(
+                    return self._decision(
+                        spec,
+                        args,
                         allowed=False,
-                        mode=self.mode,
-                        sandbox_profile=MUTATION_SANDBOX[self.mode],
                         reason="AUTO_GUARDED блокирует неклассифицированную потенциально мутирующую команду.",
+                        requires_approval=True,
+                        risk_categories=("unknown_mutation",),
                     )
 
-        sandbox = MUTATION_SANDBOX.get(self.mode, "ops_read")
-        return PermissionDecision(allowed=True, mode=self.mode, sandbox_profile=sandbox)
+        return self._decision(spec, args, allowed=True)
 
     def record_success(self, spec: ToolSpec, args: dict, _result_text: str):
         if spec.name != "ssh_execute":
@@ -230,3 +253,56 @@ class PermissionEngine:
     def _is_read_only_command(command: str) -> bool:
         value = command or ""
         return any(pattern.search(value) for pattern in _READ_ONLY_PATTERNS)
+
+    def _decision(
+        self,
+        spec: ToolSpec,
+        args: dict,
+        *,
+        allowed: bool,
+        sandbox_profile: str | None = None,
+        reason: str = "",
+        requires_approval: bool = False,
+        notes: tuple[str, ...] = (),
+        risk_categories: tuple[str, ...] = (),
+        matched_patterns: tuple[str, ...] = (),
+    ) -> PermissionDecision:
+        sandbox = sandbox_profile or MUTATION_SANDBOX.get(self.mode, "ops_read")
+        audit_metadata = {
+            "execution_policy": build_execution_policy_audit_metadata(
+                tool_name=spec.name,
+                args=args,
+                mode=self.mode,
+                allowed=allowed,
+                sandbox_profile=sandbox,
+                reason=reason,
+                requires_approval=requires_approval,
+                risk_categories=risk_categories,
+                matched_patterns=matched_patterns,
+                extra={
+                    "tool_category": spec.category,
+                    "tool_risk": spec.risk,
+                    "mutates_state": spec.mutates_state,
+                },
+            )
+        }
+        return PermissionDecision(
+            allowed=allowed,
+            mode=self.mode,
+            sandbox_profile=sandbox,
+            reason=reason,
+            requires_approval=requires_approval,
+            notes=notes,
+            audit_metadata=audit_metadata,
+        )
+
+    @staticmethod
+    def _risk_categories(spec: ToolSpec, command: str) -> tuple[str, ...]:
+        mutation = PermissionEngine._match_mutation(command)
+        if mutation:
+            return (mutation[0],)
+        if spec.mutates_state:
+            return ("mutation",)
+        if spec.risk in {"write", "admin", "exec"}:
+            return (spec.risk,)
+        return ()

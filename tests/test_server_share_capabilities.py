@@ -126,3 +126,36 @@ def test_view_only_shared_user_cannot_connect_execute_or_access_files():
     )
     assert linux_ui_action_response.status_code == 403
     assert "execute_command" in linux_ui_action_response.json()["error"]
+
+
+@pytest.mark.django_db
+def test_shared_user_cannot_reveal_secret_or_administer_shares():
+    owner = User.objects.create_user(username="share-admin-owner", password="x")
+    teammate = User.objects.create_user(username="share-admin-user", password="x")
+    another_user = User.objects.create_user(username="share-admin-third", password="x")
+    server = _create_server(owner, name="share-admin-srv", auth_method="password")
+    share = ServerShare.objects.create(server=server, user=teammate, shared_by=owner, share_context=True)
+
+    client = Client()
+    client.force_login(teammate)
+
+    reveal_response = client.post(
+        f"/servers/api/{server.id}/reveal-password/",
+        data=_json({"master_password": "irrelevant"}),
+        content_type="application/json",
+    )
+    assert reveal_response.status_code == 403
+    assert "Only the server owner" in reveal_response.json()["error"]
+
+    list_response = client.get(f"/servers/api/{server.id}/shares/")
+    assert list_response.status_code == 404
+
+    create_response = client.post(
+        f"/servers/api/{server.id}/share/",
+        data=_json({"user": another_user.username, "can_read_files": True}),
+        content_type="application/json",
+    )
+    assert create_response.status_code == 404
+
+    revoke_response = client.post(f"/servers/api/{server.id}/shares/{share.id}/revoke/")
+    assert revoke_response.status_code == 404

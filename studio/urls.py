@@ -21,6 +21,7 @@ app_name = "studio"
 urlpatterns = [
     path("capabilities/", capability_views.api_capabilities, name="capabilities"),
     path("node-manifests/", capability_views.api_node_manifests, name="node_manifests"),
+    path("readiness/", capability_views.api_readiness, name="readiness"),
     # Pipelines
     path("pipelines/", pipeline_views.api_pipelines, name="pipelines"),
     path("pipelines/assistant/", pipeline_assistant_views.api_pipeline_assistant, name="pipeline_assistant"),

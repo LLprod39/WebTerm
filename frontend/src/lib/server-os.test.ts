@@ -36,14 +36,6 @@ describe("inferServerOs", () => {
 
 
 
-  it("defaults RDP to windows", () => {
-
-    expect(inferServerOs({ server_type: "rdp", rdp: true, name: "dc-01" })).toBe("windows");
-
-  });
-
-
-
   it("detects linux distros from tags, notes, and username", () => {
 
     expect(inferServerOs({ server_type: "ssh", tags: "ubuntu,prod" })).toBe("ubuntu");

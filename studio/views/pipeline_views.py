@@ -7,9 +7,12 @@ from django.views.decorators.http import require_http_methods
 
 from core_ui.decorators import require_feature
 from studio.models import CURRENT_PIPELINE_GRAPH_VERSION, Pipeline, PipelineTrigger
+from studio.pipeline_preflight import pipeline_integration_diagnostics
+from studio.pipeline_runtime_context import validate_pipeline_entry_branch, validate_pipeline_runtime_context
 from studio.pipeline_validation import ensure_json_object, validate_pipeline_definition
-from studio.trigger_dispatch import get_pipeline_run_limit_error
-from studio.views.common import _err, _json_body, _ok, _validation_err
+from studio.readiness_issues import runtime_limit_issue, validation_issues
+from studio.trigger_dispatch import get_pipeline_run_limit_error, pipeline_run_creation_error_details
+from studio.views.common import _err, _json_body, _limit_err, _ok, _validation_err
 from studio.views.pipeline_assistant_preview import pipeline_assistant_risk
 from studio.views.pipeline_helpers import (
     _create_pipeline_run,
@@ -126,16 +129,40 @@ def api_pipeline_run(request, pipeline_id: int):
     trigger_errors: list[str] = []
     if not validation_errors:
         selected_trigger, trigger_errors = _resolve_manual_entry_trigger(pipeline, entry_node_id)
-    all_errors = [*validation_errors, *trigger_errors]
+    branch_errors = (
+        validate_pipeline_entry_branch(pipeline.nodes, pipeline.edges, selected_trigger.node_id)
+        if selected_trigger is not None
+        else []
+    )
+    context_errors = (
+        validate_pipeline_runtime_context(
+            pipeline.nodes,
+            context,
+            edges=pipeline.edges,
+            entry_node_id=selected_trigger.node_id,
+        )
+        if selected_trigger is not None and not branch_errors
+        else []
+    )
+    integration = (
+        pipeline_integration_diagnostics(pipeline, entry_node_id=selected_trigger.node_id)
+        if selected_trigger is not None and not validation_errors
+        else {"requirements": [], "issues": [], "errors": [], "warnings": []}
+    )
+    limit_error = get_pipeline_run_limit_error(pipeline.owner, cleanup_stale=not validate_only)
+    limit_errors = [str(limit_error.get("error") or "Runtime limit reached.")] if limit_error else []
+    limit_issues = [runtime_limit_issue(limit_error)] if limit_error else []
+    all_errors = [*validation_errors, *trigger_errors, *branch_errors, *context_errors, *integration["errors"], *limit_errors]
 
     if validate_only:
         risk = pipeline_assistant_risk(pipeline.nodes, pipeline.edges)
-        validation = {"ok": not all_errors, "errors": all_errors}
+        issues = [*validation_issues([*validation_errors, *trigger_errors, *branch_errors, *context_errors]), *integration["issues"], *limit_issues]
+        validation = {"ok": not all_errors, "errors": all_errors, "issues": issues}
         dry_run = {
             "ok": validation["ok"] and risk.get("level") != "dangerous",
             "executed": False,
             "mode": "validate_only",
-            "checks": ["graph_contract", "manual_trigger", "references", "risk_review"],
+            "checks": ["graph_contract", "manual_trigger", "references", "risk_review", "runtime_context", "integrations", "runtime_limits"],
             "message": (
                 "Dry-run validation checked graph structure, manual trigger routing, references and risk. "
                 "No pipeline run was created and no runtime actions were executed."
@@ -145,6 +172,7 @@ def api_pipeline_run(request, pipeline_id: int):
             {
                 "ok": validation["ok"],
                 "validation": validation,
+                "integration_requirements": integration["requirements"],
                 "risk": risk,
                 "dry_run": dry_run,
                 "entry_node_id": selected_trigger.node_id if selected_trigger else entry_node_id,
@@ -153,27 +181,28 @@ def api_pipeline_run(request, pipeline_id: int):
             }
         )
 
-    limit_error = get_pipeline_run_limit_error(pipeline.owner)
     if limit_error:
-        return JsonResponse(limit_error, status=429)
+        return _limit_err(limit_error)
 
-    if validation_errors:
-        return _validation_err(validation_errors, prefix="Pipeline is not runnable")
-    if trigger_errors:
-        return _validation_err(trigger_errors, prefix="Pipeline is not runnable")
+    if all_errors:
+        issues = [*validation_issues([*validation_errors, *trigger_errors, *branch_errors, *context_errors]), *integration["issues"]]
+        return _validation_err(all_errors, prefix="Pipeline is not runnable", issues=issues)
 
-    run = _create_pipeline_run(
-        pipeline=pipeline,
-        triggered_by=request.user,
-        trigger=selected_trigger,
-        context=context,
-        trigger_data={
-            "source": "manual",
-            "trigger_type": PipelineTrigger.TYPE_MANUAL,
-            "entry_node_id": selected_trigger.node_id,
-        },
-        entry_node_id=selected_trigger.node_id,
-    )
+    try:
+        run = _create_pipeline_run(
+            pipeline=pipeline,
+            triggered_by=request.user,
+            trigger=selected_trigger,
+            context=context,
+            trigger_data={
+                "source": "manual",
+                "trigger_type": PipelineTrigger.TYPE_MANUAL,
+                "entry_node_id": selected_trigger.node_id,
+            },
+            entry_node_id=selected_trigger.node_id,
+        )
+    except ValueError as exc:
+        return _validation_err(pipeline_run_creation_error_details(exc), prefix="Pipeline is not runnable")
     _launch_pipeline_run(run)
     return _ok(run.to_dict(), status=202)
 

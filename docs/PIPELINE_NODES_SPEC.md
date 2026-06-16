@@ -937,7 +937,7 @@ Runtime:
 
 Runtime:
 
-- Выполняется через registry adapter `studio/executor/nodes/logic_human_approval.py`, подключенный из production `PipelineExecutor`.
+- Выполняется через registry adapter `studio/executor/nodes/logic_human_approval.py`; implementation живет в `studio/pipeline_interactions.py`, а production `PipelineExecutor` оставляет только compatibility alias.
 - Adapter сохраняет существующую approval runtime semantics: state arming, email/Telegram delivery, polling, timeout и stop handling остаются в production approval runtime.
 - Генерирует one-time `approval_token`.
 - Сохраняет в `node_states[node_id]`: `status="awaiting_approval"`, token, approve/reject URL, `started_at`.
@@ -994,7 +994,7 @@ Runtime:
 
 Runtime по текущему коду:
 
-- Выполняется через registry adapter `studio/executor/nodes/logic_telegram_input.py`, подключенный из production `PipelineExecutor`.
+- Выполняется через registry adapter `studio/executor/nodes/logic_telegram_input.py`; implementation живет в `studio/pipeline_interactions.py`, а production `PipelineExecutor` оставляет только compatibility alias.
 - Adapter сохраняет существующую polling runtime semantics: Telegram ForceReply delivery, DB state polling, Telegram reply polling, timeout и stop handling остаются в production telegram-input runtime.
 - Это logic node, не trigger. Она не запускает pipeline сама.
 - Требует bot token и chat id, с fallback на global notification settings.
@@ -1290,7 +1290,7 @@ Runtime:
    Оставшийся gap: smoke pipeline безопасно валидирует форму и граф, но не выполняет реальные mutating OPS действия без внешнего контекста/серверов.
 
 3. Target node-registry architecture частичная.
-   `studio/executor/registry.py` и `studio/executor/engine.py` являются целевой архитектурой, но production execution всё ещё в `studio/pipeline_executor.py`. OPS nodes, все `output/*`, все `logic/*` и все `agent/*` nodes уже выполняются через registry adapter. `PipelineExecutor._execute_node` dispatch теперь использует `node_type in registry`, поэтому новые registry-ноды не требуют отдельной ветки в executor. Legacy helper functions в `studio/pipeline_executor.py` пока остаются runtime implementations под thin adapters.
+   `studio/executor/registry.py` и `studio/executor/engine.py` являются целевой архитектурой, но production run lifecycle всё ещё в `studio/pipeline_executor.py`. OPS nodes, все `output/*`, все `logic/*` и все `agent/*` nodes уже выполняются через registry adapter. `PipelineExecutor._execute_node` dispatch теперь использует `node_type in registry`, поэтому новые registry-ноды не требуют отдельной ветки в executor. Простые logic helper-реализации для `logic/condition`, `logic/wait` и `logic/merge` живут в `studio/pipeline_logic.py`; interactive helper-реализации для `logic/human_approval` и `logic/telegram_input` живут в `studio/pipeline_interactions.py`; `pipeline_executor.py` сохраняет legacy alias-имена.
    `python manage.py check_node_manifest_consistency` теперь также проверяет, что executor registry содержит ровно все non-trigger node types из manifest, без пропусков и лишних runtime types, а каждая нода имеет object `input_schema` и `output_schema`.
 
 3a. `NodeManifest` теперь отдает единый контракт для UI и AI.
@@ -1299,11 +1299,11 @@ Runtime:
 4. Все output-ноды (`output/report`, `output/webhook`, `output/email`, `output/telegram`) переведены на production registry adapter. `output/report` держит parity по `PipelineRun.summary`, template rendering, auto-report и redaction; `output/webhook` держит parity по `context`/`outputs` payload, redaction, `headers`, `timeout_seconds` и `fail_on_non_2xx`; `output/email` держит parity по SMTP/global settings, normalized recipients/from, STARTTLS/SSL, subject/body templates и redaction preserve-list; `output/telegram` держит parity по global/node credentials, context fallback, chunks, Telegram API errors и redaction.
    Оставшийся registry gap теперь не в output-нóдах, а в agent/logic production nodes.
 
-4a. `logic/condition` переведен на production registry adapter и держит parity по `source_node_id`, `contains`/`not_contains`, status checks, `always_true`, `passed` и строковому `output`. `logic/parallel` переведен на registry adapter с parity по gateway output; executor batch routing всё ещё отвечает за фактический fan-out. `logic/merge` тоже переведен на registry adapter с parity по `mode=all|any`, fallback invalid mode -> `all` и human-readable `output`; router-level pending merge state остается в `PipelineExecutor`. `logic/wait` переведен на registry adapter с parity по `wait_minutes` parsing/clamp, chunked sleep, stop-event handling, DB stopped status и completed/stopped output.
+4a. `logic/condition` переведен на production registry adapter и держит parity по `source_node_id`, `contains`/`not_contains`, status checks, `always_true`, `passed` и строковому `output`. `logic/parallel` переведен на registry adapter с parity по gateway output; executor batch routing всё ещё отвечает за фактический fan-out. `logic/merge` тоже переведен на registry adapter с parity по `mode=all|any`, fallback invalid mode -> `all` и human-readable `output`; router-level pending merge state остается в `PipelineExecutor`. `logic/wait` переведен на registry adapter с parity по `wait_minutes` parsing/clamp, chunked sleep, stop-event handling, DB stopped status и completed/stopped output. Общая implementation для `condition`, `merge` и `wait` живет в `studio/pipeline_logic.py`.
 
-4b. `logic/human_approval` переведен на production registry adapter без смены approval semantics: state arming, `approval_token`, manual links, email/Telegram delivery, Telegram callback polling, DB decision polling, timeout и stop handling остаются совместимыми с прежним runtime path.
+4b. `logic/human_approval` переведен на production registry adapter без смены approval semantics: state arming, `approval_token`, manual links, email/Telegram delivery, Telegram callback polling, DB decision polling, timeout и stop handling остаются совместимыми с прежним runtime path. Общая implementation живет в `studio/pipeline_interactions.py`.
 
-4c. `logic/telegram_input` переведен на production registry adapter без смены polling semantics: ForceReply delivery, `awaiting_operator_reply` state, DB/operator reply polling, Telegram reply polling, timeout и stop handling остаются совместимыми с прежним runtime path.
+4c. `logic/telegram_input` переведен на production registry adapter без смены polling semantics: ForceReply delivery, `awaiting_operator_reply` state, DB/operator reply polling, Telegram reply polling, timeout и stop handling остаются совместимыми с прежним runtime path. Общая implementation живет в `studio/pipeline_interactions.py`.
 
 4d. `agent/llm_query` и `agent/mcp_call` переведены на production registry adapter без смены runtime semantics. Для `agent/mcp_call` adapter передает текущий executor `executed_mcp_tools` set, чтобы skill-policy order tracking оставался совместимым с прежним path.
 
@@ -1335,7 +1335,7 @@ Runtime:
 1. Добавить type в `KNOWN_NODE_TYPES` и handles в `studio/pipeline_validation.py`.
 2. Добавить frontend component/metadata в `frontend/src/components/pipeline/nodes/` и `NODE_PALETTE`.
 3. Добавить форму настройки в `PipelineEditorPage.tsx` или общий node panel.
-4. Добавить runtime handler в `studio/pipeline_executor.py` или полностью мигрировать production execution на `studio/executor/`.
+4. Добавить registry handler в `studio/executor/nodes/` и вынести shared runtime helper в focused `studio/pipeline_*` module, если логика не помещается в тонкий adapter.
 5. Добавить assistant catalog/aliases в `studio/services/pipeline_assistant.py`, если ноду должен уметь генерировать AI drafter.
 6. Добавить тесты:
    - validation

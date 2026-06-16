@@ -179,7 +179,7 @@ def build_docker_service_recovery_nodes(
                 "server_ids": [server_id],
                 "model": "gemini-2.0-flash-exp",
                 "max_iterations": 3,
-                "allowed_tools": list(RESTRICTED_AGENT_TOOLS),
+                "permission_mode": "PLAN", "allowed_tools": ["ssh_execute", "read_console"],
                 "goal": (
                     "На сервере {server_name} ({server_host}) сработал критический alert по контейнеру {container_name}. "
                     "Нужно провести только диагностику и подготовить техническое заключение.\n\n"

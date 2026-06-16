@@ -22,18 +22,14 @@ from core_ui.audit import audit_context
 from servers.memory_heuristics import is_trivial_memory_command
 from servers.models import Server
 from servers.secret_utils import has_saved_server_secret
-from servers.services import terminal_events, terminal_input
+from servers.services import terminal_events, terminal_input, terminal_nova_context
 from servers.services.editor_intercept import detect_editor_command
 from servers.services.terminal_ai import preferences as ai_preferences
-from servers.services.terminal_ai.session_context import (
-    apply_successful_command_context,
-    build_initial_session_context,
-    build_nova_context_bundle,
-    build_session_probe_command,
-)
+from servers.services.terminal_ai.memory import sanitize_memory_line
+from servers.services.terminal_ai.planning import extract_json_object
+from servers.services.terminal_ai.policy import compute_confirm_reason, match_patterns
+from servers.services.terminal_ai.reporter import build_fallback_report, compute_report_status
 from servers.services.terminal_command_recorder import (
-    append_live_terminal_activity,
-    load_recent_terminal_activity,
     persist_agent_command_history,
     persist_manual_terminal_command_result,
 )
@@ -46,6 +42,16 @@ from servers.services.terminal_ssh_lifecycle import (
     close_ssh_handle,
     open_terminal_ssh_session,
     resize_terminal_ssh_session,
+)
+from servers.services.terminal_manual_command_state import (
+    append_ai_output,
+    append_manual_output,
+    append_terminal_tail,
+    finalize_manual_terminal_command,
+)
+from servers.services.terminal_stream_state import (
+    filter_internal_markers,
+    set_exit_future_result,
 )
 
 _TermSize = terminal_input.TerminalSize
@@ -146,36 +152,14 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         except (BadSignature, SignatureExpired, ValueError, TypeError):
             return None
 
-    @staticmethod
-    def _default_ai_settings() -> dict[str, Any]:
-        return ai_preferences.default_ai_settings()
-
-    @staticmethod
-    def _parse_bool(value: Any, default: bool = False) -> bool:
-        return ai_preferences.parse_bool(value, default)
-
-    @staticmethod
-    def _normalize_pattern_list(raw_value: Any) -> list[str]:
-        return ai_preferences.normalize_pattern_list(raw_value)
-
-    @staticmethod
-    def _normalize_int_list(raw_value: Any) -> list[int]:
-        return ai_preferences.normalize_int_list(raw_value)
-
-    def _normalize_ai_settings(self, raw_value: Any) -> dict[str, Any]:
-        return ai_preferences.normalize_ai_settings(raw_value)
-
-    @staticmethod
-    def _clone_ai_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
-        return ai_preferences.clone_ai_settings(settings)
-
-    @staticmethod
-    def _is_auto_report_enabled(settings: dict[str, Any], execution_mode: str) -> bool:
-        return ai_preferences.is_auto_report_enabled(settings, execution_mode)
-
-    @staticmethod
-    def _normalize_ai_chat_mode(value: Any) -> str:
-        return ai_preferences.normalize_ai_chat_mode(value)
+    _default_ai_settings = staticmethod(ai_preferences.default_ai_settings)
+    _parse_bool = staticmethod(ai_preferences.parse_bool)
+    _normalize_pattern_list = staticmethod(ai_preferences.normalize_pattern_list)
+    _normalize_int_list = staticmethod(ai_preferences.normalize_int_list)
+    _normalize_ai_settings = staticmethod(ai_preferences.normalize_ai_settings)
+    _clone_ai_settings = staticmethod(ai_preferences.clone_ai_settings)
+    _is_auto_report_enabled = staticmethod(ai_preferences.is_auto_report_enabled)
+    _normalize_ai_chat_mode = staticmethod(ai_preferences.normalize_ai_chat_mode)
 
     async def connect(self):
         self._connect_lock = asyncio.Lock()
@@ -442,8 +426,9 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             )
 
     async def _emit_terminal_session(self) -> None:
-        cwd = str((getattr(self, "_nova_session_context", None) or {}).get("cwd") or "").strip()
-        await self._safe_send_json({"type": "terminal_session", "cwd": cwd})
+        await self._safe_send_json(
+            terminal_nova_context.terminal_session_payload(getattr(self, "_nova_session_context", None))
+        )
 
     @staticmethod
     def _terminal_session_heartbeat_interval() -> int:
@@ -675,13 +660,8 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         except Exception as e:
             await self._safe_send_json({"type": "error", "message": f"stdin write failed: {e}"})
 
-    @staticmethod
-    def _should_use_manual_command_marker(command: str) -> bool:
-        return terminal_input.should_use_manual_command_marker(command)
-
-    @staticmethod
-    def _strip_terminal_input_sequences(data: str) -> str:
-        return terminal_input.strip_terminal_input_sequences(data)
+    _should_use_manual_command_marker = staticmethod(terminal_input.should_use_manual_command_marker)
+    _strip_terminal_input_sequences = staticmethod(terminal_input.strip_terminal_input_sequences)
 
     @contextlib.contextmanager
     def _suppress_terminal_input_capture(self):
@@ -772,18 +752,11 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
 
     async def _probe_nova_session_context(self, merged_env: dict[str, Any]) -> dict[str, Any]:
         fallback_host = str(getattr(self.server, "host", "") or "") if self.server else ""
-        if not self._ssh_conn:
-            return build_initial_session_context("", merged_env=merged_env, fallback_host=fallback_host)
-        output = ""
-        try:
-            result = await asyncio.wait_for(
-                self._ssh_conn.run(build_session_probe_command(), check=False),
-                timeout=3.0,
-            )
-            output = f"{result.stdout or ''}\n{result.stderr or ''}"
-        except Exception:
-            output = ""
-        return build_initial_session_context(output, merged_env=merged_env, fallback_host=fallback_host)
+        return await terminal_nova_context.probe_nova_session_context(
+            self._ssh_conn,
+            merged_env=merged_env,
+            fallback_host=fallback_host,
+        )
 
     def _append_nova_recent_activity(
         self,
@@ -793,8 +766,8 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         exit_code: int | None,
         source: str,
     ) -> None:
-        self._nova_recent_activity = append_live_terminal_activity(
-            list(getattr(self, "_nova_recent_activity", []) or []),
+        self._nova_recent_activity = terminal_nova_context.append_nova_recent_activity(
+            getattr(self, "_nova_recent_activity", None),
             command=command,
             cwd=cwd,
             exit_code=exit_code,
@@ -802,27 +775,12 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         )
 
     async def _collect_nova_context_bundle(self):
-        include_session_context = bool((self._ai_settings or {}).get("nova_session_context_enabled", True))
-        include_recent_activity = bool((self._ai_settings or {}).get("nova_recent_activity_enabled", True))
-        persisted_activity: list[dict[str, Any]] = []
-        if include_recent_activity and self.server:
-            try:
-                persisted_activity = await database_sync_to_async(
-                    load_recent_terminal_activity,
-                    thread_sensitive=True,
-                )(
-                    server_id=self.server.id,
-                    session_id=self._server_connection_id or "",
-                    limit=8,
-                )
-            except Exception:
-                persisted_activity = []
-        return build_nova_context_bundle(
-            snapshot=getattr(self, "_nova_session_context", {}) or {},
-            live_activity=list(getattr(self, "_nova_recent_activity", []) or []),
-            persisted_activity=persisted_activity,
-            include_session_context=include_session_context,
-            include_recent_activity=include_recent_activity,
+        return await terminal_nova_context.collect_nova_context_bundle(
+            server_id=self.server.id if self.server else None,
+            session_id=self._server_connection_id or "",
+            session_context=getattr(self, "_nova_session_context", None),
+            live_activity=getattr(self, "_nova_recent_activity", None),
+            ai_settings=self._ai_settings,
         )
 
     async def _handle_resize(self, content: dict[str, Any]):
@@ -2835,19 +2793,8 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             semaphore=_TERMINAL_AI_LLM_SEMAPHORE,
         )
 
-    @staticmethod
-    def _compute_report_status(done_items: list[dict[str, Any]]) -> str:
-        # F2-3: forwarder — canonical impl in servers.services.terminal_ai.reporter
-        from servers.services.terminal_ai import compute_report_status
-
-        return compute_report_status(done_items)
-
-    @staticmethod
-    def _build_fallback_report(done_items: list[dict[str, Any]]) -> str:
-        # F2-3: forwarder — canonical impl in servers.services.terminal_ai.reporter
-        from servers.services.terminal_ai import build_fallback_report
-
-        return build_fallback_report(done_items)
+    _compute_report_status = staticmethod(compute_report_status)
+    _build_fallback_report = staticmethod(build_fallback_report)
 
     async def _generate_ai_report_text(self, user_message: str, done_items: list[dict[str, Any]]) -> str:
         from servers.services.terminal_ai import generate_ai_report_text
@@ -2875,12 +2822,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             semaphore=_TERMINAL_AI_LLM_SEMAPHORE,
         )
 
-    @staticmethod
-    def _sanitize_memory_line(text: str) -> str:
-        # F2-3: forwarder — canonical impl in servers.services.terminal_ai.memory
-        from servers.services.terminal_ai import sanitize_memory_line
-
-        return sanitize_memory_line(text)
+    _sanitize_memory_line = staticmethod(sanitize_memory_line)
 
     def _spawn_memory_extraction_task(
         self,
@@ -2986,12 +2928,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             issues=issues,
         )
 
-    @staticmethod
-    def _extract_json_object(text: str) -> dict[str, Any]:
-        # Compatibility wrapper for older tests/call sites.
-        from servers.services.terminal_ai import extract_json_object
-
-        return extract_json_object(text)
+    _extract_json_object = staticmethod(extract_json_object)
 
     def _compute_confirm_reason(
         self,
@@ -3001,26 +2938,14 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         *,
         confirm_dangerous_commands: bool = True,
     ) -> str:
-        # F2-6: thin forwarder to the CommandPolicy service. Kept for
-        # backward compatibility with any call sites that still reference
-        # this method directly; new code should call ``decide_command_policy``.
-        from servers.services.terminal_ai import decide_command_policy
-
-        verdict = decide_command_policy(
+        return compute_confirm_reason(
             cmd,
             forbidden_patterns=forbidden_patterns,
             allowlist_patterns=allowlist_patterns,
-            chat_mode="agent",  # ask_mode handled at plan-item layer
             confirm_dangerous_commands=confirm_dangerous_commands,
         )
-        return verdict.reason
 
-    @staticmethod
-    def _matches_patterns(cmd: str, patterns: list[str]) -> bool:
-        # F2-6: forwarder — canonical impl in services.terminal_ai.policy
-        from servers.services.terminal_ai import match_patterns
-
-        return match_patterns(cmd, patterns)
+    _matches_patterns = staticmethod(match_patterns)
 
     async def _disconnect_ssh(self):
         was_connected = bool(self._ssh_conn or self._ssh_proc)
@@ -3113,156 +3038,35 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         Hide internal marker lines (used by AI to capture exit codes) from terminal output,
         but keep newline(s) to preserve terminal layout. Returns (filtered_text, markers).
         """
-        if not data:
-            return "", []
-
-        markers: list[tuple[int, int]] = []
-        out: list[str] = []
-        i = 0
-
-        # Ensure state exists (older instances)
         if not hasattr(self, "_marker_suppress"):
             self._marker_suppress = {"stdout": False, "stderr": False}
         if not hasattr(self, "_marker_line_buf"):
             self._marker_line_buf = {"stdout": "", "stderr": ""}
-
-        suppress = bool(self._marker_suppress.get(stream, False))
-        buf = self._marker_line_buf.get(stream, "")
-        marker_prefix = self._marker_prefix()
-        marker_re = re.compile(rf"^{re.escape(marker_prefix)}(\d+):(-?\d+)__\s*$")
-
-        while i < len(data):
-            if suppress:
-                nl = data.find("\n", i)
-                if nl == -1:
-                    buf += data[i:]
-                    i = len(data)
-                    break
-                buf += data[i:nl]
-                # Try parse marker output line: __WEUAI_EXIT_<token>_<id>:<code>__
-                m = marker_re.match(buf.strip())
-                if m:
-                    with contextlib.suppress(Exception):
-                        markers.append((int(m.group(1)), int(m.group(2))))
-                buf = ""
-                suppress = False
-                # Preserve the newline which ended the suppressed line
-                out.append("\n")
-                i = nl + 1
-                continue
-
-            idx = data.find(marker_prefix, i)
-            if idx == -1:
-                out.append(data[i:])
-                i = len(data)
-                break
-
-            out.append(data[i:idx])
-            suppress = True
-            buf = ""
-            i = idx
-
-        self._marker_suppress[stream] = suppress
-        self._marker_line_buf[stream] = buf
-        return "".join(out), markers
+        return filter_internal_markers(
+            stream=stream,
+            data=data,
+            marker_prefix=self._marker_prefix(),
+            marker_suppress=self._marker_suppress,
+            marker_line_buf=self._marker_line_buf,
+        )
 
     def _set_ai_exit_code(self, cmd_id: int, exit_code: int):
-        try:
-            fut = (self._ai_exit_futures or {}).get(int(cmd_id))
-            if fut and not fut.done():
-                fut.set_result(int(exit_code))
-        except Exception:
-            return
+        set_exit_future_result(self._ai_exit_futures, cmd_id, exit_code)
 
     def _append_terminal_tail(self, text: str):
-        if not text:
-            return
-        clean = self._strip_ansi_and_controls(text)
-        if not clean:
-            return
-        self._terminal_tail = (self._terminal_tail or "") + clean
-        # keep last ~8k chars
-        if len(self._terminal_tail) > 8000:
-            self._terminal_tail = self._terminal_tail[-8000:]
+        append_terminal_tail(self, text)
 
     def _append_ai_output(self, text: str):
-        if not text:
-            return
-        if getattr(self, "_ai_active_cmd_id", None) is None:
-            return
-        clean = self._strip_ansi_and_controls(text)
-        if not clean:
-            return
-        self._ai_active_output = (self._ai_active_output or "") + clean
-        if len(self._ai_active_output) > 6000:
-            self._ai_active_output = self._ai_active_output[-6000:]
+        append_ai_output(self, text)
 
     def _append_manual_output(self, text: str):
-        if not text:
-            return
-        if getattr(self, "_manual_active_cmd_id", None) is None:
-            return
-        clean = self._strip_ansi_and_controls(text)
-        if not clean:
-            return
-        self._manual_active_output = (self._manual_active_output or "") + clean
-        if len(self._manual_active_output) > 12000:
-            self._manual_active_output = self._manual_active_output[-12000:]
+        append_manual_output(self, text)
 
     async def _finalize_manual_terminal_command(self, cmd_id: int, exit_code: int) -> None:
-        pending = list(getattr(self, "_manual_pending_commands", []) or [])
-        if not pending:
-            return
+        await finalize_manual_terminal_command(self, cmd_id, exit_code, persist_result=database_sync_to_async(self._persist_manual_terminal_command_result, thread_sensitive=True))
 
-        item = next((entry for entry in pending if int(entry.get("id") or 0) == int(cmd_id)), None)
-        if item is None:
-            return
-
-        raw_output = (
-            self._manual_active_output if int(getattr(self, "_manual_active_cmd_id", 0) or 0) == int(cmd_id) else ""
-        )
-        clean_output = self._normalize_manual_command_output(str(item.get("command") or ""), raw_output)
-        await database_sync_to_async(self._persist_manual_terminal_command_result, thread_sensitive=True)(
-            user_id=int(item.get("user_id") or 0),
-            server_id=int(item.get("server_id") or 0),
-            session_id=str(item.get("session_id") or ""),
-            command=str(item.get("command") or ""),
-            output=clean_output,
-            exit_code=int(exit_code),
-            cwd=str(item.get("cwd") or ""),
-        )
-        self._append_nova_recent_activity(
-            command=str(item.get("command") or ""),
-            cwd=str(item.get("cwd") or ""),
-            exit_code=int(exit_code),
-            source="live_session",
-        )
-        context_before = getattr(self, "_nova_session_context", {}) or dict(item.get("context_before") or {})
-        old_cwd = str(context_before.get("cwd") or item.get("cwd") or "")
-        self._nova_session_context = apply_successful_command_context(
-            context_before,
-            command=str(item.get("command") or ""),
-            exit_code=int(exit_code),
-        )
-        new_cwd = str((self._nova_session_context or {}).get("cwd") or "")
-        if new_cwd and new_cwd != old_cwd:
-            await self._emit_terminal_session()
-
-        self._manual_pending_commands = [entry for entry in pending if int(entry.get("id") or 0) != int(cmd_id)]
-        if int(getattr(self, "_manual_active_cmd_id", 0) or 0) == int(cmd_id):
-            self._manual_active_cmd_id = None
-            self._manual_active_output = ""
-        if self._manual_active_cmd_id is None and self._manual_pending_commands:
-            self._manual_active_cmd_id = int(self._manual_pending_commands[0].get("id") or 0) or None
-            self._manual_active_output = ""
-
-    @staticmethod
-    def _normalize_manual_command_output(command: str, output: str) -> str:
-        return terminal_input.normalize_manual_command_output(command, output)
-
-    @staticmethod
-    def _strip_ansi_and_controls(text: str) -> str:
-        return terminal_input.strip_ansi_and_controls(text)
+    _normalize_manual_command_output = staticmethod(terminal_input.normalize_manual_command_output)
+    _strip_ansi_and_controls = staticmethod(terminal_input.strip_ansi_and_controls)
 
     async def _wait_for_process_exit(self):
         proc = self._ssh_proc
@@ -3285,13 +3089,8 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         finally:
             await self._disconnect_ssh()
 
-    @staticmethod
-    def _parse_term_size(content: dict[str, Any]) -> _TermSize:
-        return terminal_input.parse_terminal_size(content)
-
-    @staticmethod
-    def _build_exports(env_vars: dict[str, Any]) -> str:
-        return terminal_input.build_shell_exports(env_vars)
+    _parse_term_size = staticmethod(terminal_input.parse_terminal_size)
+    _build_exports = staticmethod(terminal_input.build_shell_exports)
 
     async def _get_session_master_password(self) -> str:
         """Get master password from session for auto-connect."""

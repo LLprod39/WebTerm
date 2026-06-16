@@ -25,8 +25,6 @@ BOOTSTRAP_MAX_SERVERS = 15
 def server_needs_os_detect(server: Server) -> bool:
     if not server.is_active:
         return False
-    if server.is_rdp() or (server.server_type or "").lower() == "rdp":
-        return not (server.detected_os or "").strip()
     if (server.server_type or "ssh").lower() != "ssh":
         return False
     if not (server.detected_os or "").strip():

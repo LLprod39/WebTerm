@@ -88,7 +88,7 @@ export default function Login() {
           <div className="grid gap-3 text-sm text-muted-foreground">
             <div className="flex items-center gap-3">
               <Server className="h-4 w-4 text-primary" />
-              <span>{lang === "ru" ? "SSH, RDP и файловые операции" : "SSH, RDP, and file operations"}</span>
+              <span>{lang === "ru" ? "SSH и файловые операции" : "SSH and file operations"}</span>
             </div>
             <div className="flex items-center gap-3">
               <ShieldCheck className="h-4 w-4 text-primary" />

@@ -63,7 +63,7 @@ def server_create(request):
             return JsonResponse({"error": "Port must be in range 1..65535"}, status=400)
 
         server_type = str(data.get("server_type", "ssh") or "ssh").strip().lower()
-        if server_type not in ("ssh", "rdp"):
+        if server_type != "ssh":
             return JsonResponse({"error": "Invalid server_type"}, status=400)
 
         auth_method = str(data.get("auth_method", "password") or "password").strip().lower()
@@ -168,7 +168,7 @@ def server_update(request, server_id):
             server.username = data["username"]
         if "server_type" in data:
             server_type = str(data.get("server_type") or "").strip().lower()
-            if server_type not in ("ssh", "rdp"):
+            if server_type != "ssh":
                 return JsonResponse({"error": "Invalid server_type"}, status=400)
             server.server_type = server_type
         if "auth_method" in data:

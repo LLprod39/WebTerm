@@ -86,6 +86,76 @@ def test_execution_policy_decision_flags_dangerous_ssh_command():
     assert decision.to_risk_item()["level"] == "dangerous"
 
 
+def test_execution_policy_requires_approval_for_dynamic_agent_with_default_tools_and_server():
+    decisions = build_execution_policy_decisions(
+        nodes=[
+            _node("manual", "trigger/manual"),
+            _node("agent", "agent/react", {"label": "Fix service", "server_ids": [42], "goal": "Restart nginx if needed"}),
+        ],
+        edges=[_edge("manual", "agent")],
+    )
+
+    assert len(decisions) == 1
+    decision = decisions[0]
+    assert decision.node_id == "agent"
+    assert decision.action_class == "mutating"
+    assert decision.level == "review"
+    assert decision.requires_approval is True
+    assert decision.allowed is False
+    assert "dynamic_agent" in decision.categories
+    assert "ssh_execute" in decision.command
+
+
+def test_execution_policy_allows_read_only_agent_tools_without_approval():
+    decisions = build_execution_policy_decisions(
+        nodes=[
+            _node("manual", "trigger/manual"),
+            _node(
+                "agent",
+                "agent/react",
+                {
+                    "label": "Read logs",
+                    "server_ids": [42],
+                    "permission_mode": "PLAN",
+                    "allowed_tools": ["ssh_execute", "read_console", "wait_for_output", "report", "ask_user", "analyze_output"],
+                    "goal": "Inspect logs only",
+                },
+            ),
+        ],
+        edges=[_edge("manual", "agent")],
+    )
+
+    assert decisions == []
+
+
+def test_execution_policy_requires_approval_for_agent_with_mcp_or_saved_config():
+    decisions = build_execution_policy_decisions(
+        nodes=[
+            _node("manual", "trigger/manual"),
+            _node("approval", "logic/human_approval"),
+            _node(
+                "agent",
+                "agent/multi",
+                {
+                    "label": "Dynamic remediation",
+                    "agent_config_id": 7,
+                    "mcp_server_ids": [3],
+                    "allowed_tools": ["report"],
+                    "goal": "Investigate and remediate if needed",
+                },
+            ),
+        ],
+        edges=[_edge("manual", "approval"), _edge("approval", "agent", "approved")],
+    )
+
+    assert len(decisions) == 1
+    decision = decisions[0]
+    assert decision.node_id == "agent"
+    assert decision.has_approved_approval_path is True
+    assert decision.allowed is True
+    assert decision.command == "agent_config:7 mcp_scope"
+
+
 def test_execution_policy_marks_external_output_without_blocking_validation():
     decisions = build_execution_policy_decisions(
         nodes=[
@@ -105,6 +175,11 @@ def test_execution_policy_marks_external_output_without_blocking_validation():
     assert all(decision.requires_approval is False for decision in decisions)
     assert all(decision.allowed is True for decision in decisions)
     assert decisions[0].command == "https://ops.example.test/hook?token=%5Bredacted%5D"
+    webhook_audit = decisions[0].to_risk_item()["audit_metadata"]
+    assert webhook_audit["version"] == 1
+    assert webhook_audit["policy_source"] == "studio_graph_validation"
+    assert webhook_audit["operation_kind"] == "external_webhook"
+    assert "secret-token" not in str(webhook_audit)
 
 
 def test_execution_policy_summary_is_runtime_audit_friendly():
@@ -125,3 +200,8 @@ def test_execution_policy_summary_is_runtime_audit_friendly():
     assert summary["requires_approval"] == 1
     assert summary["blocked"] == 1
     assert summary["by_action_class"] == {"external": 1, "mutating": 1, "dangerous": 0}
+    ssh_audit = summary["items"][1]["audit_metadata"]
+    assert ssh_audit["tool"] == "agent/ssh_cmd"
+    assert ssh_audit["operation_kind"] == "ssh_command"
+    assert ssh_audit["requires_approval"] is True
+    assert ssh_audit["policy_mode"] == "studio_graph_validation"

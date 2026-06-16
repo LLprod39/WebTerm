@@ -18,67 +18,13 @@ This is the current human-readable MARS refactor backlog. It replaces the old ge
 | Extract terminal support services | Substantial progress. Terminal input, lifecycle, events, preferences, snapshots, AI subservices, and access helpers exist. |
 | Add frontend domain API modules | In progress but started. `frontend/src/api/` exists. |
 | Restore architecture guard | Done. `python scripts\check_architecture_sizes.py --strict-new` passes. |
+| Add capability-based server share checks | Done. View-only shares cannot execute, use terminal, access files, reveal secrets, or administer shares. |
+| Keep server access SSH-only | Done. SPA route, websocket transport, templates, server type choice, share capability, and memory policy now expose only the SSH path. |
+| Upgrade shell safety parser for listed obfuscations | Done. `tests/test_command_safety.py` covers chained commands, shell pipes/substitution, quoted executables, `bash -c` encoded payloads, and inline base64 exec. |
+| Route current executable pipeline nodes through registry | Done. Registry currently exposes output, logic, agent, and ops handlers; `_execute_node` dispatches registered node types. |
+| Add canonical egress redaction helper | In progress. `app.egress_redaction` covers outbound AI events and activity log description/metadata. |
 
 ## Immediate Task
-
-### MARS-002: Route `output/report` Through Node Registry
-
-Target files:
-
-- `studio/pipeline_executor.py`
-- `studio/executor/nodes/output_report.py`
-- `studio/executor/nodes/__init__.py`
-- `tests/test_studio_node_executors.py`
-- `tests/test_studio_pipeline_v2.py`
-
-Acceptance:
-
-- Production pipeline execution uses the registry implementation for `output/report`.
-- Existing report behavior is unchanged.
-
-### MARS-003: Route `output/webhook` Through Node Registry
-
-Target files:
-
-- `studio/pipeline_executor.py`
-- `studio/executor/nodes/output_webhook.py`
-- `studio/executor/nodes/__init__.py`
-- `tests/test_studio_node_executors.py`
-- `tests/test_studio_pipeline_v2.py`
-
-Acceptance:
-
-- Production pipeline execution uses the registry implementation for `output/webhook`.
-- Webhook payload shape and error behavior stay compatible.
-
-### MARS-004: Migrate `logic/condition`
-
-Target files:
-
-- `studio/pipeline_executor.py`
-- `studio/executor/nodes/logic_condition.py`
-- `studio/executor/nodes/__init__.py`
-- `tests/test_studio_node_executors.py`
-
-Acceptance:
-
-- Condition branch behavior remains identical.
-- Source handle validation remains covered by `studio/pipeline_validation.py`.
-
-### MARS-005: Migrate `logic/merge`
-
-Target files:
-
-- `studio/pipeline_executor.py`
-- `studio/executor/nodes/logic_merge.py`
-- `studio/executor/nodes/__init__.py`
-- `tests/test_studio_node_executors.py`
-- `tests/test_studio_all_nodes_smoke.py`
-
-Acceptance:
-
-- `all` and `any` merge semantics remain stable.
-- Pending merge state remains compatible with existing `PipelineRun.routing_state`.
 
 ### MARS-006: Add Shared Execution Policy Contract
 
@@ -93,22 +39,6 @@ Target files:
 Acceptance:
 
 - SSH, MCP, file, webhook, terminal AI, and pipeline execution paths expose the same risk/approval/audit decision shape.
-
-### MARS-007: Add Capability-Based Server Share Checks
-
-Target files:
-
-- `servers/models.py`
-- `servers/views/server_helpers.py`
-- `servers/views/server_files.py`
-- `servers/views/server_ops.py`
-- `servers/consumers/ssh_terminal.py`
-- `servers/consumers/rdp_terminal.py`
-- `tests/test_servers_api_smoke.py`
-
-Acceptance:
-
-- View-only shares cannot execute commands, write files, open RDP, reveal secrets, or administer shares.
 
 ### MARS-008: Continue Frontend API Decomposition
 

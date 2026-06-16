@@ -10,47 +10,21 @@ Migrated from: studio/pipeline_executor.py:_execute_output_report()
 from __future__ import annotations
 
 import re
-from collections import defaultdict
 from typing import TYPE_CHECKING
 
 from asgiref.sync import sync_to_async
 
-from app.agent_kernel.memory.redaction import sanitize_observation_text
 from studio.executor.nodes.base import BaseNode, NodeResult
 from studio.executor.registry import registry
+from studio.pipeline_redaction import (
+    redact_pipeline_text as _redact_pipeline_text,
+    redacted_execution_context as _redacted_pipeline_context,
+)
 
 if TYPE_CHECKING:
     from studio.executor.context import ExecutionContext
 
 _TEMPLATE_PATTERN = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
-
-
-def _redact_pipeline_text(value, *, limit: int | None = None) -> str:
-    text = sanitize_observation_text(str(value or "")).text
-    if limit is None:
-        return text
-    return text[: max(0, int(limit))]
-
-
-def _redact_pipeline_value(value):
-    if value is None:
-        return None
-    if isinstance(value, dict):
-        return {str(key): _redact_pipeline_value(item) for key, item in value.items()}
-    if isinstance(value, list):
-        return [_redact_pipeline_value(item) for item in value]
-    if isinstance(value, tuple):
-        return [_redact_pipeline_value(item) for item in value]
-    if isinstance(value, (int, float, bool)):
-        return value
-    return _redact_pipeline_text(value)
-
-
-def _redacted_pipeline_context(ctx: "ExecutionContext") -> defaultdict[str, object]:
-    raw_context = ctx.extra.get("context")
-    if not isinstance(raw_context, dict):
-        raw_context = {}
-    return defaultdict(str, {str(key): _redact_pipeline_value(value) for key, value in raw_context.items()})
 
 
 def _render_template_value(value, context: dict[str, object]) -> str:

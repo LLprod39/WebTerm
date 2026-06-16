@@ -59,7 +59,6 @@ def _server_capabilities(server: Server, user: User, share: ServerShare | None =
         "execute_command": user_has_server_capability(server, user, "execute_command", share),
         "read_files": user_has_server_capability(server, user, "read_files", share),
         "write_files": user_has_server_capability(server, user, "write_files", share),
-        "use_rdp": user_has_server_capability(server, user, "use_rdp", share),
         "view_context": user_has_server_capability(server, user, "view_context", share),
         "admin_share": user_has_server_capability(server, user, "admin_share", share),
     }
@@ -105,5 +104,5 @@ def _resolve_server_secret(server: Server, request, data: dict) -> str | None:
 
 
 def _require_ssh_server(server: Server) -> None:
-    if server.is_rdp():
+    if not server.is_ssh():
         raise ValueError("SFTP доступен только для SSH-серверов")

@@ -13,6 +13,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     ...actual,
     marsApi: {
       listWorkspaces: vi.fn(),
+      listProjects: vi.fn(),
       createWorkspace: vi.fn(),
       createSession: vi.fn(),
       getSession: vi.fn(),
@@ -52,13 +53,13 @@ const baseSession: MarsSession = {
       options: ["Рабочий прототип", "Полноценный MVP"],
       required: true,
     },
-    { id: "target_platform", question: "Где это должно работать в первую очередь?", kind: "choice_text", options: ["Desktop browser", "Mobile browser"], required: true },
+    { id: "target_platform", question: "Где это должно работать в первую очередь?", kind: "choice_text", options: ["Web browser", "Mobile browser"], required: true },
     { id: "scope", question: "Что входит в первую версию?", kind: "multi_choice_text", options: ["Основная логика", "Красивый интерфейс"], required: true },
     { id: "interaction", question: "Как пользователь должен управлять или взаимодействовать?", kind: "choice_text", options: ["Клавиатура/мышь", "Touch controls"], required: true },
     { id: "visual_direction", question: "Какой визуальный стиль выбрать?", kind: "choice_text", options: ["Neon arcade", "Минимализм"], required: true },
     { id: "verification", question: "Как MARS должен проверить результат?", kind: "multi_choice_text", options: ["npm run build", "Playwright smoke"], required: true },
   ],
-  selected_skill_slugs: ["frontend-design", "frontend-dev"],
+  selected_skill_slugs: [],
   generated_plan: "",
   status: "interview",
   created_at: "2026-06-14T00:00:00Z",
@@ -82,9 +83,10 @@ describe("MarsPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(marsApi.listWorkspaces).mockResolvedValue({ workspaces: [workspace] });
+    vi.mocked(marsApi.listProjects).mockResolvedValue({ projects: [] });
     vi.mocked(marsApi.createSession).mockResolvedValue({
       session: baseSession,
-      recommended_skills: ["frontend-design", "frontend-dev"],
+      recommended_skills: [],
     });
     vi.mocked(marsApi.answerSession).mockResolvedValue({
       session: {
@@ -107,7 +109,7 @@ describe("MarsPage", () => {
         session_id: 3,
         workspace_id: 1,
         workspace,
-        cli_roles: { executor: "codex", reviewer: "gemini" },
+        cli_roles: {},
         status: "queued",
         runtime_control: {},
         allow_dirty: false,
@@ -128,7 +130,7 @@ describe("MarsPage", () => {
         session_id: 3,
         workspace_id: 1,
         workspace,
-        cli_roles: { executor: "codex", reviewer: "gemini" },
+        cli_roles: {},
         status: "queued",
         runtime_control: {},
         allow_dirty: false,
@@ -145,33 +147,39 @@ describe("MarsPage", () => {
     });
   });
 
-  it("walks through workspace, interview, skills, approval, and run controls", async () => {
+  it("walks through project creation, clarification, spec approval, and build controls", async () => {
     renderMarsPage();
 
-    expect(await screen.findByText("Personal workspace")).toBeInTheDocument();
+    expect(await screen.findByText("Project Command Center")).toBeInTheDocument();
+    expect(screen.getByText("История проектов")).toBeInTheDocument();
+    expect(screen.getByText("Планируемые задачи")).toBeInTheDocument();
+    expect(screen.queryByText(/Skill routing/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Codex/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Gemini/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Frontend design/i)).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText("C:\\WebTrerm")).not.toBeInTheDocument();
-    fireEvent.change(screen.getByPlaceholderText("Например: собрать страницу мониторинга серверов."), {
+    fireEvent.change(screen.getByPlaceholderText("Например: создать Telegram-бота для заявок или Python-скрипт для отчетов."), {
       target: { value: "Сделай 3D игру змейка в браузере" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Сформировать вопросы/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Начать уточнение/i }));
 
     expect((await screen.findAllByText("Какой результат нужен именно для этой страницы?")).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: /Рабочий прототип/i }));
     fireEvent.click(screen.getByRole("button", { name: /Дальше/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Desktop browser/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Web browser/i }));
     fireEvent.click(screen.getByRole("button", { name: /Дальше/i }));
     fireEvent.click(screen.getByRole("button", { name: /Основная логика/i }));
     fireEvent.click(screen.getByRole("button", { name: /Дальше/i }));
     fireEvent.click(screen.getByRole("button", { name: /Клавиатура\/мышь/i }));
     fireEvent.click(screen.getByRole("button", { name: /Дальше/i }));
     fireEvent.click(screen.getByRole("button", { name: /Neon arcade/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Собрать план/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Собрать ТЗ/i }));
 
     expect(await screen.findByDisplayValue(/MARS execution plan/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Подтвердить план/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Подтвердить ТЗ/i }));
     await waitFor(() => expect(marsApi.approveSessionPlan).toHaveBeenCalled());
 
-    fireEvent.click(screen.getByRole("button", { name: /Запустить выполнение/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Создать проект/i }));
     await waitFor(() => {
       expect(marsApi.runSession).toHaveBeenCalledWith(3, expect.objectContaining({ allow_dirty: false }));
     });

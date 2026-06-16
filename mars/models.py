@@ -23,7 +23,14 @@ def default_deny_globs() -> list[str]:
 
 
 def default_cli_roles() -> dict[str, str]:
-    return {"executor": "codex", "reviewer": "gemini"}
+    return {
+        "orchestrator": "mars",
+        "architect": "gemini",
+        "executor": "codex",
+        "repair": "codex",
+        "reviewer": "gemini",
+        "verifier": "system",
+    }
 
 
 class MarsWorkspace(models.Model):

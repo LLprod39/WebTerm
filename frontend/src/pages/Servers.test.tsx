@@ -66,7 +66,6 @@ const bootstrapResponse = {
       port: 22,
       username: "ubuntu",
       server_type: "ssh" as const,
-      rdp: false,
       status: "online" as const,
       group_id: 10,
       group_name: "Web",

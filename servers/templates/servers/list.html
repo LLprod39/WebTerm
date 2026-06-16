@@ -320,11 +320,6 @@
                                 shared
                             </span>
                             {% endif %}
-                            {% if item.obj.is_rdp %}
-                            <span class="text-[10px] text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-full border border-purple-500/20">
-                                RDP
-                            </span>
-                            {% endif %}
                         </div>
                     </div>
 
@@ -334,17 +329,10 @@
                             <span class="material-icons-round text-[14px]">person</span>
                             {{ item.obj.username }}
                         </span>
-                        {% if item.obj.server_type == 'rdp' %}
-                        <span class="flex items-center gap-1">
-                            <span class="material-icons-round text-[14px]">desktop_windows</span>
-                            RDP
-                        </span>
-                        {% else %}
                         <span class="flex items-center gap-1">
                             <span class="material-icons-round text-[14px]">terminal</span>
                             SSH
                         </span>
-                        {% endif %}
                         {% if item.is_shared and item.shared_by %}
                         <span class="flex items-center gap-1 text-cyan-500">
                             <span class="material-icons-round text-[14px]">share</span>
@@ -355,21 +343,12 @@
 
                     <!-- Actions -->
                     <div class="flex items-center gap-1.5">
-                        {% if item.obj.is_rdp %}
-                        <a href="{% url 'servers:server_terminal' item.obj.id %}"
-                            class="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium
-                                   bg-purple-500/15 text-purple-400 border border-purple-500/20 hover:bg-purple-500/25 transition-colors">
-                            <span class="material-icons-round text-sm">desktop_windows</span>
-                            RDP
-                        </a>
-                        {% else %}
                         <a href="{% url 'servers:server_terminal' item.obj.id %}"
                             class="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium
                                    bg-primary/15 text-primary-light border border-primary/20 hover:bg-primary/25 transition-colors">
                             <span class="material-icons-round text-sm">terminal</span>
                             SSH
                         </a>
-                        {% endif %}
 
                         <button type="button" onclick="testServerConnection({{ item.obj.id }}, this)"
                             class="btn-icon" data-i18n-title="servers.test_connection" title="Test connection">
@@ -460,10 +439,6 @@
                         <label class="auth-label">
                             <input type="radio" name="server-type" class="auth-radio" value="ssh" id="type-ssh" checked>
                             <span class="material-icons-round text-sm">terminal</span> SSH
-                        </label>
-                        <label class="auth-label">
-                            <input type="radio" name="server-type" class="auth-radio" value="rdp" id="type-rdp">
-                            <span class="material-icons-round text-sm">desktop_windows</span> RDP
                         </label>
                     </div>
                 </div>
@@ -950,8 +925,7 @@ async function loadServerData(serverId) {
         document.getElementById('server-network-config').value = s.network_config ? JSON.stringify(s.network_config, null, 2) : '';
     } catch(e) {}
 
-    const typeEl = document.querySelector(`input[name="server-type"][value="${s.server_type || 'ssh'}"]`);
-    if (typeEl) typeEl.checked = true;
+    document.getElementById('type-ssh').checked = true;
 
     const authEl = document.querySelector(`input[name="auth-method"][value="${s.auth_method || 'password'}"]`);
     if (authEl) authEl.checked = true;
@@ -966,7 +940,7 @@ async function loadServerData(serverId) {
 async function saveServer() {
     const sid = document.getElementById('server-id').value;
     const authMethod = document.querySelector('input[name="auth-method"]:checked')?.value || 'password';
-    const serverType = document.querySelector('input[name="server-type"]:checked')?.value || 'ssh';
+    const serverType = 'ssh';
 
     let networkConfig = {};
     try {

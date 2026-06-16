@@ -69,13 +69,13 @@ describe("MarsRunPage", () => {
         session_id: 3,
         workspace_id: 1,
         workspace,
-        cli_roles: { executor: "codex", reviewer: "gemini" },
+        cli_roles: {},
         status: "completed",
         runtime_control: {},
         allow_dirty: false,
         final_report: "# MARS final report",
-        codex_summary: "Codex final answer",
-        gemini_review: "Gemini review ok",
+        codex_summary: "Final answer",
+        gemini_review: "Quality review ok",
         test_output: "npm test passed",
         git_before: "",
         git_after: " M frontend/src/App.tsx",
@@ -87,7 +87,7 @@ describe("MarsRunPage", () => {
     vi.mocked(marsApi.listRunEvents).mockResolvedValue({
       events: [
         { id: 1, run_id: 7, event_type: "mars_run_started", message: "started", payload: {}, created_at: "2026-06-14T00:00:00Z" },
-        { id: 2, run_id: 7, event_type: "codex_stdout", message: "codex stream", payload: { text: "codex stream" }, created_at: "2026-06-14T00:00:01Z" },
+        { id: 2, run_id: 7, event_type: "codex_stdout", message: "build stream", payload: { text: "build stream" }, created_at: "2026-06-14T00:00:01Z" },
         { id: 3, run_id: 7, event_type: "codex_finished", message: "done", payload: {}, created_at: "2026-06-14T00:00:02Z" },
         { id: 4, run_id: 7, event_type: "gemini_finished", message: "done", payload: {}, created_at: "2026-06-14T00:00:03Z" },
       ],
@@ -100,9 +100,11 @@ describe("MarsRunPage", () => {
     expect(await screen.findByText("Рабочая папка: Personal workspace")).toBeInTheDocument();
     expect(screen.queryByText("C:\\WebTrerm")).not.toBeInTheDocument();
     expect(screen.getByText("frontend/src/App.tsx")).toBeInTheDocument();
-    expect(screen.getByText(/codex stream/)).toBeInTheDocument();
-    expect(screen.getByText("Codex final answer")).toBeInTheDocument();
-    expect(screen.getByText("Gemini review ok")).toBeInTheDocument();
+    expect(screen.getByText(/build stream/)).toBeInTheDocument();
+    expect(screen.getByText("Final answer")).toBeInTheDocument();
+    expect(screen.getByText("Quality review ok")).toBeInTheDocument();
+    expect(screen.queryByText(/Codex/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Gemini/i)).not.toBeInTheDocument();
     expect(screen.getByText("npm test passed")).toBeInTheDocument();
     expect(screen.getByText(/MARS final report/)).toBeInTheDocument();
   });

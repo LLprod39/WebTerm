@@ -16,6 +16,6 @@ export type {
   ServerDetailsResponse,
   SftpEntry,
   SftpListResponse,
-  LinuxUiCapabilities,
-  LinuxUiOverview,
 } from "@/lib/api";
+
+export * from "@/api/linux-ui";

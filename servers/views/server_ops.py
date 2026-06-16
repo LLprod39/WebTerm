@@ -213,7 +213,7 @@ def server_execute_command(request, server_id):
 @require_feature("servers")
 @require_http_methods(["POST"])
 def server_detect_os(request, server_id):
-    """SSH or RDP OS detection for a single server."""
+    """SSH OS detection for a single server."""
     from servers.os_detect_service import detect_os_for_server
 
     server = _accessible_servers_queryset(request.user).filter(id=server_id).first()

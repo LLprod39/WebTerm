@@ -84,13 +84,11 @@ def is_session_noise_line(line: str) -> bool:
     normalized = compact_text(str(line or ""), limit=220).lower()
     if not normalized:
         return True
-    if normalized.startswith(("session_opened:", "session_closed:", "rdp_session_opened:", "rdp_session_closed:")):
+    if normalized.startswith(("session_opened:", "session_closed:")):
         return True
     if normalized in {
         "ssh terminal session opened",
         "ssh terminal session closed",
-        "rdp terminal session opened",
-        "rdp terminal session closed",
     }:
         return True
     return bool(

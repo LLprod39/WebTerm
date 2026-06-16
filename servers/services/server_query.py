@@ -21,7 +21,6 @@ CAPABILITY_CONNECT_TERMINAL = "connect_terminal"
 CAPABILITY_EXECUTE_COMMAND = "execute_command"
 CAPABILITY_READ_FILES = "read_files"
 CAPABILITY_WRITE_FILES = "write_files"
-CAPABILITY_USE_RDP = "use_rdp"
 CAPABILITY_VIEW_CONTEXT = "view_context"
 CAPABILITY_ADMIN_SHARE = "admin_share"
 
@@ -30,7 +29,6 @@ _SHARE_CAPABILITY_FIELDS = {
     CAPABILITY_EXECUTE_COMMAND: "can_execute_command",
     CAPABILITY_READ_FILES: "can_read_files",
     CAPABILITY_WRITE_FILES: "can_write_files",
-    CAPABILITY_USE_RDP: "can_use_rdp",
 }
 
 
@@ -48,6 +46,7 @@ def get_servers_for_user(user) -> "QuerySet[Server]":
     return (
         Server.objects.select_related("group", "user")
         .filter(is_active=True)
+        .filter(server_type="ssh")
         .filter(Q(user=user) | share_q)
         .distinct()
     )
@@ -65,7 +64,7 @@ def get_owned_server(server_id: int, user) -> Server | None:
     Return a single active server owned by the user, or None.
     """
     try:
-        return Server.objects.get(pk=server_id, user=user, is_active=True)
+        return Server.objects.get(pk=server_id, user=user, is_active=True, server_type="ssh")
     except (Server.DoesNotExist, TypeError, ValueError):
         return None
 

@@ -90,9 +90,7 @@ export const SERVER_OS_KINDS: ServerOsKind[] = [
 
 export interface ServerOsInput {
 
-  server_type?: "ssh" | "rdp" | string;
-
-  rdp?: boolean;
+  server_type?: "ssh" | string;
 
   name?: string;
 
@@ -104,7 +102,7 @@ export interface ServerOsInput {
 
   notes?: string;
 
-  /** Backend SSH/RDP probe (preferred over heuristics). */
+  /** Backend SSH probe (preferred over heuristics). */
 
   detected_os?: string | null;
 
@@ -243,10 +241,6 @@ export function resolveServerOs(input: ServerOsInput): ServerOsKind {
 
 
 export function inferServerOs(input: ServerOsInput): ServerOsKind {
-
-  if (input.server_type === "rdp" || input.rdp) return "windows";
-
-
 
   const text = haystack(input);
 

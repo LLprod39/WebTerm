@@ -22,8 +22,7 @@ type ServerItem = {
   host: string;
   port: number;
   username: string;
-  server_type: "ssh" | "rdp";
-  rdp: boolean;
+  server_type: "ssh";
   status: "online" | "offline" | "unknown";
   group_id: number | null;
   group_name: string;
@@ -83,7 +82,6 @@ export async function installPlatformMocks(page: Page, options: PlatformMockOpti
       port: 22,
       username: "root",
       server_type: "ssh",
-      rdp: false,
       status: "online",
       group_id: 11,
       group_name: "Core",
@@ -242,7 +240,6 @@ export async function installPlatformMocks(page: Page, options: PlatformMockOpti
           port: Number(req.body?.port || 22),
           username: String(req.body?.username || "root"),
           server_type: "ssh",
-          rdp: false,
           status: "unknown",
           group_id: 11,
           group_name: "Core",

@@ -11,6 +11,8 @@ Public API:
 - :func:`match_patterns` — re: / token-sequence / substring pattern matcher.
 - :func:`decide_command_policy` — combines forbidden, allowlist, dangerous
   and chat-mode rules into one verdict.
+- :func:`compute_confirm_reason` — legacy reason-only helper retained for
+  private consumer compatibility.
 - :func:`choose_exec_mode` (F2-8) — hybrid executor hint: ``"pty"`` for
   interactive/stateful/write-heavy commands, ``"direct"`` for safe read-only.
 
@@ -277,3 +279,25 @@ def decide_command_policy(
         return _verdict(allowed=True, requires_confirm=True, reason="ask_mode")
 
     return _verdict(allowed=True, requires_confirm=False, reason="")
+
+
+def compute_confirm_reason(
+    command: str,
+    forbidden_patterns: list[str] | None,
+    allowlist_patterns: list[str] | None = None,
+    *,
+    confirm_dangerous_commands: bool = True,
+) -> str:
+    """Return the legacy reason string used by ``SSHTerminalConsumer``.
+
+    This intentionally fixes ``chat_mode`` to ``"agent"`` because ask-mode
+    confirmation is handled earlier while building plan items.
+    """
+    verdict = decide_command_policy(
+        command,
+        forbidden_patterns=forbidden_patterns,
+        allowlist_patterns=allowlist_patterns,
+        chat_mode="agent",
+        confirm_dangerous_commands=confirm_dangerous_commands,
+    )
+    return verdict.reason

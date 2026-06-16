@@ -6,53 +6,53 @@
 
 @layer base {
   :root {
-    /* Minimalist dark theme with subtle teal accent */
-    --background: 0 0% 8%;
-    --foreground: 0 0% 95%;
+    /* WebTerm command-center theme: near-black surfaces with teal signal states */
+    --background: 210 36% 5%;
+    --foreground: 205 22% 94%;
 
-    --card: 0 0% 10%;
-    --card-foreground: 0 0% 92%;
+    --card: 210 29% 8%;
+    --card-foreground: 205 20% 92%;
 
-    --popover: 0 0% 10%;
-    --popover-foreground: 0 0% 92%;
+    --popover: 210 30% 8%;
+    --popover-foreground: 205 20% 92%;
 
-    --primary: 170 50% 48%;
-    --primary-foreground: 0 0% 8%;
+    --primary: 168 70% 46%;
+    --primary-foreground: 170 60% 6%;
 
-    --secondary: 0 0% 14%;
-    --secondary-foreground: 0 0% 85%;
+    --secondary: 209 24% 13%;
+    --secondary-foreground: 205 18% 86%;
 
-    --muted: 0 0% 13%;
-    --muted-foreground: 0 0% 70%;
+    --muted: 210 23% 11%;
+    --muted-foreground: 210 12% 64%;
 
-    --accent: 170 50% 48%;
-    --accent-foreground: 0 0% 8%;
+    --accent: 168 68% 44%;
+    --accent-foreground: 170 60% 6%;
 
-    --destructive: 0 62% 50%;
+    --destructive: 0 68% 56%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 16%;
-    --input: 0 0% 16%;
-    --ring: 170 50% 48%;
+    --border: 207 20% 18%;
+    --input: 207 21% 18%;
+    --ring: 168 70% 46%;
 
     --radius: 0.5rem;
 
-    --success: 152 56% 42%;
-    --warning: 38 80% 52%;
-    --info: 210 60% 52%;
+    --success: 158 62% 47%;
+    --warning: 43 88% 55%;
+    --info: 190 74% 52%;
 
-    --terminal-bg: 0 0% 6%;
-    --terminal-fg: 170 30% 75%;
-    --terminal-cursor: 170 50% 48%;
+    --terminal-bg: 210 40% 5%;
+    --terminal-fg: 166 34% 76%;
+    --terminal-cursor: 168 70% 46%;
 
-    --sidebar-background: 0 0% 8%;
-    --sidebar-foreground: 0 0% 80%;
-    --sidebar-primary: 170 50% 48%;
-    --sidebar-primary-foreground: 0 0% 8%;
-    --sidebar-accent: 0 0% 15%;
-    --sidebar-accent-foreground: 0 0% 92%;
-    --sidebar-border: 0 0% 15%;
-    --sidebar-ring: 170 50% 48%;
+    --sidebar-background: 210 39% 5%;
+    --sidebar-foreground: 205 18% 82%;
+    --sidebar-primary: 168 70% 46%;
+    --sidebar-primary-foreground: 170 60% 6%;
+    --sidebar-accent: 209 25% 13%;
+    --sidebar-accent-foreground: 205 20% 93%;
+    --sidebar-border: 207 20% 17%;
+    --sidebar-ring: 168 70% 46%;
 
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   }
@@ -65,13 +65,23 @@
 
   html {
     background: hsl(var(--background));
+    color-scheme: dark;
   }
 
   body {
     @apply bg-background text-foreground antialiased;
+    background:
+      radial-gradient(circle at 18% 0%, hsl(var(--primary) / 0.08), transparent 28rem),
+      radial-gradient(circle at 92% 12%, hsl(var(--info) / 0.05), transparent 24rem),
+      hsl(var(--background));
     font-feature-settings: "cv11", "ss01";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.28);
+    color: hsl(var(--foreground));
   }
 
   ::-webkit-scrollbar {
@@ -107,21 +117,28 @@
 }
 
 @layer components {
+  .app-shell-bg {
+    background:
+      radial-gradient(circle at 18% 0%, hsl(var(--primary) / 0.07), transparent 28rem),
+      radial-gradient(circle at 92% 14%, hsl(var(--info) / 0.045), transparent 24rem),
+      hsl(var(--background));
+  }
+
   /* Panel styles */
   .enterprise-panel {
-    @apply rounded-xl border border-border bg-card shadow-sm;
+    @apply rounded-lg border border-border/80 bg-card/95 shadow-[0_18px_60px_hsl(var(--background)_/_0.28)];
   }
 
   .workspace-panel {
-    @apply rounded-xl border border-border bg-card shadow-sm;
+    @apply rounded-lg border border-border/80 bg-card/95 shadow-[0_18px_60px_hsl(var(--background)_/_0.28)];
   }
 
   .workspace-subtle {
-    @apply border border-border/60 bg-secondary/20;
+    @apply border border-border/70 bg-secondary/40;
   }
 
   .workspace-empty {
-    @apply flex flex-col gap-4 rounded-xl border border-dashed border-border/50 bg-secondary/10 px-6 py-8;
+    @apply flex flex-col gap-4 rounded-lg border border-dashed border-border/60 bg-secondary/20 px-6 py-8;
   }
 
   .enterprise-kicker {
@@ -130,21 +147,21 @@
 
   /* Card styles */
   .corp-card {
-    @apply rounded-xl border border-border bg-card shadow-sm;
+    @apply rounded-lg border border-border/80 bg-card/95 shadow-[0_14px_42px_hsl(var(--background)_/_0.2)];
   }
 
   .corp-surface {
-    @apply transition-colors duration-150 hover:bg-secondary/40;
+    @apply transition-colors duration-150 hover:bg-secondary/50;
   }
 
   /* Row hover — for list items inside cards */
   .row-hover {
-    @apply transition-colors duration-100 hover:bg-secondary/30;
+    @apply transition-colors duration-100 hover:bg-secondary/40;
   }
 
   /* Data row */
   .data-row {
-    @apply flex items-center gap-3 px-4 py-3 transition-colors duration-100 hover:bg-secondary/25;
+    @apply flex items-center gap-3 px-4 py-3 transition-colors duration-100 hover:bg-secondary/40;
   }
 
   /* Status indicators */
@@ -170,11 +187,11 @@
   }
 
   .icon-box-primary {
-    @apply icon-box bg-primary/10 text-primary;
+    @apply icon-box border border-primary/20 bg-primary/15 text-primary;
   }
 
   .icon-box-muted {
-    @apply icon-box bg-secondary/60 text-muted-foreground;
+    @apply icon-box border border-border/70 bg-secondary/70 text-muted-foreground;
   }
 
   /* Section divider */

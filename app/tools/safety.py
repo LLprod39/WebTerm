@@ -15,6 +15,7 @@ Adding a new pattern only requires appending to ``_DANGEROUS_PATTERNS``.
 
 from __future__ import annotations
 
+import codecs
 import re
 from dataclasses import dataclass
 
@@ -85,8 +86,20 @@ _DANGEROUS_PATTERNS: tuple[tuple[str, str, re.Pattern[str]], ...] = (
     ("curl_pipe_shell", CATEGORY_REMOTE_EXEC, _P(r"\bcurl\s+[^|]*\|\s*(?:sh|bash|zsh|ash|dash|ksh)\b")),
     ("wget_pipe_shell", CATEGORY_REMOTE_EXEC, _P(r"\bwget\s+[^|]*\|\s*(?:sh|bash|zsh|ash|dash|ksh)\b")),
     ("fetch_pipe_shell", CATEGORY_REMOTE_EXEC, _P(r"\bfetch\s+[^|]*\|\s*(?:sh|bash)\b")),
+    ("generic_pipe_shell", CATEGORY_REMOTE_EXEC, _P(r"\|\s*(?:sudo\s+)?(?:/usr/bin/|/bin/)?(?:sh|bash|zsh|ash|dash|ksh)\b")),
     ("eval_subshell", CATEGORY_REMOTE_EXEC, _P(r"\beval\s+[\"'$`(]")),
+    (
+        "command_substitution_shell",
+        CATEGORY_REMOTE_EXEC,
+        _P(r"(?:\$\(|`)[^`)]*(?:curl|wget|fetch|base64)[^`)]*(?:\|\s*)?(?:sh|bash|zsh|ash|dash|ksh)\b"),
+    ),
+    ("process_substitution_shell", CATEGORY_REMOTE_EXEC, _P(r"<\(\s*(?:curl|wget|fetch|base64)\b[^)]*\)")),
     ("base64_pipe_shell", CATEGORY_REMOTE_EXEC, _P(r"\bbase64\s+(?:-d|--decode)\b[^|]*\|\s*(?:sh|bash)\b")),
+    (
+        "base64_exec_inline",
+        CATEGORY_REMOTE_EXEC,
+        _P(r"\b(?:python3?|perl|ruby|node)\s+-[ce]\b(?=[\s\S]*(?:base64|Buffer\.from))(?=[\s\S]*(?:exec|eval|system|spawn|popen)\s*\()"),
+    ),
     # ── privilege escalation / credential changes ─────────────────────────
     ("userdel", CATEGORY_PRIVILEGE_ESCALATION, _P(r"\buserdel\b")),
     ("usermod_lock", CATEGORY_PRIVILEGE_ESCALATION, _P(r"\busermod\s+(?:-[a-z]+\s+)*(?:-L|-U|--lock|--unlock)\b")),
@@ -181,8 +194,12 @@ _PATTERN_REASONS: dict[str, str] = {
     "curl_pipe_shell": "curl | sh — удалённое исполнение кода",
     "wget_pipe_shell": "wget | sh — удалённое исполнение кода",
     "fetch_pipe_shell": "fetch | sh — удалённое исполнение кода",
+    "generic_pipe_shell": "pipe в shell — исполнение переданного скрипта",
     "eval_subshell": "eval с подстановкой — произвольный код",
+    "command_substitution_shell": "command substitution запускает shell-пайплайн",
+    "process_substitution_shell": "process substitution передает внешний скрипт в shell",
     "base64_pipe_shell": "base64 -d | sh — обфусцированное исполнение",
+    "base64_exec_inline": "inline base64 decode + exec/eval — обфусцированное исполнение",
     "userdel": "удаление пользователя (userdel)",
     "usermod_lock": "блокировка/разблокировка аккаунта (usermod -L/-U)",
     "passwd_change": "смена/удаление пароля (passwd)",
@@ -199,6 +216,39 @@ _PATTERN_REASONS: dict[str, str] = {
 
 _SAFE = CommandRisk(level="safe", categories=(), matched_patterns=(), reasons=())
 
+_SHELLS = r"sh|bash|zsh|ash|dash|ksh"
+_DANGEROUS_EXECUTABLES = (
+    r"rm|find|truncate|shred|chmod|chown|mkfs(?:\.\w+)?|dd|fdisk|parted|wipefs|blkdiscard|"
+    r"kill|pkill|killall|service|systemctl|shutdown|reboot|halt|poweroff|init|telinit|"
+    r"iptables|ip6tables|nft|ufw|curl|wget|fetch|eval|base64|userdel|usermod|passwd|visudo|"
+    r"docker|setenforce|sed|aa-teardown|apparmor_parser"
+)
+_ANSI_C_QUOTE_RE = re.compile(r"\$'((?:\\.|[^'])*)'")
+_QUOTED_EXEC_AT_COMMAND_POS_RE = re.compile(
+    rf"(^|(?:&&|\|\||[;|])\s*|\b(?:sudo|command|env)\s+)(['\"])(?P<exe>{_DANGEROUS_EXECUTABLES})\2(?=\s|$)",
+    re.IGNORECASE,
+)
+_SHELL_C_QUOTED_EXEC_RE = re.compile(
+    rf"(\b(?:{_SHELLS})\s+-c\s+['\"]?)(['\"])(?P<exe>{_DANGEROUS_EXECUTABLES})\2(?=\s|$)",
+    re.IGNORECASE,
+)
+
+
+def _decode_ansi_c_quote(match: re.Match[str]) -> str:
+    raw = match.group(1)
+    try:
+        return codecs.decode(raw, "unicode_escape")
+    except Exception:  # noqa: BLE001
+        return raw
+
+
+def _normalize_shell_surface(text: str) -> str:
+    """Expose common shell obfuscations without executing or fully parsing shell."""
+    normalized = _ANSI_C_QUOTE_RE.sub(_decode_ansi_c_quote, text)
+    normalized = _SHELL_C_QUOTED_EXEC_RE.sub(lambda m: f"{m.group(1)}{m.group('exe')}", normalized)
+    normalized = _QUOTED_EXEC_AT_COMMAND_POS_RE.sub(lambda m: f"{m.group(1)}{m.group('exe')}", normalized)
+    return normalized
+
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -210,12 +260,18 @@ def evaluate_command_safety(command: str) -> CommandRisk:
     if not command:
         return _SAFE
     text = str(command)
+    normalized = _normalize_shell_surface(text)
+    scan_texts = (text,) if normalized == text else (text, normalized)
     matched: list[str] = []
     reasons: list[str] = []
     categories: list[str] = []
+    seen_labels: set[str] = set()
     seen_categories: set[str] = set()
-    for label, category, regex in _DANGEROUS_PATTERNS:
-        if regex.search(text):
+    for scan_text in scan_texts:
+        for label, category, regex in _DANGEROUS_PATTERNS:
+            if label in seen_labels or not regex.search(scan_text):
+                continue
+            seen_labels.add(label)
             matched.append(label)
             reasons.append(_PATTERN_REASONS.get(label, label))
             if category not in seen_categories:

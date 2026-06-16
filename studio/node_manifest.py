@@ -213,7 +213,7 @@ NODE_MANIFESTS: dict[str, NodeManifest] = {
                 "server_ids": _array(_int(), description="Server ids available to the agent."),
                 "mcp_server_ids": _array(_int(), description="MCP server ids available to the agent."),
                 "skill_slugs": _array(_str(), description="Skills to apply during execution."),
-                "max_iterations": _int(minimum=1, maximum=20, default=6),
+                "permission_mode": PERMISSION_MODE_SCHEMA, "max_iterations": _int(minimum=1, maximum=20, default=6),
                 "on_failure": ON_FAILURE_SCHEMA,
             }
         ),
@@ -231,7 +231,7 @@ NODE_MANIFESTS: dict[str, NodeManifest] = {
                 "goal": _str(description="Investigation goal."),
                 "server_ids": _array(_int(), description="Server ids to inspect."),
                 "mcp_server_ids": _array(_int(), description="MCP server ids to use."),
-                "skill_slugs": _array(_str(), description="Skills to apply during execution."),
+                "skill_slugs": _array(_str(), description="Skills to apply during execution."), "permission_mode": PERMISSION_MODE_SCHEMA,
                 "on_failure": ON_FAILURE_SCHEMA,
             }
         ),
@@ -469,7 +469,7 @@ NODE_MANIFESTS: dict[str, NodeManifest] = {
         input_schema=_schema(
             {
                 **SERVER_ID_FIELDS,
-                "service": _str(description="systemd service name."),
+                "service": _str(description="systemd service name. Falls back to service_name runtime context when empty."),
                 "action": _str(enum=("start", "stop", "restart", "reload"), default="restart"),
                 "verify": _bool(default=True),
                 "on_failure": ON_FAILURE_SCHEMA,

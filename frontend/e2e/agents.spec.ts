@@ -108,7 +108,6 @@ function makeAgentsHandler(initialAgents: AgentItem[] = []) {
             port: 22,
             username: "root",
             server_type: "ssh",
-            rdp: false,
             status: "online",
             group_id: 11,
             group_name: "Core",

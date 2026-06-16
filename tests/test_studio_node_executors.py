@@ -170,9 +170,9 @@ def _make_run(username: str = "node-suite-user") -> PipelineRun:
 def _disable_activity_logging(monkeypatch):
     async def _noop(*args, **kwargs):
         return None
-
-    monkeypatch.setattr("studio.pipeline_executor.log_user_activity_async", _noop)
-    monkeypatch.setattr("studio.pipeline_executor.get_channel_layer", lambda: None)
+    monkeypatch.setattr("studio.pipeline_agent_runtime.log_user_activity_async", _noop)
+    monkeypatch.setattr("studio.pipeline_run_state.log_user_activity_async", _noop)
+    monkeypatch.setattr("studio.pipeline_run_state.get_channel_layer", lambda: None)
 
 
 def test_runtime_coverage_matches_known_node_types():
@@ -278,7 +278,7 @@ def test_pipeline_executor_records_execution_policy_summary(monkeypatch):
     summary = result.trigger_data["execution_policy"]
     assert summary["level"] == "review"
     assert summary["by_action_class"]["external"] == 1
-    assert summary["items"][0]["command"] == "https://ops.example.test/hook?token=%5Bredacted%5D"
+    assert summary["items"][0]["command"] == "https://ops.example.test/hook?token=%5Bredacted%5D" and summary["items"][0]["audit_metadata"]["policy_source"] == "studio_graph_validation" and "secret-token" not in str(summary["items"][0]["audit_metadata"])
 
 
 def test_monitoring_trigger_node_starts_selected_branch(monkeypatch):
@@ -414,7 +414,7 @@ def test_wait_node_completes_after_sleep_loop(monkeypatch):
     async def fake_sleep(seconds: float) -> None:
         sleep_calls.append(seconds)
 
-    monkeypatch.setattr("studio.executor.nodes.logic_wait.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr("studio.pipeline_logic.asyncio.sleep", fake_sleep)
 
     result = async_to_sync(executor._execute_node)(
         {"id": "wait", "type": "logic/wait", "data": {"wait_minutes": 0.1}},
@@ -435,7 +435,7 @@ def test_wait_node_respects_executor_stop_event(monkeypatch):
     async def fake_sleep(seconds: float) -> None:
         raise AssertionError("wait should stop before sleeping")
 
-    monkeypatch.setattr("studio.executor.nodes.logic_wait.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr("studio.pipeline_logic.asyncio.sleep", fake_sleep)
 
     result = async_to_sync(executor._execute_node)(
         {"id": "wait", "type": "logic/wait", "data": {"wait_minutes": 0.1}},
@@ -476,9 +476,9 @@ def test_human_approval_node_returns_approved_decision(monkeypatch):
 
         await sync_to_async(_approve, thread_sensitive=True)()
 
-    monkeypatch.setattr("studio.pipeline_executor._execute_output_email", fake_output_email)
-    monkeypatch.setattr("studio.pipeline_executor._execute_output_telegram", fake_output_telegram)
-    monkeypatch.setattr("studio.pipeline_executor.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr("studio.pipeline_interactions._execute_output_email", fake_output_email)
+    monkeypatch.setattr("studio.pipeline_interactions._execute_output_telegram", fake_output_telegram)
+    monkeypatch.setattr("studio.pipeline_interactions.asyncio.sleep", fake_sleep)
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(node, {}, node_outputs)
 
@@ -518,11 +518,11 @@ def test_human_approval_node_sends_telegram_callback_buttons(monkeypatch):
     async def fake_send_telegram_message(**_kwargs):
         return {"status": "completed", "output": "decision confirmation sent"}
 
-    monkeypatch.setattr("studio.pipeline_executor._execute_output_email", fake_output_email)
-    monkeypatch.setattr("studio.pipeline_executor._execute_output_telegram", fake_output_telegram)
-    monkeypatch.setattr("studio.pipeline_executor._poll_telegram_approval_decision", fake_poll)
-    monkeypatch.setattr("studio.pipeline_executor._send_telegram_message", fake_send_telegram_message)
-    monkeypatch.setattr("studio.pipeline_executor.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr("studio.pipeline_interactions._execute_output_email", fake_output_email)
+    monkeypatch.setattr("studio.pipeline_interactions._execute_output_telegram", fake_output_telegram)
+    monkeypatch.setattr("studio.pipeline_interactions._poll_telegram_approval_decision", fake_poll)
+    monkeypatch.setattr("studio.pipeline_interactions._send_telegram_message", fake_send_telegram_message)
+    monkeypatch.setattr("studio.pipeline_interactions.asyncio.sleep", fake_sleep)
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
         node,
@@ -569,13 +569,13 @@ def test_human_approval_node_uses_global_telegram_defaults_when_node_fields_blan
     async def fake_send_telegram_message(**_kwargs):
         return {"status": "completed", "output": "decision confirmation sent"}
 
-    monkeypatch.setattr("studio.pipeline_executor._global_tg_defaults", lambda: ("global-bot", "global-chat"))
-    monkeypatch.setattr("studio.pipeline_executor._global_email_defaults", lambda: ("", "", "", "", ""))
-    monkeypatch.setattr("studio.pipeline_executor._execute_output_email", fake_output_email)
-    monkeypatch.setattr("studio.pipeline_executor._execute_output_telegram", fake_output_telegram)
-    monkeypatch.setattr("studio.pipeline_executor._poll_telegram_approval_decision", fake_poll)
-    monkeypatch.setattr("studio.pipeline_executor._send_telegram_message", fake_send_telegram_message)
-    monkeypatch.setattr("studio.pipeline_executor.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr("studio.pipeline_interactions._global_tg_defaults", lambda: ("global-bot", "global-chat"))
+    monkeypatch.setattr("studio.pipeline_interactions._global_email_defaults", lambda: ("", "", "", "", ""))
+    monkeypatch.setattr("studio.pipeline_interactions._execute_output_email", fake_output_email)
+    monkeypatch.setattr("studio.pipeline_interactions._execute_output_telegram", fake_output_telegram)
+    monkeypatch.setattr("studio.pipeline_interactions._poll_telegram_approval_decision", fake_poll)
+    monkeypatch.setattr("studio.pipeline_interactions._send_telegram_message", fake_send_telegram_message)
+    monkeypatch.setattr("studio.pipeline_interactions.asyncio.sleep", fake_sleep)
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
         node,
@@ -618,7 +618,7 @@ def test_poll_telegram_approval_decision_consumes_callback_updates(monkeypatch):
                 )
             return _FakeHttpResponse(status_code=200, text='{"ok": true}')
 
-    monkeypatch.setattr("studio.pipeline_executor.httpx.AsyncClient", FakeHttpClient)
+    monkeypatch.setattr("studio.pipeline_telegram.httpx.AsyncClient", FakeHttpClient)
 
     def fake_json_response(self):
         return {
@@ -684,9 +684,9 @@ def test_telegram_input_node_returns_operator_reply(monkeypatch):
     async def fake_sleep(_seconds: float) -> None:
         return None
 
-    monkeypatch.setattr("studio.pipeline_executor._send_telegram_message", fake_send_telegram_message)
-    monkeypatch.setattr("studio.pipeline_executor._poll_telegram_reply_message", fake_poll_reply)
-    monkeypatch.setattr("studio.pipeline_executor.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr("studio.pipeline_interactions._send_telegram_message", fake_send_telegram_message)
+    monkeypatch.setattr("studio.pipeline_interactions._poll_telegram_reply_message", fake_poll_reply)
+    monkeypatch.setattr("studio.pipeline_interactions.asyncio.sleep", fake_sleep)
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
         node,
@@ -734,10 +734,10 @@ def test_telegram_input_node_uses_global_telegram_defaults_when_node_fields_blan
     async def fake_sleep(_seconds: float) -> None:
         return None
 
-    monkeypatch.setattr("studio.pipeline_executor._global_tg_defaults", lambda: ("global-bot", "global-chat"))
-    monkeypatch.setattr("studio.pipeline_executor._send_telegram_message", fake_send_telegram_message)
-    monkeypatch.setattr("studio.pipeline_executor._poll_telegram_reply_message", fake_poll_reply)
-    monkeypatch.setattr("studio.pipeline_executor.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr("studio.pipeline_interactions._global_tg_defaults", lambda: ("global-bot", "global-chat"))
+    monkeypatch.setattr("studio.pipeline_interactions._send_telegram_message", fake_send_telegram_message)
+    monkeypatch.setattr("studio.pipeline_interactions._poll_telegram_reply_message", fake_poll_reply)
+    monkeypatch.setattr("studio.pipeline_interactions.asyncio.sleep", fake_sleep)
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
         node,
@@ -790,9 +790,9 @@ def test_telegram_input_node_prefers_operator_reply_over_stale_stopped_status(mo
     async def fake_sleep(_seconds: float) -> None:
         return None
 
-    monkeypatch.setattr("studio.pipeline_executor._send_telegram_message", fake_send_telegram_message)
-    monkeypatch.setattr("studio.pipeline_executor._poll_telegram_reply_message", fake_poll_reply)
-    monkeypatch.setattr("studio.pipeline_executor.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr("studio.pipeline_interactions._send_telegram_message", fake_send_telegram_message)
+    monkeypatch.setattr("studio.pipeline_interactions._poll_telegram_reply_message", fake_poll_reply)
+    monkeypatch.setattr("studio.pipeline_interactions.asyncio.sleep", fake_sleep)
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
         node,
@@ -840,9 +840,9 @@ def test_telegram_input_node_stops_only_on_runtime_stop_request(monkeypatch):
     async def fake_sleep(_seconds: float) -> None:
         return None
 
-    monkeypatch.setattr("studio.pipeline_executor._send_telegram_message", fake_send_telegram_message)
-    monkeypatch.setattr("studio.pipeline_executor._poll_telegram_reply_message", fake_poll_reply)
-    monkeypatch.setattr("studio.pipeline_executor.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr("studio.pipeline_interactions._send_telegram_message", fake_send_telegram_message)
+    monkeypatch.setattr("studio.pipeline_interactions._poll_telegram_reply_message", fake_poll_reply)
+    monkeypatch.setattr("studio.pipeline_interactions.asyncio.sleep", fake_sleep)
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
         node,
@@ -861,17 +861,16 @@ def test_react_agent_node_executes_with_rendered_goal(monkeypatch):
     captured: dict[str, object] = {}
 
     async def fake_run_pipeline_react_agent(**kwargs):
-        captured["goal"] = kwargs["goal"]
-        captured["servers"] = [item.name for item in kwargs["servers"]]
+        captured.update({"goal": kwargs["goal"], "servers": [item.name for item in kwargs["servers"]], "permission_mode": kwargs["permission_mode"]})
         return SimpleNamespace(agent_run_id=101, status="completed", final_report="react ok", ai_analysis="")
 
-    monkeypatch.setattr("studio.pipeline_executor.run_pipeline_react_agent", fake_run_pipeline_react_agent)
+    monkeypatch.setattr("studio.pipeline_agent_runtime.run_pipeline_react_agent", fake_run_pipeline_react_agent)
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
         {
             "id": "react",
             "type": "agent/react",
-            "data": {"server_ids": [server.id], "goal": "Inspect {ticket}"},
+            "data": {"server_ids": [server.id], "goal": "Inspect {ticket}", "permission_mode": "PLAN"},
         },
         {"ticket": "INC-42"},
         {},
@@ -881,6 +880,7 @@ def test_react_agent_node_executes_with_rendered_goal(monkeypatch):
     assert result["output"] == "react ok"
     assert captured["goal"] == "Inspect INC-42"
     assert captured["servers"] == ["react-srv"]
+    assert captured["permission_mode"] == "PLAN"
 
 
 def test_multi_agent_node_executes_with_rendered_goal(monkeypatch):
@@ -889,17 +889,16 @@ def test_multi_agent_node_executes_with_rendered_goal(monkeypatch):
     captured: dict[str, object] = {}
 
     async def fake_run_pipeline_multi_agent(**kwargs):
-        captured["goal"] = kwargs["goal"]
-        captured["servers"] = [item.name for item in kwargs["servers"]]
+        captured.update({"goal": kwargs["goal"], "servers": [item.name for item in kwargs["servers"]], "permission_mode": kwargs["permission_mode"]})
         return SimpleNamespace(agent_run_id=202, status="completed", final_report="multi ok", ai_analysis="")
 
-    monkeypatch.setattr("studio.pipeline_executor.run_pipeline_multi_agent", fake_run_pipeline_multi_agent)
+    monkeypatch.setattr("studio.pipeline_agent_runtime.run_pipeline_multi_agent", fake_run_pipeline_multi_agent)
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
         {
             "id": "multi",
             "type": "agent/multi",
-            "data": {"server_ids": [server.id], "goal": "Coordinate {ticket}"},
+            "data": {"server_ids": [server.id], "goal": "Coordinate {ticket}", "permission_mode": "SAFE"},
         },
         {"ticket": "INC-77"},
         {},
@@ -909,6 +908,7 @@ def test_multi_agent_node_executes_with_rendered_goal(monkeypatch):
     assert result["output"] == "multi ok"
     assert captured["goal"] == "Coordinate INC-77"
     assert captured["servers"] == ["multi-srv"]
+    assert captured["permission_mode"] == "SAFE"
 
 
 def test_ssh_cmd_node_runs_preflight_command_and_verification(monkeypatch):
@@ -939,11 +939,11 @@ def test_ssh_cmd_node_runs_preflight_command_and_verification(monkeypatch):
         connect_kwargs_seen.update(kwargs)
         return FakeConnectContext()
 
-    monkeypatch.setattr("studio.pipeline_executor.PermissionEngine", _PermissionEngine)
-    monkeypatch.setattr("studio.pipeline_executor.SandboxManager", _SandboxManager)
-    monkeypatch.setattr("studio.pipeline_executor.HookManager", _HookManager)
-    monkeypatch.setattr("studio.pipeline_executor._log_pipeline_ssh_command", fake_log_pipeline_ssh_command)
-    monkeypatch.setattr("studio.pipeline_executor.get_server_connect_kwargs", fake_get_server_connect_kwargs)
+    monkeypatch.setattr("studio.pipeline_agent_runtime.PermissionEngine", _PermissionEngine)
+    monkeypatch.setattr("studio.pipeline_agent_runtime.SandboxManager", _SandboxManager)
+    monkeypatch.setattr("studio.pipeline_agent_runtime.HookManager", _HookManager)
+    monkeypatch.setattr("studio.pipeline_agent_runtime._log_pipeline_ssh_command", fake_log_pipeline_ssh_command)
+    monkeypatch.setattr("studio.pipeline_agent_runtime.get_server_connect_kwargs", fake_get_server_connect_kwargs)
     monkeypatch.setattr("asyncssh.connect", fake_connect)
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
@@ -951,13 +951,13 @@ def test_ssh_cmd_node_runs_preflight_command_and_verification(monkeypatch):
             "id": "ssh",
             "type": "agent/ssh_cmd",
             "data": {
-                "server_id": server.id,
+                "server_id_context_key": "target_server_id",
                 "command": "echo {ticket}",
                 "preflight_commands": ["echo preflight"],
                 "verification_commands": ["echo verify"],
             },
         },
-        {"ticket": "INC-55"},
+        {"ticket": "INC-55", "target_server_id": server.id},
         {},
     )
 
@@ -987,8 +987,8 @@ def test_llm_query_node_streams_response_with_context(monkeypatch):
             for chunk in ["part-1 ", "part-2"]:
                 yield chunk
 
-    monkeypatch.setattr("studio.pipeline_executor._load_pipeline_server_memory", fake_load_server_memory)
-    monkeypatch.setattr("studio.pipeline_executor._load_pipeline_operational_recipes", fake_load_operational_recipes)
+    monkeypatch.setattr("studio.pipeline_agent_llm._load_pipeline_server_memory", fake_load_server_memory)
+    monkeypatch.setattr("studio.pipeline_agent_llm._load_pipeline_operational_recipes", fake_load_operational_recipes)
     monkeypatch.setattr("app.core.llm.LLMProvider", FakeLLMProvider)
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
@@ -1031,10 +1031,10 @@ def test_mcp_call_node_executes_tool_and_tracks_execution(monkeypatch):
         captured["arguments"] = arguments
         return {"content": [{"type": "text", "text": "pong"}]}
 
-    monkeypatch.setattr("studio.pipeline_executor.PermissionEngine", _PermissionEngine)
-    monkeypatch.setattr("studio.pipeline_executor.SandboxManager", _SandboxManager)
-    monkeypatch.setattr("studio.pipeline_executor.HookManager", _HookManager)
-    monkeypatch.setattr("studio.pipeline_executor.call_mcp_tool", fake_call_mcp_tool)
+    monkeypatch.setattr("studio.pipeline_agent_mcp.PermissionEngine", _PermissionEngine)
+    monkeypatch.setattr("studio.pipeline_agent_mcp.SandboxManager", _SandboxManager)
+    monkeypatch.setattr("studio.pipeline_agent_mcp.HookManager", _HookManager)
+    monkeypatch.setattr("studio.pipeline_agent_mcp.call_mcp_tool", fake_call_mcp_tool)
 
     result = async_to_sync(executor._execute_node)(
         {
@@ -1143,9 +1143,7 @@ def test_output_webhook_node_posts_payload(monkeypatch):
             return None
 
         async def post(self, url: str, json: dict, headers: dict | None = None):
-            captured["url"] = url
-            captured["json"] = json
-            captured["headers"] = headers or {}
+            captured["url"], captured["json"], captured["headers"] = url, json, headers or {}
             return _FakeHttpResponse(status_code=204)
 
     monkeypatch.setattr("studio.executor.nodes.output_webhook.httpx.AsyncClient", FakeHttpClient)
@@ -1191,7 +1189,9 @@ def test_output_webhook_node_redacts_secret_payload(monkeypatch):
             return None
 
         async def post(self, url: str, json: dict, headers: dict | None = None):
+            captured["url"] = url
             captured["json"] = json
+            captured["headers"] = headers or {}
             return _FakeHttpResponse(status_code=204)
 
     monkeypatch.setattr("studio.executor.nodes.output_webhook.httpx.AsyncClient", FakeHttpClient)

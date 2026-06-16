@@ -217,6 +217,8 @@ class ProjectScanner:
         if git_files is not None:
             root_abs = os.path.abspath(root_dir)
             for full_path in git_files:
+                if not os.path.exists(full_path):
+                    continue
                 if self._file_is_excluded(full_path) or not self._has_tracked_extension(full_path):
                     continue
                 lines = self._count_lines(full_path)

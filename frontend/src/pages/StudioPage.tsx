@@ -53,6 +53,7 @@ import {
   studioMCP,
   studioRuns,
   studioSkills,
+  studioTemplates,
   studioAgents,
   fetchAuthSession,
   type PipelineListItem,
@@ -62,6 +63,7 @@ import { StudioNav } from "@/components/StudioNav";
 import { hasFeatureAccess } from "@/lib/featureAccess";
 import { getPipelineActivityState } from "@/components/pipeline/pipelineActivity";
 import { EmptyState, QueryStateBlock } from "@/components/ui/page-shell";
+import { getPipelineRuntimePlaceholders } from "./pipeline-editor/pipelineGraphUtils";
 
 function RunStatusBadge({ status, lang }: { status: string; lang: string }) {
   const normalized = status.toLowerCase();
@@ -112,6 +114,263 @@ function StatCard({
       <div className="text-2xl font-bold tracking-tight text-foreground">{value}</div>
       {sub && <div className="mt-1 text-xs text-muted-foreground/80">{sub}</div>}
     </div>
+  );
+}
+
+function AutomationLaunchpad({
+  lang,
+  pipelineCount,
+  runningCount,
+  failedCount,
+  canSkills,
+  canRuns,
+  canMcp,
+  onCreatePipeline,
+  onOpenDrafts,
+  onOpenSkills,
+  onOpenRuns,
+  onOpenMcp,
+}: {
+  lang: string;
+  pipelineCount: number;
+  runningCount: number;
+  failedCount: number;
+  canSkills: boolean;
+  canRuns: boolean;
+  canMcp: boolean;
+  onCreatePipeline: () => void;
+  onOpenDrafts: () => void;
+  onOpenSkills: () => void;
+  onOpenRuns: () => void;
+  onOpenMcp: () => void;
+}) {
+  const quickActions = [
+    {
+      label: localize(lang, "Открыть AI-черновики", "Open AI Drafts"),
+      description: localize(lang, "Графовый cockpit для AI-автоматизаций", "Graph-first cockpit for AI automations"),
+      icon: Wand2,
+      onClick: onOpenDrafts,
+      primary: true,
+    },
+    {
+      label: localize(lang, "Новый пайплайн", "New pipeline"),
+      description: localize(lang, "Пустой runbook для точной ручной сборки", "Blank runbook for precise manual assembly"),
+      icon: Plus,
+      onClick: onCreatePipeline,
+    },
+    canSkills
+      ? {
+          label: localize(lang, "Каталог runbook", "Runbook catalog"),
+          description: localize(lang, "Готовые заготовки и операционные скиллы", "Reusable templates and operations skills"),
+          icon: BookOpen,
+          onClick: onOpenSkills,
+        }
+      : null,
+    canMcp
+      ? {
+          label: localize(lang, "Инструменты MCP", "MCP tools"),
+          description: localize(lang, "Подключенные действия для автоматизаций", "Connected actions for automations"),
+          icon: Server,
+          onClick: onOpenMcp,
+        }
+      : null,
+    canRuns
+      ? {
+          label: localize(lang, "История запусков", "Run history"),
+          description: localize(lang, "Проверка результата и ошибок", "Execution results and failures"),
+          icon: Clock,
+          onClick: onOpenRuns,
+        }
+      : null,
+  ].filter(Boolean) as Array<{
+    label: string;
+    description: string;
+    icon: typeof Wand2;
+    onClick: () => void;
+    primary?: boolean;
+  }>;
+
+  return (
+    <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Wand2 className="h-4 w-4" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-foreground">
+                {localize(lang, "Запуск автоматизации", "Automation launchpad")}
+              </h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {localize(lang, "Собрать, запустить и проверить рабочий runbook.", "Build, run, and verify a working runbook.")}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-[11px]">
+          <span className="rounded-md border border-border bg-background px-2 py-1 text-muted-foreground">
+            {localize(lang, "Пайплайны", "Pipelines")}: {pipelineCount}
+          </span>
+          {canRuns ? (
+            <>
+              <span className="rounded-md border border-primary/20 bg-primary/10 px-2 py-1 text-primary">
+                {localize(lang, "В работе", "Running")}: {runningCount}
+              </span>
+              <span className={cn(
+                "rounded-md border px-2 py-1",
+                failedCount > 0
+                  ? "border-red-500/30 bg-red-500/10 text-red-300"
+                  : "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
+              )}>
+                {localize(lang, "Ошибки", "Failed")}: {failedCount}
+              </span>
+            </>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-5">
+        {quickActions.map((action) => (
+          <button
+            key={action.label}
+            type="button"
+            onClick={action.onClick}
+            className={cn(
+              "flex min-h-[92px] items-start gap-3 rounded-lg border px-3 py-3 text-left transition-colors",
+              action.primary
+                ? "border-primary/30 bg-primary/10 hover:bg-primary/15"
+                : "border-border bg-background/60 hover:border-primary/25 hover:bg-secondary/30",
+            )}
+          >
+            <span className={cn(
+              "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md",
+              action.primary ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground",
+            )}>
+              <action.icon className="h-4 w-4" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold text-foreground">{action.label}</span>
+              <span className="mt-1 block text-xs leading-4 text-muted-foreground">{action.description}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+type StudioPipelineTemplateCard = {
+  slug: string;
+  name: string;
+  description: string;
+  icon: string;
+  category: string;
+  tags: string[];
+  nodeCount: number;
+};
+
+function normalizeTemplateCard(item: Record<string, unknown>): StudioPipelineTemplateCard | null {
+  const slug = typeof item.slug === "string" ? item.slug : "";
+  const name = typeof item.name === "string" ? item.name : "";
+  if (!slug || !name) return null;
+  return {
+    slug,
+    name,
+    description: typeof item.description === "string" ? item.description : "",
+    icon: typeof item.icon === "string" ? item.icon : "W",
+    category: typeof item.category === "string" ? item.category : "Automation",
+    tags: Array.isArray(item.tags) ? item.tags.filter((tag): tag is string => typeof tag === "string").slice(0, 3) : [],
+    nodeCount: typeof item.node_count === "number" ? item.node_count : 0,
+  };
+}
+
+function PipelineTemplateStarter({
+  lang,
+  templates,
+  loading,
+  usingSlug,
+  onUseTemplate,
+  onOpenDrafts,
+}: {
+  lang: string;
+  templates: StudioPipelineTemplateCard[];
+  loading: boolean;
+  usingSlug: string | null;
+  onUseTemplate: (slug: string) => void;
+  onOpenDrafts: () => void;
+}) {
+  if (!loading && templates.length === 0) return null;
+
+  return (
+    <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-foreground">
+            {localize(lang, "Быстрый старт из шаблона", "Template quick start")}
+          </h2>
+          <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+            {localize(lang, "Готовые безопасные схемы с проверками, approval и отчетом.", "Ready safe workflows with checks, approval, and reporting.")}
+          </p>
+        </div>
+        <Button variant="outline" size="sm" className="h-9 gap-1.5 self-start sm:self-auto" onClick={onOpenDrafts}>
+          <Wand2 className="h-3.5 w-3.5" />
+          {localize(lang, "Собрать через AI", "Build with AI")}
+        </Button>
+      </div>
+
+      {loading ? (
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
+          {[0, 1, 2, 3].map((item) => (
+            <div key={item} className="h-[142px] rounded-lg border border-border bg-background/60 p-3">
+              <div className="mb-3 h-8 w-8 animate-pulse rounded-md bg-secondary" />
+              <div className="mb-2 h-4 w-2/3 animate-pulse rounded bg-secondary" />
+              <div className="h-3 w-full animate-pulse rounded bg-secondary" />
+              <div className="mt-2 h-3 w-4/5 animate-pulse rounded bg-secondary" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
+          {templates.map((template) => (
+            <article key={template.slug} className="flex min-h-[150px] flex-col rounded-lg border border-border bg-background/60 p-3">
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-primary/10 text-xs font-semibold text-primary">
+                  {template.icon || "W"}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">{template.category}</div>
+                  <h3 className="mt-0.5 line-clamp-2 text-sm font-semibold leading-5 text-foreground">{template.name}</h3>
+                </div>
+              </div>
+              <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                {template.description || localize(lang, "Готовый pipeline-шаблон.", "Ready pipeline template.")}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-1">
+                <span className="rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                  {template.nodeCount} {localize(lang, "узлов", "nodes")}
+                </span>
+                {template.tags.slice(0, 2).map((tag) => (
+                  <span key={tag} className="rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+              <Button
+                size="sm"
+                className="mt-auto h-9 w-full gap-1.5"
+                onClick={() => onUseTemplate(template.slug)}
+                disabled={Boolean(usingSlug)}
+                aria-label={localize(lang, `Использовать шаблон ${template.name}`, `Use template ${template.name}`)}
+              >
+                {usingSlug === template.slug ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                {localize(lang, "Создать", "Use template")}
+              </Button>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -368,7 +627,26 @@ export default function StudioPage() {
     enabled: canRuns,
   });
 
+  const { data: templateRecords = [], isLoading: templatesLoading } = useQuery({
+    queryKey: ["studio", "templates"],
+    queryFn: () => studioTemplates.list(),
+    enabled: canPipelines,
+  });
+
   const runTriggerOptions = useMemo(() => getActiveManualTriggerOptions(runTarget, lang), [lang, runTarget]);
+
+  const quickStartTemplates = useMemo(() => {
+    return templateRecords
+      .map(normalizeTemplateCard)
+      .filter((template): template is StudioPipelineTemplateCard => Boolean(template))
+      .sort((a, b) => {
+        const aPilot = a.category.toLowerCase() === "pilot ops" ? 0 : 1;
+        const bPilot = b.category.toLowerCase() === "pilot ops" ? 0 : 1;
+        if (aPilot !== bPilot) return aPilot - bPilot;
+        return a.name.localeCompare(b.name);
+      })
+      .slice(0, 4);
+  }, [templateRecords]);
 
   const sectionLinks = useMemo(
     () =>
@@ -432,6 +710,18 @@ export default function StudioPage() {
     },
   });
 
+  const useTemplateMutation = useMutation({
+    mutationFn: (slug: string) => studioTemplates.use(slug),
+    onSuccess: (pipeline) => {
+      queryClient.invalidateQueries({ queryKey: ["studio", "pipelines"] });
+      toast({ description: localize(lang, `Пайплайн "${pipeline.name}" создан из шаблона.`, `Pipeline "${pipeline.name}" created from template.`) });
+      navigate(`/studio/pipeline/${pipeline.id}`);
+    },
+    onError: (error: Error) => {
+      toast({ variant: "destructive", description: error.message });
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (pipelineId: number) => studioPipelines.delete(pipelineId),
     onSuccess: () => {
@@ -469,6 +759,18 @@ export default function StudioPage() {
         });
         return;
       }
+      const runtimeContextFields = getPipelineRuntimePlaceholders(detail.nodes || []);
+      if (runtimeContextFields.length > 0) {
+        toast({
+          description: localize(
+            lang,
+            `Заполните поля context перед запуском: ${runtimeContextFields.join(", ")}.`,
+            `Fill context fields before running: ${runtimeContextFields.join(", ")}.`,
+          ),
+        });
+        navigate(`/studio/pipeline/${pipeline.id}`, { state: { openRunDialog: true } });
+        return;
+      }
       if (manualTriggers.length === 1) {
         runMutation.mutate({ pipelineId: pipeline.id, entryNodeId: manualTriggers[0].nodeId });
         return;
@@ -494,6 +796,8 @@ export default function StudioPage() {
   }
 
   const recentFailedRuns = canRuns ? runs.filter((run) => run.status === "failed").slice(0, 3) : [];
+  const runningRunsCount = canRuns ? runs.filter((run) => run.status === "running").length : 0;
+  const failedRunsCount = canRuns ? runs.filter((run) => run.status === "failed").length : 0;
 
   return (
     <div className="flex h-full flex-col">
@@ -557,20 +861,29 @@ export default function StudioPage() {
 
           {canPipelines ? (
             <>
-              <section className="flex flex-col gap-3 rounded-lg border border-border/70 bg-card px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold text-foreground">
-                    {localize(lang, "AI-черновики", "AI Drafts")}
-                  </div>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {localize(lang, "Графовый cockpit для AI-автоматизаций", "Graph-first cockpit for AI automations")}
-                  </p>
-                </div>
-                <Button variant="outline" className="h-9 gap-1.5" onClick={() => navigate("/studio/drafts")}>
-                  <Wand2 className="h-3.5 w-3.5" />
-                  {localize(lang, "Открыть AI-черновики", "Open AI Drafts")}
-                </Button>
-              </section>
+              <AutomationLaunchpad
+                lang={lang}
+                pipelineCount={pipelines.length}
+                runningCount={runningRunsCount}
+                failedCount={failedRunsCount}
+                canSkills={canSkills}
+                canRuns={canRuns}
+                canMcp={canMcp}
+                onCreatePipeline={() => setShowCreate(true)}
+                onOpenDrafts={() => navigate("/studio/drafts")}
+                onOpenSkills={() => navigate("/studio/skills")}
+                onOpenRuns={() => navigate("/studio/runs")}
+                onOpenMcp={() => navigate("/studio/mcp")}
+              />
+
+              <PipelineTemplateStarter
+                lang={lang}
+                templates={quickStartTemplates}
+                loading={templatesLoading}
+                usingSlug={useTemplateMutation.isPending ? useTemplateMutation.variables || null : null}
+                onUseTemplate={(slug) => useTemplateMutation.mutate(slug)}
+                onOpenDrafts={() => navigate("/studio/drafts")}
+              />
 
               <div className="flex items-center gap-3 rounded-lg border border-border/70 bg-card px-3 py-2 shadow-sm">
                 <Search className="h-4 w-4 shrink-0 text-muted-foreground" />

@@ -17,7 +17,7 @@ class AgentMCPCallNode(BaseNode):
     node_type = "agent/mcp_call"
 
     async def execute(self, ctx: "ExecutionContext") -> NodeResult:
-        from studio.pipeline_executor import _execute_agent_mcp_call
+        from studio.pipeline_agent_mcp import execute_agent_mcp_call
 
         run = ctx.extra.get("run")
         if not isinstance(run, PipelineRun):
@@ -27,7 +27,7 @@ class AgentMCPCallNode(BaseNode):
         if not isinstance(executed_mcp_tools, set):
             executed_mcp_tools = None
 
-        result = await _execute_agent_mcp_call(
+        result = await execute_agent_mcp_call(
             {"id": self.node_id, "type": self.node_type, "data": self.node_data},
             dict(ctx.extra.get("context") or {}),
             run,

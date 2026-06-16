@@ -59,6 +59,7 @@ from servers.services.terminal_ai.planning import (  # noqa: F401
 from servers.services.terminal_ai.policy import (  # noqa: F401
     CommandPolicy,
     choose_exec_mode,
+    compute_confirm_reason,
     decide_command_policy,
     match_patterns,
 )

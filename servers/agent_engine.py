@@ -9,7 +9,6 @@ WebSocket live monitor via a callback.
 from __future__ import annotations
 
 import asyncio
-import json
 import time
 from collections.abc import Callable, Coroutine
 from contextlib import suppress
@@ -31,6 +30,7 @@ from app.agent_kernel.runtime.parsing import parse_action as _parse_action  # no
 from app.agent_kernel.runtime.parsing import parse_response
 from app.agent_kernel.sandbox.manager import SandboxManager
 from app.agent_kernel.tools.registry import ToolRegistry
+from app.execution_policy import safe_payload_preview
 from app.core.llm import LLMProvider
 from app.core.model_utils import resolve_provider_and_model
 from core_ui.audit import audit_context
@@ -356,7 +356,7 @@ class AgentEngine:
                     run.pk,
                     iteration,
                     action_name,
-                    json.dumps(action_args, ensure_ascii=False)[:800],
+                    safe_payload_preview(action_args),
                     (thought or "")[:300],
                 )
 
@@ -621,7 +621,7 @@ class AgentEngine:
     # ------------------------------------------------------------------
 
     async def _execute_tool(self, name: str, args: dict) -> str:
-        logger.info("agent_run {} execute_tool start: tool={} args={}", self.run_record.pk if self.run_record else "?", name, json.dumps(args, ensure_ascii=False)[:800])
+        logger.info("agent_run {} execute_tool start: tool={} args={}", self.run_record.pk if self.run_record else "?", name, safe_payload_preview(args))
         spec = self.tool_registry.get(name) if self.tool_registry else None
         decision = self.permission_engine.evaluate(spec, args) if spec else None
         if decision and not decision.allowed:
@@ -637,7 +637,7 @@ class AgentEngine:
                     entity_type="agent_run",
                     entity_id=self.run_record.pk if self.run_record else "",
                     entity_name=self.agent.name,
-                    metadata={"tool": name, "args": args, "mode": decision.mode},
+                    metadata={"tool": name, "args": args, "mode": decision.mode, **decision.audit_metadata},
                 )
             except Exception as exc:
                 logger.warning("Failed to persist audit trail for tool denial: {}", exc)
@@ -801,7 +801,7 @@ ACTION: tool_name {{"param1": "value1", "param2": "value2"}}
         summary_parts = []
         for it in iterations:
             if it.get("action"):
-                summary_parts.append(f"Step {it['iteration']}: {it['action']}({json.dumps(it.get('args', {}), ensure_ascii=False)[:100]}) → {it['observation'][:200]}")
+                summary_parts.append(f"Step {it['iteration']}: {it['action']}({safe_payload_preview(it.get('args', {}), limit=100)}) → {it['observation'][:200]}")
             else:
                 summary_parts.append(f"Step {it['iteration']}: Final answer")
 

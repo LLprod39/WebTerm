@@ -336,8 +336,6 @@ def server_memory_policy_update(request, server_id):
             365,
         ),
     )
-    if "rdp_semantic_capture_enabled" in data:
-        policy.rdp_semantic_capture_enabled = bool(data.get("rdp_semantic_capture_enabled"))
     if "human_habits_capture_enabled" in data:
         policy.human_habits_capture_enabled = bool(data.get("human_habits_capture_enabled"))
     if "is_enabled" in data:

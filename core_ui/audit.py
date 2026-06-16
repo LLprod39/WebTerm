@@ -185,7 +185,7 @@ def get_logging_flags_for_event(
     if category_lower in {"server", "servers", "monitoring", "terminal"}:
         return ["log_server_changes"]
 
-    if action_lower.startswith(("server_", "servers_", "monitoring_", "terminal_", "rdp_")):
+    if action_lower.startswith(("server_", "servers_", "monitoring_", "terminal_")):
         return ["log_server_changes"]
 
     return []

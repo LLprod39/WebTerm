@@ -13,6 +13,7 @@ from uuid import UUID
 from asgiref.sync import sync_to_async
 from loguru import logger
 
+from app.egress_redaction import redact_egress_payload, redact_egress_text
 from core_ui.audit import get_audit_context, maybe_apply_log_retention, should_log_activity
 from core_ui.models import UserActivityLog
 
@@ -78,6 +79,11 @@ def _normalize_metadata(metadata: Any) -> dict[str, Any]:
     return {"value": _normalize_metadata_value(metadata, depth=1)}
 
 
+def _merge_redaction_report(target: dict[str, int], source: dict[str, int]) -> None:
+    for key, value in source.items():
+        target[key] = target.get(key, 0) + int(value)
+
+
 def log_user_activity(
     *,
     user=None,
@@ -118,6 +124,20 @@ def log_user_activity(
         if audit_ctx.get("entity_id") and "entity_id" not in normalized_metadata:
             normalized_metadata["entity_id"] = str(audit_ctx.get("entity_id") or "").strip()
 
+        redaction_report: dict[str, int] = {}
+        redacted_metadata, metadata_report, _metadata_hashes = redact_egress_payload(normalized_metadata)
+        if isinstance(redacted_metadata, dict):
+            normalized_metadata = redacted_metadata
+        else:
+            normalized_metadata = {"value": redacted_metadata}
+        _merge_redaction_report(redaction_report, metadata_report)
+
+        redacted_description = redact_egress_text(description)
+        _merge_redaction_report(redaction_report, redacted_description.report)
+        safe_description = _normalize_text(redacted_description.text, 5000)
+        if redaction_report:
+            normalized_metadata["_redaction_report"] = redaction_report
+
         if not should_log_activity(category=category, action=action, metadata=normalized_metadata):
             return
 
@@ -147,7 +167,7 @@ def log_user_activity(
             category=_normalize_text(category, 40) or "other",
             action=_normalize_text(action, 80) or "unknown_action",
             status=status if status in {UserActivityLog.STATUS_INFO, UserActivityLog.STATUS_SUCCESS, UserActivityLog.STATUS_ERROR} else UserActivityLog.STATUS_INFO,
-            description=_normalize_text(description, 5000),
+            description=safe_description,
             entity_type=_normalize_text(entity_type, 40),
             entity_id=_normalize_text(entity_id, 64),
             entity_name=_normalize_text(entity_name, 255),

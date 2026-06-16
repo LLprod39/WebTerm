@@ -4,18 +4,21 @@ import json
 from typing import Any
 
 from django.http import JsonResponse
+from django.db.models import Count
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from core_ui.decorators import require_feature
 from mars.models import MarsRun, MarsSession, MarsWorkspace
 from mars.policy import MarsPolicyError
+from mars.project_serializers import serialize_project_session
+from mars.skill_catalog import available_skill_slugs
 from mars.services import (
-    CURATED_SKILLS,
     MarsInterviewError,
     build_interview_questions,
     create_run_for_session,
     ensure_personal_workspace,
+    existing_personal_workspace,
     generate_plan,
     record_event,
     recommend_skills,
@@ -43,12 +46,16 @@ def _err(message: str, status: int = 400, **extra: Any) -> JsonResponse:
 
 
 def _workspace_for_user(request, workspace_id: int) -> MarsWorkspace | None:
-    workspace = ensure_personal_workspace(request.user)
+    workspace = existing_personal_workspace(request.user)
+    if workspace is None:
+        return None
     return workspace if workspace.id == workspace_id else None
 
 
 def _session_for_user(request, session_id: int) -> MarsSession | None:
-    workspace = ensure_personal_workspace(request.user)
+    workspace = existing_personal_workspace(request.user)
+    if workspace is None:
+        return None
     return (
         MarsSession.objects.select_related("workspace")
         .filter(pk=session_id, user=request.user, workspace=workspace)
@@ -57,7 +64,9 @@ def _session_for_user(request, session_id: int) -> MarsSession | None:
 
 
 def _run_for_user(request, run_id: int) -> MarsRun | None:
-    workspace = ensure_personal_workspace(request.user)
+    workspace = existing_personal_workspace(request.user)
+    if workspace is None:
+        return None
     return (
         MarsRun.objects.select_related("session", "workspace")
         .filter(pk=run_id, user=request.user, workspace=workspace)
@@ -69,10 +78,11 @@ def _selected_skills(payload: dict[str, Any], fallback: list[str]) -> list[str]:
     raw = payload.get("selected_skill_slugs")
     if not isinstance(raw, list):
         return fallback
+    allowed = set(available_skill_slugs())
     selected: list[str] = []
     for item in raw:
         skill = str(item or "").strip()
-        if skill in CURATED_SKILLS and skill not in selected:
+        if skill in allowed and skill not in selected:
             selected.append(skill)
     return selected or fallback
 
@@ -80,13 +90,19 @@ def _selected_skills(payload: dict[str, Any], fallback: list[str]) -> list[str]:
 @require_http_methods(["GET", "POST"])
 @require_feature("mars")
 def api_workspaces(request):
+    if request.method == "GET":
+        workspace = existing_personal_workspace(request.user)
+        if workspace is None:
+            try:
+                workspace = ensure_personal_workspace(request.user)
+            except MarsPolicyError as exc:
+                return _err(str(exc), 400)
+        return _ok({"workspaces": [serialize_workspace(workspace)]})
+
     try:
         workspace = ensure_personal_workspace(request.user)
     except MarsPolicyError as exc:
         return _err(str(exc), 400)
-
-    if request.method == "GET":
-        return _ok({"workspaces": [serialize_workspace(workspace)]})
     return _ok({"workspace": serialize_workspace(workspace)}, 201)
 
 
@@ -106,11 +122,48 @@ def api_workspace_detail(request, workspace_id: int):
     return _ok({"workspace": serialize_workspace(workspace)})
 
 
+@require_http_methods(["GET"])
+@require_feature("mars")
+def api_projects(request):
+    workspace = existing_personal_workspace(request.user)
+    if workspace is None:
+        return _ok({"projects": []})
+
+    try:
+        limit = min(100, max(1, int(request.GET.get("limit") or 30)))
+    except ValueError:
+        limit = 30
+
+    sessions = list(
+        MarsSession.objects.select_related("workspace")
+        .filter(user=request.user, workspace=workspace)
+        .annotate(run_count=Count("runs"))
+        .order_by("-updated_at", "-id")[:limit]
+    )
+    latest_runs: dict[int, MarsRun] = {}
+    session_ids = [session.id for session in sessions]
+    if session_ids:
+        for run in (
+            MarsRun.objects.select_related("session", "workspace")
+            .filter(user=request.user, workspace=workspace, session_id__in=session_ids)
+            .order_by("session_id", "-created_at", "-id")
+        ):
+            latest_runs.setdefault(run.session_id, run)
+    for session in sessions:
+        session.latest_run = latest_runs.get(session.id)
+    return _ok({"projects": [serialize_project_session(session) for session in sessions]})
+
+
 @require_http_methods(["POST"])
 @require_feature("mars")
 def api_sessions(request):
     payload = _json_body(request)
-    workspace = ensure_personal_workspace(request.user)
+    workspace = existing_personal_workspace(request.user)
+    if workspace is None:
+        try:
+            workspace = ensure_personal_workspace(request.user)
+        except MarsPolicyError as exc:
+            return _err(str(exc), 400)
     try:
         workspace_id = int(payload.get("workspace_id") or workspace.id)
     except (TypeError, ValueError):
@@ -140,7 +193,7 @@ def api_sessions(request):
         interview_questions=interview_questions,
         selected_skill_slugs=selected_skills,
     )
-    return _ok({"session": serialize_session(session), "recommended_skills": recommended}, 201)
+    return _ok({"session": serialize_session(session), "recommended_skills": []}, 201)
 
 
 @require_http_methods(["GET"])
@@ -149,7 +202,7 @@ def api_session_detail(request, session_id: int):
     session = _session_for_user(request, session_id)
     if session is None:
         return _err("Session not found.", 404)
-    return _ok({"session": serialize_session(session), "recommended_skills": recommend_skills(session.task_brief)})
+    return _ok({"session": serialize_session(session), "recommended_skills": []})
 
 
 @require_http_methods(["POST"])

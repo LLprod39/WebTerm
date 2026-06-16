@@ -1,14 +1,26 @@
 from __future__ import annotations
 
-import json
 import hashlib
 import re
-import shlex
 from typing import TYPE_CHECKING, Any
 
 import httpx
-
 from studio.executor.nodes.base import BaseNode, NodeResult
+from studio.executor.nodes.ops_context import load_owned_server as _load_owned_server
+from studio.executor.nodes.ops_context import resolve_context_key as _resolve_context_key
+from studio.executor.nodes.ops_context import server_secret as _server_secret
+from studio.executor.nodes.ops_alert_update import execute_alert_update as _execute_alert_update
+from studio.executor.nodes.ops_actions import (
+    execute_docker_action as _execute_docker_action,
+    execute_process_action as _execute_process_action,
+    execute_service_action as _execute_service_action,
+)
+from studio.executor.nodes.ops_helpers import ALERT_ACTIONS, BACKUP_RESTORE_CHECK_ACTIONS, DISK_CLEANUP_ACTIONS, DOCKER_ACTIONS
+from studio.executor.nodes.ops_helpers import FILE_ACTIONS, PACKAGE_ACTIONS, PROCESS_ACTIONS, SERVER_SNAPSHOT_SECTIONS, SERVICE_ACTIONS
+from studio.executor.nodes.ops_helpers import backup_restore_check_command as _backup_restore_check_command, disk_cleanup_command as _disk_cleanup_command
+from studio.executor.nodes.ops_helpers import coerce_bool as _coerce_bool, coerce_int as _coerce_int, coerce_list as _coerce_list, compact_json as _compact_json
+from studio.executor.nodes.ops_helpers import normalise_packages as _normalise_packages, package_command as _package_command, parse_backup_file_rows as _parse_backup_file_rows
+from studio.executor.nodes.ops_http_check import execute_http_check as _execute_http_check
 from studio.executor.ops_runtime import (
     get_linux_ui_capabilities,
     get_linux_ui_disk,
@@ -34,212 +46,6 @@ from studio.executor.registry import registry
 
 if TYPE_CHECKING:
     from studio.executor.context import ExecutionContext
-
-SERVER_SNAPSHOT_SECTIONS = {
-    "overview",
-    "services",
-    "processes",
-    "docker",
-    "logs",
-    "disk",
-    "network",
-    "packages",
-}
-SERVICE_ACTIONS = {"start", "stop", "restart", "reload"}
-DOCKER_ACTIONS = {"start", "stop", "restart"}
-PROCESS_ACTIONS = {"terminate", "kill_force"}
-ALERT_ACTIONS = {"resolve"}
-FILE_ACTIONS = {"read", "write"}
-PACKAGE_ACTIONS = {"list_updates", "install", "update", "remove"}
-DISK_CLEANUP_ACTIONS = {"inspect", "journal_vacuum", "tmp_cleanup"}
-BACKUP_RESTORE_CHECK_ACTIONS = {"inspect", "verify_latest"}
-PACKAGE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9+._:@~/-]{0,127}$")
-
-
-def _compact_json(value: Any, *, limit: int = 3500) -> str:
-    text = json.dumps(value, ensure_ascii=False, indent=2, default=str)
-    if len(text) <= limit:
-        return text
-    return text[:limit].rstrip() + "\n..."
-
-
-def _coerce_int(value: Any) -> int | None:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _coerce_bool(value: Any, *, default: bool = False) -> bool:
-    if value in (None, ""):
-        return default
-    if isinstance(value, bool):
-        return value
-    return str(value).strip().lower() in {"1", "true", "yes", "on"}
-
-
-def _coerce_list(value: Any) -> list[Any]:
-    if isinstance(value, list):
-        return value
-    if value in (None, ""):
-        return []
-    return [value]
-
-
-def _normalise_packages(value: Any) -> list[str]:
-    source_items = value if isinstance(value, list) else [value]
-    raw_items: list[str] = []
-    for item in source_items:
-        raw_items.extend(part for part in re.split(r"[\s,]+", str(item or "")) if part)
-    packages: list[str] = []
-    for item in raw_items:
-        package = str(item or "").strip()
-        if not package:
-            continue
-        if not PACKAGE_NAME_RE.fullmatch(package):
-            raise ValueError(f"Invalid package name: {package}")
-        if package not in packages:
-            packages.append(package)
-    return packages
-
-
-def _package_command(package_manager: str, action: str, packages: list[str]) -> str:
-    quoted = " ".join(shlex.quote(package) for package in packages)
-    if package_manager == "apt":
-        if action == "install":
-            return f"DEBIAN_FRONTEND=noninteractive apt-get install -y -- {quoted}"
-        if action == "update":
-            return f"DEBIAN_FRONTEND=noninteractive apt-get install --only-upgrade -y -- {quoted}"
-        if action == "remove":
-            return f"DEBIAN_FRONTEND=noninteractive apt-get remove -y -- {quoted}"
-    if package_manager in {"dnf", "yum"} and action in {"install", "update", "remove"}:
-        return f"{package_manager} -y {action} {quoted}"
-    raise ValueError("Unsupported package action")
-
-
-def _disk_cleanup_command(action: str, *, min_age_days: int, max_entries: int, dry_run: bool, vacuum_time_days: int, vacuum_size_mb: int | None) -> str:
-    dry = "1" if dry_run else "0"
-    if action == "journal_vacuum":
-        vacuum_args = [f"--vacuum-time={vacuum_time_days}d"]
-        if vacuum_size_mb:
-            vacuum_args.append(f"--vacuum-size={vacuum_size_mb}M")
-        command = "journalctl " + " ".join(vacuum_args)
-        return (
-            "set -u\n"
-            "printf '__PLAN__\\n'\n"
-            "journalctl --disk-usage 2>&1 || true\n"
-            f"printf 'planned_command=%s\\n' {shlex.quote(command)}\n"
-            "printf '__ACTION__\\n'\n"
-            f"if [ {dry} -eq 1 ]; then printf 'dry_run=true\\n'; else {command} 2>&1; fi\n"
-        )
-    if action == "tmp_cleanup":
-        return (
-            "set -u\n"
-            "printf '__PLAN__\\n'\n"
-            f"find /tmp /var/tmp -xdev -mindepth 1 -mtime +{min_age_days} -print 2>/dev/null | head -n {max_entries}\n"
-            "printf '__ACTION__\\n'\n"
-            f"if [ {dry} -eq 1 ]; then printf 'dry_run=true\\n'; "
-            "else "
-            f"find /tmp /var/tmp -xdev -mindepth 1 -mtime +{min_age_days} -print 2>/dev/null | head -n {max_entries} | "
-            "while IFS= read -r path; do "
-            "case \"$path\" in /tmp/*|/var/tmp/*) rm -rf -- \"$path\" && printf 'removed=%s\\n' \"$path\" ;; *) printf 'skipped=%s\\n' \"$path\" ;; esac; "
-            "done; "
-            "fi\n"
-        )
-    raise ValueError("Unsupported disk cleanup action")
-
-
-def _backup_restore_check_command(path: str, *, action: str, max_depth: int, max_files: int) -> str:
-    quoted_path = shlex.quote(path)
-    return (
-        "set -u\n"
-        f"BACKUP_DIR={quoted_path}\n"
-        f"MAX_DEPTH={max_depth}\n"
-        f"MAX_FILES={max_files}\n"
-        "printf '__FILES__\\n'\n"
-        "if [ ! -d \"$BACKUP_DIR\" ]; then printf 'missing_dir\\t0\\t%s\\n' \"$BACKUP_DIR\"; exit 0; fi\n"
-        "find \"$BACKUP_DIR\" -maxdepth \"$MAX_DEPTH\" -type f -printf '%T@\\t%s\\t%p\\n' 2>/dev/null | sort -nr | head -n \"$MAX_FILES\"\n"
-        "printf '__VERIFY__\\n'\n"
-        f"if [ {1 if action == 'verify_latest' else 0} -eq 0 ]; then printf 'verification=skipped\\n'; exit 0; fi\n"
-        "latest=$(find \"$BACKUP_DIR\" -maxdepth \"$MAX_DEPTH\" -type f -printf '%T@\\t%s\\t%p\\n' 2>/dev/null | sort -nr | head -n 1 | cut -f3-)\n"
-        "if [ -z \"$latest\" ]; then printf 'verification=no_files\\n'; exit 3; fi\n"
-        "printf 'latest=%s\\n' \"$latest\"\n"
-        "case \"$latest\" in\n"
-        "  *.tar) tar -tf \"$latest\" >/dev/null 2>&1 ;;\n"
-        "  *.tar.gz|*.tgz) tar -tzf \"$latest\" >/dev/null 2>&1 ;;\n"
-        "  *.gz) gzip -t \"$latest\" >/dev/null 2>&1 ;;\n"
-        "  *.zip) if command -v unzip >/dev/null 2>&1; then unzip -t \"$latest\" >/dev/null 2>&1; else printf 'verification=missing_unzip\\n'; exit 4; fi ;;\n"
-        "  *) printf 'verification=unsupported_extension\\n'; exit 2 ;;\n"
-        "esac\n"
-        "status=$?\n"
-        "printf 'verification_exit=%s\\n' \"$status\"\n"
-        "exit \"$status\"\n"
-    )
-
-
-def _parse_backup_file_rows(raw: str, *, max_age_hours: int) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    import time
-
-    files: list[dict[str, Any]] = []
-    missing_dir = ""
-    now = time.time()
-    for line in str(raw or "").splitlines():
-        parts = line.split("\t", 2)
-        if len(parts) < 3:
-            continue
-        if parts[0] == "missing_dir":
-            missing_dir = parts[2]
-            continue
-        try:
-            mtime = float(parts[0])
-            size = int(float(parts[1]))
-        except (TypeError, ValueError):
-            continue
-        age_hours = max(0.0, (now - mtime) / 3600)
-        files.append(
-            {
-                "path": parts[2],
-                "size_bytes": size,
-                "size_mb": round(size / (1024 * 1024), 2),
-                "mtime_epoch": mtime,
-                "age_hours": round(age_hours, 2),
-            }
-        )
-    latest = files[0] if files else None
-    summary = {
-        "file_count": len(files),
-        "latest_path": latest.get("path") if latest else "",
-        "latest_age_hours": latest.get("age_hours") if latest else None,
-        "latest_size_mb": latest.get("size_mb") if latest else None,
-        "fresh": bool(latest and float(latest.get("age_hours") or 0) <= max_age_hours),
-        "max_age_hours": max_age_hours,
-        "missing_dir": missing_dir,
-    }
-    return files, summary
-
-
-def _resolve_context_key(ctx: "ExecutionContext", config: dict[str, Any], field: str, default_key: str = "") -> Any:
-    direct = config.get(field)
-    if direct not in (None, ""):
-        if isinstance(direct, str):
-            return ctx.resolve_template(direct)
-        return direct
-    key = str(config.get(f"{field}_context_key") or default_key or field).strip()
-    return ctx.get_variable(key, "") if key else ""
-
-
-async def _load_owned_server(ctx: "ExecutionContext", config: dict[str, Any]):
-    server_id = _coerce_int(_resolve_context_key(ctx, config, "server_id", "server_id"))
-    if not server_id:
-        raise ValueError("server_id is required or must be present in pipeline context.")
-    server = await _ops_runtime().get_owned_server(ctx.user, server_id)
-    if server is None:
-        raise ValueError(f"Server not found or inaccessible: {server_id}")
-    return server
-
-
-async def _server_secret(server) -> str:
-    return await _ops_runtime().server_secret(server)
 
 
 @registry.register
@@ -606,35 +412,18 @@ class OpsServiceActionNode(BaseNode):
 
     async def execute(self, ctx: "ExecutionContext") -> NodeResult:
         config = self.node_data
-        server = await _load_owned_server(ctx, config)
-        secret = await _server_secret(server)
-        service = ctx.resolve_template(str(config.get("service") or ""))
         action = str(config.get("action") or "restart").strip().lower()
         if action not in SERVICE_ACTIONS:
             return NodeResult(error="Unsupported service action")
-        if not service.strip():
-            return NodeResult(error="service is required")
-
-        preflight = await get_linux_ui_service_logs(server, secret=secret, service=service, lines=40)
-        result = await run_linux_ui_service_action(server, secret=secret, service=service, action=action)
-        verify = None
-        if _coerce_bool(config.get("verify"), default=True):
-            verify = await get_linux_ui_service_logs(server, secret=secret, service=service, lines=40)
-        output = {
-            "server": server.name,
-            "service": result.get("service") or service,
-            "action": action,
-            "success": bool(result.get("success")),
-            "dangerous": bool(result.get("dangerous")),
-            "preflight_source": preflight.get("source"),
-            "status_excerpt": result.get("status_excerpt") or result.get("output") or "",
-            "verification_source": (verify or {}).get("source"),
-        }
-        status_text = "completed" if output["success"] else "failed"
-        text = f"Service action {action} {output['service']} on {server.name}: {status_text}\n\n```json\n{_compact_json(output)}\n```"
-        if output["success"]:
-            return NodeResult(output={"output": text, "action_result": output})
-        return NodeResult(error=str(result.get("output") or "Service action failed"), output={"output": text, "action_result": output})
+        return await _execute_service_action(
+            ctx,
+            config,
+            load_owned_server=_load_owned_server,
+            server_secret=_server_secret,
+            resolve_context_key=_resolve_context_key,
+            get_service_logs=get_linux_ui_service_logs,
+            run_service_action=run_linux_ui_service_action,
+        )
 
 
 @registry.register
@@ -643,37 +432,18 @@ class OpsDockerActionNode(BaseNode):
 
     async def execute(self, ctx: "ExecutionContext") -> NodeResult:
         config = self.node_data
-        server = await _load_owned_server(ctx, config)
-        secret = await _server_secret(server)
-        container = ctx.resolve_template(str(config.get("container") or ctx.get_variable("container_name", "")))
         action = str(config.get("action") or "restart").strip().lower()
         if action not in DOCKER_ACTIONS:
             return NodeResult(error="Unsupported docker action")
-        if not container.strip():
-            return NodeResult(error="container is required")
-
-        before = await get_linux_ui_docker(server, secret=secret)
-        result = await run_linux_ui_docker_action(server, secret=secret, container=container, action=action)
-        after = await get_linux_ui_docker(server, secret=secret) if _coerce_bool(config.get("verify"), default=True) else None
-        logs = None
-        if _coerce_bool(config.get("include_logs"), default=True):
-            logs = await get_linux_ui_docker_logs(server, secret=secret, container=container, lines=_coerce_int(config.get("lines")) or 80)
-        output = {
-            "server": server.name,
-            "container": result.get("container") or container,
-            "action": action,
-            "success": bool(result.get("success")),
-            "dangerous": bool(result.get("dangerous")),
-            "before_summary": before.get("summary"),
-            "after_summary": (after or {}).get("summary"),
-            "inspect_excerpt": result.get("inspect_excerpt") or "",
-            "logs_excerpt": (logs or {}).get("content", "")[:1500],
-        }
-        status_text = "completed" if output["success"] else "failed"
-        text = f"Docker action {action} {output['container']} on {server.name}: {status_text}\n\n```json\n{_compact_json(output)}\n```"
-        if output["success"]:
-            return NodeResult(output={"output": text, "action_result": output})
-        return NodeResult(error=str(result.get("output") or "Docker action failed"), output={"output": text, "action_result": output})
+        return await _execute_docker_action(
+            ctx,
+            config,
+            load_owned_server=_load_owned_server,
+            server_secret=_server_secret,
+            get_docker=get_linux_ui_docker,
+            get_docker_logs=get_linux_ui_docker_logs,
+            run_docker_action=run_linux_ui_docker_action,
+        )
 
 
 @registry.register
@@ -682,26 +452,17 @@ class OpsProcessActionNode(BaseNode):
 
     async def execute(self, ctx: "ExecutionContext") -> NodeResult:
         config = self.node_data
-        server = await _load_owned_server(ctx, config)
-        secret = await _server_secret(server)
-        pid = _resolve_context_key(ctx, config, "pid", "pid")
         action = str(config.get("action") or "terminate").strip().lower()
         if action not in PROCESS_ACTIONS:
             return NodeResult(error="Unsupported process action")
-        result = await run_linux_ui_process_action(server, secret=secret, pid=pid, action=action)
-        output = {
-            "server": server.name,
-            "pid": result.get("pid"),
-            "action": action,
-            "success": bool(result.get("success")),
-            "dangerous": bool(result.get("dangerous")),
-            "still_running": bool(result.get("still_running")),
-            "process_excerpt": result.get("process_excerpt") or "",
-        }
-        text = f"Process action {action} PID {output['pid']} on {server.name}: {'completed' if output['success'] else 'failed'}\n\n```json\n{_compact_json(output)}\n```"
-        if output["success"]:
-            return NodeResult(output={"output": text, "action_result": output})
-        return NodeResult(error=str(result.get("output") or "Process action failed"), output={"output": text, "action_result": output})
+        return await _execute_process_action(
+            ctx,
+            config,
+            load_owned_server=_load_owned_server,
+            server_secret=_server_secret,
+            resolve_context_key=_resolve_context_key,
+            run_process_action=run_linux_ui_process_action,
+        )
 
 
 @registry.register
@@ -709,50 +470,7 @@ class OpsHttpCheckNode(BaseNode):
     node_type = "ops/http_check"
 
     async def execute(self, ctx: "ExecutionContext") -> NodeResult:
-        config = self.node_data
-        url = ctx.resolve_template(str(config.get("url") or ""))
-        if not url:
-            return NodeResult(error="url is required")
-        method = str(config.get("method") or "GET").strip().upper()
-        if method not in {"GET", "HEAD"}:
-            return NodeResult(error="method must be GET or HEAD")
-        expected_status = [_coerce_int(item) for item in _coerce_list(config.get("expected_status"))]
-        expected = {item for item in expected_status if item is not None} or set(range(200, 400))
-        timeout = max(1, min(_coerce_int(config.get("timeout_seconds")) or 15, 120))
-        retries = max(1, min(_coerce_int(config.get("retries")) or 1, 5))
-        body_contains = ctx.resolve_template(str(config.get("body_contains") or ""))
-        last_error = ""
-        response_payload: dict[str, Any] = {}
-
-        for attempt in range(1, retries + 1):
-            try:
-                async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-                    response = await client.request(method, url)
-                body = response.text[:2000] if method != "HEAD" else ""
-                response_payload = {
-                    "url": url,
-                    "method": method,
-                    "status_code": response.status_code,
-                    "attempt": attempt,
-                    "body_excerpt": body,
-                }
-                if response.status_code not in expected:
-                    last_error = f"Unexpected status {response.status_code}"
-                    continue
-                if body_contains and body_contains not in body:
-                    last_error = "Expected body text was not found"
-                    continue
-                text = f"HTTP check passed: {method} {url} -> {response.status_code}"
-                return NodeResult(output={"output": text, "http_check": response_payload})
-            except Exception as exc:
-                last_error = str(exc)
-                response_payload = {"url": url, "method": method, "attempt": attempt, "error": last_error}
-
-        return NodeResult(
-            error=last_error or "HTTP check failed",
-            output={"output": f"HTTP check failed: {method} {url}: {last_error}", "http_check": response_payload},
-        )
-
+        return await _execute_http_check(ctx, self.node_data, async_client_factory=httpx.AsyncClient)
 
 @registry.register
 class OpsAlertUpdateNode(BaseNode):
@@ -763,20 +481,9 @@ class OpsAlertUpdateNode(BaseNode):
         action = str(config.get("action") or "resolve").strip().lower()
         if action not in ALERT_ACTIONS:
             return NodeResult(error="Unsupported alert action")
-        alert_id = _coerce_int(_resolve_context_key(ctx, config, "alert_id", "alert_id"))
-        if not alert_id:
-            return NodeResult(error="alert_id is required or must be present in pipeline context")
-
-        alert = await _ops_runtime().update_alert(user=ctx.user, alert_id=alert_id, action=action)
-        if alert is None:
-            return NodeResult(error=f"Alert not found or inaccessible: {alert_id}")
-        output = {
-            "alert_id": alert["id"],
-            "action": action,
-            "title": alert["title"],
-            "server": alert["server_name"],
-            "is_resolved": alert["is_resolved"],
-            "resolved_at": alert["resolved_at"],
-            "note": ctx.resolve_template(str(config.get("note") or "")),
-        }
-        return NodeResult(output={"output": f"Alert #{alert['id']} {action}: {alert['title']}", "alert": output})
+        return await _execute_alert_update(
+            ctx,
+            config,
+            ops_runtime=_ops_runtime,
+            resolve_context_key=_resolve_context_key,
+        )
