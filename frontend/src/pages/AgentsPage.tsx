@@ -83,6 +83,42 @@ const FULL_AGENT_TOOL_OPTIONS = [
   { key: "read_skill", label: "Read skill" },
 ] as const;
 
+type AgentSudoPolicy = "disabled" | "ask" | "approved";
+
+const SUDO_AGENT_OPTIONS: Array<{
+  value: AgentSudoPolicy;
+  labelRu: string;
+  labelEn: string;
+  hintRu: string;
+  hintEn: string;
+}> = [
+  {
+    value: "disabled",
+    labelRu: "Без sudo",
+    labelEn: "No sudo",
+    hintRu: "Команды с sudo будут заблокированы.",
+    hintEn: "Commands with sudo are blocked.",
+  },
+  {
+    value: "ask",
+    labelRu: "Спросить при необходимости",
+    labelEn: "Ask when needed",
+    hintRu: "Агент остановится и попросит разрешение, если ему понадобится sudo.",
+    hintEn: "The agent stops and asks when sudo is needed.",
+  },
+  {
+    value: "approved",
+    labelRu: "Разрешить на запуск",
+    labelEn: "Approve for run",
+    hintRu: "Sudo разрешён для запусков этого агента; backend выполнит его как sudo -n.",
+    hintEn: "Sudo is approved for this agent's runs; backend enforces sudo -n.",
+  },
+];
+
+function sudoAgentOption(value: string | undefined) {
+  return SUDO_AGENT_OPTIONS.find((item) => item.value === value) || SUDO_AGENT_OPTIONS[0];
+}
+
 const SCHEDULE_PRESETS = [
   {
     minutes: 0,
@@ -520,6 +556,9 @@ export default function AgentsPage() {
                       {ag.active_run_id && (
                         <StatusBadge label="running" tone="info" />
                       )}
+                      <span className="rounded-md border border-border/50 bg-secondary/40 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                        sudo: {localize(lang, sudoAgentOption(ag.sudo_policy).labelRu, sudoAgentOption(ag.sudo_policy).labelEn)}
+                      </span>
                     </div>
                     <div className="flex items-center gap-3 text-[10px] text-muted-foreground mt-0.5">
                       <span className="flex items-center gap-0.5"><Server className="h-2.5 w-2.5" /> {ag.server_count}</span>
@@ -630,6 +669,7 @@ function CreateAgentDialog({
   const [maxIter, setMaxIter] = useState(20);
   const [multiServer, setMultiServer] = useState(false);
   const [toolsConfig, setToolsConfig] = useState<Record<string, boolean>>(() => buildDefaultToolsConfig());
+  const [sudoPolicy, setSudoPolicy] = useState<AgentSudoPolicy>("disabled");
   const [stopConditionsText, setStopConditionsText] = useState("");
   const [sessionTimeoutSeconds, setSessionTimeoutSeconds] = useState(600);
   const [maxConnections, setMaxConnections] = useState(5);
@@ -658,6 +698,7 @@ function CreateAgentDialog({
     setScheduleConfig(defaultScheduleConfig()); setSelectedSkillSlugs([]); setInputArtifacts([]);
     setActiveArtifactIndex(null);
     setTelegramEnabled(false); setTelegramChatId("");
+    setSudoPolicy("disabled");
     setToolsConfig(buildDefaultToolsConfig()); setStopConditionsText(""); setSessionTimeoutSeconds(600); setMaxConnections(5);
   };
 
@@ -679,6 +720,7 @@ function CreateAgentDialog({
     setMaxIter(initialAgent.max_iterations || 20);
     setMultiServer(Boolean(initialAgent.allow_multi_server));
     setToolsConfig({ ...buildDefaultToolsConfig(), ...(initialAgent.tools_config || {}) });
+    setSudoPolicy(sudoAgentOption(initialAgent.sudo_policy).value);
     setStopConditionsText((initialAgent.stop_conditions || []).join("\n"));
     setSessionTimeoutSeconds(initialAgent.session_timeout_seconds || 600);
     setMaxConnections(initialAgent.max_connections || 5);
@@ -727,6 +769,7 @@ function CreateAgentDialog({
         max_iterations: maxIter,
         allow_multi_server: multiServer,
         tools_config: mode === "mini" ? {} : toolsConfig,
+        sudo_policy: sudoPolicy,
         stop_conditions: stopConditionsText.split("\n").map((item) => item.trim()).filter(Boolean),
         skill_slugs: selectedSkillSlugs,
         input_artifacts: inputArtifacts
@@ -1042,6 +1085,35 @@ function CreateAgentDialog({
                 <label className="text-xs font-medium text-muted-foreground">{localize(lang, "Инструкции к анализу", "Analysis instructions")}</label>
                 <Textarea value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} rows={2} className="bg-secondary/50 text-xs"
                   placeholder={localize(lang, "На что обратить внимание в выводе команд. Необязательно.", "What to focus on in command output. Optional.")} />
+              </div>
+
+              <div className="space-y-3 rounded-lg border border-border/70 bg-secondary/20 p-3">
+                <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                  <Shield className="h-3.5 w-3.5 text-primary" /> Controlled sudo
+                </label>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {SUDO_AGENT_OPTIONS.map((option) => {
+                    const active = sudoPolicy === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => setSudoPolicy(option.value)}
+                        className={`min-h-[58px] rounded-lg border px-3 py-2 text-left transition-colors ${
+                          active
+                            ? "border-primary bg-primary/10 text-foreground"
+                            : "border-border/70 bg-background/35 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                        }`}
+                      >
+                        <span className="block text-xs font-semibold">{localize(lang, option.labelRu, option.labelEn)}</span>
+                        <span className="mt-0.5 block text-[11px] leading-4 text-muted-foreground">
+                          {localize(lang, option.hintRu, option.hintEn)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="space-y-1.5">

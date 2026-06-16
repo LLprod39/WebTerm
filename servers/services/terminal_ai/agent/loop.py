@@ -109,6 +109,7 @@ class AgentContext:
     iteration_timeout_sec: float = DEFAULT_ITERATION_TIMEOUT_SEC
     total_timeout_sec: float = DEFAULT_TOTAL_TIMEOUT_SEC
     dry_run: bool = False
+    sudo_policy: str = "disabled"
 
 
 # ---------------------------------------------------------------------------
@@ -288,6 +289,7 @@ async def run_agent_loop(
         prompt_user=ctx.prompt_user,
         open_target=ctx.open_target,
         dry_run=ctx.dry_run,
+        sudo_policy=ctx.sudo_policy,
     )
 
     system_prompt = build_system_prompt(
@@ -296,6 +298,7 @@ async def run_agent_loop(
         extras=ctx.extras,
         rules_context=ctx.rules_context,
         memory_context=ctx.memory_context,
+        sudo_policy=ctx.sudo_policy,
     )
 
     history: list[dict[str, Any]] = []

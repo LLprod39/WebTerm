@@ -1,4 +1,4 @@
-import type { AiAssistantSettings, AiAutoReportMode, AiPreferences } from "./ai-types";
+import type { AiAssistantSettings, AiAutoReportMode, AiPreferences, NovaSudoPolicy } from "./ai-types";
 
 export const AI_PREFERENCES_STORAGE_KEY = "terminal_ai_preferences_v1";
 
@@ -15,6 +15,7 @@ export const DEFAULT_AI_SETTINGS: AiAssistantSettings = {
   extraTargetServerIds: [],
   novaSessionContextEnabled: true,
   novaRecentActivityEnabled: true,
+  novaSudoPolicy: "disabled",
 };
 
 export const DEFAULT_AI_PREFERENCES: AiPreferences = {
@@ -46,12 +47,17 @@ function normalizePatternList(value: unknown) {
   return normalized.slice(0, 50);
 }
 
+function normalizeNovaSudoPolicy(value: unknown): NovaSudoPolicy {
+  return value === "ask" || value === "approved" || value === "disabled" ? value : DEFAULT_AI_SETTINGS.novaSudoPolicy;
+}
+
 export function cloneAiSettings(settings: AiAssistantSettings): AiAssistantSettings {
   return {
     ...settings,
     whitelistPatterns: [...settings.whitelistPatterns],
     blacklistPatterns: [...settings.blacklistPatterns],
     extraTargetServerIds: [...settings.extraTargetServerIds],
+    novaSudoPolicy: normalizeNovaSudoPolicy(settings.novaSudoPolicy),
   };
 }
 
@@ -105,6 +111,7 @@ export function sanitizeAiSettings(value: unknown): AiAssistantSettings {
       typeof raw.novaRecentActivityEnabled === "boolean"
         ? raw.novaRecentActivityEnabled
         : DEFAULT_AI_SETTINGS.novaRecentActivityEnabled,
+    novaSudoPolicy: normalizeNovaSudoPolicy(raw.novaSudoPolicy),
   };
 }
 
@@ -161,5 +168,6 @@ export function serializeAiSettings(settings?: AiAssistantSettings) {
     extra_target_server_ids: settings.extraTargetServerIds,
     nova_session_context_enabled: settings.novaSessionContextEnabled,
     nova_recent_activity_enabled: settings.novaRecentActivityEnabled,
+    nova_sudo_policy: settings.novaSudoPolicy,
   };
 }

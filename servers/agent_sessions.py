@@ -16,8 +16,11 @@ from collections.abc import Callable, Coroutine
 from typing import Any
 
 import asyncssh
+from asgiref.sync import sync_to_async
 from loguru import logger
 
+from app.agent_kernel.sudo_policy import SUDO_POLICY_APPROVED, command_uses_sudo, prepare_sudo_command
+from servers.secret_utils import get_server_sudo_secret
 from servers.monitor import _build_connect_kwargs
 
 BUFFER_MAX_CHARS = 8192
@@ -184,6 +187,14 @@ class AgentSessionManager:
         if session is None or session.proc is None:
             raise RuntimeError(f"Server {server_id} not connected.")
 
+        server_obj = self.allowed_servers.get(server_id)
+        if (
+            command_uses_sudo(command)
+            and getattr(server_obj, "sudo_auth_mode", "none") == "stored_password"
+            and session.conn is not None
+        ):
+            return await self._execute_with_sudo_password(session, server_obj, command)
+
         marker = f"__AGENT_EXIT_{id(session)}_{int(time.monotonic()*1000)}__"
         full_cmd = f"{command}; echo \"{marker}:$?:\"\n"
 
@@ -223,6 +234,44 @@ class AgentSessionManager:
             "stdout": "".join(stdout_parts),
             "stderr": "",
             "exit_code": exit_code,
+            "duration_ms": duration,
+        }
+
+    async def _execute_with_sudo_password(self, session: _ServerSession, server_obj: Any, command: str) -> dict[str, Any]:
+        t0 = time.monotonic()
+        sudo_password = await sync_to_async(get_server_sudo_secret, thread_sensitive=True)(server_obj)
+        prepared = prepare_sudo_command(
+            command,
+            SUDO_POLICY_APPROVED,
+            sudo_auth_mode=getattr(server_obj, "sudo_auth_mode", "none"),
+            sudo_password=sudo_password,
+        )
+        run_kwargs: dict[str, Any] = {"check": False}
+        if prepared.input_text is not None:
+            run_kwargs["input"] = prepared.input_text
+        result = await asyncio.wait_for(
+            session.conn.run(prepared.command, **run_kwargs),
+            timeout=self.command_timeout,
+        )
+        duration = int((time.monotonic() - t0) * 1000)
+        stdout = result.stdout or ""
+        if prepared.notes:
+            stdout = "\n".join(prepared.notes) + "\n" + stdout
+
+        if self.event_callback:
+            await self.event_callback("agent_console", {
+                "server_id": session.server_id,
+                "server_name": session.server_name,
+                "event": "command_done",
+                "command": prepared.command,
+                "exit_code": result.exit_status,
+                "output_preview": stdout[:500],
+            })
+
+        return {
+            "stdout": stdout,
+            "stderr": result.stderr or "",
+            "exit_code": result.exit_status,
             "duration_ms": duration,
         }
 

@@ -16,6 +16,7 @@ from django.views.decorators.http import require_http_methods
 from core_ui.decorators import require_feature
 from core_ui.models import UserActivityLog
 from servers.models import GlobalServerRules, Server, ServerConnection, ServerGroup, ServerGroupMember, ServerShare
+from servers.secret_utils import has_saved_server_sudo_secret
 from servers.views.server_helpers import _accessible_servers_queryset, _serialize_detected_os_fields
 
 
@@ -185,6 +186,8 @@ def frontend_bootstrap(request):
             "terminal_path": f"/servers/{server.id}/terminal/",
             "minimal_terminal_path": f"/servers/{server.id}/terminal/minimal/",
             "last_connected": server.last_connected.isoformat() if server.last_connected else None,
+            "sudo_auth_mode": getattr(server, "sudo_auth_mode", "none") or "none",
+            "has_saved_sudo_password": bool(server.user_id == request.user.id and has_saved_server_sudo_secret(server)),
             **_serialize_detected_os_fields(server),
         }
         servers_payload.append(item)

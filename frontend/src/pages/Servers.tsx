@@ -55,6 +55,7 @@ import {
   BookOpen,
   Loader2,
   Upload,
+  ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
@@ -543,6 +544,8 @@ export default function Servers() {
       key_path: details.key_path || "",
       ssh_private_key: "",
       password: "",
+      sudo_auth_mode: details.sudo_auth_mode || "none",
+      sudo_password: "",
       tags: details.tags || "",
       notes: details.notes || "",
       group_id: details.group_id,
@@ -567,6 +570,11 @@ export default function Servers() {
       setSaving(false);
     }
   };
+
+  const sudoPasswordRequired =
+    form.sudo_auth_mode === "stored_password" &&
+    !form.sudo_password.trim() &&
+    !(editingServer?.has_saved_sudo_password ?? false);
 
   const handlePrivateKeyFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
@@ -1511,6 +1519,43 @@ export default function Servers() {
               )}
             </div>
 
+            <div className="border-t border-border pt-4 space-y-4">
+              <div className="flex items-start gap-2">
+                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-secondary text-muted-foreground">
+                  <ShieldCheck className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <Label className="text-xs text-muted-foreground">{t("srv.sudo_auth")}</Label>
+                  <p className="mt-1 text-xs text-muted-foreground">{t("srv.sudo_auth_hint")}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                {(["none", "nopasswd", "stored_password"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setForm((s) => ({ ...s, sudo_auth_mode: mode }))}
+                    className={`min-h-10 rounded-md border px-3 py-2 text-left text-xs font-medium transition-colors ${form.sudo_auth_mode === mode ? "border-primary bg-primary/15 text-primary" : "border-border bg-secondary/50 text-muted-foreground hover:text-foreground"}`}
+                  >
+                    {mode === "none" ? t("srv.sudo_none") : mode === "nopasswd" ? t("srv.sudo_nopasswd") : t("srv.sudo_stored")}
+                  </button>
+                ))}
+              </div>
+              {form.sudo_auth_mode === "stored_password" && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">{t("srv.sudo_password")}</Label>
+                  <Input
+                    type="password"
+                    placeholder={editingServer?.has_saved_sudo_password ? t("srv.keep_sudo_password_placeholder") : ""}
+                    value={form.sudo_password}
+                    onChange={(e) => setForm((s) => ({ ...s, sudo_password: e.target.value }))}
+                    className="bg-secondary/50"
+                  />
+                  <p className="text-xs text-muted-foreground">{t("srv.sudo_password_hint")}</p>
+                </div>
+              )}
+            </div>
+
             <div className="border-t border-border pt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">{t("srv.groups")}</Label>
@@ -1548,7 +1593,8 @@ export default function Servers() {
                 !form.name ||
                 !form.host ||
                 !form.username ||
-                (form.auth_method !== "password" && !form.key_path && !form.ssh_private_key.trim())
+                (form.auth_method !== "password" && !form.key_path && !form.ssh_private_key.trim()) ||
+                sudoPasswordRequired
               }
             >
               {saving ? t("srv.saving") : editingServer ? t("srv.update") : t("srv.create")}

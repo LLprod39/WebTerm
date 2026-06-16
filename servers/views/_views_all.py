@@ -14,6 +14,7 @@ from servers.views.server_helpers import (  # noqa: F401
     _get_group_role,
     _require_ssh_server,
     _resolve_server_secret,
+    _resolve_server_sudo_secret,
     _serialize_detected_os_fields,
     _shared_server_context_allowed,
 )

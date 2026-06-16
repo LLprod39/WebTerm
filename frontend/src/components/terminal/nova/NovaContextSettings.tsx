@@ -1,6 +1,24 @@
 import { Switch } from "@/components/ui/switch";
 import { useI18n } from "@/lib/i18n";
-import type { AiAssistantSettings } from "../ai-types";
+import type { AiAssistantSettings, NovaSudoPolicy } from "../ai-types";
+
+const SUDO_OPTIONS: Array<{ value: NovaSudoPolicy; titleKey: string; descKey: string }> = [
+  {
+    value: "disabled",
+    titleKey: "terminal.ai.nova.settings.sudo.disabled",
+    descKey: "terminal.ai.nova.settings.sudo.disabled.description",
+  },
+  {
+    value: "ask",
+    titleKey: "terminal.ai.nova.settings.sudo.ask",
+    descKey: "terminal.ai.nova.settings.sudo.ask.description",
+  },
+  {
+    value: "approved",
+    titleKey: "terminal.ai.nova.settings.sudo.approved",
+    descKey: "terminal.ai.nova.settings.sudo.approved.description",
+  },
+];
 
 interface NovaContextSettingsProps {
   settings: AiAssistantSettings;
@@ -36,6 +54,32 @@ export function NovaContextSettings({ settings, onChange }: NovaContextSettingsP
             checked={settings.novaRecentActivityEnabled}
             onCheckedChange={(checked) => onChange({ novaRecentActivityEnabled: checked })}
           />
+        </div>
+        <div className="space-y-2 border-t border-border/50 pt-3">
+          <div>
+            <div className="text-[13px] font-medium text-foreground">{t("terminal.ai.nova.settings.sudo.title")}</div>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">{t("terminal.ai.nova.settings.sudo.description")}</p>
+          </div>
+          <div className="grid grid-cols-3 gap-1.5">
+            {SUDO_OPTIONS.map((option) => {
+              const active = settings.novaSudoPolicy === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => onChange({ novaSudoPolicy: option.value })}
+                  className={`min-h-16 rounded-md border px-2 py-2 text-left transition-colors ${
+                    active
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border/70 bg-background/50 text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <span className="block text-[12px] font-semibold">{t(option.titleKey)}</span>
+                  <span className="mt-1 block text-[10px] leading-snug">{t(option.descKey)}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
     </section>

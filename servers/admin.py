@@ -25,8 +25,8 @@ class ServerGroupAdmin(admin.ModelAdmin):
 
 @admin.register(Server)
 class ServerAdmin(admin.ModelAdmin):
-    list_display = ['name', 'host', 'port', 'username', 'auth_method', 'user', 'is_active', 'ai_read_only', 'created_at']
-    list_filter = ['auth_method', 'is_active', 'ai_read_only', 'created_at']
+    list_display = ['name', 'host', 'port', 'username', 'auth_method', 'sudo_auth_mode', 'user', 'is_active', 'ai_read_only', 'created_at']
+    list_filter = ['auth_method', 'sudo_auth_mode', 'is_active', 'ai_read_only', 'created_at']
     search_fields = ['name', 'host', 'username']
     readonly_fields = ['created_at', 'updated_at', 'last_connected']
 

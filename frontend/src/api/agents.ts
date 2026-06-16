@@ -56,6 +56,7 @@ export interface AgentItem {
   max_iterations: number;
   allow_multi_server: boolean;
   tools_config: Record<string, boolean>;
+  sudo_policy: "disabled" | "ask" | "approved";
   stop_conditions: string[];
   skill_slugs: string[];
   input_artifacts: AgentInputArtifact[];
@@ -245,6 +246,7 @@ export async function createAgent(payload: {
   max_iterations?: number;
   allow_multi_server?: boolean;
   tools_config?: Record<string, boolean>;
+  sudo_policy?: "disabled" | "ask" | "approved";
   stop_conditions?: string[];
   skill_slugs?: string[];
   input_artifacts?: AgentInputArtifact[];

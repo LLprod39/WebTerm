@@ -72,6 +72,9 @@ class ServerTarget:
     read_only: bool = False
     """2.11: if True, only read-only commands permitted on this target."""
 
+    sudo_auth_mode: str = "none"
+    """Server-side sudo auth method: none, nopasswd, or stored_password."""
+
     is_primary: bool = False
     """True for the session's originating server."""
 
@@ -122,6 +125,7 @@ class ToolContext:
     # --- session flags -----------------------------------------------------
     dry_run: bool = False
     default_timeout: float = 30.0
+    sudo_policy: str = "disabled"
 
     # ----------------------------------------------------------------------
     # Target resolution helpers

@@ -1,6 +1,7 @@
 export type AiExecutionMode = "auto" | "step" | "fast" | "agent";
 export type AiChatMode = "ask" | "agent";
 export type AiAutoReportMode = "auto" | "on" | "off";
+export type NovaSudoPolicy = "disabled" | "ask" | "approved";
 
 export interface AiAssistantSettings {
   memoryEnabled: boolean;
@@ -15,6 +16,7 @@ export interface AiAssistantSettings {
   extraTargetServerIds: number[];
   novaSessionContextEnabled: boolean;
   novaRecentActivityEnabled: boolean;
+  novaSudoPolicy: NovaSudoPolicy;
 }
 
 export interface AiPreferences {

@@ -15,6 +15,8 @@ import secrets
 from django.contrib.auth.models import User
 from django.db import models
 
+from app.agent_kernel.sudo_policy import SUDO_POLICY_CHOICES, SUDO_POLICY_DISABLED
+
 from .pipeline_draft_models import PipelineDraftRevision, PipelineDraftSession  # noqa: F401
 
 CURRENT_PIPELINE_GRAPH_VERSION = 2
@@ -158,6 +160,12 @@ class AgentConfig(models.Model):
         blank=True,
         help_text='List of enabled tool names, e.g. ["ssh_execute", "report"]',
     )
+    sudo_policy = models.CharField(
+        max_length=20,
+        choices=SUDO_POLICY_CHOICES,
+        default=SUDO_POLICY_DISABLED,
+        help_text="Controlled sudo policy for SSH tools used by this agent.",
+    )
     mcp_servers = models.ManyToManyField(
         MCPServerPool,
         blank=True,
@@ -213,6 +221,7 @@ class AgentConfig(models.Model):
             "model": self.model,
             "max_iterations": self.max_iterations,
             "allowed_tools": self.allowed_tools,
+            "sudo_policy": self.sudo_policy,
             "mcp_servers": list(self.mcp_servers.filter(owner=self.owner).values("id", "name", "transport")),
             "skill_slugs": list(self.skill_slugs or []),
             "skills": [skill.to_summary_dict() for skill in skills],

@@ -61,9 +61,11 @@ class FakeSSHConn:
         self.responses = responses or {}
         self.default = default or FakeRunResult(stdout="", stderr="", exit_status=0)
         self.calls: list[str] = []
+        self.call_kwargs: list[dict[str, Any]] = []
 
-    async def run(self, cmd: str, **_: Any) -> FakeRunResult:
+    async def run(self, cmd: str, **kwargs: Any) -> FakeRunResult:
         self.calls.append(cmd)
+        self.call_kwargs.append(dict(kwargs))
         for key, resp in self.responses.items():
             if key in cmd:
                 return resp
@@ -174,6 +176,68 @@ class TestShellTool:
         assert "E" in result.output
         assert extra_conn.calls == ["hostname"]
         assert primary_conn.calls == []  # untouched
+
+    @pytest.mark.asyncio
+    async def test_sudo_disabled_blocks_command(self):
+        conn = FakeSSHConn()
+        primary = _primary_target(ssh_conn=conn)
+        ctx = ToolContext(primary=primary, sudo_policy="disabled")
+        result = await ShellTool().run(ShellArgs(cmd="sudo whoami"), ctx)
+        assert result.ok is False
+        assert "sudo" in result.output.lower()
+        assert conn.calls == []
+
+    @pytest.mark.asyncio
+    async def test_sudo_approved_uses_noninteractive_mode(self):
+        conn = FakeSSHConn(default=FakeRunResult(stdout="root\n", exit_status=0))
+        primary = _primary_target(ssh_conn=conn)
+        primary.sudo_auth_mode = "nopasswd"
+        ctx = ToolContext(primary=primary, sudo_policy="approved")
+        result = await ShellTool().run(ShellArgs(cmd="sudo whoami"), ctx)
+        assert result.ok is True
+        assert conn.calls == ["sudo -n whoami"]
+        assert conn.call_kwargs == [{"check": False}]
+
+    @pytest.mark.asyncio
+    async def test_sudo_ask_prompts_and_allows_once(self):
+        conn = FakeSSHConn(default=FakeRunResult(stdout="root\n", exit_status=0))
+        primary = _primary_target(ssh_conn=conn)
+        primary.sudo_auth_mode = "nopasswd"
+        prompts = []
+
+        async def prompt_user(request):
+            prompts.append(request)
+            return "allow_once"
+
+        ctx = ToolContext(primary=primary, sudo_policy="ask", prompt_user=prompt_user)
+        result = await ShellTool().run(ShellArgs(cmd="sudo whoami"), ctx)
+        assert result.ok is True
+        assert len(prompts) == 1
+        assert conn.calls == ["sudo -n whoami"]
+
+    @pytest.mark.asyncio
+    async def test_sudo_stored_password_uses_backend_stdin(self, monkeypatch):
+        import servers.secret_utils as secret_utils
+        import servers.services.terminal_agent_context as terminal_agent_context
+
+        conn = FakeSSHConn(default=FakeRunResult(stdout="root\n", exit_status=0))
+        primary = _primary_target(ssh_conn=conn)
+        primary.sudo_auth_mode = "stored_password"
+
+        async def fake_load_user_accessible_server(**_kwargs):
+            return object()
+
+        def fake_get_server_sudo_secret(_server):
+            return "secret"
+
+        monkeypatch.setattr(terminal_agent_context, "load_user_accessible_server", fake_load_user_accessible_server)
+        monkeypatch.setattr(secret_utils, "get_server_sudo_secret", fake_get_server_sudo_secret)
+
+        ctx = ToolContext(primary=primary, user_id=1, sudo_policy="approved")
+        result = await ShellTool().run(ShellArgs(cmd="sudo whoami"), ctx)
+        assert result.ok is True
+        assert conn.calls == ["sudo -S -p '' whoami"]
+        assert conn.call_kwargs == [{"check": False, "input": "secret\n"}]
 
 
 # ---------------------------------------------------------------------------

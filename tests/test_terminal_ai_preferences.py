@@ -35,6 +35,7 @@ def test_normalize_ai_settings_clamps_ttl_and_sanitizes_lists() -> None:
             "extra_target_server_ids": [1, "2", 2, 0, -1, "bad", 3, 4, 5, 6],
             "nova_session_context_enabled": "false",
             "nova_recent_activity_enabled": "on",
+            "nova_sudo_policy": "approved",
         }
     )
 
@@ -48,6 +49,13 @@ def test_normalize_ai_settings_clamps_ttl_and_sanitizes_lists() -> None:
     assert normalized["extra_target_server_ids"] == [1, 2, 3, 4, 5]
     assert normalized["nova_session_context_enabled"] is False
     assert normalized["nova_recent_activity_enabled"] is True
+    assert normalized["nova_sudo_policy"] == "approved"
+
+
+def test_normalize_ai_settings_rejects_unknown_nova_sudo_policy() -> None:
+    normalized = normalize_ai_settings({"nova_sudo_policy": "root"})
+
+    assert normalized["nova_sudo_policy"] == "disabled"
 
 
 def test_primitive_normalizers() -> None:
@@ -63,6 +71,7 @@ def test_clone_and_mode_helpers() -> None:
     cloned = clone_ai_settings({"dry_run": True, "extra_target_server_ids": ["7", "7", 8]})
     assert cloned["dry_run"] is True
     assert cloned["extra_target_server_ids"] == [7, 8]
+    assert cloned["nova_sudo_policy"] == "disabled"
     assert is_auto_report_enabled({"auto_report": "on"}, "fast") is True
     assert is_auto_report_enabled({"auto_report": "off"}, "step") is False
     assert is_auto_report_enabled({"auto_report": "auto"}, "step") is True

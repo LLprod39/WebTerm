@@ -260,11 +260,11 @@ export function buildDefaultNodeData(type: NodeType): Record<string, unknown> {
       };
     case "agent/react":
     case "agent/multi":
-      return { max_iterations: 6, on_failure: "abort" };
+      return { max_iterations: 6, sudo_policy: "inherit", on_failure: "abort" };
     case "agent/llm_query":
       return { provider: "gemini", on_failure: "abort" };
     case "agent/ssh_cmd":
-      return { preflight_commands: [], verification_commands: [], permission_mode: "SAFE", on_failure: "abort" };
+      return { preflight_commands: [], verification_commands: [], permission_mode: "SAFE", sudo_policy: "disabled", on_failure: "abort" };
     case "agent/mcp_call":
       return { arguments: {}, arguments_text: "{}", permission_mode: "SAFE", skill_slugs: [], on_failure: "abort" };
     case "ops/server_snapshot":

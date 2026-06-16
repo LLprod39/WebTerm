@@ -8,6 +8,8 @@ export interface ServerForm {
   key_path: string;
   ssh_private_key: string;
   password: string;
+  sudo_auth_mode: "none" | "nopasswd" | "stored_password";
+  sudo_password: string;
   tags: string;
   notes: string;
   group_id: number | null;

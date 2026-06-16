@@ -15,6 +15,8 @@ import { ServerTagsInput } from "./ServerTagsInput";
 import {
   clampNumber,
   getSelectedMcpServers,
+  SUDO_POLICY_OPTIONS,
+  sudoPolicyLabel,
   t,
   type AgentProviderCardOption,
   type NodePanelLang,
@@ -86,6 +88,7 @@ export function NodeSettingsTab({
     ? (data.server_ids as number[])
     : [];
   const maxIterations = clampNumber(Number(data.max_iterations) || 6, 1, 20);
+  const sudoPolicy = (data.sudo_policy as string) || "inherit";
 
   return (
     <div className="space-y-6">
@@ -168,6 +171,9 @@ export function NodeSettingsTab({
                   {selectedAgent.mcp_servers.length} MCP
                 </Badge>
               ) : null}
+              <Badge variant="outline" className="text-[10px]">
+                sudo: {sudoPolicyLabel(selectedAgent.sudo_policy, lang)}
+              </Badge>
               {selectedAgent.skills?.length ? (
                 <Badge variant="secondary" className="text-[10px]">
                   {selectedAgent.skills.length} skills
@@ -193,6 +199,31 @@ export function NodeSettingsTab({
               <SelectItem value="continue">{t(lang, "Продолжить", "Continue")}</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="sudo-policy" className="text-xs text-muted-foreground">
+            {t(lang, "Controlled sudo", "Controlled sudo")}
+          </Label>
+          <Select value={sudoPolicy} onValueChange={(value) => onSet("sudo_policy", value)}>
+            <SelectTrigger id="sudo-policy" className="h-10 rounded-lg border-border/70 bg-background/70">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SUDO_POLICY_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {t(lang, option.labelRu, option.labelEn)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            {t(
+              lang,
+              SUDO_POLICY_OPTIONS.find((option) => option.value === sudoPolicy)?.hintRu || "Команды с sudo будут заблокированы.",
+              SUDO_POLICY_OPTIONS.find((option) => option.value === sudoPolicy)?.hintEn || "Commands with sudo are blocked.",
+            )}
+          </p>
         </div>
       </Section>
 

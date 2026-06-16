@@ -60,6 +60,7 @@ def list_user_accessible_servers_sync(*, user_id: int, server_ids: list[int]) ->
             "name",
             "host",
             "ai_read_only",
+            "sudo_auth_mode",
             "notes",
         )
     )
@@ -123,6 +124,7 @@ async def build_agent_extra_targets(
             display_name=str(row.get("name") or ""),
             host=str(row.get("host") or ""),
             read_only=bool(row.get("ai_read_only")),
+            sudo_auth_mode=str(row.get("sudo_auth_mode") or "none"),
             is_primary=False,
             description=str(row.get("description") or ""),
         )

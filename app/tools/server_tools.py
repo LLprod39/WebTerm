@@ -16,7 +16,7 @@ from app.tools.base import BaseTool, ToolMetadata, ToolParameter
 from app.tools.safety import evaluate_command_safety
 from app.tools.ssh_tools import ssh_manager
 from core_ui.activity import log_user_activity
-from servers.secret_utils import get_server_auth_secret
+from servers.secret_utils import get_server_auth_secret, get_server_sudo_secret
 
 
 def _get_user_id(kwargs: dict[str, Any]) -> int | None:
@@ -201,6 +201,7 @@ class ServerExecuteTool(BaseTool):
                 f"Используй ТОЛЬКО: server_execute с server_name_or_id=\"{target_server_name}\""
             )
         password = None
+        sudo_password = ""
         if server.auth_method in ("password", "key_password"):
             mp = _get_master_password(kwargs)
             try:
@@ -212,6 +213,18 @@ class ServerExecuteTool(BaseTool):
                 return (
                     "Сервер требует мастер-пароль для расшифровки. "
                     "Выполни команду через Servers → Execute в интерфейсе или передай master_password в контексте."
+                )
+        if getattr(server, "sudo_auth_mode", "none") == "stored_password":
+            mp = _get_master_password(kwargs)
+            try:
+                sudo_password = await sync_to_async(
+                    get_server_sudo_secret,
+                    thread_sensitive=True,
+                )(server, master_password=mp or "")
+            except ValueError:
+                return (
+                    "Сервер требует мастер-пароль для расшифровки sudo-пароля. "
+                    "Передай master_password в контексте или настрой managed secret для sudo."
                 )
         key_path = server.key_path if server.auth_method in ("key", "key_password") else None
         try:
@@ -225,7 +238,12 @@ class ServerExecuteTool(BaseTool):
                 network_config=server.network_config or {},
                 server=server,
             )
-            result = await ssh_manager.execute(conn_id, command)
+            result = await ssh_manager.execute(
+                conn_id,
+                command,
+                sudo_auth_mode=getattr(server, "sudo_auth_mode", "none"),
+                sudo_password=sudo_password,
+            )
             await ssh_manager.disconnect(conn_id)
             out = (result.get("stdout") or "") + ("\n" + (result.get("stderr") or "") if result.get("stderr") else "")
             if not out:

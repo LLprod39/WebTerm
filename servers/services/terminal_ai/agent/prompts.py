@@ -60,18 +60,22 @@ def build_tool_catalogue(tools: dict[str, TerminalTool]) -> str:
 
 def build_targets_block(primary: ServerTarget, extras: dict[str, ServerTarget]) -> str:
     """Describe authorised targets at the top of the system prompt."""
+    primary_sudo = f", sudo-auth={primary.sudo_auth_mode}" if primary.sudo_auth_mode != "none" else ""
     lines = [
         "Authorised servers for this session:",
         f"- PRIMARY {primary.name!r} → {primary.display_name or primary.host} "
         f"(server_id={primary.server_id}"
         + (", read-only" if primary.read_only else "")
+        + primary_sudo
         + ")",
     ]
     for t in extras.values():
+        sudo_hint = f", sudo-auth={t.sudo_auth_mode}" if t.sudo_auth_mode != "none" else ""
         lines.append(
             f"- extra   {t.name!r} → {t.display_name or t.host} "
             f"(server_id={t.server_id}"
             + (", read-only" if t.read_only else "")
+            + sudo_hint
             + ")"
         )
     if not extras:
@@ -129,6 +133,8 @@ risky actions.
 command differently quoted; instead `ask_user` for confirmation with \
 clear risk description.
 
+{sudo_block}
+
 {targets_block}
 
 {memory_block}
@@ -149,6 +155,25 @@ _MEMORY_HEADER = (
 )
 
 
+def build_sudo_policy_block(sudo_policy: str) -> str:
+    policy = str(sudo_policy or "").strip().lower()
+    if policy == "approved":
+        return (
+            "Controlled sudo for Nova: APPROVED for this run. Use `sudo` only when the task genuinely requires "
+            "elevated privileges. The backend tool will apply the selected server sudo auth method; any stored "
+            "sudo password is never visible to you."
+        )
+    if policy == "ask":
+        return (
+            "Controlled sudo for Nova: ASK. If a `shell` command contains `sudo`, the backend tool pauses and "
+            "asks the operator for one-command approval before execution. Do not use sudo unless needed."
+        )
+    return (
+        "Controlled sudo for Nova: DISABLED. Do not plan sudo commands; the backend tool blocks commands that "
+        "contain `sudo`."
+    )
+
+
 def build_system_prompt(
     *,
     tools: dict[str, TerminalTool],
@@ -156,6 +181,7 @@ def build_system_prompt(
     extras: dict[str, ServerTarget],
     rules_context: str = "",
     memory_context: str = "",
+    sudo_policy: str = "disabled",
 ) -> str:
     """Compose the full system prompt for the agent loop.
 
@@ -173,6 +199,7 @@ def build_system_prompt(
     )
     base = SYSTEM_PROMPT_TEMPLATE.format(
         targets_block=build_targets_block(primary, extras),
+        sudo_block=build_sudo_policy_block(sudo_policy),
         memory_block=memory_block,
         tool_catalogue=build_tool_catalogue(tools),
     )

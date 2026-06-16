@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.agent_kernel.sudo_policy import normalize_sudo_policy
+
 DEFAULT_AI_SETTINGS: dict[str, Any] = {
     "memory_enabled": True,
     "memory_ttl_requests": 6,
@@ -21,6 +23,7 @@ DEFAULT_AI_SETTINGS: dict[str, Any] = {
     "extra_target_server_ids": [],
     "nova_session_context_enabled": True,
     "nova_recent_activity_enabled": True,
+    "nova_sudo_policy": "disabled",
 }
 
 
@@ -107,6 +110,7 @@ def normalize_ai_settings(raw_value: Any) -> dict[str, Any]:
             incoming.get("nova_recent_activity_enabled"),
             bool(defaults["nova_recent_activity_enabled"]),
         ),
+        "nova_sudo_policy": normalize_sudo_policy(incoming.get("nova_sudo_policy")),
     }
 
 
@@ -123,6 +127,7 @@ def clone_ai_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
         "extra_target_server_ids": normalize_int_list(base.get("extra_target_server_ids")),
         "nova_session_context_enabled": bool(base.get("nova_session_context_enabled", True)),
         "nova_recent_activity_enabled": bool(base.get("nova_recent_activity_enabled", True)),
+        "nova_sudo_policy": normalize_sudo_policy(base.get("nova_sudo_policy")),
     }
 
 

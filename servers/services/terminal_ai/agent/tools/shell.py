@@ -23,11 +23,16 @@ import asyncio
 import logging
 import re
 
+from asgiref.sync import sync_to_async
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.agent_kernel.sudo_policy import command_uses_sudo, evaluate_sudo_command, prepare_sudo_command
 from servers.services.terminal_ai.agent.schemas import ToolResult
 from servers.services.terminal_ai.agent.tools.base import (
+    ServerTarget,
     ToolContext,
+    UserPromptOption,
+    UserPromptRequest,
     tool_err,
     tool_ok,
 )
@@ -119,6 +124,48 @@ class ShellTool:
     )
     args_schema: type[BaseModel] = ShellArgs
 
+    async def _approve_sudo_once(self, *, cmd: str, target: ServerTarget, ctx: ToolContext) -> bool:
+        if ctx.prompt_user is None:
+            return False
+        reply = await ctx.prompt_user(
+            UserPromptRequest(
+                question=(
+                    "Nova требуется sudo для команды:\n"
+                    f"`{cmd}`\n\n"
+                    f"Сервер: {target.display_name or target.name}. Разрешить выполнение один раз?"
+                ),
+                timeout_seconds=300,
+                options=[
+                    UserPromptOption(
+                        label="Разрешить один раз",
+                        value="allow_once",
+                        description="Backend выполнит команду с sudo без передачи пароля Nova.",
+                    ),
+                    UserPromptOption(
+                        label="Заблокировать",
+                        value="block",
+                        description="Команда не будет выполнена.",
+                    ),
+                ],
+                allow_multiple=False,
+                free_text_allowed=False,
+            )
+        )
+        return str(reply or "").strip().lower() in {"allow_once", "allow", "yes", "y", "да", "разрешить"}
+
+    async def _resolve_sudo_password(self, *, target: ServerTarget, ctx: ToolContext) -> str:
+        if target.sudo_auth_mode != "stored_password":
+            return ""
+        if not ctx.user_id:
+            return ""
+        from servers.services.terminal_agent_context import load_user_accessible_server
+        from servers.secret_utils import get_server_sudo_secret
+
+        server = await load_user_accessible_server(user_id=int(ctx.user_id), server_id=int(target.server_id))
+        if server is None:
+            return ""
+        return await sync_to_async(get_server_sudo_secret, thread_sensitive=True)(server)
+
     async def run(self, args: ShellArgs, ctx: ToolContext) -> ToolResult:
         cmd = args.cmd.strip()
         if not cmd:
@@ -170,6 +217,39 @@ class ShellTool:
                 ),
             )
 
+        sudo_notes: tuple[str, ...] = ()
+        sudo_input_text: str | None = None
+        sudo_policy = str(ctx.sudo_policy or "disabled")
+        if command_uses_sudo(cmd):
+            sudo_decision = evaluate_sudo_command(cmd, sudo_policy)
+            effective_sudo_policy = sudo_policy
+            if not sudo_decision.allowed:
+                if sudo_decision.matched_patterns == ("sudo_requires_operator_approval",):
+                    approved = await self._approve_sudo_once(cmd=cmd, target=target, ctx=ctx)
+                    if not approved:
+                        return tool_err(
+                            "sudo command blocked by operator policy",
+                            output="Команда с sudo не выполнена: оператор не дал разрешение.",
+                        )
+                    effective_sudo_policy = "approved"
+                else:
+                    return tool_err(
+                        sudo_decision.reason or "sudo command blocked",
+                        output=sudo_decision.reason or "Команда с sudo заблокирована настройками Nova.",
+                    )
+            try:
+                prepared_sudo = prepare_sudo_command(
+                    cmd,
+                    effective_sudo_policy,
+                    sudo_auth_mode=target.sudo_auth_mode,
+                    sudo_password=await self._resolve_sudo_password(target=target, ctx=ctx),
+                )
+            except ValueError as exc:
+                return tool_err(str(exc))
+            cmd = prepared_sudo.command
+            sudo_notes = prepared_sudo.notes
+            sudo_input_text = prepared_sudo.input_text
+
         # Dry-run short-circuit: no SSH call at all.
         if ctx.dry_run:
             return tool_ok(
@@ -191,9 +271,13 @@ class ShellTool:
 
         timeout = min(max(int(args.timeout or 30), 1), _MAX_TIMEOUT_SEC)
 
+        run_kwargs: dict[str, object] = {"check": False}
+        if sudo_input_text is not None:
+            run_kwargs["input"] = sudo_input_text
+
         try:
             result = await asyncio.wait_for(
-                conn.run(cmd, check=False),
+                conn.run(cmd, **run_kwargs),
                 timeout=timeout,
             )
         except asyncio.TimeoutError:
@@ -215,6 +299,8 @@ class ShellTool:
         exit_code = int(exit_code) if exit_code is not None else 1
 
         combined = stdout + (("\n" + stderr) if stderr else "")
+        if sudo_notes:
+            combined = "\n".join(sudo_notes) + "\n" + combined
         # Tail-truncate: the last chunk is usually the most useful part
         # of long logs. Prepend a marker so the LLM knows output was cut.
         if len(combined) > _MAX_OUTPUT_CHARS:
@@ -234,6 +320,7 @@ class ShellTool:
                 "stderr_bytes": len(stderr),
                 "cmd": cmd,
                 "target": target.name,
+                "sudo_notes": list(sudo_notes),
             },
         )
 

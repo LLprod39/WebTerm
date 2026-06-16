@@ -29,6 +29,7 @@ from app.agent_kernel.runtime.context import build_ops_prompt_context
 from app.agent_kernel.runtime.parsing import parse_action as _parse_action  # noqa: F401
 from app.agent_kernel.runtime.parsing import parse_response
 from app.agent_kernel.sandbox.manager import SandboxManager
+from app.agent_kernel.sudo_policy import prepare_sudo_command_args, sudo_policy_prompt
 from app.agent_kernel.tools.registry import ToolRegistry
 from app.execution_policy import safe_payload_preview
 from app.core.llm import LLMProvider
@@ -125,7 +126,7 @@ class AgentEngine:
             default_provider="auto",
         )
         self.role_spec = get_role_spec(agent.agent_type, agent.goal or agent.ai_prompt)
-        self.permission_engine = PermissionEngine(mode=self.role_spec.default_permission_mode)
+        self.permission_engine = PermissionEngine(mode=self.role_spec.default_permission_mode, sudo_policy=agent.sudo_policy)
         self.sandbox_manager = SandboxManager()
         self.hook_manager = HookManager()
         self.memory_store = DjangoServerMemoryStore()
@@ -647,6 +648,12 @@ class AgentEngine:
                 logger.warning("Failed to persist audit trail for tool denial: {}", exc)
             return decision.reason
 
+        prepared_args, _sudo_notes = (
+            prepare_sudo_command_args(args, self.permission_engine.sudo_policy)
+            if name == "ssh_execute"
+            else (args, ())
+        )
+        args = prepared_args
         if decision and spec:
             sandbox_decision = self.sandbox_manager.validate(spec, args, decision.sandbox_profile)
             if not sandbox_decision.allowed:
@@ -753,6 +760,7 @@ class AgentEngine:
             "- Если подключены skills, сначала ориентируйся по их каталогу и открывай полный skill через read_skill перед сервис-специфичными изменениями",
             "- Некоторые skills дополнительно применяют runtime guardrails к MCP-вызовам: могут подставлять обязательные аргументы и блокировать опасные действия",
             "- НЕ запускай опасные команды (rm -rf, mkfs, shutdown и т.д.) — они будут заблокированы",
+            f"- {sudo_policy_prompt(self.permission_engine.sudo_policy)}",
             "- Когда цель полностью достигнута, предоставь итоговый анализ БЕЗ строки ACTION",
             f"- Максимум {self.max_iterations} итераций доступно",
         ]

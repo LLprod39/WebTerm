@@ -6,6 +6,13 @@ from django.contrib.auth.models import User
 from django.db import models
 from django.utils import timezone
 
+from app.agent_kernel.sudo_policy import (
+    SUDO_AUTH_MODE_CHOICES,
+    SUDO_AUTH_MODE_NONE,
+    SUDO_POLICY_CHOICES,
+    SUDO_POLICY_DISABLED,
+)
+
 
 class ServerGroup(models.Model):
     """Groups for organizing servers"""
@@ -156,6 +163,14 @@ class Server(models.Model):
     encrypted_password = models.TextField(blank=True)  # Encrypted password if using password auth
     key_path = models.CharField(max_length=500, blank=True)  # Path to SSH key
     salt = models.BinaryField(null=True, blank=True)  # For password encryption
+    sudo_auth_mode = models.CharField(
+        max_length=32,
+        choices=SUDO_AUTH_MODE_CHOICES,
+        default=SUDO_AUTH_MODE_NONE,
+        help_text="How backend may satisfy sudo prompts for this server.",
+    )
+    encrypted_sudo_password = models.TextField(blank=True)
+    sudo_salt = models.BinaryField(null=True, blank=True)
 
     tags = models.CharField(max_length=500, blank=True)  # Comma-separated tags
     notes = models.TextField(blank=True)
@@ -1055,6 +1070,12 @@ class ServerAgent(models.Model):
     max_iterations = models.IntegerField(default=20, help_text="Max ReAct loop iterations (1-100)")
     allow_multi_server = models.BooleanField(default=False, help_text="Allow simultaneous multi-server connections")
     tools_config = models.JSONField(default=dict, blank=True, help_text="Tool availability overrides")
+    sudo_policy = models.CharField(
+        max_length=20,
+        choices=SUDO_POLICY_CHOICES,
+        default=SUDO_POLICY_DISABLED,
+        help_text="Controlled sudo policy for SSH commands executed by this agent.",
+    )
     stop_conditions = models.JSONField(default=list, blank=True, help_text="Conditions to stop the agent early")
     session_timeout_seconds = models.IntegerField(default=600, help_text="Max session duration in seconds")
     max_connections = models.IntegerField(default=5, help_text="Max simultaneous SSH connections")

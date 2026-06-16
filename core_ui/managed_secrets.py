@@ -12,6 +12,7 @@ from django.conf import settings
 from core_ui.models import ManagedSecret
 
 SERVER_AUTH_NAMESPACE = "server_auth_secret"
+SERVER_SUDO_NAMESPACE = "server_sudo_secret"
 MCP_ENV_NAMESPACE = "mcp_secret_env"
 LLM_API_KEY_NAMESPACE = "llm_api_key"
 LLM_API_KEY_OBJECT_ID = 1
@@ -106,6 +107,30 @@ def get_server_auth_secret(server_id: int) -> str:
 
 def has_server_auth_secret(server_id: int) -> bool:
     return _has(SERVER_AUTH_NAMESPACE, server_id)
+
+
+def set_server_sudo_secret(server_id: int, secret_value: str) -> None:
+    value = (secret_value or "").strip()
+    if not value:
+        _delete(SERVER_SUDO_NAMESPACE, server_id)
+        return
+    _upsert(
+        SERVER_SUDO_NAMESPACE,
+        server_id,
+        {"secret": value},
+        metadata={"kind": "server_sudo"},
+    )
+
+
+def get_server_sudo_secret(server_id: int) -> str:
+    payload = _get(SERVER_SUDO_NAMESPACE, server_id, default={})
+    if isinstance(payload, dict):
+        return str(payload.get("secret") or "")
+    return ""
+
+
+def has_server_sudo_secret(server_id: int) -> bool:
+    return _has(SERVER_SUDO_NAMESPACE, server_id)
 
 
 def set_mcp_secret_env(mcp_id: int, env: dict[str, str] | None) -> None:

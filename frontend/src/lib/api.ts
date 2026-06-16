@@ -1279,6 +1279,8 @@ export interface FrontendServer {
   terminal_path: string;
   minimal_terminal_path: string;
   last_connected: string | null;
+  sudo_auth_mode?: "none" | "nopasswd" | "stored_password";
+  has_saved_sudo_password?: boolean;
   detected_os?: string;
   detected_os_pretty?: string;
   detected_os_meta?: Record<string, unknown>;
@@ -1298,6 +1300,8 @@ export interface ServerDetailsResponse {
   group_id: number | null;
   is_active: boolean;
   ai_read_only?: boolean;
+  sudo_auth_mode?: "none" | "nopasswd" | "stored_password";
+  has_saved_sudo_password?: boolean;
   corporate_context?: string;
   network_config?: Record<string, unknown>;
   has_saved_password?: boolean;
@@ -2162,6 +2166,7 @@ export interface AgentConfig extends StudioAccessMetadata {
   model: string;
   max_iterations: number;
   allowed_tools: string[];
+  sudo_policy: "disabled" | "ask" | "approved";
   skill_slugs: string[];
   skills: StudioSkill[];
   skill_errors?: string[];

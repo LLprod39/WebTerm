@@ -73,9 +73,37 @@ const MODEL_OPTIONS = [
   "gpt-5.2",
 ];
 
+const SUDO_AGENT_OPTIONS = [
+  {
+    value: "disabled",
+    labelRu: "Без sudo",
+    labelEn: "No sudo",
+    hintRu: "Команды с sudo будут заблокированы для этого профиля.",
+    hintEn: "Commands with sudo are blocked for this profile.",
+  },
+  {
+    value: "ask",
+    labelRu: "Спросить при необходимости",
+    labelEn: "Ask when needed",
+    hintRu: "Агент остановится и попросит разрешение, если ему понадобится sudo.",
+    hintEn: "The agent stops and asks when sudo is needed.",
+  },
+  {
+    value: "approved",
+    labelRu: "Разрешить на запуск",
+    labelEn: "Approve for run",
+    hintRu: "Sudo разрешён для запусков этого профиля; backend выполняет его как sudo -n.",
+    hintEn: "Sudo is approved for this profile's runs; backend enforces sudo -n.",
+  },
+] as const;
+
 function toolLabel(toolId: string, lang: "ru" | "en") {
   const tool = ALL_TOOLS.find((item) => item.id === toolId);
   return tool ? localize(lang, tool.labelRu, tool.labelEn) : toolId;
+}
+
+function sudoOption(value: string | undefined) {
+  return SUDO_AGENT_OPTIONS.find((item) => item.value === value) || SUDO_AGENT_OPTIONS[0];
 }
 
 function AgentForm({
@@ -109,6 +137,7 @@ function AgentForm({
     instructions: "",
     model: MODEL_OPTIONS[0],
     max_iterations: 10,
+    sudo_policy: "disabled",
     skill_slugs: [],
     mcp_servers: [],
     server_scope: [],
@@ -249,6 +278,28 @@ function AgentForm({
             disabled={readOnly}
           />
         </div>
+      </div>
+
+      <div className="space-y-2 rounded-xl border border-border/70 bg-background/30 px-4 py-3">
+        <Label>{localize(lang, "Controlled sudo", "Controlled sudo")}</Label>
+        <Select
+          value={(form.sudo_policy as string) || "disabled"}
+          onValueChange={(value) => setField("sudo_policy", value)}
+        >
+          <SelectTrigger disabled={readOnly}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SUDO_AGENT_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {localize(lang, option.labelRu, option.labelEn)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          {localize(lang, sudoOption(form.sudo_policy as string).hintRu, sudoOption(form.sudo_policy as string).hintEn)}
+        </p>
       </div>
 
       <div className="space-y-2">
@@ -614,6 +665,9 @@ export default function AgentConfigPage() {
                         ) : null}
                         {agent.is_shared ? <Badge variant="outline" className="text-[10px]">{localize(lang, "Общий", "Shared")}</Badge> : null}
                         {agent.can_edit === false ? <Badge variant="outline" className="text-[10px]">{localize(lang, "Только чтение", "Read only")}</Badge> : null}
+                        <Badge variant="outline" className="text-[10px]">
+                          sudo: {localize(lang, sudoOption(agent.sudo_policy).labelRu, sudoOption(agent.sudo_policy).labelEn)}
+                        </Badge>
                       </div>
                     </div>
                   </div>

@@ -9,6 +9,30 @@ import { DIRECT_LLM_PROVIDERS } from "../pipelineGraphUtils";
 import { localize } from "../presentation";
 import type { Lang, NodeData, ServerOption, SetNodeData } from "./types";
 
+const SUDO_DIRECT_OPTIONS = [
+  {
+    value: "disabled",
+    labelRu: "Без sudo",
+    labelEn: "No sudo",
+    hintRu: "Команды с sudo будут заблокированы.",
+    hintEn: "Commands with sudo are blocked.",
+  },
+  {
+    value: "ask",
+    labelRu: "Спросить",
+    labelEn: "Ask",
+    hintRu: "Нода остановится, если команда потребует sudo-разрешение.",
+    hintEn: "The node stops when the command needs sudo approval.",
+  },
+  {
+    value: "approved",
+    labelRu: "Разрешить",
+    labelEn: "Approved",
+    hintRu: "Sudo разрешён на этот запуск; backend выполнит его как sudo -n.",
+    hintEn: "Sudo is approved for this run; backend enforces sudo -n.",
+  },
+] as const;
+
 export function SshCommandConfig({
   type,
   data,
@@ -23,6 +47,8 @@ export function SshCommandConfig({
   onSet: SetNodeData;
 }) {
   if (type !== "agent/ssh_cmd") return null;
+  const sudoPolicy = (data.sudo_policy as string) || "disabled";
+  const sudoHint = SUDO_DIRECT_OPTIONS.find((option) => option.value === sudoPolicy) || SUDO_DIRECT_OPTIONS[0];
 
   return (
     <NodeFormSection
@@ -51,6 +77,22 @@ export function SshCommandConfig({
           className="text-xs font-mono resize-none"
           rows={3}
         />
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs">Controlled sudo</Label>
+        <Select value={sudoPolicy} onValueChange={(value) => onSet("sudo_policy", value)}>
+          <SelectTrigger className="h-8 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SUDO_DIRECT_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {localize(lang, option.labelRu, option.labelEn)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <FieldHint>{localize(lang, sudoHint.hintRu, sudoHint.hintEn)}</FieldHint>
       </div>
       <AdvancedDisclosure title={localize(lang, "Проверки до/после", "Pre/post checks")}>
         <div className="space-y-1.5">

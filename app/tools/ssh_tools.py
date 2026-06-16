@@ -12,11 +12,13 @@ from asgiref.sync import sync_to_async
 from django.conf import settings
 from loguru import logger
 
+from app.agent_kernel.sudo_policy import SUDO_POLICY_APPROVED, prepare_sudo_command
 from app.execution_policy import build_execution_policy_audit_metadata
 from app.tools.base import BaseTool, ToolMetadata, ToolParameter
 from app.tools.safety import evaluate_command_safety
 from core_ui.activity import log_user_activity
 from core_ui.audit import get_audit_context
+from servers.secret_utils import get_server_sudo_secret
 from servers.ssh_host_keys import ensure_server_known_hosts, parse_host_port_value, tofu_known_hosts_for_host
 
 _ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -150,7 +152,8 @@ class SSHConnectionManager:
             # Сохраняем network_config вместе с connection для использования в execute
             self.connections[conn_id] = {
                 'connection': conn,
-                'network_config': effective_network_config
+                'network_config': effective_network_config,
+                'server': server,
             }
             logger.success(f"Connected to {conn_id}")
             return conn_id
@@ -173,7 +176,14 @@ class SSHConnectionManager:
             del self.connections[conn_id]
             logger.info(f"Disconnected from {conn_id}")
 
-    async def execute(self, conn_id: str, command: str) -> dict[str, Any]:
+    async def execute(
+        self,
+        conn_id: str,
+        command: str,
+        *,
+        sudo_auth_mode: str | None = None,
+        sudo_password: str | None = None,
+    ) -> dict[str, Any]:
         """Execute command on remote host с учётом network_config"""
         if conn_id not in self.connections:
             raise ValueError(f"No active connection: {conn_id}")
@@ -184,9 +194,11 @@ class SSHConnectionManager:
             if isinstance(conn_data, dict):
                 conn = conn_data['connection']
                 network_config = conn_data.get('network_config') or {}
+                server = conn_data.get('server')
             else:
                 conn = conn_data
                 network_config = {}
+                server = None
 
             # Добавляем environment variables из network_config
             final_command = command
@@ -200,13 +212,31 @@ class SSHConnectionManager:
                     final_command = "; ".join(exports) + "; " + command
                     logger.debug("Applying {} environment variable(s) to SSH command", len(exports))
 
-            result = await conn.run(final_command, check=False)
+            resolved_sudo_auth_mode = sudo_auth_mode or getattr(server, "sudo_auth_mode", "none")
+            resolved_sudo_password = sudo_password or ""
+            if not resolved_sudo_password and getattr(server, "sudo_auth_mode", "none") == "stored_password":
+                resolved_sudo_password = await sync_to_async(
+                    get_server_sudo_secret,
+                    thread_sensitive=True,
+                )(server)
+            prepared = prepare_sudo_command(
+                final_command,
+                SUDO_POLICY_APPROVED,
+                sudo_auth_mode=resolved_sudo_auth_mode,
+                sudo_password=resolved_sudo_password,
+            )
+            run_kwargs: dict[str, Any] = {"check": False}
+            if prepared.input_text is not None:
+                run_kwargs["input"] = prepared.input_text
+
+            result = await conn.run(prepared.command, **run_kwargs)
 
             return {
                 "stdout": result.stdout,
                 "stderr": result.stderr,
                 "exit_code": result.exit_status,
-                "success": result.exit_status == 0
+                "success": result.exit_status == 0,
+                "sudo_notes": list(prepared.notes),
             }
         except Exception as e:
             logger.error(f"Command execution failed: {e}")
@@ -266,7 +296,14 @@ class SSHExecuteTool(BaseTool):
             ]
         )
 
-    async def execute(self, conn_id: str, command: str, allow_destructive: bool = False) -> dict[str, Any]:
+    async def execute(
+        self,
+        conn_id: str,
+        command: str,
+        allow_destructive: bool = False,
+        sudo_auth_mode: str | None = None,
+        sudo_password: str | None = None,
+    ) -> dict[str, Any]:
         """Execute command over SSH"""
         audit_ctx = get_audit_context()
         command_risk = evaluate_command_safety(command)
@@ -301,7 +338,15 @@ class SSHExecuteTool(BaseTool):
                 },
             )
             return {"success": False, "stderr": "Команда выглядит опасной. Нужен явный допуск allow_destructive=true.", "stdout": "", "exit_code": -1}
-        result = await ssh_manager.execute(conn_id, command)
+        try:
+            result = await ssh_manager.execute(
+                conn_id,
+                command,
+                sudo_auth_mode=sudo_auth_mode,
+                sudo_password=sudo_password,
+            )
+        except ValueError as exc:
+            result = {"success": False, "stderr": str(exc), "stdout": "", "exit_code": -1}
         output_text = (result.get("stdout") or "") + (("\n" + (result.get("stderr") or "")) if result.get("stderr") else "")
         await sync_to_async(log_user_activity, thread_sensitive=True)(
             user_id=audit_ctx.get("user_id"),

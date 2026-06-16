@@ -2,6 +2,51 @@ import type { AgentConfig, MCPServer, StudioSkill } from "@/lib/api";
 
 export type NodePanelLang = "en" | "ru";
 
+export type SudoPolicy = "inherit" | "disabled" | "ask" | "approved";
+
+export const SUDO_POLICY_OPTIONS: Array<{
+  value: SudoPolicy;
+  labelRu: string;
+  labelEn: string;
+  hintRu: string;
+  hintEn: string;
+}> = [
+  {
+    value: "inherit",
+    labelRu: "Как в профиле",
+    labelEn: "Inherit",
+    hintRu: "Использовать настройку сохранённого агента. Без профиля = sudo запрещён.",
+    hintEn: "Use the saved agent setting. Without a saved profile, sudo is disabled.",
+  },
+  {
+    value: "disabled",
+    labelRu: "Без sudo",
+    labelEn: "No sudo",
+    hintRu: "Команды с sudo будут заблокированы.",
+    hintEn: "Commands with sudo are blocked.",
+  },
+  {
+    value: "ask",
+    labelRu: "Спросить",
+    labelEn: "Ask",
+    hintRu: "Агент остановится и попросит разрешение, если ему понадобится sudo.",
+    hintEn: "The agent stops and asks when it needs sudo.",
+  },
+  {
+    value: "approved",
+    labelRu: "Разрешить",
+    labelEn: "Approved",
+    hintRu: "Sudo разрешён на этот запуск; backend выполнит его как sudo -n.",
+    hintEn: "Sudo is approved for this run; backend enforces sudo -n.",
+  },
+];
+
+export function sudoPolicyLabel(value: string | undefined, lang: NodePanelLang) {
+  const option = SUDO_POLICY_OPTIONS.find((item) => item.value === value);
+  if (!option) return t(lang, "Без sudo", "No sudo");
+  return t(lang, option.labelRu, option.labelEn);
+}
+
 export type StudioServerOption = {
   id: number;
   name: string;

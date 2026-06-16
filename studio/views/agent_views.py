@@ -6,6 +6,7 @@ import json
 
 from django.http import JsonResponse
 
+from app.agent_kernel.sudo_policy import normalize_sudo_policy
 from core_ui.decorators import require_feature
 from studio.models import AgentConfig
 from studio.views.agent_helpers import (
@@ -58,6 +59,7 @@ def api_agents(request):
             model=data.get("model", "gemini-2.0-flash-exp"),
             max_iterations=data.get("max_iterations", 10),
             allowed_tools=data.get("allowed_tools", []),
+            sudo_policy=normalize_sudo_policy(data.get("sudo_policy")),
             skill_slugs=_sanitize_accessible_skill_slugs(
                 request.user,
                 _normalise_skill_payload(data.get("skill_slugs") if "skill_slugs" in data else data.get("skills")),
@@ -105,6 +107,8 @@ def api_agent_detail(request, agent_id: int):
         ):
             if field in data:
                 setattr(agent, field, data[field])
+        if "sudo_policy" in data:
+            agent.sudo_policy = normalize_sudo_policy(data.get("sudo_policy"))
         if "skill_slugs" in data or "skills" in data:
             agent.skill_slugs = _sanitize_accessible_skill_slugs(
                 request.user,

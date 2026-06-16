@@ -48,6 +48,7 @@ def _agent_to_dict(agent: AgentConfig, viewer) -> dict:
         "model": agent.model,
         "max_iterations": agent.max_iterations,
         "allowed_tools": agent.allowed_tools,
+        "sudo_policy": agent.sudo_policy,
         "mcp_servers": list(agent.mcp_servers.all().values("id", "name", "transport")),
         "skill_slugs": list(agent.skill_slugs or []),
         "skills": [_skill_to_summary_dict(skill, viewer, _get_skill_access(skill.slug)) for skill in skills],

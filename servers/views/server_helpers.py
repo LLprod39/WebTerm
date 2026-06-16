@@ -12,7 +12,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from servers.models import Server, ServerGroup, ServerGroupMember, ServerShare
-from servers.secret_utils import get_server_auth_secret
+from servers.secret_utils import get_server_auth_secret, get_server_sudo_secret
 from servers.services.server_query import can_access_server_context, get_active_share, get_servers_for_user, user_has_server_capability
 
 
@@ -101,6 +101,23 @@ def _resolve_server_secret(server: Server, request, data: dict) -> str | None:
     except ValueError as exc:
         raise ValueError("Не удалось расшифровать пароль сервера. Проверь MASTER_PASSWORD в .env.") from exc
     return secret or None
+
+
+def _resolve_server_sudo_secret(server: Server, request, data: dict) -> str:
+    """Resolve stored sudo password without exposing it to agents or logs."""
+    if getattr(server, "sudo_auth_mode", "none") != "stored_password":
+        return ""
+
+    direct_secret = str(data.get("sudo_password") or "").strip()
+    master_password = _effective_master_password(request, data)
+    try:
+        return get_server_sudo_secret(
+            server,
+            master_password=master_password,
+            fallback_plain=direct_secret,
+        )
+    except ValueError as exc:
+        raise ValueError("Не удалось расшифровать sudo-пароль сервера. Проверь MASTER_PASSWORD в .env.") from exc
 
 
 def _require_ssh_server(server: Server) -> None:

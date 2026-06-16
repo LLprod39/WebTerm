@@ -2508,6 +2508,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             return
 
         # Primary target = this session's server.
+        nova_sudo_policy = str((self._ai_settings or {}).get("nova_sudo_policy") or "disabled")
         primary = ServerTarget(
             name="primary",
             server_id=int(self.server.id),
@@ -2515,6 +2516,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             host=str(getattr(self.server, "host", "") or ""),
             ssh_conn=self._ssh_conn,
             read_only=bool(getattr(self.server, "ai_read_only", False)),
+            sudo_auth_mode=str(getattr(self.server, "sudo_auth_mode", "none") or "none"),
             is_primary=True,
         )
 
@@ -2621,6 +2623,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             recent_activity_context=nova_context.recent_activity_context,
             ui_context_payload=nova_context.ui_payload,
             dry_run=bool((self._ai_settings or {}).get("dry_run", False)),
+            sudo_policy=nova_sudo_policy,
         )
 
         try:

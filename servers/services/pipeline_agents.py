@@ -34,6 +34,7 @@ async def run_pipeline_react_agent(
     skills: list[Any],
     skill_errors: list[str],
     permission_mode: str = "",
+    sudo_policy: str = "",
 ) -> AgentRunSnapshot:
     agent = ServerAgent(
         name=f"pipeline_node_{node_id}",
@@ -44,6 +45,7 @@ async def run_pipeline_react_agent(
         max_iterations=max_iterations,
         tools_config=tools_config,
         allow_multi_server=len(servers) > 1,
+        sudo_policy=sudo_policy,
     )
     engine = AgentEngine(
         agent=agent,
@@ -57,7 +59,7 @@ async def run_pipeline_react_agent(
         skill_errors=skill_errors,
     )
     if permission_mode:
-        engine.permission_engine = PermissionEngine(mode=permission_mode)
+        engine.permission_engine = PermissionEngine(mode=permission_mode, sudo_policy=agent.sudo_policy)
     agent_run = await engine.run()
     return AgentRunSnapshot(
         agent_run_id=agent_run.pk,
@@ -83,6 +85,7 @@ async def run_pipeline_multi_agent(
     skills: list[Any],
     skill_errors: list[str],
     permission_mode: str = "",
+    sudo_policy: str = "",
 ) -> AgentRunSnapshot:
     agent = ServerAgent(
         name=f"pipeline_multi_{node_id}",
@@ -92,6 +95,7 @@ async def run_pipeline_multi_agent(
         max_iterations=max_iterations,
         tools_config=tools_config,
         allow_multi_server=True,
+        sudo_policy=sudo_policy,
     )
     engine = MultiAgentEngine(
         agent=agent,
@@ -105,7 +109,7 @@ async def run_pipeline_multi_agent(
         skill_errors=skill_errors,
     )
     if permission_mode:
-        engine.permission_engine = PermissionEngine(mode=permission_mode)
+        engine.permission_engine = PermissionEngine(mode=permission_mode, sudo_policy=agent.sudo_policy)
     agent_run = await engine.run()
     return AgentRunSnapshot(
         agent_run_id=agent_run.pk,

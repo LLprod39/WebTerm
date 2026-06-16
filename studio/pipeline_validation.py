@@ -14,6 +14,7 @@ from .skill_registry import normalise_skill_slugs, resolve_skills
 
 PACKAGE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9+._:@~/-]{0,127}$")
 PLACEHOLDER_RE = re.compile(r"^\{[A-Za-z_][A-Za-z0-9_]*\}$")
+SUDO_POLICY_VALUES = {"inherit", "disabled", "ask", "approved"}
 
 
 def _owner_can_use_mcp(owner) -> bool:
@@ -306,6 +307,10 @@ def _validate_node_references(node: dict[str, Any], owner, errors: list[str]) ->
         errors.extend(f"Node '{node_id}' skill error: {item}" for item in skill_errors)
 
     if node_type in {"agent/react", "agent/multi"}:
+        sudo_policy = data.get("sudo_policy")
+        if sudo_policy not in (None, "") and str(sudo_policy) not in SUDO_POLICY_VALUES:
+            errors.append(f"Node '{node_id}' field 'sudo_policy' must be one of: inherit, disabled, ask, approved.")
+
         server_ids = _collect_int_ids(data.get("server_ids"), field_name="server_ids", errors=errors, node_id=node_id)
         if server_ids:
             accessible = get_owned_server_id_set(owner, server_ids)
@@ -342,6 +347,9 @@ def _validate_node_references(node: dict[str, Any], owner, errors: list[str]) ->
                 errors.append(f"Node '{node_id}' references inaccessible MCP servers: {missing}.")
 
     if node_type == "agent/ssh_cmd":
+        sudo_policy = data.get("sudo_policy")
+        if sudo_policy not in (None, "") and str(sudo_policy) not in {"disabled", "ask", "approved"}:
+            errors.append(f"Node '{node_id}' field 'sudo_policy' must be one of: disabled, ask, approved.")
         _validate_owned_optional_server(data, owner, errors, node_id)
 
     if node_type == "agent/mcp_call":

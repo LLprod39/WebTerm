@@ -9,11 +9,13 @@ from asgiref.sync import sync_to_async as _s2a
 from app.agent_kernel.hooks.manager import HookManager
 from app.agent_kernel.permissions.engine import PermissionEngine
 from app.agent_kernel.sandbox.manager import SandboxManager
+from app.agent_kernel.sudo_policy import prepare_sudo_command, resolve_sudo_policy
 from app.core.model_utils import resolve_provider_and_model
 from core_ui.activity import log_user_activity_async
 from servers.services.command_history import save_command_history_entry
 from servers.services.pipeline_agents import run_pipeline_multi_agent, run_pipeline_react_agent
 from servers.services.ssh_connection import get_server_connect_kwargs
+from servers.secret_utils import get_server_sudo_secret
 
 from .models import MCPServerPool, PipelineRun
 from .pipeline_context import (
@@ -152,6 +154,7 @@ async def execute_agent_react(node: dict, context: dict, run: PipelineRun) -> di
         tools_config = dict.fromkeys(agent_conf.allowed_tools or [], True)
         mcp_servers = await _s2a_fn(lambda: list(agent_conf.mcp_servers.filter(owner=owner)))()
         skill_slugs = merge_unique_strings(list(agent_conf.skill_slugs or []), node_skill_slugs)
+        sudo_policy = resolve_sudo_policy(config.get("sudo_policy"), inherited=getattr(agent_conf, "sudo_policy", "disabled"))
         allowed_server_ids = await _load_agent_scope_ids(agent_conf)
         if allowed_server_ids:
             disallowed = [server_id for server_id in server_ids if server_id not in allowed_server_ids]
@@ -172,6 +175,7 @@ async def execute_agent_react(node: dict, context: dict, run: PipelineRun) -> di
             else []
         )
         skill_slugs = node_skill_slugs
+        sudo_policy = resolve_sudo_policy(config.get("sudo_policy"))
 
     skills, skill_errors = resolve_skills(skill_slugs)
 
@@ -213,6 +217,7 @@ async def execute_agent_react(node: dict, context: dict, run: PipelineRun) -> di
         skills=skills,
         skill_errors=skill_errors,
         permission_mode=pipeline_permission_mode(config),
+        sudo_policy=sudo_policy,
     )
     logger.info(
         "pipeline run %s node %s agent/react done: agent_run_id=%s status=%s report_chars=%s",
@@ -257,6 +262,7 @@ async def execute_agent_multi(node: dict, context: dict, run: PipelineRun) -> di
         tools_config = dict.fromkeys(agent_conf.allowed_tools or [], True)
         mcp_servers = await _s2a_fn(lambda: list(agent_conf.mcp_servers.filter(owner=owner)))()
         skill_slugs = merge_unique_strings(list(agent_conf.skill_slugs or []), node_skill_slugs)
+        sudo_policy = resolve_sudo_policy(config.get("sudo_policy"), inherited=getattr(agent_conf, "sudo_policy", "disabled"))
         allowed_server_ids = await _load_agent_scope_ids(agent_conf)
         if allowed_server_ids:
             disallowed = [server_id for server_id in server_ids if server_id not in allowed_server_ids]
@@ -276,6 +282,7 @@ async def execute_agent_multi(node: dict, context: dict, run: PipelineRun) -> di
             else []
         )
         skill_slugs = node_skill_slugs
+        sudo_policy = resolve_sudo_policy(config.get("sudo_policy"))
 
     skills, skill_errors = resolve_skills(skill_slugs)
 
@@ -308,6 +315,7 @@ async def execute_agent_multi(node: dict, context: dict, run: PipelineRun) -> di
         skills=skills,
         skill_errors=skill_errors,
         permission_mode=pipeline_permission_mode(config),
+        sudo_policy=sudo_policy,
     )
     return {
         "status": "completed" if agent_run.status == "completed" else "failed",
@@ -362,7 +370,10 @@ async def execute_agent_ssh_cmd(node: dict, context: dict, run: PipelineRun) -> 
     if server is None:
         return {"status": "failed", "error": f"Server not found: {server_id}"}
 
-    permission_engine = PermissionEngine(mode=pipeline_permission_mode(config))
+    permission_engine = PermissionEngine(
+        mode=pipeline_permission_mode(config),
+        sudo_policy=resolve_sudo_policy(config.get("sudo_policy")),
+    )
     sandbox_manager = SandboxManager()
     hook_manager = HookManager()
     spec = build_pipeline_tool_spec("ssh_execute", command=command)
@@ -376,24 +387,42 @@ async def execute_agent_ssh_cmd(node: dict, context: dict, run: PipelineRun) -> 
 
     try:
         connect_kwargs = await get_server_connect_kwargs(server, connect_timeout=30)
+        sudo_password = await _s2a_fn(get_server_sudo_secret, thread_sensitive=True)(server)
 
         async with asyncssh.connect(**connect_kwargs) as conn:
             combined_outputs: list[str] = []
 
             async def _run_remote_command(command_text: str, *, stage: str) -> tuple[int, str]:
-                stage_profile = decision.sandbox_profile if stage == "command" else "ops_read"
-                sandbox_decision = sandbox_manager.validate(spec, {"command": command_text}, stage_profile)
+                stage_spec = build_pipeline_tool_spec("ssh_execute", command=command_text)
+                stage_decision = permission_engine.evaluate(stage_spec, {"command": command_text})
+                if not stage_decision.allowed:
+                    raise RuntimeError(stage_decision.reason)
+                prepared_sudo = prepare_sudo_command(
+                    command_text,
+                    permission_engine.sudo_policy,
+                    sudo_auth_mode=getattr(server, "sudo_auth_mode", "none"),
+                    sudo_password=sudo_password,
+                )
+                executable_command = prepared_sudo.command
+                sudo_notes = prepared_sudo.notes
+                stage_profile = stage_decision.sandbox_profile if stage == "command" else "ops_read"
+                sandbox_decision = sandbox_manager.validate(stage_spec, {"command": executable_command}, stage_profile)
                 if not sandbox_decision.allowed:
                     raise RuntimeError(sandbox_decision.reason)
-                remote_result = await conn.run(command_text, timeout=120)
+                run_kwargs: dict[str, Any] = {"timeout": 120}
+                if prepared_sudo.input_text is not None:
+                    run_kwargs["input"] = prepared_sudo.input_text
+                remote_result = await conn.run(executable_command, **run_kwargs)
                 remote_output = remote_result.stdout + (("\n" + remote_result.stderr) if remote_result.stderr else "")
+                if sudo_notes:
+                    remote_output = "\n".join(sudo_notes) + "\n" + remote_output
                 compacted_output = await hook_manager.post_tool_use("ssh_execute", remote_output)
-                permission_engine.record_success(spec, {"command": command_text}, compacted_output)
+                permission_engine.record_success(stage_spec, {"command": executable_command}, compacted_output)
                 await _log_pipeline_ssh_command(
                     run=run,
                     server=server,
                     node_id=str(node.get("id") or ""),
-                    command=f"[{stage}] {command_text}",
+                    command=f"[{stage}] {executable_command}",
                     exit_code=remote_result.exit_status,
                     output=compacted_output,
                 )

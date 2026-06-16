@@ -37,6 +37,7 @@ from app.agent_kernel.runtime.parsing import parse_action as _parse_action  # no
 from app.agent_kernel.runtime.parsing import parse_response
 from app.agent_kernel.runtime.subagents import build_task_subagent_spec
 from app.agent_kernel.sandbox.manager import SandboxManager
+from app.agent_kernel.sudo_policy import prepare_sudo_command_args, sudo_policy_prompt
 from app.agent_kernel.tools.registry import ToolRegistry
 from app.core.llm import LLMProvider
 from app.core.model_utils import resolve_provider_and_model
@@ -144,7 +145,7 @@ class MultiAgentEngine:
             default_provider="auto",
         )
         self.role_spec = get_role_spec(agent.agent_type, agent.goal or agent.ai_prompt)
-        self.permission_engine = PermissionEngine(mode=self.role_spec.default_permission_mode)
+        self.permission_engine = PermissionEngine(mode=self.role_spec.default_permission_mode, sudo_policy=agent.sudo_policy)
         self.sandbox_manager = SandboxManager()
         self.hook_manager = HookManager()
         self.memory_store = DjangoServerMemoryStore()
@@ -878,7 +879,10 @@ Attached skills:
         if self.tool_registry is None:
             return {
                 "role_spec": self.role_spec,
-                "permission_engine": PermissionEngine(mode=self.role_spec.default_permission_mode),
+                "permission_engine": PermissionEngine(
+                    mode=self.role_spec.default_permission_mode,
+                    sudo_policy=self.permission_engine.sudo_policy,
+                ),
                 "tool_registry": ToolRegistry({}),
                 "tool_names": [],
                 "max_iterations": MAX_TASK_ITERATIONS,
@@ -900,7 +904,7 @@ Attached skills:
         local_registry = self.tool_registry.subset(allowed_names=spec.tool_names)
         return {
             "role_spec": role_spec,
-            "permission_engine": PermissionEngine(mode=spec.permission_mode),
+            "permission_engine": PermissionEngine(mode=spec.permission_mode, sudo_policy=self.permission_engine.sudo_policy),
             "tool_registry": local_registry,
             "tool_names": list(spec.tool_names),
             "max_iterations": spec.max_iterations,
@@ -997,6 +1001,7 @@ ACTION: tool_name {{"param1": "val1"}}
 Если attached skills релевантны задаче, сначала открой нужный skill через read_skill перед сервис-специфичными изменениями.
 Если attached skills содержат runtime guardrails, соблюдай их как обязательные ограничения.
 Нельзя вызывать инструменты вне выданного tool slice.
+{sudo_policy_prompt(task_permission_engine.sudo_policy)}
 
 Когда задача выполнена — напиши итоговый вывод БЕЗ строки ACTION.
 Если перед этим были изменения, но verification markers не закрыты, ты ОБЯЗАН продолжить выполнение и провести post-change verification.
@@ -1449,6 +1454,12 @@ ACTION: tool_name {{"param1": "val1"}}
         decision = active_permission_engine.evaluate(spec, args) if spec else None
         if decision and not decision.allowed:
             return decision.reason
+        prepared_args, _sudo_notes = (
+            prepare_sudo_command_args(args, active_permission_engine.sudo_policy)
+            if name == "ssh_execute"
+            else (args, ())
+        )
+        args = prepared_args
         if decision and spec:
             sandbox_decision = self.sandbox_manager.validate(spec, args, decision.sandbox_profile)
             if not sandbox_decision.allowed:

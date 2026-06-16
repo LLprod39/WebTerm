@@ -11,6 +11,7 @@ from django.views.decorators.http import require_http_methods
 
 from core_ui.activity import log_user_activity
 from core_ui.decorators import require_feature
+from app.agent_kernel.sudo_policy import normalize_sudo_policy
 from servers.agent_inputs import normalize_input_artifacts, normalize_report_delivery
 from servers.agent_schedule import normalize_schedule_config, schedule_minutes_for_config
 from servers.agent_service import (
@@ -138,6 +139,7 @@ def agent_create(request):
     max_iterations = min(int(data.get("max_iterations", 20)), 100)
     allow_multi_server = bool(data.get("allow_multi_server", False))
     tools_config = data.get("tools_config", {})
+    sudo_policy = normalize_sudo_policy(data.get("sudo_policy"))
     stop_conditions = data.get("stop_conditions", [])
     session_timeout = int(data.get("session_timeout_seconds", 600))
     max_connections = min(int(data.get("max_connections", 5)), 10)
@@ -168,6 +170,7 @@ def agent_create(request):
         max_iterations=max_iterations,
         allow_multi_server=allow_multi_server,
         tools_config=tools_config,
+        sudo_policy=sudo_policy,
         stop_conditions=stop_conditions,
         session_timeout_seconds=session_timeout,
         max_connections=max_connections,
@@ -217,6 +220,7 @@ def agent_update(request, agent_id):
         "system_prompt": str,
         "allow_multi_server": bool,
         "tools_config": dict,
+        "sudo_policy": str,
         "stop_conditions": list,
     }
     int_fields = {
@@ -228,7 +232,10 @@ def agent_update(request, agent_id):
 
     for field, typ in simple_fields.items():
         if field in data:
-            setattr(agent, field, typ(data[field]) if typ is not list else data[field])
+            if field == "sudo_policy":
+                setattr(agent, field, normalize_sudo_policy(data[field]))
+            else:
+                setattr(agent, field, typ(data[field]) if typ is not list else data[field])
 
     for field, (lo, hi) in int_fields.items():
         if field in data:

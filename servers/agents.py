@@ -14,6 +14,7 @@ from asgiref.sync import sync_to_async as _s2a
 from django.utils import timezone
 from loguru import logger
 
+from app.agent_kernel.sudo_policy import prepare_sudo_command, evaluate_sudo_command
 from app.tools.safety import is_dangerous_command
 from core_ui.activity import log_user_activity
 from core_ui.audit import audit_context
@@ -21,6 +22,7 @@ from servers.agent_inputs import build_agent_materials_prompt
 from servers.models import AgentRun, Server, ServerAgent
 from servers.monitor import _build_connect_kwargs
 from servers.report_delivery import deliver_agent_report_async
+from servers.secret_utils import get_server_sudo_secret
 
 
 def sync_to_async(func, thread_sensitive=False):
@@ -298,6 +300,11 @@ async def run_agent(agent: ServerAgent, server: Server, user) -> AgentRun:
         return run
 
     try:
+        sudo_password = await sync_to_async(get_server_sudo_secret)(server)
+    except Exception:
+        sudo_password = ""
+
+    try:
         async with asyncssh.connect(**kwargs) as conn:
             for cmd in commands:
                 if is_dangerous_command(cmd):
@@ -309,23 +316,55 @@ async def run_agent(agent: ServerAgent, server: Server, user) -> AgentRun:
                         "duration_ms": 0,
                     })
                     continue
+                sudo_decision = evaluate_sudo_command(cmd, agent.sudo_policy)
+                if not sudo_decision.allowed:
+                    outputs.append({
+                        "cmd": cmd,
+                        "stdout": "",
+                        "stderr": f"BLOCKED: {sudo_decision.reason}",
+                        "exit_code": -1,
+                        "duration_ms": 0,
+                    })
+                    continue
+                try:
+                    prepared_sudo = prepare_sudo_command(
+                        cmd,
+                        agent.sudo_policy,
+                        sudo_auth_mode=getattr(server, "sudo_auth_mode", "none"),
+                        sudo_password=sudo_password,
+                    )
+                except ValueError as exc:
+                    outputs.append({
+                        "cmd": cmd,
+                        "stdout": "",
+                        "stderr": f"BLOCKED: {exc}",
+                        "exit_code": -1,
+                        "duration_ms": 0,
+                    })
+                    continue
+                executable_cmd = prepared_sudo.command
+                sudo_notes = prepared_sudo.notes
 
                 cmd_t0 = time.monotonic()
                 try:
+                    run_kwargs: dict[str, Any] = {"check": False}
+                    if prepared_sudo.input_text is not None:
+                        run_kwargs["input"] = prepared_sudo.input_text
                     result = await asyncio.wait_for(
-                        conn.run(cmd, check=False),
+                        conn.run(executable_cmd, **run_kwargs),
                         timeout=COMMAND_TIMEOUT,
                     )
+                    sudo_note_text = ("\n".join(sudo_notes) + "\n") if sudo_notes else ""
                     outputs.append({
-                        "cmd": cmd,
-                        "stdout": (result.stdout or "")[:5000],
+                        "cmd": executable_cmd,
+                        "stdout": (sudo_note_text + (result.stdout or ""))[:5000],
                         "stderr": (result.stderr or "")[:2000],
                         "exit_code": result.exit_status,
                         "duration_ms": int((time.monotonic() - cmd_t0) * 1000),
                     })
                 except asyncio.TimeoutError:
                     outputs.append({
-                        "cmd": cmd,
+                        "cmd": executable_cmd,
                         "stdout": "",
                         "stderr": f"TIMEOUT after {COMMAND_TIMEOUT}s",
                         "exit_code": -1,
@@ -333,7 +372,7 @@ async def run_agent(agent: ServerAgent, server: Server, user) -> AgentRun:
                     })
                 except Exception as exc:
                     outputs.append({
-                        "cmd": cmd,
+                        "cmd": executable_cmd,
                         "stdout": "",
                         "stderr": str(exc)[:500],
                         "exit_code": -1,

@@ -4,6 +4,11 @@ import re
 from dataclasses import dataclass
 
 from app.agent_kernel.domain.specs import PermissionDecision, ToolSpec
+from app.agent_kernel.sudo_policy import (
+    SUDO_POLICY_DISABLED,
+    evaluate_sudo_command,
+    normalize_sudo_policy,
+)
 from app.execution_policy import build_execution_policy_audit_metadata
 from app.agent_kernel.permissions.modes import MODE_AUTO_GUARDED, MODE_PLAN, MODE_SAFE, MUTATION_SANDBOX
 from app.tools.safety import evaluate_command_safety
@@ -82,10 +87,12 @@ _SAFE_ADMIN_TOOL_NAME = re.compile(r"(get|list|read|search|describe|status|curre
 @dataclass
 class PermissionEngine:
     mode: str = MODE_SAFE
+    sudo_policy: str = SUDO_POLICY_DISABLED
 
     def __post_init__(self):
         self.observed_markers: set[str] = set()
         self.pending_verifications: set[str] = set()
+        self.sudo_policy = normalize_sudo_policy(self.sudo_policy)
 
     def evaluate(self, spec: ToolSpec, args: dict) -> PermissionDecision:
         command = str(args.get("command") or "")
@@ -101,6 +108,20 @@ class PermissionEngine:
                 risk_categories=command_risk.categories,
                 matched_patterns=command_risk.matched_patterns,
             )
+
+        if spec.name in {"ssh_execute", "server_execute"}:
+            sudo_decision = evaluate_sudo_command(command, self.sudo_policy)
+            if not sudo_decision.allowed:
+                return self._decision(
+                    spec,
+                    args,
+                    allowed=False,
+                    reason=sudo_decision.reason,
+                    requires_approval=sudo_decision.requires_approval,
+                    risk_categories=("privilege_escalation",),
+                    matched_patterns=sudo_decision.matched_patterns,
+                    extra_audit={"sudo_policy": sudo_decision.policy},
+                )
 
         if self.mode == MODE_PLAN and (spec.mutates_state or spec.risk in {"write", "admin"} or self._is_mutating_command(command)):
             return self._decision(
@@ -140,9 +161,12 @@ class PermissionEngine:
                     args,
                     allowed=True,
                     sandbox_profile="ops_mutation",
-                    risk_categories=(_kind,),
-                    notes=("После изменения обязательно выполни post-change verification.",),
-                )
+                risk_categories=(_kind,),
+                notes=(
+                    *self._sudo_notes(command),
+                    "После изменения обязательно выполни post-change verification.",
+                ),
+            )
 
         if self.mode == MODE_SAFE and spec.risk == "admin":
             return self._decision(
@@ -173,7 +197,10 @@ class PermissionEngine:
                         allowed=True,
                         sandbox_profile="ops_read",
                         risk_categories=("read_only",),
-                        notes=("Команда классифицирована как read-only и разрешена в AUTO_GUARDED.",),
+                        notes=(
+                            *self._sudo_notes(command),
+                            "Команда классифицирована как read-only и разрешена в AUTO_GUARDED.",
+                        ),
                     )
 
                 mutation = self._match_mutation(command)
@@ -195,7 +222,10 @@ class PermissionEngine:
                         allowed=True,
                         sandbox_profile="ops_mutation",
                         risk_categories=(_kind,),
-                        notes=("Изменение разрешено в AUTO_GUARDED после preflight; post-change verification обязательно.",),
+                        notes=(
+                            *self._sudo_notes(command),
+                            "Изменение разрешено в AUTO_GUARDED после preflight; post-change verification обязательно.",
+                        ),
                     )
 
                 if command and _UNKNOWN_MUTATION_PATTERN.search(command):
@@ -208,7 +238,7 @@ class PermissionEngine:
                         risk_categories=("unknown_mutation",),
                     )
 
-        return self._decision(spec, args, allowed=True)
+        return self._decision(spec, args, allowed=True, notes=self._sudo_notes(command))
 
     def record_success(self, spec: ToolSpec, args: dict, _result_text: str):
         if spec.name != "ssh_execute":
@@ -266,6 +296,7 @@ class PermissionEngine:
         notes: tuple[str, ...] = (),
         risk_categories: tuple[str, ...] = (),
         matched_patterns: tuple[str, ...] = (),
+        extra_audit: dict | None = None,
     ) -> PermissionDecision:
         sandbox = sandbox_profile or MUTATION_SANDBOX.get(self.mode, "ops_read")
         audit_metadata = {
@@ -283,6 +314,8 @@ class PermissionEngine:
                     "tool_category": spec.category,
                     "tool_risk": spec.risk,
                     "mutates_state": spec.mutates_state,
+                    "sudo_policy": self.sudo_policy,
+                    **(extra_audit or {}),
                 },
             )
         }
@@ -306,3 +339,7 @@ class PermissionEngine:
         if spec.risk in {"write", "admin", "exec"}:
             return (spec.risk,)
         return ()
+
+    def _sudo_notes(self, command: str) -> tuple[str, ...]:
+        sudo_decision = evaluate_sudo_command(command, self.sudo_policy)
+        return sudo_decision.notes if sudo_decision.allowed else ()

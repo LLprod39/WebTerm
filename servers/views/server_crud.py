@@ -13,8 +13,16 @@ from django.views.decorators.http import require_http_methods
 from core_ui.activity import log_user_activity
 from core_ui.decorators import require_feature
 from core_ui.models import UserActivityLog
+from app.agent_kernel.sudo_policy import SUDO_AUTH_MODE_STORED_PASSWORD, normalize_sudo_auth_mode
 from servers.models import Server, ServerGroup
-from servers.secret_utils import get_server_auth_secret, has_saved_server_secret, store_server_auth_secret
+from servers.secret_utils import (
+    clear_server_sudo_secret,
+    get_server_auth_secret,
+    has_saved_server_secret,
+    has_saved_server_sudo_secret,
+    store_server_auth_secret,
+    store_server_sudo_secret,
+)
 from servers.ssh_private_keys import delete_managed_private_key, store_uploaded_private_key
 from servers.ssh_host_keys import clear_server_trusted_host_keys, get_server_trusted_host_keys
 from servers.views.server_helpers import (
@@ -75,6 +83,11 @@ def server_create(request):
             return error_response
 
         password = str(data.get("password", "") or "").strip()
+        sudo_auth_mode = normalize_sudo_auth_mode(data.get("sudo_auth_mode"))
+        sudo_password = str(data.get("sudo_password", "") or "").strip()
+        if sudo_auth_mode == SUDO_AUTH_MODE_STORED_PASSWORD and not sudo_password:
+            return JsonResponse({"error": "sudo_password is required when sudo_auth_mode=stored_password"}, status=400)
+
         master_password = _effective_master_password(request, data)
         private_key = str(data.get("ssh_private_key") or "")
         with transaction.atomic():
@@ -87,6 +100,7 @@ def server_create(request):
                 username=data.get("username", ""),
                 auth_method=auth_method,
                 key_path=data.get("key_path", ""),
+                sudo_auth_mode=sudo_auth_mode,
                 tags=data.get("tags", ""),
                 notes=data.get("notes", ""),
                 corporate_context=data.get("corporate_context", ""),
@@ -98,6 +112,9 @@ def server_create(request):
                 server.save(update_fields=["key_path"])
             if password:
                 store_server_auth_secret(server, secret_value=password, master_password=master_password)
+                server.save()
+            if sudo_auth_mode == SUDO_AUTH_MODE_STORED_PASSWORD and sudo_password:
+                store_server_sudo_secret(server, secret_value=sudo_password, master_password=master_password)
                 server.save()
 
         log_user_activity(
@@ -188,6 +205,8 @@ def server_update(request, server_id):
             server.is_active = data["is_active"]
         if "ai_read_only" in data:
             server.ai_read_only = bool(data["ai_read_only"])
+        if "sudo_auth_mode" in data:
+            server.sudo_auth_mode = normalize_sudo_auth_mode(data.get("sudo_auth_mode"))
 
         if "group_id" in data:
             group, error_response = _normalize_group_for_user(data.get("group_id"), request.user)
@@ -206,6 +225,20 @@ def server_update(request, server_id):
             master_password = _effective_master_password(request, data)
             if password:
                 store_server_auth_secret(server, secret_value=password, master_password=master_password)
+
+        if "sudo_auth_mode" in data or "sudo_password" in data:
+            sudo_password = str(data.get("sudo_password") or "").strip()
+            master_password = _effective_master_password(request, data)
+            if server.sudo_auth_mode == SUDO_AUTH_MODE_STORED_PASSWORD:
+                if sudo_password:
+                    store_server_sudo_secret(server, secret_value=sudo_password, master_password=master_password)
+                elif not has_saved_server_sudo_secret(server):
+                    return JsonResponse(
+                        {"error": "sudo_password is required when sudo_auth_mode=stored_password"},
+                        status=400,
+                    )
+            else:
+                clear_server_sudo_secret(server)
 
         if str(data.get("ssh_private_key") or "").strip() and server.auth_method in ("key", "key_password"):
             old_key_path = server.key_path
@@ -322,8 +355,10 @@ def server_get(request, server_id):
             "group_id": server.group_id,
             "is_active": server.is_active,
             "ai_read_only": bool(getattr(server, "ai_read_only", False)),
+            "sudo_auth_mode": getattr(server, "sudo_auth_mode", "none") or "none",
             "network_config": server.network_config if can_access_context else {},
             "has_saved_password": bool(is_owner and has_saved_server_secret(server)),
+            "has_saved_sudo_password": bool(is_owner and has_saved_server_sudo_secret(server)),
             "can_view_password": bool(
                 is_owner and server.auth_method in ["password", "key_password"] and has_saved_server_secret(server)
             ),

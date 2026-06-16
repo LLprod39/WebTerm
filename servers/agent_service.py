@@ -78,6 +78,7 @@ def serialize_agent_item(agent: ServerAgent, *, now=None, last_run: AgentRun | N
         "max_iterations": agent.max_iterations,
         "allow_multi_server": agent.allow_multi_server,
         "tools_config": agent.tools_config,
+        "sudo_policy": agent.sudo_policy,
         "stop_conditions": agent.stop_conditions,
         "skill_slugs": list(agent.skill_slugs or []),
         "input_artifacts": normalize_input_artifacts(agent.input_artifacts),
