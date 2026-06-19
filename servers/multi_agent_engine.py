@@ -284,6 +284,7 @@ class MultiAgentEngine:
             command_timeout=30,
             event_callback=self.event_callback,
             available_skills=[skill.to_detail_dict() for skill in self.skills],
+            sudo_policy=self.permission_engine.sudo_policy,
         )
 
         plan_tasks: list[dict] = []
@@ -561,6 +562,7 @@ class MultiAgentEngine:
             max_connections=self.agent.max_connections or 5,
             command_timeout=30,
             event_callback=self.event_callback,
+            sudo_policy=self.permission_engine.sudo_policy,
         )
 
         try:

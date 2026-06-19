@@ -1643,6 +1643,10 @@ export async function listServerShares(serverId: number) {
       username: string;
       email: string;
       share_context: boolean;
+      can_connect_terminal: boolean;
+      can_execute_command: boolean;
+      can_read_files: boolean;
+      can_write_files: boolean;
       expires_at: string | null;
       created_at: string | null;
       is_active: boolean;
@@ -1652,7 +1656,15 @@ export async function listServerShares(serverId: number) {
 
 export async function createServerShare(
   serverId: number,
-  payload: { user: string; share_context?: boolean; expires_at?: string | null },
+  payload: {
+    user: string;
+    share_context?: boolean;
+    can_connect_terminal?: boolean;
+    can_execute_command?: boolean;
+    can_read_files?: boolean;
+    can_write_files?: boolean;
+    expires_at?: string | null;
+  },
 ) {
   return apiFetch<{ success: boolean }>(`/servers/api/${serverId}/share/`, {
     method: "POST",

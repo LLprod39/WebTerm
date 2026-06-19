@@ -39,6 +39,7 @@ def test_share_api_exposes_capability_flags():
 
     assert response.status_code == 200
     share_payload = response.json()["share"]
+    assert share_payload["can_connect_terminal"] is True
     assert share_payload["can_read_files"] is True
     assert share_payload["can_execute_command"] is False
 

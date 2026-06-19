@@ -39,6 +39,30 @@ _SUDO_NON_INTERACTIVE_PREFIX_RE = re.compile(
     r"(^|(?:&&|\|\||[;|])\s*)sudo(?P<flags>(?:\s+(?:-[^\s]*n[^\s]*|--non-interactive))*)",
     re.IGNORECASE,
 )
+_PRIVILEGED_READ_COMMAND_RE = re.compile(
+    r"\b("
+    r"docker\s+(?:ps|logs|inspect|stats|top|events|compose\s+(?:ps|logs|config|top))|"
+    r"journalctl|"
+    r"dmesg"
+    r")\b",
+    re.IGNORECASE,
+)
+_PRIVILEGE_ERROR_RE = re.compile(
+    r"("
+    r"permission denied|"
+    r"operation not permitted|"
+    r"must be root|"
+    r"need(?:s)? to be root|"
+    r"are you root|"
+    r"requires root|"
+    r"interactive authentication required|"
+    r"polkit.*authentication|"
+    r"/var/run/docker\.sock|"
+    r"docker daemon socket|"
+    r"cannot connect to the docker daemon"
+    r")",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -85,6 +109,20 @@ def normalize_sudo_auth_mode(value: Any) -> str:
 
 def command_uses_sudo(command: str) -> bool:
     return bool(_SUDO_COMMAND_RE.search(command or ""))
+
+
+def command_prefers_controlled_sudo(command: str) -> bool:
+    """Return True for read-only commands which commonly need root on servers."""
+    value = command or ""
+    return bool(value and not command_uses_sudo(value) and _PRIVILEGED_READ_COMMAND_RE.search(value))
+
+
+def output_indicates_privilege_error(stdout: str = "", stderr: str = "") -> bool:
+    return bool(_PRIVILEGE_ERROR_RE.search(f"{stdout or ''}\n{stderr or ''}"))
+
+
+def wrap_command_for_controlled_sudo(command: str) -> str:
+    return f"sudo bash -lc {shlex.quote(command or '')}"
 
 
 def evaluate_sudo_command(command: str, sudo_policy: Any) -> SudoCommandDecision:
@@ -203,7 +241,9 @@ def sudo_policy_prompt(policy: Any) -> str:
         return (
             "Controlled sudo: разрешён для этого запуска. Используй sudo только когда без него команда не сработает; "
             "backend применит sudo auth из настроек сервера: NOPASSWD через sudo -n или сохранённый sudo-пароль "
-            "через внутренний stdin-wrapper. Пароль не виден агенту."
+            "через внутренний stdin-wrapper. Пароль не виден агенту. Для Docker/socket diagnostics, journalctl и dmesg "
+            "можно сразу использовать sudo. Если команда вернула permission denied/operation not permitted/must be root, "
+            "повтори её с sudo; не скрывай такие ошибки через 2>/dev/null или || true во время диагностики."
         )
     if normalized == SUDO_POLICY_ASK:
         return (

@@ -48,6 +48,7 @@ x-backend-worker: &backend-worker
     CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
     CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
   volumes:
+    - ./.model_config.json:/workspace/.model_config.json
     - mini_prod_media:/workspace/media
     - mini_prod_staticfiles:/workspace/staticfiles
     - mini_prod_logs:/workspace/logs
@@ -199,6 +200,7 @@ services:
     ports:
       - "${DJANGO_BIND_HOST:-127.0.0.1}:${DJANGO_HOST_PORT:-9000}:9000"
     volumes:
+      - ./.model_config.json:/workspace/.model_config.json
       - mini_prod_media:/workspace/media
       - mini_prod_staticfiles:/workspace/staticfiles
       - mini_prod_logs:/workspace/logs

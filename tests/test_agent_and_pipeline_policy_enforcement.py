@@ -5,8 +5,14 @@ from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
 
 from app.agent_kernel.domain.specs import ToolSpec
+from app.agent_kernel.sudo_policy import (
+    command_prefers_controlled_sudo,
+    output_indicates_privilege_error,
+    wrap_command_for_controlled_sudo,
+)
 from app.agent_kernel.tools.registry import ToolRegistry
 from servers.agent_engine import AgentEngine
+from servers.agent_sessions import AgentSessionManager
 from servers.models import Server, ServerAgent
 from servers.multi_agent_engine import MultiAgentEngine
 from studio.models import MCPServerPool, Pipeline, PipelineRun
@@ -32,6 +38,123 @@ def _invalid_skill_definition() -> SkillDefinition:
         metadata={},
         content="# invalid",
     )
+
+
+def test_agent_engine_reprompts_when_first_response_has_tool_intent_without_action():
+    engine = AgentEngine.__new__(AgentEngine)
+    engine.enabled_tools = ["ssh_execute", "read_console"]
+    engine.mcp_tools = {}
+
+    assert engine._should_reprompt_missing_action(
+        "THOUGHT: Сначала проверю journalctl за последний час, затем вызову инструмент.",
+        [],
+    )
+
+
+def test_agent_engine_accepts_explicit_final_without_action():
+    engine = AgentEngine.__new__(AgentEngine)
+    engine.enabled_tools = ["ssh_execute"]
+    engine.mcp_tools = {}
+
+    assert not engine._should_reprompt_missing_action(
+        "THOUGHT: Задача завершена. Итог: ошибок не найдено.",
+        [],
+    )
+
+
+def test_agent_engine_accepts_final_after_tool_call():
+    engine = AgentEngine.__new__(AgentEngine)
+    engine.enabled_tools = ["ssh_execute"]
+    engine.mcp_tools = {}
+
+    assert not engine._should_reprompt_missing_action(
+        "THOUGHT: Проверю итоговое состояние в отчёте.",
+        [{"tool": "ssh_execute"}],
+    )
+
+
+def test_agent_engine_validates_required_tool_arguments_before_execution():
+    spec = ToolSpec(
+        name="analyze_output",
+        category="general",
+        risk="read",
+        description="Analyze output",
+        input_schema={
+            "text": {"type": "string", "required": True},
+            "question": {"type": "string", "required": True},
+        },
+    )
+
+    error = AgentEngine._validate_tool_args("analyze_output", {}, spec)
+
+    assert "missing required parameter" in error
+    assert "text" in error
+    assert "question" in error
+    assert 'ACTION: analyze_output {"text": "<text>", "question": "<question>"}' in error
+
+
+def test_sudo_policy_detects_privileged_reads_and_permission_errors():
+    assert command_prefers_controlled_sudo("docker ps 2>/dev/null | head")
+    assert command_prefers_controlled_sudo("journalctl -u nginx -n 100")
+    assert not command_prefers_controlled_sudo("docker restart nginx")
+    assert output_indicates_privilege_error(
+        "permission denied while trying to connect to the Docker daemon socket",
+        "",
+    )
+    assert wrap_command_for_controlled_sudo("docker ps | head") == "sudo bash -lc 'docker ps | head'"
+
+
+def test_agent_session_auto_sudo_for_privileged_read(monkeypatch):
+    server = SimpleNamespace(id=1, name="prod", sudo_auth_mode="nopasswd")
+    manager = AgentSessionManager([server], sudo_policy="approved")
+    manager.connections[1] = SimpleNamespace(proc=object(), conn=object(), server_id=1, server_name="prod")
+    captured = {}
+
+    async def fake_execute_controlled_sudo(session, server_obj, command, *, reason, original_result=None):
+        captured.update({"server": server_obj.name, "command": command, "reason": reason, "original": original_result})
+        return {"stdout": "ok", "stderr": "", "exit_code": 0, "duration_ms": 1}
+
+    monkeypatch.setattr(manager, "_execute_controlled_sudo", fake_execute_controlled_sudo)
+
+    result = async_to_sync(manager.execute)(1, "docker ps 2>/dev/null | head")
+
+    assert result["exit_code"] == 0
+    assert captured == {
+        "server": "prod",
+        "command": "docker ps 2>/dev/null | head",
+        "reason": "auto_sudo_privileged_read",
+        "original": None,
+    }
+
+
+def test_agent_session_retries_with_sudo_after_permission_error(monkeypatch):
+    server = SimpleNamespace(id=1, name="prod", sudo_auth_mode="stored_password")
+    manager = AgentSessionManager([server], sudo_policy="approved")
+    manager.connections[1] = SimpleNamespace(proc=object(), conn=object(), server_id=1, server_name="prod")
+    captured = {}
+    original = {
+        "stdout": "Failed to connect: permission denied",
+        "stderr": "",
+        "exit_code": 1,
+        "duration_ms": 1,
+    }
+
+    async def fake_execute_via_pty(session, command):
+        return original
+
+    async def fake_execute_controlled_sudo(session, server_obj, command, *, reason, original_result=None):
+        captured.update({"command": command, "reason": reason, "original": original_result})
+        return {"stdout": "ok", "stderr": "", "exit_code": 0, "duration_ms": 1}
+
+    monkeypatch.setattr(manager, "_execute_via_pty", fake_execute_via_pty)
+    monkeypatch.setattr(manager, "_execute_controlled_sudo", fake_execute_controlled_sudo)
+
+    result = async_to_sync(manager.execute)(1, "systemctl status nginx")
+
+    assert result["exit_code"] == 0
+    assert captured["command"] == "systemctl status nginx"
+    assert captured["reason"] == "auto_sudo_after_permission_denied"
+    assert captured["original"] == original
 
 
 @pytest.mark.django_db(transaction=True)

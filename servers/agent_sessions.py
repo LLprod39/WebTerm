@@ -19,7 +19,17 @@ import asyncssh
 from asgiref.sync import sync_to_async
 from loguru import logger
 
-from app.agent_kernel.sudo_policy import SUDO_POLICY_APPROVED, command_uses_sudo, prepare_sudo_command
+from app.agent_kernel.sudo_policy import (
+    SUDO_AUTH_MODE_NONE,
+    SUDO_POLICY_APPROVED,
+    command_prefers_controlled_sudo,
+    command_uses_sudo,
+    normalize_sudo_auth_mode,
+    normalize_sudo_policy,
+    output_indicates_privilege_error,
+    prepare_sudo_command,
+    wrap_command_for_controlled_sudo,
+)
 from servers.secret_utils import get_server_sudo_secret
 from servers.monitor import _build_connect_kwargs
 
@@ -67,6 +77,7 @@ class AgentSessionManager:
         command_timeout: int = COMMAND_TIMEOUT,
         event_callback: Callable[..., Coroutine] | None = None,
         available_skills: list[dict[str, Any]] | None = None,
+        sudo_policy: str = "disabled",
     ):
         self.allowed_servers: dict[int, Any] = {s.id: s for s in allowed_servers}
         self.max_connections = max_connections
@@ -74,6 +85,7 @@ class AgentSessionManager:
         self.event_callback = event_callback
         self.user_reply_future: asyncio.Future | None = None
         self.available_skills = [dict(skill) for skill in (available_skills or [])]
+        self.sudo_policy = normalize_sudo_policy(sudo_policy)
 
         self.connections: dict[int, _ServerSession] = {}
         self._name_to_id: dict[str, int] = {}
@@ -195,6 +207,33 @@ class AgentSessionManager:
         ):
             return await self._execute_with_sudo_password(session, server_obj, command)
 
+        if self._can_use_controlled_sudo(server_obj) and command_prefers_controlled_sudo(command):
+            return await self._execute_controlled_sudo(
+                session,
+                server_obj,
+                command,
+                reason="auto_sudo_privileged_read",
+            )
+
+        result = await self._execute_via_pty(session, command)
+        if (
+            self._can_use_controlled_sudo(server_obj)
+            and not command_uses_sudo(command)
+            and output_indicates_privilege_error(result.get("stdout", ""), result.get("stderr", ""))
+        ):
+            return await self._execute_controlled_sudo(
+                session,
+                server_obj,
+                command,
+                reason="auto_sudo_after_permission_denied",
+                original_result=result,
+            )
+
+        return result
+
+    async def _execute_via_pty(self, session: _ServerSession, command: str) -> dict[str, Any]:
+        """Execute a plain command through the interactive PTY."""
+
         marker = f"__AGENT_EXIT_{id(session)}_{int(time.monotonic()*1000)}__"
         full_cmd = f"{command}; echo \"{marker}:$?:\"\n"
 
@@ -236,6 +275,31 @@ class AgentSessionManager:
             "exit_code": exit_code,
             "duration_ms": duration,
         }
+
+    def _can_use_controlled_sudo(self, server_obj: Any) -> bool:
+        if normalize_sudo_policy(self.sudo_policy) != SUDO_POLICY_APPROVED:
+            return False
+        mode = normalize_sudo_auth_mode(getattr(server_obj, "sudo_auth_mode", "none"))
+        return mode != SUDO_AUTH_MODE_NONE
+
+    async def _execute_controlled_sudo(
+        self,
+        session: _ServerSession,
+        server_obj: Any,
+        command: str,
+        *,
+        reason: str,
+        original_result: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        sudo_command = wrap_command_for_controlled_sudo(command)
+        result = await self._execute_with_sudo_password(session, server_obj, sudo_command)
+        notes = [reason]
+        if original_result is not None:
+            notes.append(f"original_exit_code={original_result.get('exit_code', -1)}")
+        result["stdout"] = "\n".join(notes) + "\n" + (result.get("stdout") or "")
+        result["auto_sudo"] = True
+        result["auto_sudo_reason"] = reason
+        return result
 
     async def _execute_with_sudo_password(self, session: _ServerSession, server_obj: Any, command: str) -> dict[str, Any]:
         t0 = time.monotonic()

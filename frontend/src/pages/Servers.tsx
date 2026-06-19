@@ -731,6 +731,7 @@ export default function Servers() {
     await createServerShare(advancedServer.id, {
       user: shareUser.trim(),
       share_context: shareContext,
+      can_connect_terminal: true,
       expires_at: shareExpiresAt ? new Date(shareExpiresAt).toISOString() : null,
     });
     setShareUser("");

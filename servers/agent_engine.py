@@ -9,6 +9,8 @@ WebSocket live monitor via a callback.
 from __future__ import annotations
 
 import asyncio
+import json
+import re
 import time
 from collections.abc import Callable, Coroutine
 from contextlib import suppress
@@ -58,6 +60,21 @@ def sync_to_async(func, thread_sensitive=False):
 SESSION_TIMEOUT_DEFAULT = 600
 MAX_ITERATIONS_CAP = 100
 CONTROL_POLL_INTERVAL = 0.5
+
+_MISSING_ACTION_INTENT_RE = re.compile(
+    r"\b("
+    r"выполню|запущу|проверю|вызову|использую|соберу|прочитаю|получу|"
+    r"execute|run|check|call|use|collect|read|query"
+    r")\b",
+    re.IGNORECASE,
+)
+_FINAL_COMPLETION_RE = re.compile(
+    r"\b("
+    r"задача\s+завершена|цель\s+достигнута|готово|итог|вывод|"
+    r"task\s+complete|goal\s+complete|final\s+answer|done"
+    r")\b",
+    re.IGNORECASE,
+)
 
 
 class AgentEngine:
@@ -247,6 +264,7 @@ class AgentEngine:
             command_timeout=30,
             event_callback=self.event_callback,
             available_skills=[skill.to_detail_dict() for skill in self.skills],
+            sudo_policy=self.permission_engine.sudo_policy,
         )
 
         iterations_log: list[dict] = []
@@ -375,6 +393,24 @@ class AgentEngine:
                 await self._emit("agent_thought", {"iteration": iteration, "thought": thought})
 
                 if action_name is None:
+                    if self._should_reprompt_missing_action(llm_response, tool_calls_log):
+                        correction = self._missing_action_correction()
+                        logger.warning(
+                            "agent_run {} iteration {} missing ACTION despite tool intent; reprompting",
+                            run.pk,
+                            iteration,
+                        )
+                        iter_entry["observation"] = correction
+                        iterations_log.append(iter_entry)
+                        history.append({"role": "assistant", "content": llm_response})
+                        history.append({"role": "user", "content": correction})
+                        await self._emit("agent_observation", {
+                            "iteration": iteration,
+                            "tool": "parser_guard",
+                            "observation": correction,
+                        })
+                        continue
+
                     logger.info("agent_run {} iteration {} completed with final answer", run.pk, iteration)
                     iter_entry["observation"] = "(final answer)"
                     iterations_log.append(iter_entry)
@@ -621,6 +657,40 @@ class AgentEngine:
         """Extract THOUGHT and ACTION from LLM response."""
         return parse_response(response)
 
+    def _should_reprompt_missing_action(self, response: str, tool_calls_log: list[dict]) -> bool:
+        """Prevent empty "planned but did not act" runs.
+
+        Some chat models describe the next tool they intend to call but omit the
+        required ACTION line. Treating that as a final answer produces a bogus
+        completed run with zero evidence. We only reprompt before the first tool
+        call, when tools are available and the text still expresses action
+        intent rather than completion.
+        """
+        if tool_calls_log:
+            return False
+        if not (self.enabled_tools or self.mcp_tools):
+            return False
+
+        text = (response or "").strip()
+        if not text:
+            return False
+        if "ACTION:" in text.upper():
+            return False
+        if _FINAL_COMPLETION_RE.search(text):
+            return False
+        return bool(_MISSING_ACTION_INTENT_RE.search(text))
+
+    def _missing_action_correction(self) -> str:
+        available = ", ".join([*self.enabled_tools, *self.mcp_tools.keys()]) or "нет доступных инструментов"
+        return (
+            "FORMAT ERROR: ты описал следующий шаг, но не вызвал инструмент. "
+            "Продолжай работу и верни ответ строго в формате:\n"
+            'THOUGHT: <коротко зачем нужен следующий шаг>\n'
+            'ACTION: tool_name {"param1": "value"}\n'
+            f"Доступные инструменты: {available}. "
+            "Не заверши задачу, пока не соберёшь факты через инструменты."
+        )
+
     # ------------------------------------------------------------------
     # Tool execution
     # ------------------------------------------------------------------
@@ -628,6 +698,16 @@ class AgentEngine:
     async def _execute_tool(self, name: str, args: dict) -> str:
         logger.info("agent_run {} execute_tool start: tool={} args={}", self.run_record.pk if self.run_record else "?", name, safe_payload_preview(args))
         spec = self.tool_registry.get(name) if self.tool_registry else None
+        schema_error = self._validate_tool_args(name, args, spec)
+        if schema_error:
+            logger.warning(
+                "agent_run {} execute_tool schema error: tool={} error={}",
+                self.run_record.pk if self.run_record else "?",
+                name,
+                schema_error,
+            )
+            return schema_error
+
         decision = self.permission_engine.evaluate(spec, args) if spec else None
         if decision and not decision.allowed:
             # GAP 8: audit trail persistence
@@ -717,6 +797,35 @@ class AgentEngine:
                 name,
             )
             return await self.hook_manager.post_tool_use(name, f"Tool error ({name}): {exc}")
+
+    @staticmethod
+    def _validate_tool_args(name: str, args: dict, spec) -> str:
+        if not isinstance(args, dict):
+            return (
+                f"Tool input error ({name}): ACTION arguments must be a JSON object. "
+                "Repeat the action with valid JSON arguments."
+            )
+
+        schema = getattr(spec, "input_schema", None) or {}
+        missing = [
+            param_name
+            for param_name, param_info in schema.items()
+            if param_info.get("required") and args.get(param_name) in (None, "")
+        ]
+        if not missing:
+            return ""
+
+        required = ", ".join(missing)
+        example_args = {
+            param_name: f"<{param_name}>"
+            for param_name, param_info in schema.items()
+            if param_info.get("required")
+        }
+        example_json = json.dumps(example_args, ensure_ascii=False)
+        return (
+            f"Tool input error ({name}): missing required parameter(s): {required}. "
+            f"Repeat exactly as ACTION: {name} {example_json}"
+        )
 
     # ------------------------------------------------------------------
     # Prompt building

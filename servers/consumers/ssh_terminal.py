@@ -410,6 +410,16 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             return out
         return payload
 
+    async def _reject_with_error(self, *, code: int, message: str, error_code: str) -> None:
+        """Accept briefly so the client receives a structured reject reason, then close."""
+        try:
+            await self.accept()
+            await self.send_json({"type": "error", "message": message, "code": error_code})
+        except Exception as exc:
+            logger.debug("Terminal WebSocket reject payload send failed: {}", exc)
+        finally:
+            await self.close(code=code)
+
     async def _safe_send_json(self, payload: dict[str, Any]) -> None:
         """
         Send JSON to the WebSocket without raising. Logs and swallows errors so that

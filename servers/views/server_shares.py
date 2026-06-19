@@ -108,7 +108,7 @@ def server_share_create(request, server_id):
             return JsonResponse({"error": "expires_at must be in the future"}, status=400)
 
         share_context = _parse_bool(data.get("share_context"), True)
-        can_connect_terminal = _parse_bool(data.get("can_connect_terminal"))
+        can_connect_terminal = _parse_bool(data.get("can_connect_terminal"), True)
         can_execute_command = _parse_bool(data.get("can_execute_command"))
         can_read_files = _parse_bool(data.get("can_read_files"))
         can_write_files = _parse_bool(data.get("can_write_files"))
