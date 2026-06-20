@@ -1,4 +1,7 @@
-export function authSession() {
+import type { AuthSessionResponse, PipelineDetail, PipelineListItem } from "@/lib/api";
+import { featureMap } from "@/test/featureFlags";
+
+export function authSession(): AuthSessionResponse {
   return {
     authenticated: true,
     user: {
@@ -6,12 +9,12 @@ export function authSession() {
       username: "admin",
       email: "admin@example.com",
       is_staff: true,
-      features: {},
+      features: featureMap(),
     },
   };
 }
 
-export function multiTriggerPipelineListItem() {
+export function multiTriggerPipelineListItem(): PipelineListItem {
   return {
     id: 42,
     name: "Multi Trigger Pipeline",
@@ -19,7 +22,9 @@ export function multiTriggerPipelineListItem() {
     icon: "W",
     tags: [],
     is_shared: false,
+    is_template: false,
     node_count: 4,
+    created_at: "2026-04-10T10:00:00Z",
     updated_at: "2026-04-10T10:00:00Z",
     last_run: null,
     graph_version: 2,
@@ -33,7 +38,7 @@ export function multiTriggerPipelineListItem() {
   };
 }
 
-export function multiTriggerPipelineDetail() {
+export function multiTriggerPipelineDetail(): PipelineDetail {
   return {
     ...multiTriggerPipelineListItem(),
     nodes: [
@@ -79,7 +84,7 @@ export function pendingManualPipelineRun() {
   };
 }
 
-export function ticketReportPipelineListItem() {
+export function ticketReportPipelineListItem(): PipelineListItem {
   return {
     id: 66,
     name: "Ticket Report",
@@ -87,7 +92,9 @@ export function ticketReportPipelineListItem() {
     icon: "T",
     tags: [],
     is_shared: false,
+    is_template: false,
     node_count: 2,
+    created_at: "2026-04-10T10:00:00Z",
     updated_at: "2026-04-10T10:00:00Z",
     last_run: null,
     graph_version: 2,
@@ -101,7 +108,7 @@ export function ticketReportPipelineListItem() {
   };
 }
 
-export function ticketReportPipelineDetail() {
+export function ticketReportPipelineDetail(): PipelineDetail {
   return {
     ...ticketReportPipelineListItem(),
     nodes: [

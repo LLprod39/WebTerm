@@ -135,8 +135,11 @@ class Command(BaseCommand):
         return summary
 
     def _fire_trigger(self, trigger: PipelineTrigger) -> str:
-        from studio.trigger_dispatch import create_pipeline_run, launch_pipeline_run_async
-        from studio.trigger_dispatch import pipeline_run_creation_error_details
+        from studio.trigger_dispatch import (
+            create_pipeline_run,
+            launch_pipeline_run_async,
+            pipeline_run_creation_error_details,
+        )
 
         limit_error = get_pipeline_run_limit_error(trigger.pipeline.owner)
         if limit_error:

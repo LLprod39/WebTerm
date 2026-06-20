@@ -116,9 +116,16 @@ def unregister_engine(run_id: int, engine: Any | None = None) -> None:
 
         _ENGINES_BY_RUN_ID.pop(run_id, None)
 
-        agent_id = getattr(getattr(current, "agent", None), "id", None)
-        if agent_id is not None and _RUN_IDS_BY_AGENT_ID.get(int(agent_id)) == run_id:
-            _RUN_IDS_BY_AGENT_ID.pop(int(agent_id), None)
+        for agent_id, mapped_run_id in list(_RUN_IDS_BY_AGENT_ID.items()):
+            if mapped_run_id == run_id:
+                _RUN_IDS_BY_AGENT_ID.pop(agent_id, None)
+
+
+def clear_registered_engines() -> None:
+    """Clear in-process live-engine registrations for tests and process lifecycle resets."""
+    with _LOCK:
+        _ENGINES_BY_RUN_ID.clear()
+        _RUN_IDS_BY_AGENT_ID.clear()
 
 
 def get_engine_for_run(run_id: int) -> Any | None:

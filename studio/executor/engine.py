@@ -20,7 +20,6 @@ When all nodes are migrated, pipeline_executor.py is retired.
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 from collections import defaultdict, deque
 from typing import Any
@@ -112,13 +111,14 @@ class PipelineEngine:
             node_data: dict = node_def.get("data", {})
 
             if node_type not in registry:
-                # Unknown node type — skip with a warning.
-                # pipeline_executor.py handles legacy types during migration.
-                logger.warning(
-                    "Pipeline %s: node %s has unknown type %r (not in registry) — skipping",
-                    self.run_id, node_id, node_type,
-                )
-                continue
+                error = f"Node type is not registered: {node_type}"
+                logger.error("Pipeline %s: node %s failed: %s", self.run_id, node_id, error)
+                results[node_id] = {
+                    "ok": False,
+                    "output": {},
+                    "error": error,
+                }
+                return {"ok": False, "error": error, "node_results": results}
 
             node = registry.create(node_type, node_id=node_id, node_data=node_data)
             logger.debug("Pipeline %s: executing node %s (%s)", self.run_id, node_id, node_type)

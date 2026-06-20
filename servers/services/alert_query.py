@@ -1,25 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any
-
+from app.server_alert_provider import ServerAlertSnapshot
 from servers.models import ServerAlert
-
-
-@dataclass(frozen=True, slots=True)
-class ServerAlertSnapshot:
-    alert_id: int
-    alert_type: str
-    severity: str
-    title: str
-    message: str
-    is_resolved: bool
-    metadata: dict[str, Any]
-    server_id: int
-    server_name: str
-    server_host: str
-    server_username: str
-    server_owner_id: int
 
 
 def get_alert_snapshot(alert_id: int) -> ServerAlertSnapshot | None:

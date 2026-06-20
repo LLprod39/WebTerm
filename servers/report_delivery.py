@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import httpx
 
+from core_ui.services.notification_config import load_notification_config
 from servers.agent_inputs import format_telegram_report_message, normalize_report_delivery
 from servers.run_events import record_run_event_async
-from studio.views.notification_views import _load_notif_config
 
 
 async def deliver_agent_report_async(run) -> None:
@@ -14,7 +14,7 @@ async def deliver_agent_report_async(run) -> None:
     if not telegram.get("enabled"):
         return
 
-    cfg = _load_notif_config()
+    cfg = load_notification_config()
     bot_token = str(cfg.get("telegram_bot_token") or "").strip()
     chat_id = str(telegram.get("chat_id") or cfg.get("telegram_chat_id") or "").strip()
     if not bot_token or not chat_id:
@@ -68,4 +68,3 @@ async def deliver_agent_report_async(run) -> None:
             "agent_report_delivery_failed",
             {"channel": "telegram", "chat_id": chat_id, "error": str(exc)},
         )
-

@@ -5,10 +5,13 @@ import json
 from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand
 
+from app.smoke_seed_provider import (
+    SmokeSshTarget,
+    upsert_smoke_agent,
+    upsert_smoke_pipeline,
+    upsert_smoke_server,
+)
 from core_ui.models import UserAppPermission
-from servers.models import Server, ServerAgent
-from servers.secret_utils import store_server_auth_secret
-from studio.models import Pipeline
 
 
 class Command(BaseCommand):
@@ -43,6 +46,7 @@ class Command(BaseCommand):
             },
             "users": [],
         }
+        target = SmokeSshTarget(host=ssh_host, port=ssh_port, username=ssh_username, password=ssh_password)
 
         for index in range(1, users_count + 1):
             username = f"{prefix}-{index:02d}"
@@ -65,90 +69,9 @@ class Command(BaseCommand):
                     defaults={"allowed": True},
                 )
 
-            server_name = f"Smoke SSH {index:02d}"
-            server, _server_created = Server.objects.get_or_create(
-                user=user,
-                name=server_name,
-                defaults={
-                    "host": ssh_host,
-                    "port": ssh_port,
-                    "username": ssh_username,
-                    "auth_method": "password",
-                    "server_type": "ssh",
-                    "is_active": True,
-                },
-            )
-            server.host = ssh_host
-            server.port = ssh_port
-            server.username = ssh_username
-            server.auth_method = "password"
-            server.server_type = "ssh"
-            server.is_active = True
-            server.trusted_host_keys = []
-            server.save()
-            store_server_auth_secret(server, secret_value=ssh_password)
-            server.save()
-
-            pipeline_name = f"Smoke Pipeline {index:02d}"
-            nodes = [
-                {
-                    "id": "manual",
-                    "type": "trigger/manual",
-                    "position": {"x": 0, "y": 0},
-                    "data": {"label": "Manual trigger"},
-                },
-                {
-                    "id": "ssh",
-                    "type": "agent/ssh_cmd",
-                    "position": {"x": 280, "y": 0},
-                    "data": {
-                        "label": "Smoke SSH command",
-                        "server_id": server.id,
-                        "command": "printf 'PIPELINE_OK {load_user} {run_index}\\n'; whoami",
-                    },
-                },
-            ]
-            edges = [
-                {
-                    "id": "edge-manual-ssh",
-                    "source": "manual",
-                    "target": "ssh",
-                }
-            ]
-            pipeline, _pipeline_created = Pipeline.objects.get_or_create(
-                owner=user,
-                name=pipeline_name,
-                defaults={
-                    "description": "Isolated smoke pipeline for concurrent runtime checks",
-                    "nodes": nodes,
-                    "edges": edges,
-                },
-            )
-            pipeline.description = "Isolated smoke pipeline for concurrent runtime checks"
-            pipeline.nodes = nodes
-            pipeline.edges = edges
-            pipeline.save()
-            pipeline.sync_triggers_from_nodes()
-
-            agent_name = f"Smoke Agent {index:02d}"
-            agent, _agent_created = ServerAgent.objects.get_or_create(
-                user=user,
-                name=agent_name,
-                defaults={
-                    "mode": ServerAgent.MODE_MINI,
-                    "agent_type": ServerAgent.TYPE_CUSTOM,
-                    "commands": [f"sleep 1; printf 'AGENT_OK {username}\\n'; whoami"],
-                    "ai_prompt": "Smoke agent for concurrent runtime checks",
-                    "is_enabled": True,
-                },
-            )
-            agent.mode = ServerAgent.MODE_MINI
-            agent.agent_type = ServerAgent.TYPE_CUSTOM
-            agent.commands = [f"sleep 1; printf 'AGENT_OK {username}\\n'; whoami"]
-            agent.ai_prompt = "Smoke agent for concurrent runtime checks"
-            agent.is_enabled = True
-            agent.save()
-            agent.servers.set([server])
+            server = upsert_smoke_server(user_id=user.id, index=index, target=target)
+            pipeline = upsert_smoke_pipeline(user_id=user.id, index=index, server_id=server.id)
+            agent = upsert_smoke_agent(user_id=user.id, index=index, username=username, server_id=server.id)
 
             payload["users"].append(
                 {

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.agent_kernel.sudo_policy import normalize_sudo_policy
+from app.sudo_policy import normalize_sudo_policy
 
 DEFAULT_AI_SETTINGS: dict[str, Any] = {
     "memory_enabled": True,

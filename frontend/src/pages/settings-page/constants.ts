@@ -42,6 +42,21 @@ export const OLLAMA_THINKING_OPTIONS = [
   { value: "high", label: "Высокий" },
 ];
 
+export const OLLAMA_RUNTIME_KEYS = [
+  { value: "auto", key: "ai.ollama_auto" },
+  { value: "local", key: "ai.ollama_local_only" },
+  { value: "cloud", key: "ai.ollama_cloud_only" },
+];
+
+export const OLLAMA_THINKING_KEYS = [
+  { value: AUTO_OLLAMA_THINKING_VALUE, key: "ai.ollama_auto" },
+  { value: "off", key: "ai.thinking_off" },
+  { value: "on", key: "ai.thinking_on" },
+  { value: "low", key: "ai.thinking_low" },
+  { value: "medium", key: "ai.thinking_medium" },
+  { value: "high", key: "ai.thinking_high" },
+];
+
 export const PROVIDER_API_STATUS_KEY: Record<string, string> = {
   gemini: "gemini_set",
   grok: "grok_set",
@@ -59,6 +74,78 @@ export const API_KEY_PROVIDERS = [
   { value: "claude", name: "Claude", statusKey: "claude_set", envName: "ANTHROPIC_API_KEY", placeholder: "sk-ant-..." },
   { value: "ollama", name: "Ollama Cloud", statusKey: "ollama_cloud_set", envName: "OLLAMA_API_KEY", placeholder: "ollama key" },
 ];
+
+export const PROVIDER_METADATA: Record<
+  string,
+  {
+    accentColor: string;
+    textColor: string;
+    badge: string;
+    brand: string;
+    slogan: string;
+  }
+> = {
+  grok: {
+    accentColor: "bg-amber-500",
+    textColor: "text-amber-500",
+    badge: "Быстрые ответы",
+    brand: "xAI",
+    slogan: "Подходит для коротких проверок, сводок и быстрых ответов.",
+  },
+  gemini: {
+    accentColor: "bg-violet-500",
+    textColor: "text-violet-500",
+    badge: "Широкий контекст",
+    brand: "Google",
+    slogan: "Удобен для длинных логов, документов и больших контекстов.",
+  },
+  openai: {
+    accentColor: "bg-emerald-500",
+    textColor: "text-emerald-500",
+    badge: "Инструменты и логика",
+    brand: "OpenAI",
+    slogan: "Хороший выбор для вызова инструментов, проверок и структурированных ответов.",
+  },
+  fair: {
+    accentColor: "bg-cyan-500",
+    textColor: "text-cyan-500",
+    badge: "Корпоративный API",
+    brand: "ERG",
+    slogan: "OpenAI-compatible доступ к моделям FAIR.Hyperion.",
+  },
+  claude: {
+    accentColor: "bg-orange-500",
+    textColor: "text-orange-500",
+    badge: "Анализ текста",
+    brand: "Anthropic",
+    slogan: "Полезен для разборов, аккуратных отчётов и сложных инструкций.",
+  },
+  ollama: {
+    accentColor: "bg-sky-500",
+    textColor: "text-sky-500",
+    badge: "Локальное исполнение",
+    brand: "Ollama",
+    slogan: "Запускает локальные модели, когда данные не должны уходить наружу.",
+  },
+};
+
+export const ROLE_FEATURES: Record<string, { label: string; tooltip: string }[]> = {
+  "Чат / терминал": [
+    { label: "Потоковый вывод", tooltip: "Ответ появляется по мере генерации, без ожидания полного текста." },
+    { label: "Быстрый ответ", tooltip: "Лучше выбирать модель с небольшой задержкой первого токена." },
+    { label: "Контекст сессии", tooltip: "Учитывает историю терминала и настройки сервера." },
+  ],
+  "Агенты (ReAct)": [
+    { label: "Инструменты", tooltip: "Должна стабильно вызывать SSH и системные инструменты." },
+    { label: "Большой контекст", tooltip: "Полезно для логов, конфигураций и длинных выводов." },
+    { label: "Самопроверка", tooltip: "Модель должна корректировать план после ошибок выполнения." },
+  ],
+  Пайплайны: [
+    { label: "JSON", tooltip: "Нужны строгие структурированные ответы." },
+    { label: "Стабильность", tooltip: "Важно одинаково выполнять повторяющиеся шаги автоматизации." },
+    { label: "Состояние", tooltip: "Передаёт состояние между шагами сценария." },
+  ],
+};
 
 export const CATEGORY_ICONS: Record<string, ElementType> = {
   terminal: Terminal,

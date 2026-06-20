@@ -2,15 +2,16 @@
  * src/api/index.ts — canonical import location for all API functions.
  *
  * Migration status (T-017):
- *   The implementation is still in src/lib/api.ts (4133 lines).
- *   This file re-exports everything so pages can switch their imports
- *   from `../lib/api` to `../api` without any breaking changes.
+ *   Most new domain work should live in src/api/<domain>.ts.
+ *   src/lib/api.ts is now a compatibility facade plus shared transport/demo
+ *   helpers, and remains available for old imports while callers migrate.
  *
  *   Target structure (migrate function groups one PR at a time):
- *     api/auth.ts        — fetchAuthSession, login, logout, csrf, wsToken
- *     api/servers.ts     — server CRUD, files, linux UI, memory, knowledge
+ *     api/auth.ts        — fetchAuthSession, login, logout, wsToken
+ *     api/servers.ts     — server CRUD, shares, groups, bootstrap
  *     api/agents.ts      — agent CRUD, runs, events, reply, approve
  *     api/studio.ts      — pipelines, runs, MCP, skills, triggers, templates
+ *     api/studio-types.ts — Studio API DTOs and public contracts
  *     api/settings.ts    — models, settings, activity
  *     api/monitoring.ts  — health, alerts, watchers
  *     api/types.ts       — all exported TypeScript interfaces / types

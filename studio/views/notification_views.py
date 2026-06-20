@@ -3,11 +3,8 @@ Studio notification settings and test endpoints.
 """
 
 import asyncio
-import contextlib
 import json
-import os
 import smtplib
-import sys
 from email.mime.text import MIMEText
 from pathlib import Path
 
@@ -17,27 +14,22 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
 from core_ui.decorators import require_feature
+from core_ui.services.notification_config import (
+    _NOTIF_CONFIG_PATH as _DEFAULT_NOTIF_CONFIG_PATH,
+)
+from core_ui.services.notification_config import (
+    _NOTIF_DEFAULTS,
+    load_notification_config,
+    notif_config_path,
+    save_notification_config,
+)
 
 STUDIO_FEATURE_NOTIFICATIONS = "studio_notifications"
-
-_NOTIF_CONFIG_PATH = Path(getattr(django_settings, "BASE_DIR", ".")) / ".notification_config.json"
-
-_NOTIF_DEFAULTS = {
-    "telegram_bot_token": "",
-    "telegram_chat_id": "",
-    "notify_email": "",
-    "smtp_host": "",
-    "smtp_port": "587",
-    "smtp_user": "",
-    "smtp_password": "",
-    "from_email": "",
-    "site_url": "",
-}
+_NOTIF_CONFIG_PATH = _DEFAULT_NOTIF_CONFIG_PATH
 
 
 def _notif_config_path() -> Path:
-    package = sys.modules.get("studio.views")
-    return getattr(package, "_NOTIF_CONFIG_PATH", _NOTIF_CONFIG_PATH)
+    return notif_config_path()
 
 
 def _json_body(request) -> dict:
@@ -63,50 +55,12 @@ def _require_admin(request, *, message: str = "Admin access required") -> JsonRe
 
 def _load_notif_config() -> dict:
     """Read notification config from file; fall back to Django / env defaults."""
-    base: dict = {
-        "telegram_bot_token": os.getenv("TELEGRAM_BOT_TOKEN", "")
-        or getattr(django_settings, "TELEGRAM_BOT_TOKEN", "")
-        or "",
-        "telegram_chat_id": os.getenv("TELEGRAM_CHAT_ID", "")
-        or getattr(django_settings, "TELEGRAM_CHAT_ID", "")
-        or "",
-        "notify_email": (
-            os.getenv("PIPELINE_NOTIFY_EMAIL", "")
-            or getattr(django_settings, "PIPELINE_NOTIFY_EMAIL", "")
-            or os.getenv("EMAIL_HOST_USER", "")
-            or getattr(django_settings, "EMAIL_HOST_USER", "")
-            or ""
-        ),
-        "smtp_host": getattr(django_settings, "EMAIL_HOST", "smtp.gmail.com") or "",
-        "smtp_port": str(getattr(django_settings, "EMAIL_PORT", 587)),
-        "smtp_user": getattr(django_settings, "EMAIL_HOST_USER", "") or "",
-        "smtp_password": getattr(django_settings, "EMAIL_HOST_PASSWORD", "") or "",
-        "from_email": getattr(django_settings, "DEFAULT_FROM_EMAIL", "") or "",
-        "site_url": getattr(django_settings, "SITE_URL", "http://localhost:8000") or "http://localhost:8000",
-    }
-    config_path = _notif_config_path()
-    if config_path.exists():
-        try:
-            saved = json.loads(config_path.read_text(encoding="utf-8"))
-            for key, value in saved.items():
-                if key in base and value:
-                    base[key] = value
-        except Exception:
-            pass
-    return base
+    return load_notification_config()
 
 
 def _save_notif_config(data: dict):
     """Persist notification config values."""
-    existing = {}
-    config_path = _notif_config_path()
-    if config_path.exists():
-        with contextlib.suppress(Exception):
-            existing = json.loads(config_path.read_text(encoding="utf-8"))
-    for key in _NOTIF_DEFAULTS:
-        if key in data:
-            existing[key] = data[key]
-    config_path.write_text(json.dumps(existing, indent=2, ensure_ascii=False), encoding="utf-8")
+    save_notification_config(data)
 
 
 def _resolve_from_email_smtp(from_email: str, smtp_user: str, smtp_host: str) -> str:

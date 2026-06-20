@@ -1,113 +1,35 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type MouseEvent as ReactMouseEvent,
-  type MutableRefObject,
-} from "react";
-import { Link, useParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type MutableRefObject } from "react";
+import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Bot, FolderOpen, Monitor, Plus, Settings, X } from "lucide-react";
-import {
-  XTerminal,
-  type TerminalConnectionStatus,
-  type TerminalHandle,
-} from "@/components/terminal/XTerminal";
-import { AiPanel } from "@/components/terminal/AiPanel";
+import type { TerminalConnectionStatus, TerminalHandle } from "@/components/terminal/XTerminal";
 import { ServerPicker } from "@/components/terminal/ServerPicker";
-import {
-  AI_PREFERENCES_STORAGE_KEY,
-  cloneAiPreferences,
-  cloneAiSettings,
-  readStoredAiPreferences,
-} from "@/components/terminal/ai-preferences";
-import type {
-  AiAssistantSettings,
-  AiChatMode,
-  AiCommand,
-  AiExecutionMode,
-  AiMessage,
-  AiPreferences,
-} from "@/components/terminal/ai-types";
-import { parseAiQuestionPayload } from "@/components/terminal/ai-question";
-import { parseNovaContextPayload } from "@/components/terminal/nova-context";
-import { LinuxUiPanel } from "@/components/terminal/LinuxUiPanel";
-import { SftpPanel, type SftpPanelHandle } from "@/components/terminal/SftpPanel";
-import { Button } from "@/components/ui/button";
-import { StatusIndicator } from "@/components/StatusIndicator";
+import { cloneAiPreferences, cloneAiSettings, readStoredAiPreferences } from "@/components/terminal/ai-preferences";
+import type { AiAssistantSettings, AiChatMode, AiExecutionMode, AiPreferences } from "@/components/terminal/ai-types";
+import type { SftpPanelHandle } from "@/components/terminal/SftpPanel";
 import { toast } from "@/hooks/use-toast";
 import { fetchFrontendBootstrap, type FrontendServer } from "@/lib/api";
-import { QueryStateBlock } from "@/components/ui/page-shell";
 import { resolveTheme } from "@/components/terminal/TerminalThemes";
 import { TerminalSettingsPanel } from "@/components/terminal/TerminalSettingsPanel";
-import { CompletionOverlay } from "@/components/terminal/CompletionOverlay";
 import { FileEditorModal } from "@/components/editor/FileEditorModal";
 import { useEditorInterceptor } from "@/hooks/useEditorInterceptor";
 import { useI18n } from "@/lib/i18n";
-import { cn } from "@/lib/utils";
 import { useTerminalPreferences } from "@/hooks/useTerminalPreferences";
 import { useTerminalInputBuffer } from "@/hooks/useTerminalInputBuffer";
-
-interface Tab {
-  id: string;
-  serverId: number;
-  name: string;
-  sessionNumber: number;
-  status: "connected" | "connecting" | "error";
-}
-
-interface TabAiState {
-  messages: AiMessage[];
-  isGenerating: boolean;
-}
-
-let idSeq = 0;
-
-function nextId() {
-  idSeq += 1;
-  return String(idSeq);
-}
-
-function createEmptyAiState(): TabAiState {
-  return {
-    messages: [],
-    isGenerating: false,
-  };
-}
-
-function mapStatus(status: TerminalConnectionStatus): Tab["status"] {
-  if (status === "connected") return "connected";
-  if (status === "connecting") return "connecting";
-  return "error";
-}
-
-function findServer(servers: FrontendServer[], id: number) {
-  return servers.find((server) => server.id === id);
-}
-
-function getNextSessionNumber(tabs: Tab[], serverId: number) {
-  return tabs.reduce((max, tab) => {
-    if (tab.serverId !== serverId) return max;
-    return Math.max(max, tab.sessionNumber);
-  }, 0) + 1;
-}
-
-function createTab(server: FrontendServer, tabs: Tab[], tabId = nextId()): Tab {
-  return {
-    id: tabId,
-    serverId: server.id,
-    name: server.name,
-    sessionNumber: getNextSessionNumber(tabs, server.id),
-    status: "connecting",
-  };
-}
-
-function formatTabName(tab: Tab) {
-  if (tab.sessionNumber <= 1) return tab.name;
-  return `${tab.name} · ${tab.sessionNumber}`;
-}
+import { TerminalHeader } from "./terminal-page/TerminalHeader";
+import { TerminalQueryState } from "./terminal-page/TerminalQueryState";
+import { TerminalWorkspace } from "./terminal-page/TerminalWorkspace";
+import {
+  createEmptyAiState,
+  createTab,
+  findServer,
+  mapStatus,
+  nextId,
+  type SidePanelMode,
+  type Tab,
+  type TabAiState,
+} from "./terminal-page/model";
+import { useTerminalAiActions } from "./terminal-page/useTerminalAiActions";
+import { handleTerminalPageWsEvent } from "./terminal-page/ws-events";
 
 export default function TerminalPage() {
   const { id } = useParams<{ id: string }>();
@@ -131,7 +53,7 @@ export default function TerminalPage() {
   const [tabAiState, setTabAiState] = useState<Record<string, TabAiState>>({});
   const [tabAiPreferences, setTabAiPreferences] = useState<Record<string, AiPreferences>>({});
   const [showServerPicker, setShowServerPicker] = useState(false);
-  const [sidePanelMode, setSidePanelMode] = useState<"none" | "ai" | "files" | "ui">("none");
+  const [sidePanelMode, setSidePanelMode] = useState<SidePanelMode>("none");
   const [panelWidth, setPanelWidth] = useState(380);
   const [globalAiPreferences, setGlobalAiPreferences] = useState<AiPreferences>(() => readStoredAiPreferences());
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -354,32 +276,32 @@ export default function TerminalPage() {
     }));
   }, [updateActiveTabAiPreferences]);
 
+  const {
+    handleSendAi,
+    handleStopAi,
+    handleConfirm,
+    handleCancel,
+    handleReply,
+    handleGenerateReport,
+    handleClearAiMemory,
+    handleExplainCommand,
+    handleSaveAiDefaults: saveAiDefaults,
+    handleResetAiPreferences,
+    handleClearChat,
+  } = useTerminalAiActions({
+    activeTabIdRef,
+    terminalRefs,
+    tabAiPreferences,
+    globalAiPreferences,
+    updateTabAiState,
+    updateActiveTabAiState,
+    updateTabAiPreferences,
+    setGlobalAiPreferences,
+  });
+
   const handleSaveAiDefaults = useCallback(() => {
-    const next = cloneAiPreferences(activeAiPreferences);
-    setGlobalAiPreferences(next);
-    try {
-      localStorage.setItem(AI_PREFERENCES_STORAGE_KEY, JSON.stringify(next));
-      localStorage.removeItem("ai_execution_mode");
-    } catch {
-      // noop
-    }
-    toast({
-      title: "Глобальные настройки сохранены",
-      description: "Новые чаты будут стартовать с текущими параметрами.",
-    });
-  }, [activeAiPreferences]);
-
-  const handleResetAiPreferences = useCallback(() => {
-    updateActiveTabAiPreferences(() => cloneAiPreferences(globalAiPreferences));
-    toast({
-      title: "Настройки чата сброшены",
-      description: "Для текущего чата снова применены глобальные значения по умолчанию.",
-    });
-  }, [globalAiPreferences, updateActiveTabAiPreferences]);
-
-  const handleClearChat = useCallback(() => {
-    updateActiveTabAiState(() => createEmptyAiState());
-  }, [updateActiveTabAiState]);
+    saveAiDefaults(activeAiPreferences);
+  }, [activeAiPreferences, saveAiDefaults]);
 
   const revealAiPanel = useCallback(() => {
     setSidePanelMode("ai");
@@ -423,412 +345,15 @@ export default function TerminalPage() {
   }, []);
 
   const handleTabWsEvent = useCallback((tabId: string, serverId: number, payload: Record<string, unknown>) => {
-    if (handleEditorWsEvent(serverId, payload)) return;
-
-    const type = String(payload.type || "");
-
-    if (type === "terminal_session") {
-      const cwd = String(payload.cwd || "").trim();
-      if (cwd) {
-        getTabCwdRef(tabId).current = cwd;
-      }
-      return;
-    }
-
-    if (type === "ai_status") {
-      const status = String(payload.status || "");
-      updateTabAiState(tabId, (state) => ({
-        ...state,
-        isGenerating: status === "thinking" || status === "running" || status === "generating_report",
-      }));
-      return;
-    }
-
-    if (type === "ai_response") {
-      const text = String(payload.assistant_text || payload.message || "");
-      const mode = String(payload.mode || "answer") as AiMessage["mode"];
-      const rawCommands = (payload.commands as AiCommand[] | undefined) || [];
-
-      revealAiPanelForTab(tabId);
-      updateTabAiState(tabId, (state) => ({
-        ...state,
-        messages: [
-          ...state.messages,
-          {
-            id: nextId(),
-            role: "assistant",
-            type: rawCommands.length > 0 ? "commands" : "text",
-            content: text,
-            commands: rawCommands.map((command) => ({
-              ...command,
-              status: (command.status || "pending") as AiCommand["status"],
-            })),
-            mode,
-          },
-        ],
-      }));
-      return;
-    }
-
-    if (type === "ai_command_status") {
-      const cmdId = Number(payload.id);
-      const status = String(payload.status || "done") as AiCommand["status"];
-      const exitCode = payload.exit_code !== undefined ? Number(payload.exit_code) : undefined;
-
-      updateTabAiState(tabId, (state) => ({
-        ...state,
-        messages: state.messages.map((message) => {
-          if (message.type !== "commands" || !message.commands?.some((command) => command.id === cmdId)) return message;
-          return {
-            ...message,
-            commands: message.commands.map((command) =>
-              command.id === cmdId ? { ...command, status, exit_code: exitCode } : command,
-            ),
-          };
-        }),
-      }));
-      return;
-    }
-
-    // F2-8 v2: captured output from a non-PTY exec_direct channel. Merge it
-    // into the matching command so `AiPanel` can render it inline.
-    if (type === "ai_direct_output") {
-      const cmdId = Number(payload.id);
-      const directOutput = String(payload.output || "");
-      const exitCode = payload.exit_code !== undefined ? Number(payload.exit_code) : undefined;
-
-      updateTabAiState(tabId, (state) => ({
-        ...state,
-        messages: state.messages.map((message) => {
-          if (message.type !== "commands" || !message.commands?.some((command) => command.id === cmdId)) return message;
-          return {
-            ...message,
-            commands: message.commands.map((command) =>
-              command.id === cmdId
-                ? { ...command, direct_output: directOutput, exit_code: exitCode ?? command.exit_code }
-                : command,
-            ),
-          };
-        }),
-      }));
-      return;
-    }
-
-    // A6: merge explanation text into the matching command card.
-    if (type === "ai_explanation") {
-      const cmdId = Number(payload.id);
-      const explanation = String(payload.explanation || "");
-      updateTabAiState(tabId, (state) => ({
-        ...state,
-        messages: state.messages.map((message) => {
-          if (message.type !== "commands" || !message.commands?.some((c) => c.id === cmdId)) return message;
-          return {
-            ...message,
-            commands: message.commands.map((c) =>
-              c.id === cmdId ? { ...c, explanation, explaining: false } : c,
-            ),
-          };
-        }),
-      }));
-      return;
-    }
-
-    if (type === "ai_report") {
-      const report = String(payload.report || "");
-      const reportStatus = String(payload.status || "ok") as AiMessage["reportStatus"];
-      if (!report) return;
-
-      revealAiPanelForTab(tabId);
-      updateTabAiState(tabId, (state) => ({
-        ...state,
-        messages: [
-          ...state.messages,
-          { id: nextId(), role: "assistant", type: "report", content: report, reportStatus },
-        ],
-      }));
-      return;
-    }
-
-    if (type === "ai_question") {
-      const questionPayload = parseAiQuestionPayload(payload);
-
-      revealAiPanelForTab(tabId);
-      updateTabAiState(tabId, (state) => ({
-        ...state,
-        messages: [
-          ...state.messages,
-          {
-            id: nextId(),
-            role: "system",
-            type: "question",
-            content: questionPayload.question,
-            qId: questionPayload.qId,
-            question: questionPayload.question,
-            questionCmd: questionPayload.cmd,
-            questionExitCode: questionPayload.exitCode,
-            questionOptions: questionPayload.options,
-            questionAllowMultiple: questionPayload.allowMultiple,
-            questionFreeTextAllowed: questionPayload.freeTextAllowed,
-            questionPlaceholder: questionPayload.placeholder,
-            questionSource: questionPayload.source,
-            questionAnswered: false,
-          },
-        ],
-      }));
-      return;
-    }
-
-    if (type === "ai_install_progress") {
-      const cmd = String(payload.cmd || "");
-      const elapsed = Number(payload.elapsed || 0);
-      const outputTail = String(payload.output_tail || "");
-
-      revealAiPanelForTab(tabId);
-      updateTabAiState(tabId, (state) => {
-        let found = false;
-        const updated = state.messages.map((message) => {
-          if (message.type === "progress" && message.progressCmd === cmd) {
-            found = true;
-            return { ...message, progressElapsed: elapsed, progressTail: outputTail };
-          }
-          return message;
-        });
-
-        return {
-          ...state,
-          messages: found
-            ? updated
-            : [
-                ...updated,
-                {
-                  id: nextId(),
-                  role: "system",
-                  type: "progress",
-                  content: cmd,
-                  progressCmd: cmd,
-                  progressElapsed: elapsed,
-                  progressTail: outputTail,
-                },
-              ],
-        };
-      });
-      return;
-    }
-
-    if (type === "ai_recovery") {
-      revealAiPanelForTab(tabId);
-      updateTabAiState(tabId, (state) => ({
-        ...state,
-        messages: [
-          ...state.messages,
-          {
-            id: nextId(),
-            role: "system",
-            type: "recovery",
-            content: String(payload.why || ""),
-            recoveryOriginal: String(payload.original_cmd || ""),
-            recoveryNew: String(payload.new_cmd || ""),
-            recoveryWhy: String(payload.why || ""),
-          },
-        ],
-      }));
-      return;
-    }
-
-    // ── Nova agent events ────────────────────────────────────────────────
-
-    if (type === "agent_start") {
-      revealAiPanelForTab(tabId);
-      const extras = Array.isArray(payload.extras)
-        ? (payload.extras as unknown[]).map((v) => String(v))
-        : [];
-      updateTabAiState(tabId, (state) => ({
-        ...state,
-        isGenerating: true,
-        messages: [
-          ...state.messages,
-          {
-            id: nextId(),
-            role: "system",
-            type: "agent_start",
-            content: String(payload.goal || ""),
-            agentPrimary: String(payload.primary_target || "primary"),
-            agentExtras: extras,
-            agentContext: parseNovaContextPayload(payload.context),
-          },
-        ],
-      }));
-      return;
-    }
-
-    if (type === "agent_thinking") {
-      const text = String(payload.text || "").trim();
-      if (!text) return;
-      const iteration = Number(payload.iteration || 0) || undefined;
-      updateTabAiState(tabId, (state) => ({
-        ...state,
-        messages: [
-          ...state.messages,
-          {
-            id: nextId(),
-            role: "assistant",
-            type: "agent_thinking",
-            content: text,
-            agentIteration: iteration,
-          },
-        ],
-      }));
-      return;
-    }
-
-    if (type === "agent_tool_call") {
-      const iteration = Number(payload.iteration || 0) || undefined;
-      const toolName = String(payload.tool || "");
-      const toolArgs =
-        payload.args && typeof payload.args === "object"
-          ? (payload.args as Record<string, unknown>)
-          : {};
-      updateTabAiState(tabId, (state) => ({
-        ...state,
-        messages: [
-          ...state.messages,
-          {
-            id: nextId(),
-            role: "assistant",
-            type: "agent_tool",
-            content: "",
-            agentIteration: iteration,
-            agentToolName: toolName,
-            agentToolArgs: toolArgs,
-            agentToolOk: true, // optimistic; overwritten by agent_tool_result
-            agentStartedAt: Date.now(),
-          },
-        ],
-      }));
-      return;
-    }
-
-    if (type === "agent_tool_result") {
-      const iteration = Number(payload.iteration || 0) || undefined;
-      const toolName = String(payload.tool || "");
-      const ok = payload.ok !== false;
-      const output = String(payload.output || "");
-      const error = payload.error ? String(payload.error) : undefined;
-      // ``data`` carries ToolResult.data — we pull exit_code so the UI
-      // can render it as a badge instead of leaving it buried in the
-      // raw output text.
-      const data = (payload.data && typeof payload.data === "object")
-        ? (payload.data as Record<string, unknown>)
-        : {};
-      const rawExit = data.exit_code;
-      const exitCode =
-        typeof rawExit === "number"
-          ? rawExit
-          : typeof rawExit === "string" && rawExit.trim() !== "" && !Number.isNaN(Number(rawExit))
-            ? Number(rawExit)
-            : undefined;
-      updateTabAiState(tabId, (state) => {
-        // Find the most recent matching agent_tool entry and attach the result.
-        const reversed = [...state.messages].reverse();
-        const matchIdx = reversed.findIndex(
-          (m) => m.type === "agent_tool" && m.agentToolName === toolName && m.agentIteration === iteration,
-        );
-        if (matchIdx === -1) return state;
-        const absIdx = state.messages.length - 1 - matchIdx;
-        const updated = [...state.messages];
-        const prev = updated[absIdx];
-        const duration =
-          prev.agentStartedAt ? Date.now() - prev.agentStartedAt : undefined;
-        updated[absIdx] = {
-          ...prev,
-          agentToolOk: ok,
-          agentToolOutput: output,
-          agentToolError: error,
-          agentDurationMs: duration,
-          agentToolExitCode: exitCode,
-        };
-        return { ...state, messages: updated };
-      });
-      return;
-    }
-
-    if (type === "agent_todo_update") {
-      const todos = Array.isArray(payload.todos)
-        ? (payload.todos as Array<Record<string, unknown>>).map((t) => ({
-            id: String(t.id || ""),
-            content: String(t.content || ""),
-            status: (String(t.status || "pending") as
-              | "pending"
-              | "in_progress"
-              | "completed"
-              | "cancelled"),
-          }))
-        : [];
-      updateTabAiState(tabId, (state) => {
-        // Replace the previous agent_todo message in place (single
-        // live checklist) so the UI shows only the latest state.
-        const existingIdx = state.messages.findIndex((m) => m.type === "agent_todo");
-        const msg: AiMessage = {
-          id: existingIdx >= 0 ? state.messages[existingIdx].id : nextId(),
-          role: "assistant",
-          type: "agent_todo",
-          content: "",
-          agentTodos: todos,
-        };
-        if (existingIdx >= 0) {
-          const updated = [...state.messages];
-          updated[existingIdx] = msg;
-          return { ...state, messages: updated };
-        }
-        return { ...state, messages: [...state.messages, msg] };
-      });
-      return;
-    }
-
-    if (type === "agent_stopped") {
-      updateTabAiState(tabId, (state) => ({
-        ...state,
-        isGenerating: false,
-        messages: [
-          ...state.messages,
-          {
-            id: nextId(),
-            role: "system",
-            type: "agent_stopped",
-            content: "",
-            agentStopReason: String(payload.reason || ""),
-          },
-        ],
-      }));
-      return;
-    }
-
-    if (type === "agent_done" || type === "agent_error") {
-      updateTabAiState(tabId, (state) => ({ ...state, isGenerating: false }));
-      // Final text is mirrored via the existing ``ai_response`` event
-      // (see consumer._ai_run_agent) so we don't double-render here.
-      return;
-    }
-
-    if (type === "ai_error") {
-      revealAiPanelForTab(tabId);
-      updateTabAiState(tabId, (state) => ({
-        ...state,
-        isGenerating: false,
-        messages: [
-          ...state.messages,
-          { id: nextId(), role: "system", type: "text", content: String(payload.message || "AI error") },
-        ],
-      }));
-      return;
-    }
-
-    if (type === "status" && String(payload.status) === "connected") {
-      updateTabAiState(tabId, (state) => ({
-        ...state,
-        isGenerating: false,
-      }));
-    }
+    handleTerminalPageWsEvent({
+      tabId,
+      serverId,
+      payload,
+      handleEditorWsEvent,
+      getTabCwdRef,
+      revealAiPanelForTab,
+      updateTabAiState,
+    });
   }, [revealAiPanelForTab, updateTabAiState, handleEditorWsEvent, getTabCwdRef]);
 
   useEffect(() => {
@@ -838,146 +363,6 @@ export default function TerminalPage() {
     }, 0);
     return () => window.clearTimeout(timer);
   }, [activeTabId]);
-
-  const handleSendAi = useCallback((text: string) => {
-    if (!text.trim()) return;
-    const tabId = activeTabIdRef.current;
-    const preferences = tabAiPreferences[tabId] || globalAiPreferences;
-    const trimmed = text.trim();
-
-    if (trimmed.toLowerCase().startsWith("/mode")) {
-      const [, rawMode = ""] = trimmed.split(/\s+/, 2);
-      const normalizedMode = rawMode.trim().toLowerCase();
-      const currentMode = preferences.chatMode;
-
-      if (!normalizedMode) {
-        updateActiveTabAiState((state) => ({
-          ...state,
-          messages: [
-            ...state.messages,
-            {
-              id: nextId(),
-              role: "assistant",
-              type: "text",
-              content: `Текущий режим: **${currentMode === "agent" ? "Agent" : "Ask"}**.\n\nИспользуйте \`/mode ask\` или \`/mode agent\`.`,
-            },
-          ],
-        }));
-        return;
-      }
-
-      if (normalizedMode !== "ask" && normalizedMode !== "agent") {
-        updateActiveTabAiState((state) => ({
-          ...state,
-          messages: [
-            ...state.messages,
-            {
-              id: nextId(),
-              role: "assistant",
-              type: "text",
-              content: "Неизвестный режим. Доступно: `/mode ask`, `/mode agent`.",
-            },
-          ],
-        }));
-        return;
-      }
-
-      updateTabAiPreferences(tabId, (state) => ({
-        ...state,
-        chatMode: normalizedMode,
-      }));
-      updateActiveTabAiState((state) => ({
-        ...state,
-        messages: [
-          ...state.messages,
-          {
-            id: nextId(),
-            role: "assistant",
-            type: "text",
-            content:
-              normalizedMode === "agent"
-                ? "Режим переключён на **Agent**. AI будет сразу запускать безопасные команды, а опасные действия по-прежнему потребуют подтверждения."
-                : "Режим переключён на **Ask**. AI будет объяснять и предлагать команды, а запуск останется только после вашего подтверждения.",
-          },
-        ],
-      }));
-      return;
-    }
-
-    updateActiveTabAiState((state) => ({
-      ...state,
-      isGenerating: true,
-      messages: [...state.messages, { id: nextId(), role: "user", type: "text", content: text }],
-    }));
-    terminalRefs.current[tabId]?.sendAiRequest(
-      text,
-      preferences.chatMode,
-      preferences.executionMode,
-      preferences.settings,
-    );
-  }, [globalAiPreferences, tabAiPreferences, updateActiveTabAiState, updateTabAiPreferences]);
-
-  const handleStopAi = useCallback(() => {
-    updateActiveTabAiState((state) => ({
-      ...state,
-      isGenerating: false,
-    }));
-    terminalRefs.current[activeTabIdRef.current]?.stopAi();
-  }, [updateActiveTabAiState]);
-
-  const handleConfirm = useCallback((id: number) => {
-    terminalRefs.current[activeTabIdRef.current]?.sendAiConfirm(id);
-  }, []);
-
-  const handleCancel = useCallback((id: number) => {
-    terminalRefs.current[activeTabIdRef.current]?.sendAiCancel(id);
-  }, []);
-
-  const handleReply = useCallback((qId: string, text: string) => {
-    updateActiveTabAiState((state) => ({
-      ...state,
-      messages: state.messages.map((message) =>
-        message.qId === qId
-          ? {
-              ...message,
-              questionAnswered: true,
-              questionAnswer: text,
-            }
-          : message,
-      ),
-    }));
-    terminalRefs.current[activeTabIdRef.current]?.sendAiReply(qId, text);
-  }, [updateActiveTabAiState]);
-
-  const handleGenerateReport = useCallback((force = false) => {
-    terminalRefs.current[activeTabIdRef.current]?.sendAiGenerateReport(force);
-  }, []);
-
-  const handleClearAiMemory = useCallback(() => {
-    terminalRefs.current[activeTabIdRef.current]?.sendAiClearMemory();
-  }, []);
-
-  // A6: set explaining=true optimistically, then fire the WS request.
-  const handleExplainCommand = useCallback((cmd: AiCommand) => {
-    const tabId = activeTabIdRef.current;
-    // Mark as explaining to disable the button / show spinner.
-    updateTabAiState(tabId, (state) => ({
-      ...state,
-      messages: state.messages.map((message) => {
-        if (message.type !== "commands" || !message.commands?.some((c) => c.id === cmd.id)) return message;
-        return {
-          ...message,
-          commands: message.commands.map((c) => (c.id === cmd.id ? { ...c, explaining: true } : c)),
-        };
-      }),
-    }));
-    terminalRefs.current[tabId]?.sendAiExplainOutput({
-      id: cmd.id,
-      cmd: cmd.cmd,
-      output: cmd.direct_output ?? "",
-      exit_code: cmd.exit_code,
-    });
-  }, [updateTabAiState]);
 
   const handleTabFileDrop = useCallback((tabId: string, files: File[]) => {
     if (!files.length) return;
@@ -1003,303 +388,76 @@ export default function TerminalPage() {
 
   if (isLoading || error || !data || !activeTab || !activeServer) {
     return (
-      <QueryStateBlock
-        loading={isLoading}
-        error={
-          error
-            ? error
-            : !isLoading && !data
-              ? new Error("Ошибка загрузки данных терминала")
-              : !activeTab || !activeServer
-                ? new Error("Сервер не найден или недоступен")
-                : undefined
-        }
-        className="p-6"
-      >
-        {null}
-      </QueryStateBlock>
+      <TerminalQueryState
+        isLoading={isLoading}
+        error={error}
+        hasData={Boolean(data)}
+        hasActiveConnection={Boolean(activeTab && activeServer)}
+      />
     );
   }
 
   return (
     <div className="flex h-[100dvh] flex-col bg-background">
-      <div className="shrink-0 border-b border-border/80 bg-background/95 py-2 pl-16 pr-3 sm:px-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            to="/servers"
-            className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg px-3 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Назад
-          </Link>
+      <TerminalHeader
+        activeTab={activeTab}
+        activeServer={activeServer}
+        tabs={tabs}
+        activeTabId={activeTabId}
+        sidePanelMode={sidePanelMode}
+        t={t}
+        addTab={addTab}
+        closeTab={closeTab}
+        revealUiPanel={revealUiPanel}
+        setActiveTabId={setActiveTabId}
+        setSettingsOpen={setSettingsOpen}
+        setSidePanelMode={setSidePanelMode}
+      />
 
-          <div className="flex h-10 min-w-0 shrink-0 items-center gap-2 rounded-lg border border-border/70 bg-card/60 px-3">
-            <StatusIndicator
-              status={activeTab.status === "connected" ? "online" : activeTab.status === "error" ? "offline" : "unknown"}
-              showLabel={false}
-            />
-            <span className="max-w-40 truncate text-sm font-medium text-foreground sm:max-w-56">
-              {formatTabName(activeTab)}
-            </span>
-            <span className="hidden truncate text-[11px] text-muted-foreground lg:inline">
-              {activeServer.username}@{activeServer.host}:{activeServer.port}
-            </span>
-          </div>
-
-          <div className="min-w-[260px] flex-1">
-            <div className="flex items-center gap-1 overflow-x-auto rounded-lg border border-border/70 bg-card/40 p-1">
-              {tabs.map((tab) => (
-                <div
-                  key={tab.id}
-                  className={cn(
-                    "group flex h-10 shrink-0 items-center rounded-lg border transition-colors",
-                    tab.id === activeTabId
-                      ? "border-border bg-background text-foreground"
-                      : "border-transparent bg-transparent text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
-                  )}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setActiveTabId(tab.id)}
-                    className="flex h-full min-w-0 items-center gap-2 rounded-l-lg px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    aria-current={tab.id === activeTabId ? "page" : undefined}
-                  >
-                    <StatusIndicator
-                      status={tab.status === "connected" ? "online" : tab.status === "error" ? "offline" : "unknown"}
-                      showLabel={false}
-                    />
-                    <span className="max-w-40 truncate">{formatTabName(tab)}</span>
-                  </button>
-                  {tabs.length > 1 ? (
-                    <button
-                      type="button"
-                      aria-label={`Закрыть вкладку ${formatTabName(tab)}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        closeTab(tab.id);
-                      }}
-                      className="mr-1 flex h-8 w-8 items-center justify-center rounded-md opacity-60 transition-colors hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  ) : null}
-                </div>
-              ))}
-
-              <button
-                type="button"
-                onClick={addTab}
-                className="flex h-10 shrink-0 items-center gap-2 rounded-lg border border-dashed border-border/70 px-3 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label="Подключить сервер"
-                title="Подключить сервер"
-              >
-                <Plus className="h-4 w-4" />
-                Сервер
-              </button>
-            </div>
-          </div>
-
-          <div className="flex shrink-0 items-center gap-1 rounded-lg border border-border/70 bg-card/40 p-1">
-            <Button
-              type="button"
-              size="sm"
-              variant={sidePanelMode === "files" ? "secondary" : "ghost"}
-              className="h-10 gap-2 px-3 text-sm"
-              onClick={() => setSidePanelMode((current) => (current === "files" ? "none" : "files"))}
-              aria-pressed={sidePanelMode === "files"}
-              title={sidePanelMode === "files" ? "Скрыть файловую панель" : "Показать файловую панель"}
-            >
-              <FolderOpen className="h-4 w-4" />
-              SFTP
-            </Button>
-            {activeServer?.server_type === "ssh" ? (
-              <Button
-                type="button"
-                size="sm"
-                variant={sidePanelMode === "ui" ? "secondary" : "ghost"}
-                className="h-10 gap-2 px-3 text-sm"
-                onClick={() => {
-                  if (sidePanelMode === "ui") {
-                    setSidePanelMode("none");
-                    return;
-                  }
-                  revealUiPanel();
-                }}
-                aria-pressed={sidePanelMode === "ui"}
-                title={sidePanelMode === "ui" ? "Скрыть Linux Workspace" : "Показать Linux Workspace"}
-              >
-                <Monitor className="h-4 w-4" />
-                Linux
-              </Button>
-            ) : null}
-            <Button
-              type="button"
-              size="sm"
-              variant={sidePanelMode === "ai" ? "secondary" : "ghost"}
-              className="h-10 gap-2 px-3 text-sm"
-              onClick={() => setSidePanelMode((current) => (current === "ai" ? "none" : "ai"))}
-              aria-pressed={sidePanelMode === "ai"}
-              title={sidePanelMode === "ai" ? "Скрыть AI" : "Показать AI"}
-            >
-              <Bot className="h-4 w-4" />
-              AI
-            </Button>
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              onClick={() => setSettingsOpen(true)}
-              aria-label={t("terminal.settingsBtn")}
-              title={t("terminal.settingsBtn")}
-            >
-              <Settings className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex min-h-0 flex-1">
-        <div
-          className={terminalHiddenByPanel ? "hidden" : "min-h-0 flex-1 p-0"}
-          style={{ backgroundColor: resolvedTheme.background ?? "#0a0e14" }}
-        >
-          <div className="relative h-full w-full">
-            {tabs.map((tab) => (
-              <div
-                key={tab.id}
-                className={`absolute inset-0 ${tab.id === activeTabId ? "z-10" : "pointer-events-none opacity-0"}`}
-                aria-hidden={tab.id === activeTabId ? undefined : true}
-              >
-                <XTerminal
-                  ref={(handle) => {
-                    terminalRefs.current[tab.id] = handle;
-                  }}
-                  serverId={tab.serverId}
-                  active={tab.id === activeTabId}
-                  themeOverride={resolvedTheme}
-                  fontSize={effectiveTerminalFontSize}
-                  fontFamily={termPrefs.font_family}
-                  lineHeight={effectiveTerminalLineHeight}
-                  cursorStyle={termPrefs.cursor_style}
-                  cursorBlink={termPrefs.cursor_blink}
-                  scrollback={termPrefs.scrollback}
-                  onStatusChange={(status) => updateTabStatus(tab.id, status)}
-                  onError={(message) =>
-                    updateTabAiState(tab.id, (state) => ({
-                      ...state,
-                      messages: [...state.messages, { id: nextId(), role: "system", type: "text", content: message }],
-                    }))
-                  }
-                  onFilesDrop={(files) => handleTabFileDrop(tab.id, files)}
-                  onEvent={(payload) => handleTabWsEvent(tab.id, tab.serverId, payload)}
-                  onInterceptInput={tab.id === activeTabId ? inputBuf.interceptInput : undefined}
-                  cwdRef={getTabCwdRef(tab.id)}
-                  onFileClick={(absolutePath) => handleTerminalFileClick(tab.id, tab.serverId, absolutePath)}
-                />
-              </div>
-            ))}
-            <CompletionOverlay
-              suggestions={inputBuf.suggestions}
-              selectedIdx={inputBuf.selectedIdx}
-              visible={inputBuf.suggestions.length > 0}
-            />
-          </div>
-        </div>
-
-        <div
-          className={`relative min-h-0 shrink-0 overflow-hidden transition-[width] ${sidePanelMode === "none" || isUiMode || isCompactViewport ? "border-l-0" : "border-l border-border"}`}
-          style={{ width: sidePanelWidth }}
-        >
-          {sidePanelMode !== "none" && !isUiMode && !isCompactViewport ? (
-            <div
-              onMouseDown={startDrag}
-              className="absolute bottom-0 left-0 top-0 z-20 w-1 cursor-col-resize select-none transition-colors hover:bg-primary/40 active:bg-primary/60"
-              title="Перетащите для изменения ширины"
-            />
-          ) : null}
-
-          {sidePanelMode === "ai" ? (
-            <div className="flex h-full min-h-0 flex-col">
-              <div className="min-h-0 flex-1 overflow-hidden">
-                <AiPanel
-                  onClose={() => setSidePanelMode("none")}
-                  onSend={handleSendAi}
-                  onStop={handleStopAi}
-                  onConfirm={handleConfirm}
-                  onCancel={handleCancel}
-                  onReply={handleReply}
-                  onGenerateReport={handleGenerateReport}
-                  onClearMemory={handleClearAiMemory}
-                  onExplainCommand={handleExplainCommand}
-                  onSettingsChange={handleSettingsChange}
-                  onSaveDefaults={handleSaveAiDefaults}
-                  onResetToDefaults={handleResetAiPreferences}
-                  onClearChat={handleClearChat}
-                  messages={aiMessages}
-                  isGenerating={isAiGenerating}
-                  chatMode={activeChatMode}
-                  onChatModeChange={handleChatModeChange}
-                  executionMode={activeExecutionMode}
-                  settings={activeAiSettings}
-                  onModeChange={handleModeChange}
-                />
-              </div>
-            </div>
-          ) : null}
-
-          {sidePanelMode === "ui" ? (
-            <div className="flex h-full min-h-0 flex-col">
-              <div className="relative h-full min-h-0 flex-1">
-                {tabs.map((tab) => {
-                  const tabServer = findServer(servers, tab.serverId);
-                  if (!tabServer) return null;
-                  return (
-                    <div
-                      key={tab.id}
-                      className={`absolute inset-0 ${tab.id === activeTabId ? "z-10" : "pointer-events-none opacity-0"}`}
-                      aria-hidden={tab.id === activeTabId ? undefined : true}
-                    >
-                      <LinuxUiPanel
-                        server={tabServer}
-                        active={tab.id === activeTabId}
-                        onClose={() => setSidePanelMode("none")}
-                        onOpenAi={() => setSidePanelMode("ai")}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
-
-          {sidePanelMode === "files" ? (
-            <div className="flex h-full min-h-0 flex-col">
-              <div className="relative h-full min-h-0 flex-1">
-                {tabs.map((tab) => {
-                  const tabServer = findServer(servers, tab.serverId);
-                  if (!tabServer) return null;
-                  return (
-                    <div
-                      key={tab.id}
-                      className={`absolute inset-0 ${tab.id === activeTabId ? "z-10" : "pointer-events-none opacity-0"}`}
-                      aria-hidden={tab.id === activeTabId ? undefined : true}
-                    >
-                      <SftpPanel
-                        ref={(handle) => {
-                          sftpRefs.current[tab.id] = handle;
-                        }}
-                        server={tabServer}
-                        active={tab.id === activeTabId}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </div>
-
+      <TerminalWorkspace
+        tabs={tabs}
+        servers={servers}
+        activeTabId={activeTabId}
+        sidePanelMode={sidePanelMode}
+        sidePanelWidth={sidePanelWidth}
+        terminalHiddenByPanel={terminalHiddenByPanel}
+        isUiMode={isUiMode}
+        isCompactViewport={isCompactViewport}
+        resolvedTheme={resolvedTheme}
+        termPrefs={termPrefs}
+        effectiveTerminalFontSize={effectiveTerminalFontSize}
+        effectiveTerminalLineHeight={effectiveTerminalLineHeight}
+        inputBuf={inputBuf}
+        terminalRefs={terminalRefs}
+        sftpRefs={sftpRefs}
+        getTabCwdRef={getTabCwdRef}
+        startDrag={startDrag}
+        updateTabStatus={updateTabStatus}
+        updateTabAiState={updateTabAiState}
+        handleTabFileDrop={handleTabFileDrop}
+        handleTabWsEvent={handleTabWsEvent}
+        handleTerminalFileClick={handleTerminalFileClick}
+        setSidePanelMode={setSidePanelMode}
+        aiMessages={aiMessages}
+        isAiGenerating={isAiGenerating}
+        activeChatMode={activeChatMode}
+        activeExecutionMode={activeExecutionMode}
+        activeAiSettings={activeAiSettings}
+        handleSendAi={handleSendAi}
+        handleStopAi={handleStopAi}
+        handleConfirm={handleConfirm}
+        handleCancel={handleCancel}
+        handleReply={handleReply}
+        handleGenerateReport={handleGenerateReport}
+        handleClearAiMemory={handleClearAiMemory}
+        handleExplainCommand={handleExplainCommand}
+        handleSettingsChange={handleSettingsChange}
+        handleSaveAiDefaults={handleSaveAiDefaults}
+        handleResetAiPreferences={handleResetAiPreferences}
+        handleClearChat={handleClearChat}
+        handleChatModeChange={handleChatModeChange}
+        handleModeChange={handleModeChange}
+      />
       <ServerPicker
         servers={servers}
         open={showServerPicker}

@@ -21,8 +21,8 @@ from servers.views.server_helpers import (
     _accessible_servers_queryset,
     _resolve_server_secret,
     _resolve_server_sudo_secret,
-    _server_has_capability,
     _serialize_detected_os_fields,
+    _server_has_capability,
 )
 
 
@@ -41,7 +41,6 @@ def server_test_connection(request, server_id):
             return JsonResponse({"success": False, "error": "Only owner can refresh trusted SSH host key"}, status=403)
         try:
             password = _resolve_server_secret(server, request, data)
-            sudo_password = _resolve_server_sudo_secret(server, request, data)
         except ValueError as e:
             return JsonResponse({"success": False, "error": str(e)}, status=400)
 
@@ -129,6 +128,7 @@ def server_execute_command(request, server_id):
 
         try:
             password = _resolve_server_secret(server, request, data)
+            sudo_password = _resolve_server_sudo_secret(server, request, data)
         except ValueError as e:
             return JsonResponse({"success": False, "error": str(e)}, status=400)
 

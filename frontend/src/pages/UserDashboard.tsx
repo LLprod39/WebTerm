@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { relativeTime, cn } from "@/lib/utils";
 import { CustomizableDashboard, type WidgetDefinition } from "@/components/dashboard/CustomizableDashboard";
+import { getWidgetNumberProp, getWidgetStringProp } from "@/components/dashboard/widgetProps";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
@@ -77,8 +78,8 @@ export default function UserDashboard() {
         icon: <Activity className="h-4 w-4" />,
         defaultSize: { w: 12, h: 1 },
         render: (config) => {
-          const tone = config.props?.tone ?? "default";
-          const title = config.props?.customTitle ?? "Краткая сводка";
+          const tone = getWidgetStringProp(config, "tone", "default");
+          const title = getWidgetStringProp(config, "customTitle", "Краткая сводка");
 
           return (
             <SectionCard title={title} icon={<Activity className="h-4 w-4" />} className={sectionToneStyles[tone]}>
@@ -121,9 +122,9 @@ export default function UserDashboard() {
         icon: <Bot className="h-4 w-4" />,
         defaultSize: { w: 6, h: 1 },
         render: (config) => {
-          const limit = config.props?.limit ?? 5;
-          const tone = config.props?.tone ?? "default";
-          const title = config.props?.customTitle ?? "Активные запуски";
+          const limit = getWidgetNumberProp(config, "limit", 5);
+          const tone = getWidgetStringProp(config, "tone", "default");
+          const title = getWidgetStringProp(config, "customTitle", "Активные запуски");
           const displayRuns = runs?.active?.slice(0, limit) ?? [];
 
           return (
@@ -165,9 +166,9 @@ export default function UserDashboard() {
         icon: <Clock className="h-4 w-4" />,
         defaultSize: { w: 6, h: 1 },
         render: (config) => {
-          const limit = config.props?.limit ?? 5;
-          const tone = config.props?.tone ?? "default";
-          const title = config.props?.customTitle ?? "История запусков агентов";
+          const limit = getWidgetNumberProp(config, "limit", 5);
+          const tone = getWidgetStringProp(config, "tone", "default");
+          const title = getWidgetStringProp(config, "customTitle", "История запусков агентов");
           const displayRuns = runs?.recent?.slice(0, limit) ?? [];
 
           return (
@@ -216,9 +217,9 @@ export default function UserDashboard() {
         icon: <Server className="h-4 w-4" />,
         defaultSize: { w: 8, h: 1 },
         render: (config) => {
-          const limit = config.props?.limit ?? 5;
-          const tone = config.props?.tone ?? "default";
-          const title = config.props?.customTitle ?? "Состояние Fleet серверов";
+          const limit = getWidgetNumberProp(config, "limit", 5);
+          const tone = getWidgetStringProp(config, "tone", "default");
+          const title = getWidgetStringProp(config, "customTitle", "Состояние Fleet серверов");
           const displayServers = mon?.servers?.slice(0, limit) ?? [];
 
           return (
@@ -275,8 +276,8 @@ export default function UserDashboard() {
         icon: <TerminalIcon className="h-4 w-4" />,
         defaultSize: { w: 4, h: 1 },
         render: (config) => {
-          const tone = config.props?.tone ?? "default";
-          const title = config.props?.customTitle ?? "Недавние подключенные";
+          const tone = getWidgetStringProp(config, "tone", "default");
+          const title = getWidgetStringProp(config, "customTitle", "Недавние подключенные");
           const displayServers = boot?.servers?.slice(0, 5) ?? [];
 
           return (
@@ -309,9 +310,9 @@ export default function UserDashboard() {
         icon: <Play className="h-4 w-4" />,
         defaultSize: { w: 6, h: 1 },
         render: (config) => {
-          const limit = config.props?.limit ?? 5;
-          const tone = config.props?.tone ?? "default";
-          const title = config.props?.customTitle ?? "Предупреждения и алерты";
+          const limit = getWidgetNumberProp(config, "limit", 5);
+          const tone = getWidgetStringProp(config, "tone", "default");
+          const title = getWidgetStringProp(config, "customTitle", "Предупреждения и алерты");
           const displayAlerts = mon?.alerts?.slice(0, limit) ?? [];
 
           return (
@@ -353,9 +354,9 @@ export default function UserDashboard() {
         icon: <Activity className="h-4 w-4" />,
         defaultSize: { w: 6, h: 1 },
         render: (config) => {
-          const limit = config.props?.limit ?? 5;
-          const tone = config.props?.tone ?? "default";
-          const title = config.props?.customTitle ?? "История действий";
+          const limit = getWidgetNumberProp(config, "limit", 5);
+          const tone = getWidgetStringProp(config, "tone", "default");
+          const title = getWidgetStringProp(config, "customTitle", "История действий");
           const displayActivity = boot?.recent_activity?.slice(0, limit) ?? [];
 
           return (
@@ -387,8 +388,8 @@ export default function UserDashboard() {
         icon: <Settings className="h-4 w-4" />,
         defaultSize: { w: 4, h: 1 },
         render: (config) => {
-          const tone = config.props?.tone ?? "default";
-          const title = config.props?.customTitle ?? "Быстрые действия";
+          const tone = getWidgetStringProp(config, "tone", "default");
+          const title = getWidgetStringProp(config, "customTitle", "Быстрые действия");
 
           return (
             <SectionCard title={title} icon={<Settings className="h-4 w-4" />} className={sectionToneStyles[tone]}>

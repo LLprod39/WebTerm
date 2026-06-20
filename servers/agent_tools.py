@@ -215,6 +215,12 @@ AGENT_TOOLS: dict[str, dict[str, Any]] = {
     "ssh_execute": {
         "fn": tool_ssh_execute,
         "description": "Execute a shell command on a server and return stdout/stderr/exit_code.",
+        "tool_spec": {
+            "category": "ssh",
+            "risk": "exec",
+            "requires_verification": True,
+            "output_compactor": "tail",
+        },
         "params": {
             "server": {"type": "string", "required": True, "description": "Server name or id"},
             "command": {"type": "string", "required": True, "description": "Shell command to execute"},
@@ -223,6 +229,11 @@ AGENT_TOOLS: dict[str, dict[str, Any]] = {
     "read_console": {
         "fn": tool_read_console,
         "description": "Read the latest console output (last N lines) from a server.",
+        "tool_spec": {
+            "category": "monitoring",
+            "risk": "read",
+            "output_compactor": "tail",
+        },
         "params": {
             "server": {"type": "string", "required": True, "description": "Server name or id"},
             "lines": {"type": "integer", "required": False, "description": "Number of lines (default 80)"},
@@ -231,6 +242,11 @@ AGENT_TOOLS: dict[str, dict[str, Any]] = {
     "send_ctrl_c": {
         "fn": tool_send_ctrl_c,
         "description": "Send Ctrl+C to interrupt the current running command on a server.",
+        "tool_spec": {
+            "category": "service",
+            "risk": "exec",
+            "output_compactor": "tail",
+        },
         "params": {
             "server": {"type": "string", "required": True, "description": "Server name or id"},
         },
@@ -238,6 +254,11 @@ AGENT_TOOLS: dict[str, dict[str, Any]] = {
     "open_connection": {
         "fn": tool_open_connection,
         "description": "Open a new SSH connection to a server (if not already connected).",
+        "tool_spec": {
+            "category": "service",
+            "risk": "exec",
+            "output_compactor": "tail",
+        },
         "params": {
             "server": {"type": "string", "required": True, "description": "Server name or id"},
         },
@@ -245,6 +266,11 @@ AGENT_TOOLS: dict[str, dict[str, Any]] = {
     "close_connection": {
         "fn": tool_close_connection,
         "description": "Close an existing SSH connection to free resources.",
+        "tool_spec": {
+            "category": "service",
+            "risk": "exec",
+            "output_compactor": "tail",
+        },
         "params": {
             "server": {"type": "string", "required": True, "description": "Server name or id"},
         },
@@ -252,6 +278,11 @@ AGENT_TOOLS: dict[str, dict[str, Any]] = {
     "wait_for_output": {
         "fn": tool_wait_for_output,
         "description": "Wait for a regex pattern to appear in the server console output.",
+        "tool_spec": {
+            "category": "monitoring",
+            "risk": "read",
+            "output_compactor": "tail",
+        },
         "params": {
             "server": {"type": "string", "required": True, "description": "Server name or id"},
             "pattern": {"type": "string", "required": True, "description": "Regex pattern to wait for"},
@@ -261,6 +292,11 @@ AGENT_TOOLS: dict[str, dict[str, Any]] = {
     "report": {
         "fn": tool_report,
         "description": "Send an intermediate progress report to the user.",
+        "tool_spec": {
+            "category": "general",
+            "risk": "read",
+            "output_compactor": "tail",
+        },
         "params": {
             "text": {"type": "string", "required": True, "description": "Report text (Markdown)"},
         },
@@ -268,6 +304,11 @@ AGENT_TOOLS: dict[str, dict[str, Any]] = {
     "ask_user": {
         "fn": tool_ask_user,
         "description": "Ask the user a question and wait for their reply. Use for ambiguous or dangerous situations.",
+        "tool_spec": {
+            "category": "general",
+            "risk": "read",
+            "output_compactor": "tail",
+        },
         "params": {
             "question": {"type": "string", "required": True, "description": "Question to ask"},
         },
@@ -275,6 +316,11 @@ AGENT_TOOLS: dict[str, dict[str, Any]] = {
     "analyze_output": {
         "fn": tool_analyze_output,
         "description": "Ask the AI to analyze a piece of output and answer a question about it.",
+        "tool_spec": {
+            "category": "general",
+            "risk": "read",
+            "output_compactor": "tail",
+        },
         "params": {
             "text": {"type": "string", "required": True, "description": "Text to analyze"},
             "question": {"type": "string", "required": True, "description": "Question about the text"},
@@ -283,11 +329,21 @@ AGENT_TOOLS: dict[str, dict[str, Any]] = {
     "list_skills": {
         "fn": tool_list_skills,
         "description": "List the attached skills available to this agent. Use before read_skill if you need service-specific guidance.",
+        "tool_spec": {
+            "category": "general",
+            "risk": "read",
+            "output_compactor": "tail",
+        },
         "params": {},
     },
     "read_skill": {
         "fn": tool_read_skill,
         "description": "Read the full content of an attached skill by slug or name.",
+        "tool_spec": {
+            "category": "general",
+            "risk": "read",
+            "output_compactor": "tail",
+        },
         "params": {
             "skill": {"type": "string", "required": True, "description": "Skill slug or display name"},
         },

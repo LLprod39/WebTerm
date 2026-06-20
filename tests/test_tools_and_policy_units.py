@@ -4,6 +4,7 @@ from types import MappingProxyType, SimpleNamespace
 import httpx
 import pytest
 
+import app.tools.server_tool_gateway as server_tool_gateway
 from app.tools.base import BaseTool, ToolMetadata, ToolParameter
 from app.tools.server_tools import (
     ServerExecuteTool,
@@ -55,6 +56,31 @@ class _FakeSSHConnection:
         if self.should_fail:
             raise RuntimeError("boom")
         return _FakeSSHResult("ok\n", "", 0)
+
+
+class _FakeServerToolGateway:
+    def list_servers(self, user_id: int):
+        return [
+            {
+                "id": 10,
+                "name": "prod",
+                "host": "10.0.0.10",
+                "port": 22,
+                "user_id": user_id,
+            }
+        ]
+
+    def get_server(self, user_id: int, server_name_or_id: str):
+        return None
+
+    def get_active_share(self, user_id: int, server):
+        return None
+
+    def save_command_history(self, user_id: int, server, command: str, output: str, exit_code: int) -> None:
+        return None
+
+    def save_knowledge(self, user_id: int, server, command_output: str, command: str, task_id=None) -> None:
+        return None
 
 
 def _make_skill(
@@ -188,6 +214,26 @@ async def test_servers_list_tool_returns_target_lock_hint():
     )
     assert "ВНИМАНИЕ" in result
     assert "critical-db" in result
+
+
+@pytest.mark.asyncio
+async def test_servers_list_tool_uses_registered_gateway(monkeypatch):
+    monkeypatch.setattr(server_tool_gateway, "_server_tool_gateway", _FakeServerToolGateway())
+
+    result = await ServersListTool().execute(_context={"user_id": 42})
+
+    assert result == {
+        "servers": [
+            {
+                "id": 10,
+                "name": "prod",
+                "host": "10.0.0.10",
+                "port": 22,
+                "access": "owner",
+            }
+        ],
+        "total": 1,
+    }
 
 
 @pytest.mark.asyncio

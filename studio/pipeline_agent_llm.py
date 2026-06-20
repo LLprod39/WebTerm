@@ -10,7 +10,7 @@ from asgiref.sync import sync_to_async as _s2a
 from app.agent_kernel.memory.compaction import compact_text
 from app.agent_kernel.memory.server_cards import render_server_cards_prompt
 from app.core.model_utils import resolve_provider_and_model
-from servers.services.pipeline_memory import build_pipeline_operational_recipes, get_pipeline_server_card
+from app.pipeline_memory_provider import build_pipeline_operational_recipes, get_pipeline_server_card
 
 from .models import PipelineRun
 from .pipeline_context import (

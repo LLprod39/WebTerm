@@ -7,16 +7,21 @@ import os
 from typing import Any
 
 from asgiref.sync import sync_to_async
-from django.db.models import Q
-from django.utils import timezone
 from loguru import logger
 
 from app.execution_policy import build_execution_policy_audit_metadata
+from app.tools.activity_provider import log_tool_user_activity
 from app.tools.base import BaseTool, ToolMetadata, ToolParameter
 from app.tools.safety import evaluate_command_safety
+from app.tools.server_secret_provider import get_server_auth_secret, get_server_sudo_secret
+from app.tools.server_tool_gateway import (
+    get_tool_active_share,
+    get_tool_server,
+    list_servers_for_tool,
+    save_tool_command_history,
+    save_tool_knowledge,
+)
 from app.tools.ssh_tools import ssh_manager
-from core_ui.activity import log_user_activity
-from servers.secret_utils import get_server_auth_secret, get_server_sudo_secret
 
 
 def _get_user_id(kwargs: dict[str, Any]) -> int | None:
@@ -85,22 +90,7 @@ class ServersListTool(BaseTool):
                 f"Для выполнения команд используй: server_execute с server_name_or_id=\"{target_server_name}\""
             )
 
-        from servers.models import Server
-        now = timezone.now()
-        qs = (
-            Server.objects.filter(is_active=True)
-            .filter(
-                Q(user_id=user_id)
-                | (
-                    Q(shares__user_id=user_id, shares__is_revoked=False)
-                    & (Q(shares__expires_at__isnull=True) | Q(shares__expires_at__gt=now))
-                )
-            )
-            .distinct()
-            .order_by("name")
-            .values("id", "name", "host", "port", "user_id")
-        )
-        rows = list(qs)
+        rows = list_servers_for_tool(user_id)
         if not rows:
             return "Нет настроенных серверов. Добавь серверы в разделе Servers."
         servers = [
@@ -162,7 +152,7 @@ class ServerExecuteTool(BaseTool):
             actor=str(user_id or ""),
         )
         if command_risk.is_dangerous and not allow_destructive:
-            await sync_to_async(log_user_activity, thread_sensitive=True)(
+            await log_tool_user_activity(
                 user_id=user_id,
                 category="terminal",
                 action="server_tool_execute",
@@ -262,7 +252,7 @@ class ServerExecuteTool(BaseTool):
             except Exception as hist_err:
                 logger.debug(f"Failed to save command history: {hist_err}")
 
-            await sync_to_async(log_user_activity, thread_sensitive=True)(
+            await log_tool_user_activity(
                 user_id=user_id,
                 category="terminal",
                 action="server_tool_execute",
@@ -302,7 +292,7 @@ class ServerExecuteTool(BaseTool):
             return f"Exit code: {code}{network_info}\n{out}"
         except Exception as e:
             logger.exception("server_execute failed")
-            await sync_to_async(log_user_activity, thread_sensitive=True)(
+            await log_tool_user_activity(
                 user_id=user_id,
                 category="terminal",
                 action="server_tool_execute",
@@ -321,64 +311,16 @@ class ServerExecuteTool(BaseTool):
 
     @staticmethod
     def _get_server(user_id: int, server_name_or_id: str):
-        from servers.models import Server
-        now = timezone.now()
-        base_qs = (
-            Server.objects.filter(is_active=True)
-            .filter(
-                Q(user_id=user_id)
-                | (
-                    Q(shares__user_id=user_id, shares__is_revoked=False)
-                    & (Q(shares__expires_at__isnull=True) | Q(shares__expires_at__gt=now))
-                )
-            )
-            .distinct()
-        )
-        try:
-            sid = int(server_name_or_id)
-            return base_qs.filter(id=sid).first()
-        except ValueError:
-            return base_qs.filter(name__iexact=server_name_or_id).first()
+        return get_tool_server(user_id, server_name_or_id)
 
     @staticmethod
     def _get_active_share(user_id: int, server):
-        if not server or server.user_id == user_id:
-            return None
-        from servers.models import ServerShare
-
-        now = timezone.now()
-        return (
-            ServerShare.objects.filter(server=server, user_id=user_id, is_revoked=False)
-            .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
-            .first()
-        )
+        return get_tool_active_share(user_id, server)
 
     @staticmethod
     def _save_command_history(user_id: int, server, command: str, output: str, exit_code: int):
-        from django.contrib.auth.models import User
-
-        from servers.models import ServerCommandHistory
-        user = User.objects.filter(id=user_id).first()
-        ServerCommandHistory.objects.create(
-            server=server,
-            user=user,
-            actor_kind=ServerCommandHistory.ACTOR_PIPELINE,
-            source_kind=ServerCommandHistory.SOURCE_PIPELINE,
-            command=command,
-            output=output,
-            exit_code=exit_code,
-        )
+        save_tool_command_history(user_id, server, command, output, exit_code)
 
     @staticmethod
     def _save_knowledge(user_id: int, server, command_output: str, command: str, task_id=None):
-        from django.contrib.auth.models import User
-
-        from servers.knowledge_service import ServerKnowledgeService
-        user = User.objects.filter(id=user_id).first()
-        ServerKnowledgeService.analyze_and_save_knowledge(
-            server=server,
-            command_output=command_output,
-            command=command,
-            task_id=task_id,
-            user=user
-        )
+        save_tool_knowledge(user_id, server, command_output, command, task_id=task_id)

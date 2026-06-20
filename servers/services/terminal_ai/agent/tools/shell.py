@@ -26,7 +26,7 @@ import re
 from asgiref.sync import sync_to_async
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.agent_kernel.sudo_policy import command_uses_sudo, evaluate_sudo_command, prepare_sudo_command
+from app.sudo_policy import command_uses_sudo, evaluate_sudo_command, prepare_sudo_command
 from servers.services.terminal_ai.agent.schemas import ToolResult
 from servers.services.terminal_ai.agent.tools.base import (
     ServerTarget,
@@ -158,8 +158,8 @@ class ShellTool:
             return ""
         if not ctx.user_id:
             return ""
-        from servers.services.terminal_agent_context import load_user_accessible_server
         from servers.secret_utils import get_server_sudo_secret
+        from servers.services.terminal_agent_context import load_user_accessible_server
 
         server = await load_user_accessible_server(user_id=int(ctx.user_id), server_id=int(target.server_id))
         if server is None:

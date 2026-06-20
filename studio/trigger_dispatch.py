@@ -9,7 +9,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from app.runtime_limits import get_pipeline_run_limit_error
-from servers.services.alert_query import ServerAlertSnapshot, get_alert_snapshot, get_open_alert_snapshot
+from app.server_alert_provider import ServerAlertSnapshot, get_alert_snapshot, get_open_alert_snapshot
 
 from .models import PipelineRun, PipelineTrigger
 from .pipeline_preflight import pipeline_integration_diagnostics

@@ -10,15 +10,21 @@ class StudioConfig(AppConfig):
 
     def ready(self) -> None:
         from app.agent_kernel import mcp_runtime_registry, skill_promotion_registry, skill_provider_registry
+        from app.runtime_limits import register_pipeline_run_limit_provider
+        from app.smoke_seed_provider import register_smoke_pipeline_seed_provider
         from studio.mcp_runtime_adapter import StudioMCPRuntimeProvider
+        from studio.runtime_limit_provider import DjangoPipelineRunLimitProvider
         from studio.skill_adapter import StudioSkillProvider
         from studio.skill_promotion import StudioSkillPromotionGateway
+        from studio.smoke_seed_provider import DjangoSmokePipelineSeedProvider
 
         mcp_runtime_registry.register(StudioMCPRuntimeProvider())
+        register_pipeline_run_limit_provider(DjangoPipelineRunLimitProvider())
         skill_provider_registry.register(StudioSkillProvider())
         skill_promotion_registry.register(StudioSkillPromotionGateway())
+        register_smoke_pipeline_seed_provider(DjangoSmokePipelineSeedProvider())
 
-        from servers.signals import server_alert_opened
+        from app.monitoring_events import server_alert_opened
         from studio.trigger_dispatch import launch_monitoring_triggers_for_alert_id
 
         def _on_server_alert_opened(sender, alert_id: int, **kwargs: object) -> None:

@@ -149,7 +149,7 @@ export function MemorySettingsPanel({
                 <Label className="text-xs">Dream mode</Label>
                 <Select
                   value={memoryPolicyDraft.dream_mode}
-                  onValueChange={(value) => updatePolicy("dream_mode", value)}
+                  onValueChange={(value) => updatePolicy("dream_mode", value as MemoryPolicy["dream_mode"])}
                 >
                   <SelectTrigger className="h-9">
                     <SelectValue />

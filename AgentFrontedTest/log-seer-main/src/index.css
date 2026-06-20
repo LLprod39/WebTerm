@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* WebTermAI — Dark DevOps report design system. All colors HSL. */
+
+@layer base {
+  :root {
+    /* Surfaces */
+    --background: 210 59% 7%;          /* #07111B */
+    --surface: 211 51% 9%;             /* #0B1622 */
+    --foreground: 213 31% 91%;
+
+    --card: 209 46% 12%;               /* #101E2B */
+    --card-foreground: 213 31% 91%;
+
+    --popover: 209 46% 12%;
+    --popover-foreground: 213 31% 91%;
+
+    /* Accent — teal/emerald */
+    --primary: 172 66% 46%;
+    --primary-foreground: 210 59% 7%;
+
+    --secondary: 209 40% 16%;
+    --secondary-foreground: 213 27% 88%;
+
+    --muted: 209 40% 15%;
+    --muted-foreground: 215 18% 62%;
+
+    --accent: 172 50% 18%;
+    --accent-foreground: 172 66% 60%;
+
+    /* Severity */
+    --critical: 0 84% 60%;
+    --critical-foreground: 0 0% 100%;
+    --high: 38 92% 50%;
+    --high-foreground: 38 92% 8%;
+    --info: 217 91% 60%;
+    --info-foreground: 0 0% 100%;
+    --success: 158 64% 45%;
+    --success-foreground: 158 64% 8%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 212 34% 21%;             /* #233447 */
+    --input: 212 34% 21%;
+    --ring: 172 66% 46%;
+
+    --radius: 0.625rem;
+
+    --sidebar-background: 211 51% 9%;
+    --sidebar-foreground: 215 18% 70%;
+    --sidebar-primary: 172 66% 46%;
+    --sidebar-primary-foreground: 210 59% 7%;
+    --sidebar-accent: 209 40% 15%;
+    --sidebar-accent-foreground: 213 31% 91%;
+    --sidebar-border: 212 34% 18%;
+    --sidebar-ring: 172 66% 46%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--surface));
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(212 34% 30%);
+  }
+}
+
+@layer components {
+  .report-card {
+    @apply rounded-xl border border-border bg-card;
+  }
+}

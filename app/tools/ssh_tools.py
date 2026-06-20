@@ -12,14 +12,13 @@ from asgiref.sync import sync_to_async
 from django.conf import settings
 from loguru import logger
 
-from app.agent_kernel.sudo_policy import SUDO_POLICY_APPROVED, prepare_sudo_command
 from app.execution_policy import build_execution_policy_audit_metadata
+from app.sudo_policy import SUDO_POLICY_APPROVED, prepare_sudo_command
+from app.tools.activity_provider import get_tool_audit_context, log_tool_user_activity
 from app.tools.base import BaseTool, ToolMetadata, ToolParameter
 from app.tools.safety import evaluate_command_safety
-from core_ui.activity import log_user_activity
-from core_ui.audit import get_audit_context
-from servers.secret_utils import get_server_sudo_secret
-from servers.ssh_host_keys import ensure_server_known_hosts, parse_host_port_value, tofu_known_hosts_for_host
+from app.tools.server_secret_provider import get_server_sudo_secret
+from app.tools.ssh_host_key_provider import ensure_server_known_hosts, parse_host_port_value, tofu_known_hosts_for_host
 
 _ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -305,7 +304,7 @@ class SSHExecuteTool(BaseTool):
         sudo_password: str | None = None,
     ) -> dict[str, Any]:
         """Execute command over SSH"""
-        audit_ctx = get_audit_context()
+        audit_ctx = get_tool_audit_context()
         command_risk = evaluate_command_safety(command)
         policy_metadata = build_execution_policy_audit_metadata(
             tool_name="ssh_execute",
@@ -320,7 +319,7 @@ class SSHExecuteTool(BaseTool):
             actor=str(audit_ctx.get("user_id") or ""),
         )
         if command_risk.is_dangerous and not allow_destructive:
-            await sync_to_async(log_user_activity, thread_sensitive=True)(
+            await log_tool_user_activity(
                 user_id=audit_ctx.get("user_id"),
                 username_snapshot=str(audit_ctx.get("username_snapshot") or ""),
                 category="terminal",
@@ -348,7 +347,7 @@ class SSHExecuteTool(BaseTool):
         except ValueError as exc:
             result = {"success": False, "stderr": str(exc), "stdout": "", "exit_code": -1}
         output_text = (result.get("stdout") or "") + (("\n" + (result.get("stderr") or "")) if result.get("stderr") else "")
-        await sync_to_async(log_user_activity, thread_sensitive=True)(
+        await log_tool_user_activity(
             user_id=audit_ctx.get("user_id"),
             username_snapshot=str(audit_ctx.get("username_snapshot") or ""),
             category="terminal",

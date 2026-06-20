@@ -1,20 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
 
 from app.agent_kernel.permissions.engine import PermissionEngine
+from app.pipeline_agent_provider import AgentRunSnapshot
 from servers.agent_engine import AgentEngine
 from servers.models import ServerAgent
 from servers.multi_agent_engine import MultiAgentEngine
-
-
-@dataclass(frozen=True, slots=True)
-class AgentRunSnapshot:
-    agent_run_id: int
-    status: str
-    final_report: str
-    ai_analysis: str
 
 
 async def run_pipeline_react_agent(

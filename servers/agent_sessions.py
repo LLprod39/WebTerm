@@ -19,7 +19,7 @@ import asyncssh
 from asgiref.sync import sync_to_async
 from loguru import logger
 
-from app.agent_kernel.sudo_policy import (
+from app.sudo_policy import (
     SUDO_AUTH_MODE_NONE,
     SUDO_POLICY_APPROVED,
     command_prefers_controlled_sudo,
@@ -30,8 +30,8 @@ from app.agent_kernel.sudo_policy import (
     prepare_sudo_command,
     wrap_command_for_controlled_sudo,
 )
-from servers.secret_utils import get_server_sudo_secret
 from servers.monitor import _build_connect_kwargs
+from servers.secret_utils import get_server_sudo_secret
 
 BUFFER_MAX_CHARS = 8192
 COMMAND_TIMEOUT = 30
@@ -261,7 +261,7 @@ class AgentSessionManager:
         if self.event_callback:
             output_text = "".join(stdout_parts)[:500]
             await self.event_callback("agent_console", {
-                "server_id": server_id,
+                "server_id": session.server_id,
                 "server_name": session.server_name,
                 "event": "command_done",
                 "command": command,

@@ -12,9 +12,6 @@ configurable fake ``run()`` result.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any
-
 import pytest
 
 from servers.services.terminal_ai.agent.tools import (
@@ -41,52 +38,7 @@ from servers.services.terminal_ai.agent.tools import (
     ToolContext,
     default_tool_set,
 )
-
-# ---------------------------------------------------------------------------
-# Fixtures & helpers
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class FakeRunResult:
-    stdout: str = ""
-    stderr: str = ""
-    exit_status: int | None = 0
-
-
-class FakeSSHConn:
-    """Minimal asyncssh-alike for tool tests."""
-
-    def __init__(self, responses: dict[str, FakeRunResult] | None = None, default: FakeRunResult | None = None):
-        self.responses = responses or {}
-        self.default = default or FakeRunResult(stdout="", stderr="", exit_status=0)
-        self.calls: list[str] = []
-        self.call_kwargs: list[dict[str, Any]] = []
-
-    async def run(self, cmd: str, **kwargs: Any) -> FakeRunResult:
-        self.calls.append(cmd)
-        self.call_kwargs.append(dict(kwargs))
-        for key, resp in self.responses.items():
-            if key in cmd:
-                return resp
-        return self.default
-
-
-def _primary_target(*, read_only: bool = False, ssh_conn: Any = None) -> ServerTarget:
-    return ServerTarget(
-        name="primary",
-        server_id=1,
-        display_name="srv-main",
-        host="10.0.0.1",
-        ssh_conn=ssh_conn or FakeSSHConn(),
-        read_only=read_only,
-        is_primary=True,
-    )
-
-
-def _ctx(**overrides: Any) -> ToolContext:
-    return ToolContext(primary=_primary_target(), **overrides)
-
+from tests.agent_tool_fakes import FakeRunResult, FakeSSHConn, primary_target, tool_context
 
 # ---------------------------------------------------------------------------
 # ShellTool
@@ -97,7 +49,7 @@ class TestShellTool:
     @pytest.mark.asyncio
     async def test_runs_on_primary_by_default(self):
         conn = FakeSSHConn(default=FakeRunResult(stdout="ok\n", exit_status=0))
-        ctx = ToolContext(primary=_primary_target(ssh_conn=conn))
+        ctx = ToolContext(primary=primary_target(ssh_conn=conn))
         result = await ShellTool().run(ShellArgs(cmd="echo ok"), ctx)
         assert result.ok is True
         assert "Exit: 0" in result.output
@@ -113,14 +65,14 @@ class TestShellTool:
 
     @pytest.mark.asyncio
     async def test_rejects_multiline(self):
-        ctx = _ctx()
+        ctx = tool_context()
         result = await ShellTool().run(ShellArgs(cmd="ls\nrm -rf /"), ctx)
         assert result.ok is False
         assert "multi-line" in result.error.lower()
 
     @pytest.mark.asyncio
     async def test_safety_blocks_dangerous(self):
-        ctx = _ctx()
+        ctx = tool_context()
         # rm -rf / is in the default dangerous patterns
         result = await ShellTool().run(ShellArgs(cmd="rm -rf /"), ctx)
         assert result.ok is False
@@ -128,7 +80,7 @@ class TestShellTool:
 
     @pytest.mark.asyncio
     async def test_unknown_target_returns_error(self):
-        ctx = _ctx()
+        ctx = tool_context()
         result = await ShellTool().run(
             ShellArgs(cmd="ls", target="nope"), ctx
         )
@@ -138,7 +90,7 @@ class TestShellTool:
     @pytest.mark.asyncio
     async def test_dry_run_does_not_call_ssh(self):
         conn = FakeSSHConn()
-        ctx = ToolContext(primary=_primary_target(ssh_conn=conn), dry_run=True)
+        ctx = ToolContext(primary=primary_target(ssh_conn=conn), dry_run=True)
         result = await ShellTool().run(ShellArgs(cmd="whoami"), ctx)
         assert result.ok is True
         assert "DRY-RUN" in result.output
@@ -147,7 +99,7 @@ class TestShellTool:
     @pytest.mark.asyncio
     async def test_readonly_target_blocks_write(self):
         conn = FakeSSHConn()
-        primary = _primary_target(read_only=True, ssh_conn=conn)
+        primary = primary_target(read_only=True, ssh_conn=conn)
         ctx = ToolContext(primary=primary)
         result = await ShellTool().run(
             ShellArgs(cmd="echo hi > /tmp/x"), ctx
@@ -160,7 +112,7 @@ class TestShellTool:
     async def test_extra_target_routing(self):
         primary_conn = FakeSSHConn(default=FakeRunResult(stdout="P"))
         extra_conn = FakeSSHConn(default=FakeRunResult(stdout="E"))
-        primary = _primary_target(ssh_conn=primary_conn)
+        primary = primary_target(ssh_conn=primary_conn)
         extra = ServerTarget(
             name="worker-1",
             server_id=2,
@@ -180,7 +132,7 @@ class TestShellTool:
     @pytest.mark.asyncio
     async def test_sudo_disabled_blocks_command(self):
         conn = FakeSSHConn()
-        primary = _primary_target(ssh_conn=conn)
+        primary = primary_target(ssh_conn=conn)
         ctx = ToolContext(primary=primary, sudo_policy="disabled")
         result = await ShellTool().run(ShellArgs(cmd="sudo whoami"), ctx)
         assert result.ok is False
@@ -190,7 +142,7 @@ class TestShellTool:
     @pytest.mark.asyncio
     async def test_sudo_approved_uses_noninteractive_mode(self):
         conn = FakeSSHConn(default=FakeRunResult(stdout="root\n", exit_status=0))
-        primary = _primary_target(ssh_conn=conn)
+        primary = primary_target(ssh_conn=conn)
         primary.sudo_auth_mode = "nopasswd"
         ctx = ToolContext(primary=primary, sudo_policy="approved")
         result = await ShellTool().run(ShellArgs(cmd="sudo whoami"), ctx)
@@ -201,7 +153,7 @@ class TestShellTool:
     @pytest.mark.asyncio
     async def test_sudo_ask_prompts_and_allows_once(self):
         conn = FakeSSHConn(default=FakeRunResult(stdout="root\n", exit_status=0))
-        primary = _primary_target(ssh_conn=conn)
+        primary = primary_target(ssh_conn=conn)
         primary.sudo_auth_mode = "nopasswd"
         prompts = []
 
@@ -221,7 +173,7 @@ class TestShellTool:
         import servers.services.terminal_agent_context as terminal_agent_context
 
         conn = FakeSSHConn(default=FakeRunResult(stdout="root\n", exit_status=0))
-        primary = _primary_target(ssh_conn=conn)
+        primary = primary_target(ssh_conn=conn)
         primary.sudo_auth_mode = "stored_password"
 
         async def fake_load_user_accessible_server(**_kwargs):
@@ -249,7 +201,7 @@ class TestReadFileTool:
     @pytest.mark.asyncio
     async def test_missing_file_error(self):
         conn = FakeSSHConn(default=FakeRunResult(stdout="STAT:MISSING MISSING\nDATA:"))
-        ctx = ToolContext(primary=_primary_target(ssh_conn=conn))
+        ctx = ToolContext(primary=primary_target(ssh_conn=conn))
         result = await ReadFileTool().run(ReadFileArgs(path="/etc/nope"), ctx)
         assert result.ok is False
         assert "not found" in result.error.lower()
@@ -261,7 +213,7 @@ class TestReadFileTool:
         content = "hello world\n"
         b64 = base64.b64encode(content.encode()).decode()
         conn = FakeSSHConn(default=FakeRunResult(stdout=f"STAT:12 1700000000\nDATA:{b64}"))
-        ctx = ToolContext(primary=_primary_target(ssh_conn=conn))
+        ctx = ToolContext(primary=primary_target(ssh_conn=conn))
         result = await ReadFileTool().run(ReadFileArgs(path="/etc/hostname"), ctx)
         assert result.ok is True
         assert "hello world" in result.output
@@ -280,7 +232,7 @@ class TestEditFileTool:
             responses={"test -f": FakeRunResult(stdout="MISSING", exit_status=0)},
         )
         ctx = ToolContext(
-            primary=_primary_target(ssh_conn=conn), user_id=1
+            primary=primary_target(ssh_conn=conn), user_id=1
         )
         result = await EditFileTool().run(
             EditFileArgs(path="/etc/new.conf", content="x=1"), ctx
@@ -292,7 +244,7 @@ class TestEditFileTool:
     async def test_readonly_target_refuses(self):
         conn = FakeSSHConn()
         ctx = ToolContext(
-            primary=_primary_target(read_only=True, ssh_conn=conn), user_id=1
+            primary=primary_target(read_only=True, ssh_conn=conn), user_id=1
         )
         result = await EditFileTool().run(
             EditFileArgs(path="/etc/nginx.conf", content="x"), ctx
@@ -305,7 +257,7 @@ class TestEditFileTool:
     async def test_dry_run(self):
         conn = FakeSSHConn()
         ctx = ToolContext(
-            primary=_primary_target(ssh_conn=conn), user_id=1, dry_run=True
+            primary=primary_target(ssh_conn=conn), user_id=1, dry_run=True
         )
         result = await EditFileTool().run(
             EditFileArgs(path="/etc/hosts", content="x"), ctx
@@ -329,7 +281,7 @@ class TestListFilesTool:
             "drwxr-xr-x 2 root root 4096 1700000100 /etc/nginx\n"
         )
         conn = FakeSSHConn(default=FakeRunResult(stdout=ls_stdout, exit_status=0))
-        ctx = ToolContext(primary=_primary_target(ssh_conn=conn))
+        ctx = ToolContext(primary=primary_target(ssh_conn=conn))
         result = await ListFilesTool().run(ListFilesArgs(path="/etc"), ctx)
         assert result.ok is True
         entries = result.data["entries"]
@@ -351,7 +303,7 @@ class TestGrepTool:
             "/etc/nginx/sites-enabled/a.conf:7:    ssl_certificate /etc/ssl/a.pem;\n"
         )
         conn = FakeSSHConn(default=FakeRunResult(stdout=out, exit_status=0))
-        ctx = ToolContext(primary=_primary_target(ssh_conn=conn))
+        ctx = ToolContext(primary=primary_target(ssh_conn=conn))
         result = await GrepTool().run(
             GrepArgs(pattern="ssl", path="/etc/nginx"), ctx
         )
@@ -363,7 +315,7 @@ class TestGrepTool:
     async def test_no_matches_returns_ok_empty(self):
         # grep returns exit 1 when nothing matches — still ok=True for us
         conn = FakeSSHConn(default=FakeRunResult(stdout="", exit_status=1))
-        ctx = ToolContext(primary=_primary_target(ssh_conn=conn))
+        ctx = ToolContext(primary=primary_target(ssh_conn=conn))
         result = await GrepTool().run(
             GrepArgs(pattern="nonexistent", path="/etc"), ctx
         )
@@ -386,7 +338,7 @@ class TestListTargetsTool:
             is_primary=False,
             read_only=True,
         )
-        ctx = ToolContext(primary=_primary_target(), extras={"worker-1": extra})
+        ctx = ToolContext(primary=primary_target(), extras={"worker-1": extra})
         result = await ListTargetsTool().run(ListTargetsArgs(), ctx)
         assert result.ok is True
         assert len(result.data["targets"]) == 2
@@ -402,7 +354,7 @@ class TestTodoWriteTool:
         async def emit(ev):
             events.append(ev)
 
-        ctx = ToolContext(primary=_primary_target(), emit=emit)
+        ctx = ToolContext(primary=primary_target(), emit=emit)
         result = await TodoWriteTool().run(
             TodoWriteArgs(
                 todos=[
@@ -427,7 +379,7 @@ class TestAskUserTool:
             captured.append(request)
             return "yes, proceed"
 
-        ctx = ToolContext(primary=_primary_target(), prompt_user=prompt)
+        ctx = ToolContext(primary=primary_target(), prompt_user=prompt)
         result = await AskUserTool().run(
             AskUserArgs(question="Proceed?"), ctx
         )
@@ -446,7 +398,7 @@ class TestAskUserTool:
             captured.append(request)
             return "да"
 
-        ctx = ToolContext(primary=_primary_target(), prompt_user=prompt)
+        ctx = ToolContext(primary=primary_target(), prompt_user=prompt)
         result = await AskUserTool().run(
             AskUserArgs(
                 question="Продолжить?",
@@ -473,7 +425,7 @@ class TestAskUserTool:
         async def prompt(request):
             return None
 
-        ctx = ToolContext(primary=_primary_target(), prompt_user=prompt)
+        ctx = ToolContext(primary=primary_target(), prompt_user=prompt)
         result = await AskUserTool().run(
             AskUserArgs(question="Proceed?", timeout_seconds=5), ctx
         )
@@ -484,7 +436,7 @@ class TestAskUserTool:
 class TestDoneTool:
     @pytest.mark.asyncio
     async def test_echoes_final_text(self):
-        ctx = ToolContext(primary=_primary_target())
+        ctx = ToolContext(primary=primary_target())
         result = await DoneTool().run(
             DoneArgs(final_text="All good."), ctx
         )

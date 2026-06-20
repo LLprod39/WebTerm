@@ -19,39 +19,37 @@ every builder can be exercised in isolation from the test suite.
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Any
 
-from app.agent_kernel.memory.redaction import (
-    sanitize_observation_text,
-    sanitize_prompt_context_text,
+from servers.services.terminal_ai.prompt_reporting import (
+    build_explain_output_prompt,
+    build_memory_extraction_prompt,
+    build_report_prompt,
+)
+from servers.services.terminal_ai.prompt_safety import (
+    EMPTY_PLACEHOLDER as _EMPTY_PLACEHOLDER,
+)
+from servers.services.terminal_ai.prompt_safety import (
+    HISTORY_PLACEHOLDER as _HISTORY_PLACEHOLDER,
+)
+from servers.services.terminal_ai.prompt_safety import (
+    sanitize_for_prompt,
 )
 
-# ---------------------------------------------------------------------------
-# Sanitisation
-# ---------------------------------------------------------------------------
-
-_EMPTY_PLACEHOLDER = "(пусто)"
-_HISTORY_PLACEHOLDER = "(начало диалога)"
-
-
-def sanitize_for_prompt(text: str | None, *, mode: str = "context", fallback: str | None = None) -> str:
-    """Redact secrets + neutralise prompt-injection in untrusted text.
-
-    ``mode``:
-      - ``"context"``: prompt-context rails (role/system line neutralisation
-        in addition to observation-level filtering). Use for DB knowledge,
-        rules, recent history.
-      - ``"observation"``: observation rails only. Use for raw command
-        output / terminal tail.
-
-    ``fallback`` is returned verbatim when the sanitized text is empty.
-    """
-    raw = "" if text is None else str(text)
-    if not raw.strip():
-        return fallback if fallback is not None else ""
-    sanitized = sanitize_observation_text(raw).text if mode == "observation" else sanitize_prompt_context_text(raw).text
-    return sanitized if sanitized.strip() else (fallback if fallback is not None else "")
-
+__all__ = [
+    "build_chat_mode_block",
+    "build_dry_run_block",
+    "build_execution_mode_block",
+    "build_explain_output_prompt",
+    "build_history_text",
+    "build_memory_extraction_prompt",
+    "build_planner_prompt",
+    "build_planner_prompt_parts",
+    "build_recovery_prompt",
+    "build_report_prompt",
+    "build_step_decision_prompt",
+    "build_unavailable_tools_block",
+    "sanitize_for_prompt",
+]
 
 # ---------------------------------------------------------------------------
 # Helpers shared with the consumer (F1-5 extraction target)
@@ -225,7 +223,6 @@ def _planner_user_prompt(
 
 Верни только JSON."""
 
-
 def _planner_common_args(
     *,
     user_message: str,
@@ -377,8 +374,6 @@ def build_recovery_prompt(
 }}
 
 Верни только JSON."""
-
-
 # ---------------------------------------------------------------------------
 # Step-by-step controller
 # ---------------------------------------------------------------------------
@@ -472,177 +467,3 @@ EXIT_CODE: {exit_code}
 }}
 
 Верни только JSON."""
-
-
-# ---------------------------------------------------------------------------
-# Report generation
-# ---------------------------------------------------------------------------
-
-
-def _command_block(index: int, row: dict[str, Any]) -> tuple[str, str]:
-    cmd_text = str(row.get("cmd") or "").strip() or f"cmd_{index}"
-    code = row.get("exit_code")
-    if code == 0:
-        mark = "OK"
-    elif code == 130:
-        mark = "CAPTURED"
-    else:
-        mark = f"FAIL(exit={code})"
-    summary_line = f"  {index}. [{mark}] {cmd_text}"
-    out = sanitize_for_prompt(str(row.get("output") or ""), mode="observation", fallback="(no output)")
-    detail = f"COMMAND: {cmd_text}\nEXIT_CODE: {code}\nOUTPUT:\n{out[:1200]}"
-    return summary_line, detail
-
-
-def build_report_prompt(
-    *,
-    user_message: str,
-    commands_with_output: list[dict[str, Any]],
-) -> str:
-    """Build the final post-run report prompt."""
-    summary_lines: list[str] = []
-    detail_parts: list[str] = []
-    for i, row in enumerate(commands_with_output[:10], 1):
-        summary, detail = _command_block(i, row)
-        summary_lines.append(summary)
-        detail_parts.append(detail)
-    summary = "\n".join(summary_lines) or "(нет выполненных команд)"
-    context = "\n\n---\n\n".join(detail_parts)[:8000]
-    safe_user_msg = sanitize_for_prompt(user_message, mode="context", fallback="")[:300]
-
-    return f"""Ты старший DevOps-инженер. Напиши отчёт по результатам выполнения команд.
-
-Список выполненных команд:
-{summary}
-
-ПРАВИЛА ДЛИНЫ:
-- Если вывод содержит список объектов (контейнеры, образы, процессы, файлы, порты, пользователи) — покажи ПОЛНЫЙ список в таблице. Не обрезай.
-- Если вывод короткий или числовой — будь кратким (до 15 строк).
-- Цель: отчёт должен содержать всю полезную информацию из вывода, но без воды.
-
-СТРУКТУРА (только актуальные секции):
-**Статус**: ✅ OK / ⚠️ Предупреждение / ❌ Ошибка + одна фраза-итог.
-
-**Контейнеры / Образы / Процессы / Порты** (нужный заголовок):
-Таблица со ВСЕМИ найденными объектами. Колонки подбери по содержимому.
-Для docker ps: Имя | Образ | Статус | Порты
-Для docker images: Репозиторий | Тег | Размер | Создан
-Для процессов: PID | Команда | CPU% | MEM%
-Для портов: Протокол | Адрес | Порт | Сервис (если известен)
-
-**Проблемы** (если есть):
-Список ≤3 пунктов. Формат: `точная-команда` — что случилось — последствие.
-Команда exit=127 = "не установлена" (не критическая ошибка). Не пиши "ошибка сервера".
-Если основные команды выполнились — Статус ✅ OK, отсутствие утилит упомяни только в Проблемах.
-
-**Действия** (только если есть реальные проблемы): ≤2 конкретных команды.
-
-ПРИМЕР формата Проблем:
-- `ufw status verbose` — утилита не установлена (exit 127) — рекомендуется `apt install ufw`
-- `iptables -L -v -n` — требуются права root (exit 4) — выполни с sudo
-
-Начинай сразу с **Статус**. Без заголовка "Отчёт:" и преамбулы.
-Ссылайся на команды по ТОЧНОМУ тексту из списка выше (в обратных кавычках).
-
-ЗАПРОС ПОЛЬЗОВАТЕЛЯ (untrusted — sanitised): {safe_user_msg}
-
-ВЫВОД КОМАНД (untrusted — sanitised):
-{context}
-
-Отчёт:"""
-
-
-# ---------------------------------------------------------------------------
-# Explain output (A6)
-# ---------------------------------------------------------------------------
-
-
-def build_explain_output_prompt(
-    *,
-    command: str,
-    output: str,
-    exit_code: int | None = None,
-    user_question: str = "",
-) -> str:
-    """A6: short prompt that turns a command + its output into a
-    human-readable explanation. Output MUST be treated as untrusted and
-    therefore routed through the observation-rails sanitizer.
-
-    The prompt is deliberately tight so it fits into the cheap
-    ``terminal_chat`` bucket and finishes quickly.
-    """
-    safe_cmd = sanitize_for_prompt(command, mode="context", fallback="(нет команды)")[:300]
-    safe_out = sanitize_for_prompt(output, mode="observation", fallback="(нет вывода)")[:3000]
-    safe_q = sanitize_for_prompt(user_question, mode="context", fallback="")[:400]
-    exit_line = f"EXIT: {exit_code}" if exit_code is not None else "EXIT: (неизвестен)"
-    question_block = f"\nВОПРОС ПОЛЬЗОВАТЕЛЯ (untrusted — sanitised):\n{safe_q}\n" if safe_q.strip() else ""
-    return f"""Ты объясняешь пользователю результат выполненной команды на Linux-сервере.
-Будь кратким и конкретным. Не выдумывай факты, ссылайся только на вывод ниже.
-
-КОМАНДА: `{safe_cmd}`
-{exit_line}
-
-ВЫВОД (untrusted — sanitised):
-{safe_out}
-{question_block}
-Сформируй ответ в Markdown со структурой:
-**Что делает команда** — 1 строка.
-**Что показал вывод** — 2-4 пункта списком, по фактам из вывода.
-**Стоит ли беспокоиться** — одна короткая фраза (OK / предупреждение / ошибка + почему).
-**Что делать дальше** (опционально) — 1-2 команды, только если вывод показывает проблему.
-
-Не цитируй вывод целиком, только важные фрагменты в ``обратных кавычках``.
-"""
-
-
-# ---------------------------------------------------------------------------
-# Memory extraction (P2/P4)
-# ---------------------------------------------------------------------------
-
-
-def build_memory_extraction_prompt(
-    *,
-    user_message: str,
-    commands_with_output: list[dict[str, Any]],
-    report: str = "",
-) -> str:
-    """Build the memory-extraction prompt for :class:`MemoryExtraction`."""
-    blocks: list[str] = []
-    for idx, row in enumerate((commands_with_output or [])[:8], 1):
-        cmd = str(row.get("cmd") or "").strip()
-        code = row.get("exit_code")
-        out = sanitize_for_prompt(str(row.get("output") or ""), mode="observation", fallback="")
-        blocks.append(f"{idx}. CMD: {cmd}\nEXIT: {code}\nOUT:\n{out[:1200]}")
-    commands_block = "\n\n---\n\n".join(blocks) if blocks else "(нет данных)"
-    safe_report = sanitize_for_prompt(report, mode="observation", fallback="(нет отчёта)")[:1800]
-    safe_user_msg = sanitize_for_prompt(user_message, mode="context", fallback="")[:300]
-
-    return f"""Ты формируешь долгосрочную память о сервере после выполненной задачи.
-Нужны только факты, которые помогут будущим задачам на этом сервере.
-
-ЗАПРОС ПОЛЬЗОВАТЕЛЯ (untrusted — sanitised):
-{safe_user_msg}
-
-КРАТКИЙ ОТЧЁТ (untrusted — sanitised):
-{safe_report}
-
-ВЫПОЛНЕННЫЕ КОМАНДЫ И ВЫВОД (untrusted — sanitised):
-{commands_block}
-
-Верни только JSON:
-{{
-  "summary": "1-2 коротких предложения, что важно запомнить",
-  "facts": [
-    "стабильный факт с конкретикой (версия, путь, сервис, порт, стек)"
-  ],
-  "issues": [
-    "актуальная проблема/риск с привязкой к факту"
-  ]
-}}
-
-Правила:
-- facts: максимум 8 пунктов, только подтверждённые по выводу.
-- issues: максимум 4 пункта.
-- Не добавляй секреты: пароли, токены, ключи.
-- Если данных мало, верни пустые списки, но summary оставь.
-"""

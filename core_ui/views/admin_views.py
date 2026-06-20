@@ -14,6 +14,12 @@ from django.shortcuts import redirect, render
 from django.utils import timezone as django_timezone
 from django.views.decorators.http import require_http_methods
 
+from app.admin_metrics_provider import (
+    get_admin_fleet_summary,
+    get_admin_server_summary,
+    get_admin_terminal_summary,
+    get_admin_user_active_terminal_count,
+)
 from app.core.model_config import model_manager
 from core_ui.context_processors import user_can_feature
 from core_ui.models import UserActivityLog
@@ -51,7 +57,6 @@ def _collect_admin_dashboard_data(include_version: bool = False) -> dict:
     from django.contrib.auth.models import User
 
     from core_ui.models import LLMUsageLog
-    from servers.models import Server, ServerConnection
 
     Task = _model_or_none("tasks", "Task")
     AgentRun = _model_or_none("agent_hub", "AgentRun")
@@ -83,15 +88,7 @@ def _collect_admin_dashboard_data(include_version: bool = False) -> dict:
         created_at__date=today,
     ).count()
 
-    active_connections = ServerConnection.objects.filter(status="connected").select_related("server", "user")
-    terminals = [
-        {
-            "server": conn.server.name,
-            "user": conn.user.username if conn.user_id else "unknown",
-            "connected_at": conn.connected_at.isoformat(),
-        }
-        for conn in active_connections
-    ]
+    terminal_summary = get_admin_terminal_summary()
 
     if AgentRun is not None:
         agents_running = AgentRun.objects.filter(status="running").count()
@@ -191,51 +188,7 @@ def _collect_admin_dashboard_data(include_version: bool = False) -> dict:
     tasks_total = Task.objects.count() if Task is not None else 0
     tasks_in_progress = Task.objects.filter(status="IN_PROGRESS").count() if Task is not None else 0
 
-    from servers.models import ServerAlert, ServerHealthCheck
-
-    fleet_health = {
-        "avg_cpu": 0,
-        "avg_memory": 0,
-        "avg_disk": 0,
-        "healthy": 0,
-        "warning": 0,
-        "critical": 0,
-        "unreachable": 0,
-    }
-    try:
-        from django.db.models import Avg as AvgF
-        from django.db.models import Max
-
-        latest_per_server = ServerHealthCheck.objects.values("server_id").annotate(last_id=Max("id"))
-        latest_ids = [r["last_id"] for r in latest_per_server]
-        if latest_ids:
-            agg = ServerHealthCheck.objects.filter(id__in=latest_ids).aggregate(
-                avg_cpu=AvgF("cpu_percent"),
-                avg_mem=AvgF("memory_percent"),
-                avg_disk=AvgF("disk_percent"),
-            )
-            fleet_health["avg_cpu"] = round(agg["avg_cpu"] or 0, 1)
-            fleet_health["avg_memory"] = round(agg["avg_mem"] or 0, 1)
-            fleet_health["avg_disk"] = round(agg["avg_disk"] or 0, 1)
-            for hc in ServerHealthCheck.objects.filter(id__in=latest_ids).values_list("status", flat=True):
-                fleet_health[hc] = fleet_health.get(hc, 0) + 1
-    except Exception:
-        pass
-
-    active_alerts_count = ServerAlert.objects.filter(is_resolved=False).count()
-    recent_alerts = list(
-        ServerAlert.objects.filter(is_resolved=False).select_related("server").order_by("-created_at")[:10]
-    )
-    alerts_list = [
-        {
-            "server": a.server.name,
-            "type": a.alert_type,
-            "severity": a.severity,
-            "title": a.title,
-            "time": a.created_at.isoformat(),
-        }
-        for a in recent_alerts
-    ]
+    fleet_summary = get_admin_fleet_summary()
 
     data = {
         "online_users": {
@@ -244,7 +197,7 @@ def _collect_admin_dashboard_data(include_version: bool = False) -> dict:
             "users": online_users,
         },
         "ai": {"requests_today": ai_requests_today},
-        "terminals": {"active": active_connections.count(), "connections": terminals},
+        "terminals": terminal_summary,
         "agents": {
             "running": agents_running,
             "today": agents_today,
@@ -255,14 +208,14 @@ def _collect_admin_dashboard_data(include_version: bool = False) -> dict:
         "api_usage": api_usage,
         "api_calls_today": sum(v["calls"] for v in api_usage.values()),
         "providers": providers,
-        "servers": {"total": Server.objects.count(), "active": Server.objects.filter(is_active=True).count()},
+        "servers": get_admin_server_summary(),
         "tasks": {"total": tasks_total, "in_progress": tasks_in_progress},
         "hourly_activity": hourly_activity,
         "top_users": top_users,
         "recent_activity": recent_activity,
-        "fleet_health": fleet_health,
-        "active_alerts_count": active_alerts_count,
-        "alerts": alerts_list,
+        "fleet_health": fleet_summary["fleet_health"],
+        "active_alerts_count": fleet_summary["active_alerts_count"],
+        "alerts": fleet_summary["alerts"],
     }
     if include_version:
         data["app_version"] = getattr(settings, "WEU_VERSION", "2.0.0")
@@ -356,8 +309,6 @@ def api_admin_users_sessions(request):
 
     from django.contrib.auth.models import User as AuthUser
 
-    from servers.models import ServerConnection
-
     last_5min = django_timezone.now() - timedelta(minutes=5)
     active_user_ids = list(
         UserActivityLog.objects.filter(created_at__gte=last_5min, user_id__isnull=False)
@@ -368,7 +319,7 @@ def api_admin_users_sessions(request):
     sessions = []
     for user in AuthUser.objects.filter(id__in=active_user_ids).order_by("username"):
         last_log = UserActivityLog.objects.filter(user=user).order_by("-created_at").first()
-        active_terminals = ServerConnection.objects.filter(user=user, status="connected").count()
+        active_terminals = get_admin_user_active_terminal_count(user.id)
         today_actions = UserActivityLog.objects.filter(user=user, created_at__date=django_timezone.now().date()).count()
         sessions.append(
             {

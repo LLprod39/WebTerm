@@ -1,5 +1,4 @@
 from datetime import timedelta
-from types import SimpleNamespace
 
 import pytest
 from asgiref.sync import async_to_sync
@@ -22,7 +21,6 @@ from app.agent_kernel.sandbox.manager import SandboxManager
 from app.agent_kernel.tools.registry import ToolRegistry
 from app.core.model_config import ModelManager
 from servers.adapters.memory_store import DjangoServerMemoryStore
-from servers.consumers import SSHTerminalConsumer
 from servers.memory_heuristics import should_capture_command_history_memory, should_persist_ai_memory
 from servers.models import (
     AgentRun,
@@ -38,6 +36,7 @@ from servers.models import (
     ServerMemoryRevalidation,
     ServerMemorySnapshot,
 )
+from servers.services.terminal_ai.memory import select_memory_candidate_commands
 
 
 def test_model_manager_resolve_purpose_supports_ops_aliases():
@@ -88,15 +87,13 @@ def test_run_ops_supervisor_once_spawns_expected_workers(monkeypatch):
 
 
 def test_terminal_memory_capture_filters_trivial_commands():
-    consumer = SSHTerminalConsumer()
-
     commands = [
         {"cmd": "clear", "output": "screen cleared", "exit_code": 0},
         {"cmd": "pwd", "output": "/root", "exit_code": 0},
         {"cmd": "systemctl status nginx", "output": "nginx.service - active (running)", "exit_code": 0},
     ]
 
-    filtered = consumer._select_memory_candidate_commands(commands)
+    filtered = select_memory_candidate_commands(commands)
 
     assert len(filtered) == 1
     assert filtered[0]["cmd"] == "systemctl status nginx"
@@ -159,118 +156,6 @@ def test_pattern_success_summary_uses_measured_runs_consistently():
     )
 
     assert pattern_success_summary(pattern) == "1/1 измеренных запусков (100%)"
-
-
-def test_manual_terminal_command_capture_persists_output_and_exit_code(monkeypatch):
-    persisted: list[dict] = []
-
-    class DummyStdin:
-        def __init__(self):
-            self.writes: list[str] = []
-
-        def write(self, data: str):
-            self.writes.append(data)
-
-    class DummyProc:
-        def __init__(self):
-            self.stdin = DummyStdin()
-
-    async def fake_log_user_activity_async(**_kwargs):
-        return None
-
-    def immediate_sync_to_async(func, thread_sensitive=True):
-        async def runner(*args, **kwargs):
-            return func(*args, **kwargs)
-
-        return runner
-
-    monkeypatch.setattr("servers.consumers.ssh_terminal.log_user_activity_async", fake_log_user_activity_async)
-    monkeypatch.setattr("servers.consumers.ssh_terminal.database_sync_to_async", immediate_sync_to_async)
-    monkeypatch.setattr(
-        SSHTerminalConsumer,
-        "_persist_manual_terminal_command_result",
-        staticmethod(lambda **kwargs: persisted.append(kwargs)),
-    )
-
-    consumer = SSHTerminalConsumer()
-    consumer.server = SimpleNamespace(id=20, name="lunix")
-    consumer._user_id = 1
-    consumer._ssh_proc = DummyProc()
-    consumer._server_connection_id = "term-manual-test"
-    consumer._ai_marker_token = "manualtest"
-    consumer._manual_input_buffer = ""
-    consumer._input_capture_suppress = 0
-    consumer._manual_next_cmd_id = 1_000_000
-    consumer._manual_pending_commands = []
-    consumer._manual_active_cmd_id = None
-    consumer._manual_active_output = ""
-
-    async_to_sync(consumer._handle_input)("systemctl status nginx\r")
-
-    assert consumer._manual_active_cmd_id == 1_000_000
-    assert any("__WEUAI_EXIT_manualtest_1000000" in item for item in consumer._ssh_proc.stdin.writes)
-
-    consumer._append_manual_output("systemctl status nginx\nnginx.service - active (running)\n")
-    async_to_sync(consumer._finalize_manual_terminal_command)(1_000_000, 0)
-
-    assert len(persisted) == 1
-    assert persisted[0]["command"] == "systemctl status nginx"
-    assert "nginx.service - active (running)" in persisted[0]["output"]
-    assert persisted[0]["exit_code"] == 0
-
-
-def test_manual_terminal_multiline_block_skips_marker_injection(monkeypatch):
-    persisted: list[dict] = []
-
-    class DummyStdin:
-        def __init__(self):
-            self.writes: list[str] = []
-
-        def write(self, data: str):
-            self.writes.append(data)
-
-    class DummyProc:
-        def __init__(self):
-            self.stdin = DummyStdin()
-
-    async def fake_log_user_activity_async(**_kwargs):
-        return None
-
-    def immediate_sync_to_async(func, thread_sensitive=True):
-        async def runner(*args, **kwargs):
-            return func(*args, **kwargs)
-
-        return runner
-
-    monkeypatch.setattr("servers.consumers.ssh_terminal.log_user_activity_async", fake_log_user_activity_async)
-    monkeypatch.setattr("servers.consumers.ssh_terminal.database_sync_to_async", immediate_sync_to_async)
-    monkeypatch.setattr(
-        SSHTerminalConsumer,
-        "_persist_manual_terminal_command_result",
-        staticmethod(lambda **kwargs: persisted.append(kwargs)),
-    )
-
-    consumer = SSHTerminalConsumer()
-    consumer.server = SimpleNamespace(id=20, name="lunix")
-    consumer._user_id = 1
-    consumer._ssh_proc = DummyProc()
-    consumer._server_connection_id = "term-manual-test"
-    consumer._ai_marker_token = "manualtest"
-    consumer._manual_input_buffer = ""
-    consumer._input_capture_suppress = 0
-    consumer._manual_next_cmd_id = 1_000_000
-    consumer._manual_pending_commands = []
-    consumer._manual_active_cmd_id = None
-    consumer._manual_active_output = ""
-
-    async_to_sync(consumer._handle_input)("if true; then\r")
-
-    assert consumer._manual_active_cmd_id is None
-    assert not any("__WEUAI_EXIT_" in item for item in consumer._ssh_proc.stdin.writes)
-    assert len(persisted) == 1
-    assert persisted[0]["command"] == "if true; then"
-    assert persisted[0]["output"] == ""
-    assert persisted[0]["exit_code"] is None
 
 
 def test_permission_engine_requires_preflight_and_verification():

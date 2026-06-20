@@ -11,6 +11,7 @@ class TestDefaults:
         assert s.plan_index == 0
         assert s.next_id == 1
         assert s.step_extra_count == 0
+        assert s.forbidden_patterns == []
         assert s.user_message == ""
         assert s.chat_mode == "agent"
         assert s.execution_mode == "step"
@@ -29,6 +30,7 @@ class TestResetForNewRequest:
         s.plan_index = 1
         s.next_id = 42
         s.step_extra_count = 3
+        s.forbidden_patterns = ["rm -rf"]
         s.last_done_items = [{"id": 1}]
         s.last_report = "old"
         s.stop_requested = True
@@ -45,6 +47,7 @@ class TestResetForNewRequest:
         assert s.plan_index == 0
         assert s.next_id == 1
         assert s.step_extra_count == 0
+        assert s.forbidden_patterns == []
         assert s.last_done_items == []
         assert s.last_report == ""
         assert s.stop_requested is False
@@ -62,6 +65,21 @@ class TestMutationHelpers:
         assert s.allocate_id() == 2
         assert s.allocate_id() == 3
         assert s.next_id == 4
+
+    def test_load_plan_installs_initial_queue_state(self):
+        s = TerminalAiSession()
+        original_items = [{"id": 1, "cmd": "uptime"}, {"id": 2, "cmd": "df -h"}]
+        s.plan_index = 99
+        s.next_id = 99
+        s.forbidden_patterns = ["old"]
+
+        s.load_plan(original_items, next_id=3, forbidden_patterns=["rm -rf"])
+
+        assert s.plan == original_items
+        assert s.plan is not original_items
+        assert s.plan_index == 0
+        assert s.next_id == 3
+        assert s.forbidden_patterns == ["rm -rf"]
 
     def test_append_plan_item(self):
         s = TerminalAiSession()
@@ -114,6 +132,93 @@ class TestMutationHelpers:
         assert len(s.last_done_items) == 2
         assert [x["exit_code"] for x in s.last_done_items] == [0, 127]
 
+    def test_confirm_current_marks_waiting_command_confirmed(self):
+        s = TerminalAiSession()
+        s.plan = [{"id": 7, "cmd": "systemctl restart app", "requires_confirm": True, "status": "confirm"}]
+
+        transition = s.confirm_current(7)
+
+        assert transition.changed is True
+        assert transition.command_id == 7
+        assert transition.status == "confirmed"
+        assert transition.error == ""
+        assert s.plan[0]["requires_confirm"] is False
+        assert s.plan[0]["confirmed"] is True
+        assert s.plan[0]["status"] == "pending"
+        assert s.plan_index == 0
+
+    def test_confirm_current_rejects_non_current_command(self):
+        s = TerminalAiSession()
+        s.plan = [
+            {"id": 1, "cmd": "first", "requires_confirm": True},
+            {"id": 2, "cmd": "second", "requires_confirm": True},
+        ]
+
+        transition = s.confirm_current(2)
+
+        assert transition.changed is False
+        assert transition.error == "Подтверждать можно только текущую ожидающую команду"
+        assert s.plan[0]["requires_confirm"] is True
+        assert s.plan_index == 0
+
+    def test_confirm_current_noops_when_command_does_not_require_confirmation(self):
+        s = TerminalAiSession()
+        s.plan = [{"id": 3, "cmd": "hostname", "requires_confirm": False, "status": "pending"}]
+
+        transition = s.confirm_current(3)
+
+        assert transition.changed is False
+        assert transition.error == ""
+        assert s.plan[0]["status"] == "pending"
+        assert s.plan_index == 0
+
+    def test_cancel_current_skips_current_command_and_advances_cursor(self):
+        s = TerminalAiSession()
+        s.plan = [{"id": 1, "cmd": "first"}, {"id": 2, "cmd": "second"}]
+
+        transition = s.cancel_current(1)
+
+        assert transition.changed is True
+        assert transition.command_id == 1
+        assert transition.status == "skipped"
+        assert transition.error == ""
+        assert s.plan[0]["status"] == "skipped"
+        assert s.plan_index == 1
+
+    def test_cancel_current_rejects_non_current_command(self):
+        s = TerminalAiSession()
+        s.plan = [{"id": 1, "cmd": "first"}, {"id": 2, "cmd": "second"}]
+
+        transition = s.cancel_current(2)
+
+        assert transition.changed is False
+        assert transition.error == "Отменять можно только текущую ожидающую команду"
+        assert "status" not in s.plan[0]
+        assert s.plan_index == 0
+
+    def test_request_stop_returns_only_pending_non_active_commands(self):
+        s = TerminalAiSession()
+        s.plan = [
+            {"id": 1, "status": "running"},
+            {"id": 2, "status": "pending"},
+            {"id": 3, "status": "done"},
+            {"id": 4, "status": "skipped"},
+            {"id": 5, "status": "cancelled"},
+            {"id": 6},
+        ]
+
+        pending = s.request_stop(active_command_id=1)
+
+        assert s.stop_requested is True
+        assert pending == [2, 6]
+
+    def test_request_stop_uses_remaining_queue_only(self):
+        s = TerminalAiSession()
+        s.plan = [{"id": 1}, {"id": 2}, {"id": 3}]
+        s.plan_index = 1
+
+        assert s.request_stop(active_command_id=None) == [2, 3]
+
 
 class TestClear:
     def test_clear_wipes_queue_but_keeps_identifiers(self):
@@ -128,6 +233,7 @@ class TestClear:
         s.plan = [{"id": 1}]
         s.plan_index = 1
         s.step_extra_count = 2
+        s.forbidden_patterns = ["shutdown"]
         s.stop_requested = True
 
         s.clear()
@@ -135,6 +241,7 @@ class TestClear:
         assert s.plan == []
         assert s.plan_index == 0
         assert s.step_extra_count == 0
+        assert s.forbidden_patterns == []
         assert s.stop_requested is False
         # Identifiers are preserved so trailing ``ai_*`` events still
         # carry the right run_id.

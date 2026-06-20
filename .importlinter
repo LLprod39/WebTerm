@@ -21,10 +21,6 @@ source_modules =
     app.agent_kernel
 forbidden_modules =
     django
-ignore_imports =
-    # Legacy violations to be resolved in subsequent refactoring tasks:
-    app.agent_kernel.tools.registry -> servers.agent_tools
-
 
 # ─── Contract 2: app/core must not import Django feature apps ─────────────────
 # Goal: Shared infrastructure in app/core must remain dependency-free from
@@ -38,20 +34,13 @@ forbidden_modules =
     servers
     studio
     core_ui
-ignore_imports =
-    # Legacy violations to be resolved in subsequent refactoring tasks:
-    app.core.llm -> core_ui.audit
-    app.core.llm -> core_ui.services.llm_budget
-    app.core.llm_usage -> core_ui.activity
-    app.core.llm_usage -> core_ui.audit
-    app.core.llm_usage -> core_ui.models
-
 
 # ─── Contract 3: app/tools must not import Django feature apps ────────────────
 # Goal: Tool implementations must stay decoupled from feature apps.
-# Documented shims listed below are the only permitted exceptions.
+# No legacy exceptions remain; feature-app behavior must be reached through
+# app-level providers or gateway interfaces.
 [importlinter:contract:app-tools-no-django-apps]
-name = app/tools must not import servers (except documented shims), studio, or core_ui
+name = app/tools must not import servers, studio, or core_ui
 type = forbidden
 source_modules =
     app.tools
@@ -59,20 +48,6 @@ forbidden_modules =
     servers
     studio
     core_ui
-ignore_imports =
-    # server_tools.py and ssh_tools.py must directly access the Server ORM.
-    # This is a known, accepted design compromise: SSH execution tools need
-    # to know about Server entities.
-    # Future intent: Extract into servers/tools/ and remove from app/tools/.
-    app.tools.server_tools -> servers.models
-    app.tools.server_tools -> servers.secret_utils
-    app.tools.ssh_tools -> servers.ssh_host_keys
-    # Legacy violations to be resolved in subsequent refactoring tasks:
-    app.tools.server_tools -> core_ui.activity
-    app.tools.server_tools -> servers.knowledge_service
-    app.tools.ssh_tools -> core_ui.activity
-    app.tools.ssh_tools -> core_ui.audit
-
 
 # ─── Contract 4: app/tools must not import agent_kernel ───────────────────────
 # Goal: Tools are leaf-layer utilities; importing the kernel would create a
@@ -85,10 +60,6 @@ source_modules =
     app.tools
 forbidden_modules =
     app.agent_kernel
-ignore_imports =
-    # Legacy violations to be resolved in subsequent refactoring tasks:
-    app.tools.server_tools -> servers.knowledge_service
-
 
 # ─── Contract 5: core_ui must not import servers or studio ────────────────────
 # Goal: The UI layer should focus on session management and view aggregation;
@@ -101,19 +72,6 @@ source_modules =
 forbidden_modules =
     servers
     studio
-ignore_imports =
-    # Admin dashboard aggregates cross-context data for system monitoring.
-    core_ui.views.admin_views -> servers.models
-    # Chat helper bridge can use user-owned server records for explicit
-    # "run this on server X" assistant requests.
-    core_ui.views.chat_helpers -> servers.models
-    core_ui.views.chat_helpers -> servers.secret_utils
-    # seed_multi_user_smoke is dev/test tooling only, not production code.
-    core_ui.management.commands.seed_multi_user_smoke -> servers.models
-    core_ui.management.commands.seed_multi_user_smoke -> servers.secret_utils
-    core_ui.management.commands.seed_multi_user_smoke -> studio.models
-    # Legacy violations to be resolved in subsequent refactoring tasks:
-    core_ui.views.chat_helpers -> app.tools.server_tools
 
 
 # ─── Contract 6: servers must not import studio directly ──────────────────────
@@ -126,10 +84,6 @@ source_modules =
     servers
 forbidden_modules =
     studio
-ignore_imports =
-    # Legacy violations to be resolved in subsequent refactoring tasks:
-    servers.agent_service -> app.runtime_limits
-    servers.scheduled_agents -> app.runtime_limits
 
 
 # ─── Contract 7: studio must not import servers directly ──────────────────────
@@ -141,16 +95,3 @@ source_modules =
     studio
 forbidden_modules =
     servers
-ignore_imports =
-    # Legacy violations to be resolved in subsequent refactoring tasks:
-    studio.apps -> servers.signals
-    studio.pipeline_agent_llm -> servers.services.pipeline_memory
-    studio.pipeline_agent_runtime -> servers.services.command_history
-    studio.pipeline_agent_runtime -> servers.services.pipeline_agents
-    studio.pipeline_agent_runtime -> servers.services.ssh_connection
-    studio.services.server_access -> servers.services.server_query
-    studio.skill_authoring -> servers.services.tool_catalog
-    studio.trigger_dispatch -> servers.services.alert_query
-    studio.management.commands.run_telegram_bot -> app.runtime_limits
-    studio.trigger_dispatch -> app.runtime_limits
-    studio.management.commands.run_scheduled_pipelines -> app.runtime_limits

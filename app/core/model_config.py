@@ -4,17 +4,31 @@ Manages model selection for different purposes (chat, RAG, agent)
 """
 import json
 import os
-from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit
 
-import httpx
 from loguru import logger
 from pydantic import BaseModel
-from app.core.redacted_logging import redacted_config_value, redacted_log_text
 
-OLLAMA_CLOUD_MODEL_SUFFIX = " (cloud)"
-OLLAMA_RUNTIME_MODES = {"auto", "local", "cloud"}
-OLLAMA_THINK_MODES = {"", "off", "on", "low", "medium", "high"}
+from app.core import model_refresh
+from app.core.llm_secrets import get_managed_llm_api_key
+from app.core.model_catalog import (
+    get_provider_agent_model,
+    get_provider_chat_model,
+    get_provider_default_models,
+    is_config_provider_enabled,
+    provider_model_spec,
+)
+from app.core.ollama_config import (
+    decode_ollama_cloud_model,
+    encode_ollama_cloud_model,
+    get_ollama_base_urls,
+    is_ollama_cloud_model,
+    normalize_ollama_base_url,
+    normalize_ollama_cloud_base_url,
+    normalize_ollama_runtime_mode,
+    normalize_ollama_think_mode,
+)
+from app.core.redacted_logging import redacted_config_value
+
 
 class ModelConfig(BaseModel):
     """Configuration for models"""
@@ -77,12 +91,12 @@ class ModelConfig(BaseModel):
 
     # Purpose-based LLM configuration (provider + specific model per use-case)
     # Empty string means "inherit from internal_llm_provider / default chat model"
-    chat_llm_provider: str = "fair"
-    chat_llm_model: str = "qwen3:14b"
-    agent_llm_provider: str = "fair"
-    agent_llm_model: str = "fair-spark"
-    orchestrator_llm_provider: str = "fair"
-    orchestrator_llm_model: str = "fair-spark"
+    chat_llm_provider: str = ""
+    chat_llm_model: str = ""
+    agent_llm_provider: str = ""
+    agent_llm_model: str = ""
+    orchestrator_llm_provider: str = ""
+    orchestrator_llm_model: str = ""
 
     # Domain SSO settings (None => use Django settings/.env fallback)
     domain_auth_enabled: bool | None = None
@@ -158,81 +172,6 @@ class ModelManager:
         if ollama_key:
             self.ollama_api_key = ollama_key
 
-    @staticmethod
-    def _extract_model_ids(payload: dict) -> list[str]:
-        """Extract model IDs from provider payloads with {data:[{id:...}]} shape."""
-        out: list[str] = []
-        for item in payload.get("data", []) or []:
-            model_id = item.get("id")
-            if isinstance(model_id, str) and model_id:
-                out.append(model_id)
-        return out
-
-    @staticmethod
-    def _is_openai_text_model(model_id: str) -> bool:
-        """Filter for text/chat-capable OpenAI model IDs."""
-        mid = (model_id or "").lower()
-        if not mid:
-            return False
-
-        blocked_prefixes = (
-            "text-embedding",
-            "omni-moderation",
-            "whisper",
-            "tts",
-            "dall-e",
-            "gpt-image",
-            "sora",
-        )
-        if mid.startswith(blocked_prefixes):
-            return False
-
-        return (
-            mid.startswith("gpt-")
-            or mid.startswith("gpt-oss")
-            or mid.startswith("codex-")
-            or mid.startswith("o1")
-            or mid.startswith("o3")
-            or mid.startswith("o4")
-            or mid.startswith("o5")
-        )
-
-    @staticmethod
-    def _normalize_ollama_base_url(raw: str | None = None) -> str:
-        value = (
-            (raw or "").strip()
-            or (os.getenv("OLLAMA_BASE_URL") or "").strip()
-            or "http://127.0.0.1:11434"
-        ).rstrip("/")
-        if "://" not in value:
-            value = f"http://{value}"
-        return value.rstrip("/")
-
-    @staticmethod
-    def _normalize_ollama_cloud_base_url(raw: str | None = None) -> str:
-        value = (
-            (raw or "").strip()
-            or (os.getenv("OLLAMA_CLOUD_BASE_URL") or "").strip()
-            or "https://ollama.com"
-        ).rstrip("/")
-        if "://" not in value:
-            value = f"https://{value}"
-        return value.rstrip("/")
-
-    @staticmethod
-    def _normalize_ollama_runtime_mode(raw: str | None = None) -> str:
-        value = (raw or "").strip().lower()
-        if value in OLLAMA_RUNTIME_MODES:
-            return value
-        return "auto"
-
-    @staticmethod
-    def _normalize_ollama_think_mode(raw: str | None = None) -> str:
-        value = (raw or "").strip().lower()
-        if value in OLLAMA_THINK_MODES:
-            return value
-        return ""
-
     def _get_ollama_api_key(self) -> str:
         return (self.ollama_api_key or "").strip() or (os.getenv("OLLAMA_API_KEY") or "").strip()
 
@@ -260,9 +199,7 @@ class ModelManager:
     @staticmethod
     def _get_managed_llm_api_key(provider: str) -> str:
         try:
-            from core_ui.managed_secrets import get_llm_api_key
-
-            return (get_llm_api_key(provider) or "").strip()
+            return get_managed_llm_api_key(provider)
         except Exception as exc:
             logger.debug(f"Managed LLM API key lookup skipped for {provider}: {exc}")
             return ""
@@ -279,475 +216,68 @@ class ModelManager:
 
     @staticmethod
     def _encode_ollama_cloud_model(model_id: str) -> str:
-        model_id = (model_id or "").strip()
-        if not model_id:
-            return ""
-        if model_id.endswith(OLLAMA_CLOUD_MODEL_SUFFIX):
-            return model_id
-        return f"{model_id}{OLLAMA_CLOUD_MODEL_SUFFIX}"
+        return encode_ollama_cloud_model(model_id)
 
     @staticmethod
     def _is_ollama_cloud_model(model_id: str | None) -> bool:
-        return (model_id or "").strip().endswith(OLLAMA_CLOUD_MODEL_SUFFIX)
+        return is_ollama_cloud_model(model_id)
 
     @staticmethod
     def _decode_ollama_cloud_model(model_id: str | None) -> str:
-        value = (model_id or "").strip()
-        if value.endswith(OLLAMA_CLOUD_MODEL_SUFFIX):
-            return value[: -len(OLLAMA_CLOUD_MODEL_SUFFIX)].rstrip()
-        return value
-
-    @staticmethod
-    def _is_wsl_runtime() -> bool:
-        if os.getenv("WSL_DISTRO_NAME") or os.getenv("WSL_INTEROP"):
-            return True
-        for proc_file in ("/proc/sys/kernel/osrelease", "/proc/version"):
-            try:
-                if "microsoft" in Path(proc_file).read_text(encoding="utf-8", errors="ignore").lower():
-                    return True
-            except OSError:
-                continue
-        return False
-
-    @staticmethod
-    def _replace_ollama_host(base_url: str, host: str) -> str:
-        parsed = urlsplit(base_url)
-        scheme = parsed.scheme or "http"
-        port = parsed.port or 11434
-        auth = ""
-        if parsed.username:
-            auth = parsed.username
-            if parsed.password:
-                auth = f"{auth}:{parsed.password}"
-            auth = f"{auth}@"
-        path = parsed.path or ""
-        return urlunsplit((scheme, f"{auth}{host}:{port}", path, parsed.query, parsed.fragment)).rstrip("/")
+        return decode_ollama_cloud_model(model_id)
 
     def _get_ollama_base_url(self) -> str:
-        return self._normalize_ollama_base_url(self.config.ollama_base_url)
+        return normalize_ollama_base_url(self.config.ollama_base_url)
 
     def _get_ollama_cloud_base_url(self) -> str:
-        return self._normalize_ollama_cloud_base_url(self.config.ollama_cloud_base_url)
+        return normalize_ollama_cloud_base_url(self.config.ollama_cloud_base_url)
 
     def _get_ollama_runtime_mode(self) -> str:
-        return self._normalize_ollama_runtime_mode(self.config.ollama_runtime_mode)
+        return normalize_ollama_runtime_mode(self.config.ollama_runtime_mode)
 
     def _get_ollama_think_mode(self) -> str:
-        return self._normalize_ollama_think_mode(self.config.ollama_think_mode)
+        return normalize_ollama_think_mode(self.config.ollama_think_mode)
 
     def _get_ollama_base_urls(self) -> list[str]:
-        primary = self._get_ollama_base_url()
-        urls: list[str] = [primary]
-        parsed = urlsplit(primary)
-        host = (parsed.hostname or "").strip().lower()
-
-        if host not in {"127.0.0.1", "localhost", "::1"} or not self._is_wsl_runtime():
-            return urls
-
-        fallback_hosts: list[str] = ["host.docker.internal", "host.containers.internal"]
-        try:
-            for line in Path("/etc/resolv.conf").read_text(encoding="utf-8", errors="ignore").splitlines():
-                if line.startswith("nameserver "):
-                    candidate = (line.split(maxsplit=1)[1] or "").strip()
-                    if candidate:
-                        fallback_hosts.append(candidate)
-                    break
-        except OSError:
-            pass
-        try:
-            for line in Path("/proc/net/route").read_text(encoding="utf-8", errors="ignore").splitlines()[1:]:
-                parts = line.split()
-                if len(parts) < 3 or parts[1] != "00000000":
-                    continue
-                gateway_hex = parts[2]
-                if len(gateway_hex) != 8:
-                    continue
-                octets = [str(int(gateway_hex[i:i + 2], 16)) for i in range(0, 8, 2)]
-                fallback_hosts.append(".".join(reversed(octets)))
-                break
-        except OSError:
-            pass
-
-        seen_hosts: set[str] = set()
-        for fallback_host in fallback_hosts:
-            normalized_host = fallback_host.strip().lower()
-            if not normalized_host or normalized_host in seen_hosts:
-                continue
-            seen_hosts.add(normalized_host)
-            candidate_url = self._replace_ollama_host(primary, fallback_host.strip())
-            if candidate_url not in urls:
-                urls.append(candidate_url)
-        return urls
-
-    @staticmethod
-    def _extract_ollama_model_names(payload: dict, *, cloud: bool = False) -> list[str]:
-        seen: set[str] = set()
-        models: list[str] = []
-
-        for item in payload.get("models", []) or []:
-            model_id = item.get("name") or item.get("model")
-            if not isinstance(model_id, str):
-                continue
-            normalized = model_id.strip()
-            if not normalized:
-                continue
-            if cloud:
-                normalized = ModelManager._encode_ollama_cloud_model(normalized)
-            if normalized in seen:
-                continue
-            seen.add(normalized)
-            models.append(normalized)
-
-        return models
-
-    def _combine_ollama_models(self, local_models: list[str], cloud_models: list[str]) -> list[str]:
-        ordered_sources = (
-            [cloud_models, local_models]
-            if self._get_ollama_runtime_mode() == "cloud"
-            else [local_models, cloud_models]
-        )
-        seen: set[str] = set()
-        combined: list[str] = []
-
-        for source_models in ordered_sources:
-            for model_id in source_models:
-                if model_id in seen:
-                    continue
-                seen.add(model_id)
-                combined.append(model_id)
-
-        return combined
+        return get_ollama_base_urls(self._get_ollama_base_url())
 
     async def fetch_available_gemini_models(self) -> list[str]:
-        """
-        Fetch available Gemini models via REST API.
-        """
-        key = await self._aget_managed_llm_api_key("gemini") or self.gemini_api_key or (os.getenv("GEMINI_API_KEY") or "").strip()
-        if key:
-            self.gemini_api_key = key
-        if not key:
-            logger.warning("Gemini API key not set")
-            return self._get_default_gemini_models()
-
-        try:
-            models: list[str] = []
-            page_token = ""
-
-            async with httpx.AsyncClient(timeout=20.0) as client:
-                while True:
-                    params = {"key": key, "pageSize": 200}
-                    if page_token:
-                        params["pageToken"] = page_token
-                    response = await client.get(
-                        "https://generativelanguage.googleapis.com/v1beta/models",
-                        params=params,
-                    )
-                    if response.status_code != 200:
-                        logger.error("Gemini API returned status {}: {}", response.status_code, redacted_log_text(response.text))
-                        return self._get_default_gemini_models()
-
-                    payload = response.json()
-                    for model in payload.get("models", []) or []:
-                        name = model.get("name")
-                        supported = model.get("supportedGenerationMethods") or []
-                        if isinstance(name, str) and name and "generateContent" in supported:
-                            models.append(name)
-
-                    page_token = (payload.get("nextPageToken") or "").strip()
-                    if not page_token:
-                        break
-
-            models = sorted(set(models))
-            if not models:
-                logger.warning("Gemini API returned empty models list; using defaults")
-                return self._get_default_gemini_models()
-
-            self.available_gemini_models = models
-            logger.success(f"Fetched {len(models)} Gemini models")
-            return models
-
-        except Exception as e:
-            logger.error(f"Failed to fetch Gemini models: {e}")
-            return self._get_default_gemini_models()
+        return await model_refresh.fetch_available_gemini_models(self)
 
     async def fetch_available_grok_models(self) -> list[str]:
-        """
-        Fetch available Grok models from xAI API
-        """
-        key = await self._aget_managed_llm_api_key("grok") or self.grok_api_key or (os.getenv("GROK_API_KEY") or "").strip()
-        if key:
-            self.grok_api_key = key
-        if not key:
-            logger.warning("Grok API key not set")
-            return self._get_default_grok_models()
-
-        try:
-            async with httpx.AsyncClient() as client:
-                for endpoint in ("https://api.x.ai/v1/language-models", "https://api.x.ai/v1/models"):
-                    response = await client.get(
-                        endpoint,
-                        headers={"Authorization": f"Bearer {key}"},
-                        timeout=10.0
-                    )
-
-                    if response.status_code != 200:
-                        logger.warning(f"Grok API returned status {response.status_code} for {endpoint}")
-                        continue
-
-                    data = response.json()
-                    models = sorted(set(self._extract_model_ids(data)))
-                    if not models:
-                        continue
-
-                    self.available_grok_models = models
-                    logger.success(f"Fetched {len(models)} Grok models from {endpoint}")
-                    return models
-
-                logger.error("Grok API returned no model data from supported endpoints")
-                return self._get_default_grok_models()
-
-        except Exception as e:
-            logger.error(f"Failed to fetch Grok models: {e}")
-            return self._get_default_grok_models()
+        return await model_refresh.fetch_available_grok_models(self)
 
     async def fetch_available_claude_models(self) -> list[str]:
-        """Fetch available Claude models from Anthropic API."""
-        key = await self._aget_managed_llm_api_key("claude") or self.anthropic_api_key or (os.getenv("ANTHROPIC_API_KEY") or "").strip()
-        if key:
-            self.anthropic_api_key = key
-        if not key:
-            logger.warning("Anthropic API key not set")
-            return self._get_default_claude_models()
-
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(
-                    "https://api.anthropic.com/v1/models",
-                    headers={
-                        "x-api-key": key,
-                        "anthropic-version": "2023-06-01",
-                    },
-                )
-                if response.status_code != 200:
-                    logger.error("Anthropic API returned status {}: {}", response.status_code, redacted_log_text(response.text))
-                    return self._get_default_claude_models()
-
-                payload = response.json()
-                models = sorted(
-                    {
-                        item.get("id", "")
-                        for item in (payload.get("data") or [])
-                        if item.get("id")
-                    }
-                )
-
-                if not models:
-                    logger.warning("Anthropic API returned empty model list; using defaults")
-                    return self._get_default_claude_models()
-
-                self.available_claude_models = models
-                logger.success(f"Fetched {len(models)} Claude models")
-                return models
-        except Exception as e:
-            logger.error(f"Failed to fetch Claude models: {e}")
-            return self._get_default_claude_models()
+        return await model_refresh.fetch_available_claude_models(self)
 
     async def fetch_available_openai_models(self) -> list[str]:
-        """
-        Fetch available OpenAI models from OpenAI Models API.
-        """
-        key = await self._aget_managed_llm_api_key("openai") or self.openai_api_key or (os.getenv("OPENAI_API_KEY") or "").strip() or (os.getenv("CODEX_API_KEY") or "").strip()
-        if key:
-            self.openai_api_key = key
-        if not key:
-            logger.warning("OpenAI API key not set")
-            return self._get_default_openai_models()
-
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(
-                    "https://api.openai.com/v1/models",
-                    headers={"Authorization": f"Bearer {key}"},
-                )
-
-                if response.status_code != 200:
-                    logger.error("OpenAI API returned status {}: {}", response.status_code, redacted_log_text(response.text))
-                    return self._get_default_openai_models()
-
-                payload = response.json()
-                models = sorted(
-                    {
-                        model_id
-                        for model_id in self._extract_model_ids(payload)
-                        if self._is_openai_text_model(model_id)
-                    }
-                )
-
-                if not models:
-                    logger.warning("OpenAI API returned empty text model list; using defaults")
-                    return self._get_default_openai_models()
-
-                self.available_openai_models = models
-                logger.success(f"Fetched {len(models)} OpenAI models")
-                return models
-        except Exception as e:
-            logger.error(f"Failed to fetch OpenAI models: {e}")
-            return self._get_default_openai_models()
+        return await model_refresh.fetch_available_openai_models(self)
 
     async def fetch_available_fair_models(self) -> list[str]:
-        """Fetch available FAIR.Hyperion models via OpenAI-compatible Models API."""
-        key = await self._aget_managed_llm_api_key("fair") or self.fair_api_key or self._get_fair_api_key()
-        if key:
-            self.fair_api_key = key
-        if not key:
-            logger.warning("FAIR.Hyperion API key not set")
-            return self._get_default_fair_models()
-
-        base_url = self._get_fair_base_url()
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(
-                    f"{base_url}/models",
-                    headers={"Authorization": f"Bearer {key}"},
-                )
-
-                if response.status_code != 200:
-                    logger.error(
-                        "FAIR.Hyperion API returned status {}: {}",
-                        response.status_code,
-                        redacted_log_text(response.text),
-                    )
-                    return self._get_default_fair_models()
-
-                payload = response.json()
-                models = sorted(set(self._extract_model_ids(payload)))
-                if not models:
-                    logger.warning("FAIR.Hyperion API returned empty model list; using defaults")
-                    return self._get_default_fair_models()
-
-                self.available_fair_models = models
-                logger.success(f"Fetched {len(models)} FAIR.Hyperion models")
-                return models
-        except Exception as e:
-            logger.error(f"Failed to fetch FAIR.Hyperion models: {e}")
-            return self._get_default_fair_models()
+        return await model_refresh.fetch_available_fair_models(self)
 
     async def fetch_available_ollama_models(self) -> list[str]:
-        """Fetch Ollama models from local runtime and optional ollama.com cloud catalog."""
-        local_models: list[str] = []
-        cloud_models: list[str] = []
-        errors: list[str] = []
-
-        for base_url in self._get_ollama_base_urls():
-            try:
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    response = await client.get(f"{base_url}/api/tags")
-
-                if response.status_code != 200:
-                    errors.append(f"local {base_url} -> HTTP {response.status_code}")
-                    continue
-
-                local_models = self._extract_ollama_model_names(response.json())
-                self.available_ollama_local_models = local_models
-                if base_url != self.config.ollama_base_url:
-                    logger.warning(
-                        f"Ollama base URL fallback: configured={self.config.ollama_base_url or 'unset'} -> using {base_url}"
-                    )
-                self.config.ollama_base_url = base_url
-                logger.success(f"Fetched {len(local_models)} local Ollama models from {base_url}")
-                break
-            except Exception as e:
-                errors.append(f"local {base_url} -> {e}")
-
-        if not local_models:
-            self.available_ollama_local_models = []
-
-        if self.config.ollama_cloud_enabled:
-            managed_ollama_key = await self._aget_managed_llm_api_key("ollama")
-            if managed_ollama_key:
-                self.ollama_api_key = managed_ollama_key
-            api_key = self._get_ollama_api_key()
-            if not api_key:
-                errors.append("cloud https://ollama.com -> OLLAMA_API_KEY is not configured")
-            else:
-                cloud_base_url = self._get_ollama_cloud_base_url()
-                try:
-                    async with httpx.AsyncClient(timeout=10.0) as client:
-                        response = await client.get(
-                            f"{cloud_base_url}/api/tags",
-                            headers={"Authorization": f"Bearer {api_key}"},
-                        )
-
-                    if response.status_code != 200:
-                        errors.append(f"cloud {cloud_base_url} -> HTTP {response.status_code}")
-                    else:
-                        cloud_models = self._extract_ollama_model_names(response.json(), cloud=True)
-                        self.available_ollama_cloud_models = cloud_models
-                        logger.success(f"Fetched {len(cloud_models)} Ollama cloud models from {cloud_base_url}")
-                except Exception as e:
-                    errors.append(f"cloud {cloud_base_url} -> {e}")
-        else:
-            self.available_ollama_cloud_models = []
-
-        combined_models = self._combine_ollama_models(local_models, cloud_models)
-        self.available_ollama_models = combined_models
-        if combined_models:
-            return combined_models
-
-        logger.error(f"Failed to fetch Ollama models. Tried: {'; '.join(errors)}")
-        return self._get_default_ollama_models()
+        return await model_refresh.fetch_available_ollama_models(self)
 
     def _get_default_gemini_models(self) -> list[str]:
         """Default Gemini models list (fallback)"""
-        return [
-            "models/gemini-3-flash-preview",
-            "models/gemini-2.5-flash-preview",
-        ]
+        return get_provider_default_models("gemini")
 
     def _get_default_grok_models(self) -> list[str]:
         """Default Grok models list (fallback)"""
-        return [
-            "grok-3",
-            "grok-4-1-fast-non-reasoning",
-        ]
+        return get_provider_default_models("grok")
 
     def _get_default_openai_models(self) -> list[str]:
         """Default OpenAI models list (fallback)"""
-        return [
-            "gpt-5",
-            "gpt-5-mini",
-            "gpt-5-nano",
-        ]
+        return get_provider_default_models("openai")
 
     def _get_default_fair_models(self) -> list[str]:
         """Default FAIR.Hyperion models list (fallback)."""
-        return [
-            "google/gemini-3.1-pro-preview",
-            "google/gemini-3-flash-preview",
-            "google/gemini-3-pro-preview",
-            "google/gemini-embedding-001",
-            "google/gemini-2.5-pro",
-            "google/gemini-2.5-flash",
-            "qwen3-embedding:0.6b",
-            "mxbai-embed-large:latest",
-            "qwen3:14b",
-            "xai/grok-4-fast-reasoning",
-            "xai/grok-4-fast-non-reasoning",
-            "xai/grok-code-fast-1",
-            "anthropic/claude-opus-4-6",
-            "anthropic/claude-sonnet-4-6",
-            "anthropic/claude-sonnet-4-5",
-            "openai/gpt-5.2-codex",
-            "openai/gpt-5.2",
-            "fair-spark-vllm",
-            "BAAI/bge-reranker-v2-m3",
-            "fair-spark-thinking",
-            "fair-spark",
-        ]
+        return get_provider_default_models("fair")
 
     def _get_default_ollama_models(self) -> list[str]:
         """Ollama models are local-install specific; default to no cached models."""
-        return []
+        return get_provider_default_models("ollama")
 
     async def refresh_models(self):
         """Refresh available models from both providers"""
@@ -833,41 +363,21 @@ class ModelManager:
 
     def get_chat_model(self, provider: str | None = None) -> str:
         """Get configured chat model for provider."""
-        provider = provider or self.config.default_provider
-        if provider == "auto":
-            provider = self.config.internal_llm_provider or "grok"
-        if provider == "gemini":
-            return self.config.chat_model_gemini
-        if provider == "openai":
-            return self.config.chat_model_openai
-        if provider == "fair":
-            return self.config.chat_model_fair
-        if provider == "claude":
-            return self.config.chat_model_claude
-        if provider == "ollama":
-            return self.config.chat_model_ollama or self._get_first_available_ollama_model()
-        return self.config.chat_model_grok
+        normalized_provider = self._normalize_model_provider(provider)
+        fallback = self._get_first_available_ollama_model() if normalized_provider == "ollama" else ""
+        return get_provider_chat_model(self.config, normalized_provider, empty_fallback=fallback)
 
     def get_agent_model(self, provider: str | None = None) -> str:
         """Get configured agent model for provider."""
-        provider = provider or self.config.default_provider
-        if provider == "auto":
-            provider = self.config.internal_llm_provider or "grok"
-        if provider == "gemini":
-            return self.config.agent_model_gemini
-        if provider == "openai":
-            return self.config.agent_model_openai
-        if provider == "fair":
-            return self.config.agent_model_fair
-        if provider == "claude":
-            return self.config.chat_model_claude
-        if provider == "ollama":
-            return (
-                self.config.agent_model_ollama
-                or self.config.chat_model_ollama
-                or self._get_first_available_ollama_model()
-            )
-        return self.config.agent_model_grok
+        normalized_provider = self._normalize_model_provider(provider)
+        fallback = self._get_first_available_ollama_model() if normalized_provider == "ollama" else ""
+        return get_provider_agent_model(self.config, normalized_provider, empty_fallback=fallback)
+
+    def _normalize_model_provider(self, provider: str | None = None) -> str:
+        normalized = (provider or self.config.default_provider or "grok").strip()
+        if normalized == "auto":
+            normalized = (self.config.internal_llm_provider or "grok").strip()
+        return provider_model_spec(normalized).provider
 
     def _get_first_available_ollama_model(self) -> str:
         runtime_mode = self._get_ollama_runtime_mode()
@@ -915,54 +425,17 @@ class ModelManager:
 
     def _get_default_claude_models(self) -> list[str]:
         """Default Anthropic Claude models list"""
-        return [
-            "claude-opus-4-6",
-            "claude-sonnet-4-6",
-            "claude-haiku-4-5-20251001",
-        ]
+        return get_provider_default_models("claude")
 
     def get_available_models(self, provider: str) -> list[str]:
         """Get list of available models for provider"""
-        if provider == "gemini":
-            if not self.available_gemini_models:
-                return self._get_default_gemini_models()
-            return self.available_gemini_models
-        if provider == "openai":
-            if not self.available_openai_models:
-                return self._get_default_openai_models()
-            return self.available_openai_models
-        if provider == "fair":
-            if not self.available_fair_models:
-                return self._get_default_fair_models()
-            return self.available_fair_models
-        if provider == "claude":
-            if not self.available_claude_models:
-                return self._get_default_claude_models()
-            return self.available_claude_models
-        if provider == "ollama":
-            if not self.available_ollama_models:
-                return self._get_default_ollama_models()
-            return self.available_ollama_models
-        if not self.available_grok_models:
-            return self._get_default_grok_models()
-        return self.available_grok_models
+        spec = provider_model_spec(provider)
+        models = list(getattr(self, spec.available_models_attr, []) or [])
+        return models or get_provider_default_models(spec.provider)
 
     def is_provider_enabled(self, provider: str) -> bool:
         """Check if API provider is enabled"""
-        if provider == "gemini":
-            return self.config.gemini_enabled
-        elif provider == "grok":
-            return self.config.grok_enabled
-        elif provider == "openai":
-            return self.config.openai_enabled
-        elif provider == "fair":
-            return self.config.fair_enabled
-        elif provider == "claude":
-            return self.config.claude_enabled
-        elif provider == "ollama":
-            return self.config.ollama_enabled
-        # CLI providers always enabled if binary available
-        return True
+        return is_config_provider_enabled(self.config, provider)
 
 
 # Global model manager instance

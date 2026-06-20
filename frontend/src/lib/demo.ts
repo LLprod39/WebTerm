@@ -100,9 +100,9 @@ export const DEMO_BOOTSTRAP: FrontendBootstrapResponse = {
     },
   ],
   groups: [
-    { id: null, name: "All Servers", server_count: 2 },
-    { id: 1, name: "Production", server_count: 2 },
-    { id: 2, name: "Staging", server_count: 0 },
+    { id: null, name: "All Servers", description: "", color: "#64748b", server_count: 2, role: "", can_edit: false },
+    { id: 1, name: "Production", description: "", color: "#3b82f6", server_count: 2, role: "owner", can_edit: true },
+    { id: 2, name: "Staging", description: "", color: "#22c55e", server_count: 0, role: "owner", can_edit: true },
   ],
   stats: { owned: 3, shared: 0, total: 3 },
   recent_activity: [

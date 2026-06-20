@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from servers.services.terminal_ai.active_command import append_active_output
 from servers.services.terminal_ai.session_context import apply_successful_command_context
 from servers.services.terminal_stream_state import append_clean_output
 
@@ -11,11 +12,7 @@ def append_terminal_tail(consumer: Any, text: str) -> None:
 
 
 def append_ai_output(consumer: Any, text: str) -> None:
-    if not text:
-        return
-    if getattr(consumer, "_ai_active_cmd_id", None) is None:
-        return
-    consumer._ai_active_output = append_clean_output(consumer._ai_active_output, text, limit=6000)
+    append_active_output(consumer, text)
 
 
 def append_manual_output(consumer: Any, text: str) -> None:

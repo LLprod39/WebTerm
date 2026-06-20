@@ -65,6 +65,24 @@ def ai_command_status(
     return payload
 
 
+def ai_parallel_batch(*, status: str, ids: list[int], count: int | None = None) -> TerminalEvent:
+    return {
+        "type": "ai_parallel_batch",
+        "status": status,
+        "ids": [int(item_id) for item_id in ids],
+        "count": int(count if count is not None else len(ids)),
+    }
+
+
+def ai_install_progress(*, command: str, elapsed: int, output_tail: str) -> TerminalEvent:
+    return {
+        "type": "ai_install_progress",
+        "cmd": str(command or ""),
+        "elapsed": int(elapsed),
+        "output_tail": str(output_tail or "")[:200],
+    }
+
+
 def ai_report(*, report: str, status: str) -> TerminalEvent:
     return {"type": "ai_report", "report": str(report or ""), "status": status}
 

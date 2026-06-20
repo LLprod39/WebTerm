@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type MutableRefObject } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, type MutableRefObject } from "react";
 import { Terminal } from "@xterm/xterm";
 import type { ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
@@ -7,11 +7,11 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import "@xterm/xterm/css/xterm.css";
 import { getWsUrl, fetchWsToken } from "@/lib/api";
-import { cn } from "@/lib/utils";
-import { localize, useI18n } from "@/lib/i18n";
 import { createTerminalFileLinkProvider, parsePromptCwd } from "@/lib/terminal-file-links";
 import { serializeAiSettings } from "./ai-preferences";
 import type { AiAssistantSettings, AiChatMode, AiExecutionMode } from "./ai-types";
+import { XTerminalDropZone } from "./XTerminalDropZone";
+import { DEFAULT_XTERM_THEME, normalizeTerminalFontFamily } from "./xterminalConfig";
 
 export type TerminalConnectionStatus = "connecting" | "connected" | "disconnected" | "error";
 
@@ -65,12 +65,6 @@ interface XTerminalProps {
   clickableFiles?: boolean;
 }
 
-function normalizeTerminalFontFamily(fontFamily: string) {
-  const trimmed = fontFamily.trim() || "JetBrains Mono";
-  const quotedPrimary = /^[\w-]+\s+[\w\s-]+$/.test(trimmed) && !trimmed.includes(",") ? `"${trimmed}"` : trimmed;
-  return `${quotedPrimary}, "Cascadia Mono", Consolas, "Courier New", monospace`;
-}
-
 export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTerminal(
   {
     serverId,
@@ -93,7 +87,6 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
   }: XTerminalProps,
   ref,
 ) {
-  const { lang } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -107,8 +100,6 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
   const reconnectAttemptRef = useRef(0);
   const pendingMessagesRef = useRef<string[]>([]);
   const lastSizeRef = useRef<{ cols: number; rows: number } | null>(null);
-  const dragDepthRef = useRef(0);
-  const [isDragActive, setIsDragActive] = useState(false);
 
   // Store callbacks in refs so the WebSocket effect doesn't restart on every render.
   const onStatusChangeRef = useRef(onStatusChange);
@@ -156,29 +147,6 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
     pendingMessagesRef.current = [];
     lastSizeRef.current = null;
 
-    const defaultTheme: ITheme = {
-      background: "#0a0e14",
-      foreground: "#a3be8c",
-      cursor: "#22b8cf",
-      selectionBackground: "#22b8cf33",
-      black: "#1a1e24",
-      red: "#e06c75",
-      green: "#a3be8c",
-      yellow: "#e5c07b",
-      blue: "#61afef",
-      magenta: "#c678dd",
-      cyan: "#22b8cf",
-      white: "#abb2bf",
-      brightBlack: "#5c6370",
-      brightRed: "#e06c75",
-      brightGreen: "#a3be8c",
-      brightYellow: "#e5c07b",
-      brightBlue: "#61afef",
-      brightMagenta: "#c678dd",
-      brightCyan: "#22b8cf",
-      brightWhite: "#ffffff",
-    };
-
     const term = new Terminal({
       allowProposedApi: true,
       cursorBlink: cursorBlinkProp,
@@ -187,7 +155,7 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
       fontFamily: normalizeTerminalFontFamily(fontFamily),
       lineHeight,
       scrollback,
-      theme: themeOverride ?? defaultTheme,
+      theme: themeOverride ?? DEFAULT_XTERM_THEME,
     });
 
     const fit = new FitAddon();
@@ -415,7 +383,8 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
       fileLinkDisposable.dispose();
       term.dispose();
     };
-  }, [serverId]); // callbacks are accessed via refs — no restart on prop change
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- settings are live-applied below; reconnect only when server changes.
+  }, [serverId]);
 
   useEffect(() => {
     if (!active) return;
@@ -504,48 +473,8 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
   }));
 
   return (
-    <div
-      className="relative h-full w-full min-h-[200px]"
-      onDragEnter={(event) => {
-        if (!onFilesDrop || !event.dataTransfer?.types?.includes("Files")) return;
-        event.preventDefault();
-        dragDepthRef.current += 1;
-        setIsDragActive(true);
-      }}
-      onDragOver={(event) => {
-        if (!onFilesDrop || !event.dataTransfer?.types?.includes("Files")) return;
-        event.preventDefault();
-      }}
-      onDragLeave={(event) => {
-        if (!onFilesDrop) return;
-        event.preventDefault();
-        dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
-        if (dragDepthRef.current === 0) {
-          setIsDragActive(false);
-        }
-      }}
-      onDrop={(event) => {
-        if (!onFilesDrop || !event.dataTransfer?.files?.length) return;
-        event.preventDefault();
-        dragDepthRef.current = 0;
-        setIsDragActive(false);
-        onFilesDrop(Array.from(event.dataTransfer.files));
-      }}
-    >
+    <XTerminalDropZone onFilesDrop={onFilesDrop}>
       <div ref={containerRef} className="h-full w-full min-h-[200px]" />
-      <div
-        className={cn(
-          "pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-primary/10 opacity-0 transition-opacity",
-          isDragActive && "opacity-100",
-        )}
-      >
-        <div className="rounded-xl border border-primary/30 bg-background/90 px-4 py-3 text-center shadow-lg backdrop-blur">
-          <div className="text-sm font-semibold text-foreground">{localize(lang, "Загрузка файлов", "Upload files")}</div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            {localize(lang, "Перетащите файлы сюда, чтобы отправить их в текущую удалённую папку.", "Drop files here to send them to the current remote folder.")}
-          </div>
-        </div>
-      </div>
-    </div>
+    </XTerminalDropZone>
   );
 });

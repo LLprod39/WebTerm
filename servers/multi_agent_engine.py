@@ -1,17 +1,4 @@
-"""
-Multi-Agent Pipeline Engine.
-
-Implements a two-level orchestration model:
-  1. Orchestrator LLM — decomposes the goal into discrete tasks and manages flow
-  2. Task Agent LLM  — executes a single task with its own mini ReAct loop
-
-Flow:
-  goal → Orchestrator → [task1, task2, ..., taskN]
-       → TaskAgent(task1) → result → Orchestrator
-       → TaskAgent(task2) → result → Orchestrator  [or failure → decision]
-       → ...
-       → Synthesize → final_report
-"""
+"""Multi-agent orchestration engine for server agents."""
 
 from __future__ import annotations
 
@@ -28,23 +15,20 @@ from app.agent_kernel import mcp_runtime_registry, skill_provider_registry
 from app.agent_kernel.domain.roles import ROLE_SPECS, get_role_spec
 from app.agent_kernel.domain.specs import MCPRuntimeProvider, SkillProvider
 from app.agent_kernel.hooks.manager import HookManager
-from app.agent_kernel.mcp_runtime import describe_mcp_bindings, execute_mcp_binding, load_mcp_bindings
+from app.agent_kernel.mcp_runtime import load_mcp_bindings
 from app.agent_kernel.memory.compaction import build_run_summary_payload
 from app.agent_kernel.memory.server_cards import render_server_cards_prompt
 from app.agent_kernel.permissions.engine import PermissionEngine
 from app.agent_kernel.runtime.context import build_ops_prompt_context
 from app.agent_kernel.runtime.parsing import parse_action as _parse_action  # noqa: F401
 from app.agent_kernel.runtime.parsing import parse_response
-from app.agent_kernel.runtime.subagents import build_task_subagent_spec
 from app.agent_kernel.sandbox.manager import SandboxManager
-from app.agent_kernel.sudo_policy import prepare_sudo_command_args, sudo_policy_prompt
 from app.agent_kernel.tools.registry import ToolRegistry
 from app.core.llm import LLMProvider
 from app.core.model_utils import resolve_provider_and_model
 from core_ui.audit import audit_context
 from servers.adapters.memory_store import DjangoServerMemoryStore
 from servers.agent_inputs import build_agent_materials_prompt
-from servers.report_delivery import deliver_agent_report_async
 from servers.agent_runtime import (
     build_runtime_control_state,
     is_runtime_stop_requested,
@@ -54,17 +38,34 @@ from servers.agent_runtime import (
     update_runtime_control,
 )
 from servers.agent_sessions import AgentSessionManager
-from servers.agent_tools import get_enabled_tools, get_tools_description
+from servers.agent_tools import AGENT_TOOLS, get_enabled_tools
 from servers.models import AgentRun, Server, ServerAgent
+from servers.multi_agent_plan_executor import PlanExecutionCallbacks, execute_plan_tasks
 from servers.multi_agent_plan_helpers import (
     build_tasks_table,
     inject_tasks_table_into_report,
     parse_decision_response,
     parse_plan_response,
 )
-from servers.multi_agent_plan_helpers import (
-    make_task as _make_task,
+from servers.multi_agent_subagents import (
+    build_subagent_prompt_context,
+    build_task_subagent,
+    prepare_plan_tasks,
 )
+from servers.multi_agent_task_iterations import (
+    append_observation_history,
+    append_verification_blocked_history,
+    build_iteration_thought_event,
+    build_task_iteration_entry,
+    merge_task_update_into_plan_tasks,
+    record_final_answer_iteration,
+    record_observed_iteration,
+    record_verification_blocked_iteration,
+)
+from servers.multi_agent_task_prompts import build_multi_agent_task_prompt
+from servers.multi_agent_task_setup import prepare_multi_agent_task_runtime
+from servers.multi_agent_tool_execution import MultiAgentToolExecutionContext, execute_multi_agent_tool
+from servers.report_delivery import deliver_agent_report_async
 
 
 def sync_to_async(func, thread_sensitive=False):
@@ -81,14 +82,7 @@ CONTROL_POLL_INTERVAL = 0.5
 # ---------------------------------------------------------------------------
 
 class MultiAgentEngine:
-    """
-    Two-level multi-agent pipeline.
-
-    Usage::
-
-        engine = MultiAgentEngine(agent, servers, user, event_callback=ws_send)
-        run = await engine.run()
-    """
+    """Two-level multi-agent pipeline."""
 
     def __init__(
         self,
@@ -317,7 +311,11 @@ class MultiAgentEngine:
                     name: binding for name, binding in loaded_mcp_tools.items() if name in self.allowed_tool_names
                 }
                 self.disabled_mcp_tools = set(loaded_mcp_tools) - set(self.mcp_tools)
-            self.tool_registry = ToolRegistry.from_sources(self.enabled_tools, self.mcp_tools)
+            self.tool_registry = ToolRegistry.from_sources(
+                self.enabled_tools,
+                self.mcp_tools,
+                agent_tools=AGENT_TOOLS,
+            )
             self.ops_prompt_context = await self._build_ops_prompt_context()
 
             connected = self.session.get_connected_info()
@@ -359,111 +357,15 @@ class MultiAgentEngine:
             # ----------------------------------------------------------------
             # Phase 2: Execute tasks sequentially (with optional replan on failure)
             # ----------------------------------------------------------------
-            context_summary = ""
             deadline = time.monotonic() + self.session_timeout
-
-            while True:
-                loop_break = False
-                for task in plan_tasks:
-                    if self._stop_requested:
-                        task["status"] = "skipped"
-                        task["error"] = "Stopped by user"
-                        continue
-
-                    await self._pause_event.wait()
-
-                    if time.monotonic() > deadline:
-                        task["status"] = "skipped"
-                        task["error"] = "Session timeout"
-                        continue
-
-                    task["status"] = "running"
-                    task["started_at"] = timezone.now().isoformat()
-                    await sync_to_async(self._update_run)(run, plan_tasks=plan_tasks)
-                    await self._emit("agent_task_start", {"task_id": task["id"], "name": task["name"], "description": task["description"]})
-
-                    try:
-                        result, iterations = await self._run_task(task, context_summary, deadline)
-                        task["status"] = "done"
-                        task["result"] = result
-                        task["iterations"] = iterations
-                        task["completed_at"] = timezone.now().isoformat()
-                        context_summary += f"\n\n### Задача {task['id']}: {task['name']}\nРезультат: {result[:1000]}"
-                        await self._emit("agent_task_done", {"task_id": task["id"], "result": result[:500]})
-
-                    except Exception as exc:
-                        if self._stop_requested:
-                            task["status"] = "skipped"
-                            task["error"] = "Stopped by user"
-                            task["completed_at"] = timezone.now().isoformat()
-                            await sync_to_async(self._update_run)(
-                                run,
-                                plan_tasks=plan_tasks,
-                                orchestrator_log=orchestrator_log,
-                            )
-                            loop_break = True
-                            break
-
-                        task["status"] = "failed"
-                        task["error"] = str(exc)
-                        task["completed_at"] = timezone.now().isoformat()
-                        await self._emit("agent_task_failed", {"task_id": task["id"], "error": str(exc)})
-
-                        decision = await self._handle_failure(task, str(exc), plan_tasks, orchestrator_log)
-                        task["orchestrator_decision"] = decision
-
-                        if decision["action"] == "abort":
-                            await self._emit("agent_pipeline_phase", {"phase": "aborted", "message": decision.get("reason", "")})
-                            loop_break = True
-                            break
-                        elif decision["action"] == "replan":
-                            done_tasks = [t for t in plan_tasks if t["status"] == "done"]
-                            new_tasks = await self._replan(goal, plan_tasks, orchestrator_log)
-                            for j, nt in enumerate(new_tasks):
-                                nt["id"] = len(done_tasks) + j + 1
-                            plan_tasks[:] = done_tasks + new_tasks
-                            await sync_to_async(self._update_run)(run, plan_tasks=plan_tasks, orchestrator_log=orchestrator_log)
-                            await self._emit("agent_plan", {"tasks": plan_tasks})
-                            await self._emit("agent_pipeline_phase", {"phase": "executing", "message": "План пересобран. Продолжаю выполнение…"})
-                            break  # выходим из for, while продолжается — цикл for пойдёт заново с новым планом
-                        elif decision["action"] == "ask_user":
-                            question = decision.get("message", "Что делать с ошибкой задачи?")
-                            await sync_to_async(self._update_run)(
-                                run,
-                                status=AgentRun.STATUS_WAITING,
-                                pending_question=question,
-                                plan_tasks=plan_tasks,
-                            )
-                            await self._emit("agent_status", {"status": "waiting"})
-                            answer = await self._wait_for_user_reply()
-                            await sync_to_async(self._update_run)(
-                                run, status=AgentRun.STATUS_RUNNING, pending_question="",
-                            )
-                            context_summary += f"\n\n### Ответ пользователя по задаче {task['id']}\n{answer}"
-                            task["result"] = f"Пользователь ответил: {answer}"
-                        elif decision["action"] == "retry":
-                            retry_deadline = deadline
-                            if "Session timeout" in str(exc) or "session timeout" in str(exc).lower():
-                                retry_deadline = time.monotonic() + 300
-                            try:
-                                task["status"] = "running"
-                                result, iterations = await self._run_task(task, context_summary, retry_deadline)
-                                task["status"] = "done"
-                                task["result"] = result
-                                task["iterations"] = iterations
-                                task["completed_at"] = timezone.now().isoformat()
-                                context_summary += f"\n\n### Задача {task['id']}: {task['name']} (повтор)\nРезультат: {result[:1000]}"
-                                await self._emit("agent_task_done", {"task_id": task["id"], "result": result[:500]})
-                            except Exception as exc2:
-                                task["status"] = "failed"
-                                task["error"] = f"Retry failed: {exc2}"
-
-                    await sync_to_async(self._update_run)(run, plan_tasks=plan_tasks, orchestrator_log=orchestrator_log)
-
-                if loop_break:
-                    break
-                if not any(t.get("status") == "pending" for t in plan_tasks):
-                    break
+            await execute_plan_tasks(
+                goal=goal,
+                plan_tasks=plan_tasks,
+                orchestrator_log=orchestrator_log,
+                deadline=deadline,
+                callbacks=self._build_plan_execution_callbacks(run),
+                skip_completed=True,
+            )
 
             # ----------------------------------------------------------------
             # Phase 3: Synthesize final report
@@ -580,7 +482,11 @@ class MultiAgentEngine:
             if not self.session.connections:
                 raise RuntimeError("No servers connected.")
 
-            self.tool_registry = ToolRegistry.from_sources(self.enabled_tools, self.mcp_tools)
+            self.tool_registry = ToolRegistry.from_sources(
+                self.enabled_tools,
+                self.mcp_tools,
+                agent_tools=AGENT_TOOLS,
+            )
             self.ops_prompt_context = await self._build_ops_prompt_context()
             # Mark as running
             await sync_to_async(self._update_run)(run, status=AgentRun.STATUS_RUNNING)
@@ -592,113 +498,15 @@ class MultiAgentEngine:
             # ----------------------------------------------------------------
             # Phase 2: Execute tasks sequentially (with optional replan on failure)
             # ----------------------------------------------------------------
-            context_summary = ""
             deadline = time.monotonic() + self.session_timeout
-            loop_break = False
-
-            while True:
-                for task in plan_tasks:
-                    if task.get("status") in ("done", "skipped"):
-                        continue
-                    if self._stop_requested:
-                        task["status"] = "skipped"
-                        task["error"] = "Stopped by user"
-                        continue
-
-                    await self._pause_event.wait()
-
-                    if time.monotonic() > deadline:
-                        task["status"] = "skipped"
-                        task["error"] = "Session timeout"
-                        continue
-
-                    task["status"] = "running"
-                    task["started_at"] = timezone.now().isoformat()
-                    await sync_to_async(self._update_run)(run, plan_tasks=plan_tasks)
-                    await self._emit("agent_task_start", {"task_id": task["id"], "name": task["name"], "description": task["description"]})
-
-                    try:
-                        result, iterations = await self._run_task(task, context_summary, deadline)
-                        task["status"] = "done"
-                        task["result"] = result
-                        task["iterations"] = iterations
-                        task["completed_at"] = timezone.now().isoformat()
-                        context_summary += f"\n\n### Задача {task['id']}: {task['name']}\nРезультат: {result[:1000]}"
-                        await self._emit("agent_task_done", {"task_id": task["id"], "result": result[:500]})
-
-                    except Exception as exc:
-                        if self._stop_requested:
-                            task["status"] = "skipped"
-                            task["error"] = "Stopped by user"
-                            task["completed_at"] = timezone.now().isoformat()
-                            await sync_to_async(self._update_run)(
-                                run,
-                                plan_tasks=plan_tasks,
-                                orchestrator_log=orchestrator_log,
-                            )
-                            loop_break = True
-                            break
-
-                        task["status"] = "failed"
-                        task["error"] = str(exc)
-                        task["completed_at"] = timezone.now().isoformat()
-                        await self._emit("agent_task_failed", {"task_id": task["id"], "error": str(exc)})
-
-                        decision = await self._handle_failure(task, str(exc), plan_tasks, orchestrator_log)
-                        task["orchestrator_decision"] = decision
-
-                        if decision["action"] == "abort":
-                            await self._emit("agent_pipeline_phase", {"phase": "aborted", "message": decision.get("reason", "")})
-                            loop_break = True
-                            break
-                        elif decision["action"] == "replan":
-                            done_tasks = [t for t in plan_tasks if t["status"] == "done"]
-                            new_tasks = await self._replan(goal, plan_tasks, orchestrator_log)
-                            for j, nt in enumerate(new_tasks):
-                                nt["id"] = len(done_tasks) + j + 1
-                            plan_tasks[:] = done_tasks + new_tasks
-                            await sync_to_async(self._update_run)(run, plan_tasks=plan_tasks, orchestrator_log=orchestrator_log)
-                            await self._emit("agent_plan", {"tasks": plan_tasks})
-                            await self._emit("agent_pipeline_phase", {"phase": "executing", "message": "План пересобран. Продолжаю выполнение…"})
-                            break
-                        elif decision["action"] == "ask_user":
-                            question = decision.get("message", "Что делать с ошибкой задачи?")
-                            await sync_to_async(self._update_run)(
-                                run,
-                                status=AgentRun.STATUS_WAITING,
-                                pending_question=question,
-                                plan_tasks=plan_tasks,
-                            )
-                            await self._emit("agent_status", {"status": "waiting"})
-                            answer = await self._wait_for_user_reply()
-                            await sync_to_async(self._update_run)(
-                                run, status=AgentRun.STATUS_RUNNING, pending_question="",
-                            )
-                            context_summary += f"\n\n### Ответ пользователя по задаче {task['id']}\n{answer}"
-                            task["result"] = f"Пользователь ответил: {answer}"
-                        elif decision["action"] == "retry":
-                            retry_deadline = deadline
-                            if "Session timeout" in str(exc) or "session timeout" in str(exc).lower():
-                                retry_deadline = time.monotonic() + 300
-                            try:
-                                task["status"] = "running"
-                                result, iterations = await self._run_task(task, context_summary, retry_deadline)
-                                task["status"] = "done"
-                                task["result"] = result
-                                task["iterations"] = iterations
-                                task["completed_at"] = timezone.now().isoformat()
-                                context_summary += f"\n\n### Задача {task['id']}: {task['name']} (повтор)\nРезультат: {result[:1000]}"
-                                await self._emit("agent_task_done", {"task_id": task["id"], "result": result[:500]})
-                            except Exception as exc2:
-                                task["status"] = "failed"
-                                task["error"] = f"Retry failed: {exc2}"
-
-                    await sync_to_async(self._update_run)(run, plan_tasks=plan_tasks, orchestrator_log=orchestrator_log)
-
-                if loop_break:
-                    break
-                if not any(t.get("status") == "pending" for t in plan_tasks):
-                    break
+            await execute_plan_tasks(
+                goal=goal,
+                plan_tasks=plan_tasks,
+                orchestrator_log=orchestrator_log,
+                deadline=deadline,
+                callbacks=self._build_plan_execution_callbacks(run),
+                skip_completed=True,
+            )
 
             # ----------------------------------------------------------------
             # Phase 3: Synthesize final report
@@ -830,101 +638,71 @@ Attached skills:
         response = await self._call_llm_raw(system_prompt, user_msg)
         orchestrator_log.append({"role": "assistant", "content": response, "timestamp": timezone.now().isoformat()})
 
-        tasks = self._parse_plan(response)
-        return self._prepare_plan_tasks(tasks)
-
-    def _prepare_plan_tasks(self, tasks: list[dict]) -> list[dict]:
-        prepared_tasks: list[dict] = []
-        if self.tool_registry is None:
-            return [_make_task(i + 1, t["name"], t["description"]) for i, t in enumerate(tasks)]
-
-        for index, item in enumerate(tasks, start=1):
-            subagent = build_task_subagent_spec(
-                task_name=item["name"],
-                task_description=item["description"],
-                parent_agent_type=self.agent.agent_type,
-                parent_goal=self.agent.goal or self.agent.ai_prompt,
-                tool_registry=self.tool_registry,
-                requested_role=item.get("role"),
-                requested_tool_names=item.get("tool_names"),
-                requested_max_iterations=item.get("max_iterations"),
-            )
-            task = _make_task(
-                index,
-                item["name"],
-                item["description"],
-                role=subagent.role,
-                permission_mode=subagent.permission_mode,
-                max_iterations=subagent.max_iterations,
-                tool_names=list(subagent.tool_names),
-            )
-            task["subagent"] = {
-                "role": subagent.role,
-                "title": subagent.title,
-                "permission_mode": subagent.permission_mode,
-                "tool_names": list(subagent.tool_names),
-                "allowed_categories": list(subagent.allowed_categories),
-                "max_iterations": subagent.max_iterations,
-                "metadata": dict(subagent.metadata),
-            }
-            prepared_tasks.append(task)
-        return prepared_tasks
-
-    def _parse_plan(self, response: str) -> list[dict]:
-        return parse_plan_response(
+        tasks = parse_plan_response(
             response,
             max_tasks=MAX_PLAN_TASKS,
             fallback_goal=self.agent.goal or self.agent.ai_prompt,
         )
+        return self._prepare_plan_tasks(tasks)
 
-    def _build_task_subagent(self, task: dict) -> dict:
-        if self.tool_registry is None:
-            return {
-                "role_spec": self.role_spec,
-                "permission_engine": PermissionEngine(
-                    mode=self.role_spec.default_permission_mode,
-                    sudo_policy=self.permission_engine.sudo_policy,
-                ),
-                "tool_registry": ToolRegistry({}),
-                "tool_names": [],
-                "max_iterations": MAX_TASK_ITERATIONS,
-                "title": self.role_spec.title,
-                "task": task,
-            }
-
-        spec = build_task_subagent_spec(
-            task_name=task.get("name", ""),
-            task_description=task.get("description", ""),
-            parent_agent_type=self.agent.agent_type,
+    def _prepare_plan_tasks(self, tasks: list[dict]) -> list[dict]:
+        return prepare_plan_tasks(
+            tasks,
+            agent_type=self.agent.agent_type,
             parent_goal=self.agent.goal or self.agent.ai_prompt,
             tool_registry=self.tool_registry,
-            requested_role=task.get("role"),
-            requested_tool_names=task.get("tool_names"),
-            requested_max_iterations=task.get("max_iterations"),
+            max_task_iterations=MAX_TASK_ITERATIONS,
         )
-        role_spec = ROLE_SPECS.get(spec.role, self.role_spec)
-        local_registry = self.tool_registry.subset(allowed_names=spec.tool_names)
-        return {
-            "role_spec": role_spec,
-            "permission_engine": PermissionEngine(mode=spec.permission_mode, sudo_policy=self.permission_engine.sudo_policy),
-            "tool_registry": local_registry,
-            "tool_names": list(spec.tool_names),
-            "max_iterations": spec.max_iterations,
-            "title": spec.title,
-            "task": task,
-        }
+
+    def _build_task_subagent(self, task: dict) -> dict:
+        return build_task_subagent(
+            task,
+            agent_type=self.agent.agent_type,
+            parent_goal=self.agent.goal or self.agent.ai_prompt,
+            fallback_role_spec=self.role_spec,
+            parent_permission_engine=self.permission_engine,
+            tool_registry=self.tool_registry,
+            max_task_iterations=MAX_TASK_ITERATIONS,
+        )
 
     def _build_subagent_prompt_context(self, task_subagent: dict) -> str:
-        local_registry = task_subagent["tool_registry"]
-        task = task_subagent.get("task") or {}
-        return build_ops_prompt_context(
-            role_spec=task_subagent["role_spec"],
-            permission_mode=task_subagent["permission_engine"].mode,
-            server_memory_prompt=self.server_memory_prompt or "- Память по серверам не загружена",
-            operational_recipes_prompt=task.get("operational_recipes_prompt") or self.operational_recipes_prompt,
-            tool_registry_prompt=local_registry.build_prompt_slice(limit=8),
-            max_iterations=task_subagent["max_iterations"],
+        return build_subagent_prompt_context(
+            task_subagent,
+            server_memory_prompt=self.server_memory_prompt,
+            operational_recipes_prompt=self.operational_recipes_prompt,
             session_timeout=self.session_timeout,
+        )
+
+    def _build_plan_execution_callbacks(self, run: AgentRun) -> PlanExecutionCallbacks:
+        async def persist_plan_tasks(plan_tasks: list[dict]) -> None:
+            await sync_to_async(self._update_run)(run, plan_tasks=plan_tasks)
+
+        async def persist_plan_state(plan_tasks: list[dict], orchestrator_log: list[dict]) -> None:
+            await sync_to_async(self._update_run)(run, plan_tasks=plan_tasks, orchestrator_log=orchestrator_log)
+
+        async def set_waiting(question: str, plan_tasks: list[dict]) -> None:
+            await sync_to_async(self._update_run)(
+                run,
+                status=AgentRun.STATUS_WAITING,
+                pending_question=question,
+                plan_tasks=plan_tasks,
+            )
+
+        async def clear_waiting() -> None:
+            await sync_to_async(self._update_run)(run, status=AgentRun.STATUS_RUNNING, pending_question="")
+
+        return PlanExecutionCallbacks(
+            stop_requested=lambda: self._stop_requested,
+            wait_for_resume=self._pause_event.wait,
+            emit=self._emit,
+            persist_plan_tasks=persist_plan_tasks,
+            persist_plan_state=persist_plan_state,
+            set_waiting=set_waiting,
+            clear_waiting=clear_waiting,
+            run_task=self._run_task,
+            handle_failure=self._handle_failure,
+            replan=self._replan,
+            wait_for_user_reply=self._wait_for_user_reply,
         )
 
     # ------------------------------------------------------------------
@@ -934,95 +712,43 @@ Attached skills:
     async def _run_task(self, task: dict, context_summary: str, deadline: float) -> tuple[str, list]:
         """Run a single task with a mini ReAct loop. Returns (result_summary, iterations_list)."""
         task_subagent = self._build_task_subagent(task)
-        task_role_spec = task_subagent["role_spec"]
-        task_permission_engine: PermissionEngine = task_subagent["permission_engine"]
-        task_tool_registry: ToolRegistry = task_subagent["tool_registry"]
-        task_tool_names = task_subagent["tool_names"]
-        task_max_iterations = task_subagent["max_iterations"]
-        task["role"] = task_role_spec.slug
-        task["permission_mode"] = task_permission_engine.mode
-        task["max_iterations"] = task_max_iterations
-        task["tool_names"] = list(task_tool_names)
-        if not task.get("operational_recipes_prompt"):
-            recipes_query = "\n".join(
-                part for part in [task.get("name") or "", task.get("description") or "", *task_role_spec.focus_areas] if part
-            )
-            group_ids = list(dict.fromkeys([server.group_id for server in self.servers[:3] if getattr(server, "group_id", None)]))
-            task["operational_recipes_prompt"] = await self.memory_store.build_operational_recipes_prompt(
-                recipes_query,
-                server_ids=[server.id for server in self.servers[:3]],
-                group_ids=group_ids,
-                limit=4,
-            )
-        task["subagent"] = {
-            **(task.get("subagent") or {}),
-            "role": task_role_spec.slug,
-            "title": task_subagent["title"],
-            "permission_mode": task_permission_engine.mode,
-            "tool_names": list(task_tool_names),
-            "max_iterations": task_max_iterations,
-        }
+        task_runtime = await prepare_multi_agent_task_runtime(
+            task,
+            task_subagent,
+            memory_store=self.memory_store,
+            servers=self.servers,
+        )
+        task_role_spec = task_runtime.role_spec
+        task_permission_engine = task_runtime.permission_engine
+        task_tool_registry = task_runtime.tool_registry
+        task_tool_names = task_runtime.tool_names
+        task_max_iterations = task_runtime.max_iterations
 
-        connected = self.session.get_connected_info()
-        servers_desc = "\n".join(f"- {c['server_name']} (id: {c['server_id']})" for c in connected) or "- Нет активных SSH подключений"
-        tools_desc = get_tools_description(task_tool_names)
-        local_mcp_tools = {name: binding for name, binding in self.mcp_tools.items() if name in task_tool_names}
-        mcp_tools_desc = describe_mcp_bindings(self._mcp_runtime_provider, local_mcp_tools)
-        skills_desc = self._skill_provider.build_skill_catalog_description(self.skills) if self._skill_provider else ""
-        if mcp_tools_desc:
-            tools_desc = f"{tools_desc}\n\n{mcp_tools_desc}" if tools_desc else mcp_tools_desc
-        mcp_errors = ""
-        if self.mcp_tool_errors:
-            mcp_errors = "\nНедоступные MCP подключения:\n" + "\n".join(f"- {item}" for item in self.mcp_tool_errors)
-        skill_errors = ""
-        if self.skill_errors:
-            skill_errors = "\nНедоступные skills:\n" + "\n".join(f"- {item}" for item in self.skill_errors)
-        materials_prompt = build_agent_materials_prompt(self.agent.input_artifacts)
-
-        system_prompt = f"""Ты — subagent роли {task_role_spec.title}, выполняющий одну конкретную задачу внутри orchestrated DevOps pipeline.
-Работай только в пределах своей роли, permission mode и выданного tool slice. Отвечай на русском языке.
-
-{self._build_subagent_prompt_context(task_subagent)}
-{materials_prompt}
-
-Подключённые серверы:
-{servers_desc}
-
-Attached skills:
-{skills_desc or "- Skills не подключены"}
-
-Доступные инструменты:
-{tools_desc}
-{mcp_errors}
-{skill_errors}
-
-Формат вывода на каждом шаге:
-THOUGHT: <рассуждение>
-ACTION: tool_name {{"param1": "val1"}}
-
-Если attached skills релевантны задаче, сначала открой нужный skill через read_skill перед сервис-специфичными изменениями.
-Если attached skills содержат runtime guardrails, соблюдай их как обязательные ограничения.
-Нельзя вызывать инструменты вне выданного tool slice.
-{sudo_policy_prompt(task_permission_engine.sudo_policy)}
-
-Когда задача выполнена — напиши итоговый вывод БЕЗ строки ACTION.
-Если перед этим были изменения, но verification markers не закрыты, ты ОБЯЗАН продолжить выполнение и провести post-change verification.
-Максимум {task_max_iterations} итераций."""
-
-        context_block = f"\n\nКонтекст предыдущих задач:\n{context_summary}" if context_summary.strip() else ""
-        user_msg = f"Задача: {task['name']}\n{task['description']}{context_block}"
-
-        history = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_msg},
-        ]
+        prompt = build_multi_agent_task_prompt(
+            task=task,
+            role_spec=task_role_spec,
+            subagent_prompt_context=self._build_subagent_prompt_context(task_subagent),
+            agent_input_artifacts=self.agent.input_artifacts,
+            connected_servers=self.session.get_connected_info(),
+            tool_names=task_tool_names,
+            mcp_runtime_provider=self._mcp_runtime_provider,
+            mcp_tools=self.mcp_tools,
+            skill_provider=self._skill_provider,
+            skills=self.skills,
+            mcp_tool_errors=self.mcp_tool_errors,
+            skill_errors=self.skill_errors,
+            sudo_policy=task_permission_engine.sudo_policy,
+            max_iterations=task_max_iterations,
+            context_summary=context_summary,
+        )
+        history = prompt.history
 
         iterations: list[dict] = []
         final_answer = ""
         await self._emit("agent_subagent_start", {
             "task_id": task["id"],
             "role": task_role_spec.slug,
-            "title": task_subagent["title"],
+            "title": task_runtime.title,
             "permission_mode": task_permission_engine.mode,
             "tool_names": list(task_tool_names),
             "max_iterations": task_max_iterations,
@@ -1045,49 +771,40 @@ ACTION: tool_name {{"param1": "val1"}}
             thought, action_name, action_args = self._parse_response(llm_response)
             task["thought"] = thought  # update current thought for live display
 
-            iter_entry = {
-                "iteration": iteration,
-                "thought": thought,
-                "action": action_name,
-                "args": action_args,
-                "observation": "",
-                "timestamp": timezone.now().isoformat(),
-            }
+            iter_entry = build_task_iteration_entry(
+                iteration=iteration,
+                thought=thought,
+                action_name=action_name,
+                action_args=action_args,
+            )
 
-            await self._emit("agent_task_iteration", {
-                "task_id": task["id"],
-                "iteration": iteration,
-                "thought": thought,
-                "action": action_name,
-                "args": action_args,
-            })
+            await self._emit("agent_task_iteration", build_iteration_thought_event(task["id"], iter_entry))
 
             if action_name is None:
                 verification_summary = task_permission_engine.verification_summary()
                 if task_permission_engine.pending_verifications:
-                    iter_entry["observation"] = verification_summary
-                    iterations.append(iter_entry)
-                    task["verification_summary"] = verification_summary
-                    await self._emit("agent_task_iteration", {
-                        "task_id": task["id"],
-                        "iteration": iteration,
-                        "observation": verification_summary[:500],
-                    })
-                    history.append({"role": "assistant", "content": llm_response})
-                    history.append({
-                        "role": "user",
-                        "content": self.hook_manager.build_observation_message(
-                            verification_summary
-                            + " Ты не можешь завершить задачу, пока не выполнишь обязательную post-change verification.",
-                            limit=4000,
-                        ),
-                    })
+                    event = record_verification_blocked_iteration(
+                        task=task,
+                        iterations=iterations,
+                        entry=iter_entry,
+                        verification_summary=verification_summary,
+                    )
+                    await self._emit("agent_task_iteration", event)
+                    append_verification_blocked_history(
+                        history=history,
+                        llm_response=llm_response,
+                        verification_summary=verification_summary,
+                        hook_manager=self.hook_manager,
+                    )
                     continue
 
                 final_answer = thought or llm_response
-                iter_entry["observation"] = "(final answer)"
-                iterations.append(iter_entry)
-                task["verification_summary"] = verification_summary
+                record_final_answer_iteration(
+                    task=task,
+                    iterations=iterations,
+                    entry=iter_entry,
+                    verification_summary=verification_summary,
+                )
                 history.append({"role": "assistant", "content": llm_response})
                 break
 
@@ -1115,31 +832,25 @@ ACTION: tool_name {{"param1": "val1"}}
                     allowed_tool_names=task_tool_names,
                 )
 
-            iter_entry["observation"] = observation[:3000]
-            iterations.append(iter_entry)
-
-            await self._emit("agent_task_iteration", {
-                "task_id": task["id"],
-                "iteration": iteration,
-                "observation": observation[:500],
-            })
-
-            history.append({"role": "assistant", "content": llm_response})
-            history.append(
-                {
-                    "role": "user",
-                    "content": self.hook_manager.build_observation_message(observation, limit=4000),
-                }
+            await self._emit(
+                "agent_task_iteration",
+                record_observed_iteration(
+                    task=task,
+                    iterations=iterations,
+                    entry=iter_entry,
+                    observation=observation,
+                ),
+            )
+            append_observation_history(
+                history=history,
+                llm_response=llm_response,
+                observation=observation,
+                hook_manager=self.hook_manager,
             )
 
             # Save live iterations to DB
-            task["iterations"] = iterations
             if self.run_record:
-                plan_tasks_copy = list(self.run_record.plan_tasks or [])
-                for pt in plan_tasks_copy:
-                    if pt["id"] == task["id"]:
-                        pt.update(task)
-                        break
+                plan_tasks_copy = merge_task_update_into_plan_tasks(self.run_record.plan_tasks or [], task)
                 await sync_to_async(self._update_run)(self.run_record, plan_tasks=plan_tasks_copy)
 
         if not final_answer:
@@ -1230,9 +941,6 @@ ACTION: tool_name {{"param1": "val1"}}
         response = await self._call_llm_raw(system_prompt, user_msg)
         orchestrator_log.append({"role": "assistant", "content": response, "timestamp": timezone.now().isoformat()})
 
-        return self._parse_decision(response)
-
-    def _parse_decision(self, response: str) -> dict:
         return parse_decision_response(response)
 
     async def _replan(self, goal: str, plan_tasks: list[dict], orchestrator_log: list) -> list[dict]:
@@ -1281,20 +989,16 @@ ACTION: tool_name {{"param1": "val1"}}
         response = await self._call_llm_raw(system_prompt, user_msg)
         orchestrator_log.append({"role": "assistant", "content": response, "timestamp": timezone.now().isoformat()})
 
-        tasks = self._parse_plan(response)
+        tasks = parse_plan_response(
+            response,
+            max_tasks=MAX_PLAN_TASKS,
+            fallback_goal=self.agent.goal or self.agent.ai_prompt,
+        )
         return self._prepare_plan_tasks(tasks[:MAX_PLAN_TASKS])
 
     # ------------------------------------------------------------------
     # Phase 3: Final synthesis
     # ------------------------------------------------------------------
-
-    @staticmethod
-    def _build_tasks_table(plan_tasks: list[dict], result_max_len: int = 80) -> str:
-        return build_tasks_table(plan_tasks, result_max_len=result_max_len)
-
-    @staticmethod
-    def _inject_tasks_table_into_report(report: str, tasks_table: str) -> str:
-        return inject_tasks_table_into_report(report, tasks_table)
 
     async def _synthesize(self, goal: str, plan_tasks: list[dict], orchestrator_log: list) -> str:
         """Generate the final consolidated report."""
@@ -1305,7 +1009,7 @@ ACTION: tool_name {{"param1": "val1"}}
             task_summaries.append(f"{status_emoji} **{task['name']}**: {result_text[:400]}")
 
         tasks_block = "\n\n".join(task_summaries)
-        tasks_table = self._build_tasks_table(plan_tasks)
+        tasks_table = build_tasks_table(plan_tasks)
 
         system_prompt = """Ты — старший технический аналитик. Создай профессиональный деловой отчёт в формате Markdown.
 Язык: русский. Стиль: чёткий, структурированный, без воды. Только факты и конкретные данные.
@@ -1372,7 +1076,7 @@ ACTION: tool_name {{"param1": "val1"}}
             result = "".join(chunks)
             orchestrator_log.append({"role": "assistant", "content": result, "timestamp": timezone.now().isoformat()})
             # Подставляем гарантированно корректную таблицу «Результаты по задачам»
-            result = self._inject_tasks_table_into_report(result, tasks_table)
+            result = inject_tasks_table_into_report(result, tasks_table)
             return result
         except Exception as exc:
             logger.error("Synthesis failed: {}", exc)
@@ -1446,66 +1150,27 @@ ACTION: tool_name {{"param1": "val1"}}
         tool_registry: ToolRegistry | None = None,
         allowed_tool_names: list[str] | None = None,
     ) -> str:
-        active_registry = tool_registry or self.tool_registry
-        active_permission_engine = permission_engine or self.permission_engine
-        if allowed_tool_names is not None and name not in allowed_tool_names:
-            return f"Tool '{name}' is not available to this subagent."
-        spec = active_registry.get(name) if active_registry else None
-        if active_registry is not None and spec is None:
-            return f"Tool '{name}' is not available in the current tool slice."
-        decision = active_permission_engine.evaluate(spec, args) if spec else None
-        if decision and not decision.allowed:
-            return decision.reason
-        prepared_args, _sudo_notes = (
-            prepare_sudo_command_args(args, active_permission_engine.sudo_policy)
-            if name == "ssh_execute"
-            else (args, ())
+        return await execute_multi_agent_tool(
+            name,
+            args,
+            context=MultiAgentToolExecutionContext(
+                session=self.session,
+                permission_engine=self.permission_engine,
+                sandbox_manager=self.sandbox_manager,
+                hook_manager=self.hook_manager,
+                tool_registry=self.tool_registry,
+                enabled_tools=self.enabled_tools,
+                mcp_tools=self.mcp_tools,
+                disabled_mcp_tools=self.disabled_mcp_tools,
+                skill_provider=self._skill_provider,
+                skill_policies=self.skill_policies,
+                executed_mcp_tools=self._executed_mcp_tools,
+                mcp_runtime_provider=self._mcp_runtime_provider,
+            ),
+            permission_engine=permission_engine,
+            tool_registry=tool_registry,
+            allowed_tool_names=allowed_tool_names,
         )
-        args = prepared_args
-        if decision and spec:
-            sandbox_decision = self.sandbox_manager.validate(spec, args, decision.sandbox_profile)
-            if not sandbox_decision.allowed:
-                return sandbox_decision.reason
-        if name in self.mcp_tools:
-            binding = self.mcp_tools[name]
-            if self._skill_provider is not None:
-                prepared_args, policy_messages, policy_error = self._skill_provider.apply_skill_policies(
-                    self.skill_policies, binding, args, self._executed_mcp_tools
-                )
-            else:
-                prepared_args, policy_messages, policy_error = args, [], None
-            if policy_error:
-                return policy_error
-            result = await execute_mcp_binding(self._mcp_runtime_provider, self.mcp_tools, name, prepared_args)
-            if not result.startswith("MCP tool error"):
-                self._executed_mcp_tools.add(binding.tool_name)
-                if spec:
-                    active_permission_engine.record_success(spec, prepared_args, result)
-            if policy_messages:
-                result = "\n".join([*policy_messages, result])
-            if decision and decision.notes:
-                result = "\n".join([*decision.notes, result])
-            return await self.hook_manager.post_tool_use(name, result)
-        if name in self.disabled_mcp_tools:
-            return f"Tool '{name}' is disabled for this agent."
-
-        from servers.agent_tools import AGENT_TOOLS
-        tool_meta = AGENT_TOOLS.get(name)
-        if tool_meta is None:
-            return f"Unknown tool: {name}"
-        if name not in self.enabled_tools:
-            return f"Tool '{name}' is disabled for this agent."
-        fn = tool_meta["fn"]
-        try:
-            result = await fn(self.session, **args)
-            result_text = result.result
-            if spec and result.success:
-                active_permission_engine.record_success(spec, args, result_text)
-            if decision and decision.notes:
-                result_text = "\n".join([*decision.notes, result_text])
-            return await self.hook_manager.post_tool_use(name, result_text)
-        except Exception as exc:
-            return await self.hook_manager.post_tool_use(name, f"Tool error ({name}): {exc}")
 
     async def _build_ops_prompt_context(self) -> str:
         cards = []

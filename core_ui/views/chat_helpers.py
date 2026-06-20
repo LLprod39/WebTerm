@@ -12,6 +12,11 @@ from asgiref.sync import sync_to_async
 from django.conf import settings
 from loguru import logger
 
+from app.chat_server_provider import (
+    get_server_names_for_user,
+    get_servers_context_for_prompt,
+    try_server_command_by_name,
+)
 from core_ui.models import ChatSession
 
 
@@ -41,62 +46,7 @@ def _get_servers_context_for_prompt(user_id: int) -> str:
 
     Includes ready SSH command hints when server secrets can be decrypted.
     """
-    if not user_id:
-        return ""
-    try:
-        from servers.models import Server
-        from servers.secret_utils import get_server_auth_secret
-
-        master_pwd = os.environ.get("MASTER_PASSWORD", "").strip()
-        servers = list(
-            Server.objects.filter(user_id=user_id).only(
-                "id", "name", "host", "port", "username", "auth_method", "key_path", "encrypted_password", "salt"
-            )
-        )
-        if not servers:
-            return ""
-        lines = [
-            "\n\n=== СЕРВЕРЫ ПОЛЬЗОВАТЕЛЯ ===",
-            "ВАЖНО: Данные серверов ниже. НЕ ищи их в коде!",
-            "Для SSH-команд используй готовые команды подключения:",
-            "",
-        ]
-        for server in servers:
-            auth = server.auth_method or "password"
-            key_path = server.key_path or ""
-            pwd_decrypted = ""
-            if auth in ("password", "key_password"):
-                try:
-                    pwd_decrypted = get_server_auth_secret(server, master_password=master_pwd)
-                except Exception as exc:
-                    logger.debug(f"Password decryption failed for server {server.name}: {exc}")
-                    pwd_decrypted = ""
-            if auth == "key" and key_path:
-                cmd_hint = (
-                    f"ssh -i {key_path} -o StrictHostKeyChecking=no "
-                    f"{server.username}@{server.host} -p {server.port} '<COMMAND>'"
-                )
-            elif pwd_decrypted:
-                safe_pwd = pwd_decrypted.replace("'", "'\\''")
-                cmd_hint = (
-                    f"sshpass -p '{safe_pwd}' ssh -o StrictHostKeyChecking=no "
-                    f"{server.username}@{server.host} -p {server.port} '<COMMAND>'"
-                )
-            else:
-                cmd_hint = (
-                    f"ssh -o StrictHostKeyChecking=no {server.username}@{server.host} "
-                    f"-p {server.port} '<COMMAND>'  # пароль недоступен"
-                )
-            lines.append(f"• {server.name}:")
-            lines.append(f"    {cmd_hint}")
-        lines.append("")
-        lines.append("Замени <COMMAND> на нужную команду (например df -h, hostname, uptime).")
-        lines.append("sshpass установлен в системе.")
-        lines.append("")
-        return "\n".join(lines)
-    except Exception as exc:
-        logger.warning(f"_get_servers_context_for_prompt error: {exc}")
-        return ""
+    return get_servers_context_for_prompt(user_id)
 
 
 async def _stream_cursor_cli(
@@ -237,65 +187,9 @@ def _load_task_context_for_user(user_id: int, task_id) -> dict:
 @sync_to_async
 def _get_server_names_for_user(user_id: int):
     """Fetch server names from sync ORM for async chat handlers."""
-    from servers.models import Server
-
-    return list(Server.objects.filter(user_id=user_id).values_list("name", flat=True))
+    return get_server_names_for_user(user_id)
 
 
 async def _try_server_command_by_name(user_id: int, message: str):
     """Run a safe server command when the user references one of their server names."""
-    import re
-
-    try:
-        from app.tools.server_tools import ServerExecuteTool
-    except ImportError as exc:
-        logger.debug(f"ServerExecuteTool not available: {exc}")
-        return None
-    if not user_id or not (message or "").strip():
-        return None
-    try:
-        msg = (message or "").strip().lower()
-        raw = await _get_server_names_for_user(user_id)
-        names = sorted([name for name in raw if (name or "").strip()], key=lambda x: len((x or "").strip()), reverse=True)
-        if not names:
-            return None
-
-        chosen = None
-        for name in names:
-            normalized = (name or "").strip()
-            if not normalized:
-                continue
-            pattern = re.escape(normalized)
-            if re.search(r"(^|[^\w])" + pattern + r"([^\w]|$)", message, re.IGNORECASE):
-                chosen = name
-                break
-        if not chosen:
-            return None
-
-        command = "df -h"
-        if "место" in msg or "диск" in msg or "свободн" in msg:
-            command = "df -h"
-        elif "подключись" in msg or "подключиться" in msg:
-            command = "hostname && echo OK"
-        else:
-            match = re.search(r"(?:выполни|запусти|команду)\s+([^\n.!?\]]+)", message, re.IGNORECASE)
-            if match:
-                cmd = match.group(1).strip().strip("\"'")
-                if cmd and len(cmd) < 200:
-                    command = cmd
-            if "df" in msg and "df -h" not in command and "df " not in command:
-                command = "df -h"
-        tool = ServerExecuteTool()
-        out = await tool.execute(
-            server_name_or_id=chosen,
-            command=command,
-            _context={"user_id": user_id},
-        )
-        return (
-            f"Результат на сервере «{chosen}» (данные из вкладки Servers):\n\n{out}"
-            if isinstance(out, str)
-            else str(out)
-        )
-    except Exception as exc:
-        logger.warning(f"server_command_by_name failed: {exc}")
-        return None
+    return await try_server_command_by_name(user_id, message)

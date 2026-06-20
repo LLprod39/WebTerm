@@ -9,13 +9,12 @@ from asgiref.sync import sync_to_async as _s2a
 from app.agent_kernel.hooks.manager import HookManager
 from app.agent_kernel.permissions.engine import PermissionEngine
 from app.agent_kernel.sandbox.manager import SandboxManager
-from app.agent_kernel.sudo_policy import prepare_sudo_command, resolve_sudo_policy
+from app.command_history_provider import save_command_history_entry
 from app.core.model_utils import resolve_provider_and_model
+from app.pipeline_agent_provider import run_pipeline_multi_agent, run_pipeline_react_agent
+from app.pipeline_ssh_provider import get_server_connect_kwargs, get_server_sudo_password
+from app.sudo_policy import prepare_sudo_command, resolve_sudo_policy
 from core_ui.activity import log_user_activity_async
-from servers.services.command_history import save_command_history_entry
-from servers.services.pipeline_agents import run_pipeline_multi_agent, run_pipeline_react_agent
-from servers.services.ssh_connection import get_server_connect_kwargs
-from servers.secret_utils import get_server_sudo_secret
 
 from .models import MCPServerPool, PipelineRun
 from .pipeline_context import (
@@ -387,7 +386,7 @@ async def execute_agent_ssh_cmd(node: dict, context: dict, run: PipelineRun) -> 
 
     try:
         connect_kwargs = await get_server_connect_kwargs(server, connect_timeout=30)
-        sudo_password = await _s2a_fn(get_server_sudo_secret, thread_sensitive=True)(server)
+        sudo_password = await _s2a_fn(get_server_sudo_password, thread_sensitive=True)(server)
 
         async with asyncssh.connect(**connect_kwargs) as conn:
             combined_outputs: list[str] = []

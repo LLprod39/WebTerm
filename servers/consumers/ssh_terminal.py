@@ -1,13 +1,11 @@
 """
 WebSocket consumers for interactive SSH terminal sessions.
 """
-
 from __future__ import annotations
 
 import asyncio
 import contextlib
 import os
-import re
 import uuid
 from typing import Any
 
@@ -23,12 +21,42 @@ from servers.memory_heuristics import is_trivial_memory_command
 from servers.models import Server
 from servers.secret_utils import has_saved_server_secret
 from servers.services import terminal_events, terminal_input, terminal_nova_context
-from servers.services.editor_intercept import detect_editor_command
+from servers.services.terminal_agent_context import open_agent_target_connection
 from servers.services.terminal_ai import preferences as ai_preferences
+from servers.services.terminal_ai.active_command import (
+    active_command_id,
+    cancel_exit_futures,
+    clear_active_command,
+    exit_future,
+    initialize_active_command_state,
+    register_active_command,
+    resolve_exit_future,
+)
+from servers.services.terminal_ai.command_outcome import unavailable_command_name
+from servers.services.terminal_ai.legacy_state import (
+    apply_legacy_ai_queue_state,
+    sync_legacy_ai_queue_state,
+)
 from servers.services.terminal_ai.memory import sanitize_memory_line
+from servers.services.terminal_ai.plan_insertions import (
+    TerminalAiPlanReservation,
+    reserve_adaptive_step_plan_item,
+    reserve_retry_plan_item,
+)
 from servers.services.terminal_ai.planning import extract_json_object
 from servers.services.terminal_ai.policy import compute_confirm_reason, match_patterns
-from servers.services.terminal_ai.reporter import build_fallback_report, compute_report_status
+from servers.services.terminal_ai.pty_command import wait_for_pty_command_completion
+from servers.services.terminal_ai.queue_completion import handle_queue_completion
+from servers.services.terminal_ai.recovery import (
+    handle_fast_error_recovery,
+    handle_step_post_command,
+)
+from servers.services.terminal_ai.reporter import (
+    build_fallback_report,
+    compute_report_status,
+)
+from servers.services.terminal_ai.run_controller import TerminalAiRunController
+from servers.services.terminal_ai.session import TerminalAiSession
 from servers.services.terminal_command_recorder import (
     persist_agent_command_history,
     persist_manual_terminal_command_result,
@@ -38,21 +66,21 @@ from servers.services.terminal_connection_records import (
     register_terminal_connection,
     touch_terminal_connection,
 )
-from servers.services.terminal_ssh_lifecycle import (
-    close_ssh_handle,
-    open_terminal_ssh_session,
-    resize_terminal_ssh_session,
-)
+from servers.services.terminal_direct_execution import execute_direct_terminal_command
 from servers.services.terminal_manual_command_state import (
     append_ai_output,
     append_manual_output,
     append_terminal_tail,
     finalize_manual_terminal_command,
 )
-from servers.services.terminal_stream_state import (
-    filter_internal_markers,
-    set_exit_future_result,
+from servers.services.terminal_manual_input import handle_terminal_input
+from servers.services.terminal_parallel_batch import execute_terminal_parallel_batch
+from servers.services.terminal_ssh_lifecycle import (
+    close_ssh_handle,
+    open_terminal_ssh_session,
+    resize_terminal_ssh_session,
 )
+from servers.services.terminal_stream_state import filter_internal_markers
 
 _TermSize = terminal_input.TerminalSize
 
@@ -63,36 +91,10 @@ _TERMINAL_AI_LLM_SEMAPHORE = asyncio.Semaphore(4)
 
 
 class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
-    """
-    WebSocket protocol (JSON):
-      - server -> client:
-          {type: "ready", server_id, server_name, auth_method, has_encrypted_secret}
-          {type: "status", status: "connecting"|"connected"|"disconnected"}
-          {type: "output", stream: "stdout"|"stderr", data: "<chunk>"}
-          {type: "error", message: "<text>"}
-          {type: "exit", exit_status: int|null, exit_signal: any|null}
-          {type: "ai_status", status: "thinking"|"running"|"waiting_confirm"|"idle", ...}
-          {type: "ai_response", assistant_text: str, commands: [{id, cmd, why, requires_confirm, reason, risk_categories?, risk_reasons?}]}
-          {type: "ai_command_status", id: int, status: "running"|"done"|"skipped", exit_code?, reason?}
-          {type: "ai_direct_output", id: int, cmd: str, output: str, exit_code: int, dry_run: bool}
-          {type: "ai_report", report: str, status: "ok"|"warning"|"error"}
-          {type: "ai_error", message: "<text>"}
-          {type: "ai_recovery", original_cmd, new_cmd, new_id, why}
-          {type: "ai_question", q_id, question, cmd, exit_code}
-          {type: "ai_install_progress", cmd, elapsed, output_tail}
-      - client -> server:
-          {type: "connect", master_password?, password?, cols?, rows?, term_type?}
-          {type: "input", data: "<keystrokes>"}
-          {type: "resize", cols, rows}
-          {type: "disconnect"}
-          {type: "ai_request", message: "<text>", chat_mode?: "ask"|"agent", execution_mode?: "auto"|"step"|"fast", ai_settings?: {...}}
-          {type: "ai_confirm", id: <int>}
-          {type: "ai_cancel", id: <int>}
-          {type: "ai_reply", q_id: str, text: str}
-          {type: "ai_generate_report", force?: bool}
-          {type: "ai_clear_memory"}
-          {type: "ai_explain_output", id: int, cmd: str, output: str, exit_code?: int, question?: str}
-    """
+    """Interactive SSH terminal WebSocket consumer."""
+
+    _TerminalAiSessionCls = TerminalAiSession
+    _TerminalAiRunControllerCls = TerminalAiRunController
 
     server: Server | None = None
     _user_id: int | None = None
@@ -105,8 +107,8 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
     _connection_heartbeat_task: asyncio.Task[None] | None = None
     _connect_lock: asyncio.Lock
 
+    _ai_run: TerminalAiRunController
     _ai_lock: asyncio.Lock
-    _ai_task: asyncio.Task[None] | None = None
     _ai_plan: list[dict[str, Any]]
     _ai_plan_index: int
     _ai_next_id: int
@@ -123,7 +125,6 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
     _terminal_tail: str
     _ai_history: list[dict]
     _unavailable_cmds: set[str]  # commands that returned exit=127 this session
-    _ai_reply_futures: dict[str, asyncio.Future]  # q_id → future waiting for user reply
     _ai_error_retries: dict[int, int]  # cmd_id → retry count (max 2)
     _ai_run_id: str
     _ai_marker_token: str
@@ -190,28 +191,20 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             return
 
         self._user_id = int(user.id)
-        self._ai_lock = asyncio.Lock()
-        self._ai_task = None
-        # F2-1: per-request queue / run-id / cursor / step-counter state
-        # lives in a single TerminalAiSession object. The historical
-        # ``self._ai_*`` attributes are kept as @property forwarders to
-        # avoid churning the hundreds of call-sites in this file.
-        from servers.services.terminal_ai import TerminalAiSession
-
-        self._ai_session = TerminalAiSession()
+        self._ai_run = self._TerminalAiRunControllerCls()
+        self._ai_lock = self._ai_run.lock
+        self._ai_session = self._TerminalAiSessionCls()
         self._ai_forbidden_patterns = []
-        self._ai_exit_futures = {}
-        self._ai_active_cmd_id = None
-        self._ai_active_output = ""
+        initialize_active_command_state(self)
         self._ai_settings = self._default_ai_settings()
         self._ai_allowlist_patterns = []
         self._terminal_tail = ""
         self._ai_history = []
         self._unavailable_cmds: set[str] = set()
-        self._ai_reply_futures: dict[str, asyncio.Future] = {}
         self._ai_error_retries: dict[int, int] = {}
         self._ai_run_id = ""
         self._ai_marker_token = ""
+        self._ai_stop_requested = False
         # Nova: cached SSH connections to authorised extra targets for
         # the agent loop. Keys: target name (e.g. ``srv-42``) → live
         # asyncssh.SSHClientConnection. Closed in ``_disconnect_ssh``.
@@ -367,9 +360,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             # User replied to an ai_question card
             q_id = str((content or {}).get("q_id") or "")
             text = str((content or {}).get("text") or "").strip()
-            fut = self._ai_reply_futures.get(q_id)
-            if fut and not fut.done():
-                fut.set_result(text)
+            self._ai_run.resolve_reply(q_id, text)
             return
         if msg_type == "ai_clear_memory":
             await self._handle_ai_clear_memory()
@@ -602,73 +593,15 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                 await self._disconnect_ssh()
 
     async def _handle_input(self, data: str):
-        if not data:
-            return
-        if not self._ssh_proc:
-            return
-        try:
-            completed_commands = await self._capture_terminal_input(data)
-            if not completed_commands:
-                self._ssh_proc.stdin.write(data)
-                return
-
-            # Intercept editor commands (nano, vim, vi, etc.) → GUI editor
-            if len(completed_commands) == 1 and getattr(self, "_intercept_editors", True):
-                editor_info = detect_editor_command(completed_commands[0])
-                if editor_info:
-                    # Characters were already forwarded to pty keystroke-by-
-                    # keystroke, so we must CANCEL the typed command — NOT
-                    # execute it.  Ctrl+U clears the line, Ctrl+C aborts.
-                    self._ssh_proc.stdin.write("\x15\x03")
-
-                    await self._safe_send_json(
-                        {
-                            "type": "editor_intercept",
-                            "path": editor_info["path"],
-                            "editor": editor_info["editor"],
-                            "sudo": editor_info["sudo"],
-                        }
-                    )
-                    return
-
-            newline_count = len(re.findall(r"\r\n|\r|\n", data))
-            can_capture_result = (
-                len(completed_commands) == 1
-                and newline_count == 1
-                and self._should_use_manual_command_marker(completed_commands[0])
-            )
-            if not can_capture_result:
-                self._ssh_proc.stdin.write(data)
-                for command in completed_commands:
-                    current_cwd = str((getattr(self, "_nova_session_context", None) or {}).get("cwd") or "")
-                    await self._log_manual_terminal_command(command)
-                    await database_sync_to_async(self._persist_manual_terminal_command_result, thread_sensitive=True)(
-                        user_id=self._user_id or 0,
-                        server_id=self.server.id if self.server else 0,
-                        session_id=self._server_connection_id or "",
-                        command=command,
-                        output="",
-                        exit_code=None,
-                        cwd=current_cwd,
-                    )
-                    self._append_nova_recent_activity(
-                        command=command,
-                        cwd=current_cwd,
-                        exit_code=None,
-                        source="live_session",
-                    )
-                return
-
-            command_index = 0
-            for chunk in re.split(r"(\r\n|\r|\n)", data):
-                if not chunk:
-                    continue
-                self._ssh_proc.stdin.write(chunk)
-                if chunk in ("\r\n", "\r", "\n") and command_index < len(completed_commands):
-                    await self._enqueue_manual_terminal_command_capture(completed_commands[command_index])
-                    command_index += 1
-        except Exception as e:
-            await self._safe_send_json({"type": "error", "message": f"stdin write failed: {e}"})
+        await handle_terminal_input(
+            self,
+            data,
+            log_activity=log_user_activity_async,
+            persist_result=database_sync_to_async(
+                self._persist_manual_terminal_command_result,
+                thread_sensitive=True,
+            ),
+        )
 
     _should_use_manual_command_marker = staticmethod(terminal_input.should_use_manual_command_marker)
     _strip_terminal_input_sequences = staticmethod(terminal_input.strip_terminal_input_sequences)
@@ -680,64 +613,6 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             yield
         finally:
             self._input_capture_suppress = max(0, int(getattr(self, "_input_capture_suppress", 1) or 1) - 1)
-
-    async def _capture_terminal_input(self, data: str) -> list[str]:
-        if int(getattr(self, "_input_capture_suppress", 0) or 0) > 0:
-            return []
-
-        captured = terminal_input.capture_completed_terminal_commands(
-            data,
-            buffer=str(getattr(self, "_manual_input_buffer", "") or ""),
-        )
-        self._manual_input_buffer = captured.buffer
-        return captured.commands
-
-    async def _log_manual_terminal_command(self, command: str) -> None:
-        if not command or not self.server or not self._user_id:
-            return
-
-        await log_user_activity_async(
-            user_id=self._user_id,
-            category="terminal",
-            action="terminal_command",
-            status="success",
-            description=command[:4000],
-            entity_type="server",
-            entity_id=self.server.id,
-            entity_name=self.server.name,
-            metadata={
-                "source": "interactive_shell",
-                "command_length": len(command),
-            },
-        )
-
-    async def _enqueue_manual_terminal_command_capture(self, command: str) -> None:
-        if not command or not self.server or not self._user_id or not self._ssh_proc:
-            return
-
-        await self._log_manual_terminal_command(command)
-
-        cmd_id = int(getattr(self, "_manual_next_cmd_id", 1_000_000) or 1_000_000)
-        self._manual_next_cmd_id = cmd_id + 1
-        self._manual_pending_commands.append(
-            {
-                "id": cmd_id,
-                "command": command,
-                "session_id": self._server_connection_id or "",
-                "user_id": self._user_id,
-                "server_id": self.server.id,
-                "cwd": str((getattr(self, "_nova_session_context", None) or {}).get("cwd") or ""),
-                "context_before": dict(getattr(self, "_nova_session_context", None) or {}),
-            }
-        )
-        if self._manual_active_cmd_id is None:
-            self._manual_active_cmd_id = cmd_id
-            self._manual_active_output = ""
-
-        marker_prefix = self._marker_prefix()
-        marker_var = f"{marker_prefix}{cmd_id}"
-        marker_cmd = f'{marker_var}=$?; echo "{marker_prefix}{cmd_id}:${{{marker_var}}}__"'
-        self._ssh_proc.stdin.write(marker_cmd + "\n")
 
     @staticmethod
     def _persist_manual_terminal_command_result(
@@ -808,8 +683,8 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         Returns active cmd_id if interrupted.
         """
         async with self._ai_lock:
-            cmd_id = self._ai_active_cmd_id
-            fut = (self._ai_exit_futures or {}).get(cmd_id) if cmd_id is not None else None
+            cmd_id = active_command_id(self)
+            fut = exit_future(self, cmd_id)
 
         if cmd_id is None:
             return None
@@ -829,36 +704,22 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
     async def _handle_ai_stop(self):
         active_cmd_id = await self._interrupt_active_command()
 
-        pending_to_skip: list[int] = []
         async with self._ai_lock:
-            self._ai_stop_requested = True
-            for item in self._ai_plan[self._ai_plan_index :]:
-                iid = int(item.get("id") or 0)
-                status = str(item.get("status") or "pending")
-                if iid and iid != active_cmd_id and status not in ("done", "skipped", "cancelled"):
-                    pending_to_skip.append(iid)
+            ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
+            pending_to_skip = ai_session.request_stop(active_cmd_id)
+            apply_legacy_ai_queue_state(self, ai_session)
 
         if active_cmd_id is not None:
             await self._send_ai_event(
-                {
-                    "type": "ai_command_status",
-                    "id": active_cmd_id,
-                    "status": "cancelled",
-                    "reason": "stopped",
-                }
+                terminal_events.ai_command_status(item_id=active_cmd_id, status="cancelled", reason="stopped")
             )
         for cmd_id in pending_to_skip:
             await self._send_ai_event(
-                {
-                    "type": "ai_command_status",
-                    "id": cmd_id,
-                    "status": "skipped",
-                    "reason": "stopped",
-                }
+                terminal_events.ai_command_status(item_id=cmd_id, status="skipped", reason="stopped")
             )
 
         await self._cancel_ai()
-        await self._send_ai_event({"type": "ai_status", "status": "idle"})
+        await self._send_ai_event(terminal_events.ai_status("idle"))
 
     async def _cancel_ai(self):
         # Can be called from disconnect/cleanup paths
@@ -868,29 +729,16 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             await self._cancel_ai_locked()
 
     async def _cancel_ai_locked(self):
-        current = asyncio.current_task()
-        if self._ai_task and not self._ai_task.done() and (current is None or self._ai_task is not current):
-            self._ai_task.cancel()
-        self._ai_task = None
+        self._ai_run.cancel_task(current=asyncio.current_task())
 
-        for fut in (self._ai_exit_futures or {}).values():
-            if not fut.done():
-                fut.cancel()
-        self._ai_exit_futures = {}
+        cancel_exit_futures(self)
 
-        for fut in (getattr(self, "_ai_reply_futures", None) or {}).values():
-            if not fut.done():
-                fut.cancel()
-        if hasattr(self, "_ai_reply_futures"):
-            self._ai_reply_futures = {}
+        self._ai_run.cancel_reply_futures()
 
-        self._ai_plan = []
-        self._ai_plan_index = 0
-        self._ai_forbidden_patterns = []
-        self._ai_active_cmd_id = None
-        self._ai_active_output = ""
-        self._ai_stop_requested = False
-        self._ai_step_extra_count = 0
+        ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
+        ai_session.clear()
+        apply_legacy_ai_queue_state(self, ai_session)
+        clear_active_command(self)
 
     @staticmethod
     def _normalize_execution_mode(mode: str) -> str:
@@ -935,17 +783,15 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
 
             self._ai_settings = self._clone_ai_settings(ai_settings)
             self._ai_allowlist_patterns = list(self._ai_settings.get("allowlist_patterns") or [])
-            self._ai_run_id = self._new_run_id()
-            self._ai_marker_token = self._new_marker_token()
-            self._ai_plan = []
-            self._ai_plan_index = 0
-            self._ai_next_id = 1
-            self._ai_user_message = msg
-            self._ai_chat_mode = requested_chat_mode
-            self._ai_execution_mode = "step" if requested_mode == "auto" else requested_mode
-            self._ai_step_extra_count = 0
-            self._ai_last_done_items = []
-            self._ai_last_report = ""
+            ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
+            ai_session.reset_for_new_request(
+                user_message=msg,
+                chat_mode=requested_chat_mode,
+                execution_mode="step" if requested_mode == "auto" else requested_mode,
+                run_id=self._new_run_id(),
+                marker_token=self._new_marker_token(),
+            )
+            apply_legacy_ai_queue_state(self, ai_session)
             if not bool(self._ai_settings.get("memory_enabled", True)):
                 self._ai_history = []
 
@@ -969,25 +815,22 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             self._ai_run_id,
         )
         if not self._ssh_proc:
-            await self._send_ai_event({"type": "ai_error", "message": "SSH не подключён. Сначала нажмите Connect."})
+            await self._send_ai_event(terminal_events.ai_error("SSH не подключён. Сначала нажмите Connect."))
             return
         if not self.server or not self._user_id:
-            await self._send_ai_event({"type": "ai_error", "message": "Server not loaded"})
+            await self._send_ai_event(terminal_events.ai_error("Server not loaded"))
             return
 
         # 2.11: per-server read-only guard. Check flag synchronously via
         # database_sync_to_async before starting any LLM/exec work.
         if getattr(self.server, "ai_read_only", False):
             await self._send_ai_event(
-                {
-                    "type": "ai_error",
-                    "message": (
-                        "Сервер переведён в режим read-only для AI. "
-                        "AI-агент может только читать состояние; изменяющие команды заблокированы."
-                    ),
-                }
+                terminal_events.ai_error(
+                    "Сервер переведён в режим read-only для AI. "
+                    "AI-агент может только читать состояние; изменяющие команды заблокированы."
+                )
             )
-            await self._send_ai_event({"type": "ai_status", "status": "idle"})
+            await self._send_ai_event(terminal_events.ai_status("idle"))
             return
 
         self._ai_audit_context = {
@@ -1019,12 +862,11 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             },
         )
         await self._send_ai_event(
-            {
-                "type": "ai_status",
-                "status": "thinking",
-                "chat_mode": requested_chat_mode,
-                "execution_mode": requested_mode,
-            }
+            terminal_events.ai_status(
+                "thinking",
+                chat_mode=requested_chat_mode,
+                execution_mode=requested_mode,
+            )
         )
 
         with audit_context(**self._ai_audit_context):
@@ -1033,7 +875,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             # no `_ai_plan`, no `_ai_process_queue`, no per-step planner.
             if requested_mode == "agent":
                 async with self._ai_lock:
-                    self._ai_task = asyncio.create_task(
+                    self._ai_run.start_task(
                         self._run_ai_agent_background(
                             user_message=msg,
                             chat_mode=requested_chat_mode,
@@ -1071,8 +913,8 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                     hint in err_msg.lower() for hint in ("timeout", "429", "rate", "resource exhausted", "overloaded")
                 ):
                     err_msg = "Временная ошибка API (лимит или перегрузка). Попробуйте позже."
-                await self._send_ai_event({"type": "ai_error", "message": err_msg})
-                await self._send_ai_event({"type": "ai_status", "status": "idle"})
+                await self._send_ai_event(terminal_events.ai_error(err_msg))
+                await self._send_ai_event(terminal_events.ai_status("idle"))
                 return
 
         mode = str(plan_obj.get("mode") or "execute").lower().strip()
@@ -1091,17 +933,16 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         if mode in ("answer", "ask"):
             self._add_to_history("assistant", assistant_text or "(ответ)")
             await self._send_ai_event(
-                {
-                    "type": "ai_response",
-                    "mode": mode,
-                    "assistant_text": assistant_text,
-                    "commands": [],
-                    "chat_mode": requested_chat_mode,
-                    "execution_mode": selected_mode,
-                    "requested_execution_mode": requested_mode,
-                }
+                terminal_events.ai_response(
+                    mode=mode,
+                    assistant_text=assistant_text,
+                    commands=[],
+                    chat_mode=requested_chat_mode,
+                    execution_mode=selected_mode,
+                    requested_execution_mode=requested_mode,
+                )
             )
-            await self._send_ai_event({"type": "ai_status", "status": "idle"})
+            await self._send_ai_event(terminal_events.ai_status("idle"))
             return
 
         # --- execute mode ---
@@ -1173,93 +1014,84 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             assistant_text = f"{ask_prefix}\n\n{assistant_text}" if assistant_text else ask_prefix
 
         async with self._ai_lock:
-            self._ai_plan = plan_items
-            self._ai_plan_index = 0
-            self._ai_next_id = next_id
-            self._ai_forbidden_patterns = merged_forbidden or []
+            ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
+            ai_session.load_plan(plan_items, next_id=next_id, forbidden_patterns=merged_forbidden)
+            apply_legacy_ai_queue_state(self, ai_session)
 
         await self._send_ai_event(
-            {
-                "type": "ai_response",
-                "mode": "execute",
-                "assistant_text": assistant_text,
-                "commands": plan_items,
-                "chat_mode": requested_chat_mode,
-                "execution_mode": selected_mode,
-                "requested_execution_mode": requested_mode,
-            }
+            terminal_events.ai_response(
+                mode="execute",
+                assistant_text=assistant_text,
+                commands=plan_items,
+                chat_mode=requested_chat_mode,
+                execution_mode=selected_mode,
+                requested_execution_mode=requested_mode,
+            )
         )
 
         if not plan_items:
             self._add_to_history("assistant", assistant_text or "Команды не нужны")
-            await self._send_ai_event({"type": "ai_status", "status": "idle"})
+            await self._send_ai_event(terminal_events.ai_status("idle"))
             return
 
-        await self._send_ai_event({"type": "ai_status", "status": "running"})
+        await self._send_ai_event(terminal_events.ai_status("running"))
         with audit_context(**self._ai_audit_context):
             async with self._ai_lock:
-                self._ai_task = asyncio.create_task(self._ai_process_queue())
+                self._ai_run.start_task(self._ai_process_queue())
 
     async def _handle_ai_confirm(self, content: dict[str, Any]):
         try:
             cmd_id = int(content.get("id"))
         except Exception:
-            await self._send_ai_event({"type": "ai_error", "message": "Некорректный id для подтверждения"})
+            await self._send_ai_event(terminal_events.ai_error("Некорректный id для подтверждения"))
             return
 
         should_start = False
         async with self._ai_lock:
-            if not self._ai_plan or self._ai_plan_index >= len(self._ai_plan):
+            ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
+            transition = ai_session.confirm_current(cmd_id)
+            apply_legacy_ai_queue_state(self, ai_session)
+            if transition.error:
+                await self._send_ai_event(terminal_events.ai_error(transition.error))
                 return
-            item = self._ai_plan[self._ai_plan_index]
-            if int(item.get("id") or 0) != cmd_id:
-                await self._send_ai_event(
-                    {"type": "ai_error", "message": "Подтверждать можно только текущую ожидающую команду"}
-                )
+            if not transition.changed:
                 return
-            if not item.get("requires_confirm"):
-                return
-            item["requires_confirm"] = False
-            item["confirmed"] = True
-            item["status"] = "pending"
-            if not self._ai_task or self._ai_task.done():
+            if not self._ai_run.has_active_task():
                 should_start = True
 
-        await self._send_ai_event({"type": "ai_command_status", "id": cmd_id, "status": "confirmed"})
+        await self._send_ai_event(terminal_events.ai_command_status(item_id=cmd_id, status=transition.status))
         if should_start:
-            await self._send_ai_event({"type": "ai_status", "status": "running"})
+            await self._send_ai_event(terminal_events.ai_status("running"))
             with audit_context(**getattr(self, "_ai_audit_context", {})):
                 async with self._ai_lock:
-                    self._ai_task = asyncio.create_task(self._ai_process_queue())
+                    self._ai_run.start_task(self._ai_process_queue())
 
     async def _handle_ai_cancel(self, content: dict[str, Any]):
         try:
             cmd_id = int(content.get("id"))
         except Exception:
-            await self._send_ai_event({"type": "ai_error", "message": "Некорректный id для отмены"})
+            await self._send_ai_event(terminal_events.ai_error("Некорректный id для отмены"))
             return
 
         should_start = False
         async with self._ai_lock:
-            if not self._ai_plan or self._ai_plan_index >= len(self._ai_plan):
+            ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
+            transition = ai_session.cancel_current(cmd_id)
+            apply_legacy_ai_queue_state(self, ai_session)
+            if transition.error:
+                await self._send_ai_event(terminal_events.ai_error(transition.error))
                 return
-            item = self._ai_plan[self._ai_plan_index]
-            if int(item.get("id") or 0) != cmd_id:
-                await self._send_ai_event(
-                    {"type": "ai_error", "message": "Отменять можно только текущую ожидающую команду"}
-                )
+            if not transition.changed:
                 return
-            item["status"] = "skipped"
-            self._ai_plan_index += 1
-            if not self._ai_task or self._ai_task.done():
+            if not self._ai_run.has_active_task():
                 should_start = True
 
-        await self._send_ai_event({"type": "ai_command_status", "id": cmd_id, "status": "skipped"})
+        await self._send_ai_event(terminal_events.ai_command_status(item_id=cmd_id, status=transition.status))
         if should_start:
-            await self._send_ai_event({"type": "ai_status", "status": "running"})
+            await self._send_ai_event(terminal_events.ai_status("running"))
             with audit_context(**getattr(self, "_ai_audit_context", {})):
                 async with self._ai_lock:
-                    self._ai_task = asyncio.create_task(self._ai_process_queue())
+                    self._ai_run.start_task(self._ai_process_queue())
 
     async def _handle_ai_clear_memory(self):
         async with self._ai_lock:
@@ -1337,7 +1169,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
     async def _handle_ai_generate_report(self, content: dict[str, Any]):
         force_regenerate = self._parse_bool((content or {}).get("force"), False)
         async with self._ai_lock:
-            if self._ai_task and not self._ai_task.done():
+            if self._ai_run.has_active_task():
                 await self._send_ai_event(
                     terminal_events.ai_error("Дождитесь завершения текущего запуска ассистента.")
                 )
@@ -1442,6 +1274,49 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
 
         return normalize_command_text(cmd)
 
+    async def _reserve_ai_retry_item(self, retries: int) -> TerminalAiPlanReservation:
+        async with self._ai_lock:
+            ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
+            reservation = reserve_retry_plan_item(ai_session, self._ai_error_retries, retries=retries)
+            apply_legacy_ai_queue_state(self, ai_session)
+            return reservation
+
+    async def _reserve_ai_adaptive_item(self, extra_limit: int) -> TerminalAiPlanReservation | None:
+        async with self._ai_lock:
+            ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
+            reservation = reserve_adaptive_step_plan_item(ai_session, extra_limit=extra_limit)
+            apply_legacy_ai_queue_state(self, ai_session)
+            return reservation
+
+    def _build_reserved_plan_item(
+        self,
+        reservation: TerminalAiPlanReservation,
+        *,
+        cmd: str,
+        why: str,
+        no_recovery: bool = False,
+    ) -> dict[str, Any]:
+        item = self._build_plan_item(
+            item_id=reservation.item_id,
+            cmd=cmd,
+            why=why,
+            forbidden_patterns=reservation.forbidden_patterns,
+            allowlist_patterns=list(self._ai_allowlist_patterns or []),
+            confirm_dangerous_commands=bool(self._ai_settings.get("confirm_dangerous_commands", True)),
+        )
+        if no_recovery:
+            item["_no_recovery"] = True
+        return item
+
+    async def _insert_ai_plan_item(self, item: dict[str, Any], *, at_cursor: bool) -> None:
+        async with self._ai_lock:
+            ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
+            if at_cursor:
+                ai_session.insert_at_cursor(item)
+            else:
+                ai_session.insert_after_current(item)
+            apply_legacy_ai_queue_state(self, ai_session)
+
     async def _ai_process_queue(self):
         """
         Execute queued AI commands sequentially.
@@ -1459,67 +1334,56 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                     break
 
                 # 4.2: parallel batch detection ──────────────────────────
-                batch_indices: list[int] = []
-                plan_snapshot: list[dict[str, Any]] = []
                 async with self._ai_lock:
-                    if not self._ai_plan or self._ai_plan_index >= len(self._ai_plan):
-                        break
-                    if direct_exec_enabled and not step_mode and self._ssh_conn:
-                        from servers.services.parallel_executor import collect_parallel_batch
+                    ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
+                    parallel_batch = ai_session.prepare_parallel_batch(
+                        direct_exec_enabled=direct_exec_enabled,
+                        step_mode=step_mode,
+                        has_ssh_connection=bool(self._ssh_conn),
+                    )
 
-                        batch_indices = collect_parallel_batch(
-                            self._ai_plan, self._ai_plan_index, step_mode=step_mode,
-                        )
-                        if batch_indices:
-                            plan_snapshot = [self._ai_plan[i] for i in batch_indices]
-
-                if batch_indices:
-                    await self._execute_parallel_batch(plan_snapshot, batch_indices)
+                if parallel_batch.is_ready:
+                    await self._execute_parallel_batch(parallel_batch.items, parallel_batch.indices)
                     async with self._ai_lock:
-                        new_idx = max(batch_indices) + 1
-                        if new_idx > self._ai_plan_index:
-                            self._ai_plan_index = new_idx
+                        ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
+                        ai_session.advance_after_parallel_batch(parallel_batch.indices)
+                        apply_legacy_ai_queue_state(self, ai_session)
                     continue
                 # ── end parallel batch ─────────────────────────────────────
 
                 async with self._ai_lock:
-                    item = self._ai_plan[self._ai_plan_index]
-                    item_id = int(item.get("id") or 0)
-                    cmd = str(item.get("cmd") or "").strip()
-                    reason = str(item.get("reason") or "").strip()
-                    requires_confirm = bool(item.get("requires_confirm"))
-                    status = str(item.get("status") or "pending")
+                    ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
+                    queue_step = ai_session.prepare_next_step()
+                    apply_legacy_ai_queue_state(self, ai_session)
 
-                    if status in ("done", "skipped", "cancelled"):
-                        self._ai_plan_index += 1
-                        continue
-
-                    if bool(item.get("blocked")):
-                        item["status"] = "skipped"
-                        self._ai_plan_index += 1
-                        await self._send_ai_event(
-                            terminal_events.ai_command_status(
-                                item_id=item_id,
-                                status="skipped",
-                                reason=reason or "forbidden",
-                            )
+                if queue_step.action == "empty":
+                    break
+                if queue_step.action == "advance":
+                    continue
+                if queue_step.action == "blocked_skipped":
+                    await self._send_ai_event(
+                        terminal_events.ai_command_status(
+                            item_id=queue_step.command_id or 0,
+                            status="skipped",
+                            reason=queue_step.reason or "forbidden",
                         )
-                        continue
-
-                    if requires_confirm:
-                        item["status"] = "pending_confirm"
-                        # Pause until user confirms/cancels current command
-                        await self._send_ai_event(
-                            terminal_events.ai_status(
-                                "waiting_confirm",
-                                id=item_id,
-                                reason=reason or "dangerous",
-                            )
+                    )
+                    continue
+                if queue_step.action == "waiting_confirm":
+                    # Pause until user confirms/cancels current command
+                    await self._send_ai_event(
+                        terminal_events.ai_status(
+                            "waiting_confirm",
+                            id=queue_step.command_id or 0,
+                            reason=queue_step.reason or "dangerous",
                         )
-                        send_idle = False
-                        return
+                    )
+                    send_idle = False
+                    return
 
-                    item["status"] = "running"
+                item = queue_step.item or {}
+                item_id = int(queue_step.command_id or 0)
+                cmd = queue_step.command
 
                 await self._send_ai_event(
                     terminal_events.ai_command_status(item_id=item_id, status="running")
@@ -1576,11 +1440,8 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                     exit_code=exit_code,
                 )
 
-                # Track unavailable commands (exit=127 = "command not found")
-                if exit_code == 127:
-                    base_cmd = cmd.strip().split()[0].split("/")[-1] if cmd.strip() else ""
-                    if base_cmd:
-                        self._unavailable_cmds.add(base_cmd)
+                if unavailable_cmd := unavailable_command_name(cmd, exit_code):
+                    self._unavailable_cmds.add(unavailable_cmd)
 
                 # ── Adaptive error recovery ─────────────────────────────────
                 # For non-trivial failures (not success, not interrupted, not skipped):
@@ -1591,452 +1452,50 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                 # both success and error cases in a single LLM round-trip
                 # (-30–50% LLM cost in step-mode on errors). In fast-mode the
                 # block below is the only place where errors are handled.
-                recovery_action = None
-                skip_recovery = step_mode  # unified controller handles errors
-                if exit_code not in (0, 130, None) and not item.get("_no_recovery") and not skip_recovery:
-                    retries = self._ai_error_retries.get(item_id, 0)
-                    if retries < 2:
-                        await self._send_ai_event(
-                            terminal_events.ai_status(
-                                "analyzing_error",
-                                cmd=cmd,
-                                exit_code=exit_code,
-                            )
-                        )
-                        try:
-                            async with self._ai_lock:
-                                remaining_cmds = [
-                                    it.get("cmd", "")
-                                    for it in self._ai_plan[self._ai_plan_index + 1 :]
-                                    if it.get("status") not in ("done", "skipped")
-                                ]
-                            decision = await self._ai_handle_error(cmd, exit_code, output_snippet, remaining_cmds)
-                            recovery_action = decision.get("action", "skip")
-
-                            if recovery_action == "retry":
-                                new_cmd = str(decision.get("cmd") or "").strip()
-                                why = str(decision.get("why") or "Retry after error")
-                                if new_cmd and new_cmd != cmd:
-                                    next_id = self._ai_next_id
-                                    self._ai_next_id += 1
-                                    self._ai_error_retries[next_id] = retries + 1
-                                    async with self._ai_lock:
-                                        forbidden_patterns = list(self._ai_forbidden_patterns or [])
-                                        allowlist_patterns = list(self._ai_allowlist_patterns or [])
-                                        confirm_dangerous = bool(
-                                            self._ai_settings.get("confirm_dangerous_commands", True)
-                                        )
-                                    new_item = self._build_plan_item(
-                                        item_id=next_id,
-                                        cmd=new_cmd,
-                                        why=why,
-                                        forbidden_patterns=forbidden_patterns,
-                                        allowlist_patterns=allowlist_patterns,
-                                        confirm_dangerous_commands=confirm_dangerous,
-                                    )
-                                    new_item["_no_recovery"] = False
-                                    async with self._ai_lock:
-                                        # Insert right after current position
-                                        self._ai_plan.insert(self._ai_plan_index + 1, new_item)
-                                    await self._send_ai_event(
-                                        {
-                                            "type": "ai_recovery",
-                                            "original_cmd": cmd,
-                                            "new_cmd": new_cmd,
-                                            "new_id": next_id,
-                                            "why": why,
-                                            "requires_confirm": bool(new_item.get("requires_confirm")),
-                                            "reason": str(new_item.get("reason") or ""),
-                                            "streaming": bool(new_item.get("streaming")),
-                                        }
-                                    )
-
-                            elif recovery_action == "ask":
-                                question = str(decision.get("question") or "Как лучше продолжить?")
-                                q_id = f"q_{item_id}_{self._ai_next_id}"
-                                self._ai_next_id += 1
-                                loop = asyncio.get_event_loop()
-                                reply_fut: asyncio.Future = loop.create_future()
-                                self._ai_reply_futures[q_id] = reply_fut
-                                await self._send_ai_event(
-                                    {
-                                        "type": "ai_question",
-                                        "q_id": q_id,
-                                        "question": question,
-                                        "cmd": cmd,
-                                        "exit_code": exit_code,
-                                    }
-                                )
-                                try:
-                                    user_reply = await asyncio.wait_for(reply_fut, timeout=300)
-                                    self._add_to_history("user", f"[Ответ агенту]: {user_reply}")
-                                    # Re-evaluate with user's answer
-                                    decision2 = await self._ai_handle_error(
-                                        cmd, exit_code, output_snippet, remaining_cmds, user_reply=user_reply
-                                    )
-                                    if decision2.get("action") == "retry":
-                                        new_cmd2 = str(decision2.get("cmd") or "").strip()
-                                        why2 = str(decision2.get("why") or "")
-                                        if new_cmd2 and new_cmd2 != cmd:
-                                            next_id2 = self._ai_next_id
-                                            self._ai_next_id += 1
-                                            self._ai_error_retries[next_id2] = retries + 1
-                                            async with self._ai_lock:
-                                                forbidden_patterns = list(self._ai_forbidden_patterns or [])
-                                                allowlist_patterns = list(self._ai_allowlist_patterns or [])
-                                                confirm_dangerous = bool(
-                                                    self._ai_settings.get("confirm_dangerous_commands", True)
-                                                )
-                                            new_item2 = self._build_plan_item(
-                                                item_id=next_id2,
-                                                cmd=new_cmd2,
-                                                why=why2,
-                                                forbidden_patterns=forbidden_patterns,
-                                                allowlist_patterns=allowlist_patterns,
-                                                confirm_dangerous_commands=confirm_dangerous,
-                                            )
-                                            new_item2["_no_recovery"] = False
-                                            async with self._ai_lock:
-                                                self._ai_plan.insert(self._ai_plan_index + 1, new_item2)
-                                            await self._send_ai_event(
-                                                {
-                                                    "type": "ai_recovery",
-                                                    "original_cmd": cmd,
-                                                    "new_cmd": new_cmd2,
-                                                    "new_id": next_id2,
-                                                    "why": why2,
-                                                    "requires_confirm": bool(new_item2.get("requires_confirm")),
-                                                    "reason": str(new_item2.get("reason") or ""),
-                                                    "streaming": bool(new_item2.get("streaming")),
-                                                }
-                                            )
-                                            recovery_action = "retry"
-                                    elif decision2.get("action") == "abort":
-                                        recovery_action = "abort"
-                                        await self._send_ai_event(
-                                            {
-                                                "type": "ai_error",
-                                                "message": str(decision2.get("why") or "Выполнение прервано"),
-                                            }
-                                        )
-                                except asyncio.TimeoutError:
-                                    # User didn't reply in time → skip
-                                    logger.info("ai_question timeout, skipping command")
-                                    recovery_action = "skip"
-                                finally:
-                                    self._ai_reply_futures.pop(q_id, None)
-
-                            elif recovery_action == "abort":
-                                await self._send_ai_event(
-                                    {
-                                        "type": "ai_error",
-                                        "message": str(
-                                            decision.get("why") or "Выполнение прервано из-за критической ошибки"
-                                        ),
-                                    }
-                                )
-
-                        except asyncio.CancelledError:
-                            raise
-                        except Exception as e:
-                            logger.warning("Error recovery LLM failed: %s", e)
-                            recovery_action = "skip"
+                recovery_action = await handle_fast_error_recovery(
+                    self,
+                    item=item,
+                    item_id=item_id,
+                    command=cmd,
+                    exit_code=exit_code,
+                    output=output_snippet,
+                    step_mode=step_mode,
+                )
 
                 if recovery_action == "abort":
                     break
                 # ── End adaptive error recovery ─────────────────────────────
 
                 async with self._ai_lock:
-                    if (
-                        self._ai_plan_index < len(self._ai_plan)
-                        and int(self._ai_plan[self._ai_plan_index].get("id") or 0) == item_id
-                    ):
-                        self._ai_plan[self._ai_plan_index]["status"] = "done"
-                        self._ai_plan[self._ai_plan_index]["exit_code"] = exit_code
-                        self._ai_plan[self._ai_plan_index]["output_snippet"] = output_snippet or ""
-                        self._ai_plan_index += 1
+                    ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
+                    ai_session.mark_current_done(item_id, exit_code, output_snippet or "")
+                    apply_legacy_ai_queue_state(self, ai_session)
 
                 is_stream = bool(item.get("streaming", False))
                 await self._send_ai_event(
-                    {
-                        "type": "ai_command_status",
-                        "id": item_id,
-                        "status": "done",
-                        "exit_code": exit_code,
-                        "streaming": is_stream,
-                    }
+                    terminal_events.ai_command_status(
+                        item_id=item_id,
+                        status="done",
+                        exit_code=exit_code,
+                        streaming=is_stream,
+                    )
                 )
 
                 # Step-by-step mode: re-evaluate after each command, not only on errors.
                 if step_mode:
-                    try:
-                        async with self._ai_lock:
-                            remaining_cmds = [
-                                str(it.get("cmd") or "").strip()
-                                for it in self._ai_plan[self._ai_plan_index :]
-                                if it.get("status") not in ("done", "skipped")
-                            ]
-                        decision = await self._ai_step_decide_next(
-                            user_goal=(self._ai_user_message or ""),
-                            last_cmd=cmd,
-                            exit_code=int(exit_code if exit_code is not None else -1),
-                            output=output_snippet or "",
-                            remaining_cmds=remaining_cmds,
-                        )
-
-                        action = str(decision.get("action") or "continue").lower().strip()
-                        # Ask user if required, then re-evaluate with reply.
-                        if action == "ask":
-                            question = str(decision.get("question") or "Как продолжить дальше?").strip()
-                            q_id = f"q_step_{item_id}_{self._ai_next_id}"
-                            self._ai_next_id += 1
-                            loop = asyncio.get_event_loop()
-                            reply_fut: asyncio.Future = loop.create_future()
-                            self._ai_reply_futures[q_id] = reply_fut
-                            await self._send_ai_event(
-                                {
-                                    "type": "ai_question",
-                                    "q_id": q_id,
-                                    "question": question,
-                                    "cmd": cmd,
-                                    "exit_code": exit_code,
-                                }
-                            )
-                            try:
-                                user_reply = await asyncio.wait_for(reply_fut, timeout=300)
-                                self._add_to_history("user", f"[Ответ на шаг]: {user_reply}")
-                                decision = await self._ai_step_decide_next(
-                                    user_goal=(self._ai_user_message or ""),
-                                    last_cmd=cmd,
-                                    exit_code=int(exit_code if exit_code is not None else -1),
-                                    output=output_snippet or "",
-                                    remaining_cmds=remaining_cmds,
-                                    user_reply=user_reply,
-                                )
-                                action = str(decision.get("action") or "continue").lower().strip()
-                            except asyncio.TimeoutError:
-                                action = "continue"
-                            finally:
-                                self._ai_reply_futures.pop(q_id, None)
-
-                        # F1-9: unified step controller also handles retry/skip on error.
-                        if action == "retry":
-                            # Replace failed cmd with fixed one; insert next in queue.
-                            retries = self._ai_error_retries.get(item_id, 0)
-                            new_cmd = str(decision.get("cmd") or "").strip()
-                            if new_cmd and new_cmd != cmd and retries < 2:
-                                async with self._ai_lock:
-                                    forbidden_patterns = list(self._ai_forbidden_patterns or [])
-                                    allowlist_patterns = list(self._ai_allowlist_patterns or [])
-                                    retry_id = int(self._ai_next_id)
-                                    self._ai_next_id += 1
-                                    self._ai_error_retries[retry_id] = retries + 1
-                                    retry_item = self._build_plan_item(
-                                        item_id=retry_id,
-                                        cmd=new_cmd,
-                                        why=str(decision.get("why") or "Retry after error (step-mode)"),
-                                        forbidden_patterns=forbidden_patterns,
-                                        allowlist_patterns=allowlist_patterns,
-                                        confirm_dangerous_commands=bool(
-                                            self._ai_settings.get("confirm_dangerous_commands", True)
-                                        ),
-                                    )
-                                    retry_item["_no_recovery"] = False
-                                    self._ai_plan.insert(self._ai_plan_index, retry_item)
-                                await self._send_ai_event(
-                                    {
-                                        "type": "ai_recovery",
-                                        "original_cmd": cmd,
-                                        "new_cmd": new_cmd,
-                                        "new_id": retry_id,
-                                        "why": str(decision.get("why") or ""),
-                                        "requires_confirm": bool(retry_item.get("requires_confirm")),
-                                        "reason": str(retry_item.get("reason") or ""),
-                                        "streaming": bool(retry_item.get("streaming")),
-                                    }
-                                )
-                        elif action == "skip":
-                            # Non-critical failure on the (already completed) item; just proceed.
-                            # Nothing to do — the remaining plan continues as-is.
-                            pass
-                        elif action == "next":
-                            next_cmd = str(decision.get("next_cmd") or "").strip()
-                            if next_cmd:
-                                extra_limit = 20
-                                if self._ai_step_extra_count >= extra_limit:
-                                    await self._send_ai_event(
-                                        {
-                                            "type": "ai_response",
-                                            "mode": "answer",
-                                            "assistant_text": (
-                                                "Достигнут защитный лимит дополнительных адаптивных шагов "
-                                                f"({extra_limit}) в режиме step-by-step. "
-                                                "Продолжаю выполнение уже запланированных команд. "
-                                                "Для длинных линейных задач переключите режим на Fast или Auto."
-                                            ),
-                                            "commands": [],
-                                            "execution_mode": "step",
-                                        }
-                                    )
-                                else:
-                                    async with self._ai_lock:
-                                        forbidden_patterns = list(self._ai_forbidden_patterns or [])
-                                        allowlist_patterns = list(self._ai_allowlist_patterns or [])
-                                        next_id = int(self._ai_next_id)
-                                        self._ai_next_id += 1
-                                        self._ai_step_extra_count += 1
-                                        new_item = self._build_plan_item(
-                                            item_id=next_id,
-                                            cmd=next_cmd,
-                                            why=str(decision.get("why") or "Следующий адаптивный шаг"),
-                                            forbidden_patterns=forbidden_patterns,
-                                            allowlist_patterns=allowlist_patterns,
-                                            confirm_dangerous_commands=bool(
-                                                self._ai_settings.get("confirm_dangerous_commands", True)
-                                            ),
-                                        )
-                                        self._ai_plan.insert(self._ai_plan_index, new_item)
-                                    await self._send_ai_event(
-                                        {
-                                            "type": "ai_response",
-                                            "mode": "execute",
-                                            "assistant_text": str(
-                                                decision.get("assistant_text")
-                                                or "Добавляю следующий шаг по результатам проверки."
-                                            ),
-                                            "commands": [new_item],
-                                            "execution_mode": "step",
-                                        }
-                                    )
-
-                        elif action == "done":
-                            done_text = str(
-                                decision.get("assistant_text") or "Цель достигнута. Останавливаю дальнейшие шаги."
-                            ).strip()
-                            self._add_to_history("assistant", done_text)
-                            await self._send_ai_event(
-                                {
-                                    "type": "ai_response",
-                                    "mode": "answer",
-                                    "assistant_text": done_text,
-                                    "commands": [],
-                                    "execution_mode": "step",
-                                }
-                            )
-                            pending_ids: list[int] = []
-                            async with self._ai_lock:
-                                for it in self._ai_plan[self._ai_plan_index :]:
-                                    iid = int(it.get("id") or 0)
-                                    st = str(it.get("status") or "")
-                                    if iid and st not in ("done", "skipped", "cancelled"):
-                                        it["status"] = "skipped"
-                                        pending_ids.append(iid)
-                                self._ai_plan_index = len(self._ai_plan)
-                            for pid in pending_ids:
-                                await self._send_ai_event(
-                                    {
-                                        "type": "ai_command_status",
-                                        "id": pid,
-                                        "status": "skipped",
-                                        "reason": "goal_achieved",
-                                    }
-                                )
-                            break
-
-                        elif action == "abort":
-                            await self._send_ai_event(
-                                {
-                                    "type": "ai_error",
-                                    "message": str(
-                                        decision.get("assistant_text")
-                                        or "Выполнение остановлено из-за критического состояния."
-                                    ),
-                                }
-                            )
-                            break
-                        # continue => keep executing current queue
-                    except asyncio.CancelledError:
-                        raise
-                    except Exception as e:
-                        logger.warning("Step-by-step post-step analysis failed: %s", e)
+                    should_stop = await handle_step_post_command(
+                        self,
+                        item_id=item_id,
+                        command=cmd,
+                        exit_code=exit_code,
+                        output=output_snippet or "",
+                    )
+                    if should_stop:
+                        break
 
             # После выполнения всех команд — сформировать отчёт по выводу (анализ логов, проблем и т.д.)
             if send_idle:
-                user_msg = getattr(self, "_ai_user_message", "") or ""
-                async with self._ai_lock:
-                    plan_snapshot = list(self._ai_plan) if self._ai_plan else []
-                done_items = [
-                    {
-                        "cmd": str(it.get("cmd") or "").strip(),
-                        "exit_code": it.get("exit_code"),
-                        "output": (str(it.get("output_snippet") or "").strip())[:4000],
-                    }
-                    for it in plan_snapshot
-                    if str(it.get("status") or "") == "done"
-                ]
-                done_with_output = [x for x in done_items if (x.get("output") or "").strip()]
-                async with self._ai_lock:
-                    self._ai_last_done_items = list(done_items)
-                if user_msg and done_items:
-                    report = ""
-                    if self._is_auto_report_enabled(self._ai_settings, getattr(self, "_ai_execution_mode", "step")):
-                        await self._send_ai_event({"type": "ai_status", "status": "generating_report"})
-                        report = await self._generate_ai_report_text(user_msg, done_items)
-                        # A5: clearly mark the report so the user can't
-                        # confuse a dry-run preview with a real operation.
-                        if bool((self._ai_settings or {}).get("dry_run", False)) and report:
-                            report = (
-                                "🔸 **DRY-RUN RESULT** — никаких изменений на сервере не сделано.\n\n"
-                                + report
-                            )
-                        await self._send_ai_event(
-                            {
-                                "type": "ai_report",
-                                "report": report,
-                                "status": self._compute_report_status(done_items),
-                            }
-                        )
-                    async with self._ai_lock:
-                        self._ai_last_report = report
-                    if bool(self._ai_settings.get("memory_enabled", True)):
-                        exec_summary_parts = []
-                        for it in done_items:
-                            c = it.get("exit_code")
-                            mark = "✓" if c == 0 else ("⏹" if c == 130 else f"✗(exit={c})")
-                            exec_summary_parts.append(f"  {mark} {it['cmd']}")
-                        exec_summary = "Выполнено:\n" + "\n".join(exec_summary_parts)
-                        self._add_to_history("assistant", exec_summary)
-                        if report:
-                            self._add_to_history("assistant", f"[Отчёт]\n{report[:400]}")
-
-                    # Save concise server memory snapshot only for durable
-                    # operational signals. The extraction is done in a
-                    # fire-and-forget background task (F1-7) so that the UI
-                    # sees ``idle`` immediately after the report; the memory
-                    # write is ~4-5s of LLM latency that must not block UX.
-                    memory_candidates = self._select_memory_candidate_commands(done_with_output)
-                    # A2: additional guard — skip the LLM extraction call
-                    # on trivially-diagnostic runs (single command, or all
-                    # commands in the noise list with zero-exit). Saves
-                    # ~30% of extraction calls in typical usage without
-                    # losing any durable signal.
-                    from servers.services.terminal_ai import should_extract_memory as _should_extract
-
-                    if (
-                        memory_candidates
-                        and _should_extract(done_items)
-                        and self.server
-                        and self._user_id
-                        and bool(self._ai_settings.get("memory_enabled", True))
-                    ):
-                        self._spawn_memory_extraction_task(
-                            user_message=user_msg,
-                            commands_with_output=memory_candidates,
-                            report=report,
-                            user_id=int(self._user_id),
-                            server_id=int(self.server.id),
-                            audit_ctx=dict(self._ai_audit_context or {}),
-                        )
+                await handle_queue_completion(self)
 
         except asyncio.CancelledError:
             raise
@@ -2047,10 +1506,10 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
                 hint in err_msg.lower() for hint in ("timeout", "429", "rate", "resource exhausted", "overloaded")
             ):
                 err_msg = "Временная ошибка API (лимит или перегрузка). Попробуйте позже."
-            await self._send_ai_event({"type": "ai_error", "message": err_msg})
+            await self._send_ai_event(terminal_events.ai_error(err_msg))
         finally:
             if send_idle:
-                await self._send_ai_event({"type": "ai_status", "status": "idle"})
+                await self._send_ai_event(terminal_events.ai_status("idle"))
 
     async def _ai_execute_command(self, cmd: str, cmd_id: int) -> tuple[int, str]:
         """
@@ -2071,9 +1530,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         loop = asyncio.get_running_loop()
         fut: asyncio.Future[int] = loop.create_future()
         async with self._ai_lock:
-            self._ai_exit_futures[cmd_id] = fut
-            self._ai_active_cmd_id = cmd_id
-            self._ai_active_output = ""
+            register_active_command(self, cmd_id, fut)
 
         with self._suppress_terminal_input_capture():
             await self._ai_type_text(clean_cmd)
@@ -2085,50 +1542,19 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             marker_cmd = f'{marker_var}=$?; echo "{marker_prefix}{cmd_id}:${{{marker_var}}}__"'
             self._ssh_proc.stdin.write(marker_cmd + "\n")
 
-        # For streaming commands: schedule Ctrl+C after 8 s to allow output capture
-        interrupt_task: asyncio.Task | None = None
-        if is_streaming:
-            interrupt_task = asyncio.create_task(self._interrupt_streaming_after(8.0))
-
-        # For install commands: start periodic monitoring
-        monitor_task: asyncio.Task | None = None
-        if is_install and not is_streaming:
-            monitor_task = asyncio.create_task(self._monitor_install(cmd_id, clean_cmd))
-
-        exit_code = -1
-        timeout = 30 if is_streaming else 600  # installs may take up to 10 min
-        try:
-            exit_code = int(await asyncio.wait_for(fut, timeout=timeout))
-        except asyncio.TimeoutError:
-            if is_streaming:
-                # Force Ctrl+C as last resort
-                try:
-                    if self._ssh_proc:
-                        self._ssh_proc.stdin.write("\x03")
-                except Exception:
-                    pass
-                exit_code = 130
-            else:
-                raise TimeoutError("Timeout waiting for command completion marker")
-        finally:
-            # Always cancel the interrupt/monitor tasks if still pending
-            if interrupt_task and not interrupt_task.done():
-                interrupt_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await interrupt_task
-            if monitor_task and not monitor_task.done():
-                monitor_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await monitor_task
-            async with self._ai_lock:
-                self._ai_exit_futures.pop(cmd_id, None)
-
-        # Short delay so buffered output arrives in _ai_active_output
-        await asyncio.sleep(0.4)
-        output_snippet = (self._ai_active_output or "")[-6000:]
-        async with self._ai_lock:
-            self._ai_active_cmd_id = None
-        return exit_code, output_snippet
+        return await wait_for_pty_command_completion(
+            self,
+            cmd_id=cmd_id,
+            command=clean_cmd,
+            future=fut,
+            is_streaming=is_streaming,
+            is_install=is_install,
+            lock=self._ai_lock,
+            send_ai_event=self._send_ai_event,
+            interrupt_streaming_after=self._interrupt_streaming_after,
+            write_interrupt=self._write_interrupt_to_pty,
+            detect_install_error=self._detect_install_error,
+        )
 
     # F2-8 v2: non-PTY execution path for safe stateless reads.
     #
@@ -2151,45 +1577,15 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         tuple the same way as :meth:`_ai_execute_command` so recovery,
         logging and memory-ingestion flows all keep working.
         """
-        if not self._ssh_conn:
-            raise RuntimeError("SSH connection not established")
-
-        clean_cmd = self._normalize_command_text(cmd)
-        if not clean_cmd:
-            return -1, ""
-
-        try:
-            result = await asyncio.wait_for(
-                self._ssh_conn.run(clean_cmd, check=False),
-                timeout=self.DIRECT_EXEC_TIMEOUT_SEC,
-            )
-        except asyncio.TimeoutError:
-            output_snippet = "WEUAI_EXECUTION_ERROR: direct exec timed out"
-            exit_code = 124  # POSIX convention for `timeout`
-        else:
-            stdout = str(result.stdout or "")
-            stderr = str(result.stderr or "")
-            combined = stdout + (("\n" + stderr) if stderr else "")
-            output_snippet = combined[-self.DIRECT_EXEC_MAX_OUTPUT :]
-            # asyncssh returns None when the remote side reported no exit
-            # status (rare, but happens on certain device shells). Treat as
-            # failure so the recovery path kicks in.
-            exit_code = (
-                int(result.exit_status) if result.exit_status is not None else 1
-            )
-
-        # Surface the captured output to the UI — this is the ONLY place
-        # the user sees direct-path output (the PTY was not touched).
-        await self._send_ai_event(
-            {
-                "type": "ai_direct_output",
-                "id": cmd_id,
-                "cmd": clean_cmd,
-                "output": output_snippet,
-                "exit_code": exit_code,
-            }
+        return await execute_direct_terminal_command(
+            ssh_conn=self._ssh_conn,
+            command=cmd,
+            item_id=cmd_id,
+            send_event=self._send_ai_event,
+            normalize_command=self._normalize_command_text,
+            timeout_seconds=self.DIRECT_EXEC_TIMEOUT_SEC,
+            max_output_chars=self.DIRECT_EXEC_MAX_OUTPUT,
         )
-        return exit_code, output_snippet
 
     # ── 2.4: pre-execution file snapshots ──────────────────────────────────
 
@@ -2228,110 +1624,36 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         attempted within the batch — failed items are simply marked done
         with their exit code so downstream reporting can handle them.
         """
-        if not items:
-            return
-
-        item_ids = [int(it.get("id") or 0) for it in items]
-        await self._send_ai_event(
-            {
-                "type": "ai_parallel_batch",
-                "status": "start",
-                "ids": item_ids,
-                "count": len(items),
-            }
-        )
-
-        # Mark all as running.
-        for it in items:
-            it["status"] = "running"
-        for iid in item_ids:
-            await self._send_ai_event(
-                {"type": "ai_command_status", "id": iid, "status": "running"}
-            )
-
-        dry_run_active = bool((self._ai_settings or {}).get("dry_run", False))
-
-        async def _run_one(item: dict[str, Any]) -> tuple[int, int, str]:
-            """Execute a single direct command. Returns (item_id, exit_code, output)."""
-            iid = int(item.get("id") or 0)
-            cmd = str(item.get("cmd") or "").strip()
-            # 2.4: snapshot before execution
-            if not dry_run_active and self._ssh_conn:
-                await self._maybe_snapshot_file(cmd, iid)
-            try:
-                if dry_run_active:
-                    out = f"[DRY-RUN] Would execute: {cmd}"
-                    await self._send_ai_event(
-                        {
-                            "type": "ai_direct_output",
-                            "id": iid,
-                            "cmd": cmd,
-                            "output": out,
-                            "exit_code": 0,
-                            "dry_run": True,
-                        }
-                    )
-                    return iid, 0, out
-                ec, out = await self._ai_execute_command_direct(cmd, iid)
-                return iid, ec, out
-            except asyncio.CancelledError:
-                raise
-            except Exception as e:
-                logger.warning("Parallel exec failed (id=%s): %s", iid, e)
-                return iid, 1, f"WEUAI_EXECUTION_ERROR: {type(e).__name__}: {e}"
-
-        results = await asyncio.gather(*[_run_one(it) for it in items], return_exceptions=True)
-
-        # Process results.
-        for item, plan_idx, result in zip(items, plan_indices, results, strict=True):
-            iid = int(item.get("id") or 0)
-            if isinstance(result, BaseException):
-                exit_code, output_snippet = 1, f"WEUAI_EXECUTION_ERROR: {result}"
-            else:
-                _, exit_code, output_snippet = result
-
-            await self._log_ai_command_history(
-                user_id=self._user_id,
-                server_id=self.server.id,
-                command=str(item.get("cmd") or ""),
-                output_snippet=output_snippet,
-                exit_code=exit_code,
-            )
-            if exit_code == 127:
-                base_cmd = str(item.get("cmd") or "").strip().split()[0].split("/")[-1]
-                if base_cmd:
-                    self._unavailable_cmds.add(base_cmd)
-
+        async def mark_plan_index_done(plan_idx: int, exit_code: int, output_snippet: str) -> None:
             async with self._ai_lock:
-                if plan_idx < len(self._ai_plan):
-                    self._ai_plan[plan_idx]["status"] = "done"
-                    self._ai_plan[plan_idx]["exit_code"] = exit_code
-                    self._ai_plan[plan_idx]["output_snippet"] = output_snippet or ""
+                ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
+                ai_session.mark_plan_index_done(plan_idx, exit_code, output_snippet)
+                apply_legacy_ai_queue_state(self, ai_session)
 
-            await self._send_ai_event(
-                {
-                    "type": "ai_command_status",
-                    "id": iid,
-                    "status": "done",
-                    "exit_code": exit_code,
-                }
-            )
-
-        await self._send_ai_event(
-            {
-                "type": "ai_parallel_batch",
-                "status": "done",
-                "ids": item_ids,
-                "count": len(items),
-            }
+        await execute_terminal_parallel_batch(
+            items=items,
+            plan_indices=plan_indices,
+            dry_run=bool((self._ai_settings or {}).get("dry_run", False)),
+            has_ssh_connection=bool(self._ssh_conn),
+            user_id=self._user_id,
+            server_id=self.server.id if self.server else 0,
+            send_event=self._send_ai_event,
+            snapshot_command=self._maybe_snapshot_file,
+            execute_direct=self._ai_execute_command_direct,
+            log_command_history=self._log_ai_command_history,
+            mark_plan_index_done=mark_plan_index_done,
+            record_unavailable=self._unavailable_cmds.add,
         )
 
     async def _interrupt_streaming_after(self, delay: float) -> None:
         """Send Ctrl+C after `delay` seconds to interrupt a streaming command."""
         await asyncio.sleep(delay)
+        with contextlib.suppress(Exception):
+            self._write_interrupt_to_pty()
+
+    def _write_interrupt_to_pty(self) -> None:
         if self._ssh_proc:
-            with contextlib.suppress(Exception):
-                self._ssh_proc.stdin.write("\x03")
+            self._ssh_proc.stdin.write("\x03")
 
     @staticmethod
     def _is_streaming_command(cmd: str) -> bool:
@@ -2345,60 +1667,9 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
     def _is_trivial_memory_command(cmd: str) -> bool:
         return is_trivial_memory_command(cmd)
 
-    def _select_memory_candidate_commands(self, commands_with_output: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        # F2-3: forwarder — canonical impl in servers.services.terminal_ai.memory
-        from servers.services.terminal_ai import select_memory_candidate_commands
-
-        return select_memory_candidate_commands(commands_with_output)
-
     @staticmethod
     def _detect_install_error(output: str) -> bool:
         return terminal_input.detect_install_error(output)
-
-    async def _monitor_install(self, cmd_id: int, cmd: str, interval: float = 30.0) -> None:
-        """
-        Periodically send install progress updates to the frontend.
-        If a clear error is detected, sends Ctrl+C to interrupt the install.
-        """
-        start = asyncio.get_event_loop().time()
-        try:
-            while True:
-                await asyncio.sleep(interval)
-                # Check if command already finished
-                fut = (self._ai_exit_futures or {}).get(cmd_id)
-                if not fut or fut.done():
-                    return
-
-                output_so_far = (self._ai_active_output or "")[-3000:]
-                elapsed = int(asyncio.get_event_loop().time() - start)
-
-                # Send progress notification to frontend
-                last_line = (output_so_far.strip().split("\n")[-1] or "").strip()
-                try:
-                    await self._send_ai_event(
-                        {
-                            "type": "ai_install_progress",
-                            "cmd": cmd,
-                            "elapsed": elapsed,
-                            "output_tail": last_line[:200],
-                        }
-                    )
-                except Exception:
-                    return
-
-                # Abort if a clear error is detected in output
-                if self._detect_install_error(output_so_far):
-                    logger.warning("Install error detected in output, sending Ctrl+C: %s", cmd)
-                    try:
-                        if self._ssh_proc:
-                            self._ssh_proc.stdin.write("\x03")
-                    except Exception:
-                        pass
-                    return
-        except asyncio.CancelledError:
-            pass
-        except Exception:
-            logger.exception("Install monitoring failed")
 
     async def _ai_handle_error(
         self,
@@ -2487,9 +1758,8 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             raise
         finally:
             async with self._ai_lock:
-                if self._ai_task is asyncio.current_task():
-                    self._ai_task = None
-            await self._send_ai_event({"type": "ai_status", "status": "idle"})
+                self._ai_run.clear_task_if_current()
+            await self._send_ai_event(terminal_events.ai_status("idle"))
 
     async def _ai_run_agent(
         self,
@@ -2512,9 +1782,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         from servers.services.terminal_ai.agent.tools import ServerTarget, UserPromptRequest
 
         if not self._ssh_conn or not self.server:
-            await self._send_ai_event(
-                {"type": "ai_error", "message": "SSH connection required for agent mode"}
-            )
+            await self._send_ai_event(terminal_events.ai_error("SSH connection required for agent mode"))
             return
 
         # Primary target = this session's server.
@@ -2558,39 +1826,33 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         # to await the future for q_id.
         async def _prompt_user(request: UserPromptRequest) -> str | None:
             q_id = f"q_agent_{self._new_run_id()}"
-            loop = asyncio.get_event_loop()
-            reply_fut: asyncio.Future = loop.create_future()
-            self._ai_reply_futures[q_id] = reply_fut
-            await self._send_ai_event(
-                {
-                    "type": "ai_question",
-                    "q_id": q_id,
-                    "question": request.question,
-                    "source": "agent",
-                    "options": [
-                        {
-                            "label": option.label,
-                            "value": option.value,
-                            "description": option.description,
-                        }
-                        for option in request.options
-                    ],
-                    "allow_multiple": bool(request.allow_multiple),
-                    "free_text_allowed": bool(request.free_text_allowed),
-                    "placeholder": request.placeholder,
-                }
-            )
             try:
-                return await asyncio.wait_for(
-                    reply_fut,
-                    timeout=max(5.0, float(request.timeout_seconds)),
+                return await self._ai_run.ask_user(
+                    q_id=q_id,
+                    event={
+                        "type": "ai_question",
+                        "q_id": q_id,
+                        "question": request.question,
+                        "source": "agent",
+                        "options": [
+                            {
+                                "label": option.label,
+                                "value": option.value,
+                                "description": option.description,
+                            }
+                            for option in request.options
+                        ],
+                        "allow_multiple": bool(request.allow_multiple),
+                        "free_text_allowed": bool(request.free_text_allowed),
+                        "placeholder": request.placeholder,
+                    },
+                    send_event=self._send_ai_event,
+                    timeout_seconds=max(5.0, float(request.timeout_seconds)),
                 )
             except asyncio.TimeoutError:
                 return None
             except asyncio.CancelledError:
                 raise
-            finally:
-                self._ai_reply_futures.pop(q_id, None)
 
         def _stop_requested() -> bool:
             return bool(getattr(self, "_ai_stop_requested", False)) or not self._ssh_proc
@@ -2642,9 +1904,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
             raise
         except Exception as exc:  # noqa: BLE001 — never crash the consumer
             logger.warning("agent loop failed: %s", exc)
-            await self._send_ai_event(
-                {"type": "ai_error", "message": f"Agent loop failed: {exc}"}
-            )
+            await self._send_ai_event(terminal_events.ai_error(f"Agent loop failed: {exc}"))
             return
 
         # Persist the final assistant reply to chat history so future
@@ -2718,55 +1978,11 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         encrypted secret. Returns ``None`` on any failure — the agent
         receives a tool error and can ``ask_user`` for credentials.
         """
-        try:
-            server = await self._load_server_for_agent(server_id)
-            if server is None:
-                logger.warning(
-                    "agent open_target: server %s not accessible", server_id
-                )
-                return None
-
-            master_password = await self._get_session_master_password()
-            if not master_password:
-                master_password = (os.environ.get("MASTER_PASSWORD") or "").strip()
-
-            secret = await self._resolve_server_secret(
-                server_id=server.id,
-                master_password=master_password or "",
-                plain_password="",
-            )
-            from servers.services.terminal_connection_options import build_terminal_connect_kwargs
-
-            connect_kwargs = await build_terminal_connect_kwargs(server, secret=secret or "")
-            return await asyncssh.connect(**connect_kwargs)
-        except Exception as exc:  # noqa: BLE001 — never crash the agent
-            logger.warning("agent open_target(server_id=%s) failed: %s", server_id, exc)
-            return None
-
-    async def _load_server_for_agent(self, server_id: int) -> Any | None:
-        """Fetch a server model the user is authorised to access."""
-        from servers.services.terminal_agent_context import load_user_accessible_server
-
-        if not self._user_id:
-            return None
-        return await load_user_accessible_server(
-            user_id=int(self._user_id),
+        return await open_agent_target_connection(
+            user_id=self._user_id,
             server_id=server_id,
-        )
-
-    async def _list_user_accessible_servers(
-        self, *, user_id: int, server_ids: list[int]
-    ) -> list[dict]:
-        """Return server metadata for ids the user can access.
-
-        Checks ownership, direct shares, and group membership — same
-        ACL the terminal-open flow uses.
-        """
-        from servers.services.terminal_agent_context import list_user_accessible_servers
-
-        return await list_user_accessible_servers(
-            user_id=user_id,
-            server_ids=server_ids,
+            get_master_password=self._get_session_master_password,
+            resolve_server_secret=self._resolve_server_secret,
         )
 
     async def _ai_plan_commands(
@@ -3072,7 +2288,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
         )
 
     def _set_ai_exit_code(self, cmd_id: int, exit_code: int):
-        set_exit_future_result(self._ai_exit_futures, cmd_id, exit_code)
+        resolve_exit_future(self, cmd_id, exit_code)
 
     def _append_terminal_tail(self, text: str):
         append_terminal_tail(self, text)

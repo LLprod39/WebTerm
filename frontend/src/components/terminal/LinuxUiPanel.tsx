@@ -119,18 +119,10 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
   const availableApps = capabilities?.available_apps;
   const packageManager = capabilities?.package_manager;
 
-  const apps = useMemo<WorkspaceAppDefinition[]>(() => buildWorkspaceApps({ availableApps, packageManager, lang }), [
-    availableApps?.disk,
-    availableApps?.docker,
-    availableApps?.logs,
-    availableApps?.network,
-    availableApps?.quick_run,
-    availableApps?.services,
-    availableApps?.settings,
-    availableApps?.text_editor,
-    packageManager,
-    lang,
-  ]);
+  const apps = useMemo<WorkspaceAppDefinition[]>(
+    () => buildWorkspaceApps({ availableApps, packageManager, lang }),
+    [availableApps, packageManager, lang],
+  );
 
   const appMap = useMemo(
     () => Object.fromEntries(apps.map((app) => [app.id, app])) as Record<WorkspaceAppId, WorkspaceAppDefinition>,

@@ -264,8 +264,11 @@ class Command(BaseCommand):
             self.stderr.write(f"Pipeline runtime context failed — fix it in Studio: {context_errors[:2]}")
             return "ignored"
 
-        from studio.trigger_dispatch import create_pipeline_run, launch_pipeline_run_async
-        from studio.trigger_dispatch import pipeline_run_creation_error_details
+        from studio.trigger_dispatch import (
+            create_pipeline_run,
+            launch_pipeline_run_async,
+            pipeline_run_creation_error_details,
+        )
 
         try:
             run = create_pipeline_run(

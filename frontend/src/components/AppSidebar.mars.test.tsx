@@ -6,7 +6,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { I18nProvider } from "@/lib/i18n";
 import { AppSidebar } from "@/components/AppSidebar";
-import { fetchAuthSession } from "@/lib/api";
+import { fetchAuthSession, type FeatureFlag } from "@/lib/api";
+import { featureMap } from "@/test/featureFlags";
 
 vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
@@ -17,7 +18,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
   };
 });
 
-function renderSidebar(features: Record<string, boolean>) {
+function renderSidebar(features: Partial<Record<FeatureFlag, boolean>>) {
   vi.mocked(fetchAuthSession).mockResolvedValue({
     authenticated: true,
     user: {
@@ -25,7 +26,7 @@ function renderSidebar(features: Record<string, boolean>) {
       username: "admin",
       email: "admin@example.com",
       is_staff: true,
-      features,
+      features: featureMap(features),
     },
   });
 

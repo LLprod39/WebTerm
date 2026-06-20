@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Dispatch, ElementType, SetStateAction } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Bot, MessageSquare, Workflow } from "lucide-react";
 import {
@@ -17,28 +17,9 @@ import {
   LLM_PROVIDER_VALUES,
   PROVIDER_API_STATUS_KEY,
 } from "./constants";
+import type { ProviderOverviewItem, RouteModelConfig } from "./aiSettingsTypes";
 
 type RefreshableProvider = "gemini" | "grok" | "openai" | "fair" | "claude" | "ollama";
-
-export type RouteModelConfig = {
-  key: "chat" | "agent" | "orchestrator";
-  shortLabel: string;
-  label: string;
-  description: string;
-  icon: ElementType;
-  provider: string;
-  model: string;
-};
-
-export type ProviderOverviewItem = {
-  value: string;
-  label: string;
-  catalogSize: number;
-  activeRoutes: string[];
-  enabled: boolean;
-  configured: boolean;
-  isSelected: boolean;
-};
 
 type UseAiSettingsFormArgs = {
   currentConfig?: SettingsConfig;

@@ -14,14 +14,22 @@ from __future__ import annotations
 from typing import Any
 
 from studio.skill_policy import apply_skill_policies, compile_skill_policies
-from studio.skill_registry import build_skill_catalog_description, resolve_skills
+from studio.skill_registry import build_skill_catalog_description, normalise_skill_slugs, resolve_skills
 
 
 class StudioSkillProvider:
     """Adapts studio.skill_* functions to the SkillProvider protocol."""
 
-    def resolve_skills(self, slugs: list[str]) -> list[Any]:
+    def resolve_skills(self, slugs: list[str]) -> tuple[list[Any], list[str]]:
         return resolve_skills(slugs)
+
+    def normalise_skill_slugs(self, raw_values: Any) -> list[str]:
+        return normalise_skill_slugs(raw_values)
+
+    def sanitize_accessible_skill_slugs(self, user: Any, slugs: list[str]) -> list[str]:
+        from studio.views.skill_helpers import _sanitize_accessible_skill_slugs
+
+        return _sanitize_accessible_skill_slugs(user, slugs)
 
     def compile_skill_policies(self, skills: list[Any]) -> Any:
         return compile_skill_policies(skills)

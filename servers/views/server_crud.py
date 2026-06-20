@@ -10,10 +10,10 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 
+from app.sudo_policy import SUDO_AUTH_MODE_STORED_PASSWORD, normalize_sudo_auth_mode
 from core_ui.activity import log_user_activity
 from core_ui.decorators import require_feature
 from core_ui.models import UserActivityLog
-from app.agent_kernel.sudo_policy import SUDO_AUTH_MODE_STORED_PASSWORD, normalize_sudo_auth_mode
 from servers.models import Server, ServerGroup
 from servers.secret_utils import (
     clear_server_sudo_secret,
@@ -23,8 +23,8 @@ from servers.secret_utils import (
     store_server_auth_secret,
     store_server_sudo_secret,
 )
-from servers.ssh_private_keys import delete_managed_private_key, store_uploaded_private_key
 from servers.ssh_host_keys import clear_server_trusted_host_keys, get_server_trusted_host_keys
+from servers.ssh_private_keys import delete_managed_private_key, store_uploaded_private_key
 from servers.views.server_helpers import (
     _accessible_servers_queryset,
     _active_server_share,

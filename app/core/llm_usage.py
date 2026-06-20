@@ -1,9 +1,10 @@
 import asyncio
-import contextlib
 from typing import Any
 
 from django.conf import settings as django_settings
 from loguru import logger
+
+from app.core.llm_usage_sink import LLMUsageEvent, capture_llm_usage_context, record_llm_usage_event
 
 
 def _uses_sqlite_database() -> bool:
@@ -27,51 +28,27 @@ def log_llm_usage(
 ):
     """Best-effort LLM usage logging that never blocks model responses."""
     try:
-        from core_ui.audit import get_audit_context
-
-        captured_audit_ctx = get_audit_context()
+        captured_audit_ctx = capture_llm_usage_context()
     except Exception:
         captured_audit_ctx = {}
 
     def _do_log():
         try:
-            from django.db import close_old_connections
-
-            from core_ui.activity import log_llm_activity
-            from core_ui.audit import audit_context, get_audit_context, maybe_apply_log_retention, should_log_llm
-            from core_ui.models import LLMUsageLog
-
-            close_old_connections()
-            with audit_context(**captured_audit_ctx):
-                if not should_log_llm():
-                    return
-
-                maybe_apply_log_retention()
-                audit_ctx = get_audit_context()
-                LLMUsageLog.objects.create(
+            record_llm_usage_event(
+                LLMUsageEvent(
                     provider=provider,
                     model_name=model_name,
-                    user_id=audit_ctx.get("user_id"),
-                    input_tokens=len(input_text) // 4,
-                    output_tokens=len(output_text) // 4,
-                    duration_ms=duration_ms,
-                    status=status,
-                )
-                log_llm_activity(
-                    provider=provider,
-                    model_name=model_name,
-                    prompt=input_text,
-                    response=output_text,
+                    input_text=input_text,
+                    output_text=output_text,
                     duration_ms=duration_ms,
                     status=status,
                     purpose=purpose,
                     metadata=metadata,
+                    audit_context=captured_audit_ctx,
                 )
+            )
         except Exception as e:
             logger.debug(f"Failed to log LLM usage: {e}")
-        finally:
-            with contextlib.suppress(Exception):
-                close_old_connections()
 
     try:
         loop = asyncio.get_running_loop()

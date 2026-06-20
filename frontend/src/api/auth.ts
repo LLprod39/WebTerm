@@ -1,17 +1,68 @@
 /**
- * src/api/auth.ts — Authentication and session API.
- *
- * Migration target for the following functions from src/lib/api.ts:
- *   fetchAuthSession, login, logout, fetchCsrfToken, fetchWsToken
- *   fetchAuthSession, apiAuthLogin, apiAuthLogout
- *
- * Interfaces to migrate here:
- *   AuthUser, AuthSessionResponse, AuthLoginResponse
- *
- * Status: re-exported from src/api/index.ts (pending migration)
+ * Authentication, session, and WebSocket-token API.
  */
+import { apiFetch } from "@/lib/api";
+import type { FeatureFlag } from "@/lib/api";
+import {
+  canUseDemoMode,
+  DEMO_SESSION,
+  enableDemoMode,
+  isDemoMode,
+} from "@/lib/demo";
 
-// Re-export types that clearly belong to this domain.
-// Once the functions are physically moved here, remove them from lib/api.ts.
-export type { AuthUser, AuthSessionResponse, AuthLoginResponse } from "@/lib/api";
-export { fetchAuthSession } from "@/lib/api";
+export interface AuthUser {
+  id: number;
+  username: string;
+  email: string;
+  is_staff: boolean;
+  is_superuser?: boolean;
+  access_profile?: string;
+  permission_sources?: Record<string, string>;
+  features: Record<FeatureFlag, boolean> & Partial<Record<string, boolean>>;
+}
+
+export interface AuthSessionResponse {
+  authenticated: boolean;
+  user: AuthUser | null;
+}
+
+export interface AuthLoginResponse {
+  success: boolean;
+  authenticated: boolean;
+  next_url: string;
+  user: AuthUser;
+}
+
+/** Fetch a short-lived WS auth token from Django (solves Vite proxy cookie issue). */
+export async function fetchWsToken(): Promise<string | null> {
+  try {
+    const data = await apiFetch<{ token: string }>("/api/auth/ws-token/");
+    return data.token ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchAuthSession(): Promise<AuthSessionResponse> {
+  if (isDemoMode()) return DEMO_SESSION;
+  try {
+    return await apiFetch<AuthSessionResponse>("/api/auth/session/");
+  } catch {
+    if (canUseDemoMode() && enableDemoMode()) {
+      return DEMO_SESSION;
+    }
+    return { authenticated: false, user: null };
+  }
+}
+
+export async function authLogin(username: string, password: string, authMode: "auto" | "local" = "auto") {
+  return apiFetch<AuthLoginResponse>("/api/auth/login/", {
+    method: "POST",
+    body: JSON.stringify({ username, password, auth_mode: authMode }),
+    timeoutMs: 10_000,
+  });
+}
+
+export async function authLogout() {
+  return apiFetch<{ success: boolean }>("/api/auth/logout/", { method: "POST" });
+}

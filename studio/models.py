@@ -1,23 +1,21 @@
-"""
-Agent Studio Models
-
-Provides the building blocks for a DevOps n8n-like agent automation platform:
-- MCPServerPool: reusable MCP server definitions (stdio/sse)
-- AgentConfig: standalone agent configuration (system prompt, tools, MCP, servers)
-- Pipeline: visual pipeline definition (nodes + edges as JSON)
-- PipelineTrigger: webhook/cron/manual/monitoring triggers for pipelines
-- PipelineRun: execution record for a pipeline run
-- PipelineTemplate: bundled pipeline templates for quick start
-"""
-
 import secrets
 
 from django.contrib.auth.models import User
 from django.db import models
 
-from app.agent_kernel.sudo_policy import SUDO_POLICY_CHOICES, SUDO_POLICY_DISABLED
+from app.sudo_policy import SUDO_POLICY_CHOICES, SUDO_POLICY_DISABLED
 
+from .model_serializers import (
+    agent_config_to_dict,
+    pipeline_get_last_run,
+    pipeline_get_trigger_summary,
+    pipeline_run_to_dict,
+    pipeline_template_to_dict,
+    pipeline_to_detail_dict,
+    pipeline_to_list_dict,
+)
 from .pipeline_draft_models import PipelineDraftRevision, PipelineDraftSession  # noqa: F401
+from .pipeline_model_services import instantiate_template_for_user, sync_pipeline_triggers_from_nodes
 
 CURRENT_PIPELINE_GRAPH_VERSION = 2
 
@@ -91,30 +89,6 @@ class MCPServerPool(models.Model):
         if self.env:
             config["env"] = self.env
         return config
-
-
-def _collect_monitoring_filters(data: dict | None) -> dict:
-    raw_data = data if isinstance(data, dict) else {}
-    nested = raw_data.get("monitoring_filters") if isinstance(raw_data.get("monitoring_filters"), dict) else {}
-    filters: dict[str, object] = dict(nested)
-
-    if isinstance(raw_data.get("server_ids"), list):
-        server_ids = [int(item) for item in raw_data.get("server_ids", []) if str(item).strip().isdigit()]
-        if server_ids:
-            filters["server_ids"] = server_ids
-
-    for key in ("severities", "alert_types", "container_names"):
-        raw_values = raw_data.get(key)
-        if isinstance(raw_values, list):
-            values = [str(item or "").strip() for item in raw_values if str(item or "").strip()]
-            if values:
-                filters[key] = values
-
-    match_text = str(raw_data.get("match_text") or "").strip()
-    if match_text:
-        filters["match_text"] = match_text
-
-    return filters
 
 
 class AgentConfig(models.Model):
@@ -206,28 +180,7 @@ class AgentConfig(models.Model):
         return self.name
 
     def to_dict(self) -> dict:
-        from .skill_policy import compile_skill_policies
-        from .skill_registry import resolve_skills
-
-        skills, skill_errors = resolve_skills(self.skill_slugs or [])
-        _, policy_errors = compile_skill_policies(skills)
-        return {
-            "id": self.pk,
-            "name": self.name,
-            "description": self.description,
-            "icon": self.icon,
-            "system_prompt": self.system_prompt,
-            "instructions": self.instructions,
-            "model": self.model,
-            "max_iterations": self.max_iterations,
-            "allowed_tools": self.allowed_tools,
-            "sudo_policy": self.sudo_policy,
-            "mcp_servers": list(self.mcp_servers.filter(owner=self.owner).values("id", "name", "transport")),
-            "skill_slugs": list(self.skill_slugs or []),
-            "skills": [skill.to_summary_dict() for skill in skills],
-            "skill_errors": [*skill_errors, *policy_errors],
-            "server_scope": list(self.server_scope.filter(user=self.owner).values("id", "name")),
-        }
+        return agent_config_to_dict(self)
 
 
 class Pipeline(models.Model):
@@ -279,125 +232,19 @@ class Pipeline(models.Model):
         return self.name
 
     def get_last_run(self):
-        live_run = self.runs.filter(
-            status__in=[
-                PipelineRun.STATUS_PENDING,
-                PipelineRun.STATUS_RUNNING,
-            ]
-        ).order_by("-created_at", "-id").first()
-        if live_run:
-            return live_run
-        return self.runs.order_by("-created_at", "-id").first()
+        return pipeline_get_last_run(self)
 
     def get_trigger_summary(self) -> dict:
-        triggers = list(self.triggers.all())
-        active_triggers = [trigger for trigger in triggers if trigger.is_active]
-        last_triggered_at = None
-        for trigger in active_triggers:
-            if trigger.last_triggered_at and (last_triggered_at is None or trigger.last_triggered_at > last_triggered_at):
-                last_triggered_at = trigger.last_triggered_at
-        return {
-            "active_total": len(active_triggers),
-            "active_manual": sum(1 for trigger in active_triggers if trigger.trigger_type == PipelineTrigger.TYPE_MANUAL),
-            "active_webhook": sum(1 for trigger in active_triggers if trigger.trigger_type == PipelineTrigger.TYPE_WEBHOOK),
-            "active_schedule": sum(1 for trigger in active_triggers if trigger.trigger_type == PipelineTrigger.TYPE_SCHEDULE),
-            "active_monitoring": sum(
-                1 for trigger in active_triggers if trigger.trigger_type == PipelineTrigger.TYPE_MONITORING
-            ),
-            "last_triggered_at": last_triggered_at.isoformat() if last_triggered_at else None,
-        }
+        return pipeline_get_trigger_summary(self)
 
     def to_list_dict(self) -> dict:
-        last_run = self.get_last_run()
-        return {
-            "id": self.pk,
-            "name": self.name,
-            "description": self.description,
-            "icon": self.icon,
-            "tags": self.tags,
-            "is_shared": self.is_shared,
-            "is_template": self.is_template,
-            "graph_version": self.graph_version,
-            "node_count": len(self.nodes) if self.nodes else 0,
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat(),
-            "trigger_summary": self.get_trigger_summary(),
-            "last_run": {
-                "id": last_run.pk,
-                "status": last_run.status,
-                "started_at": last_run.started_at.isoformat() if last_run.started_at else None,
-                "finished_at": last_run.finished_at.isoformat() if last_run.finished_at else None,
-            }
-            if last_run
-            else None,
-        }
+        return pipeline_to_list_dict(self)
 
     def to_detail_dict(self) -> dict:
-        d = self.to_list_dict()
-        d["nodes"] = self.nodes
-        d["edges"] = self.edges
-        d["triggers"] = [t.to_dict() for t in self.triggers.order_by("created_at", "id")]
-        return d
+        return pipeline_to_detail_dict(self)
 
     def sync_triggers_from_nodes(self):
-        trigger_type_map = {
-            "trigger/manual": PipelineTrigger.TYPE_MANUAL,
-            "trigger/webhook": PipelineTrigger.TYPE_WEBHOOK,
-            "trigger/schedule": PipelineTrigger.TYPE_SCHEDULE,
-            "trigger/monitoring": PipelineTrigger.TYPE_MONITORING,
-        }
-        keep_node_ids: set[str] = set()
-
-        for node in self.nodes or []:
-            node_type = str(node.get("type") or "")
-            trigger_type = trigger_type_map.get(node_type)
-            node_id = str(node.get("id") or "").strip()
-            if not trigger_type or not node_id:
-                continue
-
-            data = node.get("data") or {}
-            payload_map = data.get("webhook_payload_map")
-            if not isinstance(payload_map, dict):
-                payload_map = {}
-            monitoring_filters = _collect_monitoring_filters(data)
-
-            defaults = {
-                "name": (str(data.get("label") or "").strip() or node_id),
-                "trigger_type": trigger_type,
-                "is_active": bool(data.get("is_active", True)),
-                "cron_expression": str(data.get("cron_expression") or "").strip(),
-                "webhook_payload_map": payload_map,
-                "monitoring_filters": monitoring_filters,
-            }
-            existing = list(self.triggers.filter(node_id=node_id).order_by("id"))
-            if existing:
-                trigger = existing[0]
-                created = False
-                if len(existing) > 1:
-                    self.triggers.filter(node_id=node_id).exclude(pk=trigger.pk).delete()
-            else:
-                trigger = PipelineTrigger.objects.create(
-                    pipeline=self,
-                    node_id=node_id,
-                    **defaults,
-                )
-                created = True
-
-            if not created:
-                changed = False
-                for field, value in defaults.items():
-                    if getattr(trigger, field) != value:
-                        setattr(trigger, field, value)
-                        changed = True
-                if changed:
-                    trigger.save()
-
-            keep_node_ids.add(node_id)
-
-        if keep_node_ids:
-            self.triggers.exclude(node_id__in=keep_node_ids).delete()
-        else:
-            self.triggers.all().delete()
+        sync_pipeline_triggers_from_nodes(self)
 
 
 class PipelineTrigger(models.Model):
@@ -580,28 +427,7 @@ class PipelineRun(models.Model):
         return None
 
     def to_dict(self) -> dict:
-        trigger = getattr(self, "trigger", None)
-        return {
-            "id": self.pk,
-            "pipeline_id": self.pipeline_id,
-            "pipeline_name": self.pipeline.name,
-            "status": self.status,
-            "node_states": self.node_states,
-            "nodes_snapshot": self.nodes_snapshot,
-            "context": self.context,
-            "summary": self.summary,
-            "error": self.error,
-            "duration_seconds": self.duration_seconds,
-            "started_at": self.started_at.isoformat() if self.started_at else None,
-            "finished_at": self.finished_at.isoformat() if self.finished_at else None,
-            "created_at": self.created_at.isoformat(),
-            "triggered_by": self.triggered_by.username if self.triggered_by else None,
-            "trigger_id": trigger.pk if trigger else None,
-            "entry_node_id": self.entry_node_id,
-            "trigger_type": trigger.trigger_type if trigger else "manual",
-            "trigger_name": trigger.name if trigger else "",
-            "trigger_node_id": trigger.node_id if trigger else self.entry_node_id,
-        }
+        return pipeline_run_to_dict(self)
 class PipelineTemplate(models.Model):
     """
     Bundled pipeline template for quick start.
@@ -634,52 +460,11 @@ class PipelineTemplate(models.Model):
         return f"[{self.category}] {self.name}"
 
     def to_dict(self) -> dict:
-        return {
-            "slug": self.slug,
-            "name": self.name,
-            "description": self.description,
-            "icon": self.icon,
-            "category": self.category,
-            "tags": self.tags,
-            "node_count": len(self.nodes),
-            "graph_version": self.graph_version,
-        }
+        return pipeline_template_to_dict(self)
 
     def instantiate_for_user(self, user: User) -> "Pipeline":
         """Create a new Pipeline for the given user from this template."""
-        nodes = list(self.nodes)
-        edges = list(self.edges)
-
-        if self.slug == "server-update-approval":
-            from .services.server_access import get_preferred_owned_server_id
-
-            server_id = get_preferred_owned_server_id(user, preferred_name="backup-01", fallback_order_by="name")
-            if server_id:
-                server_ids = [server_id]
-                for node in nodes:
-                    nid = node.get("id")
-                    if nid in ("n2", "n8", "n10"):
-                        data = dict(node.get("data") or {})
-                        data["server_ids"] = server_ids
-                        node = dict(node)
-                        node["data"] = data
-                        for i, n in enumerate(nodes):
-                            if n.get("id") == nid:
-                                nodes[i] = node
-                                break
-
-        pipeline = Pipeline.objects.create(
-            name=self.name,
-            description=self.description,
-            icon=self.icon,
-            tags=self.tags,
-            nodes=nodes,
-            edges=edges,
-            graph_version=self.graph_version or CURRENT_PIPELINE_GRAPH_VERSION,
-            owner=user,
-        )
-        pipeline.sync_triggers_from_nodes()
-        return pipeline
+        return instantiate_template_for_user(self, user)
 
 
 class StudioSkillAccess(models.Model):

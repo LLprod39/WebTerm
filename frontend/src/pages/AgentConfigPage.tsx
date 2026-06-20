@@ -4,24 +4,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
-  BookOpen,
   Bot,
   Loader2,
-  Pencil,
   Plus,
   Save,
-  Trash2,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogBody,
@@ -31,11 +19,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { ShareAccessEditor } from "@/components/studio/ShareAccessEditor";
 import { useToast } from "@/hooks/use-toast";
 import { StudioHero, HeroStatChip, HeroActionButton } from "@/components/studio/StudioHero";
 import {
@@ -49,62 +32,19 @@ import {
 } from "@/lib/api";
 import { hasFeatureAccess } from "@/lib/featureAccess";
 import { localize, useI18n } from "@/lib/i18n";
-
-const ALL_TOOLS = [
-  { id: "ssh_execute", labelRu: "SSH-команды", labelEn: "SSH Execute", descriptionRu: "Запуск команд на серверах", descriptionEn: "Run commands on servers" },
-  { id: "read_console", labelRu: "Чтение консоли", labelEn: "Read Console", descriptionRu: "Чтение вывода терминала", descriptionEn: "Read terminal output" },
-  { id: "open_connection", labelRu: "Открыть SSH", labelEn: "Open Connection", descriptionRu: "Открытие SSH-подключений", descriptionEn: "Open SSH connections" },
-  { id: "close_connection", labelRu: "Закрыть SSH", labelEn: "Close Connection", descriptionRu: "Закрытие SSH-подключений", descriptionEn: "Close SSH connections" },
-  { id: "wait_for_output", labelRu: "Ожидать вывод", labelEn: "Wait for Output", descriptionRu: "Ожидание нужного текста в терминале", descriptionEn: "Wait for terminal patterns" },
-  { id: "report", labelRu: "Отчёт", labelEn: "Report", descriptionRu: "Промежуточные статусы выполнения", descriptionEn: "Send intermediate status updates" },
-  { id: "ask_user", labelRu: "Спросить пользователя", labelEn: "Ask User", descriptionRu: "Пауза до ответа пользователя", descriptionEn: "Pause for user input" },
-  { id: "analyze_output", labelRu: "Анализ вывода", labelEn: "Analyze Output", descriptionRu: "LLM-анализ полученного вывода", descriptionEn: "Run LLM analysis over output" },
-];
-
-function visibleAllowedTools(tools?: string[]) {
-  return Array.isArray(tools) ? tools.filter((tool) => tool !== "send_ctrl_c") : undefined;
-}
-
-const MODEL_OPTIONS = [
-  "gemini-2.0-flash-exp",
-  "gemini-2.5-pro",
-  "claude-4.5-sonnet",
-  "claude-4.5-opus",
-  "gpt-5.2",
-];
-
-const SUDO_AGENT_OPTIONS = [
-  {
-    value: "disabled",
-    labelRu: "Без sudo",
-    labelEn: "No sudo",
-    hintRu: "Команды с sudo будут заблокированы для этого профиля.",
-    hintEn: "Commands with sudo are blocked for this profile.",
-  },
-  {
-    value: "ask",
-    labelRu: "Спросить при необходимости",
-    labelEn: "Ask when needed",
-    hintRu: "Агент остановится и попросит разрешение, если ему понадобится sudo.",
-    hintEn: "The agent stops and asks when sudo is needed.",
-  },
-  {
-    value: "approved",
-    labelRu: "Разрешить на запуск",
-    labelEn: "Approve for run",
-    hintRu: "Sudo разрешён для запусков этого профиля; backend выполняет его как sudo -n.",
-    hintEn: "Sudo is approved for this profile's runs; backend enforces sudo -n.",
-  },
-] as const;
-
-function toolLabel(toolId: string, lang: "ru" | "en") {
-  const tool = ALL_TOOLS.find((item) => item.id === toolId);
-  return tool ? localize(lang, tool.labelRu, tool.labelEn) : toolId;
-}
-
-function sudoOption(value: string | undefined) {
-  return SUDO_AGENT_OPTIONS.find((item) => item.value === value) || SUDO_AGENT_OPTIONS[0];
-}
+import {
+  AgentAllowedToolsSection,
+  AgentCoreSettingsSection,
+  AgentMcpServersSection,
+  AgentServerScopeSection,
+  AgentSkillsSection,
+  AgentVisibilitySection,
+} from "./agent-config/AgentFormAccessSections";
+import { AgentConfigCard } from "./agent-config/AgentConfigCard";
+import {
+  MODEL_OPTIONS,
+  visibleAllowedTools,
+} from "./agent-config/agentConfigOptions";
 
 function AgentForm({
   initial,
@@ -215,272 +155,64 @@ function AgentForm({
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-[96px_minmax(0,1fr)]">
-        <div className="space-y-2">
-          <Label>{localize(lang, "Иконка", "Icon")}</Label>
-          <Input
-            value={form.icon || "B"}
-            onChange={(event) => setField("icon", event.target.value)}
-            className="text-center text-lg"
-            disabled={readOnly}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>{localize(lang, "Название", "Name")}</Label>
-          <Input
-            value={form.name || ""}
-            onChange={(event) => setField("name", event.target.value)}
-            placeholder={localize(lang, "Агент OPS-разбора", "Ops triage agent")}
-            disabled={readOnly}
-          />
-        </div>
-      </div>
+      <AgentCoreSettingsSection
+        form={form}
+        lang={lang}
+        readOnly={readOnly}
+        onFieldChange={setField}
+      />
 
-      <div className="space-y-2">
-        <Label>{localize(lang, "Описание", "Description")}</Label>
-        <Input
-          value={form.description || ""}
-          onChange={(event) => setField("description", event.target.value)}
-          placeholder={localize(
-            lang,
-            "Переиспользуемый агент для проверок инфраструктуры и предложений по ремонту",
-            "Reusable agent for infrastructure checks and repair suggestions",
-          )}
-          disabled={readOnly}
-        />
-      </div>
+      <AgentAllowedToolsSection
+        allowedTools={form.allowed_tools || []}
+        lang={lang}
+        readOnly={readOnly}
+        onToggleTool={toggleTool}
+      />
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <Label>{localize(lang, "Модель", "Model")}</Label>
-          <Select value={form.model || MODEL_OPTIONS[0]} onValueChange={(value) => setField("model", value)}>
-            <SelectTrigger disabled={readOnly}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {MODEL_OPTIONS.map((model) => (
-                <SelectItem key={model} value={model}>
-                  {model}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      <AgentMcpServersSection
+        canUseMcp={canUseMcp}
+        lang={lang}
+        mcpIds={mcpIds}
+        mcpList={mcpList}
+        readOnly={readOnly}
+        onToggleMcp={toggleMcp}
+      />
 
-        <div className="space-y-2">
-          <Label>{localize(lang, "Лимит итераций", "Max iterations")}</Label>
-          <Input
-            type="number"
-            min={1}
-            max={50}
-            value={form.max_iterations || 10}
-            onChange={(event) => setField("max_iterations", Number(event.target.value) || 10)}
-            disabled={readOnly}
-          />
-        </div>
-      </div>
+      <AgentSkillsSection
+        canUseSkills={canUseSkills}
+        lang={lang}
+        readOnly={readOnly}
+        selectedSkillSlugs={form.skill_slugs || []}
+        skills={skills}
+        onBrowseCatalog={() => navigate("/studio/skills")}
+        onToggleSkill={toggleSkill}
+      />
 
-      <div className="space-y-2 rounded-xl border border-border/70 bg-background/30 px-4 py-3">
-        <Label>{localize(lang, "Controlled sudo", "Controlled sudo")}</Label>
-        <Select
-          value={(form.sudo_policy as string) || "disabled"}
-          onValueChange={(value) => setField("sudo_policy", value)}
-        >
-          <SelectTrigger disabled={readOnly}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {SUDO_AGENT_OPTIONS.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {localize(lang, option.labelRu, option.labelEn)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          {localize(lang, sudoOption(form.sudo_policy as string).hintRu, sudoOption(form.sudo_policy as string).hintEn)}
-        </p>
-      </div>
+      <AgentServerScopeSection
+        lang={lang}
+        readOnly={readOnly}
+        serverScopeIds={serverScopeIds}
+        servers={servers}
+        onToggleServerScope={toggleServerScope}
+      />
 
-      <div className="space-y-2">
-        <Label>{localize(lang, "Системный промпт", "System prompt")}</Label>
-        <Textarea
-          value={form.system_prompt || ""}
-          onChange={(event) => setField("system_prompt", event.target.value)}
-          rows={4}
-          placeholder={localize(
-            lang,
-            "Ты аккуратный OPS-агент. Проверяй контекст перед рискованными действиями.",
-            "You are a careful operations agent. Verify before any risky action.",
-          )}
-          disabled={readOnly}
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label>{localize(lang, "Инструкции", "Instructions")}</Label>
-        <Textarea
-          value={form.instructions || ""}
-          onChange={(event) => setField("instructions", event.target.value)}
-          rows={4}
-          placeholder={localize(
-            lang,
-            "Сначала собирай контекст. Не выполняй разрушительные команды без явного подтверждения.",
-            "Always gather context first. Avoid destructive commands unless explicitly approved.",
-          )}
-          disabled={readOnly}
-        />
-      </div>
-
-      <div className="space-y-3">
-        <Label>{localize(lang, "Разрешённые инструменты", "Allowed tools")}</Label>
-        <div className="grid gap-2 md:grid-cols-2">
-          {ALL_TOOLS.map((tool) => (
-            <label
-              key={tool.id}
-              className="flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 bg-background/30 px-3 py-3 transition-colors hover:bg-background/40"
-            >
-              <Checkbox
-                checked={(form.allowed_tools || []).includes(tool.id)}
-                onCheckedChange={() => toggleTool(tool.id)}
-                className="mt-0.5"
-                disabled={readOnly}
-              />
-              <div>
-                <div className="text-sm font-medium text-foreground">{localize(lang, tool.labelRu, tool.labelEn)}</div>
-                <div className="text-xs text-muted-foreground">{localize(lang, tool.descriptionRu, tool.descriptionEn)}</div>
-              </div>
-            </label>
-          ))}
-        </div>
-      </div>
-
-      {canUseMcp && mcpList.length > 0 ? (
-        <div className="space-y-3">
-          <Label>{localize(lang, "MCP-серверы", "MCP servers")}</Label>
-          <div className="grid gap-2">
-            {mcpList.map((mcp) => (
-              <label
-                key={mcp.id}
-                className="flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 bg-background/30 px-3 py-3 transition-colors hover:bg-background/40"
-              >
-                <Checkbox checked={mcpIds.includes(mcp.id)} onCheckedChange={() => toggleMcp(mcp.id)} disabled={readOnly} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-medium text-foreground">{mcp.name}</span>
-                    <Badge variant="outline" className="text-[10px] font-mono">
-                      {mcp.transport}
-                    </Badge>
-                    {mcp.last_test_ok === true ? <Badge variant="secondary">OK</Badge> : null}
-                    {mcp.last_test_ok === false ? <Badge variant="destructive">ERR</Badge> : null}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {mcp.description || localize(lang, "Описание не заполнено", "No description")}
-                  </div>
-                </div>
-              </label>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {canUseSkills && skills.length > 0 ? (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <Label>{localize(lang, "Skills", "Skills")}</Label>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 gap-1.5 rounded-md px-3 text-[11px]"
-              onClick={() => navigate("/studio/skills")}
-              disabled={readOnly}
-            >
-              <BookOpen className="h-3.5 w-3.5" />
-              {localize(lang, "Открыть каталог", "Browse catalog")}
-            </Button>
-          </div>
-          <div className="grid gap-2">
-            {skills.map((skill) => (
-              <label
-                key={skill.slug}
-                className="flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 bg-background/30 px-3 py-3 transition-colors hover:bg-background/40"
-              >
-                <Checkbox
-                  checked={(form.skill_slugs || []).includes(skill.slug)}
-                  onCheckedChange={() => toggleSkill(skill.slug)}
-                  className="mt-0.5"
-                  disabled={readOnly}
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-medium text-foreground">{skill.name}</span>
-                    <span className="font-mono text-[10px] text-muted-foreground">{skill.slug}</span>
-                    {skill.service ? <span className="text-[10px] text-muted-foreground">{skill.service}</span> : null}
-                    {skill.safety_level ? <span className="text-[10px] text-muted-foreground">{skill.safety_level}</span> : null}
-                  </div>
-                  <div className="text-xs text-muted-foreground">{skill.description}</div>
-                </div>
-              </label>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {servers.length > 0 ? (
-        <div className="space-y-3">
-          <Label>{localize(lang, "Ограничение по серверам", "Server scope")}</Label>
-          <p className="text-xs text-muted-foreground">
-            {localize(
-              lang,
-              "Оставьте пустым, чтобы агент работал со всеми доступными серверами. Выберите серверы, чтобы жёстко ограничить профиль.",
-              "Leave empty to allow all accessible servers. Select specific servers to hard-scope this agent.",
-            )}
-          </p>
-          <div className="grid gap-2 md:grid-cols-2">
-            {servers.map((server) => (
-              <label
-                key={server.id}
-                className="flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 bg-background/30 px-3 py-3 transition-colors hover:bg-background/40"
-              >
-                <Checkbox
-                  checked={serverScopeIds.includes(server.id)}
-                  onCheckedChange={() => toggleServerScope(server.id)}
-                  disabled={readOnly}
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium text-foreground">{server.name}</div>
-                  <div className="text-xs text-muted-foreground">{server.host}</div>
-                </div>
-              </label>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {isAdmin ? (
-        <ShareAccessEditor
-          title={localize(lang, "Видимость", "Visibility")}
-          description={localize(
-            lang,
-            "Администратор управляет тем, кто может открывать и переиспользовать этот профиль агента.",
-            "Admin controls who can open and reuse this agent profile.",
-          )}
-          isShared={Boolean(form.is_shared)}
-          sharedUserIds={sharedUserIds}
-          users={shareUsers}
-          disabled={readOnly}
-          onSharedChange={(value) => setField("is_shared", value)}
-          onToggleUser={(userId) =>
-            setField(
-              "shared_user_ids",
-              sharedUserIds.includes(userId)
-                ? sharedUserIds.filter((id) => id !== userId)
-                : [...sharedUserIds, userId],
-            )
-          }
-        />
-      ) : null}
+      <AgentVisibilitySection
+        isAdmin={isAdmin}
+        isShared={Boolean(form.is_shared)}
+        lang={lang}
+        readOnly={readOnly}
+        sharedUserIds={sharedUserIds}
+        users={shareUsers}
+        onSharedChange={(value) => setField("is_shared", value)}
+        onToggleUser={(userId) =>
+          setField(
+            "shared_user_ids",
+            sharedUserIds.includes(userId)
+              ? sharedUserIds.filter((id) => id !== userId)
+              : [...sharedUserIds, userId],
+          )
+        }
+      />
 
       {form.skill_errors?.length ? (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3">
@@ -643,96 +375,15 @@ export default function AgentConfigPage() {
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {agents.map((agent) => {
-            const visibleTools = visibleAllowedTools(agent.allowed_tools) || [];
-            return (
-            <div key={agent.id} className="group overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-all duration-150 hover:shadow-md">
-              <div className="p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex min-w-0 items-start gap-3">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-lg font-semibold text-primary">
-                      {agent.icon || "B"}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-foreground">{agent.name}</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {agent.description || localize(lang, "Описание не заполнено", "No description")}
-                      </p>
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {agent.is_owner ? <Badge variant="secondary" className="text-[10px]">{localize(lang, "Мой", "Mine")}</Badge> : null}
-                        {!agent.is_owner && agent.owner_username ? (
-                          <Badge variant="outline" className="text-[10px]">{localize(lang, "Владелец", "Owner")}: {agent.owner_username}</Badge>
-                        ) : null}
-                        {agent.is_shared ? <Badge variant="outline" className="text-[10px]">{localize(lang, "Общий", "Shared")}</Badge> : null}
-                        {agent.can_edit === false ? <Badge variant="outline" className="text-[10px]">{localize(lang, "Только чтение", "Read only")}</Badge> : null}
-                        <Badge variant="outline" className="text-[10px]">
-                          sudo: {localize(lang, sudoOption(agent.sudo_policy).labelRu, sudoOption(agent.sudo_policy).labelEn)}
-                        </Badge>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex gap-1 shrink-0">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8 rounded-lg"
-                      onClick={() => setEditAgent(agent)}
-                      aria-label={agent.can_edit === false ? localize(lang, `Открыть агента ${agent.name}`, `View agent ${agent.name}`) : localize(lang, `Изменить агента ${agent.name}`, `Edit agent ${agent.name}`)}
-                      title={agent.can_edit === false ? localize(lang, "Открыть агента", "View agent") : localize(lang, "Изменить агента", "Edit agent")}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    {agent.can_edit !== false ? (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 rounded-lg text-destructive hover:text-destructive"
-                        onClick={() => setDeleteTarget(agent)}
-                        aria-label={localize(lang, `Удалить агента ${agent.name}`, `Delete agent ${agent.name}`)}
-                        title={localize(lang, "Удалить агента", "Delete agent")}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-
-              <div className="border-t border-border/50 bg-secondary/10 px-4 py-3 space-y-2.5">
-                <div className="flex flex-wrap gap-1.5">
-                  <span className="rounded border border-border/50 bg-secondary/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{agent.model}</span>
-                  <span className="rounded border border-border/50 bg-secondary/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                    {localize(lang, `${agent.max_iterations} итер.`, `${agent.max_iterations} iter`)}
-                  </span>
-                  {agent.mcp_servers?.length ? <span className="rounded border border-border/50 bg-secondary/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">{agent.mcp_servers.length} MCP</span> : null}
-                  {agent.skill_slugs?.length ? (
-                    <span className="rounded border border-border/50 bg-secondary/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                      {localize(lang, `${agent.skill_slugs.length} skills`, `${agent.skill_slugs.length} skills`)}
-                    </span>
-                  ) : null}
-                  {agent.server_scope?.length ? (
-                    <span className="rounded border border-border/50 bg-secondary/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                      {localize(lang, `${agent.server_scope.length} серверов`, `${agent.server_scope.length} scoped`)}
-                    </span>
-                  ) : null}
-                </div>
-                {visibleTools.length ? (
-                  <p className="text-[11px] text-muted-foreground/70">
-                    {visibleTools.slice(0, 4).map((item) => toolLabel(item, lang)).join(", ")}
-                    {visibleTools.length > 4 ? ` +${visibleTools.length - 4}` : ""}
-                  </p>
-                ) : null}
-                {agent.skill_errors?.length ? (
-                  <div className="rounded-lg border border-amber-500/25 bg-amber-500/8 px-2.5 py-1.5">
-                    {agent.skill_errors.slice(0, 1).map((error) => (
-                      <p key={error} className="text-[11px] text-amber-300">{error}</p>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-            );
-          })}
+          {agents.map((agent) => (
+            <AgentConfigCard
+              key={agent.id}
+              agent={agent}
+              lang={lang}
+              onEdit={setEditAgent}
+              onDelete={setDeleteTarget}
+            />
+          ))}
         </div>
       )}
 

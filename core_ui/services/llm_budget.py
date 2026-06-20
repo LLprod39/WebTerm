@@ -18,30 +18,30 @@ Public API
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import timedelta
 
+from app.core.llm_budget import BudgetExceededError, BudgetStatus, disabled_budget_status
 
-class BudgetExceededError(RuntimeError):
-    """Raised when a pre-flight budget check rejects an LLM call."""
-
-
-@dataclass(frozen=True)
-class BudgetStatus:
-    """Snapshot of one user's token usage over the trailing 24 h."""
-
-    enabled: bool
-    used_tokens: int
-    limit_tokens: int
-    remaining_tokens: int
-
-    @property
-    def exceeded(self) -> bool:
-        return self.enabled and self.remaining_tokens <= 0
+__all__ = [
+    "BudgetExceededError",
+    "BudgetStatus",
+    "get_current_llm_budget_user_id",
+    "get_user_daily_budget_status",
+]
 
 
 def _disabled_status() -> BudgetStatus:
-    return BudgetStatus(enabled=False, used_tokens=0, limit_tokens=0, remaining_tokens=0)
+    return disabled_budget_status()
+
+
+def get_current_llm_budget_user_id() -> int | None:
+    """Return the current audit-context user id for LLM budget checks."""
+    from core_ui.audit import get_audit_context
+
+    user_id = (get_audit_context() or {}).get("user_id")
+    if not user_id:
+        return None
+    return int(user_id)
 
 
 def get_user_daily_budget_status(user_id: int | None) -> BudgetStatus:

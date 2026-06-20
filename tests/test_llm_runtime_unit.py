@@ -94,7 +94,7 @@ async def test_gemini_stream_chat_returns_timeout_message(monkeypatch):
             awaitable.close()
         raise asyncio.TimeoutError
 
-    monkeypatch.setattr("app.core.llm.asyncio.wait_for", _raise_timeout)
+    monkeypatch.setattr("app.core.llm_gemini.asyncio.wait_for", _raise_timeout)
 
     chunks = [chunk async for chunk in provider.stream_chat("hello", model="gemini")]
 

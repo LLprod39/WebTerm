@@ -4,13 +4,13 @@ import re
 from dataclasses import dataclass
 
 from app.agent_kernel.domain.specs import PermissionDecision, ToolSpec
-from app.agent_kernel.sudo_policy import (
+from app.agent_kernel.permissions.modes import MODE_AUTO_GUARDED, MODE_PLAN, MODE_SAFE, MUTATION_SANDBOX
+from app.execution_policy import build_execution_policy_audit_metadata
+from app.sudo_policy import (
     SUDO_POLICY_DISABLED,
     evaluate_sudo_command,
     normalize_sudo_policy,
 )
-from app.execution_policy import build_execution_policy_audit_metadata
-from app.agent_kernel.permissions.modes import MODE_AUTO_GUARDED, MODE_PLAN, MODE_SAFE, MUTATION_SANDBOX
 from app.tools.safety import evaluate_command_safety
 
 _MUTATING_PATTERNS: tuple[tuple[re.Pattern[str], str, tuple[str, ...], tuple[str, ...]], ...] = (

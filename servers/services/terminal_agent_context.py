@@ -8,6 +8,7 @@ used by the terminal flow.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -152,3 +153,54 @@ async def build_agent_memory_context(server_ids: list[int]) -> str:
     except Exception as exc:  # noqa: BLE001
         logger.warning("agent memory context load failed: %s", exc)
         return ""
+
+
+async def open_agent_target_connection(
+    *,
+    user_id: int | None,
+    server_id: int,
+    get_master_password: Callable[[], Awaitable[str | None]],
+    resolve_server_secret: Callable[..., Awaitable[str]],
+    load_server: Callable[..., Awaitable[Any | None]] = load_user_accessible_server,
+    build_connect_kwargs: Callable[..., Awaitable[dict[str, Any]]] | None = None,
+    connect: Callable[..., Awaitable[Any]] | None = None,
+) -> Any | None:
+    """Open an asyncssh connection to an authorised terminal-agent target.
+
+    The helper is best-effort by design: failures are logged and returned as
+    ``None`` so the agent tool can surface an unavailable-target error without
+    crashing the terminal session.
+    """
+    if not user_id:
+        return None
+
+    try:
+        server = await load_server(user_id=int(user_id), server_id=server_id)
+        if server is None:
+            logger.warning("agent open_target: server %s not accessible", server_id)
+            return None
+
+        master_password = str(await get_master_password() or "").strip()
+        if not master_password:
+            master_password = (os.environ.get("MASTER_PASSWORD") or "").strip()
+
+        secret = await resolve_server_secret(
+            server_id=server.id,
+            master_password=master_password or "",
+            plain_password="",
+        )
+
+        if build_connect_kwargs is None:
+            from servers.services.terminal_connection_options import build_terminal_connect_kwargs
+
+            build_connect_kwargs = build_terminal_connect_kwargs
+        if connect is None:
+            import asyncssh
+
+            connect = asyncssh.connect
+
+        connect_kwargs = await build_connect_kwargs(server, secret=secret or "")
+        return await connect(**connect_kwargs)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("agent open_target(server_id=%s) failed: %s", server_id, exc)
+        return None

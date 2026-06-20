@@ -6,12 +6,13 @@ from django.contrib.auth.models import User
 from django.db import models
 from django.utils import timezone
 
-from app.agent_kernel.sudo_policy import (
+from app.sudo_policy import (
     SUDO_AUTH_MODE_CHOICES,
     SUDO_AUTH_MODE_NONE,
     SUDO_POLICY_CHOICES,
     SUDO_POLICY_DISABLED,
 )
+from servers.model_helpers import server_network_context_summary, update_server_network_flags
 
 
 class ServerGroup(models.Model):
@@ -237,52 +238,11 @@ class Server(models.Model):
 
     def get_network_context_summary(self) -> str:
         """Получить описание сетевого контекста для AI"""
-        parts = []
-
-        # Сначала из corporate_context (приоритет - текстовые заметки)
-        if self.corporate_context:
-            parts.append(self.corporate_context.strip())
-
-        # Дополнительно из network_config если есть
-        if self.network_config:
-            nc = self.network_config
-
-            # Прокси
-            if nc.get("proxy", {}).get("http_proxy"):
-                parts.append(f"Прокси: {nc['proxy']['http_proxy']}")
-
-            # VPN
-            if nc.get("vpn", {}).get("required"):
-                vpn_type = nc["vpn"].get("type", "VPN")
-                parts.append(f"VPN: {vpn_type}")
-
-            # Bastion
-            if nc.get("network", {}).get("bastion_host"):
-                parts.append(f"Bastion: {nc['network']['bastion_host']}")
-
-            # Firewall
-            if nc.get("firewall", {}).get("inbound_ports"):
-                ports = nc["firewall"]["inbound_ports"]
-                parts.append(f"Порты: {','.join(map(str, ports))}")
-
-        return "\n".join(parts) if parts else "Стандартная сеть"
+        return server_network_context_summary(self.corporate_context, self.network_config)
 
     def update_network_flags(self):
         """Обновить helper flags на основе network_config"""
-        if not self.network_config:
-            return
-
-        nc = self.network_config
-
-        # Proxy
-        self.has_proxy = bool(nc.get("proxy", {}).get("http_proxy"))
-
-        # VPN
-        self.requires_vpn = bool(nc.get("vpn", {}).get("required"))
-
-        # Firewall (по умолчанию True для корпоративных сетей)
-        if nc.get("firewall"):
-            self.behind_firewall = True
+        update_server_network_flags(self)
 
 
 class ServerShare(models.Model):

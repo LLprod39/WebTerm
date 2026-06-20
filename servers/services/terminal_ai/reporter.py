@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from typing import Any
 
+DRY_RUN_REPORT_PREFIX = "🔸 **DRY-RUN RESULT** — никаких изменений на сервере не сделано."
+
 
 def compute_report_status(done_items: list[dict[str, Any]]) -> str:
     """Compute summary status from a list of executed command results.
@@ -49,3 +51,20 @@ def build_fallback_report(done_items: list[dict[str, Any]]) -> str:
         + ", ".join(str(code) for code in codes)
         + ". Вывод в консоли слева. Для анализа проверьте вывод вручную."
     )
+
+
+def apply_dry_run_report_prefix(report: str, *, dry_run: bool) -> str:
+    """Mark generated reports that came from a dry-run preview."""
+    if not dry_run or not report:
+        return report
+    return f"{DRY_RUN_REPORT_PREFIX}\n\n{report}"
+
+
+def build_execution_summary(done_items: list[dict[str, Any]]) -> str:
+    """Build compact chat-history summary for executed commands."""
+    exec_summary_parts = []
+    for item in done_items:
+        code = item.get("exit_code")
+        mark = "✓" if code == 0 else ("⏹" if code == 130 else f"✗(exit={code})")
+        exec_summary_parts.append(f"  {mark} {item['cmd']}")
+    return "Выполнено:\n" + "\n".join(exec_summary_parts)

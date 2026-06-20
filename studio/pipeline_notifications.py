@@ -5,13 +5,13 @@ from typing import Any
 
 import httpx
 
+from core_ui.services.notification_config import load_notification_config
+
 
 def _load_notif_cfg() -> dict[str, Any]:
     """Load Studio notification config with a settings fallback."""
     try:
-        from studio.views import _load_notif_config
-
-        cfg = _load_notif_config()
+        cfg = load_notification_config()
         return cfg if isinstance(cfg, dict) else {}
     except Exception:
         pass

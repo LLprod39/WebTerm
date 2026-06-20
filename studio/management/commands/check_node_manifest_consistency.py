@@ -87,9 +87,12 @@ def collect_node_manifest_consistency_errors(repo_root: Path | None = None) -> l
 
     node_meta = _read_text(root / "frontend" / "src" / "components" / "pipeline" / "nodes" / "nodeMeta.tsx")
     type_meta_block = _slice_between(node_meta, "export const NODE_TYPE_META", "export const NODE_TYPE_GUIDANCE_META")
-    guidance_meta_block = _slice_between(node_meta, "export const NODE_TYPE_GUIDANCE_META", "export const NODE_CATEGORY_LABELS")
     _compare_sets(errors, label="frontend NODE_TYPE_META", actual=_node_type_refs(type_meta_block), expected=expected)
-    _compare_sets(errors, label="frontend NODE_TYPE_GUIDANCE_META", actual=_node_type_refs(guidance_meta_block), expected=expected)
+
+    node_guidance_meta = _read_text(
+        root / "frontend" / "src" / "components" / "pipeline" / "nodes" / "nodeGuidanceMeta.ts"
+    )
+    _compare_sets(errors, label="frontend NODE_TYPE_GUIDANCE_META", actual=_node_type_refs(node_guidance_meta), expected=expected)
 
     docs = _read_text(root / "docs" / "PIPELINE_NODES_SPEC.md")
     missing_in_docs = sorted(node_type for node_type in expected if f"`{node_type}`" not in docs)

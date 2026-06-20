@@ -9,9 +9,10 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
+from app.agent_kernel import skill_provider_registry
+from app.sudo_policy import normalize_sudo_policy
 from core_ui.activity import log_user_activity
 from core_ui.decorators import require_feature
-from app.agent_kernel.sudo_policy import normalize_sudo_policy
 from servers.agent_inputs import normalize_input_artifacts, normalize_report_delivery
 from servers.agent_schedule import normalize_schedule_config, schedule_minutes_for_config
 from servers.agent_service import (
@@ -23,7 +24,6 @@ from servers.agent_service import (
 from servers.agents import get_all_templates, get_template
 from servers.models import ServerAgent
 from servers.views.server_helpers import _accessible_servers_queryset
-from studio.views.skill_helpers import _normalise_skill_payload, _sanitize_accessible_skill_slugs
 
 
 @login_required
@@ -143,9 +143,11 @@ def agent_create(request):
     stop_conditions = data.get("stop_conditions", [])
     session_timeout = int(data.get("session_timeout_seconds", 600))
     max_connections = min(int(data.get("max_connections", 5)), 10)
-    skill_slugs = _sanitize_accessible_skill_slugs(
+    skill_slugs = skill_provider_registry.sanitize_accessible_skill_slugs(
         request.user,
-        _normalise_skill_payload(data.get("skill_slugs") if "skill_slugs" in data else data.get("skills")),
+        skill_provider_registry.normalise_skill_slugs(
+            data.get("skill_slugs") if "skill_slugs" in data else data.get("skills")
+        ),
     )
     input_artifacts = normalize_input_artifacts(data.get("input_artifacts"))
     report_delivery = normalize_report_delivery(data.get("report_delivery"))
@@ -257,9 +259,11 @@ def agent_update(request, agent_id):
         )
 
     if "skill_slugs" in data or "skills" in data:
-        agent.skill_slugs = _sanitize_accessible_skill_slugs(
+        agent.skill_slugs = skill_provider_registry.sanitize_accessible_skill_slugs(
             request.user,
-            _normalise_skill_payload(data.get("skill_slugs") if "skill_slugs" in data else data.get("skills")),
+            skill_provider_registry.normalise_skill_slugs(
+                data.get("skill_slugs") if "skill_slugs" in data else data.get("skills")
+            ),
         )
     if "input_artifacts" in data:
         agent.input_artifacts = normalize_input_artifacts(data.get("input_artifacts"))

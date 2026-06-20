@@ -77,6 +77,65 @@ class TestPurposeAliasesForTerminalAi:
         assert provider == "gemini"
 
 
+class TestProviderModelSelection:
+    def test_chat_and_agent_models_use_provider_catalog(self):
+        mgr = _make_manager(
+            default_provider="openai",
+            internal_llm_provider="fair",
+            chat_model_openai="gpt-chat",
+            agent_model_openai="gpt-agent",
+            chat_model_grok="grok-chat",
+            agent_model_grok="grok-agent",
+        )
+
+        assert mgr.get_chat_model("openai") == "gpt-chat"
+        assert mgr.get_agent_model("openai") == "gpt-agent"
+        assert mgr.get_chat_model("unknown-provider") == "grok-chat"
+        assert mgr.get_agent_model("unknown-provider") == "grok-agent"
+
+    def test_auto_provider_uses_internal_provider_for_model_selection(self):
+        mgr = _make_manager(
+            default_provider="auto",
+            internal_llm_provider="fair",
+            chat_model_fair="fair-chat",
+            agent_model_fair="fair-agent",
+        )
+
+        assert mgr.get_chat_model() == "fair-chat"
+        assert mgr.get_agent_model() == "fair-agent"
+
+    def test_claude_agent_model_inherits_chat_model(self):
+        mgr = _make_manager(chat_model_claude="claude-sonnet-test")
+
+        assert mgr.get_chat_model("claude") == "claude-sonnet-test"
+        assert mgr.get_agent_model("claude") == "claude-sonnet-test"
+
+    def test_ollama_models_follow_configured_then_available_fallback_chain(self):
+        mgr = _make_manager(chat_model_ollama="", agent_model_ollama="")
+        mgr.available_ollama_local_models = ["local-model"]
+        mgr.available_ollama_cloud_models = ["cloud-model"]
+
+        assert mgr.get_chat_model("ollama") == "local-model"
+        assert mgr.get_agent_model("ollama") == "local-model"
+
+        mgr.config.chat_model_ollama = "configured-chat"
+        assert mgr.get_chat_model("ollama") == "configured-chat"
+        assert mgr.get_agent_model("ollama") == "configured-chat"
+
+        mgr.config.agent_model_ollama = "configured-agent"
+        assert mgr.get_agent_model("ollama") == "configured-agent"
+
+    def test_available_models_and_enabled_flags_are_table_driven(self):
+        mgr = _make_manager(openai_enabled=True, claude_enabled=False)
+        mgr.available_openai_models = ["gpt-custom"]
+
+        assert mgr.get_available_models("openai") == ["gpt-custom"]
+        assert "claude-sonnet-4-6" in mgr.get_available_models("claude")
+        assert mgr.is_provider_enabled("openai") is True
+        assert mgr.is_provider_enabled("claude") is False
+        assert mgr.is_provider_enabled("cursor") is True
+
+
 class TestA4ExpandedTerminalPurposes:
     """A4: expanded per-purpose routing — each sub-call of Terminal AI
     (step decision, recovery, report, answer, explain) must land in the

@@ -18,6 +18,7 @@ from django.db import close_old_connections, connections
 from django.utils import timezone
 from loguru import logger
 
+from app.agent_kernel import skill_provider_registry
 from servers.agent_dispatch import (
     complete_agent_dispatch,
     enqueue_agent_run_dispatch,
@@ -30,7 +31,6 @@ from servers.models import AgentRun, AgentRunDispatch, Server, ServerAgent
 from servers.multi_agent_engine import MultiAgentEngine
 from servers.run_events import record_run_event, record_run_event_async
 from servers.worker_state import heartbeat_background_worker
-from studio.skill_registry import resolve_skills
 
 
 def _make_event_callback(run_id: int):
@@ -103,7 +103,7 @@ async def _run_agent_background(run_id: int, agent_id: int, server_ids: list[int
         thread_sensitive=True,
     )()
     skills, skill_errors = await sync_to_async(
-        lambda: resolve_skills(list(agent.skill_slugs or [])),
+        lambda: skill_provider_registry.resolve_skills(list(agent.skill_slugs or [])),
         thread_sensitive=True,
     )()
 
@@ -148,7 +148,7 @@ async def _run_plan_execution_background(run_id: int, agent_id: int, server_ids:
         thread_sensitive=True,
     )()
     skills, skill_errors = await sync_to_async(
-        lambda: resolve_skills(list(agent.skill_slugs or [])),
+        lambda: skill_provider_registry.resolve_skills(list(agent.skill_slugs or [])),
         thread_sensitive=True,
     )()
 

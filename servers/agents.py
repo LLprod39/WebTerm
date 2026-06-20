@@ -14,11 +14,11 @@ from asgiref.sync import sync_to_async as _s2a
 from django.utils import timezone
 from loguru import logger
 
-from app.agent_kernel.sudo_policy import prepare_sudo_command, evaluate_sudo_command
+from app.sudo_policy import evaluate_sudo_command, prepare_sudo_command
 from app.tools.safety import is_dangerous_command
 from core_ui.activity import log_user_activity
 from core_ui.audit import audit_context
-from servers.agent_inputs import build_agent_materials_prompt
+from servers.agent_analysis import get_ai_analysis
 from servers.models import AgentRun, Server, ServerAgent
 from servers.monitor import _build_connect_kwargs
 from servers.report_delivery import deliver_agent_report_async
@@ -397,7 +397,7 @@ async def run_agent(agent: ServerAgent, server: Server, user) -> AgentRun:
         entity_id=str(run.id),
         entity_name=agent.name,
     ):
-        ai_analysis = await _get_ai_analysis(agent, server, outputs)
+        ai_analysis = await get_ai_analysis(agent, server, outputs, template=get_template(agent.agent_type))
 
     run.status = AgentRun.STATUS_COMPLETED
     run.commands_output = outputs
@@ -457,78 +457,6 @@ async def run_agent(agent: ServerAgent, server: Server, user) -> AgentRun:
         logger.warning("Mini-agent memory ingestion failed: {}", mem_exc)
 
     return run
-
-
-async def _get_ai_analysis(agent: ServerAgent, server: Server, outputs: list[dict]) -> str:
-    from app.core.llm import LLMProvider
-    from studio.skill_registry import build_skill_catalog_description, resolve_skills
-
-    tpl = get_template(agent.agent_type)
-    system_prompt = (tpl or {}).get("ai_prompt", "")
-    user_extra = agent.ai_prompt or ""
-    skills, skill_errors = await sync_to_async(lambda: resolve_skills(list(agent.skill_slugs or [])), thread_sensitive=True)()
-    skills_desc = build_skill_catalog_description(skills)
-
-    prompt_parts = [
-        f"# Agent: {agent.name}",
-        f"Server: **{server.name}** ({server.host})",
-        "",
-    ]
-
-    if system_prompt:
-        prompt_parts.append(system_prompt)
-        prompt_parts.append("")
-
-    if user_extra:
-        prompt_parts.append(f"Additional instructions: {user_extra}")
-        prompt_parts.append("")
-
-    materials_prompt = build_agent_materials_prompt(agent.input_artifacts)
-    if materials_prompt:
-        prompt_parts.append(materials_prompt)
-        prompt_parts.append("")
-
-    if skills_desc or skill_errors:
-        prompt_parts.append("## Attached skills")
-        prompt_parts.append(skills_desc or "- Skills не подключены")
-        if skill_errors:
-            prompt_parts.append("Недоступные skills:")
-            prompt_parts.extend(f"- {item}" for item in skill_errors)
-        prompt_parts.append("")
-
-    prompt_parts.append("## Command outputs:\n")
-    for i, out in enumerate(outputs, 1):
-        prompt_parts.append(f"### Command {i}: `{out['cmd']}`")
-        prompt_parts.append(f"Exit code: {out['exit_code']}")
-        if out["stdout"]:
-            prompt_parts.append(f"```\n{out['stdout'][:3000]}\n```")
-        if out["stderr"]:
-            prompt_parts.append(f"Stderr: `{out['stderr'][:500]}`")
-        prompt_parts.append("")
-
-    prompt_parts.extend([
-        "---",
-        "Предоставь краткий анализ в формате **Markdown** на русском языке:",
-        "1. **Резюме** — 1-2 предложения об общем состоянии",
-        "2. **Обнаружения** — ключевые проблемы, отсортированные по серьёзности",
-        "3. **Рекомендации** — конкретные практические шаги",
-        "4. **Уровень риска** — Низкий / Средний / Высокий / Критический",
-        "",
-        "Будь конкретным и практичным. Отвечай на русском языке.",
-    ])
-
-    full_prompt = "\n".join(prompt_parts)
-    provider = LLMProvider()
-
-    try:
-        chunks = []
-        async for chunk in provider.stream_chat(full_prompt, model="auto"):
-            chunks.append(chunk)
-        return "".join(chunks)
-    except Exception as exc:
-        logger.error("AI analysis failed for agent '{}': {}", agent.name, exc)
-        return f"AI analysis failed: {exc}"
-
 
 async def run_agent_on_all_servers(agent: ServerAgent, user) -> list[AgentRun]:
     """Run agent on all configured servers sequentially."""

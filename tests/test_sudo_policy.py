@@ -1,6 +1,6 @@
 from app.agent_kernel.domain.specs import ToolSpec
 from app.agent_kernel.permissions.engine import PermissionEngine
-from app.agent_kernel.sudo_policy import enforce_non_interactive_sudo, evaluate_sudo_command, prepare_sudo_command
+from app.sudo_policy import enforce_non_interactive_sudo, evaluate_sudo_command, prepare_sudo_command
 
 
 def _ssh_spec() -> ToolSpec:

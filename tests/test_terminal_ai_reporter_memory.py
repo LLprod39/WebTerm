@@ -13,6 +13,8 @@ from servers.services.terminal_ai.memory import (
     should_extract_memory,
 )
 from servers.services.terminal_ai.reporter import (
+    apply_dry_run_report_prefix,
+    build_execution_summary,
     build_fallback_report,
     compute_report_status,
 )
@@ -74,6 +76,31 @@ class TestBuildFallbackReport:
     def test_empty_list_still_produces_text(self):
         report = build_fallback_report([])
         assert report  # non-empty fallback string
+
+
+class TestReportFormattingHelpers:
+    def test_apply_dry_run_report_prefix_marks_preview_reports(self):
+        report = apply_dry_run_report_prefix("ok", dry_run=True)
+
+        assert "DRY-RUN RESULT" in report
+        assert report.endswith("\n\nok")
+
+    def test_apply_dry_run_report_prefix_leaves_empty_or_real_reports_unchanged(self):
+        assert apply_dry_run_report_prefix("", dry_run=True) == ""
+        assert apply_dry_run_report_prefix("ok", dry_run=False) == "ok"
+
+    def test_build_execution_summary_uses_exit_code_marks(self):
+        summary = build_execution_summary(
+            [
+                {"cmd": "true", "exit_code": 0},
+                {"cmd": "sleep", "exit_code": 130},
+                {"cmd": "bad", "exit_code": 127},
+            ]
+        )
+
+        assert "✓ true" in summary
+        assert "⏹ sleep" in summary
+        assert "✗(exit=127) bad" in summary
 
 
 # ---------------------------------------------------------------------------

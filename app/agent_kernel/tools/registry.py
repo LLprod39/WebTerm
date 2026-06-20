@@ -1,6 +1,12 @@
 from __future__ import annotations
 
+import logging
+from collections.abc import Mapping
+from typing import Any
+
 from app.agent_kernel.domain.specs import ToolSpec
+
+logger = logging.getLogger(__name__)
 
 
 def _infer_tool_spec(name: str, description: str, params: dict, *, runner: str = "agent", is_mcp: bool = False) -> ToolSpec:
@@ -52,19 +58,51 @@ def _infer_tool_spec(name: str, description: str, params: dict, *, runner: str =
     )
 
 
+def _tool_spec_from_declared_metadata(name: str, meta: Mapping[str, Any], *, runner: str = "agent") -> ToolSpec | None:
+    declared = meta.get("tool_spec")
+    if not isinstance(declared, Mapping):
+        return None
+
+    output_compactor = declared.get("output_compactor", "tail")
+    return ToolSpec(
+        name=name,
+        category=declared["category"],
+        risk=declared["risk"],
+        description=str(declared.get("description") or meta.get("description") or ""),
+        input_schema=dict(declared.get("input_schema") or meta.get("params") or {}),
+        mutates_state=bool(declared.get("mutates_state", False)),
+        requires_preflight=tuple(str(item) for item in declared.get("requires_preflight", ())),
+        requires_verification=bool(declared.get("requires_verification", False)),
+        output_compactor=str(output_compactor) if output_compactor is not None else None,
+        runner=str(declared.get("runner") or runner),
+    )
+
+
 class ToolRegistry:
     def __init__(self, specs: dict[str, ToolSpec]):
         self.specs = specs
 
     @classmethod
-    def from_sources(cls, enabled_tools: list[str], mcp_tools: dict | None = None) -> ToolRegistry:
-        from servers.agent_tools import AGENT_TOOLS
-
+    def from_sources(
+        cls,
+        enabled_tools: list[str],
+        mcp_tools: dict | None = None,
+        *,
+        agent_tools: Mapping[str, Mapping[str, Any]] | None = None,
+    ) -> ToolRegistry:
+        if enabled_tools and agent_tools is None:
+            logger.warning("No built-in agent tool source supplied; only MCP tool specs will be registered.")
+        agent_tool_source = agent_tools or {}
         specs: dict[str, ToolSpec] = {}
         for name in enabled_tools:
-            meta = AGENT_TOOLS.get(name)
+            meta = agent_tool_source.get(name)
             if not meta:
                 continue
+            declared = _tool_spec_from_declared_metadata(name, meta, runner="agent")
+            if declared is not None:
+                specs[name] = declared
+                continue
+            logger.warning("Agent tool %s is missing explicit tool_spec metadata; using compatibility inference.", name)
             specs[name] = _infer_tool_spec(name, meta.get("description") or "", meta.get("params") or {}, runner="agent")
         for name, binding in (mcp_tools or {}).items():
             specs[name] = _infer_tool_spec(

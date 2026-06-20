@@ -6,7 +6,7 @@ import json
 
 from django.http import JsonResponse
 
-from app.agent_kernel.sudo_policy import normalize_sudo_policy
+from app.sudo_policy import normalize_sudo_policy
 from core_ui.decorators import require_feature
 from studio.models import AgentConfig
 from studio.views.agent_helpers import (

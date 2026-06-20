@@ -5,12 +5,12 @@ from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
 
 from app.agent_kernel.domain.specs import ToolSpec
-from app.agent_kernel.sudo_policy import (
+from app.agent_kernel.tools.registry import ToolRegistry
+from app.sudo_policy import (
     command_prefers_controlled_sudo,
     output_indicates_privilege_error,
     wrap_command_for_controlled_sudo,
 )
-from app.agent_kernel.tools.registry import ToolRegistry
 from servers.agent_engine import AgentEngine
 from servers.agent_sessions import AgentSessionManager
 from servers.models import Server, ServerAgent

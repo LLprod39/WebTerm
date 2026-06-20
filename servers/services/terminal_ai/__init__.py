@@ -21,6 +21,7 @@ independently unit-testable. The SSH consumer should import from here
 instead of embedding f-string prompts inline.
 """
 
+from servers.services.terminal_ai.command_outcome import unavailable_command_name  # noqa: F401
 from servers.services.terminal_ai.decision import (  # noqa: F401
     decide_recovery,
     decide_step_next,
@@ -32,6 +33,10 @@ from servers.services.terminal_ai.history import (  # noqa: F401
     clear_history_sync,
     load_recent,
     load_recent_sync,
+)
+from servers.services.terminal_ai.legacy_state import (  # noqa: F401
+    apply_legacy_ai_queue_state,
+    sync_legacy_ai_queue_state,
 )
 from servers.services.terminal_ai.memory import (  # noqa: F401
     sanitize_memory_line,
@@ -90,6 +95,8 @@ from servers.services.terminal_ai.report_generation import (  # noqa: F401
     make_ai_report,
 )
 from servers.services.terminal_ai.reporter import (  # noqa: F401
+    apply_dry_run_report_prefix,
+    build_execution_summary,
     build_fallback_report,
     compute_report_status,
 )
@@ -98,6 +105,7 @@ from servers.services.terminal_ai.rules_loader import (  # noqa: F401
     load_effective_environment_vars,
     load_terminal_rules,
 )
+from servers.services.terminal_ai.run_controller import TerminalAiRunController  # noqa: F401
 from servers.services.terminal_ai.schemas import (  # noqa: F401
     MemoryExtraction,
     PlannedCommand,
