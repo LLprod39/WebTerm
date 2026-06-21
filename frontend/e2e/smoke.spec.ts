@@ -23,10 +23,10 @@ test.describe("Smoke scenarios", () => {
     await expect(page.getByRole("heading", { name: "Infrastructure" })).toBeVisible();
 
     await page.getByRole("link", { name: "Dashboard" }).first().click();
-    await expect(page.getByRole("heading", { name: "Server Dashboard" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Мой воркспейс" })).toBeVisible();
 
     await page.getByRole("link", { name: "Studio" }).first().click();
-    await expect(page.getByRole("heading", { name: "Pipeline Workspace" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Pipelines", exact: true })).toBeVisible();
 
     await page.getByRole("link", { name: "Settings" }).first().click();
     await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
@@ -36,7 +36,7 @@ test.describe("Smoke scenarios", () => {
     const { harness } = await installPlatformMocks(page, { authenticated: true });
 
     await page.goto("/studio");
-    await expect(page.getByRole("heading", { name: "Pipeline Workspace" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Pipelines", exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: /^Run$/ }).first().click();
     await expect

@@ -44,7 +44,7 @@ export function PurposeModelSelector({
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
-          <label className="text-[10px] font-medium text-muted-foreground uppercase">Провайдер</label>
+          <label className="text-xs font-medium text-muted-foreground uppercase">Провайдер</label>
           <Select value={provider} onValueChange={onProviderChange}>
             <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -53,7 +53,7 @@ export function PurposeModelSelector({
           </Select>
         </div>
         <div className="space-y-1">
-          <label className="text-[10px] font-medium text-muted-foreground uppercase">Модель</label>
+          <label className="text-xs font-medium text-muted-foreground uppercase">Модель</label>
           {availableModels.length > 0 ? (
             <Select value={model} onValueChange={onModelChange}>
               <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
@@ -71,12 +71,12 @@ export function PurposeModelSelector({
           )}
         </div>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
         <span>{getProviderLabel(provider)}</span>
         <span>{availableModels.length ? `${availableModels.length} моделей в каталоге` : "Ручной ввод модели"}</span>
       </div>
       {availableModels.length > 0 && (
-        <Button size="sm" variant="ghost" className="h-7 justify-start px-2 text-[11px] text-muted-foreground" onClick={onRefresh} disabled={refreshing}>
+        <Button size="sm" variant="ghost" className="h-7 justify-start px-2 text-xs text-muted-foreground" onClick={onRefresh} disabled={refreshing}>
           <RefreshCw className={cn("h-2.5 w-2.5", refreshing && "animate-spin")} /> Обновить список
         </Button>
       )}

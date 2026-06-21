@@ -163,7 +163,7 @@ function DraftGraphCanvasInner({
             />
           ) : null}
           <Panel position="top-left">
-            <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-background/86 px-3 py-2 text-[11px] text-muted-foreground shadow-sm backdrop-blur">
+            <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-background/86 px-3 py-2 text-xs text-muted-foreground shadow-sm backdrop-blur">
               <GitBranch className="h-3.5 w-3.5 text-primary" />
               <span>{model.source === "preview" ? localize(lang, "Предпросмотр графа", "Preview graph") : localize(lang, "Граф правки", "Patch graph")}</span>
               <span className="rounded border border-border/70 px-1.5 py-0.5">{nodes.length} {localize(lang, "нод", "nodes")}</span>
@@ -172,7 +172,7 @@ function DraftGraphCanvasInner({
           </Panel>
           {response?.risk?.items?.length ? (
             <Panel position="top-right">
-              <div className="flex items-center gap-2 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-100 shadow-sm backdrop-blur">
+              <div className="flex items-center gap-2 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100 shadow-sm backdrop-blur">
                 <AlertTriangle className="h-3.5 w-3.5" />
                 {localize(lang, "Проверка риска", "Risk review")}
               </div>

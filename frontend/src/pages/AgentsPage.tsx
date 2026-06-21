@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { AgentReportModal } from "@/components/studio/AgentReportModal";
 import { Button } from "@/components/ui/button";
+import { DeleteDialog } from "@/components/system/ConfirmDialog";
 import { EmptyState, MetricCard, MetricGrid, PageHero, PageShell, QueryStateBlock, SectionCard, StatusBadge } from "@/components/ui/page-shell";
 import { CreateAgentDialog } from "./agents-page/CreateAgentDialog";
 import {
@@ -41,6 +42,7 @@ export default function AgentsPage() {
   const [runningId, setRunningId] = useState<number | null>(null);
   const [result, setResult] = useState<AgentRunResult | null>(null);
   const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<AgentItem | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["agents", "list"],
@@ -89,9 +91,14 @@ export default function AgentsPage() {
     await queryClient.invalidateQueries({ queryKey: ["agents"] });
   };
 
-  const onDelete = async (id: number) => {
-    if (!confirm(t("agent.delete_confirm"))) return;
-    await deleteAgent(id);
+  const onDelete = async (agent: AgentItem) => {
+    setDeleteTarget(agent);
+  };
+
+  const confirmDeleteAgent = async () => {
+    if (!deleteTarget) return;
+    await deleteAgent(deleteTarget.id);
+    setDeleteTarget(null);
     await queryClient.invalidateQueries({ queryKey: ["agents"] });
   };
 
@@ -196,22 +203,22 @@ export default function AgentsPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-sm font-medium text-foreground">{ag.name}</span>
-                      <span className="rounded-md border border-border/50 bg-secondary/40 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                      <span className="rounded-md border border-border/50 bg-secondary/40 px-1.5 py-0.5 text-xs font-semibold text-muted-foreground">
                         {agentModeLabel(ag.mode, lang)}
                       </span>
                       {ag.active_run_id && (
                         <StatusBadge label="running" tone="info" />
                       )}
-                      <span className="rounded-md border border-border/50 bg-secondary/40 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                      <span className="rounded-md border border-border/50 bg-secondary/40 px-1.5 py-0.5 text-xs font-semibold text-muted-foreground">
                         sudo: {localize(lang, sudoAgentOption(ag.sudo_policy).labelRu, sudoAgentOption(ag.sudo_policy).labelEn)}
                       </span>
                     </div>
-                    <div className="flex items-center gap-3 text-[10px] text-muted-foreground mt-0.5">
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
                       <span className="flex items-center gap-0.5"><Server className="h-2.5 w-2.5" /> {ag.server_count}</span>
                       {ag.last_run_at && <span className="flex items-center gap-0.5"><Clock className="h-2.5 w-2.5" /> {relativeTime(ag.last_run_at)}</span>}
                       {isAgentScheduled(ag) && <span className="flex items-center gap-0.5"><RefreshCw className="h-2.5 w-2.5" /> {formatScheduleConfigLabel(ag.schedule_config, ag.schedule_minutes, lang)}</span>}
                     </div>
-                    {ag.goal && <p className="text-[10px] text-muted-foreground mt-0.5 truncate max-w-md">{ag.goal}</p>}
+                    {ag.goal && <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-md">{ag.goal}</p>}
                   </div>
                   <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:shrink-0">
                     {ag.active_run_id ? (
@@ -251,7 +258,7 @@ export default function AgentsPage() {
                       size="icon"
                       variant="ghost"
                       className="h-8 w-8 text-muted-foreground hover:text-red-400"
-                      onClick={() => onDelete(ag.id)}
+                      onClick={() => onDelete(ag)}
                       aria-label={localize(lang, `Удалить ${ag.name}`, `Delete ${ag.name}`)}
                     >
                       <Trash2 className="h-3 w-3" />
@@ -285,6 +292,21 @@ export default function AgentsPage() {
           await queryClient.invalidateQueries({ queryKey: ["agents", "list"] });
           window.setTimeout(() => setCreatedAgentId((current) => (current === id ? null : current)), 8000);
         }}
+      />
+      <DeleteDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        title={localize(lang, "Удалить агента?", "Delete agent?")}
+        description={localize(
+          lang,
+          `Агент "${deleteTarget?.name || ""}" будет удалён. История уже созданных запусков останется доступной в отчётах.`,
+          `Agent "${deleteTarget?.name || ""}" will be removed. Existing run history remains available in reports.`,
+        )}
+        confirmLabel={localize(lang, "Удалить агента", "Delete agent")}
+        cancelLabel={localize(lang, "Отмена", "Cancel")}
+        onConfirm={confirmDeleteAgent}
       />
     </PageShell>
   );

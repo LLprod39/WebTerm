@@ -21,7 +21,7 @@ export function MergeNode({ data, selected }: NodeProps) {
       sourcePorts={[{ id: "out", label: getNodeBranchLabel("out", lang) }]}
       {...getNodeRuntimeProps(d)}
     >
-      <div className="text-[10px] text-orange-300/80 bg-orange-500/10 rounded px-1.5 py-0.5 uppercase tracking-wide">
+      <div className="text-xs text-orange-300/80 bg-orange-500/10 rounded px-1.5 py-0.5 uppercase tracking-wide">
         {mode}
       </div>
     </NodeBase>

@@ -6,6 +6,12 @@ const fullFeatures = {
   dashboard: true,
   agents: true,
   studio: true,
+  studio_pipelines: true,
+  studio_runs: true,
+  studio_agents: true,
+  studio_skills: true,
+  studio_mcp: true,
+  studio_notifications: true,
   settings: true,
   orchestrator: true,
 };
@@ -14,6 +20,7 @@ function makeStudioHandler() {
   let nextPipelineId = 102;
   let nextSkillSlug = 1;
   let nextMcpId = 502;
+  let nextAgentId = 301;
 
   const pipelines: any[] = [
     {
@@ -27,9 +34,14 @@ function makeStudioHandler() {
       node_count: 3,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      graph_version: 2,
+      trigger_summary: { active_total: 1, active_manual: 1, active_webhook: 0, active_schedule: 0, active_monitoring: 0, last_triggered_at: null },
       last_run: null,
-      nodes: [],
+      nodes: [
+        { id: "manual_start", type: "trigger/manual", position: { x: 0, y: 0 }, data: { label: "Manual start", is_active: true } },
+      ],
       edges: [],
+      triggers: [],
     },
   ];
 
@@ -56,6 +68,11 @@ function makeStudioHandler() {
       guardrail_summary: ["Run preflight"],
       recommended_tools: ["report"],
       runtime_enforced: true,
+      is_owner: true,
+      can_edit: true,
+      can_share: true,
+      is_shared: false,
+      shared_user_ids: [],
       path: "studio/skills/incident-triage/SKILL.md",
     },
   ];
@@ -68,6 +85,44 @@ function makeStudioHandler() {
       content: "# Incident Triage\n\n- Verify scope\n- Gather logs",
     },
   };
+
+  const skillWorkspaceFiles: Record<string, Record<string, any>> = {
+    "incident-triage": {
+      "SKILL.md": {
+        path: "SKILL.md",
+        name: "SKILL.md",
+        kind: "skill",
+        language: "markdown",
+        editable: true,
+        content: "# Incident Triage\n\n- Verify scope\n- Gather logs",
+      },
+      "references/checklist.md": {
+        path: "references/checklist.md",
+        name: "checklist.md",
+        kind: "reference",
+        language: "markdown",
+        editable: true,
+        content: "# Checklist\n\n- Capture timeline",
+      },
+    },
+  };
+
+  const skillValidation = (slug: string) => ({
+    slug,
+    path: skillDetails[slug]?.path || `studio/skills/${slug}/SKILL.md`,
+    errors: [],
+    warnings: [],
+    is_valid: true,
+  });
+
+  const workspaceFileSummary = (file: any) => ({
+    path: file.path,
+    name: file.name,
+    kind: file.kind,
+    language: file.language,
+    editable: file.editable,
+    size: file.content.length,
+  });
 
   const mcpServers: any[] = [
     {
@@ -98,6 +153,8 @@ function makeStudioHandler() {
       icon: "🐙",
     },
   ];
+
+  const agentConfigs: any[] = [];
 
   const notifications = {
     telegram_bot_token: "",
@@ -134,6 +191,11 @@ function makeStudioHandler() {
       return json(filtered);
     }
 
+    if (req.path.match(/^\/api\/studio\/pipelines\/\d+\/$/) && req.method === "GET") {
+      const id = Number(req.path.split("/")[4]);
+      return json(pipelines.find((pipeline) => pipeline.id === id) || pipelines[0]);
+    }
+
     if (req.path === "/api/studio/runs/" && req.method === "GET") {
       return json([]);
     }
@@ -154,6 +216,11 @@ function makeStudioHandler() {
         finished_at: null,
         created_at: new Date().toISOString(),
         triggered_by: "admin",
+        trigger_id: null,
+        entry_node_id: String(req.body?.entry_node_id || ""),
+        trigger_type: "manual",
+        trigger_name: "Manual start",
+        trigger_node_id: String(req.body?.entry_node_id || ""),
       });
     }
 
@@ -208,10 +275,6 @@ function makeStudioHandler() {
     if (req.path === "/api/studio/notifications/test-email/" && req.method === "POST") return json({ ok: true, message: "Email test sent" });
 
     if (req.path === "/api/studio/skills/" && req.method === "GET") return json(skills);
-    if (req.path.match(/^\/api\/studio\/skills\/[^/]+\/$/) && req.method === "GET") {
-      const slug = decodeURIComponent(req.path.split("/")[4]);
-      return json(skillDetails[slug] || skillDetails["incident-triage"]);
-    }
     if (req.path === "/api/studio/skills/templates/" && req.method === "GET") {
       return json([
         {
@@ -227,6 +290,37 @@ function makeStudioHandler() {
           },
         },
       ]);
+    }
+    if (req.path.match(/^\/api\/studio\/skills\/[^/]+\/$/) && req.method === "GET") {
+      const slug = decodeURIComponent(req.path.split("/")[4]);
+      return json(skillDetails[slug] || skillDetails["incident-triage"]);
+    }
+    if (req.path.match(/^\/api\/studio\/skills\/[^/]+\/workspace\/$/) && req.method === "GET") {
+      const slug = decodeURIComponent(req.path.split("/")[4]);
+      const files = Object.values(skillWorkspaceFiles[slug] || {});
+      return json({
+        skill: skillDetails[slug] || skillDetails["incident-triage"],
+        files: files.map(workspaceFileSummary),
+        validation: skillValidation(slug),
+      });
+    }
+    if (req.path.match(/^\/api\/studio\/skills\/[^/]+\/workspace\/file\/$/) && req.method === "GET") {
+      const slug = decodeURIComponent(req.path.split("/")[4]);
+      const path = req.query.path || "SKILL.md";
+      const file = skillWorkspaceFiles[slug]?.[path] || skillWorkspaceFiles["incident-triage"]["SKILL.md"];
+      return json({ ...workspaceFileSummary(file), content: file.content });
+    }
+    if (req.path.match(/^\/api\/studio\/skills\/[^/]+\/workspace\/file\/$/) && req.method === "PUT") {
+      const slug = decodeURIComponent(req.path.split("/")[4]);
+      const path = String((req.body as any)?.path || "SKILL.md");
+      const content = String((req.body as any)?.content || "");
+      const file = skillWorkspaceFiles[slug]?.[path];
+      if (file) file.content = content;
+      return json({
+        ok: true,
+        file: file ? { ...workspaceFileSummary(file), content: file.content } : undefined,
+        validation: skillValidation(slug),
+      });
     }
     if (req.path === "/api/studio/skills/validate/" && req.method === "POST") {
       return json({
@@ -263,10 +357,20 @@ function makeStudioHandler() {
         metadata: {},
         content: `# ${created.name}`,
       };
+      skillWorkspaceFiles[slug] = {
+        "SKILL.md": {
+          path: "SKILL.md",
+          name: "SKILL.md",
+          kind: "skill",
+          language: "markdown",
+          editable: true,
+          content: `# ${created.name}`,
+        },
+      };
       return json({
         ok: true,
         skill: skillDetails[slug],
-        validation: { slug, path: skillDetails[slug].path, errors: [], warnings: [], is_valid: true },
+        validation: skillValidation(slug),
       });
     }
 
@@ -307,7 +411,37 @@ function makeStudioHandler() {
     if (req.path === "/api/studio/mcp/templates/" && req.method === "GET") return json(mcpTemplates);
 
     if (req.path === "/api/studio/servers/" && req.method === "GET") return json([{ id: 1, name: "Web-01", host: "10.0.0.11" }]);
-    if (req.path === "/api/studio/agents/" && req.method === "GET") return json([]);
+    if (req.path === "/api/studio/share-users/" && req.method === "GET") {
+      return json([{ id: 2, username: "operator", email: "operator@example.com" }]);
+    }
+    if (req.path === "/api/studio/agents/" && req.method === "GET") return json(agentConfigs);
+    if (req.path === "/api/studio/agents/" && req.method === "POST") {
+      const created = {
+        id: nextAgentId++,
+        name: String(req.body?.name || "Execution profile"),
+        description: String(req.body?.description || ""),
+        icon: String(req.body?.icon || "B"),
+        system_prompt: String(req.body?.system_prompt || ""),
+        instructions: String(req.body?.instructions || ""),
+        model: String(req.body?.model || "gpt-5.2"),
+        max_iterations: Number(req.body?.max_iterations || 10),
+        allowed_tools: Array.isArray(req.body?.allowed_tools) ? req.body.allowed_tools : ["ssh_execute", "report"],
+        sudo_policy: String(req.body?.sudo_policy || "disabled"),
+        skill_slugs: Array.isArray(req.body?.skill_slugs) ? req.body.skill_slugs : [],
+        skills: [],
+        mcp_servers: [],
+        server_scope: [],
+        owner_username: "admin",
+        is_owner: true,
+        can_edit: true,
+        is_shared: Boolean(req.body?.is_shared),
+        shared_user_ids: Array.isArray(req.body?.shared_user_ids) ? req.body.shared_user_ids : [],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      agentConfigs.push(created);
+      return json(created);
+    }
   };
 }
 
@@ -316,7 +450,7 @@ test("works with pipeline actions from Studio", async ({ page }) => {
   const harness = await installApiHarness(page, handler);
 
   await page.goto("/studio");
-  await expect(page.getByRole("heading", { name: "Pipeline Workspace" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Pipelines", exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: /^Run$/ }).first().click();
   await expect.poll(() => harness.getCalls("/api/studio/pipelines/101/run/", "POST").length).toBe(1);
@@ -333,15 +467,63 @@ test("works with pipeline actions from Studio", async ({ page }) => {
   await expect(page.getByText("Nightly Patch Copy")).toHaveCount(0);
 });
 
+test("creates execution profile from Studio profiles", async ({ page }) => {
+  const handler = makeStudioHandler();
+  const harness = await installApiHarness(page, handler);
+
+  await page.goto("/studio/agents");
+  await expect(page.getByRole("heading", { name: "Execution Profiles" })).toBeVisible();
+
+  await page.getByRole("button", { name: "New profile" }).first().click();
+  const sheet = page.getByRole("dialog");
+  await expect(sheet.getByRole("heading", { name: "New profile" })).toBeVisible();
+  await expect(sheet.getByText("Risk summary")).toBeVisible();
+
+  await sheet.getByPlaceholder("Ops triage profile").fill("Rollback guard");
+  await expect(sheet.getByText("You have unsaved changes.")).toBeVisible();
+  await sheet.getByRole("button", { name: "Tools" }).click();
+  await expect(sheet.getByText("Allowed tools")).toBeVisible();
+  await sheet.getByRole("button", { name: "Save profile" }).click();
+
+  await expect.poll(() => harness.getCalls("/api/studio/agents/", "POST").length).toBe(1);
+  await expect(page.getByText("Rollback guard")).toBeVisible();
+});
+
+test("guards unsaved skill workspace edits before switching files", async ({ page }) => {
+  await installApiHarness(page, makeStudioHandler());
+
+  await page.goto("/studio/skills");
+  await expect(page.getByRole("heading", { name: "Skill Catalog" })).toBeVisible();
+
+  await page.getByRole("button", { name: /Incident Triage/ }).click();
+  await expect(page.getByRole("heading", { name: "Incident Triage" })).toBeVisible();
+  await page.getByRole("tab", { name: "Workspace" }).click();
+
+  const editor = page.locator("textarea").first();
+  await expect(editor).toHaveValue(/Verify scope/);
+  await editor.fill("# Incident Triage\n\n- Edited but not saved");
+  await expect(page.getByText("unsaved")).toBeVisible();
+
+  await page.getByRole("button", { name: /checklist\.md/ }).click();
+  await expect(page.getByRole("alertdialog")).toContainText("Unsaved file changes");
+
+  await page.getByRole("button", { name: "Stay" }).click();
+  await expect(editor).toHaveValue(/Edited but not saved/);
+
+  await page.getByRole("button", { name: /checklist\.md/ }).click();
+  await page.getByRole("button", { name: "Discard and continue" }).click();
+  await expect(editor).toHaveValue(/Capture timeline/);
+});
+
 test("manages MCP registry and notification test actions", async ({ page }) => {
   const harness = await installApiHarness(page, makeStudioHandler());
 
   await page.goto("/studio/mcp");
-  await expect(page.getByText("MCP Hub")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "MCP Registry" })).toBeVisible();
 
   await page.getByRole("button", { name: "Add server" }).first().click();
-  await page.getByPlaceholder("GitHub MCP").fill("PagerDuty MCP");
-  await page.getByPlaceholder("What this MCP provides").fill("Incident escalation tools");
+  await page.getByPlaceholder("For example, GitHub MCP").fill("PagerDuty MCP");
+  await page.getByPlaceholder("What tools this server exposes").fill("Incident escalation tools");
   await page.getByPlaceholder("npx").fill("npx");
   await page.getByRole("button", { name: /^Save$/ }).click();
   await expect(page.getByText("PagerDuty MCP")).toBeVisible();
@@ -352,13 +534,16 @@ test("manages MCP registry and notification test actions", async ({ page }) => {
 
   await page.locator('input[type="password"]').first().fill("tg-token");
   await page.locator('input[placeholder="123456789"]').fill("123456789");
+  await expect(page.getByText("You have unsaved changes")).toBeVisible();
   await page.getByRole("button", { name: "Send test Telegram message" }).click();
   await expect(page.getByText("Telegram test sent")).toBeVisible();
+  await expect(page.getByText(/Tested/)).toBeVisible();
 
   await page.getByPlaceholder("smtp.gmail.com").fill("smtp.gmail.com");
   await page.getByPlaceholder("email@example.com", { exact: true }).fill("smtp-user");
   await page.getByRole("button", { name: "Send test email" }).click();
   await expect(page.getByText("Email test sent")).toBeVisible();
 
-  await page.getByRole("button", { name: /^Save$/ }).click();
+  await page.getByRole("button", { name: "Save settings" }).click();
+  await expect(page.getByRole("button", { name: "Saved" })).toBeVisible();
 });

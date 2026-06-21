@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
 import { format, subDays } from "date-fns";
-import { Activity, CalendarIcon, Search } from "lucide-react";
+import { Activity, CalendarIcon, Download, Search } from "lucide-react";
 
 import type { ActivityLogEvent } from "@/api";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,32 @@ type AuditActivityTabProps = {
   onDateToChange: Dispatch<SetStateAction<Date | undefined>>;
 };
 
+function csvCell(value: unknown) {
+  const text = String(value ?? "").replace(/\r?\n/g, " ");
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function exportActivityCsv(events: ActivityLogEvent[]) {
+  const rows = [
+    ["time", "user", "category", "action", "description"],
+    ...events.map((event) => [
+      event.timestamp || event.created_at || "",
+      event.username || "",
+      event.category || "",
+      event.action || "",
+      event.description || "",
+    ]),
+  ];
+  const csv = rows.map((row) => row.map(csvCell).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `audit-activity-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 function ActivityCards({ events }: { events: ActivityLogEvent[] }) {
   if (events.length === 0) {
     return (
@@ -42,15 +68,15 @@ function ActivityCards({ events }: { events: ActivityLogEvent[] }) {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[11px] text-muted-foreground">{relativeTime(event.timestamp || event.created_at || "")}</span>
+                  <span className="text-xs text-muted-foreground">{relativeTime(event.timestamp || event.created_at || "")}</span>
                   <span className="text-xs font-medium text-foreground">{event.username || "—"}</span>
                 </div>
-                <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
                   <CategoryIcon className="h-3 w-3 shrink-0" />
                   <span>{event.category || "—"}</span>
                 </div>
               </div>
-              <Badge variant="secondary" className="shrink-0 text-[10px]">{event.action || "—"}</Badge>
+              <Badge variant="secondary" className="shrink-0 text-xs">{event.action || "—"}</Badge>
             </div>
             <p className="mt-2 break-words text-xs leading-5 text-muted-foreground">
               {event.description || "—"}
@@ -68,7 +94,7 @@ function ActivityTable({ events }: { events: ActivityLogEvent[] }) {
       <div className="max-h-[500px] overflow-auto">
         <table className="w-full text-xs">
           <thead className="sticky top-0 z-10 bg-card">
-            <tr className="border-b border-border text-[10px] uppercase text-muted-foreground">
+            <tr className="border-b border-border text-xs uppercase text-muted-foreground">
               <th className="px-3 py-2 text-left font-medium">Время</th>
               <th className="px-3 py-2 text-left font-medium">Пользователь</th>
               <th className="px-3 py-2 text-left font-medium">Категория</th>
@@ -101,7 +127,7 @@ function ActivityTable({ events }: { events: ActivityLogEvent[] }) {
                       </div>
                     </td>
                     <td className="px-3 py-2.5">
-                      <Badge variant="secondary" className="text-[10px]">{event.action || "—"}</Badge>
+                      <Badge variant="secondary" className="text-xs">{event.action || "—"}</Badge>
                     </td>
                     <td className="max-w-[300px] truncate px-3 py-2.5 text-muted-foreground">
                       {event.description || "—"}
@@ -141,7 +167,7 @@ export function AuditActivityTab({
               value={activitySearch}
               onChange={(event) => onActivitySearchChange(event.target.value)}
               placeholder={t("audit.search_placeholder")}
-              className="h-8 pl-9 text-xs"
+              className="h-10 pl-9"
             />
           </div>
 
@@ -151,7 +177,7 @@ export function AuditActivityTab({
                 key={preset.days}
                 size="sm"
                 variant={activityDays === preset.days ? "default" : "outline"}
-                className="h-7 px-2 text-[10px]"
+                className="h-10 px-3 text-xs"
                 onClick={() => {
                   onActivityDaysChange(preset.days);
                   onDateFromChange(subDays(new Date(), preset.days || 0));
@@ -166,7 +192,7 @@ export function AuditActivityTab({
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-[10px]">
+                <Button variant="outline" size="sm" className="h-10 gap-1 px-3 text-xs">
                   <CalendarIcon className="h-3 w-3" />
                   {dateFrom ? format(dateFrom, "dd.MM.yy") : "От"}
                 </Button>
@@ -181,10 +207,10 @@ export function AuditActivityTab({
                 />
               </PopoverContent>
             </Popover>
-            <span className="text-[10px] text-muted-foreground">—</span>
+            <span className="text-xs text-muted-foreground">—</span>
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-[10px]">
+                <Button variant="outline" size="sm" className="h-10 gap-1 px-3 text-xs">
                   <CalendarIcon className="h-3 w-3" />
                   {dateTo ? format(dateTo, "dd.MM.yy") : "До"}
                 </Button>
@@ -201,7 +227,19 @@ export function AuditActivityTab({
             </Popover>
           </div>
 
-          <Badge variant="outline" className="shrink-0 text-[10px]">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-10 gap-1.5"
+            onClick={() => exportActivityCsv(filteredActivity)}
+            disabled={!filteredActivity.length}
+          >
+            <Download className="h-4 w-4" />
+            CSV
+          </Button>
+
+          <Badge variant="outline" className="shrink-0 text-xs">
             {filteredActivity.length} записей
           </Badge>
         </div>

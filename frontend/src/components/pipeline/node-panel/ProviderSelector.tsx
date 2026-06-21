@@ -41,7 +41,7 @@ export function ProviderSelector({
               <p className="line-clamp-2 text-xs font-medium text-muted-foreground">
                 {option.modelLabel}
               </p>
-              <p className="text-[11px] text-muted-foreground/80">
+              <p className="text-xs text-muted-foreground/80">
                 {option.hint}
               </p>
             </div>

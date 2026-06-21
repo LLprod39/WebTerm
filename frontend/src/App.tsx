@@ -1,8 +1,7 @@
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
+import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Suspense, lazy, type ReactNode } from "react";
 import { I18nProvider, useI18n } from "./lib/i18n";
 import AppLayout from "./components/AppLayout";
@@ -80,6 +79,31 @@ function AuthGate({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+function PermissionDenied() {
+  const { t } = useI18n();
+  return (
+    <div className="flex min-h-full items-center justify-center px-6 py-12">
+      <section className="max-w-lg rounded-xl border border-border bg-card px-6 py-6 shadow-sm">
+        <div className="text-xs font-semibold uppercase tracking-wide text-primary">
+          {t("app.permission_denied_kicker")}
+        </div>
+        <h1 className="mt-3 text-2xl font-semibold text-foreground">
+          {t("app.permission_denied_title")}
+        </h1>
+        <p className="mt-3 text-sm leading-6 text-muted-foreground">
+          {t("app.permission_denied_desc")}
+        </p>
+        <Link
+          to="/servers"
+          className="mt-5 inline-flex min-h-10 items-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {t("app.permission_denied_action")}
+        </Link>
+      </section>
+    </div>
+  );
+}
+
 function FeatureGate({
   feature,
   children,
@@ -109,7 +133,7 @@ function FeatureGate({
       : hasFeatureAccess(data.user, feature);
 
   if (!allowed) {
-    return <Navigate to="/servers" replace />;
+    return <PermissionDenied />;
   }
 
   return <>{children}</>;
@@ -120,7 +144,6 @@ const App = () => (
     <I18nProvider>
       <TooltipProvider>
         <Toaster />
-        <Sonner />
         <BrowserRouter>
           <Suspense fallback={<RouteLoader />}>
             <Routes>

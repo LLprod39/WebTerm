@@ -44,13 +44,12 @@ export function MarsBriefStep({
 }: BriefStepProps) {
   return (
     <SectionCard
-      title={localize(lang, "Guided brief", "Guided brief")}
-      description={localize(lang, "Коротко опишите проект, а MARS задаст правильные вопросы и соберет детали.", "Describe the project; MARS asks the right questions and gathers details.")}
+      title={localize(lang, "Задача", "Task")}
+      description={localize(lang, "Опишите результат, а MARS задаст уточняющие вопросы перед планом.", "Describe the result; MARS asks clarifying questions before the plan.")}
       icon={<Target className="h-4 w-4" />}
-      className="border-[#27323b] bg-[#111922]/88 shadow-[0_18px_60px_rgba(0,0,0,0.28)]"
       bodyClassName="space-y-4 px-5 py-5"
       actions={
-        <Button size="sm" onClick={onCreateQuestions} disabled={!canStartInterview} className="h-9 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25">
+        <Button size="sm" onClick={onCreateQuestions} disabled={!canStartInterview} className="h-9">
           {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
           {localize(lang, "Начать уточнение", "Start questions")}
         </Button>
@@ -58,12 +57,12 @@ export function MarsBriefStep({
     >
       <div className="grid gap-4">
         <div className="grid gap-2">
-          <Label className="text-xs font-semibold text-slate-300">{localize(lang, "Идея проекта", "Project idea")}</Label>
+          <Label className="text-xs font-semibold text-muted-foreground">{localize(lang, "Идея проекта", "Project idea")}</Label>
           <Textarea
             value={taskBrief}
             onChange={(event) => onTaskBriefChange(event.target.value)}
             rows={4}
-            className="min-h-28 resize-none border-[#26313a] bg-[#0f171f] text-sm leading-6 text-slate-100 placeholder:text-slate-500"
+            className="min-h-28 resize-none bg-background text-sm leading-6"
             placeholder={localize(lang, "Например: создать Telegram-бота для заявок или Python-скрипт для отчетов.", "Example: create a Telegram bot for requests or a Python reporting script.")}
           />
         </div>
@@ -74,14 +73,14 @@ export function MarsBriefStep({
               key={starter.en}
               type="button"
               onClick={() => onTaskBriefChange(localize(lang, starter.ru, starter.en))}
-              className="group flex min-h-[78px] items-start gap-3 rounded-lg border border-[#26313a] bg-[#0f171f] px-3 py-3 text-left transition-colors hover:border-emerald-400/35 hover:bg-[#14201f]"
+              className="group flex min-h-[78px] items-start gap-3 rounded-lg border border-border/80 bg-secondary/20 px-3 py-3 text-left transition-colors hover:border-primary/35 hover:bg-secondary/50"
             >
-              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-emerald-400/10 text-emerald-300">
+              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-primary/10 text-primary">
                 <FileText className="h-3.5 w-3.5" />
               </span>
               <span className="min-w-0">
-                <span className="line-clamp-2 text-xs leading-5 text-slate-300">{localize(lang, starter.ru, starter.en)}</span>
-                <span className="mt-1 inline-block text-[11px] text-slate-500 underline-offset-2 group-hover:text-emerald-300 group-hover:underline">
+                <span className="line-clamp-2 text-xs leading-5 text-foreground">{localize(lang, starter.ru, starter.en)}</span>
+                <span className="mt-1 inline-block text-xs text-muted-foreground underline-offset-2 group-hover:text-primary group-hover:underline">
                   {localize(lang, "Пример запроса", "Example request")}
                 </span>
               </span>
@@ -144,14 +143,13 @@ export function MarsInterviewStep({
 
   return (
     <SectionCard
-      title={localize(lang, "Уточнения для ИИ", "AI clarification")}
+      title={localize(lang, "Уточнения", "Clarifying questions")}
       description={localize(
         lang,
-        `Ответьте минимум на ${minimumAnswers} вопросов, чтобы ИИ точно понял результат, ограничения и проверку.`,
-        `Answer at least ${minimumAnswers} questions so the AI understands the result, limits, and verification.`,
+        `Ответьте минимум на ${minimumAnswers} вопросов, чтобы MARS понял результат, ограничения и проверку.`,
+        `Answer at least ${minimumAnswers} questions so MARS understands the result, limits, and verification.`,
       )}
       icon={<ClipboardList className="h-4 w-4" />}
-      className="border-[#27323b] bg-[#111922]/88 shadow-[0_18px_60px_rgba(0,0,0,0.28)]"
       actions={
         <div className="flex min-w-[220px] items-center gap-3">
           <Progress value={interviewProgress} className="h-2" />
@@ -164,11 +162,11 @@ export function MarsInterviewStep({
           <div className="space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-400/15 text-sm font-semibold text-emerald-300">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-sm font-semibold text-primary">
                   {activeQuestionIndex + 1}
                 </span>
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-emerald-300">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-primary">
                     {localize(lang, `Вопрос ${activeQuestionIndex + 1} из ${questions.length}`, `Question ${activeQuestionIndex + 1} of ${questions.length}`)}
                   </div>
                   <div className="truncate text-xs text-muted-foreground">
@@ -204,11 +202,11 @@ export function MarsInterviewStep({
                         className={cn(
                           "flex min-h-12 items-center gap-3 rounded-lg border px-3 py-2 text-left text-sm transition-colors",
                           selected
-                            ? "border-emerald-400/45 bg-emerald-400/12 text-slate-100 shadow-sm"
-                            : "border-[#26313a] bg-[#0f171f] text-slate-400 hover:bg-[#151f28] hover:text-slate-100",
+                            ? "border-primary/45 bg-primary/10 text-foreground shadow-sm"
+                            : "border-border bg-secondary/20 text-muted-foreground hover:bg-secondary/50 hover:text-foreground",
                         )}
                       >
-                        <span className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-md border", selected ? "border-emerald-400 bg-emerald-400 text-[#07110f]" : "border-[#3a4652] text-slate-500")}>
+                        <span className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-md border", selected ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground")}>
                           {selected ? <Check className="h-3.5 w-3.5" /> : <CircleDot className="h-3.5 w-3.5" />}
                         </span>
                         <span className="min-w-0 [overflow-wrap:anywhere]">{option}</span>
@@ -220,12 +218,12 @@ export function MarsInterviewStep({
             </div>
 
             <div className="grid gap-2">
-              <Label>{localize(lang, "Детали для ИИ", "Details for the AI")}</Label>
+              <Label>{localize(lang, "Детали для MARS", "Details for MARS")}</Label>
               <Textarea
                 value={answers[activeQuestion.id] || ""}
                 onChange={(event) => onAnswerChange(activeQuestion.id, event.target.value)}
                 rows={4}
-                className="min-h-24 resize-none border-[#26313a] bg-[#0f171f] text-sm leading-6 text-slate-100 placeholder:text-slate-500"
+                className="min-h-24 resize-none bg-background text-sm leading-6"
                 placeholder={activeQuestion.placeholder || localize(lang, "Добавьте детали, чтобы MARS не гадал.", "Add details so MARS does not guess.")}
               />
             </div>
@@ -233,8 +231,8 @@ export function MarsInterviewStep({
             <div className="flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-sm text-muted-foreground">
                 {interviewReady
-                  ? localize(lang, "Ответов достаточно, можно собрать ТЗ и план.", "Enough answers; you can build the spec and plan.")
-                  : localize(lang, `До ТЗ осталось ${Math.max(0, minimumAnswers - answeredQuestionCount)} ответов.`, `${Math.max(0, minimumAnswers - answeredQuestionCount)} more answers before the spec.`)}
+                  ? localize(lang, "Ответов достаточно, можно собрать план.", "Enough answers; you can build the plan.")
+                  : localize(lang, `До плана осталось ${Math.max(0, minimumAnswers - answeredQuestionCount)} ответов.`, `${Math.max(0, minimumAnswers - answeredQuestionCount)} more answers before the plan.`)}
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" onClick={() => onMoveQuestion(-1)} disabled={activeQuestionIndex <= 0}>
@@ -247,7 +245,7 @@ export function MarsInterviewStep({
                 </Button>
                 <Button size="sm" onClick={onBuildPlan} disabled={!canSaveAnswers}>
                   {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  {localize(lang, "Собрать ТЗ", "Build spec")}
+                  {localize(lang, "Собрать план", "Build plan")}
                 </Button>
               </div>
             </div>
@@ -275,15 +273,15 @@ export function MarsInterviewStep({
                     key={question.id}
                     type="button"
                     onClick={() => onSelectQuestion(question.id)}
-                    className={cn("w-full rounded-lg border px-3 py-2 text-left transition-colors", active ? "border-emerald-400/45 bg-emerald-400/10" : "border-[#26313a] bg-[#0f171f] hover:bg-[#151f28]")}
+                    className={cn("w-full rounded-lg border px-3 py-2 text-left transition-colors", active ? "border-primary/45 bg-primary/10" : "border-border bg-secondary/20 hover:bg-secondary/50")}
                   >
                     <div className="flex items-start gap-2">
-                      <span className={cn("mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold", answered ? "bg-emerald-400 text-[#07110f]" : "bg-[#1b2530] text-slate-400")}>
+                      <span className={cn("mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-xs font-semibold", answered ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground")}>
                         {answered ? <Check className="h-3 w-3" /> : index + 1}
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-xs font-medium text-foreground">{question.question}</span>
-                        <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{answerPreview(question.id)}</span>
+                        <span className="mt-0.5 block truncate text-xs text-muted-foreground">{answerPreview(question.id)}</span>
                       </span>
                     </div>
                   </button>
@@ -314,21 +312,20 @@ type PlanStepProps = {
 export function MarsPlanStep({ lang, goalText, planDraft, canApprovePlan, pending, onPlanChange, onApprovePlan }: PlanStepProps) {
   return (
     <SectionCard
-      title={localize(lang, "ТЗ и план", "Spec and plan")}
-      description={localize(lang, "Проверьте, как MARS понял задачу. Здесь можно поправить ТЗ перед созданием.", "Review how MARS understood the task. You can edit the spec before building.")}
+      title={localize(lang, "План", "Plan")}
+      description={localize(lang, "Проверьте, как MARS понял задачу. Здесь можно поправить план перед выполнением.", "Review how MARS understood the task. You can edit the plan before execution.")}
       icon={<ShieldCheck className="h-4 w-4" />}
-      className="border-[#27323b] bg-[#111922]/88 shadow-[0_18px_60px_rgba(0,0,0,0.28)]"
       actions={
-        <Button size="sm" onClick={onApprovePlan} disabled={!canApprovePlan} className="h-9 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25">
+        <Button size="sm" onClick={onApprovePlan} disabled={!canApprovePlan} className="h-9">
           {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-          {localize(lang, "Подтвердить ТЗ", "Approve spec")}
+          {localize(lang, "Подтвердить план", "Approve plan")}
         </Button>
       }
     >
       <div className="space-y-5">
         {goalText ? (
-          <div className="rounded-lg border border-emerald-400/25 bg-emerald-400/10 px-4 py-3">
-            <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-emerald-300">
+          <div className="rounded-lg border border-primary/25 bg-primary/10 px-4 py-3">
+            <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-primary">
               <Rocket className="h-3.5 w-3.5" />
               {localize(lang, "Цель", "Goal")}
             </div>
@@ -342,8 +339,8 @@ export function MarsPlanStep({ lang, goalText, planDraft, canApprovePlan, pendin
             value={planDraft}
             onChange={(event) => onPlanChange(event.target.value)}
             rows={16}
-            className="min-h-80 resize-none border-[#26313a] bg-[#0f171f] font-mono text-xs leading-5 text-slate-100 placeholder:text-slate-500"
-            placeholder={localize(lang, "ТЗ и план появятся после ответов.", "Spec and plan appear after answers.")}
+            className="min-h-80 resize-none bg-background font-mono text-xs leading-5"
+            placeholder={localize(lang, "План появится после ответов.", "The plan appears after answers.")}
           />
         </div>
       </div>
@@ -378,39 +375,38 @@ export function MarsRunStep({
 }: RunStepProps) {
   return (
     <SectionCard
-      title={localize(lang, "Создание", "Build")}
-      description={localize(lang, "MARS начнет редактировать файлы, писать код, запускать проверки и показывать ход работы.", "MARS starts editing files, writing code, running checks, and showing progress.")}
+      title={localize(lang, "Выполнение", "Run")}
+      description={localize(lang, "MARS изменит файлы, запустит проверки и покажет ход работы.", "MARS changes files, runs checks, and shows progress.")}
       icon={<Play className="h-4 w-4" />}
-      className="border-[#27323b] bg-[#111922]/88 shadow-[0_18px_60px_rgba(0,0,0,0.28)]"
       actions={
         <StatusBadge
-          label={latestRun?.status ? latestRun.status.replaceAll("_", " ") : sessionStatus === "approved" ? localize(lang, "готов к созданию", "ready to build") : localize(lang, "ожидает ТЗ", "waiting for spec")}
+          label={latestRun?.status ? latestRun.status.replaceAll("_", " ") : sessionStatus === "approved" ? localize(lang, "готово к запуску", "ready to run") : localize(lang, "ожидает план", "waiting for plan")}
           tone={latestRun ? statusTone(latestRun.status) : sessionStatus === "approved" ? "success" : "neutral"}
         />
       }
     >
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
         <div className="space-y-4">
-          <div className="grid gap-2 rounded-lg border border-[#26313a] bg-[#0f171f] px-3 py-3 text-sm text-slate-400 sm:grid-cols-3">
-            <div>{localize(lang, "Редактирует код", "Edits code")}</div>
+          <div className="grid gap-2 rounded-lg border border-border/80 bg-secondary/20 px-3 py-3 text-sm text-muted-foreground sm:grid-cols-3">
+            <div>{localize(lang, "Изменяет код", "Changes code")}</div>
             <div>{localize(lang, "Создает файлы", "Creates files")}</div>
-            <div>{localize(lang, "Запускает проверку", "Runs checks")}</div>
+            <div>{localize(lang, "Запускает проверки", "Runs checks")}</div>
           </div>
 
           <div className="grid gap-2">
             <Label>{localize(lang, "Как проверить результат", "How to verify the result")}</Label>
-            <Input value={testCommand} onChange={(event) => onTestCommandChange(event.target.value)} placeholder="npm run build" className="border-[#26313a] bg-[#0f171f] font-mono text-xs text-slate-100" />
+            <Input value={testCommand} onChange={(event) => onTestCommandChange(event.target.value)} placeholder="npm run build" className="bg-background font-mono text-xs" />
           </div>
         </div>
 
         <div className="space-y-2">
-          <Button className="w-full bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25" size="sm" onClick={onRun} disabled={!canRun}>
+          <Button className="w-full" size="sm" onClick={onRun} disabled={!canRun}>
             {runPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-            {localize(lang, "Создать проект", "Build project")}
+            {localize(lang, "Запустить выполнение", "Start run")}
           </Button>
           {latestRunId ? (
             <Button className="w-full" variant="ghost" onClick={() => onOpenRun(latestRunId)}>
-              {localize(lang, "Открыть run", "Open run")}
+              {localize(lang, "Открыть запуск", "Open run")}
             </Button>
           ) : null}
         </div>

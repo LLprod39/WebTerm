@@ -58,7 +58,7 @@ export function PolicyCard({
             <Badge
               key={badge.key}
               variant="outline"
-              className={cn("text-[10px]", badge.className)}
+              className={cn("text-xs", badge.className)}
             >
               {badge.label}
             </Badge>

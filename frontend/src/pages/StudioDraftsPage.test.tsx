@@ -149,6 +149,7 @@ describe("StudioDraftsPage", () => {
     renderPage("/studio/drafts?draft=5");
 
     expect((await screen.findAllByText("Existing draft")).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getAllByRole("button", { name: /Request/i }).at(-1)!);
     const prompt = screen.getByLabelText("Pipeline task");
     fireEvent.change(prompt, { target: { value: "Add Telegram delivery" } });
     fireEvent.click(screen.getByRole("button", { name: /Revise draft/i }));

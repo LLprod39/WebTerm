@@ -157,6 +157,53 @@ function makeTerminalHandler() {
         recent_activity: [],
       });
     }
+
+    if (req.path === "/servers/api/1/files/" && req.method === "GET") {
+      return json({
+        success: true,
+        path: "/home/root",
+        home_path: "/home/root",
+        parent_path: "/home",
+        entries: [
+          {
+            path: "/home/root/app.conf",
+            name: "app.conf",
+            kind: "file",
+            is_dir: false,
+            is_symlink: false,
+            size: 128,
+            permissions: "0644",
+            modified_at: 1772326800,
+          },
+          {
+            path: "/home/root/logs",
+            name: "logs",
+            kind: "dir",
+            is_dir: true,
+            is_symlink: false,
+            size: 0,
+            permissions: "0755",
+            modified_at: 1772326800,
+          },
+        ],
+      });
+    }
+
+    if (req.path === "/servers/api/1/files/write/" && req.method === "POST") {
+      const body = (req.body || {}) as { path?: string; content?: string };
+      const path = body.path || "/home/root/new-file.conf";
+      return json({
+        success: true,
+        path: "/home/root",
+        file: {
+          path,
+          filename: path.split("/").pop() || "new-file.conf",
+          encoding: "utf-8",
+          content: body.content || "",
+          size: (body.content || "").length,
+        },
+      });
+    }
   };
 }
 
@@ -166,7 +213,7 @@ async function getSocketState(page: Page) {
 
 test("keeps multiple terminal tabs connected while switching between servers", async ({ page }) => {
   await installTerminalSocketMock(page);
-  await installApiHarness(page, makeTerminalHandler());
+  await installApiHarness(page, makeTerminalHandler(), "ru");
 
   await page.goto("/servers/1/terminal");
 
@@ -181,7 +228,7 @@ test("keeps multiple terminal tabs connected while switching between servers", a
     return messageTypes.includes("connect");
   }).toBeTruthy();
 
-  await page.getByRole("button", { name: "Add tab" }).click();
+  await page.getByRole("button", { name: "Подключить сервер" }).click();
   await page.getByRole("button", { name: "DB-01" }).click();
 
   await expect.poll(async () => {
@@ -203,7 +250,7 @@ test("keeps multiple terminal tabs connected while switching between servers", a
 
 test("reconnects terminal websocket after server-side connection loss", async ({ page }) => {
   await installTerminalSocketMock(page);
-  await installApiHarness(page, makeTerminalHandler());
+  await installApiHarness(page, makeTerminalHandler(), "ru");
 
   await page.goto("/servers/1/terminal");
 
@@ -225,4 +272,30 @@ test("reconnects terminal websocket after server-side connection loss", async ({
   expect(state[0].readyState).toBe(3);
   expect(state[1].readyState).toBe(1);
   expect(state[1].sent.map((raw: string) => JSON.parse(raw).type)).toContain("connect");
+});
+
+test("uses custom terminal and SFTP dialogs instead of browser prompts", async ({ page }) => {
+  await installTerminalSocketMock(page);
+  const harness = await installApiHarness(page, makeTerminalHandler(), "ru");
+
+  await page.goto("/servers/1/terminal");
+
+  await page.getByRole("button", { name: "Подключить сервер" }).click();
+  await page.getByRole("button", { name: "DB-01" }).click();
+
+  await page.getByLabel("Закрыть вкладку DB-01").click();
+  await expect(page.getByRole("alertdialog", { name: "Закрыть терминальную сессию?" })).toBeVisible();
+  await page.getByRole("button", { name: "Отмена" }).click();
+  await expect(page.getByRole("button", { name: "DB-01", exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Web-01", exact: true }).click();
+  await page.getByRole("button", { name: "Файлы" }).click();
+  await expect(page.getByText("Файлы SFTP").first()).toBeVisible();
+
+  await page.getByRole("button", { name: "Новый файл" }).click();
+  await expect(page.getByRole("dialog", { name: "Новый файл" })).toBeVisible();
+  await page.getByLabel("Имя файла").fill("deploy.env");
+  await page.getByRole("button", { name: "Создать файл" }).click();
+
+  await expect.poll(() => harness.getCalls("/servers/api/1/files/write/", "POST").length).toBe(1);
 });

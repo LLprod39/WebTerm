@@ -211,7 +211,7 @@ test("sidebar navigation opens key sections", async ({ page }) => {
 
   await page.getByRole("link", { name: "Dashboard" }).first().click();
   await expect(page).toHaveURL(/\/dashboard$/);
-  await expect(page.getByRole("heading", { name: "Server Dashboard" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Мой воркспейс" })).toBeVisible();
 
   await page.getByRole("link", { name: "Agents" }).first().click();
   await expect(page).toHaveURL(/\/agents$/);
@@ -219,7 +219,7 @@ test("sidebar navigation opens key sections", async ({ page }) => {
 
   await page.getByRole("link", { name: "Studio" }).first().click();
   await expect(page).toHaveURL(/\/studio$/);
-  await expect(page.getByRole("heading", { name: "Pipeline Workspace" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Pipelines", exact: true })).toBeVisible();
 
   await page.getByRole("link", { name: "Settings" }).first().click();
   await expect(page).toHaveURL(/\/settings$/);

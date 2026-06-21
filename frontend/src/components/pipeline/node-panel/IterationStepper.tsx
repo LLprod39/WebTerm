@@ -38,7 +38,7 @@ export function IterationStepper({
         <span className="text-lg font-semibold tabular-nums text-foreground" aria-live="polite">
           {safeValue}
         </span>
-        <span className="text-[11px] text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           {min}-{max}
         </span>
       </div>

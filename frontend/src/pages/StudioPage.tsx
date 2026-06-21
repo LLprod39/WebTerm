@@ -118,7 +118,7 @@ export default function StudioPage() {
           ? { label: localize(lang, "Реестр MCP", "MCP registry"), desc: localize(lang, "Инструменты и интеграции для автоматизации", "Tools and integrations for automation"), icon: Server, path: "/studio/mcp" }
           : null,
         canAgents
-          ? { label: localize(lang, "Профили агентов", "Agent profiles"), desc: localize(lang, "Переиспользуемые роли для OPS-задач", "Reusable profiles for OPS tasks"), icon: Bot, path: "/studio/agents" }
+          ? { label: localize(lang, "Профили выполнения", "Execution profiles"), desc: localize(lang, "Модель, инструменты и scope для pipeline-нод", "Model, tools, and scope for pipeline nodes"), icon: Bot, path: "/studio/agents" }
           : null,
         canRuns
           ? { label: localize(lang, "История запусков", "Execution history"), desc: localize(lang, "Запуски в вашей зоне доступа", "Runs available for your access scope"), icon: Clock, path: "/studio/runs" }
@@ -136,7 +136,7 @@ export default function StudioPage() {
         canPipelines ? { icon: Workflow, label: localize(lang, "Пайплайны", "Pipelines"), value: pipelines.length } : null,
         canSkills ? { icon: BookOpen, label: localize(lang, "Runbook", "Runbooks"), value: Array.isArray(skills) ? skills.length : 0 } : null,
         canMcp ? { icon: Server, label: localize(lang, "MCP", "MCP servers"), value: Array.isArray(mcpList) ? mcpList.length : 0 } : null,
-        canAgents ? { icon: Bot, label: localize(lang, "Агенты", "Agents"), value: Array.isArray(agents) ? agents.length : 0 } : null,
+        canAgents ? { icon: Bot, label: localize(lang, "Профили", "Profiles"), value: Array.isArray(agents) ? agents.length : 0 } : null,
         canRuns ? { icon: CheckCircle2, label: localize(lang, "Завершено", "Completed"), value: runs.filter((run) => run.status === "completed").length, sub: localize(lang, "запусков", "runs") } : null,
         canRuns ? { icon: XCircle, label: localize(lang, "Ошибки", "Failed"), value: runs.filter((run) => run.status === "failed").length, sub: localize(lang, "запусков", "runs") } : null,
       ].filter(Boolean) as Array<{ icon: ElementType; label: string; value: string | number; sub?: string }>,
@@ -243,7 +243,7 @@ export default function StudioPage() {
         <header className="border-b border-border/70 bg-card/45 px-4 py-4 sm:px-6">
           <div className="flex w-full flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
-              <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 <Workflow className="h-3.5 w-3.5 text-primary" />
                 Studio
               </div>
@@ -274,13 +274,13 @@ export default function StudioPage() {
             <div className="mt-4 grid w-full gap-2 sm:grid-cols-2 lg:grid-cols-6">
               {stats.map((item) => (
                 <div key={item.label} className="min-w-0 rounded-lg border border-border/70 bg-background/45 px-3 py-2">
-                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <item.icon className="h-3.5 w-3.5 shrink-0 text-primary" />
                     <span className="truncate">{item.label}</span>
                   </div>
                   <div className="mt-1 flex items-baseline gap-1">
                     <span className="text-lg font-semibold text-foreground">{item.value}</span>
-                    {item.sub ? <span className="text-[11px] text-muted-foreground">{item.sub}</span> : null}
+                    {item.sub ? <span className="text-xs text-muted-foreground">{item.sub}</span> : null}
                   </div>
                 </div>
               ))}

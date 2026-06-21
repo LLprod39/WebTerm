@@ -26,14 +26,16 @@ import { ServicesWindow } from "@/components/terminal/linux-ui/ServicesWindow";
 import { SummaryCard } from "@/components/terminal/linux-ui/SummaryCard";
 import { buildWorkspaceApps } from "@/components/terminal/linux-ui/WorkspaceApps";
 import {
-  DEFAULT_ACTIVE_APP,
   ToolMenu,
   WorkspacePanel,
-  panelHeightClass,
   type WorkspaceAppDefinition,
   type WorkspaceAppId,
-  workspaceStatusLabel,
 } from "@/components/terminal/linux-ui/WorkspaceChrome";
+import {
+  DEFAULT_ACTIVE_APP,
+  panelHeightClass,
+  workspaceStatusLabel,
+} from "@/components/terminal/linux-ui/workspaceChromeUtils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   fetchLinuxUiCapabilities,
@@ -304,7 +306,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
                           </span>
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-medium">{app.title}</span>
-                            <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{workspaceStatusLabel(app.status)}</span>
+                            <span className="mt-0.5 block truncate text-xs text-muted-foreground">{workspaceStatusLabel(app.status)}</span>
                           </span>
                         </button>
                       ))}
@@ -368,7 +370,7 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
 
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-medium text-foreground">{activeAppDefinition?.title || "Обзор"}</div>
-            <div className="truncate text-[11px] text-muted-foreground">
+            <div className="truncate text-xs text-muted-foreground">
               {activeAppDefinition?.subtitle || `${server.username}@${server.host}`}
             </div>
           </div>
@@ -390,12 +392,12 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
             </div>
 
             <div className="hidden rounded-[1rem] border border-border bg-background px-3 py-1.5 text-right xl:block">
-              <div className="truncate font-mono text-[11px] text-muted-foreground">{server.username}@{server.host}</div>
-              <div className="mt-0.5 text-[11px] text-muted-foreground">{capabilities?.os_name || localize(lang, "Рабочее пространство Linux", "Linux workspace")}</div>
+              <div className="truncate font-mono text-xs text-muted-foreground">{server.username}@{server.host}</div>
+              <div className="mt-0.5 text-xs text-muted-foreground">{capabilities?.os_name || localize(lang, "Рабочее пространство Linux", "Linux workspace")}</div>
             </div>
 
             <div className="rounded-[1rem] border border-border bg-background px-3 py-1.5 text-right">
-              <div className="flex items-center justify-end gap-1 text-[11px] text-muted-foreground">
+              <div className="flex items-center justify-end gap-1 text-xs text-muted-foreground">
                 <CalendarDays className="h-3.5 w-3.5" />
                 <span>{dateLabel}</span>
               </div>

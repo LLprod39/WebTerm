@@ -30,10 +30,10 @@ export const CompletionOverlay: React.FC<CompletionOverlayProps> = ({
   return (
     <div className="absolute bottom-4 left-3 z-50 w-72 overflow-hidden rounded-lg border border-white/10 bg-zinc-900/95 shadow-2xl ring-1 ring-black/20 backdrop-blur-md">
       <div className="flex items-center gap-1.5 border-b border-white/5 px-3 py-1.5">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+        <span className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
           {t("terminal.completionTitle")}
         </span>
-        <span className="ml-auto rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] tabular-nums text-zinc-500">
+        <span className="ml-auto rounded bg-zinc-800 px-1.5 py-0.5 text-xs tabular-nums text-zinc-500">
           {suggestions.length}
         </span>
       </div>
@@ -52,11 +52,11 @@ export const CompletionOverlay: React.FC<CompletionOverlayProps> = ({
         ))}
       </ul>
       <div className="flex items-center gap-2.5 border-t border-white/5 px-3 py-1">
-        <kbd className="rounded border border-zinc-700 bg-zinc-800 px-1 py-0.5 text-[9px] font-medium text-zinc-400">↑↓</kbd>
-        <span className="text-[10px] text-zinc-500">{t("terminal.completionNav")}</span>
-        <kbd className="rounded border border-zinc-700 bg-zinc-800 px-1 py-0.5 text-[9px] font-medium text-zinc-400">Tab</kbd>
-        <span className="text-[10px] text-zinc-500">{t("terminal.completionAccept")}</span>
-        <kbd className="ml-auto rounded border border-zinc-700 bg-zinc-800 px-1 py-0.5 text-[9px] font-medium text-zinc-400">Esc</kbd>
+        <kbd className="rounded border border-zinc-700 bg-zinc-800 px-1 py-0.5 text-xs font-medium text-zinc-400">↑↓</kbd>
+        <span className="text-xs text-zinc-500">{t("terminal.completionNav")}</span>
+        <kbd className="rounded border border-zinc-700 bg-zinc-800 px-1 py-0.5 text-xs font-medium text-zinc-400">Tab</kbd>
+        <span className="text-xs text-zinc-500">{t("terminal.completionAccept")}</span>
+        <kbd className="ml-auto rounded border border-zinc-700 bg-zinc-800 px-1 py-0.5 text-xs font-medium text-zinc-400">Esc</kbd>
       </div>
     </div>
   );

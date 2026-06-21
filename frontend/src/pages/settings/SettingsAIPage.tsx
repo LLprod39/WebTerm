@@ -67,7 +67,7 @@ export default function SettingsAIPage() {
           </div>
           <div>
             <h1 className="text-base font-semibold tracking-tight text-foreground">Настройки AI</h1>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Провайдеры, модели по ролям, Ollama и безопасная маршрутизация запросов.
             </p>
           </div>

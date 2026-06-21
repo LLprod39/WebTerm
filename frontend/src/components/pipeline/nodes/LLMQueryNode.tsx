@@ -26,7 +26,7 @@ export function LLMQueryNode({ data, selected }: NodeProps) {
       ]}
       {...getNodeRuntimeProps(d)}
     >
-      <div className="text-[10px] text-blue-400/80 bg-blue-500/10 rounded px-1.5 py-0.5 truncate flex items-center gap-1">
+      <div className="text-xs text-blue-400/80 bg-blue-500/10 rounded px-1.5 py-0.5 truncate flex items-center gap-1">
         <Zap className="h-2.5 w-2.5" />{model}
       </div>
     </NodeBase>

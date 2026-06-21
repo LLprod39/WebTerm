@@ -95,7 +95,7 @@ export function SystemSettingsWindow({
           <div className="flex items-center justify-between gap-2">
             <div>
               <div className="text-xs font-medium text-foreground">{localize(lang, "Системные настройки", "System Settings")}</div>
-              <div className="text-[10px] text-muted-foreground">{server.name}</div>
+              <div className="text-xs text-muted-foreground">{server.name}</div>
             </div>
             <Button
               type="button"
@@ -159,7 +159,7 @@ export function SystemSettingsWindow({
                   )}
                 </div>
                 {normalizedQuery ? (
-                  <div className="mt-2 text-[11px] text-muted-foreground">
+                  <div className="mt-2 text-xs text-muted-foreground">
                     {localize(lang, "Фильтр поиска", "Search filter")}: <span className="font-mono text-foreground">{query}</span>
                   </div>
                 ) : null}

@@ -41,7 +41,7 @@ export function StudioHero({
               )}
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="inline-flex h-6 items-center rounded-full bg-primary/10 px-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-primary ring-1 ring-primary/20">
+                  <span className="inline-flex h-6 items-center rounded-full bg-primary/10 px-2.5 text-xs font-semibold uppercase tracking-[0.14em] text-primary ring-1 ring-primary/20">
                     {kicker}
                   </span>
                 </div>

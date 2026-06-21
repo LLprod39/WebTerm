@@ -25,36 +25,6 @@ export function formatCompactDateTime(value?: string | null): string {
   }).format(new Date(value));
 }
 
-export function statusLabel(status: string): string {
-  switch (status) {
-    case "plan_review":
-      return "review";
-    default:
-      return status;
-  }
-}
-
-export function statusClasses(status: string): string {
-  switch (status) {
-    case "running":
-      return "border-sky-500/30 bg-sky-500/12 text-sky-300";
-    case "paused":
-      return "border-amber-500/30 bg-amber-500/12 text-amber-300";
-    case "waiting":
-      return "border-orange-500/30 bg-orange-500/12 text-orange-300";
-    case "plan_review":
-      return "border-violet-500/30 bg-violet-500/12 text-violet-300";
-    case "completed":
-      return "border-emerald-500/30 bg-emerald-500/12 text-emerald-300";
-    case "failed":
-      return "border-red-500/30 bg-red-500/12 text-red-300";
-    case "stopped":
-      return "border-border/70 bg-secondary/45 text-muted-foreground";
-    default:
-      return "border-border/70 bg-secondary/45 text-muted-foreground";
-  }
-}
-
 export function eventTypeClasses(eventType: string): string {
   if (eventType.includes("failed") || eventType.includes("error")) {
     return "border-red-500/30 bg-red-500/10 text-red-300";

@@ -10,7 +10,7 @@ test.describe("Accessibility", () => {
     await installPlatformMocks(page, { authenticated: false });
 
     await page.goto("/login");
-    await expect(page.getByRole("heading", { name: "WebTermAI" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /WebTermAI/ })).toBeVisible();
 
     const violations = await collectSeriousAndCriticalViolations(page);
     expectViolationsWithinBudget(violations, {
@@ -45,5 +45,51 @@ test.describe("Accessibility", () => {
       "link-in-text-block": { impact: "serious", maxNodes: 1 },
       "link-name": { impact: "serious", maxNodes: 1 },
     });
+  });
+
+  test("server create sheet accessibility budget", async ({ page }) => {
+    await installPlatformMocks(page, { authenticated: true });
+
+    await page.goto("/servers");
+    await expect(page.getByRole("heading", { name: "Infrastructure" })).toBeVisible();
+    await page.getByRole("button", { name: /Add Server/i }).click();
+    await expect(page.getByRole("dialog").filter({ hasText: "Create Server" })).toBeVisible();
+
+    const violations = await collectSeriousAndCriticalViolations(page);
+    expectViolationsWithinBudget(violations, {});
+  });
+
+  test("agent wizard accessibility budget", async ({ page }) => {
+    await installPlatformMocks(page, { authenticated: true });
+
+    await page.goto("/agents");
+    await expect(page.getByRole("heading", { name: "Agents" })).toBeVisible();
+    await page.getByRole("button", { name: "New agent" }).click();
+    await expect(page.getByRole("dialog").getByRole("heading", { name: "Agent type" })).toBeVisible();
+
+    const violations = await collectSeriousAndCriticalViolations(page);
+    expectViolationsWithinBudget(violations, {});
+  });
+
+  test("settings users create drawer accessibility budget", async ({ page }) => {
+    await installPlatformMocks(page, { authenticated: true });
+
+    await page.goto("/settings/users");
+    await expect(page.getByRole("heading", { name: "Users" })).toBeVisible();
+    await page.getByRole("button", { name: "Create User" }).click();
+    await expect(page.getByRole("dialog", { name: "Create User" })).toBeVisible();
+
+    const violations = await collectSeriousAndCriticalViolations(page);
+    expectViolationsWithinBudget(violations, {});
+  });
+
+  test("mars beta page accessibility budget", async ({ page }) => {
+    await installPlatformMocks(page, { authenticated: true, features: { mars: true } });
+
+    await page.goto("/mars");
+    await expect(page.getByRole("heading", { name: /MARS beta/ })).toBeVisible();
+
+    const violations = await collectSeriousAndCriticalViolations(page);
+    expectViolationsWithinBudget(violations, {});
   });
 });

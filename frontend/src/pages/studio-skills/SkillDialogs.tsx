@@ -110,7 +110,7 @@ export function CreateSkillDialog({
                     ))}
                   </SelectContent>
                 </Select>
-                {selectedTemplate?.summary ? <p className="text-[11px] leading-4 text-muted-foreground">{selectedTemplate.summary}</p> : null}
+                {selectedTemplate?.summary ? <p className="text-xs leading-4 text-muted-foreground">{selectedTemplate.summary}</p> : null}
               </div>
 
               <div className="space-y-1.5">
@@ -169,10 +169,10 @@ export function CreateSkillDialog({
                 </div>
                 {wizard.starter_reference_enabled ? (
                   <div className="mt-4 space-y-2">
-                    <Label className="text-[11px] text-muted-foreground">{tr("Текст инструкции", "Runbook content")}</Label>
+                    <Label className="text-xs text-muted-foreground">{tr("Текст инструкции", "Runbook content")}</Label>
                     <Textarea
                       rows={7}
-                      className="font-mono text-[11px] leading-5"
+                      className="font-mono text-xs leading-5"
                       value={wizard.starter_reference_content}
                       onChange={(event) => setWizard((prev) => ({ ...prev, starter_reference_content: event.target.value }))}
                       spellCheck={false}
@@ -203,10 +203,10 @@ export function CreateSkillDialog({
                 </div>
                 {wizard.starter_script_enabled ? (
                   <div className="mt-4 space-y-2">
-                    <Label className="text-[11px] text-muted-foreground">{tr("Текст скрипта", "Script content")}</Label>
+                    <Label className="text-xs text-muted-foreground">{tr("Текст скрипта", "Script content")}</Label>
                     <Textarea
                       rows={7}
-                      className="font-mono text-[11px] leading-5"
+                      className="font-mono text-xs leading-5"
                       value={wizard.starter_script_content}
                       onChange={(event) => setWizard((prev) => ({ ...prev, starter_script_content: event.target.value }))}
                       spellCheck={false}
@@ -274,14 +274,14 @@ export function CreateSkillDialog({
                     <div className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-card/35 px-3 py-2">
                       <div>
                         <span className="text-xs font-medium text-foreground">{tr("Создать папку assets/", "Create assets/ folder")}</span>
-                        <p className="mt-0.5 text-[11px] text-muted-foreground">{tr("Для CSV, шаблонов и примеров данных.", "For CSV, templates, and sample data.")}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">{tr("Для CSV, шаблонов и примеров данных.", "For CSV, templates, and sample data.")}</p>
                       </div>
                       <Switch checked={wizard.with_assets} onCheckedChange={(checked) => setWizard((prev) => ({ ...prev, with_assets: Boolean(checked) }))} />
                     </div>
                     <div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
                       <div>
                         <span className="text-xs font-medium text-destructive">{tr("Перезаписать существующий slug", "Overwrite existing slug")}</span>
-                        <p className="mt-0.5 text-[11px] text-muted-foreground">{tr("Только если обновляете свой скилл.", "Only when updating your own skill.")}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">{tr("Только если обновляете свой скилл.", "Only when updating your own skill.")}</p>
                       </div>
                       <Switch checked={wizard.force} onCheckedChange={(checked) => setWizard((prev) => ({ ...prev, force: Boolean(checked) }))} />
                     </div>
@@ -289,7 +289,7 @@ export function CreateSkillDialog({
 
                   <div className="space-y-1.5">
                     <Label className="text-xs text-muted-foreground">{tr("Политика выполнения JSON", "Runtime policy JSON")}</Label>
-                    <Textarea rows={6} value={wizard.runtime_policy_text} onChange={(event) => setWizard((prev) => ({ ...prev, runtime_policy_text: event.target.value }))} className="font-mono text-[11px] leading-5" spellCheck={false} />
+                    <Textarea rows={6} value={wizard.runtime_policy_text} onChange={(event) => setWizard((prev) => ({ ...prev, runtime_policy_text: event.target.value }))} className="font-mono text-xs leading-5" spellCheck={false} />
                   </div>
                 </AccordionContent>
               </AccordionItem>
@@ -359,7 +359,7 @@ export function CreateFileDialog({
             <Label className="text-xs">{tr("Содержимое", "Content")}</Label>
             <Textarea rows={16} value={content} onChange={(event) => onContentChange(event.target.value)} className="font-mono text-[12px] leading-5" />
           </div>
-          <div className="rounded-xl border border-border/70 bg-background/24 px-4 py-4 text-[11px] leading-5 text-muted-foreground">
+          <div className="rounded-xl border border-border/70 bg-background/24 px-4 py-4 text-xs leading-5 text-muted-foreground">
             {tr("Разрешены только относительные пути и текстовые расширения. Абсолютные пути, скрытые файлы и выход за пределы папки скилла backend отклоняет.", "Only relative paths and text extensions are allowed. Absolute paths, hidden files, and escaping the skill directory are rejected by the backend.")}
           </div>
         </div>
@@ -407,7 +407,7 @@ export function SkillValidationDialog({
         <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-muted/20 p-4">
           <div>
             <p className="text-sm font-medium">{tr("Режим валидации", "Validation mode")}</p>
-            <p className="text-[11px] text-muted-foreground">{tr("В строгом режиме предупреждения считаются блокерами деплоя.", "Strict mode treats warnings as deployment blockers.")}</p>
+            <p className="text-xs text-muted-foreground">{tr("В строгом режиме предупреждения считаются блокерами деплоя.", "Strict mode treats warnings as deployment blockers.")}</p>
           </div>
           <div className="flex items-center gap-2">
             <Label className="text-xs">{tr("Строгий", "Strict")}</Label>
@@ -427,11 +427,11 @@ export function SkillValidationDialog({
                 <CardHeader className="space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <CardTitle className="text-sm">{result.slug}</CardTitle>
-                    {result.errors.length === 0 && result.warnings.length === 0 && <Badge variant="secondary" className="text-[10px]">ok</Badge>}
-                    {result.errors.length > 0 && <Badge variant="destructive" className="text-[10px]">{result.errors.length} {tr("ошибок", "errors")}</Badge>}
-                    {result.warnings.length > 0 && <Badge variant="outline" className="text-[10px]">{result.warnings.length} {tr("предупреждений", "warnings")}</Badge>}
+                    {result.errors.length === 0 && result.warnings.length === 0 && <Badge variant="secondary" className="text-xs">ok</Badge>}
+                    {result.errors.length > 0 && <Badge variant="destructive" className="text-xs">{result.errors.length} {tr("ошибок", "errors")}</Badge>}
+                    {result.warnings.length > 0 && <Badge variant="outline" className="text-xs">{result.warnings.length} {tr("предупреждений", "warnings")}</Badge>}
                   </div>
-                  <p className="text-[11px] text-muted-foreground">{result.path}</p>
+                  <p className="text-xs text-muted-foreground">{result.path}</p>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   {result.errors.length > 0 && (
@@ -439,7 +439,7 @@ export function SkillValidationDialog({
                       <p className="text-xs font-medium text-red-200">{tr("Ошибки", "Errors")}</p>
                       <div className="mt-1 space-y-1">
                         {result.errors.map((item) => (
-                          <p key={item} className="text-[11px] text-red-100">• {item}</p>
+                          <p key={item} className="text-xs text-red-100">• {item}</p>
                         ))}
                       </div>
                     </div>
@@ -449,7 +449,7 @@ export function SkillValidationDialog({
                       <p className="text-xs font-medium text-amber-100">{tr("Предупреждения", "Warnings")}</p>
                       <div className="mt-1 space-y-1">
                         {result.warnings.map((item) => (
-                          <p key={item} className="text-[11px] text-amber-50">• {item}</p>
+                          <p key={item} className="text-xs text-amber-50">• {item}</p>
                         ))}
                       </div>
                     </div>

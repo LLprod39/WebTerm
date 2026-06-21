@@ -205,7 +205,7 @@ export function SkillSettingsTab({
                   rows={9}
                   value={skillSettingsDraft.runtime_policy_text}
                   onChange={(event) => setSkillSettingsDraft((prev) => ({ ...prev, runtime_policy_text: event.target.value }))}
-                  className="font-mono text-[11px] leading-5"
+                  className="font-mono text-xs leading-5"
                   spellCheck={false}
                   disabled={!canEditSkill}
                 />
@@ -240,7 +240,7 @@ export function SkillSettingsTab({
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-foreground">{tr("Состояние", "Status")}</h3>
-                <p className="text-[11px] text-muted-foreground">{tr("Краткая информация без системных путей.", "Short summary without system paths.")}</p>
+                <p className="text-xs text-muted-foreground">{tr("Краткая информация без системных путей.", "Short summary without system paths.")}</p>
               </div>
             </div>
             <div className="mt-4 space-y-2 text-xs text-muted-foreground">

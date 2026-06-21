@@ -85,11 +85,11 @@ function ServiceListRow({
           <div className="truncate font-mono text-xs text-foreground">{service.unit}</div>
           <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">{service.description || "No description"}</div>
         </div>
-        <span className={cn("shrink-0 rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide", serviceHealthClass(service.health))}>
+        <span className={cn("shrink-0 rounded-full border px-2 py-0.5 text-xs uppercase tracking-wide", serviceHealthClass(service.health))}>
           {service.health}
         </span>
       </div>
-      <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+      <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
         <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5">{service.load}</span>
         <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5">
           {service.active}/{service.sub}
@@ -298,10 +298,10 @@ export function ServicesWindow({
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="truncate font-mono text-sm text-foreground">{selectedService.unit}</h3>
-                        <span className={cn("rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide", serviceHealthClass(selectedService.health))}>
+                        <span className={cn("rounded-full border px-2 py-0.5 text-xs uppercase tracking-wide", serviceHealthClass(selectedService.health))}>
                           {selectedService.health}
                         </span>
-                        <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                        <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-xs uppercase tracking-wide text-muted-foreground">
                           {selectedService.active}/{selectedService.sub}
                         </span>
                       </div>
@@ -345,7 +345,7 @@ export function ServicesWindow({
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                        <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-xs uppercase tracking-wide text-muted-foreground">
                           {logsQuery.data?.service_logs.lines || 80} lines
                         </span>
                         {logsEnabled ? (
@@ -373,19 +373,19 @@ export function ServicesWindow({
                         Service actions run through typed Linux UI endpoints instead of raw shell.
                       </div>
                       <div className="mt-4 rounded-2xl border border-border/70 bg-background/94 p-3">
-                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Last action</div>
+                        <div className="text-xs uppercase tracking-wide text-muted-foreground">Last action</div>
                         <div className="mt-2 text-sm text-foreground">
                           {lastAction ? `${lastAction.action} ${lastAction.service}` : "No service action has been executed yet."}
                         </div>
                         {lastAction ? (
-                          <div className={cn("mt-2 inline-flex rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide", lastAction.success ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300" : "border-destructive/30 bg-destructive/10 text-destructive")}>
+                          <div className={cn("mt-2 inline-flex rounded-full border px-2 py-0.5 text-xs uppercase tracking-wide", lastAction.success ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300" : "border-destructive/30 bg-destructive/10 text-destructive")}>
                             {lastAction.success ? "success" : "failed"}
                           </div>
                         ) : null}
                       </div>
                       {lastAction?.output ? (
                         <ScrollArea className="mt-3 h-36 rounded-2xl border border-border/70 bg-background/94">
-                          <pre className="whitespace-pre-wrap break-words px-3 py-3 font-mono text-[11px] leading-5 text-muted-foreground">
+                          <pre className="whitespace-pre-wrap break-words px-3 py-3 font-mono text-xs leading-5 text-muted-foreground">
                             {lastAction.output}
                           </pre>
                         </ScrollArea>

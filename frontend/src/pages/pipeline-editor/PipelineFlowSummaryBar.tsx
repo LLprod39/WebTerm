@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 
 import type { PipelineEdge, PipelineNode } from "@/lib/api";
 import type { PipelineRunGraphState } from "@/components/pipeline/pipelineRunGraph";
@@ -18,7 +18,9 @@ type PipelineFlowSummaryBarProps = {
   edges: PipelineEdge[];
   graphState: PipelineRunGraphState;
   selectedNodeId: string | null;
+  collapsed?: boolean;
   lang: "en" | "ru";
+  onCollapsedChange?: (collapsed: boolean) => void;
   onSelectNode: (node: PipelineNode) => void;
 };
 
@@ -55,7 +57,9 @@ export function PipelineFlowSummaryBar({
   edges,
   graphState,
   selectedNodeId,
+  collapsed = false,
   lang,
+  onCollapsedChange,
   onSelectNode,
 }: PipelineFlowSummaryBarProps) {
   const chain = useMemo(() => buildVisibleFlowChain(nodes, edges), [edges, nodes]);
@@ -68,6 +72,24 @@ export function PipelineFlowSummaryBar({
     return null;
   }
 
+  if (collapsed) {
+    return (
+      <div className="flex items-center gap-2 border-b border-border/80 bg-card/50 px-4 py-2">
+        <button
+          type="button"
+          className="inline-flex min-h-8 items-center gap-2 rounded-lg border border-border/70 bg-background/55 px-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground"
+          onClick={() => onCollapsedChange?.(false)}
+        >
+          <ChevronRight className="h-3.5 w-3.5" />
+          {localize(lang, "Показать flow", "Show flow")}
+        </button>
+        <span className="text-xs text-muted-foreground">
+          {nodes.length} {localize(lang, "нод", "nodes")} / {edges.length} {localize(lang, "связей", "edges")}
+        </span>
+      </div>
+    );
+  }
+
   visibleChain.forEach((node, index) => {
     const phaseLabel = getNodePhaseLabel(node.type, lang);
     const meta = NODE_TYPE_LOOKUP[node.type || ""];
@@ -78,7 +100,7 @@ export function PipelineFlowSummaryBar({
         <span
           key={`${node.id}-phase`}
           className={cn(
-            "ml-1 inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
+            "ml-1 inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-xs font-semibold uppercase tracking-wide",
             getNodePhaseBadgeClass(node.type),
           )}
         >
@@ -94,7 +116,7 @@ export function PipelineFlowSummaryBar({
           type="button"
           onClick={() => onSelectNode(node)}
           className={cn(
-            "inline-flex min-h-8 max-w-[190px] items-center gap-1.5 rounded-lg border px-2 py-1 text-[10px] transition-colors",
+            "inline-flex min-h-8 max-w-[190px] items-center gap-1.5 rounded-lg border px-2 py-1 text-xs transition-colors",
             graphState.currentNodeId === node.id
               ? "border-blue-500/40 bg-blue-500/10 text-blue-200 shadow-[0_0_16px_rgba(59,130,246,0.18)]"
               : graphState.traversedNodeIds.has(node.id)
@@ -120,7 +142,7 @@ export function PipelineFlowSummaryBar({
     items.push(
       <span
         key="flow-overflow"
-        className="inline-flex shrink-0 items-center rounded-full border border-border/70 bg-background/60 px-2 py-0.5 text-[10px] text-muted-foreground"
+        className="inline-flex shrink-0 items-center rounded-full border border-border/70 bg-background/60 px-2 py-0.5 text-xs text-muted-foreground"
       >
         +{hiddenCount} {localize(lang, "этапов", "more")}
       </span>,
@@ -128,10 +150,15 @@ export function PipelineFlowSummaryBar({
   }
 
   return (
-    <div className="flex items-center gap-2 overflow-x-auto border-b border-border/80 bg-[#10141a] px-4 py-2">
-      <span className="mr-1 shrink-0 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/80">
+    <div className="flex items-center gap-2 overflow-x-auto border-b border-border/80 bg-card/50 px-4 py-2">
+      <button
+        type="button"
+        className="mr-1 inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-lg border border-border/70 bg-background/55 px-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground"
+        onClick={() => onCollapsedChange?.(true)}
+      >
+        <ChevronDown className="h-3.5 w-3.5" />
         {localize(lang, "Flow", "Flow")}
-      </span>
+      </button>
       {items}
     </div>
   );

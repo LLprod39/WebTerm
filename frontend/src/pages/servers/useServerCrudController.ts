@@ -8,9 +8,11 @@ import {
   updateServer,
   type FrontendServer,
 } from "@/lib/api";
+import { notify } from "@/lib/notify";
 
 import { asPayload, initialForm } from "./serverForm";
 import type { ServerForm } from "./types";
+import { validateServerForm } from "./serverValidation";
 
 type Translate = (key: string) => string;
 type TranslateWithVars = (key: string, vars?: Record<string, string | number>) => string;
@@ -33,13 +35,11 @@ export function useServerCrudController({
   const [serverDeleteTarget, setServerDeleteTarget] = useState<FrontendServer | null>(null);
   const [form, setForm] = useState<ServerForm>(initialForm());
   const [saving, setSaving] = useState(false);
+  const [testingConnection, setTestingConnection] = useState(false);
 
-  const sudoPasswordRequired = useMemo(
-    () =>
-      form.sudo_auth_mode === "stored_password" &&
-      !form.sudo_password.trim() &&
-      !(editingServer?.has_saved_sudo_password ?? false),
-    [editingServer?.has_saved_sudo_password, form.sudo_auth_mode, form.sudo_password],
+  const formValidation = useMemo(
+    () => validateServerForm(form, t, editingServer?.has_saved_sudo_password ?? false),
+    [editingServer?.has_saved_sudo_password, form, t],
   );
 
   const openCreate = useCallback(() => {
@@ -81,16 +81,36 @@ export function useServerCrudController({
   }, []);
 
   const saveServer = useCallback(async () => {
+    const validation = validateServerForm(form, t, editingServer?.has_saved_sudo_password ?? false);
+    if (!validation.isValid) {
+      notify.error({ title: t("srv.form_incomplete"), description: validation.summary });
+      return null;
+    }
+
     setSaving(true);
     try {
+      let savedId = editingServer?.id ?? null;
       if (editingServer) await updateServer(editingServer.id, asPayload(form));
-      else await createServer(asPayload(form));
+      else {
+        const created = await createServer(asPayload(form));
+        savedId = created.server_id;
+      }
+      notify.success({
+        title: editingServer ? t("srv.server_updated") : t("srv.server_created"),
+      });
       setDialogOpen(false);
       await reload();
+      return savedId;
+    } catch (error) {
+      notify.error({
+        title: t("srv.save_failed"),
+        description: error instanceof Error ? error.message : t("srv.unknown_error"),
+      });
+      return null;
     } finally {
       setSaving(false);
     }
-  }, [editingServer, form, reload]);
+  }, [editingServer, form, reload, t]);
 
   const handlePrivateKeyFile = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
@@ -100,7 +120,7 @@ export function useServerCrudController({
       setForm((state) => ({ ...state, ssh_private_key: text }));
     } catch (error) {
       console.error(error);
-      alert(t("srv.private_key_read_error"));
+      notify.error({ title: t("srv.private_key_read_error") });
     } finally {
       event.currentTarget.value = "";
     }
@@ -120,14 +140,57 @@ export function useServerCrudController({
   }, [editingServer?.id, onServerDeleted, reload, serverDeleteTarget]);
 
   const testConnection = useCallback(async (server: FrontendServer) => {
-    const result = await testServer(server.id, {});
-    if (result.success) {
-      alert(tr("srv.connection_success", { name: server.name }));
-    } else {
-      alert(tr("srv.connection_failed", { error: result.error || t("srv.unknown_error") }));
+    setTestingConnection(true);
+    try {
+      const result = await testServer(server.id, {});
+      if (result.success) {
+        notify.success({ title: tr("srv.connection_success", { name: server.name }) });
+      } else {
+        notify.error({
+          title: t("srv.connection_failed_title"),
+          description: tr("srv.connection_failed", { error: result.error || t("srv.unknown_error") }),
+        });
+      }
+      await reload();
+    } catch (error) {
+      notify.error({
+        title: t("srv.connection_failed_title"),
+        description: error instanceof Error ? error.message : t("srv.unknown_error"),
+      });
+    } finally {
+      setTestingConnection(false);
     }
-    await reload();
   }, [reload, t, tr]);
+
+  const testConnectionById = useCallback(async (serverId: number, name: string) => {
+    setTestingConnection(true);
+    try {
+      const result = await testServer(serverId, {});
+      if (result.success) {
+        notify.success({ title: tr("srv.connection_success", { name }) });
+      } else {
+        notify.error({
+          title: t("srv.connection_failed_title"),
+          description: tr("srv.connection_failed", { error: result.error || t("srv.unknown_error") }),
+        });
+      }
+      await reload();
+    } catch (error) {
+      notify.error({
+        title: t("srv.connection_failed_title"),
+        description: error instanceof Error ? error.message : t("srv.unknown_error"),
+      });
+    } finally {
+      setTestingConnection(false);
+    }
+  }, [reload, t, tr]);
+
+  const saveAndTestServer = useCallback(async () => {
+    const serverName = form.name.trim() || editingServer?.name || t("srv.create_server");
+    const savedId = await saveServer();
+    if (!savedId) return;
+    await testConnectionById(savedId, serverName);
+  }, [editingServer?.name, form.name, saveServer, t, testConnectionById]);
 
   return {
     clearServerDeleteTarget,
@@ -135,16 +198,18 @@ export function useServerCrudController({
     dialogOpen,
     editingServer,
     form,
+    formValidation,
     handlePrivateKeyFile,
     openCreate,
     openEdit,
     requestDeleteServer,
     saveServer,
+    saveAndTestServer,
     saving,
     serverDeleteTarget,
     setDialogOpen,
     setForm,
-    sudoPasswordRequired,
     testConnection,
+    testingConnection,
   };
 }

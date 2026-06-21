@@ -94,7 +94,7 @@ function CmdRiskBadge({ command }: { command: AiCommand }) {
   const showExecHint = risk.execMode === "direct" && risk.level === "safe";
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${
+      className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs font-medium ${
         showExecHint
           ? "border-border/60 bg-secondary/40 text-muted-foreground"
           : riskBadgeClass(risk.level)
@@ -108,11 +108,11 @@ function CmdRiskBadge({ command }: { command: AiCommand }) {
 
 function CmdStatusBadge({ status, exit_code }: { status?: AiCommand["status"]; exit_code?: number }) {
   if (!status || status === "pending") {
-    return <span className="rounded-md border border-border/60 px-1.5 py-0.5 text-[11px] text-muted-foreground">ожидает</span>;
+    return <span className="rounded-md border border-border/60 px-1.5 py-0.5 text-xs text-muted-foreground">ожидает</span>;
   }
   if (status === "running") {
     return (
-      <span className="flex items-center gap-1 whitespace-nowrap rounded-md border border-warning/30 bg-warning/10 px-1.5 py-0.5 text-[11px] text-warning">
+      <span className="flex items-center gap-1 whitespace-nowrap rounded-md border border-warning/30 bg-warning/10 px-1.5 py-0.5 text-xs text-warning">
         <Loader2 className="h-2.5 w-2.5 animate-spin" /> выполняется
       </span>
     );
@@ -120,7 +120,7 @@ function CmdStatusBadge({ status, exit_code }: { status?: AiCommand["status"]; e
   if (status === "done") {
     const ok = exit_code === 0 || exit_code === undefined;
     return (
-      <span className={`flex items-center gap-1 whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[11px] ${
+      <span className={`flex items-center gap-1 whitespace-nowrap rounded-md border px-1.5 py-0.5 text-xs ${
         ok ? "border-success/30 bg-success/10 text-success" : "border-destructive/30 bg-destructive/10 text-destructive"
       }`}>
         {ok ? <CheckCircle2 className="h-2.5 w-2.5" /> : <AlertTriangle className="h-2.5 w-2.5" />}
@@ -129,10 +129,10 @@ function CmdStatusBadge({ status, exit_code }: { status?: AiCommand["status"]; e
     );
   }
   if (status === "skipped" || status === "cancelled") {
-    return <span className="px-1.5 py-0.5 text-[11px] text-muted-foreground/50 line-through">пропущено</span>;
+    return <span className="px-1.5 py-0.5 text-xs text-muted-foreground/50 line-through">пропущено</span>;
   }
   if (status === "confirmed") {
-    return <span className="rounded-md border border-info/30 bg-info/10 px-1.5 py-0.5 text-[11px] text-info">подтверждено</span>;
+    return <span className="rounded-md border border-info/30 bg-info/10 px-1.5 py-0.5 text-xs text-info">подтверждено</span>;
   }
   return null;
 }
@@ -169,7 +169,7 @@ function CommandsMsg({
       {allCommands.length > 0 ? (
         visibleCommands.length > 0 ? (
           <div className="overflow-hidden rounded-xl border border-border">
-            <div className="flex items-center gap-1.5 bg-secondary/40 px-3 py-2 text-[11px] font-medium text-muted-foreground">
+            <div className="flex items-center gap-1.5 bg-secondary/40 px-3 py-2 text-xs font-medium text-muted-foreground">
               <TerminalIcon className="h-3 w-3" /> Команды ({visibleCommands.length}/{allCommands.length})
             </div>
             <div className="divide-y divide-border/40">
@@ -184,7 +184,7 @@ function CommandsMsg({
                   </div>
                   {cmd.why ? <p className="text-xs text-muted-foreground">{cmd.why}</p> : null}
                   {cmd.direct_output ? (
-                    <pre className="max-h-48 overflow-auto rounded-md border border-border/60 bg-secondary/40 px-2 py-1.5 font-mono text-[11px] leading-relaxed text-muted-foreground">
+                    <pre className="max-h-48 overflow-auto rounded-md border border-border/60 bg-secondary/40 px-2 py-1.5 font-mono text-xs leading-relaxed text-muted-foreground">
                       {cmd.direct_output}
                     </pre>
                   ) : null}
@@ -194,7 +194,7 @@ function CommandsMsg({
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="h-6 gap-1 px-2 text-[11px]"
+                        className="h-6 gap-1 px-2 text-xs"
                         disabled={!!cmd.explaining}
                         onClick={() => onExplainCommand(cmd)}
                       >
@@ -236,7 +236,7 @@ function CommandsMsg({
               ))}
             </div>
             {hiddenCount > 0 ? (
-              <div className="border-t border-border/40 bg-secondary/20 px-3 py-2 text-[11px] text-muted-foreground">
+              <div className="border-t border-border/40 bg-secondary/20 px-3 py-2 text-xs text-muted-foreground">
                 {hiddenCount} команд скрыто настройками видимости.
               </div>
             ) : null}
@@ -305,13 +305,13 @@ function ProgressMsg({ msg }: { msg: AiMessage }) {
           <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-warning" />
           <code className="truncate font-mono">{msg.progressCmd}</code>
         </div>
-        <span className="ml-2 flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
+        <span className="ml-2 flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
           <Clock className="h-3 w-3" />
           {msg.progressElapsed}s
         </span>
       </div>
       {msg.progressTail ? (
-        <div className="max-h-24 overflow-y-auto whitespace-pre-wrap break-all bg-terminal-bg/60 px-4 py-2 text-[11px] font-mono text-muted-foreground/80">
+        <div className="max-h-24 overflow-y-auto whitespace-pre-wrap break-all bg-terminal-bg/60 px-4 py-2 text-xs font-mono text-muted-foreground/80">
           {msg.progressTail}
         </div>
       ) : null}

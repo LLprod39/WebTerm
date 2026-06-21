@@ -12,10 +12,14 @@ import {
   type AccessUser,
 } from "@/lib/api";
 import { ACCESS_UI_TEXT, formatAccessText, localizeAccessFeatures } from "@/lib/accessUiText";
+import { DeleteDialog } from "@/components/system/ConfirmDialog";
 import { useI18n } from "@/lib/i18n";
+import { notify } from "@/lib/notify";
 import { buildExplicitPayload, createPermissionModes } from "./settings-users/accessUserPermissions";
 import { SettingsUsersLayout } from "./settings-users/SettingsUsersLayout";
+import { ResetPasswordDialog } from "./settings-users/UserSecurityDialogs";
 import type { UserCreateForm, UserEditDraft } from "./settings-users/settingsUsersTypes";
+import { validateCreateUserForm, validateEditUserDraft } from "./settings-users/userValidation";
 
 const FALLBACK_FEATURES = ACCESS_FEATURE_OPTIONS;
 
@@ -37,6 +41,8 @@ export default function SettingsUsersPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editing, setEditing] = useState<UserEditDraft>({});
   const [createForm, setCreateForm] = useState<UserCreateForm>(INITIAL_CREATE_FORM);
+  const [deleteTarget, setDeleteTarget] = useState<AccessUser | null>(null);
+  const [passwordTarget, setPasswordTarget] = useState<AccessUser | null>(null);
 
   const { data: usersData, isLoading, error } = useQuery({
     queryKey: ["access", "users"],
@@ -53,6 +59,8 @@ export default function SettingsUsersPage() {
     () => localizeAccessFeatures(lang, usersData?.features ?? groupsData?.features ?? FALLBACK_FEATURES),
     [groupsData?.features, lang, usersData?.features],
   );
+  const createValidation = useMemo(() => validateCreateUserForm(createForm, lang), [createForm, lang]);
+  const editValidation = useMemo(() => validateEditUserDraft(editing, lang), [editing, lang]);
 
   const refreshAll = async () => {
     await Promise.all([
@@ -82,18 +90,32 @@ export default function SettingsUsersPage() {
   };
 
   const createUser = async () => {
+    if (!createValidation.isValid) {
+      notify.error({ title: copy.createTitle, description: createValidation.summary });
+      return false;
+    }
+
     setSaving(true);
     try {
       await createAccessUser({ ...createForm });
-      setCreateForm(INITIAL_CREATE_FORM);
+      setCreateForm({ ...INITIAL_CREATE_FORM });
       await refreshAll();
+      return true;
+    } catch (err) {
+      notify.error({ title: copy.createTitle, description: err instanceof Error ? err.message : String(err) });
+      return false;
     } finally {
       setSaving(false);
     }
   };
 
   const saveEdit = async () => {
-    if (!editingId) return;
+    if (!editingId) return false;
+    if (!editValidation.isValid) {
+      notify.error({ title: copy.editAction, description: editValidation.summary });
+      return false;
+    }
+
     setSaving(true);
     try {
       await updateAccessUser(editingId, {
@@ -107,22 +129,51 @@ export default function SettingsUsersPage() {
       });
       cancelEdit();
       await refreshAll();
+      return true;
+    } catch (err) {
+      notify.error({ title: copy.editAction, description: err instanceof Error ? err.message : String(err) });
+      return false;
     } finally {
       setSaving(false);
     }
   };
 
   const removeUser = async (user: AccessUser) => {
-    if (!confirm(formatAccessText(copy.deleteConfirm, { name: user.username }))) return;
-    await deleteAccessUser(user.id);
-    await refreshAll();
+    setDeleteTarget(user);
   };
 
   const resetPassword = async (user: AccessUser) => {
-    const password = prompt(formatAccessText(copy.passwordPrompt, { name: user.username }));
-    if (!password) return;
-    await setAccessUserPassword(user.id, password);
-    alert(copy.passwordUpdated);
+    setPasswordTarget(user);
+  };
+
+  const confirmRemoveUser = async () => {
+    if (!deleteTarget) return;
+    setSaving(true);
+    try {
+      await deleteAccessUser(deleteTarget.id);
+      notify.success({ title: copy.deleteAction, description: deleteTarget.username });
+      setDeleteTarget(null);
+      await refreshAll();
+    } catch (err) {
+      notify.error({ title: copy.error, description: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const submitResetPassword = async (password: string) => {
+    if (!passwordTarget) return;
+    setSaving(true);
+    try {
+      await setAccessUserPassword(passwordTarget.id, password);
+      notify.success({ title: copy.passwordUpdated, description: passwordTarget.username });
+      setPasswordTarget(null);
+      await refreshAll();
+    } catch (err) {
+      notify.error({ title: copy.error, description: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (isLoading) {
@@ -138,23 +189,48 @@ export default function SettingsUsersPage() {
   }
 
   return (
-    <SettingsUsersLayout
-      lang={lang}
-      users={users}
-      groups={groups}
-      features={features}
-      saving={saving}
-      editingId={editingId}
-      editing={editing}
-      createForm={createForm}
-      onStartEdit={startEdit}
-      onCancelEdit={cancelEdit}
-      onSaveEdit={saveEdit}
-      onRemoveUser={removeUser}
-      onResetPassword={resetPassword}
-      onCreateUser={createUser}
-      onEditingChange={setEditing}
-      onCreateFormChange={setCreateForm}
-    />
+    <>
+      <SettingsUsersLayout
+        lang={lang}
+        users={users}
+        groups={groups}
+        features={features}
+        saving={saving}
+        editingId={editingId}
+        editing={editing}
+        createForm={createForm}
+        createValidation={createValidation}
+        editValidation={editValidation}
+        onStartEdit={startEdit}
+        onCancelEdit={cancelEdit}
+        onSaveEdit={saveEdit}
+        onRemoveUser={removeUser}
+        onResetPassword={resetPassword}
+        onCreateUser={createUser}
+        onEditingChange={setEditing}
+        onCreateFormChange={setCreateForm}
+      />
+      <DeleteDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open && !saving) setDeleteTarget(null);
+        }}
+        title={formatAccessText(copy.deleteConfirm, { name: deleteTarget?.username || "" })}
+        description={formatAccessText(copy.deleteDescription, { name: deleteTarget?.username || "" })}
+        confirmLabel={copy.deleteAction}
+        cancelLabel={ACCESS_UI_TEXT[lang].common.cancel}
+        onConfirm={confirmRemoveUser}
+      />
+      <ResetPasswordDialog
+        lang={lang}
+        user={passwordTarget}
+        open={Boolean(passwordTarget)}
+        saving={saving}
+        onOpenChange={(open) => {
+          if (!open && !saving) setPasswordTarget(null);
+        }}
+        onSubmit={submitResetPassword}
+      />
+    </>
   );
 }

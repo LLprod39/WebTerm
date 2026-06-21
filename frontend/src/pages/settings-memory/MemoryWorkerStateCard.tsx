@@ -21,7 +21,7 @@ export function MemoryWorkerStateCard({
     <div key={`${label}-${state.worker_key}`} className="rounded-xl border border-border/60 bg-secondary/10 px-3 py-3 shadow-sm">
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-sm font-medium text-foreground">{label}</p>
-        <span className={cn("rounded border px-1.5 py-0.5 text-[10px] uppercase tracking-wide", statusTone)}>
+        <span className={cn("rounded border px-1.5 py-0.5 text-xs uppercase tracking-wide", statusTone)}>
           {state.status}
         </span>
         {state.is_stale ? <Badge variant="destructive">stale</Badge> : null}
@@ -36,8 +36,8 @@ export function MemoryWorkerStateCard({
         {state.last_error ? <p className="text-destructive">error: {state.last_error}</p> : null}
         {Object.keys(state.last_summary || {}).length ? (
           <details className="rounded border border-border/50 bg-background/30 px-2 py-2">
-            <summary className="cursor-pointer text-[11px] font-medium text-foreground">Last summary</summary>
-            <pre className="mt-2 whitespace-pre-wrap text-[10px] leading-relaxed text-muted-foreground">
+            <summary className="cursor-pointer text-xs font-medium text-foreground">Last summary</summary>
+            <pre className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
               {JSON.stringify(state.last_summary, null, 2)}
             </pre>
           </details>

@@ -27,7 +27,7 @@ export function MCPCallNode({ data, selected }: NodeProps) {
       {...getNodeRuntimeProps(d)}
     >
       {serverName && (
-        <div className="text-[10px] text-teal-300/80 bg-teal-500/10 rounded px-1.5 py-0.5 truncate">
+        <div className="text-xs text-teal-300/80 bg-teal-500/10 rounded px-1.5 py-0.5 truncate">
           {serverName}
         </div>
       )}

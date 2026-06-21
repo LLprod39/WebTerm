@@ -70,10 +70,10 @@ export function DraftListItem({
             {title}
           </span>
         </div>
-        <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-muted-foreground">
+        <p className="mt-1 line-clamp-2 text-xs leading-4 text-muted-foreground">
           {session.user_goal || response?.patch_summary || localize(lang, "Без описания", "No description")}
         </p>
-        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1 rounded border border-border/70 px-1.5 py-0.5">
             <Clock className="h-3 w-3" />
             {formatRelativeTime(session.updated_at, lang)}
@@ -130,7 +130,7 @@ export function DraftFilterButton({
       data-filter={value}
     >
       <span className="min-w-0 truncate">{label}</span>
-      <span className="rounded border border-border/70 px-1.5 py-0.5 text-[10px]">{count}</span>
+      <span className="rounded border border-border/70 px-1.5 py-0.5 text-xs">{count}</span>
     </button>
   );
 }

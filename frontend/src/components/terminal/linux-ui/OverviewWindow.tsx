@@ -45,7 +45,7 @@ export function OverviewWindow({
         <div className="flex flex-wrap gap-1.5">
           {pills.length > 0 ? (
             pills.map((pill) => (
-              <span key={pill} className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+              <span key={pill} className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-xs uppercase tracking-wide text-muted-foreground">
                 {pill}
               </span>
             ))
@@ -58,7 +58,7 @@ export function OverviewWindow({
         <div className="grid gap-3">
           {cards.map((card) => (
             <div key={card.label} className="rounded-2xl border border-border/70 bg-background/90 p-3">
-              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{card.label}</div>
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">{card.label}</div>
               <div className="mt-2 text-base font-semibold text-foreground">{card.value}</div>
               <div className="mt-1 text-xs text-muted-foreground">{card.hint}</div>
             </div>

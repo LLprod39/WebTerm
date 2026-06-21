@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { GripVertical, Layout, Minus, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 import {
@@ -198,7 +199,7 @@ function DashboardWidgetEditHeader({
         <span className="font-bold truncate text-foreground select-none">
           {getWidgetStringProp(item.config, "customTitle", item.def.title)}
         </span>
-        <span className="text-[9px] text-muted-foreground bg-secondary px-1.5 py-0.5 rounded font-mono shrink-0 select-none">
+        <span className="text-xs text-muted-foreground bg-secondary px-1.5 py-0.5 rounded font-mono shrink-0 select-none">
           {getDashboardWidthLabel(width)}
         </span>
       </div>
@@ -270,7 +271,7 @@ function DashboardWidgetSettings({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <div className="space-y-1">
-          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Предустановка ширины</label>
+          <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block">Предустановка ширины</label>
           <div className="flex flex-wrap gap-1">
             {DASHBOARD_WIDGET_WIDTHS.map((size) => (
               <button
@@ -278,7 +279,7 @@ function DashboardWidgetSettings({
                 type="button"
                 onClick={() => onUpdateWidgetProp(item.config.id, "w", size)}
                 className={cn(
-                  "px-2 py-1 rounded text-[10px] font-semibold border transition-all",
+                  "px-2 py-1 rounded text-xs font-semibold border transition-all",
                   width === size
                     ? "bg-primary text-primary-foreground border-primary shadow-sm"
                     : "bg-background/80 hover:bg-secondary border-border text-foreground",
@@ -291,7 +292,7 @@ function DashboardWidgetSettings({
         </div>
 
         <div className="space-y-1">
-          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Свой заголовок</label>
+          <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block">Свой заголовок</label>
           <input
             type="text"
             placeholder={item.def.title}
@@ -302,32 +303,40 @@ function DashboardWidgetSettings({
         </div>
 
         <div className="space-y-1">
-          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Визуальная схема (тон)</label>
-          <select
+          <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block">Визуальная схема (тон)</label>
+          <Select
             value={getWidgetStringProp(item.config, "tone", "default")}
-            onChange={(event) => onUpdateWidgetProp(item.config.id, "tone", event.target.value)}
-            className="w-full h-8 px-2 rounded-md border border-border bg-background text-xs cursor-pointer focus:border-primary"
+            onValueChange={(value) => onUpdateWidgetProp(item.config.id, "tone", value)}
           >
-            <option value="default">По умолчанию</option>
-            <option value="info">Инфо (Синий)</option>
-            <option value="success">Успех (Зеленый)</option>
-            <option value="warning">Внимание (Оранжевый)</option>
-            <option value="danger">Критический (Красный)</option>
-          </select>
+            <SelectTrigger className="h-8 rounded-md bg-background text-xs" aria-label="Визуальная схема">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="default">По умолчанию</SelectItem>
+              <SelectItem value="info">Инфо (Синий)</SelectItem>
+              <SelectItem value="success">Успех (Зеленый)</SelectItem>
+              <SelectItem value="warning">Внимание (Оранжевый)</SelectItem>
+              <SelectItem value="danger">Критический (Красный)</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {dashboardLimitedListWidgetIds.has(item.config.id) ? (
           <div className="space-y-1">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Лимит строк / объектов</label>
-            <select
-              value={getWidgetNumberProp(item.config, "limit", 5)}
-              onChange={(event) => onUpdateWidgetProp(item.config.id, "limit", parseInt(event.target.value))}
-              className="w-full h-8 px-2 rounded-md border border-border bg-background text-xs cursor-pointer focus:border-primary"
+            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block">Лимит строк / объектов</label>
+            <Select
+              value={String(getWidgetNumberProp(item.config, "limit", 5))}
+              onValueChange={(value) => onUpdateWidgetProp(item.config.id, "limit", parseInt(value, 10))}
             >
-              {[3, 5, 8, 10, 15, 20].map((limit) => (
-                <option key={limit} value={limit}>{limit} элементов</option>
-              ))}
-            </select>
+              <SelectTrigger className="h-8 rounded-md bg-background text-xs" aria-label="Лимит строк">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[3, 5, 8, 10, 15, 20].map((limit) => (
+                  <SelectItem key={limit} value={String(limit)}>{limit} элементов</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         ) : null}
       </div>

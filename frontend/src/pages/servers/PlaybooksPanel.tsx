@@ -2,16 +2,20 @@ import { useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { BookOpen, CheckCircle2, ChevronDown, ChevronRight, Copy, Download, FileJson, GripVertical, Loader2, Play, Plus, Save, Server, Settings, Trash2, Upload, X, XCircle } from "lucide-react";
 import { StatusIndicator } from "@/components/StatusIndicator";
 import { ServerOsBadge } from "@/components/servers/ServerOsBadge";
+import { DeleteDialog } from "@/components/system/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { executeServerCommand, type FrontendServer } from "@/lib/api";
 import { localize } from "@/lib/i18n";
+import { notify } from "@/lib/notify";
 import { resolveServerOs } from "@/lib/server-os";
 import { formatCommandOutput } from "./formatters";
 import { exportPlaybookAsJson, loadPlaybooks, newPlaybookId, newTaskId, parseAnsiblePlaybook, savePlaybooks } from "./playbooks";
 import type { Playbook, PlaybookRunResult, PlaybookTask } from "./types";
 interface UsePlaybooksPanelParams { servers: FrontendServer[]; t: (key: string) => string; tr: (key: string, vars?: Record<string, string | number>) => string; lang: string; }
+// The hook return type is the panel props contract, so keep the narrow colocated export.
+// eslint-disable-next-line react-refresh/only-export-components
 export function usePlaybooksPanel({ servers, t, tr, lang }: UsePlaybooksPanelParams) {
   const [playbooks, setPlaybooks] = useState<Playbook[]>(loadPlaybooks);
   const [activePlaybook, setActivePlaybook] = useState<Playbook | null>(null);
@@ -22,6 +26,7 @@ export function usePlaybooksPanel({ servers, t, tr, lang }: UsePlaybooksPanelPar
   const [playbookRunning, setPlaybookRunning] = useState(false);
   const [playbookResults, setPlaybookResults] = useState<PlaybookRunResult[]>([]);
   const [playbookView, setPlaybookView] = useState<"list" | "edit" | "run">("list");
+  const [deletePlaybookTarget, setDeletePlaybookTarget] = useState<Playbook | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const addPlaybookTask = () => {
@@ -92,12 +97,17 @@ export function usePlaybooksPanel({ servers, t, tr, lang }: UsePlaybooksPanelPar
     setActivePlaybook(playbook);
   };
 
-  const onDeletePlaybook = (id: string) => {
-    if (!confirm(t("pb.delete_confirm"))) return;
-    const updated = playbooks.filter((playbook) => playbook.id !== id);
+  const onDeletePlaybook = (playbook: Playbook) => {
+    setDeletePlaybookTarget(playbook);
+  };
+
+  const onConfirmDeletePlaybook = () => {
+    if (!deletePlaybookTarget) return;
+    const updated = playbooks.filter((playbook) => playbook.id !== deletePlaybookTarget.id);
     setPlaybooks(updated);
     savePlaybooks(updated);
-    if (activePlaybook?.id === id) setPlaybookView("list");
+    if (activePlaybook?.id === deletePlaybookTarget.id) setPlaybookView("list");
+    setDeletePlaybookTarget(null);
   };
 
   const onDuplicatePlaybook = (playbook: Playbook) => {
@@ -128,7 +138,7 @@ export function usePlaybooksPanel({ servers, t, tr, lang }: UsePlaybooksPanelPar
       setPlaybookResults([]);
       setPlaybookView("edit");
     } catch (err) {
-      alert(tr("pb.parse_failed", { error: err instanceof Error ? err.message : String(err) }));
+      notify.error({ title: tr("pb.parse_failed", { error: err instanceof Error ? err.message : String(err) }) });
     }
   };
 
@@ -208,22 +218,22 @@ export function usePlaybooksPanel({ servers, t, tr, lang }: UsePlaybooksPanelPar
   };
 
   return {
-    activePlaybook, addPlaybookTask, clearTargets, fileInputRef, lang, moveTask, onDeletePlaybook, onDropPlaybook,
+    activePlaybook, addPlaybookTask, clearTargets, deletePlaybookTarget, fileInputRef, lang, moveTask, onConfirmDeletePlaybook, onDeletePlaybook, onDropPlaybook,
     onDuplicatePlaybook, onFileInputChange, onRunPlaybook, onSavePlaybook, openEditPlaybook, openNewPlaybook,
     playbookDesc, playbookName, playbookResults, playbookRunning, playbookTargets, playbookTasks, playbookView,
     playbooks, removePlaybookTask, selectAllTargets, servers, setPlaybookDesc, setPlaybookName, setPlaybookView,
-    t, toggleTarget, tr, updatePlaybookTask,
+    setDeletePlaybookTarget, t, toggleTarget, tr, updatePlaybookTask,
   };
 }
 
 type PlaybooksPanelProps = ReturnType<typeof usePlaybooksPanel>;
 
 export function PlaybooksPanel({
-  activePlaybook, addPlaybookTask, clearTargets, fileInputRef, lang, moveTask, onDeletePlaybook, onDropPlaybook,
+  activePlaybook, addPlaybookTask, clearTargets, deletePlaybookTarget, fileInputRef, lang, moveTask, onConfirmDeletePlaybook, onDeletePlaybook, onDropPlaybook,
   onDuplicatePlaybook, onFileInputChange, onRunPlaybook, onSavePlaybook, openEditPlaybook, openNewPlaybook,
   playbookDesc, playbookName, playbookResults, playbookRunning, playbookTargets, playbookTasks, playbookView,
   playbooks, removePlaybookTask, selectAllTargets, servers, setPlaybookDesc, setPlaybookName, setPlaybookView,
-  t, toggleTarget, tr, updatePlaybookTask,
+  setDeletePlaybookTarget, t, toggleTarget, tr, updatePlaybookTask,
 }: PlaybooksPanelProps) {
   return (
     <>
@@ -256,7 +266,7 @@ export function PlaybooksPanel({
             <p className="text-xs text-muted-foreground">
               {t("pb.drop_help")} <span className="text-primary underline">{t("pb.browse")}</span>
             </p>
-            <p className="text-[10px] text-muted-foreground/60 mt-1">{t("pb.supports")}</p>
+            <p className="text-xs text-muted-foreground/60 mt-1">{t("pb.supports")}</p>
           </div>
 
           {playbooks.length === 0 ? (
@@ -286,7 +296,7 @@ export function PlaybooksPanel({
                     <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => onDuplicatePlaybook(playbook)} aria-label={localize(lang, "Дублировать плейбук", "Duplicate playbook")}>
                       <Copy className="h-3 w-3" />
                     </Button>
-                    <Button size="icon" variant="outline" className="h-9 w-9 border-destructive/30 text-destructive hover:bg-destructive/10" onClick={() => onDeletePlaybook(playbook.id)} aria-label={localize(lang, "Удалить плейбук", "Delete playbook")}>
+                    <Button size="icon" variant="outline" className="h-9 w-9 border-destructive/30 text-destructive hover:bg-destructive/10" onClick={() => onDeletePlaybook(playbook)} aria-label={localize(lang, "Удалить плейбук", "Delete playbook")}>
                       <Trash2 className="h-3 w-3" />
                     </Button>
                   </div>
@@ -343,7 +353,7 @@ export function PlaybooksPanel({
                   </div>
                   <div className="flex-1 space-y-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-mono text-muted-foreground bg-secondary rounded px-1.5 py-0.5 shrink-0">#{idx + 1}</span>
+                      <span className="text-xs font-mono text-muted-foreground bg-secondary rounded px-1.5 py-0.5 shrink-0">#{idx + 1}</span>
                       <Input
                         placeholder={t("pb.task_description_placeholder")}
                         value={task.description}
@@ -357,7 +367,7 @@ export function PlaybooksPanel({
                       onChange={(event) => updatePlaybookTask(task.id, { command: event.target.value })}
                       className="bg-background h-9 font-mono text-sm border-border"
                     />
-                    <label className="text-[11px] flex items-center gap-1.5 text-muted-foreground cursor-pointer">
+                    <label className="text-xs flex items-center gap-1.5 text-muted-foreground cursor-pointer">
                       <input
                         type="checkbox"
                         checked={task.continueOnError}
@@ -400,7 +410,7 @@ export function PlaybooksPanel({
                   <ServerOsBadge kind={resolveServerOs(server)} size="sm" />
                   <StatusIndicator status={server.status} showLabel={false} />
                   <span className="font-medium truncate">{server.name}</span>
-                  <span className="text-[10px] font-mono ml-auto opacity-60">{server.host}</span>
+                  <span className="text-xs font-mono ml-auto opacity-60">{server.host}</span>
                 </button>
               ))}
             </div>
@@ -455,18 +465,18 @@ export function PlaybooksPanel({
                   {serverResult.taskResults.map((taskResult, taskIndex) => (
                     <div key={taskResult.taskId} className="px-4 py-3">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[10px] font-mono text-muted-foreground bg-secondary rounded px-1.5 py-0.5">#{taskIndex + 1}</span>
+                        <span className="text-xs font-mono text-muted-foreground bg-secondary rounded px-1.5 py-0.5">#{taskIndex + 1}</span>
                         <code className="text-xs font-mono text-foreground">{taskResult.command}</code>
                         <span className="ml-auto">
                           {taskResult.status === "success" && <CheckCircle2 className="h-3.5 w-3.5 text-primary" />}
                           {taskResult.status === "error" && <XCircle className="h-3.5 w-3.5 text-destructive" />}
                           {taskResult.status === "running" && <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />}
                           {taskResult.status === "pending" && <span className="h-3.5 w-3.5 rounded-full bg-muted-foreground/20 inline-block" />}
-                          {taskResult.status === "skipped" && <span className="text-[10px] text-muted-foreground">{t("pb.skipped")}</span>}
+                          {taskResult.status === "skipped" && <span className="text-xs text-muted-foreground">{t("pb.skipped")}</span>}
                         </span>
                       </div>
                       {taskResult.output && (
-                        <pre className="mt-2 p-2.5 rounded bg-background border border-border text-[11px] font-mono text-muted-foreground overflow-x-auto max-h-32 whitespace-pre-wrap">{taskResult.output}</pre>
+                        <pre className="mt-2 p-2.5 rounded bg-background border border-border text-xs font-mono text-muted-foreground overflow-x-auto max-h-32 whitespace-pre-wrap">{taskResult.output}</pre>
                       )}
                     </div>
                   ))}
@@ -476,6 +486,21 @@ export function PlaybooksPanel({
           })}
         </section>
       )}
+      <DeleteDialog
+        open={Boolean(deletePlaybookTarget)}
+        onOpenChange={(open) => {
+          if (!open) setDeletePlaybookTarget(null);
+        }}
+        title={t("pb.delete_confirm")}
+        description={localize(
+          lang,
+          `Плейбук "${deletePlaybookTarget?.name || ""}" будет удалён из локального каталога.`,
+          `Playbook "${deletePlaybookTarget?.name || ""}" will be removed from the local catalog.`,
+        )}
+        confirmLabel={localize(lang, "Удалить", "Delete")}
+        cancelLabel={localize(lang, "Отмена", "Cancel")}
+        onConfirm={onConfirmDeletePlaybook}
+      />
     </>
   );
 }

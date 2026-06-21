@@ -132,7 +132,7 @@ export function RunMonitorPanel({
               >
                 <span className="shrink-0">{NODE_STATUS_ICON[status] || NODE_STATUS_ICON.pending}</span>
                 <span className="flex-1 truncate font-medium">{(node.data?.label as string) || node.id}</span>
-                <span className="text-muted-foreground text-[10px] shrink-0">{node.type}</span>
+                <span className="text-muted-foreground text-xs shrink-0">{node.type}</span>
                 {hasContent && (
                   isExpanded
                     ? <ChevronUp className="h-3 w-3 text-muted-foreground shrink-0" />
@@ -142,7 +142,7 @@ export function RunMonitorPanel({
 
               {status === "awaiting_approval" && (
                 <div className="border-t border-border px-3 py-2 space-y-2">
-                  <p className="text-yellow-400 text-[11px] font-medium">Waiting for your decision...</p>
+                  <p className="text-yellow-400 text-xs font-medium">Waiting for your decision...</p>
                   {typeof stateExtra.approve_url === "string" && (
                     <div className="flex gap-2">
                       <a

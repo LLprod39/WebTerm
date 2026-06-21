@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { FrontendServer } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { workspaceStatusClass, workspaceStatusLabel } from "./workspaceChromeUtils";
 
 export type WorkspaceAppId = "files" | "overview" | "services" | "processes" | "logs" | "disk" | "network" | "docker" | "packages" | "text-editor" | "quick-run" | "settings";
 export type WorkspaceAppStatus = "live" | "ready" | "next" | "unavailable";
@@ -18,33 +19,6 @@ export interface WorkspaceAppDefinition {
   icon: ReactNode;
   accentClass: string;
   hidden?: boolean;
-}
-
-export const DEFAULT_ACTIVE_APP: WorkspaceAppId = "overview";
-
-function statusClass(status: WorkspaceAppStatus) {
-  if (status === "live") return "border-emerald-500/20 bg-emerald-500/8 text-emerald-400";
-  if (status === "ready") return "border-primary/20 bg-primary/8 text-primary";
-  if (status === "next") return "border-amber-500/20 bg-amber-500/8 text-amber-400";
-  return "border-border bg-secondary/70 text-muted-foreground";
-}
-
-export function workspaceStatusLabel(status: WorkspaceAppStatus) {
-  if (status === "live") return "Готово";
-  if (status === "ready") return "Доступно";
-  if (status === "next") return "Запланировано";
-  return "Недоступно";
-}
-
-const PANEL_HEIGHT_CLASSES: Partial<Record<WorkspaceAppId, string>> = {
-  files: "min-h-[32rem]",
-  services: "min-h-[32rem]",
-  "text-editor": "min-h-[32rem]",
-  settings: "min-h-[30rem]",
-};
-
-export function panelHeightClass(appId: WorkspaceAppId) {
-  return PANEL_HEIGHT_CLASSES[appId] || "min-h-[28rem]";
 }
 
 export function ToolMenu({
@@ -80,12 +54,12 @@ export function ToolMenu({
       <div className="relative z-10">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <div className="text-[11px] font-medium text-muted-foreground">Инструменты Linux UI</div>
+            <div className="text-xs font-medium text-muted-foreground">Инструменты Linux UI</div>
             <div className="mt-2 truncate text-2xl font-semibold tracking-tight text-foreground">{server.name}</div>
             <div className="mt-1 truncate font-mono text-xs text-muted-foreground">{server.username}@{server.host}</div>
           </div>
           <div className="rounded-[1.15rem] border border-primary/20 bg-primary/10 px-3 py-2 text-right">
-            <div className="text-[11px] font-medium text-muted-foreground">Активно</div>
+            <div className="text-xs font-medium text-muted-foreground">Активно</div>
             <div className="max-w-24 truncate text-sm font-semibold text-foreground">
               {apps.find((app) => app.id === activeApp)?.title || "Обзор"}
             </div>
@@ -104,7 +78,7 @@ export function ToolMenu({
         </div>
 
         <div className="mt-5">
-          <div className="mb-2 text-[11px] font-medium text-muted-foreground">Закреплено</div>
+          <div className="mb-2 text-xs font-medium text-muted-foreground">Закреплено</div>
           <div className="grid grid-cols-3 gap-2">
             {pinnedApps.map((app) => (
               <button
@@ -129,8 +103,8 @@ export function ToolMenu({
 
         <div className="mt-5">
           <div className="mb-2 flex items-center justify-between gap-3">
-            <div className="text-[11px] font-medium text-muted-foreground">Все инструменты</div>
-            <div className="text-[11px] text-muted-foreground">{filteredApps.length} доступно</div>
+            <div className="text-xs font-medium text-muted-foreground">Все инструменты</div>
+            <div className="text-xs text-muted-foreground">{filteredApps.length} доступно</div>
           </div>
           <div className="max-h-64 space-y-1 overflow-y-auto pr-1">
             {filteredApps.map((app) => (
@@ -151,7 +125,7 @@ export function ToolMenu({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate text-sm font-medium text-foreground">{app.title}</span>
-                    <span className={cn("rounded-md border px-2 py-0.5 text-[11px] font-medium", statusClass(app.status))}>
+                    <span className={cn("rounded-md border px-2 py-0.5 text-xs font-medium", workspaceStatusClass(app.status))}>
                       {workspaceStatusLabel(app.status)}
                     </span>
                   </div>
@@ -216,11 +190,11 @@ export function WorkspacePanel({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="truncate text-sm font-medium text-foreground">{title}</span>
-              <span className={cn("rounded-md border px-2 py-0.5 text-[11px] font-medium", statusClass(status))}>
+              <span className={cn("rounded-md border px-2 py-0.5 text-xs font-medium", workspaceStatusClass(status))}>
                 {workspaceStatusLabel(status)}
               </span>
             </div>
-            <div className="truncate text-[11px] text-muted-foreground">{subtitle}</div>
+            <div className="truncate text-xs text-muted-foreground">{subtitle}</div>
           </div>
         </div>
       </header>

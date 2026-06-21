@@ -58,10 +58,10 @@ export function ServersListTab({
         const groupLabel = displayServerGroupName(group, lang);
 
         return (
-          <div key={group} className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+          <div key={group} className="overflow-hidden rounded-lg border border-border/80 bg-card/70">
             <button
               onClick={() => onToggleGroup(group)}
-              className="w-full flex items-center gap-3 px-4 py-3 transition-colors text-left hover:bg-secondary/30"
+              className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[color:var(--wt-hover)]"
               aria-label={tr(isCollapsed ? "srv.expand_group" : "srv.collapse_group", {
                 name: groupLabel,
               })}
@@ -80,10 +80,10 @@ export function ServersListTab({
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
                 <Server className="h-4 w-4 text-primary" />
               </div>
-              <span className="text-sm font-semibold tracking-tight text-foreground">
+              <span className="text-sm font-semibold tracking-normal text-foreground">
                 {groupLabel}
               </span>
-              <span className="ml-auto rounded-md border border-border/50 bg-secondary/30 px-2 py-1 text-xs font-medium text-muted-foreground">
+              <span className="ml-auto rounded-md border border-border/60 bg-secondary/45 px-2.5 py-1 text-xs font-medium text-muted-foreground">
                 {formatServerCount(inGroup.length, lang)}
               </span>
             </button>
@@ -107,7 +107,7 @@ export function ServersListTab({
                       return (
                         <div
                           key={server.id}
-                          className={`group flex flex-col gap-3 px-4 py-3 transition-all duration-150 hover:bg-secondary/20 sm:flex-row sm:items-center ${
+                          className={`group flex flex-col gap-3 px-4 py-3 transition-colors duration-150 hover:bg-secondary/30 sm:flex-row sm:items-center ${
                             i < inGroup.length - 1 ? "border-b border-border/40" : ""
                           }`}
                         >
@@ -119,18 +119,18 @@ export function ServersListTab({
                                   {server.name}
                                 </p>
                                 {server.is_shared ? (
-                                  <span className="rounded-full border border-border bg-secondary/30 px-2 py-0.5 text-[10px] text-muted-foreground">
+                                  <span className="rounded-md border border-border/70 bg-secondary/45 px-2 py-0.5 text-xs text-muted-foreground">
                                     {t("srv.shared_badge")}
                                   </span>
                                 ) : null}
-                                <span className="hidden rounded-md border border-border/60 bg-background/80 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline">
+                                <span className="hidden rounded-md border border-border/60 bg-background/80 px-2 py-0.5 text-xs font-medium text-muted-foreground sm:inline">
                                   {connLabel}
                                 </span>
                               </div>
-                              <p className="font-mono text-[11px] text-muted-foreground">
+                              <p className="font-mono text-xs leading-5 text-muted-foreground">
                                 {server.host}:{server.port}
                               </p>
-                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px]">
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5">
                                 <span className="font-medium text-muted-foreground">
                                   {t(serverOsLabelKey(osKind))}
                                 </span>
@@ -170,45 +170,43 @@ export function ServersListTab({
                             </span>
                             <Button
                               asChild
-                              size="xs"
+                              size="sm"
                               variant="outline"
-                              className="h-9 gap-1.5 border-border hover:border-primary hover:text-primary"
+                              className="h-10 gap-2 border-border hover:border-primary hover:text-primary"
                             >
                               <Link to={`/servers/${server.id}/terminal`}>
-                                <Terminal className="h-3 w-3" /> SSH
+                                <Terminal className="h-4 w-4" /> SSH
                               </Link>
                             </Button>
                             <Button
                               size="icon"
                               variant="outline"
-                              className="h-9 w-9"
                               onClick={() => void onOpenAdvanced(server)}
                               aria-label={tr("srv.open_advanced_for", { name: server.name })}
                               title={t("srv.advanced")}
                             >
-                              <Sparkles className="h-3.5 w-3.5" />
+                              <Sparkles className="h-4 w-4" />
                             </Button>
                             {server.can_edit && (
                               <>
                                 <Button
                                   size="icon"
                                   variant="outline"
-                                  className="h-9 w-9"
                                   onClick={() => void onOpenEdit(server)}
                                   aria-label={tr("srv.edit_server_for", { name: server.name })}
                                   title={t("srv.edit_server")}
                                 >
-                                  <Settings className="h-3.5 w-3.5" />
+                                  <Settings className="h-4 w-4" />
                                 </Button>
                                 <Button
                                   size="icon"
-                                  variant="destructive"
-                                  className="h-9 w-9"
+                                  variant="ghost"
+                                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                                   onClick={() => onRequestDeleteServer(server)}
                                   aria-label={tr("srv.delete_server_for", { name: server.name })}
                                   title={t("srv.delete")}
                                 >
-                                  <Trash2 className="h-3.5 w-3.5" />
+                                  <Trash2 className="h-4 w-4" />
                                 </Button>
                               </>
                             )}
@@ -232,12 +230,12 @@ export function ServersListTab({
           actions={
             <>
               {totalServers ? (
-                <Button size="sm" variant="outline" className="h-9" onClick={onClearSearch}>
+                <Button size="sm" variant="outline" className="h-10" onClick={onClearSearch}>
                   {t("srv.clear_search")}
                 </Button>
               ) : null}
-              <Button size="sm" className="h-9 gap-1.5" onClick={onOpenCreate}>
-                <Plus className="h-3.5 w-3.5" /> {t("srv.add")}
+              <Button size="sm" className="h-10 gap-2" onClick={onOpenCreate}>
+                <Plus className="h-4 w-4" /> {t("srv.add")}
               </Button>
             </>
           }

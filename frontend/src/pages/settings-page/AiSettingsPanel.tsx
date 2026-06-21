@@ -54,17 +54,17 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-foreground">{providerItem.label}</p>
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       {providerItem.catalogSize ? `${providerItem.catalogSize} моделей` : "Каталог пуст, доступен ручной ввод"}
                     </p>
                   </div>
                   {providerItem.isSelected ? <Badge className="shrink-0">Основной</Badge> : null}
                 </div>
-                <div className="mt-3 flex items-center gap-2 text-[11px] text-muted-foreground">
+                <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                   <span className={cn("h-2 w-2 rounded-full", providerItem.configured ? "bg-emerald-400" : "bg-amber-400")} />
                   <span>{providerItem.configured ? "Готов к использованию" : "Нужна настройка"}</span>
                 </div>
-                <p className="mt-2 text-[11px] text-muted-foreground">
+                <p className="mt-2 text-xs text-muted-foreground">
                   {providerItem.activeRoutes.length > 0
                     ? `Маршруты: ${providerItem.activeRoutes.join(", ")}`
                     : "Отдельные роли пока не используют этот провайдер"}
@@ -76,7 +76,7 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
           <div className="space-y-4 rounded-2xl border border-border/60 bg-secondary/15 p-4">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-medium text-muted-foreground uppercase">Провайдер</label>
+                <label className="text-xs font-medium text-muted-foreground uppercase">Провайдер</label>
                 <Select value={form.provider} onValueChange={form.handleDefaultProviderChange}>
                   <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -87,7 +87,7 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-medium text-muted-foreground uppercase">Модель</label>
+                <label className="text-xs font-medium text-muted-foreground uppercase">Модель</label>
                 {form.availableModels.length > 0 ? (
                   <Select value={form.model} onValueChange={form.setModel}>
                     <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
@@ -111,7 +111,7 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
             <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-background/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="space-y-1">
                 <p className="text-xs font-medium">{getProviderLabel(form.provider)}</p>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   {form.availableModels.length
                     ? "Модель можно выбрать из синхронизированного каталога."
                     : "Для этого провайдера сейчас используется ручной ввод модели."}
@@ -139,7 +139,7 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
           <div className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-secondary/20 p-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="space-y-1">
               <p className="text-xs font-medium text-foreground">Быстрые действия</p>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Можно скопировать основную модель в роли, дозаполнить пустые поля или откатить черновик к сохраненному состоянию.
               </p>
             </div>
@@ -212,7 +212,7 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
       <SectionCard title="Подключение FAIR.Hyperion" icon={Globe} description="OpenAI-compatible endpoint и каталог моделей">
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
           <div className="space-y-1.5">
-            <label className="text-[10px] font-medium text-muted-foreground uppercase">BaseURL</label>
+            <label className="text-xs font-medium text-muted-foreground uppercase">BaseURL</label>
             <Input
               value={form.fairBaseUrl}
               onChange={(event) => form.setFairBaseUrl(event.target.value)}
@@ -275,7 +275,7 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-xs font-medium">{providerItem.name}</p>
-                      <p className="truncate text-[10px] text-muted-foreground">{providerItem.envName}</p>
+                      <p className="truncate text-xs text-muted-foreground">{providerItem.envName}</p>
                     </div>
                     <Badge variant={connected ? "default" : "secondary"} className="shrink-0">
                       {connected ? "Подключен" : "Не задан"}
@@ -283,7 +283,7 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
                   </div>
                   <div className="flex items-center gap-2">
                     <div className={cn("h-2.5 w-2.5 rounded-full", connected ? "bg-green-500" : "bg-red-500")} />
-                    <p className="text-[10px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       {enabled ? "Активен" : "Отключен"} · значение ключа не выводится
                     </p>
                   </div>
@@ -329,15 +329,15 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
         <SectionCard title="Доменная авторизация" icon={Globe} description="SSO через HTTP-заголовок">
           <div className="grid grid-cols-3 gap-3">
             <div className="rounded-lg border border-border px-3 py-2.5">
-              <p className="text-[10px] text-muted-foreground uppercase">Статус</p>
+              <p className="text-xs text-muted-foreground uppercase">Статус</p>
               <p className="text-sm font-medium">{config.domain_auth_enabled ? "Включен" : "Выключен"}</p>
             </div>
             <div className="rounded-lg border border-border px-3 py-2.5">
-              <p className="text-[10px] text-muted-foreground uppercase">Header</p>
+              <p className="text-xs text-muted-foreground uppercase">Header</p>
               <p className="text-sm font-mono">{config.domain_auth_header || "REMOTE_USER"}</p>
             </div>
             <div className="rounded-lg border border-border px-3 py-2.5">
-              <p className="text-[10px] text-muted-foreground uppercase">Авто-создание</p>
+              <p className="text-xs text-muted-foreground uppercase">Авто-создание</p>
               <p className="text-sm font-medium">{config.domain_auth_auto_create ? "Да" : "Нет"}</p>
             </div>
           </div>

@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import type { Dispatch, SetStateAction } from "react";
-import { ArrowLeft, Bot, FolderOpen, Monitor, Plus, Settings, X } from "lucide-react";
+import { ArrowLeft, Bot, FolderOpen, Monitor, Plus, Server, Settings, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { StatusIndicator } from "@/components/StatusIndicator";
@@ -40,84 +40,51 @@ export function TerminalHeader({
   setSettingsOpen: (open: boolean) => void;
   setSidePanelMode: Dispatch<SetStateAction<SidePanelMode>>;
 }) {
+  const activeStatus =
+    activeTab.status === "connected"
+      ? t("terminal.statusConnected")
+      : activeTab.status === "error"
+        ? t("terminal.statusError")
+        : t("terminal.statusConnecting");
+  const endpoint = `${activeServer.username}@${activeServer.host}:${activeServer.port}`;
+
   return (
-    <div className="shrink-0 border-b border-border/80 bg-background/95 py-2 pl-16 pr-3 sm:px-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <Link
-          to="/servers"
-          className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg px-3 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Назад
-        </Link>
+    <header className="shrink-0 border-b border-border/80 bg-background/95 pl-14 pr-3 sm:px-4">
+      <div className="flex min-h-[4.25rem] flex-col gap-3 py-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <Link
+            to="/servers"
+            className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg px-3 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            {t("common.back")}
+          </Link>
 
-        <div className="flex h-10 min-w-0 shrink-0 items-center gap-2 rounded-lg border border-border/70 bg-card/60 px-3">
-          <StatusIndicator
-            status={activeTab.status === "connected" ? "online" : activeTab.status === "error" ? "offline" : "unknown"}
-            showLabel={false}
-          />
-          <span className="max-w-40 truncate text-sm font-medium text-foreground sm:max-w-56">
-            {formatTabName(activeTab)}
-          </span>
-          <span className="hidden truncate text-[11px] text-muted-foreground lg:inline">
-            {activeServer.username}@{activeServer.host}:{activeServer.port}
-          </span>
-        </div>
+          <div className="hidden h-8 w-px bg-border/80 sm:block" />
 
-        <div className="min-w-[260px] flex-1">
-          <div className="flex items-center gap-1 overflow-x-auto rounded-lg border border-border/70 bg-card/40 p-1">
-            {tabs.map((tab) => (
-              <div
-                key={tab.id}
-                className={cn(
-                  "group flex h-10 shrink-0 items-center rounded-lg border transition-colors",
-                  tab.id === activeTabId
-                    ? "border-border bg-background text-foreground"
-                    : "border-transparent bg-transparent text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
-                )}
-              >
-                <button
-                  type="button"
-                  onClick={() => setActiveTabId(tab.id)}
-                  className="flex h-full min-w-0 items-center gap-2 rounded-l-lg px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-current={tab.id === activeTabId ? "page" : undefined}
-                >
-                  <StatusIndicator
-                    status={tab.status === "connected" ? "online" : tab.status === "error" ? "offline" : "unknown"}
-                    showLabel={false}
-                  />
-                  <span className="max-w-40 truncate">{formatTabName(tab)}</span>
-                </button>
-                {tabs.length > 1 ? (
-                  <button
-                    type="button"
-                    aria-label={`Закрыть вкладку ${formatTabName(tab)}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      closeTab(tab.id);
-                    }}
-                    className="mr-1 flex h-8 w-8 items-center justify-center rounded-md opacity-60 transition-colors hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                ) : null}
-              </div>
-            ))}
-
-            <button
-              type="button"
-              onClick={addTab}
-              className="flex h-10 shrink-0 items-center gap-2 rounded-lg border border-dashed border-border/70 px-3 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label="Подключить сервер"
-              title="Подключить сервер"
-            >
-              <Plus className="h-4 w-4" />
-              Сервер
-            </button>
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-2">
+              <Server className="h-4 w-4 shrink-0 text-primary" />
+              <h1 className="truncate text-base font-semibold leading-6 text-foreground">
+                {formatTabName(activeTab)}
+              </h1>
+              <span className="inline-flex min-h-7 items-center gap-1.5 rounded-md border border-info/30 bg-info/10 px-2.5 text-xs font-medium text-info">
+                <StatusIndicator
+                  status={activeTab.status === "connected" ? "online" : activeTab.status === "error" ? "offline" : "unknown"}
+                  showLabel={false}
+                />
+                {activeStatus}
+              </span>
+            </div>
+            <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-4 text-muted-foreground">
+              <span className="font-mono">{endpoint}</span>
+              <span aria-hidden>·</span>
+              <span>{tabs.length} {t(tabs.length === 1 ? "terminal.sessionOne" : "terminal.sessionMany")}</span>
+            </div>
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-1 rounded-lg border border-border/70 bg-card/40 p-1">
+        <div className="flex shrink-0 items-center gap-1 rounded-lg border border-border/70 bg-card/60 p-1">
           <Button
             type="button"
             size="sm"
@@ -125,10 +92,10 @@ export function TerminalHeader({
             className="h-10 gap-2 px-3 text-sm"
             onClick={() => setSidePanelMode((current) => (current === "files" ? "none" : "files"))}
             aria-pressed={sidePanelMode === "files"}
-            title={sidePanelMode === "files" ? "Скрыть файловую панель" : "Показать файловую панель"}
+            title={sidePanelMode === "files" ? t("terminal.hideFiles") : t("terminal.showFiles")}
           >
             <FolderOpen className="h-4 w-4" />
-            SFTP
+            {t("terminal.filesPanel")}
           </Button>
           {activeServer.server_type === "ssh" ? (
             <Button
@@ -144,10 +111,10 @@ export function TerminalHeader({
                 revealUiPanel();
               }}
               aria-pressed={sidePanelMode === "ui"}
-              title={sidePanelMode === "ui" ? "Скрыть Linux Workspace" : "Показать Linux Workspace"}
+              title={sidePanelMode === "ui" ? t("terminal.hideWorkspace") : t("terminal.showWorkspace")}
             >
               <Monitor className="h-4 w-4" />
-              Linux
+              {t("terminal.workspacePanel")}
             </Button>
           ) : null}
           <Button
@@ -157,10 +124,10 @@ export function TerminalHeader({
             className="h-10 gap-2 px-3 text-sm"
             onClick={() => setSidePanelMode((current) => (current === "ai" ? "none" : "ai"))}
             aria-pressed={sidePanelMode === "ai"}
-            title={sidePanelMode === "ai" ? "Скрыть AI" : "Показать AI"}
+            title={sidePanelMode === "ai" ? t("terminal.hideAi") : t("terminal.showAi")}
           >
             <Bot className="h-4 w-4" />
-            AI
+            {t("terminal.aiPanel")}
           </Button>
           <Button
             type="button"
@@ -174,6 +141,59 @@ export function TerminalHeader({
           </Button>
         </div>
       </div>
-    </div>
+
+      <div className="flex items-center gap-2 border-t border-border/50 py-2">
+        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+          {tabs.map((tab) => (
+            <div
+              key={tab.id}
+              className={cn(
+                "group flex min-h-10 shrink-0 items-center rounded-lg border transition-colors",
+                tab.id === activeTabId
+                  ? "border-primary/50 bg-primary/10 text-foreground"
+                  : "border-transparent bg-transparent text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
+              )}
+            >
+              <button
+                type="button"
+                onClick={() => setActiveTabId(tab.id)}
+                className="flex h-10 min-w-0 items-center gap-2 rounded-l-lg px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-current={tab.id === activeTabId ? "page" : undefined}
+              >
+                <StatusIndicator
+                  status={tab.status === "connected" ? "online" : tab.status === "error" ? "offline" : "unknown"}
+                  showLabel={false}
+                />
+                <span className="max-w-48 truncate">{formatTabName(tab)}</span>
+              </button>
+              {tabs.length > 1 ? (
+                <button
+                  type="button"
+                  aria-label={`${t("terminal.closeTab")} ${formatTabName(tab)}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closeTab(tab.id);
+                  }}
+                  className="mr-1 flex h-8 w-8 items-center justify-center rounded-md opacity-70 transition-colors hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
+            </div>
+          ))}
+
+          <button
+            type="button"
+            onClick={addTab}
+            className="flex min-h-10 shrink-0 items-center gap-2 rounded-lg border border-dashed border-border/80 px-3 text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={t("terminal.connectServer")}
+            title={t("terminal.connectServer")}
+          >
+            <Plus className="h-4 w-4" />
+            {t("terminal.server")}
+          </button>
+        </div>
+      </div>
+    </header>
   );
 }

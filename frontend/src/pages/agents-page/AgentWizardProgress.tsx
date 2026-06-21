@@ -1,4 +1,4 @@
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Lock } from "lucide-react";
 
 import { localize } from "@/lib/i18n";
 
@@ -9,22 +9,25 @@ type AgentWizardProgressProps = {
   currentStepIndex: number;
   lang: string;
   onStepChange: (step: AgentWizardStep) => void;
+  canVisitStep: (step: AgentWizardStep) => boolean;
 };
 
-export function AgentWizardProgress({ step, currentStepIndex, lang, onStepChange }: AgentWizardProgressProps) {
+export function AgentWizardProgress({ step, currentStepIndex, lang, onStepChange, canVisitStep }: AgentWizardProgressProps) {
   return (
-    <div className="border-b border-border/70 bg-secondary/10 px-6 py-4">
-      <div className="grid gap-3 md:grid-cols-5">
+    <div className="border-b border-border/70 bg-secondary/10 px-4 py-3 sm:px-6">
+      <div className="flex gap-2 overflow-x-auto pb-1">
         {AGENT_WIZARD_STEPS.map((item, index) => {
           const Icon = item.icon;
           const active = item.key === step;
           const complete = index < currentStepIndex;
+          const canVisit = canVisitStep(item.key);
           return (
             <button
               key={item.key}
               type="button"
+              disabled={!canVisit}
               onClick={() => onStepChange(item.key)}
-              className={`flex min-h-[58px] items-center gap-3 rounded-lg border px-3 text-left transition-colors ${
+              className={`flex min-h-14 w-[210px] shrink-0 items-center gap-3 rounded-lg border px-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-55 ${
                 active
                   ? "border-primary/80 bg-primary/10 text-foreground"
                   : complete
@@ -33,11 +36,11 @@ export function AgentWizardProgress({ step, currentStepIndex, lang, onStepChange
               }`}
             >
               <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-sm font-semibold ${active || complete ? "border-primary bg-primary/15 text-primary" : "border-border/80 bg-secondary/30"}`}>
-                {complete ? <CheckCircle2 className="h-4 w-4" /> : active ? index + 1 : <Icon className="h-4 w-4" />}
+                {complete ? <CheckCircle2 className="h-4 w-4" /> : !canVisit ? <Lock className="h-4 w-4" /> : active ? index + 1 : <Icon className="h-4 w-4" />}
               </span>
               <span className="min-w-0">
                 <span className="block truncate text-sm font-semibold">{localize(lang, item.labelRu, item.labelEn)}</span>
-                <span className="block truncate text-[11px] text-muted-foreground">{localize(lang, item.detailRu, item.detailEn)}</span>
+                <span className="block truncate text-xs leading-4 text-muted-foreground">{localize(lang, item.detailRu, item.detailEn)}</span>
               </span>
             </button>
           );

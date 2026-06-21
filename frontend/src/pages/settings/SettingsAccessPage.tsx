@@ -1,109 +1,295 @@
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { Users, FolderOpen, Shield, ChevronRight, UserCheck, KeyRound, Lock } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
+import {
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  FolderOpen,
+  KeyRound,
+  Lock,
+  Shield,
+  UserPlus,
+  Users,
+} from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import {
+  fetchAccessGroupPermissions,
+  fetchAccessGroups,
+  fetchAccessPermissions,
+  fetchAccessUsers,
+} from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
+
+type Tone = "neutral" | "success" | "warning" | "danger" | "info";
+
+const toneClasses: Record<Tone, string> = {
+  neutral: "border-border/70 bg-secondary/10 text-muted-foreground",
+  success: "border-emerald-500/25 bg-emerald-500/10 text-emerald-300",
+  warning: "border-amber-500/25 bg-amber-500/10 text-amber-300",
+  danger: "border-red-500/25 bg-red-500/10 text-red-300",
+  info: "border-blue-500/25 bg-blue-500/10 text-blue-300",
+};
+
+function MetricTile({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: number | string;
+  tone?: Tone;
+}) {
+  return (
+    <div className={cn("rounded-lg border px-4 py-3", toneClasses[tone])}>
+      <div className="text-2xl font-semibold leading-8 text-foreground">{value}</div>
+      <div className="mt-1 text-sm leading-5">{label}</div>
+    </div>
+  );
+}
+
+function RiskRow({
+  label,
+  detail,
+  value,
+  tone,
+  href,
+}: {
+  label: string;
+  detail: string;
+  value: number;
+  tone: Tone;
+  href: string;
+}) {
+  const ok = value === 0;
+  return (
+    <Link
+      to={href}
+      className="group flex items-center gap-3 border-b border-border/50 px-4 py-3 last:border-b-0 hover:bg-secondary/20"
+    >
+      <div
+        className={cn(
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border",
+          ok ? toneClasses.success : toneClasses[tone],
+        )}
+      >
+        {ok ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-semibold text-foreground">{label}</span>
+          <span className={cn("rounded-md border px-1.5 py-0.5 text-xs font-medium", ok ? toneClasses.success : toneClasses[tone])}>
+            {value}
+          </span>
+        </div>
+        <p className="mt-0.5 text-sm leading-5 text-muted-foreground">{detail}</p>
+      </div>
+      <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
+    </Link>
+  );
+}
+
+function NavRow({
+  title,
+  description,
+  href,
+  icon: Icon,
+}: {
+  title: string;
+  description: string;
+  href: string;
+  icon: typeof Users;
+}) {
+  return (
+    <Link
+      to={href}
+      className="group flex min-h-16 items-center gap-3 border-b border-border/50 px-4 py-3 last:border-b-0 hover:bg-secondary/20"
+    >
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-secondary/20 text-primary">
+        <Icon className="h-4 w-4" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-foreground">{title}</p>
+        <p className="mt-0.5 text-sm leading-5 text-muted-foreground">{description}</p>
+      </div>
+      <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
+    </Link>
+  );
+}
 
 export default function SettingsAccessPage() {
-  const { t } = useI18n();
+  const { lang } = useI18n();
+  const tr = (ru: string, en: string) => (lang === "ru" ? ru : en);
 
-  const accessPages = [
-    { titleKey: "access.users", descKey: "access.users_desc", icon: Users, url: "/settings/users", color: "text-blue-400", bgColor: "bg-blue-500/12" },
-    { titleKey: "access.groups", descKey: "access.groups_desc", icon: FolderOpen, url: "/settings/groups", color: "text-violet-400", bgColor: "bg-violet-500/12" },
-    { titleKey: "access.permissions", descKey: "access.permissions_desc", icon: Shield, url: "/settings/permissions", color: "text-amber-400", bgColor: "bg-amber-500/12" },
-  ];
+  const usersQuery = useQuery({ queryKey: ["access", "users"], queryFn: fetchAccessUsers });
+  const groupsQuery = useQuery({ queryKey: ["access", "groups"], queryFn: fetchAccessGroups });
+  const permissionsQuery = useQuery({ queryKey: ["access", "permissions"], queryFn: fetchAccessPermissions });
+  const groupPermissionsQuery = useQuery({
+    queryKey: ["access", "group-permissions"],
+    queryFn: fetchAccessGroupPermissions,
+  });
 
-  const quickActions = [
-    { titleKey: "access.add_user", descKey: "access.add_user_desc", icon: UserCheck, url: "/settings/users?action=create" },
-    { titleKey: "access.configure_roles", descKey: "access.configure_roles_desc", icon: KeyRound, url: "/settings/groups" },
-  ];
+  const users = useMemo(() => usersQuery.data?.users ?? [], [usersQuery.data?.users]);
+  const groups = useMemo(() => groupsQuery.data?.groups ?? [], [groupsQuery.data?.groups]);
+  const directPermissions = useMemo(() => permissionsQuery.data?.permissions ?? [], [permissionsQuery.data?.permissions]);
+  const groupPermissions = useMemo(
+    () => groupPermissionsQuery.data?.permissions ?? permissionsQuery.data?.group_permissions ?? [],
+    [groupPermissionsQuery.data?.permissions, permissionsQuery.data?.group_permissions],
+  );
+  const isLoading = usersQuery.isLoading || groupsQuery.isLoading || permissionsQuery.isLoading || groupPermissionsQuery.isLoading;
+  const isError = usersQuery.isError || groupsQuery.isError || permissionsQuery.isError || groupPermissionsQuery.isError;
+
+  const metrics = useMemo(() => {
+    const activeUsers = users.filter((user) => user.is_active).length;
+    const admins = users.filter((user) => user.is_staff || user.is_superuser).length;
+    const inactiveWithAccess = users.filter((user) => {
+      if (user.is_active) return false;
+      return Object.values(user.effective_permissions || {}).some(Boolean);
+    }).length;
+    const usersWithoutGroup = users.filter((user) => user.is_active && (user.groups || []).length === 0).length;
+    const directOverrideUsers = new Set(directPermissions.map((permission) => permission.user_id)).size;
+    const deniedOverrides =
+      directPermissions.filter((permission) => !permission.allowed).length +
+      groupPermissions.filter((permission) => !permission.allowed).length;
+
+    return {
+      activeUsers,
+      admins,
+      inactiveWithAccess,
+      usersWithoutGroup,
+      directOverrideUsers,
+      deniedOverrides,
+      totalOverrides: directPermissions.length + groupPermissions.length,
+    };
+  }, [directPermissions, groupPermissions, users]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-100">
+        {tr("Не удалось загрузить сводку доступа.", "Could not load the access summary.")}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 pb-10">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
-          <Lock className="h-4 w-4 text-primary" />
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+            <Lock className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">
+              {tr("Управление доступом", "Access Control")}
+            </h1>
+            <p className="mt-1 text-sm leading-5 text-muted-foreground">
+              {tr(
+                "Сводка по пользователям, группам и точечным исключениям.",
+                "Summary of users, groups, and explicit access exceptions.",
+              )}
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-base font-semibold tracking-tight text-foreground">Управление доступом</h1>
-          <p className="text-[11px] text-muted-foreground">Пользователи, группы и точечные разрешения</p>
-        </div>
-      </div>
-
-      {/* Info */}
-      <div className="rounded-xl border border-border/60 bg-secondary/10 px-5 py-4">
-        <p className="text-sm leading-relaxed text-muted-foreground/70">
-          Базовую модель прав рекомендуется строить через <strong className="text-foreground/80 font-medium">профили</strong> и <strong className="text-foreground/80 font-medium">группы</strong>.
-          Раздел <strong className="text-foreground/80 font-medium">разрешений</strong> используйте только при необходимости точечного исключения.
-        </p>
-      </div>
-
-      {/* Navigation cards */}
-      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-        {accessPages.map((page, index, pages) => (
-          <Link
-            key={page.url}
-            to={page.url}
-            className={cn(
-              "group flex items-center gap-4 px-5 py-4 transition-all duration-150 hover:bg-secondary/25",
-              index < pages.length - 1 && "border-b border-border/50"
-            )}
-          >
-            <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-all duration-150 group-hover:scale-105", page.bgColor)}>
-              <page.icon className={cn("h-4.5 w-4.5", page.color)} aria-hidden="true" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-foreground transition-colors">{t(page.titleKey)}</p>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">{t(page.descKey)}</p>
-            </div>
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground/40 transition-all duration-150 group-hover:bg-secondary/50 group-hover:text-foreground/60 group-hover:translate-x-0.5">
-              <ChevronRight className="h-4 w-4" aria-hidden="true" />
-            </div>
+        <Button asChild className="h-10 gap-2">
+          <Link to="/settings/users?action=create">
+            <UserPlus className="h-4 w-4" />
+            {tr("Добавить пользователя", "Add user")}
           </Link>
-        ))}
+        </Button>
       </div>
 
-      {/* Quick actions */}
-      <div>
-        <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">Быстрые действия</h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {quickActions.map((action) => (
-            <Link
-              key={action.url}
-              to={action.url}
-              className="group flex items-center gap-3 rounded-xl border border-border/60 bg-card px-4 py-3.5 shadow-sm transition-all duration-150 hover:bg-secondary/25 hover:shadow-md"
-            >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors duration-200 group-hover:bg-primary group-hover:text-primary-foreground">
-                <action.icon className="h-4 w-4" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-foreground/90">{t(action.titleKey)}</p>
-                <p className="text-[11px] text-muted-foreground/50">{t(action.descKey)}</p>
-              </div>
-            </Link>
-          ))}
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricTile label={tr("активных пользователей", "active users")} value={metrics.activeUsers} tone="success" />
+        <MetricTile label={tr("администраторов", "admins")} value={metrics.admins} tone={metrics.admins ? "info" : "warning"} />
+        <MetricTile label={tr("групп доступа", "access groups")} value={groups.length} />
+        <MetricTile
+          label={tr("точечных исключений", "explicit exceptions")}
+          value={metrics.totalOverrides}
+          tone={metrics.totalOverrides ? "warning" : "success"}
+        />
       </div>
 
-      {/* How it works */}
-      <div className="rounded-xl border border-dashed border-border/50 bg-secondary/10 px-5 py-5">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-          <div className="h-1.5 w-1.5 rounded-full bg-primary/60" />
-          Как работает система доступа
-        </h3>
-        <div className="mt-4 space-y-3 text-[13px] text-muted-foreground/70">
-          <p className="flex items-start gap-2.5">
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-secondary text-[10px] font-bold text-muted-foreground mt-px">1</span>
-            <span><strong className="text-foreground/70 font-medium">Пользователи</strong> — создавайте аккаунты и назначайте профили доступа.</span>
-          </p>
-          <p className="flex items-start gap-2.5">
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-secondary text-[10px] font-bold text-muted-foreground mt-px">2</span>
-            <span><strong className="text-foreground/70 font-medium">Группы</strong> — объединяйте пользователей с одинаковыми правами.</span>
-          </p>
-          <p className="flex items-start gap-2.5">
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-secondary text-[10px] font-bold text-muted-foreground mt-px">3</span>
-            <span><strong className="text-foreground/70 font-medium">Разрешения</strong> — настраивайте точечные исключения при необходимости.</span>
-          </p>
-        </div>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <section className="overflow-hidden rounded-xl border border-border bg-card">
+          <div className="border-b border-border/60 px-4 py-3">
+            <h2 className="text-base font-semibold text-foreground">{tr("Риски доступа", "Access Risks")}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {tr("Показывает состояния, которые стоит проверить перед изменением правил.", "States to review before changing policy.")}
+            </p>
+          </div>
+          <RiskRow
+            href="/settings/users"
+            label={tr("Отключённые аккаунты с доступом", "Inactive accounts with access")}
+            detail={tr("Пользователь выключен, но effective permissions всё ещё содержат allow.", "User is disabled while effective permissions still include allow.")}
+            value={metrics.inactiveWithAccess}
+            tone="danger"
+          />
+          <RiskRow
+            href="/settings/users"
+            label={tr("Пользователи без группы", "Users without a group")}
+            detail={tr("Активные пользователи без групп сложнее сопровождать через RBAC.", "Active users without groups are harder to manage through RBAC.")}
+            value={metrics.usersWithoutGroup}
+            tone="warning"
+          />
+          <RiskRow
+            href="/settings/permissions"
+            label={tr("Пользователи с прямыми исключениями", "Users with direct exceptions")}
+            detail={tr("Прямые overrides должны быть временными и понятными.", "Direct overrides should be temporary and explainable.")}
+            value={metrics.directOverrideUsers}
+            tone="warning"
+          />
+          <RiskRow
+            href="/settings/permissions"
+            label={tr("Deny-исключения", "Deny exceptions")}
+            detail={tr("Запреты могут перекрывать ожидаемые права профиля или группы.", "Denies can override expected profile or group access.")}
+            value={metrics.deniedOverrides}
+            tone="info"
+          />
+        </section>
+
+        <section className="overflow-hidden rounded-xl border border-border bg-card">
+          <div className="border-b border-border/60 px-4 py-3">
+            <h2 className="text-base font-semibold text-foreground">{tr("Разделы", "Sections")}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {tr("Откройте конкретный объект вместо повторных быстрых действий.", "Open the specific object instead of duplicate quick actions.")}
+            </p>
+          </div>
+          <NavRow
+            href="/settings/users"
+            icon={Users}
+            title={tr("Пользователи", "Users")}
+            description={tr("Аккаунты, профиль доступа, группы и reset password.", "Accounts, access profile, groups, and password reset.")}
+          />
+          <NavRow
+            href="/settings/groups"
+            icon={FolderOpen}
+            title={tr("Группы", "Groups")}
+            description={tr("Команды, участники и наследуемые групповые правила.", "Teams, members, and inherited group policy.")}
+          />
+          <NavRow
+            href="/settings/permissions"
+            icon={Shield}
+            title={tr("Разрешения", "Permissions")}
+            description={tr("Матрица effective access и точечные allow/deny исключения.", "Effective access matrix and explicit allow/deny exceptions.")}
+          />
+          <div className="border-t border-border/60 px-4 py-3 text-sm leading-6 text-muted-foreground">
+            <KeyRound className="mr-2 inline h-4 w-4 text-primary" />
+            {tr(
+              "Базовую модель держите в профилях и группах, а исключения используйте только для точечных случаев.",
+              "Keep the baseline in profiles and groups; use exceptions only for specific cases.",
+            )}
+          </div>
+        </section>
       </div>
     </div>
   );

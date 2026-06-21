@@ -1,4 +1,4 @@
-import { useEffect, useState, type ElementType } from "react";
+import { useEffect, useMemo, useState, type ElementType } from "react";
 import { StudioNav } from "@/components/StudioNav";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -11,6 +11,7 @@ import {
   EyeOff,
   Loader2,
   Mail,
+  RotateCcw,
   Save,
   Send,
 } from "lucide-react";
@@ -21,6 +22,25 @@ import { PageShell, SectionCard, StatusBadge } from "@/components/ui/page-shell"
 import { useToast } from "@/hooks/use-toast";
 import { studioNotifications, type NotificationConfig } from "@/lib/api";
 import { localize, useI18n } from "@/lib/i18n";
+
+const notificationConfigKeys: Array<keyof NotificationConfig> = [
+  "telegram_bot_token",
+  "telegram_chat_id",
+  "notify_email",
+  "smtp_host",
+  "smtp_port",
+  "smtp_user",
+  "smtp_password",
+  "from_email",
+  "site_url",
+];
+
+function normalizeNotificationConfig(config?: Partial<NotificationConfig>) {
+  return notificationConfigKeys.reduce<Record<string, string>>((acc, key) => {
+    acc[key] = String(config?.[key] ?? "");
+    return acc;
+  }, {});
+}
 
 function PasswordField({
   value,
@@ -48,11 +68,10 @@ function PasswordField({
       />
       <button
         type="button"
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+        className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         onClick={() => setVisible((current) => !current)}
         aria-label={visibilityLabel}
         title={visibilityLabel}
-        tabIndex={-1}
       >
         {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
       </button>
@@ -115,18 +134,21 @@ function TestButton({
   onTest: () => Promise<{ ok: boolean; message: string }>;
   disabled?: boolean;
 }) {
-  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const { lang } = useI18n();
+  const [result, setResult] = useState<{ ok: boolean; message: string; testedAt: Date } | null>(null);
   const [loading, setLoading] = useState(false);
 
   const run = async () => {
     setLoading(true);
     setResult(null);
     try {
-      setResult(await onTest());
+      const response = await onTest();
+      setResult({ ...response, testedAt: new Date() });
     } catch (error: unknown) {
       setResult({
         ok: false,
         message: error instanceof Error ? error.message : String(error),
+        testedAt: new Date(),
       });
     } finally {
       setLoading(false);
@@ -147,14 +169,19 @@ function TestButton({
       </Button>
       {result ? (
         <div
-          className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${
+          className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-xs ${
             result.ok
               ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
               : "border-red-500/30 bg-red-500/10 text-red-200"
           }`}
         >
-          {result.ok ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <AlertCircle className="h-3.5 w-3.5 shrink-0" />}
-          {result.message}
+          {result.ok ? <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" /> : <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
+          <span className="min-w-0">
+            <span className="block">{result.message}</span>
+            <span className="mt-0.5 block text-muted-foreground">
+              {localize(lang, "Проверено", "Tested")} {result.testedAt.toLocaleTimeString(lang === "ru" ? "ru-RU" : "en-US", { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          </span>
         </div>
       ) : null}
     </div>
@@ -181,12 +208,23 @@ export default function NotificationsSettingsPage() {
     setForm((current) => ({ ...current, [key]: value }));
   };
 
+  const normalizedConfig = useMemo(() => JSON.stringify(normalizeNotificationConfig(config)), [config]);
+  const normalizedForm = useMemo(() => JSON.stringify(normalizeNotificationConfig(form)), [form]);
+  const isDirty = normalizedConfig !== normalizedForm;
+  const discardChanges = () => {
+    if (!config) return;
+    setForm(config);
+  };
+
   const saveMutation = useMutation({
     mutationFn: async () => {
-      await studioNotifications.save(form);
-      await queryClient.invalidateQueries({ queryKey: ["studio", "notifications"] });
+      const payload = normalizeNotificationConfig(form) as Partial<NotificationConfig>;
+      await studioNotifications.save(payload);
+      return payload;
     },
-    onSuccess: () => {
+    onSuccess: async (payload) => {
+      setForm(payload);
+      await queryClient.invalidateQueries({ queryKey: ["studio", "notifications"] });
       toast({ description: localize(lang, "Настройки оповещений сохранены.", "Notification settings saved.") });
     },
     onError: (error: Error) => {
@@ -217,9 +255,9 @@ export default function NotificationsSettingsPage() {
             description={localize(lang, "Студия использует эти значения для согласований, оповещений и отчетов.", "Studio uses these defaults for approvals, alerts, and reports.")}
             icon={<Bell className="h-5 w-5 text-primary" />}
             actions={
-              <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} className="gap-2">
-                {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                {localize(lang, "Сохранить", "Save")}
+              <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !isDirty} className="gap-2">
+                {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : isDirty ? <Save className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+                {isDirty ? localize(lang, "Сохранить настройки", "Save settings") : localize(lang, "Сохранено", "Saved")}
               </Button>
             }
           >
@@ -409,6 +447,34 @@ export default function NotificationsSettingsPage() {
               </div>
             </div>
           </SectionCard>
+
+          {isDirty ? (
+            <div className="sticky bottom-4 z-20 rounded-xl border border-amber-500/30 bg-background/95 px-4 py-3 shadow-2xl backdrop-blur">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3 text-sm">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                  <div>
+                    <div className="font-medium text-foreground">
+                      {localize(lang, "Есть несохранённые изменения", "You have unsaved changes")}
+                    </div>
+                    <div className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                      {localize(lang, "Сохраните настройки каналов или откатите черновик.", "Save the channel settings or discard the draft.")}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" onClick={discardChanges} className="gap-2">
+                    <RotateCcw className="h-4 w-4" />
+                    {localize(lang, "Откатить", "Discard")}
+                  </Button>
+                  <Button type="button" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} className="gap-2">
+                    {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    {localize(lang, "Сохранить изменения", "Save changes")}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </PageShell>
       </div>
     </div>

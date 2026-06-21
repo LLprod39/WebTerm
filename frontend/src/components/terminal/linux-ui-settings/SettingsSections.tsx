@@ -58,7 +58,7 @@ export function OverviewSection({
         </div>
         <div className="space-y-4">
           <div className="rounded-[1.1rem] border border-border bg-background p-3 shadow-sm">
-            <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{localize(lang, "Снимок runtime", "Runtime Snapshot")}</div>
+            <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{localize(lang, "Снимок runtime", "Runtime Snapshot")}</div>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               <InfoCard lang={lang} label={localize(lang, "Shell", "Shell")} value={settings.environment.shell} mono />
               <InfoCard lang={lang} label={localize(lang, "Локаль", "Locale")} value={settings.environment.locale} mono />
@@ -67,10 +67,10 @@ export function OverviewSection({
             </div>
           </div>
           <div className="rounded-[1.1rem] border border-border bg-background p-3 shadow-sm">
-            <div className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{localize(lang, "Каталоги PATH", "PATH Directories")}</div>
+            <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">{localize(lang, "Каталоги PATH", "PATH Directories")}</div>
             <div className="space-y-2">
               {settings.environment.path_directories.slice(0, 8).map((entry) => (
-                <div key={entry} className="rounded-xl border border-border/70 bg-card px-3 py-2 font-mono text-[11px] text-foreground">
+                <div key={entry} className="rounded-xl border border-border/70 bg-card px-3 py-2 font-mono text-xs text-foreground">
                   {entry}
                 </div>
               ))}
@@ -134,9 +134,9 @@ export function UsersSection({ settings, query, lang }: { settings: LinuxUiSetti
               <div className="flex items-center gap-2">
                 <User className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="font-mono text-xs text-foreground">{account.name}</span>
-                <span className="text-[10px] text-muted-foreground">uid:{account.uid}</span>
+                <span className="text-xs text-muted-foreground">uid:{account.uid}</span>
               </div>
-              <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span className="font-mono">{account.home}</span>
                 <span className="font-mono">{account.shell}</span>
               </div>
@@ -172,10 +172,10 @@ export function CrontabSection({ settings, query, lang }: { settings: LinuxUiSet
         <InfoCard lang={lang} label={localize(lang, "Таймеры", "Timers")} value={nonEmptyLines(settings.timers).length} />
       </div>
       <div className="rounded-[1.1rem] border border-border bg-background p-3 shadow-sm">
-        <div className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{localize(lang, "Видимые записи", "Visible Entries")}</div>
+        <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">{localize(lang, "Видимые записи", "Visible Entries")}</div>
         <div className="space-y-2">
           {visibleEntries.slice(0, 24).map((line) => (
-            <div key={line} className="rounded-xl border border-border/70 bg-card px-3 py-2 font-mono text-[11px] text-foreground">
+            <div key={line} className="rounded-xl border border-border/70 bg-card px-3 py-2 font-mono text-xs text-foreground">
               {line}
             </div>
           ))}
@@ -213,12 +213,12 @@ export function EnvironmentSection({ settings, query, lang }: { settings: LinuxU
 
       <OutputBlock lang={lang} label={localize(lang, "Каталоги PATH", "PATH Directories")} value={settings.path_directories.join("\n")} query={query} emptyLabel={localize(lang, "PATH пуст", "PATH is empty")} />
       <div className="rounded-[1.1rem] border border-border bg-background p-3 shadow-sm">
-        <div className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{localize(lang, "Переменные окружения", "Environment Variables")}</div>
+        <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">{localize(lang, "Переменные окружения", "Environment Variables")}</div>
         <div className="space-y-2">
           {visibleEnvVars.slice(0, 40).map((item) => (
             <div key={item.key} className="rounded-xl border border-border/70 bg-card px-3 py-2">
-              <div className="font-mono text-[11px] text-foreground">{item.key}</div>
-              <div className="mt-1 break-all font-mono text-[10px] text-muted-foreground">{item.value || localize(lang, "(пусто)", "(empty)")}</div>
+              <div className="font-mono text-xs text-foreground">{item.key}</div>
+              <div className="mt-1 break-all font-mono text-xs text-muted-foreground">{item.value || localize(lang, "(пусто)", "(empty)")}</div>
             </div>
           ))}
           {visibleEnvVars.length === 0 ? (

@@ -5,14 +5,15 @@ import { I18nProvider } from "@/lib/i18n";
 import KubernetesPage from "@/pages/KubernetesPage";
 
 describe("KubernetesPage", () => {
-  it("renders the empty protected workspace without backend data", () => {
+  it("renders the beta onboarding instead of an empty placeholder", () => {
     render(
       <I18nProvider>
         <KubernetesPage />
       </I18nProvider>,
     );
 
-    expect(screen.getByRole("heading", { name: "Кубернетес" })).toBeInTheDocument();
-    expect(screen.getByText("Пустая страница")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Kubernetes beta" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Подключение кластера" })).toBeInTheDocument();
+    expect(screen.queryByText("Пустая страница")).not.toBeInTheDocument();
   });
 });

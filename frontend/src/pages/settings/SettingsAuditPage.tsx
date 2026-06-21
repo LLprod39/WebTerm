@@ -126,22 +126,22 @@ export default function SettingsAuditPage() {
           <Activity className="h-4 w-4 text-primary" />
         </div>
         <div>
-          <h1 className="text-base font-semibold tracking-tight text-foreground">Аудит и журнал</h1>
-          <p className="text-[11px] text-muted-foreground">Логирование и история действий пользователей</p>
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">Аудит и журнал</h1>
+          <p className="text-sm leading-6 text-muted-foreground">Логирование и история действий пользователей</p>
         </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "logging" | "activity")} className="w-full">
-        <TabsList className="grid h-auto w-full max-w-md grid-cols-2 gap-2 rounded-2xl border border-primary/10 bg-card/40 p-1.5 shadow-sm backdrop-blur-xl">
-          <TabsTrigger value="logging" className="gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm">
+        <TabsList className="grid h-auto w-full max-w-md grid-cols-2 gap-1 rounded-xl border border-border bg-card p-1 shadow-sm">
+          <TabsTrigger value="logging" className="min-h-10 gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none">
             <Eye className="h-4 w-4" />
             Логирование
           </TabsTrigger>
-          <TabsTrigger value="activity" className="gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm">
+          <TabsTrigger value="activity" className="min-h-10 gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none">
             <Activity className="h-4 w-4" />
             Журнал
             {filteredActivity.length > 0 && (
-              <Badge variant="default" className="ml-1 h-5 px-1.5 text-[10px] bg-primary text-primary-foreground">
+              <Badge variant="default" className="ml-1 h-5 px-1.5 text-xs bg-primary text-primary-foreground">
                 {filteredActivity.length}
               </Badge>
             )}

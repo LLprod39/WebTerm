@@ -19,11 +19,13 @@ import {
   BookOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
+import { DeleteDialog } from "@/components/system/ConfirmDialog";
+import { ContentPanel, MetaPill } from "@/components/system/ContentPanel";
+import { PageHeader } from "@/components/system/PageHeader";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { PageHero, PageShell, QueryStateBlock } from "@/components/ui/page-shell";
+import { PageShell, QueryStateBlock } from "@/components/ui/page-shell";
 import { PlaybooksPanel, usePlaybooksPanel } from "./servers/PlaybooksPanel";
 import { ServerAdvancedDialog } from "./servers/ServerAdvancedDialog";
 import { ServerFormDialog } from "./servers/ServerFormDialog";
@@ -76,18 +78,21 @@ export default function Servers() {
     dialogOpen,
     editingServer,
     form,
+    formValidation,
     handlePrivateKeyFile,
     openCreate,
     openEdit,
     requestDeleteServer,
+    saveAndTestServer,
     saveServer,
     saving,
     serverDeleteTarget,
     setDialogOpen,
     setForm,
-    sudoPasswordRequired,
     clearServerDeleteTarget,
     confirmDeleteServer,
+    testConnection,
+    testingConnection,
   } = useServerCrudController({
     onServerDeleted: closeAdvancedServerIfDeleted,
     reload,
@@ -224,103 +229,120 @@ export default function Servers() {
   }
 
   return (
-    <PageShell width="full" className="max-w-[1500px]">
-      <PageHero
-        kicker="Inventory"
+    <PageShell width="full" className="max-w-[1500px] space-y-6">
+      <PageHeader
+        eyebrow={t("srv.inventory_kicker")}
         title={t("srv.title")}
         description={t("srv.groups_description")}
+        meta={
+          <>
+            <MetaPill>{tr("srv.total_count", { count: servers.length })}</MetaPill>
+            <MetaPill className="border-success/30 text-success">{tr("srv.online_count", { count: onlineCount })}</MetaPill>
+            <MetaPill>{tr("srv.shared_count", { count: sharedCount })}</MetaPill>
+            <MetaPill>{tr("srv.groups_count", { count: groupCount })}</MetaPill>
+          </>
+        }
         actions={
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <>
             <div className="relative w-full sm:w-auto">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder={t("srv.search")}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="h-10 w-full border-border bg-background pl-9 text-sm sm:w-64"
+                className="h-10 w-full border-border bg-card/70 pl-9 text-sm sm:w-72"
               />
             </div>
-            <Button size="sm" className="h-10 gap-1.5 text-sm" onClick={openCreate}>
+            <Button className="h-10 gap-2 text-sm" onClick={openCreate}>
               <Plus className="h-4 w-4" /> {t("srv.add")}
             </Button>
-          </div>
+          </>
         }
       />
 
-      <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as MainTab)} className="space-y-3">
-        <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto p-1">
-          <TabsTrigger value="servers" className="min-h-10 gap-2 px-3">
-            <Server className="h-4 w-4" /> {t("srv.list")}
-          </TabsTrigger>
-          <TabsTrigger value="groups" className="min-h-10 gap-2 px-3">
-            <Layers className="h-4 w-4" /> {t("srv.groups")}
-          </TabsTrigger>
-          <TabsTrigger value="rules" className="min-h-10 gap-2 px-3">
-            <Settings className="h-4 w-4" /> {t("srv.rules_tab")}
-          </TabsTrigger>
-          <TabsTrigger value="playbook" className="min-h-10 gap-2 px-3">
-            <BookOpen className="h-4 w-4" /> {t("pb.title")}
-          </TabsTrigger>
-        </TabsList>
+      <ContentPanel className="overflow-hidden">
+        <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as MainTab)}>
+          <div className="border-b border-border/70 px-4 pt-4">
+            <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto bg-transparent p-0">
+              <TabsTrigger value="servers" className="min-h-10 gap-2 rounded-b-none px-3">
+                <Server className="h-4 w-4" /> {t("srv.list")}
+              </TabsTrigger>
+              <TabsTrigger value="groups" className="min-h-10 gap-2 rounded-b-none px-3">
+                <Layers className="h-4 w-4" /> {t("srv.groups")}
+              </TabsTrigger>
+              <TabsTrigger value="rules" className="min-h-10 gap-2 rounded-b-none px-3">
+                <Settings className="h-4 w-4" /> {t("srv.rules_tab")}
+              </TabsTrigger>
+              <TabsTrigger value="playbook" className="min-h-10 gap-2 rounded-b-none px-3">
+                <BookOpen className="h-4 w-4" /> {t("pb.title")}
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
-        <TabsContent value="servers" className="space-y-3">
-          <ServersListTab
-            grouped={grouped}
-            filteredCount={filtered.length}
-            totalServers={servers.length}
-            collapsed={collapsed}
-            fleetHealthByServerId={fleetHealthByServerId}
-            t={t}
-            tr={tr}
-            lang={lang}
-            onToggleGroup={toggleGroup}
-            onOpenCreate={openCreate}
-            onOpenAdvanced={openAdvanced}
-            onOpenEdit={openEdit}
-            onRequestDeleteServer={requestDeleteServer}
-            onClearSearch={() => setSearch("")}
-          />
-        </TabsContent>
+          <div className="p-4 sm:p-5">
+            <TabsContent value="servers" className="mt-0 space-y-3">
+              <ServersListTab
+                grouped={grouped}
+                filteredCount={filtered.length}
+                totalServers={servers.length}
+                collapsed={collapsed}
+                fleetHealthByServerId={fleetHealthByServerId}
+                t={t}
+                tr={tr}
+                lang={lang}
+                onToggleGroup={toggleGroup}
+                onOpenCreate={openCreate}
+                onOpenAdvanced={openAdvanced}
+                onOpenEdit={openEdit}
+                onRequestDeleteServer={requestDeleteServer}
+                onClearSearch={() => setSearch("")}
+              />
+            </TabsContent>
 
-        <TabsContent value="groups" className="space-y-3">
-          <ServerGroupsTab
-            manageableGroups={manageableGroups}
-            groupCount={groupCount}
-            t={t}
-            tr={tr}
-            onOpenCreateGroup={openCreateGroup}
-            onOpenGroupRules={openGroupRules}
-            onOpenGroupSettings={openGroupSettings}
-            onRequestDeleteGroup={requestDeleteGroup}
-          />
-        </TabsContent>
+            <TabsContent value="groups" className="mt-0 space-y-3">
+              <ServerGroupsTab
+                manageableGroups={manageableGroups}
+                groupCount={groupCount}
+                t={t}
+                tr={tr}
+                onOpenCreateGroup={openCreateGroup}
+                onOpenGroupRules={openGroupRules}
+                onOpenGroupSettings={openGroupSettings}
+                onRequestDeleteGroup={requestDeleteGroup}
+              />
+            </TabsContent>
 
-        <TabsContent value="rules" className="space-y-3">
-          <ServerRulesTab
-            controller={rulesController}
-            manageableGroups={manageableGroups}
-            t={t}
-            tr={tr}
-          />
-        </TabsContent>
+            <TabsContent value="rules" className="mt-0 space-y-3">
+              <ServerRulesTab
+                controller={rulesController}
+                manageableGroups={manageableGroups}
+                t={t}
+                tr={tr}
+              />
+            </TabsContent>
 
-        <TabsContent value="playbook" className="space-y-3">
-          <PlaybooksPanel {...playbooksPanel} />
-        </TabsContent>
-      </Tabs>
+            <TabsContent value="playbook" className="mt-0 space-y-3">
+              <PlaybooksPanel {...playbooksPanel} />
+            </TabsContent>
+          </div>
+        </Tabs>
+      </ContentPanel>
 
       <ServerFormDialog
         editingServer={editingServer}
         form={form}
+        formValidation={formValidation}
         handlePrivateKeyFile={handlePrivateKeyFile}
         manageableGroups={manageableGroups}
         onSave={saveServer}
+        onSaveAndTest={saveAndTestServer}
+        onTestConnection={testConnection}
         open={dialogOpen}
         saving={saving}
         setDialogOpen={setDialogOpen}
         setForm={setForm}
-        sudoPasswordRequired={sudoPasswordRequired}
         t={t}
+        testingConnection={testingConnection}
       />
 
       <ServerGroupDialog
@@ -360,7 +382,7 @@ export default function Servers() {
         t={t}
       />
 
-      <ConfirmActionDialog
+      <DeleteDialog
         open={Boolean(serverDeleteTarget)}
         onOpenChange={(open) => {
           if (!open) clearServerDeleteTarget();
@@ -373,7 +395,7 @@ export default function Servers() {
         contentClassName="max-w-sm"
       />
 
-      <ConfirmActionDialog
+      <DeleteDialog
         open={Boolean(groupDeleteTarget)}
         onOpenChange={(open) => {
           if (!open) clearGroupDeleteTarget();

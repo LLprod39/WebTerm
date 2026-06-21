@@ -82,7 +82,7 @@ export function MCPForm({
                 : localize(lang, "Удалённый SSE endpoint", "Remote SSE endpoint")}
             </div>
           </div>
-          <div className="rounded-md border border-border/70 bg-card px-2.5 py-1 font-mono text-[11px] text-muted-foreground">
+          <div className="rounded-md border border-border/70 bg-card px-2.5 py-1 font-mono text-xs text-muted-foreground">
             {transport}
           </div>
         </div>

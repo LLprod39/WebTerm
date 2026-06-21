@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { DeleteDialog } from "@/components/system/ConfirmDialog";
 import {
   Dialog,
   DialogBody,
@@ -10,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
 import type { ServerKnowledgeController } from "./useServerKnowledgeController";
@@ -24,30 +26,32 @@ export function ServerKnowledgeDialogs({
   t,
 }: ServerKnowledgeDialogsProps) {
   const {
-  activeKnowledgeCategories,
-  aiKnowledgeContent,
-  aiKnowledgeDialogOpen,
-  aiKnowledgeDialogSaving,
-  aiKnowledgeTitle,
-  knowledgeActive,
-  knowledgeCategory,
-  knowledgeContent,
-  knowledgeDialogOpen,
-  knowledgeDialogSaving,
-  knowledgeEditingId,
-  knowledgeTitle,
-  onAiKnowledgeSave,
-  onKnowledgeSave,
-  resetAiKnowledgeDialog,
-  resetKnowledgeDialog,
-  setAiKnowledgeContent,
-  setAiKnowledgeDialogOpen,
-  setAiKnowledgeTitle,
-  setKnowledgeActive,
-  setKnowledgeCategory,
-  setKnowledgeContent,
-  setKnowledgeDialogOpen,
-  setKnowledgeTitle,
+    activeKnowledgeCategories,
+    aiKnowledgeContent,
+    aiKnowledgeDialogOpen,
+    aiKnowledgeDialogSaving,
+    aiKnowledgeTitle,
+    clearKnowledgeConfirmDialog,
+    knowledgeActive,
+    knowledgeCategory,
+    knowledgeConfirmDialog,
+    knowledgeContent,
+    knowledgeDialogOpen,
+    knowledgeDialogSaving,
+    knowledgeEditingId,
+    knowledgeTitle,
+    onAiKnowledgeSave,
+    onKnowledgeSave,
+    resetAiKnowledgeDialog,
+    resetKnowledgeDialog,
+    setAiKnowledgeContent,
+    setAiKnowledgeDialogOpen,
+    setAiKnowledgeTitle,
+    setKnowledgeActive,
+    setKnowledgeCategory,
+    setKnowledgeContent,
+    setKnowledgeDialogOpen,
+    setKnowledgeTitle,
   } = controller;
 
   return (
@@ -78,17 +82,21 @@ export function ServerKnowledgeDialogs({
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">{t("srv.knowledge_category")}</Label>
-              <select
+              <Select
                 value={knowledgeCategory}
-                onChange={(event) => setKnowledgeCategory(event.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-secondary/50 px-3 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                onValueChange={setKnowledgeCategory}
               >
-                {activeKnowledgeCategories.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="h-9 bg-secondary/50" aria-label={t("srv.knowledge_category")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {activeKnowledgeCategories.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">{t("srv.knowledge_content")}</Label>
@@ -189,6 +197,23 @@ export function ServerKnowledgeDialogs({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DeleteDialog
+        open={Boolean(knowledgeConfirmDialog)}
+        onOpenChange={(open) => {
+          if (!open) clearKnowledgeConfirmDialog();
+        }}
+        title={knowledgeConfirmDialog?.title || t("srv.delete")}
+        description={knowledgeConfirmDialog?.description || ""}
+        confirmLabel={knowledgeConfirmDialog?.confirmLabel || t("srv.delete")}
+        cancelLabel={t("srv.cancel")}
+        onConfirm={() => {
+          const action = knowledgeConfirmDialog?.onConfirm;
+          clearKnowledgeConfirmDialog();
+          return action?.();
+        }}
+        contentClassName="max-w-sm"
+      />
     </>
   );
 }

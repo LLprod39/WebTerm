@@ -172,7 +172,7 @@ test("renders live pipeline node events from websocket updates", async ({ page }
   await installApiHarness(page, makePipelineLiveHandler());
 
   await page.goto("/studio/runs");
-  await expect(page.getByRole("heading", { name: "История запусков" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Execution History" })).toBeVisible();
   await expect(page.getByText("Run #9001").last()).toBeVisible();
 
   await expect.poll(async () => {

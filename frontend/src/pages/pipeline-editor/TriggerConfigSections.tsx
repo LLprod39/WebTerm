@@ -47,7 +47,7 @@ export function TriggerBasicFields({
 
   return (
     <>
-      <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground">
+      <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
         {localize(
           lang,
           "Настройки триггера сохраняются вместе с пайплайном. Каждый триггер запускает только свою ветку графа.",
@@ -57,7 +57,7 @@ export function TriggerBasicFields({
       <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
         <div>
           <p className="text-xs font-medium">{localize(lang, "Триггер включён", "Trigger enabled")}</p>
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             {localize(lang, "Можно выключить запуск, не удаляя ноду", "Disable the start without deleting the node")}
           </p>
         </div>
@@ -71,14 +71,14 @@ function ManualTriggerConfig({ pipelineId, lang }: { pipelineId: number | null; 
   return (
     <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 space-y-1">
       <p className="text-xs font-medium">{localize(lang, "Ручной запуск", "Manual start")}</p>
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         {localize(lang, "Запускается из кнопки ", "Start this pipeline from the Studio ")}
         <strong>{localize(lang, "Запуск", "Run")}</strong>
         {pipelineId
           ? localize(lang, ` или через POST /api/studio/pipelines/${pipelineId}/run/.`, ` dialog or POST /api/studio/pipelines/${pipelineId}/run/.`)
           : "."}
       </p>
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         {localize(
           lang,
           "Если в графе несколько ручных триггеров, оператор выбирает, с какой ноды начать run.",
@@ -137,7 +137,7 @@ function WebhookTriggerConfig({
             {localize(lang, "Сопоставьте поля входящего payload с переменными pipeline, например", "Map incoming payload fields into pipeline variables, for example")}{" "}
             <code>head_commit.id</code>.
           </FieldHint>
-          {webhookState.error && <p className="text-[10px] text-red-400">{webhookState.error}</p>}
+          {webhookState.error && <p className="text-xs text-red-400">{webhookState.error}</p>}
         </div>
       </AdvancedDisclosure>
       {trigger && (
@@ -179,7 +179,7 @@ function ScheduleTriggerConfig({
           <Clock className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
           <div className="min-w-0">
             <div className="text-sm font-semibold text-foreground">{describeCronExpression(cronExpression, lang)}</div>
-            <div className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
+            <div className="mt-1 text-xs leading-relaxed text-muted-foreground">
               {localize(lang, "Сохраните пайплайн, чтобы scheduler начал использовать это расписание.", "Save the pipeline so the scheduler starts using this schedule.")}
             </div>
           </div>
@@ -207,7 +207,7 @@ function ScheduleTriggerConfig({
                   <span className="text-xs font-semibold text-foreground">{localize(lang, preset.labelRu, preset.labelEn)}</span>
                   {active ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-primary" /> : null}
                 </span>
-                <span className="mt-1 block text-[10px] leading-relaxed">{localize(lang, preset.descriptionRu, preset.descriptionEn)}</span>
+                <span className="mt-1 block text-xs leading-relaxed">{localize(lang, preset.descriptionRu, preset.descriptionEn)}</span>
               </button>
             );
           })}
@@ -229,7 +229,7 @@ function ScheduleTriggerConfig({
               }}
               className="h-8 text-xs"
             />
-            <span className="text-[10px] text-muted-foreground">{localize(lang, "мин", "min")}</span>
+            <span className="text-xs text-muted-foreground">{localize(lang, "мин", "min")}</span>
           </div>
           <FieldHint>{localize(lang, "Для частых проверок. Например 5, 10 или 15 минут.", "For frequent checks, e.g. 5, 10, or 15 minutes.")}</FieldHint>
         </div>
@@ -289,7 +289,7 @@ function MonitoringTriggerConfig({
       title={localize(lang, "Вход / условие", "Input / condition")}
       description={localize(lang, "Фильтры alert-ов, по которым мониторинг запустит эту ветку.", "Alert filters that start this branch from monitoring.")}
     >
-      <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-100">
+      <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
         {localize(
           lang,
           "Monitoring-триггер ждёт alert от сервера и не запускается из диалога Run. Сохраните pipeline, чтобы он начал ждать подходящее событие.",

@@ -39,12 +39,12 @@ export function SettingsSearchResults({
                 className="rounded-xl border border-border bg-card px-3 py-3 text-left transition-colors hover:border-primary/20 hover:bg-secondary"
               >
                 <div className="flex items-center gap-2">
-                  <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                  <span className="rounded-full border border-border bg-background px-2 py-0.5 text-xs uppercase tracking-wide text-muted-foreground">
                     {localize(lang, section.labelRu, section.labelEn)}
                   </span>
                   <span className="text-sm font-medium text-foreground">{item.label}</span>
                 </div>
-                <pre className="mt-2 whitespace-pre-wrap font-mono text-[11px] leading-5 text-muted-foreground">
+                <pre className="mt-2 whitespace-pre-wrap font-mono text-xs leading-5 text-muted-foreground">
                   {item.snippet}
                 </pre>
               </button>

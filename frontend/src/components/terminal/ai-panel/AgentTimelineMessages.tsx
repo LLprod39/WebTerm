@@ -26,7 +26,7 @@ function AgentStartMsg({ msg }: { msg: AiMessage }) {
   return (
     <div className="space-y-2">
       <div
-        className="flex flex-wrap items-center gap-1.5 rounded-md border border-border/50 bg-background/40 px-2.5 py-1.5 text-[11px] text-muted-foreground"
+        className="flex flex-wrap items-center gap-1.5 rounded-md border border-border/50 bg-background/40 px-2.5 py-1.5 text-xs text-muted-foreground"
         title={msg.content || undefined}
       >
         <Sparkles className="h-3 w-3 text-primary/80" />
@@ -42,13 +42,13 @@ function AgentStartMsg({ msg }: { msg: AiMessage }) {
             {extras.slice(0, 3).map((name) => (
               <code
                 key={name}
-                className="rounded border border-border/50 bg-secondary/40 px-1 py-0 font-mono text-[10px] text-muted-foreground"
+                className="rounded border border-border/50 bg-secondary/40 px-1 py-0 font-mono text-xs text-muted-foreground"
               >
                 {name}
               </code>
             ))}
             {extras.length > 3 ? (
-              <span className="text-[10px] text-muted-foreground">+{extras.length - 3}</span>
+              <span className="text-xs text-muted-foreground">+{extras.length - 3}</span>
             ) : null}
           </>
         ) : null}
@@ -69,7 +69,7 @@ function AgentThinkingMsg({ msg }: { msg: AiMessage }) {
     <button
       type="button"
       onClick={() => setExpanded((v) => !v)}
-      className="group flex w-full items-start gap-1.5 px-2 py-0.5 text-left text-[11px] italic leading-snug text-muted-foreground/70 transition-colors hover:text-foreground"
+      className="group flex w-full items-start gap-1.5 px-2 py-0.5 text-left text-xs italic leading-snug text-muted-foreground/70 transition-colors hover:text-foreground"
       title={expanded ? undefined : msg.content}
     >
       <Brain className="h-3 w-3 mt-0.5 shrink-0 opacity-60" />
@@ -86,10 +86,10 @@ export function AgentTodoMsg({ msg }: { msg: AiMessage }) {
   const completed = todos.filter((t) => t.status === "completed").length;
   return (
     <div className="overflow-hidden rounded-md border border-border/60 bg-card/70">
-      <div className="flex items-center gap-2 border-b border-border/50 px-3 py-1.5 text-[11px] font-medium text-foreground">
+      <div className="flex items-center gap-2 border-b border-border/50 px-3 py-1.5 text-xs font-medium text-foreground">
         <ListTodo className="h-3 w-3 text-muted-foreground" />
         <span>Todo</span>
-        <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+        <span className="ml-auto font-mono text-xs text-muted-foreground">
           {completed}/{todos.length}
         </span>
       </div>

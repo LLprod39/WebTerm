@@ -19,7 +19,7 @@ const NAV_ITEMS = [
   { path: "/studio/drafts", labelRu: "Черновики", labelEn: "Drafts", icon: Wand2, feature: "studio_pipelines" },
   { path: "/studio/skills", labelRu: "Скиллы", labelEn: "OPS Skills", icon: BookOpen, feature: "studio_skills" },
   { path: "/studio/mcp", labelRu: "MCP", labelEn: "MCP Tools", icon: Server, feature: "studio_mcp" },
-  { path: "/studio/agents", labelRu: "Агенты", labelEn: "Agents", icon: Bot, feature: "studio_agents" },
+  { path: "/studio/agents", labelRu: "Профили", labelEn: "Profiles", icon: Bot, feature: "studio_agents" },
   { path: "/studio/runs", labelRu: "Запуски", labelEn: "Runs", icon: Clock, feature: "studio_runs" },
   { path: "/studio/notifications", labelRu: "Оповещения", labelEn: "Alerts", icon: Bell, feature: "studio_notifications" },
 ] as const;
@@ -49,7 +49,7 @@ export function StudioNav() {
 
   return (
     <nav className="flex min-h-14 items-center gap-1 overflow-x-auto border-b border-border/60 bg-card/70 py-0 pl-16 pr-4 sm:px-4">
-      <span className="mr-4 flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-1 text-[11px] font-bold uppercase tracking-[0.14em] text-primary/80">
+      <span className="mr-4 flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-1 text-xs font-bold uppercase tracking-[0.14em] text-primary/80">
         <span className="h-1.5 w-1.5 rounded-full bg-primary/70" />
         Studio
       </span>

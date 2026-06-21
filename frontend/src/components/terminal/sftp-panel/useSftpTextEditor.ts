@@ -78,20 +78,11 @@ export function useSftpTextEditor({
     setIsEditorSaving(false);
   }, []);
 
-  const confirmDiscardEditorChanges = useCallback((nextActionLabel: string) => {
-    if (!isEditorDirty) return true;
-    return window.confirm(`Есть несохранённые изменения. Продолжить и ${nextActionLabel}?`);
-  }, [isEditorDirty]);
-
   const openTextEditor = useCallback(async (entry: SftpEntry, options?: { forceReload?: boolean }) => {
     if (entry.is_dir) return;
 
     const isSameFile = editorPath === entry.path;
     if (isSameFile && !options?.forceReload) {
-      return;
-    }
-
-    if (!isSameFile && !confirmDiscardEditorChanges("открыть другой файл")) {
       return;
     }
 
@@ -114,19 +105,17 @@ export function useSftpTextEditor({
         setIsEditorLoading(false);
       }
     }
-  }, [confirmDiscardEditorChanges, editorPath, serverId, setEditorFile, toast]);
+  }, [editorPath, serverId, setEditorFile, toast]);
 
   const reloadEditor = useCallback(async () => {
     if (!editorPath) return;
-    if (!confirmDiscardEditorChanges("перезагрузить файл")) return;
     const entry = entries.find((item) => item.path === editorPath) || fallbackTextEntry(editorPath, editorFilename);
     await openTextEditor(entry, { forceReload: true });
-  }, [confirmDiscardEditorChanges, editorFilename, editorPath, entries, openTextEditor]);
+  }, [editorFilename, editorPath, entries, openTextEditor]);
 
   const closeEditor = useCallback(() => {
-    if (!confirmDiscardEditorChanges("закрыть редактор")) return;
     resetEditor();
-  }, [confirmDiscardEditorChanges, resetEditor]);
+  }, [resetEditor]);
 
   const saveEditor = useCallback(async () => {
     if (!editorPath) return;
@@ -155,7 +144,6 @@ export function useSftpTextEditor({
 
   return {
     closeEditor,
-    confirmDiscardEditorChanges,
     editorContent,
     editorEncoding,
     editorError,

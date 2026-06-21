@@ -150,9 +150,9 @@ describe("MarsPage", () => {
   it("walks through project creation, clarification, spec approval, and build controls", async () => {
     renderMarsPage();
 
-    expect(await screen.findByText("Project Command Center")).toBeInTheDocument();
+    expect(await screen.findByText("MARS beta - AI-разработка")).toBeInTheDocument();
     expect(screen.getByText("История проектов")).toBeInTheDocument();
-    expect(screen.getByText("Планируемые задачи")).toBeInTheDocument();
+    expect(screen.queryByText("План выполнения")).not.toBeInTheDocument();
     expect(screen.queryByText(/Skill routing/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Codex/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Gemini/i)).not.toBeInTheDocument();
@@ -173,13 +173,13 @@ describe("MarsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Клавиатура\/мышь/i }));
     fireEvent.click(screen.getByRole("button", { name: /Дальше/i }));
     fireEvent.click(screen.getByRole("button", { name: /Neon arcade/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Собрать ТЗ/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Собрать план/i }));
 
     expect(await screen.findByDisplayValue(/MARS execution plan/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Подтвердить ТЗ/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Подтвердить план/i }));
     await waitFor(() => expect(marsApi.approveSessionPlan).toHaveBeenCalled());
 
-    fireEvent.click(screen.getByRole("button", { name: /Создать проект/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Запустить выполнение/i }));
     await waitFor(() => {
       expect(marsApi.runSession).toHaveBeenCalledWith(3, expect.objectContaining({ allow_dirty: false }));
     });

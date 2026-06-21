@@ -52,7 +52,7 @@ function MemoryPolicyControls({
     <div className="space-y-4 rounded-xl border border-border bg-secondary/10 px-4 py-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-medium text-foreground">Правила долгосрочной памяти</p>
-        <Button size="sm" variant="outline" className="h-7" onClick={() => void onSaveMemoryPolicy()} disabled={memoryPolicySaving}>
+        <Button size="sm" variant="outline" className="h-9" onClick={() => void onSaveMemoryPolicy()} disabled={memoryPolicySaving}>
           {memoryPolicySaving ? t("mem.saving") : t("mem.save")}
         </Button>
       </div>
@@ -61,7 +61,7 @@ function MemoryPolicyControls({
         <label className="flex cursor-pointer items-center justify-between rounded-lg border border-border px-3 py-3 transition-colors hover:bg-secondary/30">
           <div>
             <p className="text-xs font-medium">Автозаметки</p>
-            <p className="text-[10px] text-muted-foreground">Включить долгосрочную память</p>
+            <p className="text-xs text-muted-foreground">Включить долгосрочную память</p>
           </div>
           <Switch
             checked={memoryPolicyDraft.ai_memory_enabled}
@@ -72,7 +72,7 @@ function MemoryPolicyControls({
         <label className="flex cursor-pointer items-center justify-between rounded-lg border border-border px-3 py-3 transition-colors hover:bg-secondary/30">
           <div>
             <p className="text-xs font-medium">Операционная память</p>
-            <p className="text-[10px] text-muted-foreground">Оперативный контекст</p>
+            <p className="text-xs text-muted-foreground">Оперативный контекст</p>
           </div>
           <Switch
             checked={memoryPolicyDraft.operational_memory_enabled}
@@ -99,12 +99,12 @@ function MemoryServerSelector({
   return (
     <div className="grid gap-3 lg:grid-cols-[minmax(0,240px)_minmax(0,1fr)]">
       <div className="space-y-1.5">
-        <Label className="text-xs">Сервер</Label>
+        <Label className="text-sm">Сервер</Label>
         <Select
           value={selectedMemoryServerId ? String(selectedMemoryServerId) : ""}
           onValueChange={(value) => onSelectedMemoryServerIdChange(Number(value))}
         >
-          <SelectTrigger className="h-9">
+          <SelectTrigger className="h-10">
             <SelectValue placeholder={t("mem.select_server")} />
           </SelectTrigger>
           <SelectContent>
@@ -159,8 +159,8 @@ export function SettingsMemoryPanel({
           <ScrollText className="h-4 w-4 text-primary" />
         </div>
         <div>
-          <h1 className="text-base font-semibold tracking-tight text-foreground">Долговременная память AI</h1>
-          <p className="text-[11px] text-muted-foreground">{t("mem.subtitle")}</p>
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">Память AI по серверу</h1>
+          <p className="text-sm leading-6 text-muted-foreground">{t("mem.subtitle")}</p>
         </div>
       </div>
 
@@ -173,7 +173,7 @@ export function SettingsMemoryPanel({
             <Button
               size="sm"
               variant="outline"
-              className="h-7 gap-1.5"
+              className="h-9 gap-1.5"
               onClick={() => void onRefreshMemoryOverview()}
               disabled={!selectedMemoryServerId || memoryLoading}
             >
@@ -182,7 +182,7 @@ export function SettingsMemoryPanel({
             </Button>
             <Button
               size="sm"
-              className="h-7 gap-1.5"
+              className="h-9 gap-1.5"
               onClick={() => void onRunMemoryDreams()}
               disabled={!selectedMemoryServerId || memoryDreamRunning}
             >

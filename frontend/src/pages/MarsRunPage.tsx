@@ -1,11 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, BrainCircuit, CheckCircle2, FileCode2, Loader2, Square, Terminal, XCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  BrainCircuit,
+  CheckCircle2,
+  Copy,
+  Download,
+  FileCode2,
+  Loader2,
+  Search,
+  Square,
+  Terminal,
+  XCircle,
+} from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { PageHero, PageShell, QueryStateBlock, SectionCard, StatusBadge } from "@/components/ui/page-shell";
 import { Progress } from "@/components/ui/progress";
-import { PageGrid, PageHero, PageShell, QueryStateBlock, SectionCard, StatusBadge } from "@/components/ui/page-shell";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getMarsRunWsUrl, marsApi, type MarsRunEvent } from "@/lib/api";
 import { localize, useI18n } from "@/lib/i18n";
 
@@ -52,8 +66,19 @@ function parseChangedFiles(statusText?: string): string[] {
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean)
-    .map((line) => line.slice(2).trim())
+    .map((line) => line.replace(/^[A-Z?]{1,2}\s+/, "").trim())
     .filter(Boolean);
+}
+
+function downloadText(filename: string, text: string) {
+  const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 export default function MarsRunPage() {
@@ -62,6 +87,7 @@ export default function MarsRunPage() {
   const queryClient = useQueryClient();
   const numericRunId = Number(runId);
   const [liveEvents, setLiveEvents] = useState<MarsRunEvent[]>([]);
+  const [logSearch, setLogSearch] = useState("");
 
   const runQuery = useQuery({
     queryKey: ["mars", "run", numericRunId],
@@ -125,15 +151,24 @@ export default function MarsRunPage() {
     const stream = event.event_type.includes("_stderr") ? "stderr" : "stdout";
     return `[${stream}] ${eventText(event)}`;
   });
+  const filteredCliLines = useMemo(() => {
+    const query = logSearch.trim().toLowerCase();
+    if (!query) return cliLines;
+    return cliLines.filter((line) => line.toLowerCase().includes(query));
+  }, [cliLines, logSearch]);
+  const logText = filteredCliLines.length
+    ? filteredCliLines.join("\n")
+    : localize(lang, "CLI stdout/stderr появится здесь.", "CLI stdout/stderr appears here.");
   const checklist = [
     { label: localize(lang, "Рабочая папка", "Workspace policy"), done: events.some((event) => event.event_type === "mars_run_started") },
     { label: localize(lang, "Создание", "Build"), done: events.some((event) => event.event_type === "codex_finished") || Boolean(run?.codex_summary) },
-    { label: localize(lang, "Verification", "Verification"), done: events.some((event) => event.event_type.startsWith("tests_")) || Boolean(run?.test_output) },
+    { label: localize(lang, "Проверка", "Verification"), done: events.some((event) => event.event_type.startsWith("tests_")) || Boolean(run?.test_output) },
     { label: localize(lang, "Качество", "Quality"), done: events.some((event) => event.event_type === "gemini_finished") || Boolean(run?.gemini_review) },
-    { label: localize(lang, "Final report", "Final report"), done: Boolean(run?.final_report) },
+    { label: localize(lang, "Итоговый отчет", "Final report"), done: Boolean(run?.final_report) },
   ];
   const progress = Math.round((checklist.filter((item) => item.done).length / checklist.length) * 100);
   const canStop = run?.status === "queued" || run?.status === "running";
+  const recentEvents = events.filter((event) => !isCliEvent(event)).slice(-40);
 
   return (
     <PageShell width="full" className="space-y-5">
@@ -163,92 +198,158 @@ export default function MarsRunPage() {
       />
 
       <QueryStateBlock loading={runQuery.isLoading} error={runQuery.error}>
-        <PageGrid sidebar>
-          <div className="space-y-5">
-            <SectionCard
-              title={localize(lang, "Ход работы", "Progress")}
-              description={localize(lang, "Основные события запуска без внутренних деталей.", "Main run events without internal details.")}
-              icon={<BrainCircuit className="h-4 w-4" />}
-            >
-              <div className="space-y-4">
-                <Progress value={progress} />
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-                  {checklist.map((item) => (
-                    <div key={item.label} className="flex min-h-12 items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm">
-                      {item.done ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <XCircle className="h-4 w-4 text-muted-foreground/50" />}
-                      <span className="truncate">{item.label}</span>
-                    </div>
-                  ))}
+        <div className="space-y-5">
+          <SectionCard
+            title={localize(lang, "Обзор", "Overview")}
+            description={localize(lang, "Итог, изменения, проверки и следующий шаг видны до подробных логов.", "Summary, changes, checks, and next step appear before detailed logs.")}
+            icon={<BrainCircuit className="h-4 w-4" />}
+          >
+            <div className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-4">
+                <div className="rounded-lg border border-border/80 bg-secondary/20 px-3 py-3">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{localize(lang, "Статус", "Status")}</div>
+                  <div className="mt-2 text-sm font-semibold text-foreground">{run?.status?.replaceAll("_", " ") || "loading"}</div>
                 </div>
+                <div className="rounded-lg border border-border/80 bg-secondary/20 px-3 py-3">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{localize(lang, "Изменения", "Changes")}</div>
+                  <div className="mt-2 text-sm font-semibold text-foreground">{changedFiles.length}</div>
+                </div>
+                <div className="rounded-lg border border-border/80 bg-secondary/20 px-3 py-3">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{localize(lang, "Проверки", "Checks")}</div>
+                  <div className="mt-2 text-sm font-semibold text-foreground">{run?.test_output ? localize(lang, "Есть вывод", "Output ready") : localize(lang, "Ожидаются", "Pending")}</div>
+                </div>
+                <div className="rounded-lg border border-border/80 bg-secondary/20 px-3 py-3">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{localize(lang, "Следующее действие", "Next action")}</div>
+                  <div className="mt-2 text-sm font-semibold text-foreground">
+                    {run?.status === "completed" ? localize(lang, "Открыть отчет", "Open report") : canStop ? localize(lang, "Следить за ходом", "Watch progress") : localize(lang, "Проверить результат", "Review result")}
+                  </div>
+                </div>
+              </div>
+
+              <Progress value={progress} />
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                {checklist.map((item) => (
+                  <div key={item.label} className="flex min-h-12 items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm">
+                    {item.done ? <CheckCircle2 className="h-4 w-4 text-success" /> : <XCircle className="h-4 w-4 text-muted-foreground/50" />}
+                    <span className="truncate">{item.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </SectionCard>
+
+          <Tabs defaultValue="progress" className="space-y-3">
+            <TabsList className="flex h-auto w-full justify-start overflow-x-auto">
+              <TabsTrigger value="progress">{localize(lang, "Ход работы", "Progress")}</TabsTrigger>
+              <TabsTrigger value="logs">{localize(lang, "Логи", "Logs")}</TabsTrigger>
+              <TabsTrigger value="changes">{localize(lang, "Изменения", "Changes")}</TabsTrigger>
+              <TabsTrigger value="report">{localize(lang, "Отчет", "Report")}</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="progress">
+              <SectionCard
+                title={localize(lang, "Ход работы", "Progress")}
+                description={localize(lang, "Основные события запуска без внутренних деталей.", "Main run events without internal details.")}
+                icon={<BrainCircuit className="h-4 w-4" />}
+              >
                 <div className="space-y-2">
-                  {events.filter((event) => !isCliEvent(event)).slice(-40).map((event) => (
+                  {recentEvents.map((event) => (
                     <div key={event.id} className="rounded-lg border border-border bg-secondary/15 px-3 py-2">
                       <div className="flex items-center justify-between gap-3">
                         <span className="truncate text-xs font-semibold text-foreground">{publicEventLabel(event.event_type, lang)}</span>
-                        <span className="shrink-0 text-[10px] text-muted-foreground">{event.created_at ? new Date(event.created_at).toLocaleTimeString() : ""}</span>
+                        <span className="shrink-0 text-xs text-muted-foreground">{event.created_at ? new Date(event.created_at).toLocaleTimeString() : ""}</span>
                       </div>
                       {event.message ? <div className="mt-1 text-xs leading-5 text-muted-foreground">{publicEventMessage(event, lang)}</div> : null}
                     </div>
                   ))}
-                  {events.length === 0 ? (
+                  {recentEvents.length === 0 ? (
                     <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
                       {localize(lang, "Событий пока нет.", "No events yet.")}
                     </div>
                   ) : null}
                 </div>
-              </div>
-            </SectionCard>
-
-            <SectionCard title={localize(lang, "Журнал выполнения", "Execution log")} icon={<Terminal className="h-4 w-4" />}>
-              <pre className="max-h-[460px] overflow-auto rounded-lg bg-black p-4 text-xs leading-5 text-zinc-100">
-                {cliLines.length ? cliLines.join("\n") : localize(lang, "CLI stdout/stderr появится здесь.", "CLI stdout/stderr appears here.")}
-              </pre>
-            </SectionCard>
-
-            <div className="grid gap-5 xl:grid-cols-2">
-              <SectionCard title={localize(lang, "Результат выполнения", "Run result")} icon={<BrainCircuit className="h-4 w-4" />}>
-                <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded-lg bg-secondary/20 p-4 text-xs leading-5 text-foreground">
-                  {run?.codex_summary || localize(lang, "Результат пока пуст.", "No result yet.")}
-                </pre>
               </SectionCard>
-              <SectionCard title={localize(lang, "Проверка качества", "Quality check")} icon={<BrainCircuit className="h-4 w-4" />}>
-                <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded-lg bg-secondary/20 p-4 text-xs leading-5 text-foreground">
-                  {run?.gemini_review || localize(lang, "Review еще не готов.", "Review is not ready yet.")}
-                </pre>
-              </SectionCard>
-            </div>
-          </div>
+            </TabsContent>
 
-          <div className="space-y-5">
-            <SectionCard title={localize(lang, "Changed files", "Changed files")} icon={<FileCode2 className="h-4 w-4" />}>
-              <div className="space-y-2">
-                {changedFiles.length ? (
-                  changedFiles.map((file) => (
-                    <div key={file} className="truncate rounded-lg border border-border bg-background px-3 py-2 font-mono text-xs">
-                      {file}
+            <TabsContent value="logs">
+              <SectionCard
+                title={localize(lang, "Журнал выполнения", "Execution log")}
+                icon={<Terminal className="h-4 w-4" />}
+                actions={
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="relative">
+                      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        value={logSearch}
+                        onChange={(event) => setLogSearch(event.target.value)}
+                        placeholder={localize(lang, "Поиск в логах", "Search logs")}
+                        className="h-8 w-44 bg-background pl-8 text-xs"
+                      />
                     </div>
-                  ))
-                ) : (
-                  <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-                    {localize(lang, "Git status чистый.", "Git status is clean.")}
+                    <Button variant="outline" size="sm" onClick={() => void navigator.clipboard?.writeText(logText)}>
+                      <Copy className="h-3.5 w-3.5" />
+                      {localize(lang, "Копировать", "Copy")}
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => downloadText(`mars-run-${numericRunId}.log`, logText)}>
+                      <Download className="h-3.5 w-3.5" />
+                      {localize(lang, "Скачать", "Download")}
+                    </Button>
                   </div>
-                )}
+                }
+              >
+                <pre className="max-h-[560px] overflow-auto rounded-lg bg-background p-4 text-xs leading-5 text-foreground">
+                  {logText}
+                </pre>
+              </SectionCard>
+            </TabsContent>
+
+            <TabsContent value="changes">
+              <div className="grid gap-5 xl:grid-cols-2">
+                <SectionCard title={localize(lang, "Измененные файлы", "Changed files")} icon={<FileCode2 className="h-4 w-4" />}>
+                  <div className="space-y-2">
+                    {changedFiles.length ? (
+                      changedFiles.map((file) => (
+                        <div key={file} className="truncate rounded-lg border border-border bg-background px-3 py-2 font-mono text-xs">
+                          {file}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+                        {localize(lang, "Git status чистый.", "Git status is clean.")}
+                      </div>
+                    )}
+                  </div>
+                </SectionCard>
+
+                <SectionCard title={localize(lang, "Проверки", "Checks")} icon={<Terminal className="h-4 w-4" />}>
+                  <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-secondary/20 p-4 text-xs leading-5 text-foreground">
+                    {run?.test_output || localize(lang, "Команда проверки не запускалась.", "No verification command was run.")}
+                  </pre>
+                </SectionCard>
               </div>
-            </SectionCard>
+            </TabsContent>
 
-            <SectionCard title={localize(lang, "Tests", "Tests")} icon={<Terminal className="h-4 w-4" />}>
-              <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-secondary/20 p-4 text-xs leading-5 text-foreground">
-                {run?.test_output || localize(lang, "Verification command не запускался.", "No verification command was run.")}
-              </pre>
-            </SectionCard>
-
-            <SectionCard title={localize(lang, "Final report", "Final report")} icon={<CheckCircle2 className="h-4 w-4" />}>
-              <pre className="max-h-[520px] overflow-auto whitespace-pre-wrap rounded-lg bg-secondary/20 p-4 text-xs leading-5 text-foreground">
-                {run?.final_report || localize(lang, "Финальный отчет появится после завершения.", "Final report appears after completion.")}
-              </pre>
-            </SectionCard>
-          </div>
-        </PageGrid>
+            <TabsContent value="report">
+              <div className="grid gap-5 xl:grid-cols-2">
+                <SectionCard title={localize(lang, "Результат выполнения", "Run result")} icon={<BrainCircuit className="h-4 w-4" />}>
+                  <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded-lg bg-secondary/20 p-4 text-xs leading-5 text-foreground">
+                    {run?.codex_summary || localize(lang, "Результат пока пуст.", "No result yet.")}
+                  </pre>
+                </SectionCard>
+                <SectionCard title={localize(lang, "Проверка качества", "Quality check")} icon={<BrainCircuit className="h-4 w-4" />}>
+                  <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded-lg bg-secondary/20 p-4 text-xs leading-5 text-foreground">
+                    {run?.gemini_review || localize(lang, "Проверка качества еще не готова.", "Quality review is not ready yet.")}
+                  </pre>
+                </SectionCard>
+                <SectionCard title={localize(lang, "Итоговый отчет", "Final report")} icon={<CheckCircle2 className="h-4 w-4" />} className="xl:col-span-2">
+                  <pre className="max-h-[520px] overflow-auto whitespace-pre-wrap rounded-lg bg-secondary/20 p-4 text-xs leading-5 text-foreground">
+                    {run?.final_report || localize(lang, "Итоговый отчет появится после завершения.", "Final report appears after completion.")}
+                  </pre>
+                </SectionCard>
+              </div>
+            </TabsContent>
+          </Tabs>
+        </div>
       </QueryStateBlock>
     </PageShell>
   );

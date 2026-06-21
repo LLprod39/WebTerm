@@ -23,6 +23,12 @@ import type { KnowledgeCategoryOption, KnowledgeItem, UserKnowledgeFilter } from
 
 type Translate = (key: string) => string;
 type TranslateWithVars = (key: string, vars?: Record<string, string | number>) => string;
+type KnowledgeConfirmDialog = {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  onConfirm: () => Promise<void>;
+};
 
 export function useServerKnowledgeController(
   activeServer: FrontendServer | null,
@@ -43,6 +49,7 @@ export function useServerKnowledgeController(
   const [aiKnowledgeKindFilter, setAiKnowledgeKindFilter] = useState<UserKnowledgeFilter>("all");
   const [knowledgeDeletingId, setKnowledgeDeletingId] = useState<number | null>(null);
   const [knowledgeBulkDeleting, setKnowledgeBulkDeleting] = useState(false);
+  const [knowledgeConfirmDialog, setKnowledgeConfirmDialog] = useState<KnowledgeConfirmDialog | null>(null);
 
   const [aiKnowledgeDialogOpen, setAiKnowledgeDialogOpen] = useState(false);
   const [aiKnowledgeDialogSaving, setAiKnowledgeDialogSaving] = useState(false);
@@ -119,14 +126,19 @@ export function useServerKnowledgeController(
     setAiKnowledgeContent("");
   }, []);
 
+  const clearKnowledgeConfirmDialog = useCallback(() => {
+    setKnowledgeConfirmDialog(null);
+  }, []);
+
   const resetForAdvancedOpen = useCallback(() => {
     setKnowledgeSearch("");
     setAiKnowledgeKindFilter("all");
     setKnowledgeDialogOpen(false);
     setAiKnowledgeDialogOpen(false);
+    clearKnowledgeConfirmDialog();
     resetKnowledgeDialog();
     resetAiKnowledgeDialog();
-  }, [resetAiKnowledgeDialog, resetKnowledgeDialog]);
+  }, [clearKnowledgeConfirmDialog, resetAiKnowledgeDialog, resetKnowledgeDialog]);
 
   const loadForServer = useCallback(async (serverId: number) => {
     const [knowledgeResp, memoryResp] = await Promise.all([
@@ -197,18 +209,25 @@ export function useServerKnowledgeController(
     if (!activeServer) return;
     const target = manualKnowledge.find((item) => item.id === id);
     const label = target?.title?.trim() || t("srv.this_entry");
-    if (!confirm(tr("srv.delete_knowledge_confirm", { name: label }))) return;
-    setKnowledgeDeletingId(id);
-    try {
-      await deleteServerKnowledge(activeServer.id, id);
-      if (knowledgeEditingId === id) {
-        setKnowledgeDialogOpen(false);
-        resetKnowledgeDialog();
-      }
-      await loadForServer(activeServer.id);
-    } finally {
-      setKnowledgeDeletingId(null);
-    }
+
+    setKnowledgeConfirmDialog({
+      title: tr("srv.delete_knowledge_confirm", { name: label }),
+      description: t("srv.delete_knowledge_description"),
+      confirmLabel: t("srv.delete"),
+      onConfirm: async () => {
+        setKnowledgeDeletingId(id);
+        try {
+          await deleteServerKnowledge(activeServer.id, id);
+          if (knowledgeEditingId === id) {
+            setKnowledgeDialogOpen(false);
+            resetKnowledgeDialog();
+          }
+          await loadForServer(activeServer.id);
+        } finally {
+          setKnowledgeDeletingId(null);
+        }
+      },
+    });
   }, [activeServer, knowledgeEditingId, loadForServer, manualKnowledge, resetKnowledgeDialog, t, tr]);
 
   const onKnowledgeToggle = useCallback(async (item: KnowledgeItem) => {
@@ -220,29 +239,32 @@ export function useServerKnowledgeController(
   const onDeleteFilteredManualKnowledge = useCallback(async () => {
     if (!activeServer || filteredManualKnowledge.length === 0) return;
     const isAllManual = filteredManualKnowledge.length === manualKnowledge.length;
-    const confirmed = confirm(
-      isAllManual
+
+    setKnowledgeConfirmDialog({
+      title: isAllManual
         ? tr("srv.delete_manual_all_confirm", { count: filteredManualKnowledge.length })
         : tr("srv.delete_manual_filtered_confirm", { count: filteredManualKnowledge.length }),
-    );
-    if (!confirmed) return;
-
-    setKnowledgeBulkDeleting(true);
-    try {
-      for (const item of filteredManualKnowledge) {
-        await deleteServerKnowledge(activeServer.id, item.id);
-      }
-      if (
-        knowledgeEditingId &&
-        filteredManualKnowledge.some((item) => item.id === knowledgeEditingId)
-      ) {
-        setKnowledgeDialogOpen(false);
-        resetKnowledgeDialog();
-      }
-      await loadForServer(activeServer.id);
-    } finally {
-      setKnowledgeBulkDeleting(false);
-    }
+      description: t("srv.delete_knowledge_bulk_description"),
+      confirmLabel: isAllManual ? t("srv.delete_all") : t("srv.delete_filtered"),
+      onConfirm: async () => {
+        setKnowledgeBulkDeleting(true);
+        try {
+          for (const item of filteredManualKnowledge) {
+            await deleteServerKnowledge(activeServer.id, item.id);
+          }
+          if (
+            knowledgeEditingId &&
+            filteredManualKnowledge.some((item) => item.id === knowledgeEditingId)
+          ) {
+            setKnowledgeDialogOpen(false);
+            resetKnowledgeDialog();
+          }
+          await loadForServer(activeServer.id);
+        } finally {
+          setKnowledgeBulkDeleting(false);
+        }
+      },
+    });
   }, [
     activeServer,
     filteredManualKnowledge,
@@ -250,6 +272,7 @@ export function useServerKnowledgeController(
     loadForServer,
     manualKnowledge.length,
     resetKnowledgeDialog,
+    t,
     tr,
   ]);
 
@@ -286,43 +309,53 @@ export function useServerKnowledgeController(
   const onAiKnowledgeDelete = useCallback(async (item: MemorySnapshotItem) => {
     if (!activeServer) return;
     const label = item.title?.trim() || item.memory_key;
-    if (!confirm(tr("srv.delete_ai_note_confirm", { name: label }))) return;
 
-    setAiKnowledgeDeletingId(item.id);
-    try {
-      await deleteServerMemorySnapshot(activeServer.id, item.id);
-      if (aiKnowledgeEditingId === item.id) {
-        setAiKnowledgeDialogOpen(false);
-        resetAiKnowledgeDialog();
-      }
-      await loadForServer(activeServer.id);
-    } finally {
-      setAiKnowledgeDeletingId(null);
-    }
-  }, [activeServer, aiKnowledgeEditingId, loadForServer, resetAiKnowledgeDialog, tr]);
+    setKnowledgeConfirmDialog({
+      title: tr("srv.delete_ai_note_confirm", { name: label }),
+      description: t("srv.delete_ai_note_description"),
+      confirmLabel: t("srv.delete"),
+      onConfirm: async () => {
+        setAiKnowledgeDeletingId(item.id);
+        try {
+          await deleteServerMemorySnapshot(activeServer.id, item.id);
+          if (aiKnowledgeEditingId === item.id) {
+            setAiKnowledgeDialogOpen(false);
+            resetAiKnowledgeDialog();
+          }
+          await loadForServer(activeServer.id);
+        } finally {
+          setAiKnowledgeDeletingId(null);
+        }
+      },
+    });
+  }, [activeServer, aiKnowledgeEditingId, loadForServer, resetAiKnowledgeDialog, t, tr]);
 
   const onDeleteFilteredAiKnowledge = useCallback(async () => {
     if (!activeServer || filteredAiKnowledge.length === 0) return;
     const isAllAi = filteredAiKnowledge.length === autoKnowledge.length;
-    const confirmed = confirm(
-      isAllAi
-        ? tr("srv.delete_ai_all_confirm", { count: filteredAiKnowledge.length })
-        : tr("srv.delete_ai_filtered_confirm", { count: filteredAiKnowledge.length }),
-    );
-    if (!confirmed) return;
 
     const snapshotIds = filteredAiKnowledge.map((item) => item.id);
-    setAiKnowledgeBulkDeleting(true);
-    try {
-      await bulkDeleteServerMemorySnapshots(activeServer.id, { snapshot_ids: snapshotIds });
-      if (aiKnowledgeEditingId && snapshotIds.includes(aiKnowledgeEditingId)) {
-        setAiKnowledgeDialogOpen(false);
-        resetAiKnowledgeDialog();
-      }
-      await loadForServer(activeServer.id);
-    } finally {
-      setAiKnowledgeBulkDeleting(false);
-    }
+
+    setKnowledgeConfirmDialog({
+      title: isAllAi
+        ? tr("srv.delete_ai_all_confirm", { count: filteredAiKnowledge.length })
+        : tr("srv.delete_ai_filtered_confirm", { count: filteredAiKnowledge.length }),
+      description: t("srv.delete_ai_bulk_description"),
+      confirmLabel: isAllAi ? t("srv.delete_all") : t("srv.delete_filtered"),
+      onConfirm: async () => {
+        setAiKnowledgeBulkDeleting(true);
+        try {
+          await bulkDeleteServerMemorySnapshots(activeServer.id, { snapshot_ids: snapshotIds });
+          if (aiKnowledgeEditingId && snapshotIds.includes(aiKnowledgeEditingId)) {
+            setAiKnowledgeDialogOpen(false);
+            resetAiKnowledgeDialog();
+          }
+          await loadForServer(activeServer.id);
+        } finally {
+          setAiKnowledgeBulkDeleting(false);
+        }
+      },
+    });
   }, [
     activeServer,
     aiKnowledgeEditingId,
@@ -330,25 +363,31 @@ export function useServerKnowledgeController(
     filteredAiKnowledge,
     loadForServer,
     resetAiKnowledgeDialog,
+    t,
     tr,
   ]);
 
   const onPurgeAiMemory = useCallback(async () => {
     if (!activeServer) return;
-    const confirmed = confirm(t("srv.purge_ai_memory_confirm"));
-    if (!confirmed) return;
 
-    setAiMemoryPurging(true);
-    try {
-      await purgeServerAiMemory(activeServer.id);
-      if (aiKnowledgeEditingId) {
-        setAiKnowledgeDialogOpen(false);
-        resetAiKnowledgeDialog();
-      }
-      await loadForServer(activeServer.id);
-    } finally {
-      setAiMemoryPurging(false);
-    }
+    setKnowledgeConfirmDialog({
+      title: t("srv.purge_ai_memory_confirm"),
+      description: t("srv.purge_ai_memory_description"),
+      confirmLabel: t("srv.purge_all"),
+      onConfirm: async () => {
+        setAiMemoryPurging(true);
+        try {
+          await purgeServerAiMemory(activeServer.id);
+          if (aiKnowledgeEditingId) {
+            setAiKnowledgeDialogOpen(false);
+            resetAiKnowledgeDialog();
+          }
+          await loadForServer(activeServer.id);
+        } finally {
+          setAiMemoryPurging(false);
+        }
+      },
+    });
   }, [activeServer, aiKnowledgeEditingId, loadForServer, resetAiKnowledgeDialog, t]);
 
   return {
@@ -363,11 +402,13 @@ export function useServerKnowledgeController(
     aiKnowledgeTitle,
     aiMemoryPurging,
     autoKnowledge,
+    clearKnowledgeConfirmDialog,
     filteredAiKnowledge,
     filteredManualKnowledge,
     knowledgeActive,
     knowledgeBulkDeleting,
     knowledgeCategory,
+    knowledgeConfirmDialog,
     knowledgeContent,
     knowledgeDeletingId,
     knowledgeDialogOpen,

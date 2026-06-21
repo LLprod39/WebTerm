@@ -160,22 +160,22 @@ export function NodeSettingsTab({
               <Cpu className="mt-0.5 h-4 w-4 text-muted-foreground" />
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Badge variant="outline" className="text-[10px]">
+              <Badge variant="outline" className="text-xs">
                 {selectedAgent.model}
               </Badge>
-              <Badge variant="secondary" className="text-[10px]">
+              <Badge variant="secondary" className="text-xs">
                 {selectedAgent.max_iterations} iter
               </Badge>
               {selectedAgent.mcp_servers?.length ? (
-                <Badge variant="secondary" className="text-[10px]">
+                <Badge variant="secondary" className="text-xs">
                   {selectedAgent.mcp_servers.length} MCP
                 </Badge>
               ) : null}
-              <Badge variant="outline" className="text-[10px]">
+              <Badge variant="outline" className="text-xs">
                 sudo: {sudoPolicyLabel(selectedAgent.sudo_policy, lang)}
               </Badge>
               {selectedAgent.skills?.length ? (
-                <Badge variant="secondary" className="text-[10px]">
+                <Badge variant="secondary" className="text-xs">
                   {selectedAgent.skills.length} skills
                 </Badge>
               ) : null}
@@ -440,7 +440,7 @@ export function NodeSettingsTab({
           {selectedSkills.length ? (
             <div className="mt-3 flex flex-wrap gap-2">
               {selectedSkills.map((skill) => (
-                <Badge key={skill.slug} variant="secondary" className="rounded-full px-2.5 py-1 text-[10px]">
+                <Badge key={skill.slug} variant="secondary" className="rounded-full px-2.5 py-1 text-xs">
                   {skill.name}
                 </Badge>
               ))}

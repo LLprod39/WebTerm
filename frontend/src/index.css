@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "./design/tokens.css";
 
 @tailwind base;
 @tailwind components;
@@ -6,40 +7,39 @@
 
 @layer base {
   :root {
-    /* WebTerm command-center theme: near-black surfaces with teal signal states */
-    --background: 210 36% 5%;
-    --foreground: 205 22% 94%;
+    --background: 209 56% 6%;
+    --foreground: 204 29% 94%;
 
-    --card: 210 29% 8%;
-    --card-foreground: 205 20% 92%;
+    --card: 207 45% 9%;
+    --card-foreground: 204 29% 94%;
 
-    --popover: 210 30% 8%;
-    --popover-foreground: 205 20% 92%;
+    --popover: 207 45% 9%;
+    --popover-foreground: 204 29% 94%;
 
-    --primary: 168 70% 46%;
-    --primary-foreground: 170 60% 6%;
+    --primary: 172 71% 46%;
+    --primary-foreground: 172 73% 6%;
 
-    --secondary: 209 24% 13%;
-    --secondary-foreground: 205 18% 86%;
+    --secondary: 207 44% 12%;
+    --secondary-foreground: 207 27% 84%;
 
-    --muted: 210 23% 11%;
-    --muted-foreground: 210 12% 64%;
+    --muted: 207 42% 11%;
+    --muted-foreground: 207 22% 56%;
 
-    --accent: 168 68% 44%;
-    --accent-foreground: 170 60% 6%;
+    --accent: 172 71% 46%;
+    --accent-foreground: 172 73% 6%;
 
-    --destructive: 0 68% 56%;
+    --destructive: 0 84% 67%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 207 20% 18%;
-    --input: 207 21% 18%;
-    --ring: 168 70% 46%;
+    --border: 207 34% 20%;
+    --input: 207 34% 20%;
+    --ring: 172 71% 46%;
 
     --radius: 0.5rem;
 
-    --success: 158 62% 47%;
-    --warning: 43 88% 55%;
-    --info: 190 74% 52%;
+    --success: 153 58% 50%;
+    --warning: 40 87% 62%;
+    --info: 209 90% 66%;
 
     --terminal-bg: 210 40% 5%;
     --terminal-fg: 166 34% 76%;
@@ -70,10 +70,7 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    background:
-      radial-gradient(circle at 18% 0%, hsl(var(--primary) / 0.08), transparent 28rem),
-      radial-gradient(circle at 92% 12%, hsl(var(--info) / 0.05), transparent 24rem),
-      hsl(var(--background));
+    background: hsl(var(--background));
     font-feature-settings: "cv11", "ss01";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -104,8 +101,8 @@
 
   /* Clean focus styles */
   *:focus-visible {
-    outline: 1.5px solid hsl(var(--ring));
-    outline-offset: 1px;
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
     border-radius: var(--radius);
   }
 }
@@ -142,7 +139,7 @@
   }
 
   .enterprise-kicker {
-    @apply text-[10px] font-bold uppercase tracking-[0.16em] text-primary;
+    @apply text-xs font-semibold uppercase tracking-wide text-primary;
   }
 
   /* Card styles */

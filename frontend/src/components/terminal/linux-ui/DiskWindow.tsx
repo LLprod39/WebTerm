@@ -43,9 +43,9 @@ function DiskMountRow({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="truncate font-mono text-sm text-foreground">{mount.mount}</div>
-          <div className="mt-1 truncate text-[11px] text-muted-foreground">{mount.filesystem}</div>
+          <div className="mt-1 truncate text-xs text-muted-foreground">{mount.filesystem}</div>
         </div>
-        <span className={cn("shrink-0 rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide", diskUsageClass(mount.percent))}>
+        <span className={cn("shrink-0 rounded-full border px-2 py-0.5 text-xs uppercase tracking-wide", diskUsageClass(mount.percent))}>
           {mount.percent != null ? `${mount.percent.toFixed(1)}%` : "n/a"}
         </span>
       </div>
@@ -58,7 +58,7 @@ function DiskMountRow({
           style={{ width: `${fill}%` }}
         />
       </div>
-      <div className="mt-2 text-[11px] text-muted-foreground">
+      <div className="mt-2 text-xs text-muted-foreground">
         {mount.used_gb != null && mount.size_gb != null ? `${mount.used_gb} / ${mount.size_gb} GB` : "Usage unavailable"}
       </div>
     </button>
@@ -90,9 +90,9 @@ function DiskPathRow({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="truncate font-mono text-xs text-foreground">{item.path}</div>
-          <div className="mt-1 text-[11px] text-muted-foreground">{label}</div>
+          <div className="mt-1 text-xs text-muted-foreground">{label}</div>
         </div>
-        <span className="shrink-0 rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+        <span className="shrink-0 rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-xs uppercase tracking-wide text-muted-foreground">
           {item.size_mb != null ? `${item.size_mb} MB` : "n/a"}
         </span>
       </div>
@@ -334,7 +334,7 @@ export function DiskWindow({
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex flex-wrap items-center gap-2">
                     <h3 className="font-mono text-sm text-foreground">{selectedMount.mount}</h3>
-                    <span className={cn("rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide", diskUsageClass(selectedMount.percent))}>
+                    <span className={cn("rounded-full border px-2 py-0.5 text-xs uppercase tracking-wide", diskUsageClass(selectedMount.percent))}>
                       {selectedMount.percent != null ? `${selectedMount.percent.toFixed(1)}% full` : "usage unknown"}
                     </span>
                     </div>
@@ -423,7 +423,7 @@ export function DiskWindow({
                           )}
                         >
                           <div className="font-mono text-xs text-foreground">{item.path}</div>
-                          <div className="mt-1 text-[11px] text-muted-foreground">{item.label}</div>
+                          <div className="mt-1 text-xs text-muted-foreground">{item.label}</div>
                         </button>
                       ) : (
                         <DiskPathRow
@@ -447,7 +447,7 @@ export function DiskWindow({
                 {selectedArtifact ? (
                   <div className="space-y-4">
                     <div>
-                      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{selectedArtifact.label}</div>
+                      <div className="text-xs uppercase tracking-wide text-muted-foreground">{selectedArtifact.label}</div>
                       <div className="mt-2 break-all font-mono text-xs text-foreground">{selectedArtifact.path}</div>
                     </div>
                     <div className="grid gap-2">

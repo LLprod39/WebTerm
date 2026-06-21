@@ -2,6 +2,7 @@ import { Eye, FileCode2, FileText, ListChecks, Plus, Send, Trash2, Upload, X } f
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { AgentInputArtifact } from "@/lib/api";
 import { localize } from "@/lib/i18n";
@@ -106,7 +107,7 @@ export function AgentMaterialsSection({
                         <div className="truncate text-xs font-semibold text-foreground">
                           {artifact.name || artifactKindLabel(artifact.kind, lang)}
                         </div>
-                        <div className="mt-0.5 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
+                        <div className="mt-0.5 flex flex-wrap gap-1.5 text-xs leading-4 text-muted-foreground">
                           <span>{artifactKindLabel(artifact.kind, lang)}</span>
                           <span>{artifactSummary(artifact, lang)}</span>
                         </div>
@@ -128,10 +129,10 @@ export function AgentMaterialsSection({
             {activeArtifact && activeArtifactIndex !== null ? (
               <div className="space-y-3 rounded-lg border border-border/70 bg-background/35 p-3">
                 <div className="grid gap-2 sm:grid-cols-[140px_1fr]">
-                  <select
+                  <Select
                     value={activeArtifact.kind}
-                    onChange={(e) => {
-                      const nextKind = e.target.value as AgentInputArtifact["kind"];
+                    onValueChange={(value) => {
+                      const nextKind = value as AgentInputArtifact["kind"];
                       const nextTasks = nextKind === "task_list" ? (activeArtifact.tasks?.length ? activeArtifact.tasks : parseTasksFromContent(activeArtifact.content || "")) : undefined;
                       updateArtifact(activeArtifactIndex, {
                         kind: nextKind,
@@ -139,12 +140,18 @@ export function AgentMaterialsSection({
                         content: nextKind === "task_list" ? activeArtifact.content : activeArtifact.content || tasksToContent(activeArtifact.tasks),
                       });
                     }}
-                    className="h-9 rounded-md border border-border bg-secondary/50 px-2 text-xs text-foreground"
                   >
-                    {ARTIFACT_KINDS.map((item) => (
-                      <option key={item.kind} value={item.kind}>{localize(lang, item.labelRu, item.labelEn)}</option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="h-9 bg-secondary/50 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ARTIFACT_KINDS.map((item) => (
+                        <SelectItem key={item.kind} value={item.kind}>
+                          {localize(lang, item.labelRu, item.labelEn)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Input value={activeArtifact.name} onChange={(e) => updateArtifact(activeArtifactIndex, { name: e.target.value })} className="h-9 bg-secondary/50 text-sm" />
                 </div>
                 {activeArtifact.kind === "task_list" ? (

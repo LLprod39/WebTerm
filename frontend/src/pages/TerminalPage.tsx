@@ -11,6 +11,7 @@ import { fetchFrontendBootstrap, type FrontendServer } from "@/lib/api";
 import { resolveTheme } from "@/components/terminal/TerminalThemes";
 import { TerminalSettingsPanel } from "@/components/terminal/TerminalSettingsPanel";
 import { FileEditorModal } from "@/components/editor/FileEditorModal";
+import { ConfirmDialog } from "@/components/system/ConfirmDialog";
 import { useEditorInterceptor } from "@/hooks/useEditorInterceptor";
 import { useI18n } from "@/lib/i18n";
 import { useTerminalPreferences } from "@/hooks/useTerminalPreferences";
@@ -57,6 +58,7 @@ export default function TerminalPage() {
   const [panelWidth, setPanelWidth] = useState(380);
   const [globalAiPreferences, setGlobalAiPreferences] = useState<AiPreferences>(() => readStoredAiPreferences());
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [pendingCloseTabId, setPendingCloseTabId] = useState<string | null>(null);
   const [isCompactViewport, setIsCompactViewport] = useState(() =>
     typeof window === "undefined" ? false : window.matchMedia("(max-width: 640px)").matches,
   );
@@ -250,6 +252,16 @@ export default function TerminalPage() {
     });
   }, []);
 
+  const requestCloseTab = useCallback((tabId: string) => {
+    if (tabs.length <= 1) return;
+    setPendingCloseTabId(tabId);
+  }, [tabs.length]);
+
+  const pendingCloseTab = useMemo(
+    () => tabs.find((tab) => tab.id === pendingCloseTabId) || null,
+    [pendingCloseTabId, tabs],
+  );
+
   const updateTabStatus = useCallback((tabId: string, status: TerminalConnectionStatus) => {
     if (!tabId) return;
     setTabs((prev) => prev.map((tab) => (tab.id === tabId ? { ...tab, status: mapStatus(status) } : tab)));
@@ -407,7 +419,7 @@ export default function TerminalPage() {
         sidePanelMode={sidePanelMode}
         t={t}
         addTab={addTab}
-        closeTab={closeTab}
+        closeTab={requestCloseTab}
         revealUiPanel={revealUiPanel}
         setActiveTabId={setActiveTabId}
         setSettingsOpen={setSettingsOpen}
@@ -476,6 +488,22 @@ export default function TerminalPage() {
         open={editorState.isOpen}
         initialPath={editorState.filePath}
         onClose={closeEditor}
+      />
+      <ConfirmDialog
+        open={Boolean(pendingCloseTab)}
+        onOpenChange={(open) => {
+          if (!open) setPendingCloseTabId(null);
+        }}
+        title={t("terminal.closeTabTitle")}
+        description={t("terminal.closeTabDescription").replace("{name}", pendingCloseTab ? pendingCloseTab.name : "")}
+        confirmLabel={t("terminal.closeTabConfirm")}
+        cancelLabel={t("terminal.cancel")}
+        onConfirm={() => {
+          if (pendingCloseTab) {
+            closeTab(pendingCloseTab.id);
+          }
+          setPendingCloseTabId(null);
+        }}
       />
     </div>
   );

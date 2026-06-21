@@ -5,6 +5,7 @@
 import React, { useEffect } from "react";
 import { X, Palette, Type, MonitorDot, PaintBucket, FileCode2 } from "lucide-react";
 
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useI18n } from "@/lib/i18n";
 import type { TerminalPrefs } from "@/api/terminal-preferences";
 import { THEME_PRESETS } from "./TerminalThemes";
@@ -103,7 +104,7 @@ export const TerminalSettingsPanel: React.FC<TerminalSettingsPanelProps> = ({
                         : "border-zinc-700/60 bg-zinc-800/60 hover:border-zinc-500"
                     }`}
                   >
-                    <span className={`text-[11px] font-medium ${
+                    <span className={`text-xs font-medium ${
                       prefs.theme_name === p.name ? "text-blue-300" : "text-zinc-300"
                     }`}>
                       {p.label}
@@ -160,7 +161,7 @@ export const TerminalSettingsPanel: React.FC<TerminalSettingsPanelProps> = ({
                     const { background: _, ...rest } = prefs.theme_colors;
                     onUpdate({ theme_colors: rest });
                   }}
-                  className="ml-auto text-[10px] text-zinc-500 hover:text-zinc-300"
+                  className="ml-auto text-xs text-zinc-500 hover:text-zinc-300"
                 >
                   {t("terminal.reset")}
                 </button>
@@ -170,20 +171,24 @@ export const TerminalSettingsPanel: React.FC<TerminalSettingsPanelProps> = ({
 
           {/* ---------- Font ---------- */}
           <Section icon={<Type size={14} />} title={t("terminal.fontLabel")}>
-            <label className="flex items-center gap-2 text-xs text-zinc-400">
-              {t("terminal.fontFamily")}
-              <select
+            <div className="flex items-center gap-2 text-xs text-zinc-400">
+              <span>{t("terminal.fontFamily")}</span>
+              <Select
                 value={prefs.font_family}
-                onChange={(e) => onUpdate({ font_family: e.target.value })}
-                className="flex-1 rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-200"
+                onValueChange={(value) => onUpdate({ font_family: value })}
               >
+                <SelectTrigger className="h-8 flex-1 rounded border-zinc-700 bg-zinc-800 text-xs text-zinc-200" aria-label={t("terminal.fontFamily")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
                 {FONT_OPTIONS.map((f) => (
-                  <option key={f} value={f}>
+                  <SelectItem key={f} value={f}>
                     {f}
-                  </option>
+                  </SelectItem>
                 ))}
-              </select>
-            </label>
+                </SelectContent>
+              </Select>
+            </div>
 
             <label className="flex items-center gap-2 text-xs text-zinc-400">
               {t("terminal.fontSize")}
@@ -271,7 +276,7 @@ export const TerminalSettingsPanel: React.FC<TerminalSettingsPanelProps> = ({
               />
               {t("terminal.interceptEditors")}
             </label>
-            <p className="mt-2 text-[11px] text-zinc-500">{t("terminal.clickableFilesHint")}</p>
+            <p className="mt-2 text-xs text-zinc-500">{t("terminal.clickableFilesHint")}</p>
           </Section>
         </div>
       </div>

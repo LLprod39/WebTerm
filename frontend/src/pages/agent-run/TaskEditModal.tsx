@@ -7,6 +7,8 @@ import {
 } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
+import { DeleteDialog } from "@/components/system/ConfirmDialog";
+import { InlineAlert } from "@/components/system/InlineAlert";
 import { Input } from "@/components/ui/input";
 
 import type { PlanTask } from "./types";
@@ -30,30 +32,35 @@ export function TaskEditModal({
   const [aiMsg, setAiMsg] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
+  const [formError, setFormError] = useState("");
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const aiInputRef = useRef<HTMLInputElement>(null);
 
   const handleSave = async () => {
     setSaving(true);
+    setFormError("");
     try {
       const res = await updatePipelineTask(runId, task.id, { action: "update", name, description });
       onSaved(res.plan_tasks);
       onClose();
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : t("run.save_error"));
+      setFormError(e instanceof Error ? e.message : t("run.save_error"));
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = async () => {
-    if (!confirm(`${t("run.confirm_delete_task")} "${task.name}"?`)) return;
+  const confirmDelete = async () => {
     setDeleting(true);
+    setFormError("");
     try {
       const res = await updatePipelineTask(runId, task.id, { action: "delete" });
       onSaved(res.plan_tasks);
+      setDeleteConfirmOpen(false);
       onClose();
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : t("run.delete_error"));
+      setDeleteConfirmOpen(false);
+      setFormError(e instanceof Error ? e.message : t("run.delete_error"));
     } finally {
       setDeleting(false);
     }
@@ -82,10 +89,20 @@ export function TaskEditModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-2xl overflow-hidden rounded-[28px] border border-border/70 bg-card/95 shadow-[0_28px_80px_rgba(0,0,0,0.38)]">
+      <DeleteDialog
+        open={deleteConfirmOpen}
+        onOpenChange={setDeleteConfirmOpen}
+        title={`${t("run.confirm_delete_task")} "${task.name}"?`}
+        description={t("run.edit_task_desc")}
+        confirmLabel={t("run.delete_task")}
+        cancelLabel={t("run.cancel")}
+        onConfirm={confirmDelete}
+      />
+
+      <div className="w-full max-w-2xl overflow-hidden rounded-xl border border-border/70 bg-card/95 shadow-[0_28px_80px_rgba(0,0,0,0.38)]">
         <div className="flex items-start justify-between gap-4 border-b border-border/70 px-5 py-4">
           <div>
-            <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{t("run.task_editor")}</div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("run.task_editor")}</div>
             <div className="mt-1 text-lg font-semibold text-foreground">{t("run.edit_task")}</div>
             <p className="mt-1 text-sm text-muted-foreground">{t("run.edit_task_desc")}</p>
           </div>
@@ -99,34 +116,35 @@ export function TaskEditModal({
 
         <div className="grid gap-5 px-5 py-5 lg:grid-cols-[minmax(0,1fr)_280px]">
           <div className="space-y-4">
+            {formError ? <InlineAlert tone="danger" title={t("run.error")} description={formError} /> : null}
             <div className="space-y-2">
-              <label className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">{t("run.task_name")}</label>
+              <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("run.task_name")}</label>
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="h-11 rounded-2xl border-border/70 bg-background/70"
+                className="h-11 border-border/70 bg-background/70"
                 placeholder={t("run.task_name")}
               />
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">{t("run.task_desc")}</label>
+              <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("run.task_desc")}</label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="h-48 w-full resize-none rounded-[22px] border border-border/70 bg-background/70 px-4 py-3 text-sm text-foreground outline-none transition-colors focus:border-violet-500/40 focus:ring-2 focus:ring-violet-500/20"
+                className="h-48 w-full resize-none rounded-lg border border-border/70 bg-background/70 px-4 py-3 text-sm text-foreground outline-none transition-colors focus:border-primary/50 focus:ring-2 focus:ring-primary/20"
                 placeholder={t("run.task_desc")}
               />
             </div>
           </div>
 
-          <div className="rounded-[24px] border border-violet-500/20 bg-violet-500/8 p-4">
-            <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.18em] text-violet-300">
+          <div className="rounded-lg border border-[color:var(--wt-ai)] bg-[color:rgb(155_135_245_/_0.10)] p-4">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[color:var(--wt-ai)]">
               <Sparkles className="h-3.5 w-3.5" />
               {t("run.ai_assistant")}
             </div>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">{t("run.ai_assistant_desc")}</p>
             {aiError ? (
-              <div className="mt-3 rounded-2xl border border-red-500/25 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+              <div className="mt-3 rounded-lg border border-destructive/35 bg-destructive/10 px-3 py-2 text-xs text-destructive">
                 {aiError}
               </div>
             ) : null}
@@ -136,13 +154,13 @@ export function TaskEditModal({
                 value={aiMsg}
                 onChange={(e) => setAiMsg(e.target.value)}
                 placeholder={t("run.ai_suggestion")}
-                className="h-11 rounded-2xl border-violet-500/20 bg-background/70 text-sm"
+                className="h-11 border-[color:var(--wt-ai)] bg-background/70 text-sm"
                 onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleAiRefine()}
                 disabled={aiLoading}
               />
               <Button
                 size="sm"
-                className="h-10 w-full rounded-xl bg-violet-600 text-white hover:bg-violet-500"
+                className="h-10 w-full"
                 onClick={handleAiRefine}
                 disabled={aiLoading || !aiMsg.trim()}
               >
@@ -158,19 +176,19 @@ export function TaskEditModal({
             size="sm"
             variant="destructive"
             className="h-8 px-3 gap-1.5 text-xs"
-            onClick={handleDelete}
+            onClick={() => setDeleteConfirmOpen(true)}
             disabled={deleting || saving}
           >
             {deleting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
             {t("run.delete_task")}
           </Button>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="ghost" className="h-10 rounded-xl px-4" onClick={onClose} disabled={saving}>
+            <Button size="sm" variant="ghost" className="h-10 px-4" onClick={onClose} disabled={saving}>
               {t("run.cancel")}
             </Button>
             <Button
               size="sm"
-              className="h-10 rounded-xl bg-primary px-4 text-primary-foreground"
+              className="h-10 px-4"
               onClick={handleSave}
               disabled={saving}
             >

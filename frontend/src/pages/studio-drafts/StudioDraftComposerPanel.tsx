@@ -55,14 +55,14 @@ export function StudioDraftComposerPanel({
   onSubmit: (messageOverride?: string, compilerMode?: StudioPipelineAssistantPayload["compiler_mode"]) => void;
 }) {
   return (
-    <div className={cn("border-b border-border/70 p-4 xl:block", mobilePane === "review" ? "hidden" : "block")}>
+    <div className={cn("min-h-0 flex-1 overflow-y-auto p-4 xl:block", mobilePane === "review" ? "hidden" : "block")}>
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             <Sparkles className="h-3.5 w-3.5" />
             {localize(lang, "Описание задачи", "Request")}
           </div>
-          <div className="mt-1 text-[11px] text-muted-foreground/80">
+          <div className="mt-1 text-xs text-muted-foreground/80">
             {hasOpenQuestions
               ? localize(lang, "Ответьте на вопросы черновика", "Answer draft questions")
               : submitWillRevise
@@ -80,7 +80,7 @@ export function StudioDraftComposerPanel({
 
       <div className="mt-3 grid gap-3">
         <label className="grid gap-1.5">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             {localize(lang, "Название пайплайна", "Pipeline name")}
           </span>
           <Input
@@ -93,11 +93,11 @@ export function StudioDraftComposerPanel({
         {hasOpenQuestions ? (
           <div className="rounded-lg border border-sky-500/25 bg-sky-500/10 p-3">
             <div className="flex min-w-0 items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-sky-100">
+              <div className="flex min-w-0 items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-sky-100">
                 <HelpCircle className="h-3.5 w-3.5 shrink-0" />
                 <span className="truncate">{localize(lang, "Не хватает деталей", "Missing details")}</span>
               </div>
-              <Badge variant="outline" className="shrink-0 border-sky-400/25 bg-sky-400/10 text-[10px] text-sky-100">
+              <Badge variant="outline" className="shrink-0 border-sky-400/25 bg-sky-400/10 text-xs text-sky-100">
                 {Object.values(questionAnswers).filter((value) => value.trim()).length}/{openQuestions.length}
               </Badge>
             </div>
@@ -105,7 +105,7 @@ export function StudioDraftComposerPanel({
               {openQuestions.map((question, index) => (
                 <label key={`${question}-${index}`} className="grid min-w-0 gap-2 rounded-md border border-sky-400/20 bg-background/55 p-2.5">
                   <span className="flex min-w-0 gap-2 text-xs font-medium leading-5 text-sky-50">
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-sky-300/25 bg-sky-300/10 text-[10px]">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-sky-300/25 bg-sky-300/10 text-xs">
                       {index + 1}
                     </span>
                     <span className="min-w-0 [overflow-wrap:anywhere]">{question}</span>
@@ -123,7 +123,7 @@ export function StudioDraftComposerPanel({
           </div>
         ) : null}
         <label className="grid gap-1.5">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             {hasOpenQuestions ? localize(lang, "Доп. сведения", "Extra details") : localize(lang, "Задача для пайплайна", "Pipeline task")}
           </span>
           <Textarea

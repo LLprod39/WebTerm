@@ -2,6 +2,7 @@ import { Layers, Settings } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import type { FrontendGroup, ServerGroupRole } from "@/lib/api";
@@ -67,7 +68,7 @@ export function ServerRulesTab({
           <h2 className="text-sm font-semibold text-foreground">{t("srv.rules_tab")}</h2>
           <p className="text-xs text-muted-foreground mt-1">{t("srv.rules_intro")}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 text-[11px]">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="inline-flex items-center rounded-full border border-border px-2 py-1 font-medium text-foreground">{t("srv.rules_global_badge")}</span>
           <span className="inline-flex items-center rounded-full border border-border px-2 py-1 font-medium text-foreground">{t("srv.rules_group_badge")}</span>
           <span className="inline-flex items-center rounded-full border border-border px-2 py-1 font-medium text-foreground">{t("srv.rules_server_badge")}</span>
@@ -98,7 +99,7 @@ export function ServerRulesTab({
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(340px,0.9fr)]">
               <div className="space-y-4 rounded-lg border border-border p-4">
                 <div>
-                  <div className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">{t("srv.scope_global")}</div>
+                  <div className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">{t("srv.scope_global")}</div>
                   <h3 className="mt-3 text-sm font-semibold text-foreground">{t("srv.rules_default_instructions")}</h3>
                   <p className="text-xs text-muted-foreground mt-1">{t("srv.rules_global_help")}</p>
                 </div>
@@ -152,7 +153,7 @@ export function ServerRulesTab({
 
               <div className="space-y-4 rounded-lg border border-border bg-secondary/10 p-4">
                 <div>
-                  <div className="inline-flex items-center rounded-full bg-secondary px-2.5 py-1 text-[11px] font-medium text-foreground">{t("srv.rules_preview_global_badge")}</div>
+                  <div className="inline-flex items-center rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-foreground">{t("srv.rules_preview_global_badge")}</div>
                   <h3 className="mt-3 text-sm font-semibold text-foreground">{t("srv.rules_preview_global_title")}</h3>
                   <p className="text-xs text-muted-foreground mt-1">{t("srv.rules_preview_global_help")}</p>
                 </div>
@@ -189,25 +190,27 @@ export function ServerRulesTab({
               <div className="space-y-4 rounded-lg border border-border p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <div className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">{t("srv.scope_group")}</div>
+                    <div className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">{t("srv.scope_group")}</div>
                     <h3 className="mt-3 text-sm font-semibold text-foreground">{t("srv.rules_group_title")}</h3>
                     <p className="text-xs text-muted-foreground mt-1">{t("srv.rules_group_help")}</p>
                   </div>
                   <div className="min-w-[220px] space-y-1.5">
                     <Label className="text-xs text-muted-foreground">{t("srv.rules_group_select")}</Label>
-                    <select
-                      value={rulesGroupId ?? ""}
-                      onChange={(event) => {
-                        if (event.target.value) selectGroupRules(Number(event.target.value));
-                      }}
-                      className="flex h-9 w-full rounded-md border border-input bg-secondary/50 px-3 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    <Select
+                      value={rulesGroupId ? String(rulesGroupId) : undefined}
+                      onValueChange={(value) => selectGroupRules(Number(value))}
                     >
-                      {manageableGroups.map((group) => (
-                        <option key={group.id} value={group.id}>
-                          {group.name}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger className="h-9 bg-secondary/50" aria-label={t("srv.rules_group_select")}>
+                        <SelectValue placeholder={t("srv.selected_group")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {manageableGroups.map((group) => (
+                          <SelectItem key={group.id} value={String(group.id)}>
+                            {group.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
@@ -252,7 +255,7 @@ export function ServerRulesTab({
 
               <div className="space-y-4 rounded-lg border border-border bg-secondary/10 p-4">
                 <div>
-                  <div className="inline-flex items-center rounded-full bg-secondary px-2.5 py-1 text-[11px] font-medium text-foreground">
+                  <div className="inline-flex items-center rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-foreground">
                     {t("srv.rules_preview_group_badge")}
                   </div>
                   <h3 className="mt-3 text-sm font-semibold text-foreground">

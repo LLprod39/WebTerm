@@ -226,4 +226,45 @@ describe("Servers page rules and translations", () => {
     expect(await screen.findByText("Уровень: Сервер")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Открыть наследуемые правила" })).toBeInTheDocument();
   });
+
+  it("uses the redesigned server form with inline validation and custom selects", async () => {
+    renderServers("en");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add Server" }));
+
+    expect(await screen.findByRole("dialog", { name: "Create Server" })).toBeInTheDocument();
+    expect(screen.getByText("Required fields are missing")).toBeInTheDocument();
+    expect(screen.getAllByText("Enter a server name.").length).toBeGreaterThan(0);
+    expect(document.querySelector("select")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/Name/), { target: { value: "edge-01" } });
+    fireEvent.change(screen.getByLabelText(/Host/), { target: { value: "10.0.0.20" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+
+    await waitFor(() => {
+      expect(api.createServer).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "edge-01",
+          host: "10.0.0.20",
+          username: "root",
+          server_type: "ssh",
+        }),
+      );
+    });
+  });
+
+  it("tests an existing server connection without native alerts", async () => {
+    const alertSpy = vi.mocked(window.alert);
+    renderServers("en");
+
+    await screen.findByText("prod-web-01");
+    fireEvent.click(screen.getByRole("button", { name: "Edit server prod-web-01" }));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Test connection" }));
+
+    await waitFor(() => {
+      expect(api.testServer).toHaveBeenCalledWith(1, {});
+    });
+    expect(alertSpy).not.toHaveBeenCalled();
+  });
 });

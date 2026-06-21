@@ -36,7 +36,7 @@ export function AuditLoggingTab({
         icon={Eye}
         description={t("audit.log_settings_desc")}
         actions={
-          <Button size="sm" className="h-7 gap-1.5" onClick={() => void onSaveLogging()} disabled={saving}>
+          <Button size="sm" className="h-9 gap-1.5" onClick={() => void onSaveLogging()} disabled={saving}>
             <Save className="h-3 w-3" />
             {saving ? t("audit.saving") : loggingSaved ? t("ai.saved") : t("audit.save")}
           </Button>
@@ -60,7 +60,7 @@ export function AuditLoggingTab({
                   </div>
                   <div className="min-w-0">
                     <p className={cn("text-sm font-bold tracking-tight transition-colors", enabled ? "text-foreground" : "text-foreground/70")}>{item.label}</p>
-                    <p className="line-clamp-2 text-[11px] font-medium leading-4 text-muted-foreground/80">{item.desc}</p>
+                    <p className="line-clamp-2 text-xs font-medium leading-4 text-muted-foreground/80">{item.desc}</p>
                   </div>
                 </div>
                 <Switch
@@ -77,12 +77,12 @@ export function AuditLoggingTab({
       <SectionCard title={t("audit.storage_title")} icon={Database} description={t("audit.storage_desc")}>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label className="text-xs">{t("audit.retention_label")}</Label>
+            <Label className="text-sm">{t("audit.retention_label")}</Label>
             <Select
               value={String(loggingConfig.retention_days)}
               onValueChange={(value) => onUpdateLogging("retention_days", Number(value))}
             >
-              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="30">30 дней</SelectItem>
                 <SelectItem value="60">60 дней</SelectItem>
@@ -93,12 +93,12 @@ export function AuditLoggingTab({
             </Select>
           </div>
           <div className="space-y-2">
-            <Label className="text-xs">{t("audit.export_format")}</Label>
+            <Label className="text-sm">{t("audit.export_format")}</Label>
             <Select
               value={loggingConfig.export_format}
               onValueChange={(value) => onUpdateLogging("export_format", value)}
             >
-              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="json">JSON</SelectItem>
                 <SelectItem value="csv">CSV</SelectItem>
@@ -108,7 +108,7 @@ export function AuditLoggingTab({
           </div>
         </div>
         <div className="mt-4 rounded-lg border border-border bg-muted/20 px-4 py-3">
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Логи хранятся на сервере в таблице <code className="text-foreground">core_ui_useractivitylog</code>.
             При превышении срока хранения старые записи автоматически удаляются.
           </p>
@@ -124,12 +124,12 @@ export function AuditLoggingTab({
         </div>
         <div className="flex flex-wrap gap-2">
           {activeItems.map((item) => (
-            <Badge key={item.key} variant="secondary" className="gap-1 text-[10px]">
+            <Badge key={item.key} variant="secondary" className="gap-1 text-xs">
               <item.icon className="h-2.5 w-2.5" /> {item.label}
             </Badge>
           ))}
           {activeItems.length === 0 && (
-            <p className="text-[11px] text-muted-foreground">{t("audit.log_settings")}</p>
+            <p className="text-xs text-muted-foreground">{t("audit.log_settings")}</p>
           )}
         </div>
       </div>

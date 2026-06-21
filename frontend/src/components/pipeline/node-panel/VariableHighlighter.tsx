@@ -87,7 +87,7 @@ export function VariableHighlighter({
                   textarea.focus();
                   textarea.setSelectionRange(occurrence.start, occurrence.end);
                 }}
-                className="rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {`{{${variable.name}}}`}
               </button>
@@ -95,7 +95,7 @@ export function VariableHighlighter({
           </div>
 
           {hasDoubleBraceToken ? (
-            <p className="text-[11px] text-amber-200">
+            <p className="text-xs text-amber-200">
               {t(
                 lang,
                 "Runtime сейчас подставляет одинарные плейсхолдеры вида {variable}. Двойные скобки подсвечиваются для удобства редактирования.",

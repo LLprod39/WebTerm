@@ -128,7 +128,7 @@ export function ServerPicker({ servers, open, onClose, onSelect, openSessionCoun
           ) : (
             Array.from(groups.entries()).map(([groupName, groupServers]) => (
               <div key={groupName}>
-                <div className="sticky top-0 bg-secondary/40 px-5 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <div className="sticky top-0 bg-secondary/40 px-5 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   {groupName} ({groupServers.length})
                 </div>
                 {groupServers.map((server) => {
@@ -160,7 +160,7 @@ export function ServerPicker({ servers, open, onClose, onSelect, openSessionCoun
                             showLabel={false}
                           />
                           {openSessions > 0 ? (
-                            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                            <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                               {formatSessionCount(openSessions)}
                             </span>
                           ) : null}
@@ -170,7 +170,7 @@ export function ServerPicker({ servers, open, onClose, onSelect, openSessionCoun
                         </p>
                       </div>
 
-                      <span className="shrink-0 text-[10px] uppercase text-muted-foreground/60">
+                      <span className="shrink-0 text-xs uppercase text-muted-foreground/60">
                         {server.server_type}
                       </span>
                     </button>

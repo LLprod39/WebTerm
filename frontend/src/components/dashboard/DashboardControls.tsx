@@ -28,7 +28,7 @@ export function DashboardControls({
         </div>
         <span className="tracking-tight">{isEditing ? "Настройка рабочего пространства" : "Рабочее пространство"}</span>
         {isEditing ? (
-          <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-[10px] font-bold text-primary">
+          <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-bold text-primary">
             Конструктор активен
           </span>
         ) : null}
@@ -75,7 +75,7 @@ export function DashboardEditHelp({ isEditing }: { isEditing: boolean }) {
       <Info className="h-5 w-5 mt-0.5 shrink-0 text-muted-foreground" />
       <div className="space-y-1">
         <strong className="font-bold text-sm block">Инструкция по настройке панелей интерфейса:</strong>
-        <p className="text-[11.5px] leading-relaxed text-muted-foreground">
+        <p className="text-xs leading-relaxed text-muted-foreground">
           • <strong>Перемещение</strong>: Нажмите и удерживайте левую кнопку мыши на верхней панели карточки виджета с иконкой <GripVertical className="inline-block h-3.5 w-3.5 mx-0.5" /> для изменения его расположения на экране.
           <br />
           • <strong>Изменение ширины границ</strong>: Наведите указатель на правый край карточки виджета и потяните его влево или вправо для точного регулирования размера по сетке.

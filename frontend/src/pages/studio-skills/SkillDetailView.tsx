@@ -109,8 +109,8 @@ export function SkillDetailView({
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {selectedSkill?.service && <Badge variant="secondary" className="text-[11px]">{selectedSkill.service}</Badge>}
-          {selectedSkill && <Badge variant="outline" className="font-mono text-[11px] bg-background/50">{selectedSkill.slug}</Badge>}
+          {selectedSkill?.service && <Badge variant="secondary" className="text-xs">{selectedSkill.service}</Badge>}
+          {selectedSkill && <Badge variant="outline" className="font-mono text-xs bg-background/50">{selectedSkill.slug}</Badge>}
         </div>
       </div>
 
@@ -130,7 +130,7 @@ export function SkillDetailView({
                       <BookOpen className="h-5 w-5 text-primary" />
                     </div>
                     <h2 className="text-2xl lg:text-3xl font-bold tracking-tight text-foreground">{selectedSkill.name}</h2>
-                    <Badge variant="outline" className="font-mono text-[11px] bg-background/50 backdrop-blur text-muted-foreground ring-1 ring-border/50">{selectedSkill.slug}</Badge>
+                    <Badge variant="outline" className="font-mono text-xs bg-background/50 backdrop-blur text-muted-foreground ring-1 ring-border/50">{selectedSkill.slug}</Badge>
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-medium text-muted-foreground">
                     {selectedSkill.service && <span className="inline-flex items-center gap-1.5 rounded-md bg-muted/40 px-2 py-1"><Server className="h-3 w-3" /> {selectedSkill.service}</span>}

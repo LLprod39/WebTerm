@@ -110,11 +110,11 @@ export function NodeBase({
               {status && <StatusIcon status={status} />}
             </div>
             {description && (
-              <span className="mt-1 block text-[11px] leading-4.5 text-foreground/75 line-clamp-2">{description}</span>
+              <span className="mt-1 block text-xs leading-4.5 text-foreground/75 line-clamp-2">{description}</span>
             )}
             {statusLabel && (
               <div className="mt-2">
-                <span className="rounded-md border border-border/70 bg-background/60 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                <span className="rounded-md border border-border/70 bg-background/60 px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
                   {statusLabel}
                 </span>
               </div>
@@ -142,7 +142,7 @@ export function NodeBase({
             {port.label ? (
               <span
                 className={cn(
-                  "pointer-events-none absolute -bottom-5 text-[10px] font-medium text-muted-foreground",
+                  "pointer-events-none absolute -bottom-5 text-xs font-medium text-muted-foreground",
                   port.labelClassName,
                 )}
                 style={{ left, transform: "translateX(-50%)" }}

@@ -42,9 +42,9 @@ export function SftpTextEditorSection({
           <div className="flex items-center gap-2">
             <FileCode2 className="h-4 w-4 text-primary" />
             <div className="truncate text-sm font-semibold text-foreground">{editorFilename || editorPath}</div>
-            {isEditorDirty ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary">Изменён</span> : null}
+            {isEditorDirty ? <span className="rounded-md bg-primary/10 px-2 py-0.5 text-xs text-primary">Изменён</span> : null}
           </div>
-          <div className="mt-1 truncate font-mono text-[11px] text-muted-foreground">{editorPath}</div>
+          <div className="mt-1 truncate font-mono text-xs text-muted-foreground">{editorPath}</div>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <Button type="button" size="sm" variant="outline" className="h-8 border-border bg-background px-3 text-xs" onClick={onReload} disabled={isEditorLoading || isEditorSaving}>
@@ -69,7 +69,7 @@ export function SftpTextEditorSection({
         disabled={isEditorLoading}
         aria-label="Содержимое файла"
       />
-      <footer className="flex items-center justify-between border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
+      <footer className="flex items-center justify-between border-t border-border px-4 py-2 text-xs text-muted-foreground">
         <span>{editorEncoding}</span>
         <span>{formatRuCount(editorContent.split("\n").length, "строка", "строки", "строк")} • {editorSizeLabel}</span>
       </footer>

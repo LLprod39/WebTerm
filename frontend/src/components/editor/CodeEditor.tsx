@@ -13,15 +13,7 @@ import { syntaxHighlighting, defaultHighlightStyle, bracketMatching, foldGutter,
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import { tags } from "@lezer/highlight";
 
-import { json } from "@codemirror/lang-json";
-import { yaml } from "@codemirror/lang-yaml";
-import { python } from "@codemirror/lang-python";
-import { javascript } from "@codemirror/lang-javascript";
-import { html } from "@codemirror/lang-html";
-import { css } from "@codemirror/lang-css";
-import { xml } from "@codemirror/lang-xml";
-import { markdown } from "@codemirror/lang-markdown";
-import { sql } from "@codemirror/lang-sql";
+import { detectLanguageExt } from "./codeEditorLanguage";
 
 /* ------------------------------------------------------------------ */
 /*  Dark theme matching terminal palette                               */
@@ -101,61 +93,6 @@ const darkHighlight = HighlightStyle.define([
   { tag: tags.regexp, color: "#7ee787" },
 ]);
 
-/* ------------------------------------------------------------------ */
-/*  Language detection                                                  */
-/* ------------------------------------------------------------------ */
-
-const LANG_MAP: Record<string, () => Extension> = {
-  json: () => json(),
-  jsonc: () => json(),
-  yaml: () => yaml(),
-  yml: () => yaml(),
-  py: () => python(),
-  python: () => python(),
-  js: () => javascript(),
-  mjs: () => javascript(),
-  cjs: () => javascript(),
-  ts: () => javascript({ typescript: true }),
-  tsx: () => javascript({ typescript: true, jsx: true }),
-  jsx: () => javascript({ jsx: true }),
-  html: () => html(),
-  htm: () => html(),
-  css: () => css(),
-  scss: () => css(),
-  xml: () => xml(),
-  svg: () => xml(),
-  md: () => markdown(),
-  markdown: () => markdown(),
-  sql: () => sql(),
-};
-
-export function detectLanguageExt(filename: string): Extension | null {
-  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
-  const factory = LANG_MAP[ext];
-  return factory ? factory() : null;
-}
-
-export function getLanguageLabel(filename: string): string {
-  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
-  const labels: Record<string, string> = {
-    py: "Python", js: "JavaScript", ts: "TypeScript", tsx: "TSX", jsx: "JSX",
-    json: "JSON", yaml: "YAML", yml: "YAML", toml: "TOML",
-    sh: "Shell", bash: "Bash", zsh: "Zsh",
-    conf: "Config", cfg: "Config", ini: "INI",
-    md: "Markdown", txt: "Text", log: "Log",
-    html: "HTML", css: "CSS", scss: "SCSS",
-    xml: "XML", sql: "SQL", dockerfile: "Dockerfile",
-    rs: "Rust", go: "Go", c: "C", cpp: "C++", h: "C Header",
-    java: "Java", rb: "Ruby", php: "PHP",
-    nginx: "Nginx", service: "systemd",
-  };
-  return labels[ext] || "Plain text";
-}
-
-/* ------------------------------------------------------------------ */
-/*  React component                                                     */
-/* ------------------------------------------------------------------ */
-
 interface CodeEditorProps {
   content: string;
   filename: string;
@@ -168,8 +105,10 @@ interface CodeEditorProps {
 export function CodeEditor({ content, filename, readOnly = false, onChange, onSave, className }: CodeEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const contentRef = useRef(content);
   const onChangeRef = useRef(onChange);
   const onSaveRef = useRef(onSave);
+  contentRef.current = content;
   onChangeRef.current = onChange;
   onSaveRef.current = onSave;
 
@@ -213,7 +152,7 @@ export function CodeEditor({ content, filename, readOnly = false, onChange, onSa
     if (langExt) extensions.push(langExt);
     if (readOnly) extensions.push(EditorState.readOnly.of(true));
 
-    const state = EditorState.create({ doc: content, extensions });
+    const state = EditorState.create({ doc: contentRef.current, extensions });
     const view = new EditorView({ state, parent: containerRef.current });
     viewRef.current = view;
 

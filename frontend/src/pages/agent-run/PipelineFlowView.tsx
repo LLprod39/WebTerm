@@ -47,6 +47,14 @@ export function PipelineFlowView({
   onTasksUpdated?: (tasks: PlanTask[]) => void;
 }) {
   const { t } = useI18n();
+  const tr = (key: string, vars?: Record<string, string | number>) => {
+    let text = t(key);
+    if (!vars) return text;
+    for (const [name, value] of Object.entries(vars)) {
+      text = text.split(`{${name}}`).join(String(value));
+    }
+    return text;
+  };
   const goal = run.agent_name;
   const isCompleted = run.status === "completed";
   const isFailed = run.status === "failed";
@@ -55,7 +63,7 @@ export function PipelineFlowView({
   const canEdit = planTasks.some((task) => task.status === "pending");
 
   return (
-    <div className="rounded-[28px] border border-border/70 bg-card/55 shadow-[0_22px_64px_rgba(0,0,0,0.18)]">
+    <div className="rounded-lg border border-border/80 bg-card/95">
       {editingTask ? (
         <TaskEditModal
           task={editingTask}
@@ -70,8 +78,8 @@ export function PipelineFlowView({
 
       <div className="border-b border-border/70 px-5 py-5">
         <div className="grid gap-3 lg:grid-cols-3">
-          <div className="rounded-[22px] border border-border/70 bg-background/55 p-4">
-            <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{t("run.goal")}</div>
+          <div className="rounded-lg border border-border/70 bg-background/55 p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("run.goal")}</div>
             <div className="mt-2 flex items-start gap-3">
               <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-sky-500/20 bg-sky-500/10">
                 <Target className="h-4 w-4 text-sky-300" />
@@ -82,8 +90,8 @@ export function PipelineFlowView({
               </div>
             </div>
           </div>
-          <div className="rounded-[22px] border border-border/70 bg-background/55 p-4">
-            <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{t("run.plan_state")}</div>
+          <div className="rounded-lg border border-border/70 bg-background/55 p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("run.plan_state")}</div>
             <div className="mt-2 flex items-start gap-3">
               <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-violet-500/20 bg-violet-500/10">
                 <Brain className="h-4 w-4 text-violet-300" />
@@ -98,8 +106,8 @@ export function PipelineFlowView({
               </div>
             </div>
           </div>
-          <div className="rounded-[22px] border border-border/70 bg-background/55 p-4">
-            <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{t("run.run_signal")}</div>
+          <div className="rounded-lg border border-border/70 bg-background/55 p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("run.run_signal")}</div>
             <div className="mt-2 flex items-start gap-3">
               <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-border/70 bg-card/70">
                 {isFailed ? (
@@ -125,7 +133,7 @@ export function PipelineFlowView({
 
       <div className="px-4 py-5 sm:px-6">
         <div className="mx-auto max-w-3xl">
-          <FlowNode icon={<Target className="h-4 w-4 text-sky-300" />} label="Goal" title={run.agent_name} color="blue" status="done">
+          <FlowNode icon={<Target className="h-4 w-4 text-sky-300" />} label={t("run.flow_goal")} title={run.agent_name} color="blue" status="done">
             <p className="mt-2 text-sm leading-6 text-muted-foreground">{(run as { goal?: string }).goal || goal}</p>
           </FlowNode>
 
@@ -133,22 +141,22 @@ export function PipelineFlowView({
 
           <FlowNode
             icon={<Brain className="h-4 w-4 text-violet-300" />}
-            label="Orchestrator"
-            title="Планирование"
+            label={t("run.flow_orchestrator")}
+            title={t("run.flow_planning")}
             color="violet"
             status={planTasks.length > 0 ? "done" : isActive ? "running" : "pending"}
           >
             {planTasks.length > 0 ? (
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <p className="text-sm text-muted-foreground">Создан план из {planTasks.length} задач</p>
+                <p className="text-sm text-muted-foreground">{tr("run.plan_created", { count: planTasks.length })}</p>
                 {canEdit ? (
-                  <span className="rounded-full border border-violet-500/20 bg-violet-500/10 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-violet-300">
-                    pending tasks can be edited
+                  <span className="rounded-md border border-[color:var(--wt-ai)] bg-[color:rgb(155_135_245_/_0.10)] px-2.5 py-1 text-xs font-medium text-[color:var(--wt-ai)]">
+                    {t("run.pending_tasks_editable")}
                   </span>
                 ) : null}
               </div>
             ) : isActive ? (
-              <p className="mt-2 text-sm text-violet-300/80">Разбиваю цель на задачи…</p>
+              <p className="mt-2 text-sm text-[color:var(--wt-ai)]">{t("run.plan_breakdown")}</p>
             ) : null}
           </FlowNode>
 
@@ -178,8 +186,8 @@ export function PipelineFlowView({
               <FlowConnector />
               <FlowNode
                 icon={<FileText className="h-4 w-4 text-emerald-300" />}
-                label="Synthesis"
-                title="Финальный отчёт"
+                label={t("run.flow_synthesis")}
+                title={t("run.flow_final_report")}
                 color="green"
                 status={run.final_report ? "done" : isActive ? "running" : "pending"}
               >
@@ -193,30 +201,30 @@ export function PipelineFlowView({
           {isActive && planTasks.length > 0 && !planTasks.some((task) => task.status === "running") ? (
             <div className="flex items-center gap-2 py-5 pl-7 text-sm text-muted-foreground">
               <Brain className="h-4 w-4 text-violet-300" />
-              <span>Оркестратор анализирует результаты…</span>
+              <span>{t("run.orchestrator_waiting")}</span>
             </div>
           ) : null}
 
           {pendingQuestion ? (
-            <div className="mt-5 rounded-[24px] border border-orange-500/25 bg-orange-500/8 p-4">
+            <div className="mt-5 rounded-lg border border-warning/35 bg-warning/10 p-4">
               <div className="flex items-start gap-3">
                 <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-orange-500/20 bg-background/45">
                   <MessageSquare className="h-4 w-4 text-orange-300" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-[10px] uppercase tracking-[0.18em] text-orange-300">Needs input</div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-warning">{t("run.needs_input")}</div>
                   <p className="mt-2 text-sm leading-6 text-foreground">{pendingQuestion}</p>
                   <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                     <Input
                       value={replyText}
                       onChange={(e) => setReplyText(e.target.value)}
-                      placeholder="Ваш ответ…"
-                      className="h-11 rounded-2xl bg-background/80"
+                      placeholder={t("run.reply_placeholder")}
+                      className="h-11 bg-background/80"
                       onKeyDown={(e) => e.key === "Enter" && onReply()}
                     />
-                    <Button size="sm" className="h-11 rounded-2xl px-4" onClick={onReply} disabled={sending}>
+                    <Button size="sm" className="h-11 px-4" onClick={onReply} disabled={sending}>
                       {sending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                      Ответить
+                      {t("run.reply")}
                     </Button>
                   </div>
                 </div>

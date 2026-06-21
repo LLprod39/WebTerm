@@ -71,32 +71,32 @@ export function SkillCard({ skill, isSelected, onSelect, lang }: SkillCardProps)
               {skill.name}
             </p>
             {skill.runtime_enforced ? (
-              <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-500">
+              <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-xs font-bold uppercase tracking-wider text-amber-500">
                 {tr("контроль", "enforced")}
               </span>
             ) : null}
             {skill.is_owner ? (
-              <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
+              <Badge variant="secondary" className="px-1.5 py-0 text-xs">
                 {tr("Мой", "Mine")}
               </Badge>
             ) : null}
             {!skill.is_owner && skill.owner_username ? (
-              <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
+              <Badge variant="outline" className="px-1.5 py-0 text-xs">
                 {tr("Владелец", "Owner")}: {skill.owner_username}
               </Badge>
             ) : null}
             {skill.is_shared ? (
-              <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
+              <Badge variant="outline" className="px-1.5 py-0 text-xs">
                 {tr("Общий", "Shared")}
               </Badge>
             ) : null}
             {skill.can_edit === false ? (
-              <Badge variant="outline" className="px-1.5 py-0 text-[10px] opacity-70">
+              <Badge variant="outline" className="px-1.5 py-0 text-xs opacity-70">
                 {tr("Только чтение", "Read only")}
               </Badge>
             ) : null}
           </div>
-          <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] font-medium text-muted-foreground">
+          <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs font-medium text-muted-foreground">
             {skill.service ? (
               <span className="flex items-center gap-1">
                 <Server className="h-3 w-3" />
@@ -107,7 +107,7 @@ export function SkillCard({ skill, isSelected, onSelect, lang }: SkillCardProps)
           </div>
         </div>
         {skill.safety_level ? (
-          <Badge variant="outline" className="shrink-0 bg-background/50 px-1.5 py-0 text-[10px] shadow-sm">
+          <Badge variant="outline" className="shrink-0 bg-background/50 px-1.5 py-0 text-xs shadow-sm">
             {safetyLevelLabel(skill.safety_level, lang)}
           </Badge>
         ) : null}
@@ -118,7 +118,7 @@ export function SkillCard({ skill, isSelected, onSelect, lang }: SkillCardProps)
         </p>
       ) : null}
       {skill.guardrail_summary?.length > 0 ? (
-        <div className="mt-3 flex items-start gap-1.5 text-[11px] leading-snug text-emerald-600/80 dark:text-emerald-400/80">
+        <div className="mt-3 flex items-start gap-1.5 text-xs leading-snug text-emerald-600/80 dark:text-emerald-400/80">
           <Shield className="mt-0.5 h-3 w-3 min-w-[12px]" />
           <p className="line-clamp-1">{skill.guardrail_summary[0]}</p>
         </div>
@@ -128,7 +128,7 @@ export function SkillCard({ skill, isSelected, onSelect, lang }: SkillCardProps)
           {skill.tags.slice(0, 3).map((tag) => (
             <span
               key={tag}
-              className={`rounded-md px-1.5 py-0.5 text-[10px] font-medium ${
+              className={`rounded-md px-1.5 py-0.5 text-xs font-medium ${
                 isSelected ? "bg-primary/10 text-primary" : "bg-muted/50 text-muted-foreground"
               }`}
             >
@@ -156,13 +156,13 @@ export function ValidationSummaryCard({ report }: { report: StudioSkillValidatio
                 ? tr("Библиотека скиллов прошла валидацию", "Skill library passed validation")
                 : tr("Библиотека скиллов требует проверки", "Skill library needs review")}
             </p>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               {report.summary.skills} {tr("скиллов", "skill(s)")}, {report.summary.errors} {tr("ошибок", "error(s)")},{" "}
               {report.summary.warnings} {tr("предупреждений", "warning(s)")}
             </p>
           </div>
         </div>
-        <Badge variant="outline" className="text-[10px]">
+        <Badge variant="outline" className="text-xs">
           {report.summary.strict ? tr("строгий режим", "strict mode") : tr("стандартный режим", "standard mode")}
         </Badge>
       </CardContent>

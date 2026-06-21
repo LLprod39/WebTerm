@@ -26,27 +26,27 @@ function RunStatusBadge({ status, lang }: { status: string; lang: string }) {
   const normalized = status.toLowerCase();
   if (normalized === "completed") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-400">
+      <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-xs font-semibold text-emerald-400">
         <CheckCircle2 className="h-2.5 w-2.5" /> {localize(lang, "Завершен", "Completed")}
       </span>
     );
   }
   if (normalized === "failed") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-md border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-red-400">
+      <span className="inline-flex items-center gap-1 rounded-md border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-xs font-semibold text-red-400">
         <XCircle className="h-2.5 w-2.5" /> {localize(lang, "Ошибка", "Failed")}
       </span>
     );
   }
   if (normalized === "running") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+      <span className="inline-flex items-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-xs font-semibold text-primary">
         <Loader2 className="h-2.5 w-2.5 animate-spin" /> {localize(lang, "Выполняется", "Running")}
       </span>
     );
   }
   return (
-    <span className="rounded-md border border-border/50 bg-secondary/40 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+    <span className="rounded-md border border-border/50 bg-secondary/40 px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
       {status}
     </span>
   );
@@ -155,7 +155,7 @@ export function PipelineCard({
           {tags.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">
               {tags.map((tag) => (
-                <span key={tag} className="inline-flex items-center rounded border border-border px-1.5 py-0 text-[10px] text-muted-foreground">
+                <span key={tag} className="inline-flex items-center rounded border border-border px-1.5 py-0 text-xs text-muted-foreground">
                   {tag}
                 </span>
               ))}
@@ -164,11 +164,11 @@ export function PipelineCard({
 
           <div className="mt-3 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 {formatRelativeTime(pipeline.updated_at, lang)}
               </span>
               {activityState.label && (
-                <span className={cn("inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium", activityToneClass)}>
+                <span className={cn("inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs font-medium", activityToneClass)}>
                   <ActivityIcon className={cn("h-2.5 w-2.5", activityState.icon === "running" && "animate-spin")} />
                   {formatActivityLabel(activityState.label, lang)}
                 </span>
@@ -182,11 +182,11 @@ export function PipelineCard({
               </Button>
             </div>
           </div>
-          <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-muted-foreground">
+          <p className="mt-2 line-clamp-2 text-xs leading-4 text-muted-foreground">
             {formatActivityDetail(activityState.detail, lang)}
           </p>
 
-          {cloning && <p className="mt-2 text-[11px] text-primary">{localize(lang, "Создаю копию...", "Creating a copy...")}</p>}
+          {cloning && <p className="mt-2 text-xs text-primary">{localize(lang, "Создаю копию...", "Creating a copy...")}</p>}
         </div>
       </div>
     </article>

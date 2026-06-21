@@ -113,7 +113,7 @@ export function SkillCatalogView({
               </SelectContent>
             </Select>
             <div className="w-px h-6 bg-border/40 mx-1"></div>
-            <span className="text-[11px] font-medium text-muted-foreground whitespace-nowrap bg-muted/40 px-2 py-1 rounded-md">
+            <span className="text-xs font-medium text-muted-foreground whitespace-nowrap bg-muted/40 px-2 py-1 rounded-md">
               {tr(`${filteredSkills.length} найдено`, `${filteredSkills.length} found`)}
             </span>
             <Button size="sm" variant="outline" className="h-10 gap-1.5 rounded-lg px-3" onClick={onCreateSkill}>

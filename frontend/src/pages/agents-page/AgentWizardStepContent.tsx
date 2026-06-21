@@ -8,10 +8,12 @@ import {
   Server,
   Settings2,
   Shield,
+  Search,
   Zap,
   type LucideIcon,
 } from "lucide-react";
 
+import { InlineAlert } from "@/components/system/InlineAlert";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type {
@@ -28,6 +30,7 @@ import {
   AGENT_ICONS,
   type AgentSudoPolicy,
   type AgentTaskDraft,
+  type AgentWizardCheck,
   type AgentWizardStep,
   FULL_AGENT_TOOL_OPTIONS,
   QUICK_TIMES,
@@ -77,6 +80,9 @@ type AgentWizardStepContentProps = {
   sudoPolicy: AgentSudoPolicy;
   setSudoPolicy: StateSetter<AgentSudoPolicy>;
   servers: FrontendServer[];
+  totalServerCount: number;
+  serverSearch: string;
+  setServerSearch: StateSetter<string>;
   selectedServers: number[];
   toggleServer: (id: number) => void;
   selectAll: () => void;
@@ -116,8 +122,12 @@ type AgentWizardStepContentProps = {
   setTelegramEnabled: StateSetter<boolean>;
   telegramChatId: string;
   setTelegramChatId: StateSetter<string>;
+  sudoRiskAcknowledged: boolean;
+  setSudoRiskAcknowledged: StateSetter<boolean>;
   summaryRows: SummaryRow[];
   commandCount: number;
+  readiness: number;
+  readinessChecks: AgentWizardCheck[];
 };
 
 export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
@@ -150,6 +160,9 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
     sudoPolicy,
     setSudoPolicy,
     servers,
+    totalServerCount,
+    serverSearch,
+    setServerSearch,
     selectedServers,
     toggleServer,
     selectAll,
@@ -189,8 +202,12 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
     setTelegramEnabled,
     telegramChatId,
     setTelegramChatId,
+    sudoRiskAcknowledged,
+    setSudoRiskAcknowledged,
     summaryRows,
     commandCount,
+    readiness,
+    readinessChecks,
   } = props;
 
   return (
@@ -212,7 +229,7 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
                     <button key={item.key} type="button" aria-pressed={active} onClick={() => setMode(item.key)} className={`min-h-[92px] rounded-lg border p-4 text-left transition-colors ${active ? "border-primary bg-primary/10 text-foreground" : "border-border/70 bg-background/30 text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>
                       <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg border border-border/70 bg-secondary/50 text-primary"><Icon className="h-4 w-4" /></span>
                       <span className="block text-sm font-semibold">{item.label}</span>
-                      <span className="mt-1 block text-xs text-muted-foreground">{item.text}</span>
+                      <span className="mt-1 block text-xs leading-4 text-muted-foreground">{item.text}</span>
                     </button>
                   );
                 })}
@@ -297,19 +314,51 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
                     <button key={option.value} type="button" aria-pressed={active} onClick={() => setSudoPolicy(option.value)} className={`min-h-[76px] rounded-lg border p-3 text-left transition-colors ${active ? "border-primary bg-primary/10 text-foreground" : "border-border/70 bg-background/30 text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>
                       <Shield className="mb-2 h-4 w-4 text-primary" />
                       <span className="block text-sm font-semibold">{localize(lang, option.labelRu, option.labelEn)}</span>
+                      <span className="mt-1 block text-xs leading-4 text-muted-foreground">{localize(lang, option.hintRu, option.hintEn)}</span>
                     </button>
                   );
                 })}
               </div>
             </div>
+            {sudoPolicy === "approved" ? (
+              <label className="grid gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm leading-5 text-foreground sm:grid-cols-[auto_1fr]">
+                <input
+                  type="checkbox"
+                  checked={sudoRiskAcknowledged}
+                  onChange={(event) => setSudoRiskAcknowledged(event.target.checked)}
+                  className="mt-1"
+                />
+                <span>
+                  {localize(
+                    lang,
+                    "Я понимаю, что агент сможет запускать разрешённые команды с sudo в рамках выбранных серверов.",
+                    "I understand this agent can run approved sudo commands within the selected server scope.",
+                  )}
+                </span>
+              </label>
+            ) : null}
           </section>
         )}
 
         {step === "servers" && (
           <section className="space-y-4 rounded-lg border border-border/70 bg-secondary/15 p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <h3 className="text-lg font-semibold text-foreground">{localize(lang, "Выбор серверов", "Server selection")}</h3>
+              <div>
+                <h3 className="text-lg font-semibold text-foreground">{localize(lang, "Выбор серверов", "Server selection")}</h3>
+                <p className="mt-1 text-sm leading-5 text-muted-foreground">
+                  {localize(lang, `${selectedServers.length} выбрано из ${totalServerCount}`, `${selectedServers.length} selected of ${totalServerCount}`)}
+                </p>
+              </div>
               <button type="button" onClick={selectAll} className={`min-h-9 rounded-md border px-3 text-sm font-semibold transition-colors ${hasAllServersSelected ? "border-primary bg-primary/10 text-primary" : "border-border/70 text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>{hasAllServersSelected ? localize(lang, "Снять выбор", "Clear") : localize(lang, "Выбрать все", "Select all")}</button>
+            </div>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={serverSearch}
+                onChange={(event) => setServerSearch(event.target.value)}
+                placeholder={localize(lang, "Поиск по имени, хосту или группе", "Search by name, host, or group")}
+                className="h-10 bg-background/60 pl-9"
+              />
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               {servers.map((server) => {
@@ -317,12 +366,21 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
                 return (
                   <button key={server.id} type="button" aria-pressed={active} onClick={() => toggleServer(server.id)} className={`flex min-h-[64px] items-center gap-3 rounded-lg border p-3 text-left transition-colors ${active ? "border-primary bg-primary/10 text-foreground" : "border-border/70 bg-background/30 text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-secondary/50 text-muted-foreground"><Server className="h-4 w-4" /></span>
-                    <span className="min-w-0 flex-1 truncate text-sm font-semibold">{server.name}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold">{server.name}</span>
+                      <span className="mt-0.5 block truncate text-xs leading-4 text-muted-foreground">{server.host} · {server.group_name}</span>
+                    </span>
                     {active && <CheckCircle2 className="h-5 w-5 shrink-0 text-primary" />}
                   </button>
                 );
               })}
             </div>
+            {!servers.length ? (
+              <InlineAlert
+                tone="warning"
+                description={localize(lang, "Под текущий поиск серверы не найдены.", "No servers match the current search.")}
+              />
+            ) : null}
             <div className="space-y-4 rounded-lg border border-border/70 bg-background/25 p-4">
               <div className="flex items-center justify-between gap-3">
                 <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground"><CalendarDays className="h-4 w-4 text-primary" /> {t("agent.schedule")}</h4>
@@ -334,7 +392,7 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
                   return (
                     <button key={option.mode} type="button" aria-pressed={active} onClick={() => setScheduleMode(option.mode)} className={`min-h-[76px] rounded-lg border p-3 text-left transition-colors ${active ? "border-primary bg-primary/10 text-foreground" : "border-border/70 bg-background/30 text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>
                       <span className="block text-sm font-semibold">{localize(lang, option.labelRu, option.labelEn)}</span>
-                      <span className="mt-1 block text-[11px] text-muted-foreground">{localize(lang, option.hintRu, option.hintEn)}</span>
+                      <span className="mt-1 block text-xs leading-4 text-muted-foreground">{localize(lang, option.hintRu, option.hintEn)}</span>
                     </button>
                   );
                 })}
@@ -383,7 +441,7 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <h4 className="text-sm font-semibold text-foreground">{localize(lang, "Доступ к инструментам", "Tool access")}</h4>
-                    <p className="mt-1 text-xs text-muted-foreground">
+                    <p className="mt-1 text-xs leading-4 text-muted-foreground">
                       {localize(lang, `${enabledToolCount} из ${FULL_AGENT_TOOL_OPTIONS.length} включено`, `${enabledToolCount} of ${FULL_AGENT_TOOL_OPTIONS.length} enabled`)}
                     </p>
                   </div>
@@ -413,7 +471,7 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground"><BookOpen className="h-4 w-4 text-primary" /> {localize(lang, "Скиллы агента", "Agent skills")}</h4>
-                  <p className="mt-1 text-xs text-muted-foreground">
+                    <p className="mt-1 text-xs leading-4 text-muted-foreground">
                     {localize(lang, `${selectedSkillSlugs.length} выбрано · ${availableSkills.length} доступно`, `${selectedSkillSlugs.length} selected · ${availableSkills.length} available`)}
                   </p>
                 </div>
@@ -430,7 +488,7 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
                     return (
                       <button key={skill.slug} type="button" aria-pressed={active} onClick={() => toggleSkill(skill.slug)} className={`min-h-[58px] rounded-lg border px-3 py-2 text-left transition-colors ${active ? "border-primary bg-primary/10 text-foreground" : "border-border/70 bg-background/35 text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>
                         <span className="block truncate text-xs font-semibold">{skill.name}</span>
-                        <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{skill.service || skill.category || skill.slug}</span>
+                        <span className="mt-0.5 block truncate text-xs leading-4 text-muted-foreground">{skill.service || skill.category || skill.slug}</span>
                       </button>
                     );
                   })}
@@ -475,18 +533,36 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
             </div>
             <div className="rounded-lg border border-border/70 bg-background/30 p-4">
               <div className="grid gap-3 text-sm md:grid-cols-4">
-                <div><span className="block text-xs text-muted-foreground">{localize(lang, "Команды", "Commands")}</span><strong>{commandCount}</strong></div>
-                <div><span className="block text-xs text-muted-foreground">{localize(lang, "Скиллы", "Skills")}</span><strong>{selectedSkillSlugs.length}</strong></div>
-                <div><span className="block text-xs text-muted-foreground">{localize(lang, "Материалы", "Materials")}</span><strong>{inputArtifacts.length}</strong></div>
-                <div><span className="block text-xs text-muted-foreground">Telegram</span><strong>{telegramEnabled ? localize(lang, "Да", "Yes") : localize(lang, "Нет", "No")}</strong></div>
+                <div><span className="block text-xs leading-4 text-muted-foreground">{localize(lang, "Команды", "Commands")}</span><strong>{commandCount}</strong></div>
+                <div><span className="block text-xs leading-4 text-muted-foreground">{localize(lang, "Скиллы", "Skills")}</span><strong>{selectedSkillSlugs.length}</strong></div>
+                <div><span className="block text-xs leading-4 text-muted-foreground">{localize(lang, "Материалы", "Materials")}</span><strong>{inputArtifacts.length}</strong></div>
+                <div><span className="block text-xs leading-4 text-muted-foreground">Telegram</span><strong>{telegramEnabled ? localize(lang, "Да", "Yes") : localize(lang, "Нет", "No")}</strong></div>
+                <div><span className="block text-xs leading-4 text-muted-foreground">{localize(lang, "Готовность", "Readiness")}</span><strong>{readiness}%</strong></div>
               </div>
             </div>
+            {readiness < 100 ? (
+              <InlineAlert
+                tone="warning"
+                title={localize(lang, "Preflight ещё не пройден", "Preflight is not complete")}
+                description={localize(
+                  lang,
+                  readinessChecks.filter((check) => !check.passed).map((check) => check.labelRu).join(" · "),
+                  readinessChecks.filter((check) => !check.passed).map((check) => check.labelEn).join(" · "),
+                )}
+              />
+            ) : (
+              <InlineAlert
+                tone="success"
+                title={localize(lang, "Preflight пройден", "Preflight passed")}
+                description={localize(lang, "Конфигурация готова к созданию агента.", "Configuration is ready to create the agent.")}
+              />
+            )}
           </section>
         )}
       </div>
 
       {step !== "template" && (
-        <AgentWizardQuickSummary lang={lang} summaryRows={summaryRows} />
+        <AgentWizardQuickSummary lang={lang} summaryRows={summaryRows} readiness={readiness} checks={readinessChecks} />
       )}
     </div>
   );

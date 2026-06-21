@@ -17,15 +17,15 @@ export function NovaContextCard({ context }: NovaContextCardProps) {
   const identity = [session?.user, session?.hostname].filter(Boolean).join("@");
 
   return (
-    <div className="space-y-2 rounded-md border border-border/50 bg-card/70 px-2.5 py-2 text-[11px] text-muted-foreground">
+    <div className="space-y-2 rounded-md border border-border/50 bg-card/70 px-2.5 py-2 text-xs text-muted-foreground">
       <div className="flex items-center justify-between gap-2">
         <span className="font-medium text-foreground">{t("terminal.ai.nova.context.title")}</span>
-        <span className="text-[10px]">{t("terminal.ai.nova.context.description")}</span>
+        <span className="text-xs">{t("terminal.ai.nova.context.description")}</span>
       </div>
 
       {session ? (
         <div className="space-y-1 rounded-md border border-border/40 bg-background/40 px-2 py-1.5">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-foreground/80">
+          <div className="text-xs font-semibold uppercase tracking-wide text-foreground/80">
             {t("terminal.ai.nova.context.session")}
           </div>
           <div className="grid gap-1 sm:grid-cols-2">
@@ -47,14 +47,14 @@ export function NovaContextCard({ context }: NovaContextCardProps) {
 
       {recentActivity.length ? (
         <div className="space-y-1 rounded-md border border-border/40 bg-background/40 px-2 py-1.5">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-foreground/80">
+          <div className="text-xs font-semibold uppercase tracking-wide text-foreground/80">
             {t("terminal.ai.nova.context.recentActivity")}
           </div>
           <div className="space-y-1">
             {recentActivity.map((item, index) => (
               <div key={`${item.command}-${item.cwd || ""}-${index}`} className="rounded border border-border/30 bg-background/30 px-1.5 py-1">
                 <div className="font-mono text-foreground/90">{item.command}</div>
-                <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px]">
+                <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-xs">
                   {item.cwd ? <span>{t("terminal.ai.nova.context.cwd")}: {item.cwd}</span> : null}
                   {typeof item.exit_code === "number" ? <span>{t("terminal.ai.nova.context.exit")}: {item.exit_code}</span> : null}
                   {item.source ? <span>{t("terminal.ai.nova.context.source")}: {item.source}</span> : null}

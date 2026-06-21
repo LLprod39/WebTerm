@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, ClipboardList, FileText, Rocket, Target } from "lucide-react";
+import { ClipboardList, FileText, Rocket, Target } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-import { PageShell, StatusBadge } from "@/components/ui/page-shell";
+import { PageHero, PageShell, StatusBadge } from "@/components/ui/page-shell";
 import { marsApi, type MarsInterviewQuestion, type MarsProject, type MarsSession } from "@/lib/api";
 import { localize, useI18n } from "@/lib/i18n";
 import {
@@ -177,14 +177,21 @@ export default function MarsPage() {
   const canSaveAnswers = interviewReady && !answerSession.isPending;
   const canApprovePlan = Boolean(session && planDraft.trim()) && !approvePlan.isPending;
   const canRun = Boolean(session?.status === "approved") && !runSession.isPending;
+  const showStatusRail = Boolean(
+    latestRunId ||
+      latestRun ||
+      runSession.isPending ||
+      session?.status === "running" ||
+      session?.status === "completed",
+  );
 
   const wizardSteps: WizardStepMeta[] = useMemo(
     () => [
       {
         id: "brief",
-        label: localize(lang, "Идея", "Idea"),
+        label: localize(lang, "Задача", "Task"),
         title: localize(lang, "Что создать", "What to build"),
-        description: localize(lang, "Скрипт, бот, сайт, утилита или проект.", "Script, bot, site, tool, or project."),
+        description: localize(lang, "Опишите результат и ограничения.", "Describe the result and limits."),
         done: Boolean(session),
         available: true,
         icon: Target,
@@ -192,7 +199,7 @@ export default function MarsPage() {
       {
         id: "interview",
         label: localize(lang, "Уточнения", "Clarify"),
-        title: localize(lang, "ИИ должен понять детали", "AI understands details"),
+        title: localize(lang, "MARS должен понять детали", "MARS understands details"),
         description: localize(lang, "Ответьте по шагам, чтобы убрать догадки.", "Answer step by step to remove guesswork."),
         done: interviewReady,
         available: Boolean(session),
@@ -200,33 +207,24 @@ export default function MarsPage() {
       },
       {
         id: "plan",
-        label: localize(lang, "ТЗ", "Spec"),
-        title: localize(lang, "Проверь, как ИИ понял", "Review AI understanding"),
-        description: localize(lang, "Можно поправить ТЗ до создания.", "Edit the spec before building."),
+        label: localize(lang, "План", "Plan"),
+        title: localize(lang, "Проверьте план", "Review the plan"),
+        description: localize(lang, "Можно поправить план до выполнения.", "Edit the plan before running."),
         done: session?.status === "approved",
         available: Boolean(session && planDraft.trim()),
         icon: FileText,
       },
       {
         id: "run",
-        label: localize(lang, "Создание", "Build"),
-        title: localize(lang, "ИИ пишет и проверяет", "AI builds and checks"),
-        description: localize(lang, "MARS меняет код, запускает проверки и показывает ход.", "MARS changes code, runs checks, and shows progress."),
+        label: localize(lang, "Выполнение", "Run"),
+        title: localize(lang, "MARS пишет и проверяет", "MARS builds and checks"),
+        description: localize(lang, "Результат показывается внутри этого шага.", "The result appears inside this step."),
         done: Boolean(latestRunId),
         available: session?.status === "approved" || Boolean(latestRunId),
         icon: Rocket,
       },
-      {
-        id: "final",
-        label: localize(lang, "Рабочий проект", "Ready project"),
-        title: localize(lang, "Готово к запуску", "Ready to launch"),
-        description: localize(lang, "Итоговый отчет и ссылка на результат.", "Final report and result link."),
-        done: latestRun?.status === "completed",
-        available: Boolean(latestRunId),
-        icon: CheckCircle2,
-      },
     ],
-    [interviewReady, lang, latestRun?.status, latestRunId, planDraft, session],
+    [interviewReady, lang, latestRunId, planDraft, session],
   );
 
   useEffect(() => {
@@ -338,7 +336,7 @@ export default function MarsPage() {
         />
       );
     }
-    if (activeStep === "run" || activeStep === "final") {
+    if (activeStep === "run") {
       return (
         <MarsRunStep
           lang={lang}
@@ -367,25 +365,16 @@ export default function MarsPage() {
   };
 
   return (
-    <PageShell
-      width="full"
-      className="-my-5 min-h-[calc(100vh-2rem)] space-y-5 bg-[radial-gradient(circle_at_18%_9%,rgba(20,184,166,0.13),transparent_27%),linear-gradient(180deg,#0a0f14_0%,#0b1117_100%)] px-4 py-5 md:px-6 xl:px-8"
-    >
-      <section className="px-0 py-2">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-emerald-300">MARS</div>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-100">
-              {localize(lang, "Project Command Center", "Project Command Center")}
-            </h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-              {localize(
-                lang,
-                "Создавайте scripts, проекты и automation через guided brief, пошаговую сборку, проверку и отчет.",
-                "Create scripts, projects, and automation through a guided brief, step-by-step build, verification, and report.",
-              )}
-            </p>
-          </div>
+    <PageShell width="full" className="space-y-5">
+      <PageHero
+        kicker={localize(lang, "WebTerm workspace", "WebTerm workspace")}
+        title={localize(lang, "MARS beta - AI-разработка", "MARS beta - AI development")}
+        description={localize(
+          lang,
+          "Соберите задачу через описание, уточнения, план и проверяемое выполнение внутри общего WebTerm workspace.",
+          "Shape a task through description, clarifying questions, plan, and verifiable execution inside the shared WebTerm workspace.",
+        )}
+        actions={
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge
               label={localize(lang, `Проект: ${shortProjectTitle}`, `Project: ${shortProjectTitle}`)}
@@ -399,8 +388,8 @@ export default function MarsPage() {
               className="h-9 px-3"
             />
           </div>
-        </div>
-      </section>
+        }
+      />
 
       {firstError ? (
         <div className="rounded-lg border border-destructive/30 bg-destructive/8 px-4 py-3 text-sm text-destructive">
@@ -424,11 +413,13 @@ export default function MarsPage() {
           />
         }
         statusRail={
-          <MarsOrchestratorRail
-            lang={lang}
-            latestRun={latestRun}
-            totalProgress={totalProgress}
-          />
+          showStatusRail ? (
+            <MarsOrchestratorRail
+              lang={lang}
+              latestRun={latestRun}
+              totalProgress={totalProgress}
+            />
+          ) : undefined
         }
       >
         <MarsWizardNav activeStep={activeStep} steps={wizardSteps} onStepChange={setActiveStep} />

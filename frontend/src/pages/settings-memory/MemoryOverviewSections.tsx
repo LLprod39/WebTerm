@@ -33,7 +33,7 @@ function MemoryStats({ stats }: { stats: ServerMemoryOverviewResponse["stats"] }
       {items.map((stat) => (
         <div key={stat.label} className="group/stat relative overflow-hidden rounded-xl border border-primary/5 bg-background/50 px-4 py-4 shadow-sm transition-all hover:border-primary/20 hover:bg-background/80 hover:shadow-md">
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 transition-opacity group-hover/stat:opacity-100" />
-          <p className="relative z-10 text-[11px] font-bold uppercase tracking-widest text-muted-foreground/70 transition-colors group-hover/stat:text-primary">{stat.label}</p>
+          <p className="relative z-10 text-xs font-bold uppercase tracking-widest text-muted-foreground/70 transition-colors group-hover/stat:text-primary">{stat.label}</p>
           <p className="relative z-10 mt-2 text-2xl font-black text-foreground/90">{stat.value}</p>
         </div>
       ))}
@@ -103,7 +103,7 @@ export function MemoryOverviewSections({
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
           <MemoryWorkerStateCard label="Консолидация памяти" state={memoryOverview.worker_states?.memory_dreams || memoryOverview.daemon_state} />
           <MemoryWorkerStateCard label="Выполнение агентов" state={memoryOverview.worker_states?.agent_execution} />
-          <MemoryWorkerStateCard label="Службы наблюдения (Watchers)" state={memoryOverview.worker_states?.watchers} />
+          <MemoryWorkerStateCard label="Службы наблюдения" state={memoryOverview.worker_states?.watchers} />
         </div>
       </SectionCard>
 

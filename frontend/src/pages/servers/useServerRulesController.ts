@@ -14,6 +14,7 @@ import {
   type ServerDetailsResponse,
   type ServerGroupRole,
 } from "@/lib/api";
+import { notify } from "@/lib/notify";
 
 import {
   formatScopedRulesPreview,
@@ -297,7 +298,7 @@ export function useServerRulesController({
 
   const onSaveGlobalContext = async () => {
     if (parsedGlobalEnvironment.error) {
-      alert(t("srv.invalid_global_json"));
+      notify.error({ title: t("srv.invalid_global_json") });
       return;
     }
     await saveGlobalServerContext({
@@ -306,13 +307,13 @@ export function useServerRulesController({
       required_checks: globalRequired,
       environment_vars: parsedGlobalEnvironment.value,
     });
-    alert(t("srv.global_context_saved"));
+    notify.success({ title: t("srv.global_context_saved") });
   };
 
   const onSaveGroupContext = async () => {
     if (!rulesGroupId) return;
     if (parsedGroupEnvironment.error) {
-      alert(t("srv.invalid_group_json"));
+      notify.error({ title: t("srv.invalid_group_json") });
       return;
     }
     await saveGroupServerContext(rulesGroupId, {
@@ -320,13 +321,13 @@ export function useServerRulesController({
       forbidden_commands: groupForbidden,
       environment_vars: parsedGroupEnvironment.value,
     });
-    alert(t("srv.group_context_saved"));
+    notify.success({ title: t("srv.group_context_saved") });
   };
 
   const onSaveServerContext = async () => {
     if (!activeServer) return;
     if (parsedServerNetworkConfig.error) {
-      alert(t("srv.invalid_server_network_json"));
+      notify.error({ title: t("srv.invalid_server_network_json") });
       return;
     }
 
@@ -345,7 +346,7 @@ export function useServerRulesController({
             }
           : current,
       );
-      alert(t("srv.server_override_saved"));
+      notify.success({ title: t("srv.server_override_saved") });
       await reload();
     } finally {
       setServerScopeLoading(false);
@@ -356,19 +357,19 @@ export function useServerRulesController({
     if (!activeServer?.group_id || !groupMemberUser.trim()) return;
     await addServerGroupMember(activeServer.group_id, { user: groupMemberUser.trim(), role: groupMemberRole });
     setGroupMemberUser("");
-    alert(t("srv.group_member_updated"));
+    notify.success({ title: t("srv.group_member_updated") });
   };
 
   const onRemoveGroupMember = async () => {
     if (!activeServer?.group_id || !groupRemoveUserId.trim()) return;
     const userId = Number(groupRemoveUserId);
     if (!Number.isFinite(userId) || userId <= 0) {
-      alert(t("srv.invalid_user_id"));
+      notify.error({ title: t("srv.invalid_user_id") });
       return;
     }
     await removeServerGroupMember(activeServer.group_id, userId);
     setGroupRemoveUserId("");
-    alert(t("srv.group_member_removed"));
+    notify.success({ title: t("srv.group_member_removed") });
   };
 
   return {

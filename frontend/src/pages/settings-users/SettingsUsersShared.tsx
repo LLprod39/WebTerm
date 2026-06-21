@@ -1,4 +1,5 @@
 import { ACCESS_UI_TEXT, getAccessSourceLabel } from "@/lib/accessUiText";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { AccessFeatureOption, AccessGroupOption, PermissionMode } from "./settingsUsersTypes";
 
 export const SELECT_CLASS =
@@ -6,7 +7,7 @@ export const SELECT_CLASS =
 
 export function FieldLabel({ htmlFor, children }: { htmlFor?: string; children: string }) {
   return (
-    <label htmlFor={htmlFor} className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+    <label htmlFor={htmlFor} className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
       {children}
     </label>
   );
@@ -44,7 +45,7 @@ export function PermissionSummary({
   const renderChip = ([feat, allowed]: [string, boolean]) => (
     <span
       key={feat}
-      className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium ${
+      className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ${
         allowed
           ? "bg-emerald-500/10 text-emerald-400"
           : "bg-red-500/8 text-red-400/80"
@@ -56,8 +57,8 @@ export function PermissionSummary({
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground/70">
-        <span className="font-semibold uppercase tracking-wider">{title}</span>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+        {title ? <span className="font-semibold uppercase tracking-wider">{title}</span> : null}
         <span>
           {allowedCount} {lang === "ru" ? "разрешено" : "allowed"}
         </span>
@@ -68,7 +69,7 @@ export function PermissionSummary({
       <div className="flex flex-wrap gap-1.5 sm:hidden">
         {previewEntries.map(renderChip)}
         {entries.length > previewEntries.length && (
-          <span className="inline-flex items-center rounded-md bg-secondary/35 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+          <span className="inline-flex items-center rounded-md bg-secondary/35 px-2 py-0.5 text-xs font-medium text-muted-foreground">
             +{entries.length - previewEntries.length}
           </span>
         )}
@@ -100,21 +101,27 @@ export function PermissionModeField({
     <div className="group/perm flex flex-col items-stretch gap-2 rounded-lg border border-border/40 bg-secondary/10 px-3 py-2.5 transition-colors hover:bg-secondary/20 2xl:flex-row 2xl:items-center 2xl:justify-between">
       <div className="min-w-0 flex-1">
         <div className="text-[13px] font-medium text-foreground/90">{label}</div>
-        <div className="mt-0.5 text-[11px] text-muted-foreground/60">
+        <div className="mt-0.5 text-xs text-muted-foreground">
           {t.effective}: {effective ? t.allowed : t.denied}
           {source ? ` · ${getAccessSourceLabel(lang, source)}` : ""}
         </div>
       </div>
-      <select
+      <Select
         value={mode}
-        onChange={(event) => onChange(event.target.value as PermissionMode)}
-        className="h-8 w-full shrink-0 rounded-md border border-border bg-secondary/30 px-2 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary/30 2xl:w-36"
-        aria-label={`${label} mode`}
+        onValueChange={(value) => onChange(value as PermissionMode)}
       >
-        <option value="inherit">{t.inherit}</option>
-        <option value="allow">{t.allow}</option>
-        <option value="deny">{t.deny}</option>
-      </select>
+        <SelectTrigger
+          className="h-8 w-full shrink-0 rounded-md border-border bg-secondary/30 text-xs 2xl:w-36"
+          aria-label={`${label} mode`}
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="inherit">{t.inherit}</SelectItem>
+          <SelectItem value="allow">{t.allow}</SelectItem>
+          <SelectItem value="deny">{t.deny}</SelectItem>
+        </SelectContent>
+      </Select>
     </div>
   );
 }

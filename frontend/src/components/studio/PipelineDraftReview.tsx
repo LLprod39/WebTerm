@@ -97,7 +97,7 @@ function ResourceRow({
   const visible = (items || []).slice(0, 5);
   return (
     <div className="min-w-0 rounded-lg border border-border/70 bg-background/45 px-3 py-3">
-      <div className="mb-2 flex min-w-0 items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+      <div className="mb-2 flex min-w-0 items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
         {icon}
         <span className="min-w-0 truncate">{label}</span>
       </div>
@@ -106,11 +106,11 @@ function ResourceRow({
           {visible.map((item, index) => (
             <div key={`${item.id || item.slug || item.name || index}`} className="min-w-0 rounded-md border border-border/60 bg-card/70 px-2.5 py-2">
               <div className="truncate text-xs font-medium text-foreground">{item.name || item.slug || item.id}</div>
-              {item.reason ? <div className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-muted-foreground">{item.reason}</div> : null}
+              {item.reason ? <div className="mt-0.5 line-clamp-2 text-xs leading-4 text-muted-foreground">{item.reason}</div> : null}
               {Array.isArray(item.tools) && item.tools.length ? (
                 <div className="mt-1 flex flex-wrap gap-1">
                   {item.tools.slice(0, 4).map((tool) => (
-                    <span key={tool} className="min-w-0 rounded border border-border/60 px-1.5 py-0.5 text-[10px] text-muted-foreground [overflow-wrap:anywhere]">
+                    <span key={tool} className="min-w-0 rounded border border-border/60 px-1.5 py-0.5 text-xs text-muted-foreground [overflow-wrap:anywhere]">
                       {tool}
                     </span>
                   ))}
@@ -119,7 +119,7 @@ function ResourceRow({
             </div>
           ))}
           {(items || []).length > visible.length ? (
-            <div className="text-[11px] text-muted-foreground">+{(items || []).length - visible.length}</div>
+            <div className="text-xs text-muted-foreground">+{(items || []).length - visible.length}</div>
           ) : null}
         </div>
       ) : (
@@ -139,7 +139,7 @@ function Metric({
   return (
     <div className="min-w-0 rounded-lg border border-border/70 bg-card/70 px-3 py-2 text-center">
       <div className="text-lg font-semibold text-foreground">{value}</div>
-      <div className="truncate text-[10px] uppercase tracking-[0.08em] text-muted-foreground">{label}</div>
+      <div className="truncate text-xs uppercase tracking-[0.08em] text-muted-foreground">{label}</div>
     </div>
   );
 }
@@ -173,16 +173,16 @@ function GraphNodes({
         {graphNodes.slice(0, compact ? 6 : 12).map((node, index) => (
           <div key={node.ref} className="min-w-0 rounded-lg border border-border/70 bg-card/70 px-3 py-2">
             <div className="flex items-center gap-2">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-primary/10 text-[10px] font-semibold text-primary">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-primary/10 text-xs font-semibold text-primary">
                 {index + 1}
               </span>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-xs font-semibold text-foreground">{node.label || node.ref}</div>
-                <div className="truncate text-[11px] text-muted-foreground">{node.type}</div>
+                <div className="truncate text-xs text-muted-foreground">{node.type}</div>
               </div>
             </div>
             {response.node_explanations?.[node.ref] ? (
-              <div className="mt-2 text-[11px] leading-4 text-muted-foreground [overflow-wrap:anywhere]">{response.node_explanations[node.ref]}</div>
+              <div className="mt-2 text-xs leading-4 text-muted-foreground [overflow-wrap:anywhere]">{response.node_explanations[node.ref]}</div>
             ) : null}
           </div>
         ))}
@@ -248,7 +248,7 @@ export function PipelineDraftReview({
   const graphContent = (
     <div className="flex flex-col gap-3">
       <GraphNodes response={response} compact={compact} lang={lang} graphCounts={graphCounts} />
-      <div className="grid grid-cols-2 gap-2 text-[11px]">
+      <div className="grid grid-cols-2 gap-2 text-xs">
         <div className="rounded-lg border border-border/70 bg-background/45 px-3 py-2">
           <span className="text-muted-foreground">{localize(lang, "Связи", "Edges")}</span>
           <span className="ml-2 font-semibold text-foreground">{displayEdges}</span>
@@ -345,7 +345,7 @@ export function PipelineDraftReview({
         </Badge>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 text-[10px]">
+      <div className="grid grid-cols-3 gap-2 text-xs">
         <Metric label={localize(lang, "нод", "nodes")} value={displayNodes} />
         <Metric label={localize(lang, "связей", "edges")} value={displayEdges} />
         <Metric label={localize(lang, "правок", "edits")} value={stats.updatedNodes} />
@@ -353,7 +353,7 @@ export function PipelineDraftReview({
 
       {confidencePercent !== null ? (
         <div className="rounded-lg border border-border/70 bg-background/45 px-3 py-2">
-          <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
+          <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
             <span>{localize(lang, "Уверенность", "Confidence")}</span>
             <span>{confidencePercent}%</span>
           </div>

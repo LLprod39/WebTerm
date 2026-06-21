@@ -32,13 +32,13 @@ export function NovaContextSettings({ settings, onChange }: NovaContextSettingsP
     <section className="space-y-2.5">
       <div className="px-0.5">
         <h4 className="text-[13px] font-semibold text-foreground">{t("terminal.ai.nova.settings.title")}</h4>
-        <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">{t("terminal.ai.nova.settings.description")}</p>
+        <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{t("terminal.ai.nova.settings.description")}</p>
       </div>
       <div className="space-y-2 rounded-lg border border-border/50 bg-secondary/15 p-3">
         <div className="flex items-center justify-between gap-3 py-1.5">
           <div>
             <div className="text-[13px] font-medium text-foreground">{t("terminal.ai.nova.settings.sessionContext.title")}</div>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">{t("terminal.ai.nova.settings.sessionContext.description")}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{t("terminal.ai.nova.settings.sessionContext.description")}</p>
           </div>
           <Switch
             checked={settings.novaSessionContextEnabled}
@@ -48,7 +48,7 @@ export function NovaContextSettings({ settings, onChange }: NovaContextSettingsP
         <div className="flex items-center justify-between gap-3 py-1.5">
           <div>
             <div className="text-[13px] font-medium text-foreground">{t("terminal.ai.nova.settings.recentActivity.title")}</div>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">{t("terminal.ai.nova.settings.recentActivity.description")}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{t("terminal.ai.nova.settings.recentActivity.description")}</p>
           </div>
           <Switch
             checked={settings.novaRecentActivityEnabled}
@@ -58,7 +58,7 @@ export function NovaContextSettings({ settings, onChange }: NovaContextSettingsP
         <div className="space-y-2 border-t border-border/50 pt-3">
           <div>
             <div className="text-[13px] font-medium text-foreground">{t("terminal.ai.nova.settings.sudo.title")}</div>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">{t("terminal.ai.nova.settings.sudo.description")}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{t("terminal.ai.nova.settings.sudo.description")}</p>
           </div>
           <div className="grid grid-cols-3 gap-1.5">
             {SUDO_OPTIONS.map((option) => {
@@ -75,7 +75,7 @@ export function NovaContextSettings({ settings, onChange }: NovaContextSettingsP
                   }`}
                 >
                   <span className="block text-[12px] font-semibold">{t(option.titleKey)}</span>
-                  <span className="mt-1 block text-[10px] leading-snug">{t(option.descKey)}</span>
+                  <span className="mt-1 block text-xs leading-snug">{t(option.descKey)}</span>
                 </button>
               );
             })}

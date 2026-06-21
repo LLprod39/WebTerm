@@ -134,6 +134,10 @@ function makeAgentsHandler(initialAgents: AgentItem[] = []) {
       return json({ success: true, active: [], recent: [] });
     }
 
+    if (req.path === "/api/studio/skills/" && req.method === "GET") {
+      return json([]);
+    }
+
     if (req.path === "/servers/api/agents/" && req.method === "GET") {
       return json({ success: true, agents });
     }
@@ -251,18 +255,28 @@ test("creates and runs a mini agent from the agents page", async ({ page }) => {
   await page.getByRole("button", { name: "Create your first agent" }).click();
 
   const createDialog = page.getByRole("dialog");
-  await createDialog.getByRole("button", { name: /Build from scratch/i }).click();
+  await expect(createDialog.getByText("Agent type")).toBeVisible();
+  await createDialog.getByRole("button", { name: /Custom/i }).click();
 
-  const configDialog = page.getByRole("dialog");
-  await expect(configDialog.getByText("Configure Mini Agent")).toBeVisible();
-  await configDialog.getByPlaceholder("My Agent").fill("Disk Audit");
-  await configDialog.locator("textarea").nth(0).fill("hostname\nuptime");
-  await configDialog.locator("textarea").nth(1).fill("Summarize the result");
-  await configDialog.getByRole("button", { name: "Web-01" }).click();
-  await configDialog.getByRole("button", { name: "Create Agent" }).click();
+  await expect(createDialog.getByRole("heading", { name: "Basics" })).toBeVisible();
+  await createDialog.getByPlaceholder("Log analysis").fill("Disk Audit");
+  await createDialog.locator("textarea").nth(0).fill("hostname\nuptime");
+  await createDialog.locator("textarea").nth(1).fill("Summarize the result");
+  await createDialog.getByRole("button", { name: "Next" }).click();
 
-  await expect(page.getByText("Disk Audit")).toBeVisible();
-  expect(harness.getCalls("/servers/api/agents/create/", "POST").length).toBe(1);
+  await expect(createDialog.getByRole("heading", { name: "Server selection" })).toBeVisible();
+  await createDialog.getByRole("button", { name: /Web-01/i }).click();
+  await createDialog.getByRole("button", { name: "Next" }).click();
+
+  await expect(createDialog.getByRole("heading", { name: "Capabilities" })).toBeVisible();
+  await createDialog.getByRole("button", { name: "Next" }).click();
+
+  await expect(createDialog.getByText("Preflight passed")).toBeVisible();
+  await createDialog.getByRole("button", { name: "Create Agent" }).click();
+
+  await expect.poll(() => harness.getCalls("/servers/api/agents/create/", "POST").length).toBe(1);
+  await expect(createDialog).toBeHidden();
+  await expect(page.getByRole("main").getByText("Disk Audit")).toBeVisible();
 
   await page.getByRole("button", { name: /^Run$/ }).click();
   await expect.poll(() => harness.getCalls("/servers/api/agents/300/run/", "POST").length).toBe(1);

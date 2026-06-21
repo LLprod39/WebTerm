@@ -112,12 +112,12 @@ export function MemorySettingsPanel({
               </Badge>
               {memoryOverview?.daemon_state?.is_stale ? <Badge variant="outline">Lease stale</Badge> : null}
             </div>
-            <p className="mt-2 text-[11px] text-muted-foreground">
+            <p className="mt-2 text-xs text-muted-foreground">
               Здесь живут только системные AI memory controls. Пользовательские текстовые заметки остаются в карточке
               сервера.
             </p>
             {memoryOverview?.daemon_state?.heartbeat_at ? (
-              <p className="mt-1 text-[11px] text-muted-foreground">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Heartbeat: {new Date(memoryOverview.daemon_state.heartbeat_at).toLocaleString()}
               </p>
             ) : null}
@@ -244,7 +244,7 @@ export function MemorySettingsPanel({
                 Human habits capture
               </label>
             </div>
-            <p className="mt-2 text-[11px] text-muted-foreground">
+            <p className="mt-2 text-xs text-muted-foreground">
               Если выключить AI memory, новый layered memory pipeline и dreams перестанут собирать события. Останется
               старый формат: очень короткая автоматическая выжимка после рабочей сессии.
             </p>

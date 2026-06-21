@@ -36,12 +36,12 @@ export function AgentNode({ data, selected, type }: NodeProps) {
       {...getNodeRuntimeProps(d)}
     >
       {typeof d?.agent_name === "string" && d.agent_name && (
-        <div className="text-[10px] text-muted-foreground bg-muted/40 rounded px-1.5 py-0.5 truncate">
+        <div className="text-xs text-muted-foreground bg-muted/40 rounded px-1.5 py-0.5 truncate">
           {d.agent_name}
         </div>
       )}
       {(!d?.agent_name || typeof d.agent_name !== "string") && model && (
-        <div className="text-[10px] text-violet-300/80 bg-violet-500/10 rounded px-1.5 py-0.5 truncate">
+        <div className="text-xs text-violet-300/80 bg-violet-500/10 rounded px-1.5 py-0.5 truncate">
           {model}
         </div>
       )}

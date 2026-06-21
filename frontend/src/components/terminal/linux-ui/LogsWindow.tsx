@@ -113,7 +113,7 @@ export function LogsWindow({
                       </div>
                       <span
                         className={cn(
-                          "shrink-0 rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide",
+                          "shrink-0 rounded-full border px-2 py-0.5 text-xs uppercase tracking-wide",
                           preset.available
                             ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
                             : "border-border/70 bg-background/94 text-muted-foreground",
@@ -134,7 +134,7 @@ export function LogsWindow({
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="truncate text-sm font-semibold text-foreground">{selectedPreset?.label || "Logs"}</h3>
-                    <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-xs uppercase tracking-wide text-muted-foreground">
                       {lines} lines
                     </span>
                   </div>

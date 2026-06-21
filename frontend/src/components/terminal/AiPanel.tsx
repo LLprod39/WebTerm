@@ -96,7 +96,7 @@ function ChatModeSelector({
             title={config.desc}
             aria-pressed={active}
             onClick={() => onChange(item)}
-            className={`h-7 rounded px-2 text-[11px] font-medium transition-colors ${
+            className={`h-7 rounded px-2 text-xs font-medium transition-colors ${
               active
                 ? "bg-secondary text-foreground shadow-sm"
                 : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
@@ -130,7 +130,7 @@ function ModeSelector({
             title={config.desc}
             aria-pressed={active}
             onClick={() => onChange(item)}
-            className={`flex h-7 items-center justify-center gap-1 rounded px-2 text-[11px] font-medium transition-colors ${
+            className={`flex h-7 items-center justify-center gap-1 rounded px-2 text-xs font-medium transition-colors ${
               active
                 ? "bg-secondary text-foreground shadow-sm"
                 : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
@@ -268,7 +268,7 @@ export function AiPanel({
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-[13px] font-medium text-foreground">AI</span>
-                <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                   <span
                     aria-hidden="true"
                     className={`h-1.5 w-1.5 rounded-full ${
@@ -321,7 +321,7 @@ export function AiPanel({
           <ChatModeSelector mode={chatMode} onChange={onChatModeChange} />
           <div className="flex items-center gap-1.5">
             {settings.dryRun ? (
-              <span className="inline-flex items-center rounded border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning">
+              <span className="inline-flex items-center rounded border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-warning">
                 dry-run
               </span>
             ) : null}
@@ -394,7 +394,7 @@ export function AiPanel({
           )}
 
           {isGenerating ? (
-            <div className="flex items-center gap-2 px-0.5 py-1 text-[11px] text-muted-foreground">
+            <div className="flex items-center gap-2 px-0.5 py-1 text-xs text-muted-foreground">
               <div className="flex gap-1">
                 {[0, 150, 300].map((delay) => (
                   <span
@@ -414,7 +414,7 @@ export function AiPanel({
         <div className="shrink-0 border-t border-border p-2">
           {messages.length > 0 ? (
             <div className="mb-1.5 flex items-center justify-between gap-2 rounded-md border border-border/50 bg-background/40 px-2.5 py-1.5">
-              <span className="text-[11px] text-muted-foreground">Сформировать отчёт</span>
+              <span className="text-xs text-muted-foreground">Сформировать отчёт</span>
               <Button type="button" size="xs" variant="ghost" onClick={() => onGenerateReport?.(false)} disabled={!canGenerateReport} className="h-8 gap-1 px-2">
                 <FileText className="h-3 w-3" />
                 Отчёт

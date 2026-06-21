@@ -1,7 +1,8 @@
-import { ArrowLeft, Bell, ChevronRight, Clock, Info, Link2, Loader2, MoreHorizontal, Play, Plus, Save, Wand2, XCircle, Zap } from "lucide-react";
+import { ArrowLeft, Bell, CheckCircle2, Clock, Info, Link2, Loader2, MoreHorizontal, Play, Plus, Save, ShieldCheck, Wand2, XCircle, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,6 +17,7 @@ import { getPipelineActivityCopy, localize } from "./presentation";
 export function PipelineEditorToolbar({
   assistantOpen,
   hasHydratedPipeline,
+  hasLocalChanges,
   lang,
   pipelineId,
   pipelineName,
@@ -31,9 +33,11 @@ export function PipelineEditorToolbar({
   onOpenRunDialog,
   onPipelineNameChange,
   onSave,
+  onValidateGraph,
 }: {
   assistantOpen: boolean;
   hasHydratedPipeline: boolean;
+  hasLocalChanges: boolean;
   lang: "en" | "ru";
   pipelineId: number | null;
   pipelineName: string;
@@ -49,40 +53,51 @@ export function PipelineEditorToolbar({
   onOpenRunDialog: () => void;
   onPipelineNameChange: (value: string) => void;
   onSave: () => void;
+  onValidateGraph: () => void;
 }) {
   return (
-    <div className="z-10 flex flex-col gap-2 border-b border-border bg-card px-3 py-3 lg:flex-row lg:items-center lg:px-4">
-      <div className="flex min-w-0 items-center gap-2">
+    <div className="z-10 flex flex-col gap-3 border-b border-border bg-card px-3 py-3 lg:flex-row lg:items-center lg:px-4">
+      <div className="flex min-w-0 flex-1 items-center gap-2">
         <Button size="icon" variant="ghost" className="h-9 w-9 shrink-0" onClick={onBack} aria-label={localize(lang, "Вернуться в Studio", "Back to Studio")}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        <Input
-          value={pipelineName}
-          onChange={(e) => onPipelineNameChange(e.target.value)}
-          className="h-9 min-w-0 flex-1 border-0 px-0 text-sm font-medium shadow-none focus-visible:ring-0 sm:w-72"
-          placeholder={localize(lang, "Название pipeline…", "Pipeline name…")}
-        />
+        <div className="min-w-0 flex-1">
+          <Input
+            value={pipelineName}
+            onChange={(e) => onPipelineNameChange(e.target.value)}
+            className="h-8 min-w-0 border-0 bg-transparent px-0 text-base font-semibold shadow-none focus-visible:ring-0 sm:max-w-xl"
+            placeholder={localize(lang, "Название pipeline…", "Pipeline name…")}
+          />
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <Badge
+              variant={hasLocalChanges ? "outline" : "secondary"}
+              className={hasLocalChanges ? "border-amber-500/30 bg-amber-500/10 text-amber-100" : "text-xs"}
+            >
+              {hasLocalChanges ? localize(lang, "Есть изменения", "Unsaved changes") : localize(lang, "Сохранено", "Saved")}
+            </Badge>
+            {resolvedLastRun ? (
+              <button
+                type="button"
+                onClick={() => onOpenLastRun(resolvedLastRun.id)}
+                className="inline-flex min-h-7 items-center gap-1.5 rounded-md border border-border/70 bg-background/35 px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-border hover:bg-background/50 hover:text-foreground"
+              >
+                {resolvedLastRun.status === "running" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Clock className="h-3 w-3" />}
+                {localize(lang, "Последний запуск", "Last run")} #{resolvedLastRun.id}: {resolvedLastRun.status}
+              </button>
+            ) : null}
+          </div>
+        </div>
       </div>
       <div className="flex flex-wrap items-center gap-2 lg:ml-auto lg:justify-end">
-        {resolvedLastRun && (
-          <button
-            type="button"
-            onClick={() => onOpenLastRun(resolvedLastRun.id)}
-            className="hidden min-h-9 items-center gap-2 rounded-md border border-border/70 bg-background/35 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-border hover:bg-background/50 hover:text-foreground sm:flex"
-          >
-            {resolvedLastRun.status === "running" && <Loader2 className="h-2.5 w-2.5 animate-spin mr-1" />}
-            Run #{resolvedLastRun.id}: {resolvedLastRun.status}
-          </button>
-        )}
         <Button
           size="sm"
-          onClick={onSave}
-          disabled={savePending || (Boolean(pipelineId) && !hasHydratedPipeline) || saveDisabled}
+          variant="outline"
+          onClick={onValidateGraph}
+          disabled={runDisabled}
           className="h-9 gap-1.5"
         >
-          {savePending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
-          {localize(lang, "Сохранить", "Save")}
+          <ShieldCheck className="h-3.5 w-3.5" />
+          {localize(lang, "Проверить", "Validate")}
         </Button>
         <Button
           size="sm"
@@ -95,21 +110,30 @@ export function PipelineEditorToolbar({
         </Button>
         <Button
           size="sm"
-          variant="secondary"
+          variant="outline"
+          onClick={onSave}
+          disabled={savePending || (Boolean(pipelineId) && !hasHydratedPipeline) || saveDisabled}
+          className="h-9 gap-1.5"
+        >
+          {savePending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+          {localize(lang, "Сохранить", "Save")}
+        </Button>
+        <Button
+          size="sm"
           onClick={onOpenRunDialog}
           disabled={runDisabled}
           className="h-9 gap-1.5"
         >
-          {runPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
-          {localize(lang, "Запуск", "Run")}
+          {runPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+          {localize(lang, "Запустить", "Run")}
         </Button>
         <Button
           size="sm"
-          variant={assistantOpen ? "default" : "outline"}
+          variant={assistantOpen ? "secondary" : "outline"}
           onClick={onOpenAssistant}
           className="h-9 gap-1.5"
         >
-          <Wand2 className="h-3 w-3" />
+          <Wand2 className="h-3.5 w-3.5" />
           {localize(lang, "AI", "AI")}
         </Button>
 
@@ -122,8 +146,8 @@ export function PipelineEditorToolbar({
           <DropdownMenuContent align="end" className="w-52">
             {resolvedLastRun && (
               <DropdownMenuItem onClick={() => onOpenLastRun(resolvedLastRun.id)}>
-                <Clock className="mr-2 h-3.5 w-3.5" />
-                {localize(lang, "Открыть запуск #", "Open run #")}
+                <CheckCircle2 className="mr-2 h-3.5 w-3.5" />
+                {localize(lang, "Открыть последний запуск", "Open last run")}
               </DropdownMenuItem>
             )}
           </DropdownMenuContent>
@@ -179,7 +203,7 @@ export function PipelineActivityBar({
                   : Zap;
 
   return (
-    <div className="flex flex-col items-start gap-2 border-b border-border/80 bg-[#15191f] px-4 py-2.5 text-xs sm:flex-row sm:items-center lg:gap-3">
+    <div className="flex flex-col items-start gap-2 border-b border-border/80 bg-card/60 px-4 py-2.5 text-xs sm:flex-row sm:items-center lg:gap-3">
       <div className={`flex items-center gap-2 rounded-full border px-2.5 py-1.5 ${activityToneClass}`}>
         <ActivityIcon
           className={`h-3.5 w-3.5 ${activityState.icon === "running" ? "animate-spin" : ""}`}

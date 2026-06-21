@@ -104,7 +104,7 @@ export function SftpDirectoryBrowser({
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <div className="text-sm font-semibold text-foreground">Файлы SFTP</div>
-            <div className="truncate font-mono text-[11px] text-muted-foreground">
+            <div className="truncate font-mono text-xs text-muted-foreground">
               {server.username}@{server.host}:{server.port}
             </div>
           </div>
@@ -201,7 +201,7 @@ export function SftpDirectoryBrowser({
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="border-b border-border bg-secondary/20 px-4 py-2.5">
           <div className="flex flex-col gap-2">
-            <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
               <span>{formatRuCount(visibleEntries.length, "объект", "объекта", "объектов")}</span>
               <span>•</span>
               <span>{formatRuCount(directoryCount, "папка", "папки", "папок")}</span>
@@ -212,28 +212,28 @@ export function SftpDirectoryBrowser({
               <div className="flex flex-col gap-2 rounded-xl border border-border bg-background/80 px-3 py-2">
                 <div className="min-w-0">
                   <div className="truncate text-xs font-medium text-foreground">{selectedEntry.name}</div>
-                  <div className="truncate font-mono text-[10px] text-muted-foreground">{selectedEntry.path}</div>
+                  <div className="truncate font-mono text-xs text-muted-foreground">{selectedEntry.path}</div>
                 </div>
                 <div className="grid grid-cols-2 gap-1.5">
                   {!selectedEntry.is_dir ? (
-                    <Button type="button" size="sm" variant="ghost" className="h-8 justify-start px-2 text-[11px]" onClick={onOpenSelectedEntry}>
+                    <Button type="button" size="sm" variant="ghost" className="h-9 justify-start px-2 text-xs" onClick={onOpenSelectedEntry}>
                       <FileCode2 className="mr-1 h-3.5 w-3.5" />
                       Редактировать
                     </Button>
                   ) : null}
-                  <Button type="button" size="sm" variant="ghost" className="h-8 justify-start px-2 text-[11px]" onClick={onRename}>
+                  <Button type="button" size="sm" variant="ghost" className="h-9 justify-start px-2 text-xs" onClick={onRename}>
                     <Pencil className="mr-1 h-3.5 w-3.5" />
                     Переименовать
                   </Button>
-                  <Button type="button" size="sm" variant="ghost" className="h-8 justify-start px-2 text-[11px]" onClick={onChmod}>
+                  <Button type="button" size="sm" variant="ghost" className="h-9 justify-start px-2 text-xs" onClick={onChmod}>
                     <Shield className="mr-1 h-3.5 w-3.5" />
                     Права
                   </Button>
-                  <Button type="button" size="sm" variant="ghost" className="h-8 justify-start px-2 text-[11px]" onClick={onChown}>
+                  <Button type="button" size="sm" variant="ghost" className="h-9 justify-start px-2 text-xs" onClick={onChown}>
                     <User className="mr-1 h-3.5 w-3.5" />
                     Владелец
                   </Button>
-                  <Button type="button" size="sm" variant="ghost" className="h-8 justify-start px-2 text-[11px] text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={onDelete}>
+                  <Button type="button" size="sm" variant="ghost" className="h-9 justify-start px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={onDelete}>
                     <Trash2 className="mr-1 h-3.5 w-3.5" />
                     Удалить
                   </Button>
@@ -282,7 +282,7 @@ export function SftpDirectoryBrowser({
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-medium text-foreground">{entry.name}</div>
-                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                           <span>{entry.is_dir ? "Папка" : "Файл"}</span>
                           {!entry.is_dir ? <span>{formatBytes(entry.size)}</span> : null}
                           {entry.modified_at ? <span>{formatTimestamp(entry.modified_at)}</span> : null}

@@ -17,6 +17,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { localize, useI18n } from "@/lib/i18n";
 import { canAccessStudio, hasFeatureAccess } from "@/lib/featureAccess";
 
+const KUBERNETES_NAV_READY = false;
+
 export function AppSidebar() {
   const { state, toggleSidebar } = useSidebar();
   const collapsed = state === "collapsed";
@@ -35,12 +37,13 @@ export function AppSidebar() {
     { titleKey: "nav.servers", url: "/servers", icon: Server, feature: null },
     { titleKey: "nav.agents", url: "/agents", icon: Bot, feature: "agents" },
     { titleKey: "nav.studio", url: "/studio", icon: Workflow, feature: "studio" },
-    { titleKey: "nav.kubernetes", url: "/kubernetes", icon: Boxes, feature: "kubernetes" },
+    { titleKey: "nav.kubernetes", url: "/kubernetes", icon: Boxes, feature: "kubernetes", ready: KUBERNETES_NAV_READY },
     { titleKey: "nav.mars", url: "/mars", icon: BrainCircuit, feature: "mars" },
     { titleKey: "nav.settings", url: "/settings", icon: Settings, feature: "settings" },
   ];
 
   const allowedItems = navItems.filter((item) => {
+    if ("ready" in item && item.ready === false) return false;
     if (!item.feature) return true;
     if (item.feature === "studio") {
       return canAccessStudio(data?.user);
@@ -85,7 +88,7 @@ export function AppSidebar() {
         {!collapsed && (
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold text-sidebar-foreground">WebTermAI</div>
-            <div className="truncate text-[11px] text-sidebar-foreground/50">{t("nav.ops_workspace")}</div>
+            <div className="truncate text-xs text-sidebar-foreground/70">{t("nav.ops_workspace")}</div>
           </div>
         )}
       </div>
@@ -95,7 +98,7 @@ export function AppSidebar() {
         {navSections.map((section) => (
           <SidebarGroup key={section.id} className={collapsed ? "mb-2" : "mb-4"}>
             {!collapsed ? (
-              <div className="mb-2 px-3 text-[11px] font-medium uppercase tracking-[0.14em] text-sidebar-foreground/40">
+              <div className="mb-2 px-3 text-xs font-medium uppercase tracking-[0.14em] text-sidebar-foreground/70">
                 {section.label}
               </div>
             ) : null}
@@ -163,7 +166,7 @@ export function AppSidebar() {
           {!collapsed && (
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-sidebar-foreground truncate">{data?.user?.username || "user"}</p>
-              <p className="mt-0.5 flex items-center gap-1 text-[10px] font-medium text-sidebar-foreground/40">
+              <p className="mt-0.5 flex items-center gap-1 text-xs font-medium text-sidebar-foreground/70">
                 <ShieldCheck className="h-2.5 w-2.5" />
                 {roleLabel}
               </p>

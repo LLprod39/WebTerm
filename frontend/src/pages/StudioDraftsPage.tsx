@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle, CheckCircle2, Circle } from "lucide-react";
 
 import { StudioNav } from "@/components/StudioNav";
+import { Badge } from "@/components/ui/badge";
 import { buildDraftCanvasModel } from "@/components/studio/draftGraphModel";
 import {
   canReviseDraft,
@@ -33,6 +35,81 @@ import {
   type StudioDraftMobilePane,
 } from "./studio-drafts/studioDraftsModel";
 
+type StudioDraftInspectorTab = "request" | "check" | "changes";
+
+function DraftProgressStrip({
+  lang,
+  hasDraft,
+  hasPrompt,
+  hasOpenQuestions,
+  validationOk,
+  validationFailed,
+  ready,
+  applied,
+}: {
+  lang: string;
+  hasDraft: boolean;
+  hasPrompt: boolean;
+  hasOpenQuestions: boolean;
+  validationOk: boolean;
+  validationFailed: boolean;
+  ready: boolean;
+  applied: boolean;
+}) {
+  const steps = [
+    {
+      label: localize(lang, "Черновик", "Draft"),
+      done: hasDraft,
+      active: !hasDraft && hasPrompt,
+      blocked: false,
+    },
+    {
+      label: localize(lang, "Проверка", "Validated"),
+      done: validationOk,
+      active: hasDraft && !validationOk && !validationFailed,
+      blocked: hasOpenQuestions || validationFailed,
+    },
+    {
+      label: localize(lang, "Готово", "Ready"),
+      done: ready,
+      active: validationOk && !ready,
+      blocked: validationFailed,
+    },
+    {
+      label: localize(lang, "Применён", "Applied"),
+      done: applied,
+      active: false,
+      blocked: false,
+    },
+  ];
+
+  return (
+    <div className="border-b border-border/70 bg-card/35 px-4 py-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        {steps.map((step, index) => {
+          const Icon = step.blocked ? AlertTriangle : step.done ? CheckCircle2 : Circle;
+          return (
+            <div key={step.label} className="flex min-w-0 items-center gap-2">
+              {index > 0 ? <span className="hidden h-px w-5 bg-border sm:block" /> : null}
+              <Badge
+                variant={step.done ? "secondary" : "outline"}
+                className={cn(
+                  "h-7 gap-1.5 rounded-full px-2.5 text-xs",
+                  step.blocked ? "border-amber-500/30 bg-amber-500/10 text-amber-100" : "",
+                  step.active ? "border-primary/30 bg-primary/10 text-primary" : "",
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {step.label}
+              </Badge>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function StudioDraftsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -46,6 +123,8 @@ export default function StudioDraftsPage() {
   const [selectedSkeletonSlug, setSelectedSkeletonSlug] = useState("");
   const [questionAnswers, setQuestionAnswers] = useState<Record<number, string>>({});
   const [mobilePane, setMobilePane] = useState<StudioDraftMobilePane>("queue");
+  const [queueCollapsed, setQueueCollapsed] = useState(false);
+  const [inspectorTab, setInspectorTab] = useState<StudioDraftInspectorTab>("request");
 
   const defaultDraftName = useMemo(() => getDefaultDraftName(lang), [lang]);
   const promptPresets = useMemo(() => getPromptPresets(lang), [lang]);
@@ -92,6 +171,9 @@ export default function StudioDraftsPage() {
       activeDraft.status !== "discarded",
   );
   const submitWillRevise = canReviseDraft(activeDraft);
+  const validationFailed = activeResponse?.validation?.ok === false || activeResponse?.risk?.level === "dangerous";
+  const validationOk = Boolean(activeResponse && activeResponse.validation?.ok !== false && !hasOpenQuestions && activeResponse.risk?.level !== "dangerous");
+  const draftApplied = activeDraft?.status === "applied";
 
   const filterCounts = useMemo(() => getDraftFilterCounts(draftSessions), [draftSessions]);
   const visibleDrafts = useMemo(
@@ -121,6 +203,18 @@ export default function StudioDraftsPage() {
     const preferred = activeResponse?.selected_template?.slug || activeTemplateRecommendations[0]?.slug || "";
     setSelectedSkeletonSlug(preferred);
   }, [activeDraft?.id, activeResponse?.selected_template?.slug, activeTemplateRecommendations]);
+
+  useEffect(() => {
+    if (hasOpenQuestions) {
+      setInspectorTab("request");
+      setMobilePane("compose");
+      return;
+    }
+    if (activeResponse) {
+      setInspectorTab("check");
+      setMobilePane((current) => (current === "compose" ? "review" : current));
+    }
+  }, [activeDraft?.id, activeResponse, hasOpenQuestions]);
 
   const setActiveDraft = (id: number | null) => {
     const next = new URLSearchParams(searchParams);
@@ -295,12 +389,28 @@ export default function StudioDraftsPage() {
           edgeCount={activeModel.edges.length}
           onOverview={() => navigate("/studio")}
         />
+        <DraftProgressStrip
+          lang={lang}
+          hasDraft={Boolean(activeDraft)}
+          hasPrompt={Boolean(prompt.trim())}
+          hasOpenQuestions={hasOpenQuestions}
+          validationOk={validationOk}
+          validationFailed={validationFailed}
+          ready={activeCanApply}
+          applied={draftApplied}
+        />
         <StudioDraftsMobileTabs lang={lang} mobilePane={mobilePane} onMobilePaneChange={setMobilePane} />
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[300px_minmax(420px,1fr)_390px]">
+        <div
+          className={cn(
+            "grid min-h-0 flex-1 grid-cols-1",
+            queueCollapsed ? "xl:grid-cols-[56px_minmax(420px,1fr)_360px]" : "xl:grid-cols-[280px_minmax(420px,1fr)_360px]",
+          )}
+        >
           <StudioDraftQueuePanel
             lang={lang}
             mobilePane={mobilePane}
+            collapsed={queueCollapsed}
             draftSessions={draftSessions}
             draftsLoading={draftsLoading}
             search={search}
@@ -312,6 +422,7 @@ export default function StudioDraftsPage() {
             onSearchChange={setSearch}
             onFilterChange={setFilter}
             onNewDraft={handleNewDraft}
+            onCollapsedChange={setQueueCollapsed}
             onSelectDraft={setActiveDraft}
             onDiscardDraft={(draftId) => discardMutation.mutate(draftId)}
           />
@@ -327,45 +438,77 @@ export default function StudioDraftsPage() {
               mobilePane === "compose" || mobilePane === "review" ? "flex" : "hidden",
             )}
           >
-            <StudioDraftComposerPanel
-              lang={lang}
-              mobilePane={mobilePane}
-              activeDraft={activeDraft || null}
-              activeResponse={activeResponse}
-              hasOpenQuestions={hasOpenQuestions}
-              openQuestions={openQuestions}
-              questionAnswers={questionAnswers}
-              prompt={prompt}
-              draftName={draftName}
-              promptPresets={promptPresets}
-              submitWillRevise={submitWillRevise}
-              createPending={createOrReviseMutation.isPending}
-              canSubmitComposer={canSubmitComposer}
-              onNewDraft={handleNewDraft}
-              onQuestionAnswersChange={setQuestionAnswers}
-              onPromptChange={setPrompt}
-              onDraftNameChange={setDraftName}
-              onSubmit={handleSubmit}
-            />
-            <StudioDraftReviewPanel
-              lang={lang}
-              mobilePane={mobilePane}
-              activeResponse={activeResponse}
-              activeGraphCounts={activeGraphCounts}
-              hasOpenQuestions={hasOpenQuestions}
-              activeCanApply={activeCanApply}
-              applyPending={applyMutation.isPending}
-              activeCanValidate={activeCanValidate}
-              validatePending={validateMutation.isPending}
-              useTemplatePending={useTemplateMutation.isPending}
-              activeCanSwitchTemplate={activeCanSwitchTemplate}
-              selectedSkeletonSlug={selectedSkeletonSlug}
-              activeTemplateRecommendations={activeTemplateRecommendations}
-              onApply={handleApply}
-              onValidate={() => validateMutation.mutate()}
-              onUseTemplate={() => useTemplateMutation.mutate()}
-              onSelectedSkeletonSlugChange={setSelectedSkeletonSlug}
-            />
+            <div className="border-b border-border/70 bg-card px-3 py-2">
+              <div className="grid grid-cols-3 gap-1 rounded-lg bg-background/60 p-1">
+                {[
+                  { value: "request" as const, label: localize(lang, "Запрос", "Request") },
+                  { value: "check" as const, label: localize(lang, "Проверка", "Check") },
+                  { value: "changes" as const, label: localize(lang, "Изменения", "Changes") },
+                ].map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    className={cn(
+                      "h-8 rounded-md px-2 text-xs font-medium transition-colors",
+                      inspectorTab === item.value
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-muted-foreground hover:bg-card/60 hover:text-foreground",
+                    )}
+                    aria-pressed={inspectorTab === item.value}
+                    onClick={() => {
+                      setInspectorTab(item.value);
+                      setMobilePane(item.value === "request" ? "compose" : "review");
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {inspectorTab === "request" ? (
+              <StudioDraftComposerPanel
+                lang={lang}
+                mobilePane={mobilePane}
+                activeDraft={activeDraft || null}
+                activeResponse={activeResponse}
+                hasOpenQuestions={hasOpenQuestions}
+                openQuestions={openQuestions}
+                questionAnswers={questionAnswers}
+                prompt={prompt}
+                draftName={draftName}
+                promptPresets={promptPresets}
+                submitWillRevise={submitWillRevise}
+                createPending={createOrReviseMutation.isPending}
+                canSubmitComposer={canSubmitComposer}
+                onNewDraft={handleNewDraft}
+                onQuestionAnswersChange={setQuestionAnswers}
+                onPromptChange={setPrompt}
+                onDraftNameChange={setDraftName}
+                onSubmit={handleSubmit}
+              />
+            ) : (
+              <StudioDraftReviewPanel
+                lang={lang}
+                mobilePane={mobilePane}
+                mode={inspectorTab}
+                activeResponse={activeResponse}
+                activeGraphCounts={activeGraphCounts}
+                hasOpenQuestions={hasOpenQuestions}
+                activeCanApply={activeCanApply}
+                applyPending={applyMutation.isPending}
+                activeCanValidate={activeCanValidate}
+                validatePending={validateMutation.isPending}
+                useTemplatePending={useTemplateMutation.isPending}
+                activeCanSwitchTemplate={activeCanSwitchTemplate}
+                selectedSkeletonSlug={selectedSkeletonSlug}
+                activeTemplateRecommendations={activeTemplateRecommendations}
+                onApply={handleApply}
+                onValidate={() => validateMutation.mutate()}
+                onUseTemplate={() => useTemplateMutation.mutate()}
+                onSelectedSkeletonSlugChange={setSelectedSkeletonSlug}
+              />
+            )}
           </aside>
         </div>
       </div>

@@ -176,25 +176,25 @@ export function QuickRunWindow({
           </div>
           <div className="grid grid-cols-3 gap-2 text-xs">
             <div className="rounded-xl border border-border bg-background px-3 py-2">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{localize(lang, "История", "History")}</div>
+              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{localize(lang, "История", "History")}</div>
               <div className="mt-1 text-base font-semibold text-foreground">{history.length}</div>
             </div>
             <div className="rounded-xl border border-border bg-background px-3 py-2">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{localize(lang, "Ошибки", "Failures")}</div>
+              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{localize(lang, "Ошибки", "Failures")}</div>
               <div className="mt-1 text-base font-semibold text-foreground">
                 {history.filter((item) => item.error || item.exitCode !== 0).length}
               </div>
             </div>
             <div className="rounded-xl border border-border bg-background px-3 py-2">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{localize(lang, "Хост", "Host")}</div>
-              <div className="mt-1 truncate font-mono text-[11px] text-muted-foreground">{server.host}</div>
+              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{localize(lang, "Хост", "Host")}</div>
+              <div className="mt-1 truncate font-mono text-xs text-muted-foreground">{server.host}</div>
             </div>
           </div>
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           <Terminal className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{localize(lang, "Быстрые шаблоны", "Quick presets")}</span>
+          <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{localize(lang, "Быстрые шаблоны", "Quick presets")}</span>
           <div className="flex flex-wrap gap-1.5">
             {quickCommands.map((qc) => (
               <button
@@ -202,7 +202,7 @@ export function QuickRunWindow({
                 type="button"
                 onClick={() => void runCommand(qc.cmd)}
                 disabled={isRunning}
-                className="rounded-full border border-border bg-background px-2.5 py-0.5 font-mono text-[10px] text-muted-foreground transition-colors hover:border-primary/20 hover:bg-secondary hover:text-foreground disabled:opacity-50"
+                className="rounded-full border border-border bg-background px-2.5 py-0.5 font-mono text-xs text-muted-foreground transition-colors hover:border-primary/20 hover:bg-secondary hover:text-foreground disabled:opacity-50"
               >
                 {qc.label}
               </button>
@@ -282,7 +282,7 @@ export function QuickRunWindow({
                   <div className="flex shrink-0 items-center gap-1.5">
                     <span
                       className={cn(
-                        "rounded-full border px-1.5 py-0.5 text-[9px] uppercase tracking-wide",
+                        "rounded-full border px-1.5 py-0.5 text-xs uppercase tracking-wide",
                         result.error
                           ? "border-destructive/30 bg-destructive/10 text-destructive"
                           : result.exitCode === 0
@@ -294,14 +294,14 @@ export function QuickRunWindow({
                     >
                       {result.error ? "err" : result.exitCode != null ? `exit ${result.exitCode}` : "?"}
                     </span>
-                    <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                    <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
                       <Clock className="h-2.5 w-2.5" />
                       {result.duration}ms
                     </span>
                   </div>
                 </div>
 
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <span>{result.timestamp.toLocaleTimeString()}</span>
                   <span>•</span>
                   <span>
@@ -322,7 +322,7 @@ export function QuickRunWindow({
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="h-8 rounded-xl border-border bg-background text-[11px] text-foreground hover:bg-secondary"
+                    className="h-8 rounded-xl border-border bg-background text-xs text-foreground hover:bg-secondary"
                     onClick={() => void runCommand(result.command)}
                     disabled={isRunning}
                   >
@@ -333,7 +333,7 @@ export function QuickRunWindow({
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="h-8 rounded-xl border-border bg-background text-[11px] text-foreground hover:bg-secondary"
+                    className="h-8 rounded-xl border-border bg-background text-xs text-foreground hover:bg-secondary"
                     onClick={() => copyCommand(result.command)}
                   >
                     <Copy className="mr-1.5 h-3.5 w-3.5" />
@@ -344,7 +344,7 @@ export function QuickRunWindow({
                       type="button"
                       size="sm"
                       variant="outline"
-                      className="h-8 rounded-xl border-border bg-background text-[11px] text-foreground hover:bg-secondary"
+                      className="h-8 rounded-xl border-border bg-background text-xs text-foreground hover:bg-secondary"
                       onClick={() => copyOutput(result.stdout)}
                     >
                       <Copy className="mr-1.5 h-3.5 w-3.5" />
@@ -356,7 +356,7 @@ export function QuickRunWindow({
                 {result.error ? (
                   <div className="mt-3 flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/8 p-3">
                     <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-destructive" />
-                    <pre className="whitespace-pre-wrap break-words font-mono text-[11px] text-destructive">
+                    <pre className="whitespace-pre-wrap break-words font-mono text-xs text-destructive">
                       {result.error}
                     </pre>
                   </div>
@@ -364,10 +364,10 @@ export function QuickRunWindow({
 
                 {result.stdout ? (
                   <div className="group relative mt-3 rounded-xl border border-border bg-card p-3">
-                    <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-foreground">
+                    <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-5 text-foreground">
                       {result.stdout}
                     </pre>
-                    <span className="pointer-events-none absolute right-2 top-2 rounded-full border border-border bg-background px-2 py-0.5 text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+                    <span className="pointer-events-none absolute right-2 top-2 rounded-full border border-border bg-background px-2 py-0.5 text-xs text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
                       stdout
                     </span>
                   </div>
@@ -375,7 +375,7 @@ export function QuickRunWindow({
 
                 {result.stderr ? (
                   <div className="mt-2 rounded-xl border border-border bg-secondary/50 p-3">
-                    <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-muted-foreground">
+                    <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-5 text-muted-foreground">
                       {result.stderr}
                     </pre>
                   </div>

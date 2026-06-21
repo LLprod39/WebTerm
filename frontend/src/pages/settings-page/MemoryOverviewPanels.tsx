@@ -28,7 +28,7 @@ function MemoryStatsGrid({ stats }: { stats: ServerMemoryOverviewResponse["stats
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
       {items.map((item) => (
         <div key={item.label} className="rounded-lg border border-border bg-secondary/10 px-3 py-2">
-          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{item.label}</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">{item.label}</p>
           <p className="mt-1 text-lg font-semibold text-foreground">{item.value}</p>
         </div>
       ))}

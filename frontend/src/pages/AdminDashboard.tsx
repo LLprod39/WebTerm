@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Maximize2, Minimize2, ShieldCheck } from "lucide-react";
+import { Activity, Maximize2, Minimize2 } from "lucide-react";
 
 import { fetchAdminDashboard } from "@/api";
 import { Button } from "@/components/ui/button";
@@ -33,8 +33,8 @@ export default function AdminDashboard() {
   return (
     <PageShell width={isFullWidth ? "full" : "7xl"}>
       <PageHero
-        kicker={localize(lang, "Обзор системы", "System Overview")}
-        title={localize(lang, "Центр управления", "Admin Control Center")}
+        kicker={localize(lang, "Состояние платформы", "Platform Status")}
+        title={localize(lang, "Панель администратора", "Admin Dashboard")}
         description={localize(
           lang,
           "Мониторинг инфраструктуры, активности пользователей и запусков агентов в реальном времени.",
@@ -61,10 +61,10 @@ export default function AdminDashboard() {
               )}
             </Button>
             <div className="flex items-center gap-3 px-3 py-1.5 rounded-xl bg-card border border-border/80 shadow-sm h-8 shrink-0">
-              <ShieldCheck className="h-4 w-4 text-emerald-500" />
-              <span className="text-xs font-semibold text-foreground/90">{localize(lang, "Система защищена", "System Secure")}</span>
+              <Activity className="h-4 w-4 text-info" />
+              <span className="text-xs font-semibold text-foreground/90">{localize(lang, "Версия", "Version")} v{d?.app_version || "2.0.0"}</span>
               <div className="h-3.5 w-px bg-border mx-1" />
-              <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">v{d?.app_version || "2.0.0"}</span>
+              <span className="text-xs text-muted-foreground">{localize(lang, "Автообновление 30 с", "Refreshes every 30s")}</span>
             </div>
           </div>
         }

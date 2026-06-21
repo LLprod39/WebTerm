@@ -1,7 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import type { MarsInterviewQuestion } from "@/lib/api";
 
-export type WizardStepId = "brief" | "interview" | "plan" | "run" | "final";
+export type WizardStepId = "brief" | "interview" | "plan" | "run";
 
 export type WizardStepMeta = {
   id: WizardStepId;
@@ -57,9 +57,9 @@ export const ORCHESTRATOR_PHASES: Array<{
   },
   {
     id: "reviewer",
-    ru: "Финальный отчет",
-    en: "Final report",
-    descriptionRu: "Собирает итог, проверки и готовность к запуску.",
+    ru: "Итог",
+    en: "Result",
+    descriptionRu: "Собирает результат, проверки и готовность к запуску.",
     descriptionEn: "Summarizes the result, checks, and launch readiness.",
     mode: "auto",
   },

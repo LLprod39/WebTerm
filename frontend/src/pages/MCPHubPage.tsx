@@ -183,6 +183,9 @@ export default function MCPHubPage() {
       ? localize(lang, "Просмотр MCP-сервера", "View MCP server")
       : localize(lang, "Редактировать MCP-сервер", "Edit MCP server")
     : localize(lang, "Добавить MCP-сервер", "Add MCP server");
+  const healthyCount = mcpList.filter((mcp) => mcp.last_test_ok === true).length;
+  const failedCount = mcpList.filter((mcp) => mcp.last_test_ok === false).length;
+  const unknownCount = Math.max(0, mcpList.length - healthyCount - failedCount);
 
   return (
     <div className="flex flex-col h-full">
@@ -220,6 +223,23 @@ export default function MCPHubPage() {
           </TabsList>
 
           <TabsContent value="mine" className="space-y-4">
+            {!isLoading && mcpList.length > 0 ? (
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-xl border border-success/25 bg-success/10 px-4 py-3">
+                  <div className="text-2xl font-semibold text-success">{healthyCount}</div>
+                  <div className="mt-1 text-sm text-foreground">{localize(lang, "Подключения работают", "Healthy connections")}</div>
+                </div>
+                <div className="rounded-xl border border-destructive/25 bg-destructive/10 px-4 py-3">
+                  <div className="text-2xl font-semibold text-destructive">{failedCount}</div>
+                  <div className="mt-1 text-sm text-foreground">{localize(lang, "Требуют проверки", "Need attention")}</div>
+                </div>
+                <div className="rounded-xl border border-border bg-secondary/20 px-4 py-3">
+                  <div className="text-2xl font-semibold text-muted-foreground">{unknownCount}</div>
+                  <div className="mt-1 text-sm text-foreground">{localize(lang, "Ещё не проверялись", "Not tested yet")}</div>
+                </div>
+              </div>
+            ) : null}
+
             {isLoading ? (
               <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -259,71 +279,24 @@ export default function MCPHubPage() {
                               <div className="min-w-0">
                                 <div className="flex items-center gap-1.5">
                                   <span className="truncate text-sm font-semibold text-foreground">{mcp.name}</span>
-                                  <span className="rounded border border-border/50 bg-secondary/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{mcp.transport}</span>
+                                  <span className="rounded border border-border/50 bg-secondary/40 px-1.5 py-0.5 font-mono text-xs text-muted-foreground">{mcp.transport}</span>
                                 </div>
                                 <p className="mt-0.5 text-xs text-muted-foreground">{mcp.description || localize(lang, "Описание не заполнено", "No description")}</p>
                               </div>
                             </div>
                             <div className="mt-2 flex flex-wrap gap-1">
-                              {mcp.is_owner ? <Badge variant="secondary" className="text-[10px]">{localize(lang, "Мой", "Mine")}</Badge> : null}
-                              {!mcp.is_owner && mcp.owner_username ? <Badge variant="outline" className="text-[10px]">{localize(lang, "Владелец", "Owner")}: {mcp.owner_username}</Badge> : null}
-                              {mcp.is_shared ? <Badge variant="outline" className="text-[10px]">{localize(lang, "Общий", "Shared")}</Badge> : null}
-                              {mcp.can_edit === false ? <Badge variant="outline" className="text-[10px]">{localize(lang, "Только чтение", "Read only")}</Badge> : null}
+                              {mcp.is_owner ? <Badge variant="secondary" className="text-xs">{localize(lang, "Мой", "Mine")}</Badge> : null}
+                              {!mcp.is_owner && mcp.owner_username ? <Badge variant="outline" className="text-xs">{localize(lang, "Владелец", "Owner")}: {mcp.owner_username}</Badge> : null}
+                              {mcp.is_shared ? <Badge variant="outline" className="text-xs">{localize(lang, "Общий", "Shared")}</Badge> : null}
+                              {mcp.can_edit === false ? <Badge variant="outline" className="text-xs">{localize(lang, "Только чтение", "Read only")}</Badge> : null}
                             </div>
                           </div>
 
-                          <div className="flex gap-2">
-                            {mcp.can_edit !== false ? (
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-10 w-10 rounded-xl"
-                                type="button"
-                                aria-label={localize(lang, `Проверить ${mcp.name}`, `Test ${mcp.name}`)}
-                                title={localize(lang, "Проверить подключение", "Test connection")}
-                                onClick={() => {
-                                  setTestingId(mcp.id);
-                                  testMutation.mutate(mcp.id);
-                                }}
-                                disabled={testingId === mcp.id}
-                              >
-                                {testingId === mcp.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <RefreshCw className="h-4 w-4" />
-                                )}
-                              </Button>
-                            ) : null}
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="ghost"
-                              className="h-10 w-10 rounded-xl"
-                              onClick={() => openEditDialog(mcp)}
-                              aria-label={mcp.can_edit === false ? localize(lang, `Открыть ${mcp.name}`, `View ${mcp.name}`) : localize(lang, `Изменить ${mcp.name}`, `Edit ${mcp.name}`)}
-                              title={mcp.can_edit === false ? localize(lang, "Открыть сервер", "View server") : localize(lang, "Изменить сервер", "Edit server")}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            {mcp.can_edit !== false ? (
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-10 w-10 rounded-xl text-destructive hover:text-destructive"
-                                type="button"
-                                aria-label={localize(lang, `Удалить ${mcp.name}`, `Delete ${mcp.name}`)}
-                                title={localize(lang, "Удалить сервер", "Delete server")}
-                                onClick={() => setDeleteTarget(mcp)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            ) : null}
-                          </div>
                         </div>
                       </div>
 
                       <div className="border-t border-border/50 bg-secondary/10 px-4 py-3 space-y-2.5">
-                        <div className="rounded-lg border border-border/50 bg-background/40 px-3 py-2 font-mono text-[11px] text-muted-foreground">
+                        <div className="rounded-lg border border-border/50 bg-background/40 px-3 py-2 font-mono text-xs text-muted-foreground">
                           {previewConnection(mcp) || localize(lang, "Команда или URL не указаны", "No connection data")}
                         </div>
 
@@ -340,15 +313,60 @@ export default function MCPHubPage() {
                               tone={tone}
                             />
                             {mcp.last_test_at && (
-                              <span className="text-[10px] text-muted-foreground/60">
+                              <span className="text-xs text-muted-foreground/60">
                                 {new Date(mcp.last_test_at).toLocaleDateString()}
                               </span>
                             )}
                           </div>
                         </div>
 
+                        <div className="flex flex-wrap gap-2">
+                          {mcp.can_edit !== false ? (
+                            <Button
+                              size="sm"
+                              variant={mcp.last_test_ok === false ? "default" : "outline"}
+                              className="h-9 gap-1.5"
+                              type="button"
+                              onClick={() => {
+                                setTestingId(mcp.id);
+                                testMutation.mutate(mcp.id);
+                              }}
+                              disabled={testingId === mcp.id}
+                            >
+                              {testingId === mcp.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <RefreshCw className="h-4 w-4" />
+                              )}
+                              {localize(lang, "Проверить", "Test")}
+                            </Button>
+                          ) : null}
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-9 gap-1.5"
+                            onClick={() => openEditDialog(mcp)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                            {mcp.can_edit === false ? localize(lang, "Открыть", "View") : localize(lang, "Изменить", "Edit")}
+                          </Button>
+                          {mcp.can_edit !== false ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-9 gap-1.5 text-destructive hover:text-destructive"
+                              type="button"
+                              onClick={() => setDeleteTarget(mcp)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              {localize(lang, "Удалить", "Delete")}
+                            </Button>
+                          ) : null}
+                        </div>
+
                         {mcp.last_test_error && (
-                          <p className="text-[11px] leading-5 text-red-400/80">{mcp.last_test_error}</p>
+                          <p className="text-xs leading-5 text-red-400/80">{mcp.last_test_error}</p>
                         )}
                       </div>
                     </div>
@@ -386,7 +404,7 @@ export default function MCPHubPage() {
                             </CardDescription>
                           </div>
                         </div>
-                        <Badge variant="secondary" className="text-[10px] font-mono">
+                        <Badge variant="secondary" className="text-xs font-mono">
                           {template.transport}
                         </Badge>
                       </div>

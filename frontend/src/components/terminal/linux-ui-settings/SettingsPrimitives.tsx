@@ -32,7 +32,7 @@ export function InfoCard({
             : "border-border bg-background",
       )}
     >
-      <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</div>
+      <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{label}</div>
       <div
         className={cn(
           "mt-1.5 break-words text-sm",
@@ -42,7 +42,7 @@ export function InfoCard({
       >
         {value || emptyValue(lang)}
       </div>
-      {hint ? <div className="mt-1.5 text-[11px] text-muted-foreground">{hint}</div> : null}
+      {hint ? <div className="mt-1.5 text-xs text-muted-foreground">{hint}</div> : null}
     </div>
   );
 }
@@ -70,11 +70,11 @@ export function OutputBlock({
       <div className="mb-1.5 flex items-center justify-between gap-2">
         <div className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">{label}</div>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             {lineCountLabel(lang, nonEmptyLines(visibleValue || value).length)}
           </span>
           {onCopy ? (
-            <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-[11px]" onClick={onCopy}>
+            <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={onCopy}>
               <Copy className="mr-1 h-3 w-3" />
               {localize(lang, "Копировать", "Copy")}
             </Button>
@@ -82,7 +82,7 @@ export function OutputBlock({
         </div>
       </div>
       <div className="mt-1.5 rounded-[1.1rem] border border-border bg-background p-3">
-        <pre className="whitespace-pre-wrap font-mono text-[11px] leading-5 text-foreground">
+        <pre className="whitespace-pre-wrap font-mono text-xs leading-5 text-foreground">
           {visibleValue || emptyLabel}
         </pre>
       </div>

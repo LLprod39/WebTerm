@@ -226,7 +226,7 @@ export function TextEditorOpenPanel({
             key={path}
             type="button"
             onClick={() => onOpenFile(path)}
-            className="rounded-full border border-border bg-background px-2 py-0.5 text-[10px] text-muted-foreground transition-colors hover:border-primary/20 hover:bg-secondary hover:text-foreground"
+            className="rounded-full border border-border bg-background px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:border-primary/20 hover:bg-secondary hover:text-foreground"
           >
             {path}
           </button>
@@ -234,14 +234,14 @@ export function TextEditorOpenPanel({
       </div>
       {recentPaths.length > 0 ? (
         <div className="mt-3">
-          <div className="mb-1.5 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{localize(lang, "Недавние", "Recent")}</div>
+          <div className="mb-1.5 text-xs uppercase tracking-[0.18em] text-muted-foreground">{localize(lang, "Недавние", "Recent")}</div>
           <div className="flex flex-wrap gap-1.5">
             {recentPaths.map((path) => (
               <button
                 key={path}
                 type="button"
                 onClick={() => onOpenFile(path)}
-                className="rounded-full border border-border bg-background px-2.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:border-primary/20 hover:bg-secondary hover:text-foreground"
+                className="rounded-full border border-border bg-background px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:border-primary/20 hover:bg-secondary hover:text-foreground"
               >
                 {path}
               </button>
@@ -334,7 +334,7 @@ export function TextEditorFooter({
   onReload: (tabId: string) => void;
 }) {
   return (
-    <footer className="flex min-h-8 items-center justify-between border-t border-border bg-secondary/20 px-3 py-2 text-[11px] text-muted-foreground">
+    <footer className="flex min-h-8 items-center justify-between border-t border-border bg-secondary/20 px-3 py-2 text-xs text-muted-foreground">
       <div className="flex items-center gap-3">
         {activeTab && (
           <>
@@ -342,7 +342,7 @@ export function TextEditorFooter({
             <span>{getLanguageHint(activeTab.filename, lang)}</span>
             <span>{activeTab.encoding}</span>
             {activeTab.isNew && (
-              <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground">{localize(lang, "Новый файл", "New file")}</span>
+              <span className="rounded-full bg-secondary px-1.5 py-0.5 text-xs text-muted-foreground">{localize(lang, "Новый файл", "New file")}</span>
             )}
           </>
         )}
@@ -351,7 +351,7 @@ export function TextEditorFooter({
         {activeTab && (
           <>
             {activeTab.dirty && (
-              <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">{localize(lang, "Изменён", "Modified")}</span>
+              <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-xs text-primary">{localize(lang, "Изменён", "Modified")}</span>
             )}
             <span>{localize(lang, `${activeLineCount} строк`, `${activeLineCount} lines`)}</span>
             <span>{localize(lang, `${activeCharCount} символов`, `${activeCharCount} chars`)}</span>
@@ -359,7 +359,7 @@ export function TextEditorFooter({
               type="button"
               size="sm"
               variant="ghost"
-              className="h-6 gap-1 rounded-lg px-2 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground"
+              className="h-6 gap-1 rounded-lg px-2 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
               onClick={() => onSave(activeTab.id)}
               disabled={!activeTab.dirty}
             >
@@ -370,7 +370,7 @@ export function TextEditorFooter({
               type="button"
               size="sm"
               variant="ghost"
-              className="h-6 gap-1 rounded-lg px-2 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground"
+              className="h-6 gap-1 rounded-lg px-2 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
               onClick={() => onReload(activeTab.id)}
               disabled={activeTab.isNew}
             >

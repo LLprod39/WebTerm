@@ -69,7 +69,7 @@ export function SftpTransferQueue({
   return (
     <div className="border-t border-border bg-secondary/20">
       <div className="flex items-center justify-between px-4 py-2">
-        <button type="button" className="text-[11px] font-medium text-muted-foreground" onClick={onToggleExpanded}>
+        <button type="button" className="text-xs font-medium text-muted-foreground" onClick={onToggleExpanded}>
           Передачи {activeCount > 0 ? `(${activeCount})` : ""}
         </button>
         {transfers.length > 0 ? (
@@ -77,7 +77,7 @@ export function SftpTransferQueue({
             type="button"
             size="sm"
             variant="ghost"
-            className="h-8 rounded-lg px-2.5 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground"
+            className="h-8 rounded-lg px-2.5 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
             onClick={onClearCompleted}
           >
             Очистить готовые
@@ -107,7 +107,7 @@ export function SftpTransferQueue({
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm text-foreground">{item.name}</div>
-                      <div className="truncate text-[11px] text-muted-foreground">{transferStatusLabel(item)}</div>
+                      <div className="truncate text-xs text-muted-foreground">{transferStatusLabel(item)}</div>
                     </div>
                     {item.status === "running" ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : null}
                     <Button
@@ -127,7 +127,7 @@ export function SftpTransferQueue({
                   </div>
                   <div className="mt-2">
                     <Progress value={item.progress} className="h-2" />
-                    <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
+                    <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
                       <span>
                         {formatBytes(item.loaded)}
                         {item.total ? ` / ${formatBytes(item.total)}` : ""}
@@ -140,7 +140,7 @@ export function SftpTransferQueue({
                           type="button"
                           size="sm"
                           variant="outline"
-                          className="h-7 rounded-lg border-border bg-background text-[11px] text-foreground hover:bg-secondary"
+                          className="h-7 rounded-lg border-border bg-background text-xs text-foreground hover:bg-secondary"
                           onClick={() => onRetry(item.id)}
                         >
                           Повторить
@@ -150,13 +150,13 @@ export function SftpTransferQueue({
                             type="button"
                             size="sm"
                             variant="outline"
-                            className="h-7 rounded-lg border-border bg-background text-[11px] text-foreground hover:bg-secondary"
+                            className="h-7 rounded-lg border-border bg-background text-xs text-foreground hover:bg-secondary"
                             onClick={() => onRetry(item.id, true)}
                           >
                             Перезаписать
                           </Button>
                         ) : null}
-                        <div className="truncate text-[11px] text-destructive">{item.error}</div>
+                        <div className="truncate text-xs text-destructive">{item.error}</div>
                       </div>
                     ) : null}
                   </div>

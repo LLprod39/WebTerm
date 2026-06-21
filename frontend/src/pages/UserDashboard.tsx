@@ -98,7 +98,7 @@ export default function UserDashboard() {
                   tone={runs?.active?.length ? "info" : "default"}
                 />
                 <MetricCard
-                  label="Fleet Health"
+                  label="Состояние серверов"
                   value={mon?.summary?.healthy ?? 0}
                   description="Стабильных узлов"
                   icon={<Activity className="h-5 w-5" />}
@@ -141,12 +141,12 @@ export default function UserDashboard() {
                         <span className="font-semibold truncate text-xs">{run.agent_name}</span>
                         <StatusBadge label={run.status} tone="info" />
                       </div>
-                      <p className="mt-1 truncate text-[10px] text-muted-foreground">
+                      <p className="mt-1 truncate text-xs text-muted-foreground">
                         на сервере: {run.server_name}
                       </p>
                     </div>
                     <div className="text-right shrink-0 ml-3">
-                      <div className="text-[10px] text-muted-foreground font-mono">{relativeTime(run.started_at)}</div>
+                      <div className="text-xs text-muted-foreground font-mono">{relativeTime(run.started_at)}</div>
                     </div>
                   </Link>
                 ))}
@@ -190,13 +190,13 @@ export default function UserDashboard() {
                           <span className="font-semibold truncate text-xs">{r.agent_name}</span>
                           <StatusBadge label={r.status} tone={runTone} />
                         </div>
-                        <p className="mt-1 truncate text-[10px] text-muted-foreground">
+                        <p className="mt-1 truncate text-xs text-muted-foreground">
                           сервер: <span className="text-foreground/80">{r.server_name}</span> • итераций: {r.total_iterations}
                         </p>
                       </div>
                       <div className="text-right shrink-0 ml-3">
-                        <div className="text-[10px] font-mono font-medium text-foreground">{r.duration_ms ? `${(r.duration_ms / 1000).toFixed(1)}s` : "n/a"}</div>
-                        <div className="text-[9px] text-muted-foreground/60 mt-0.5">{relativeTime(r.started_at)}</div>
+                        <div className="text-xs font-mono font-medium text-foreground">{r.duration_ms ? `${(r.duration_ms / 1000).toFixed(1)}s` : "n/a"}</div>
+                        <div className="text-xs text-muted-foreground/60 mt-0.5">{relativeTime(r.started_at)}</div>
                       </div>
                     </Link>
                   );
@@ -219,7 +219,7 @@ export default function UserDashboard() {
         render: (config) => {
           const limit = getWidgetNumberProp(config, "limit", 5);
           const tone = getWidgetStringProp(config, "tone", "default");
-          const title = getWidgetStringProp(config, "customTitle", "Состояние Fleet серверов");
+          const title = getWidgetStringProp(config, "customTitle", "Состояние серверов");
           const displayServers = mon?.servers?.slice(0, limit) ?? [];
 
           return (
@@ -235,28 +235,28 @@ export default function UserDashboard() {
                         </div>
                         <div className="truncate">
                           <span className="font-semibold text-foreground/95">{s.server_name}</span>
-                          <span className="text-[10px] text-muted-foreground/50 ml-2 font-mono">({s.host})</span>
+                          <span className="text-xs text-muted-foreground/50 ml-2 font-mono">({s.host})</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-3.5 shrink-0 flex-wrap sm:flex-nowrap">
                         <StatusBadge label={s.status} tone={statusTone} />
                         {s.cpu_percent !== null && (
-                          <div className="text-[10px] text-muted-foreground shrink-0 bg-card border rounded px-1.5 py-0.5 font-medium">
+                          <div className="text-xs text-muted-foreground shrink-0 bg-card border rounded px-1.5 py-0.5 font-medium">
                             CPU: <span className={cn("font-bold", s.cpu_percent > 80 ? "text-red-500" : s.cpu_percent > 60 ? "text-amber-500" : "text-emerald-500")}>{s.cpu_percent}%</span>
                           </div>
                         )}
                         {s.memory_percent !== null && (
-                          <div className="text-[10px] text-muted-foreground shrink-0 bg-card border rounded px-1.5 py-0.5 font-medium">
+                          <div className="text-xs text-muted-foreground shrink-0 bg-card border rounded px-1.5 py-0.5 font-medium">
                             RAM: <span className="text-foreground/90 font-bold">{s.memory_percent}%</span>
                           </div>
                         )}
                         {s.response_time_ms !== null && (
-                          <span className="text-[10px] text-muted-foreground/50 font-mono shrink-0">
+                          <span className="text-xs text-muted-foreground/50 font-mono shrink-0">
                             {s.response_time_ms}ms
                           </span>
                         )}
-                        <Button size="xs" variant="outline" asChild className="h-6 px-2.5 text-[10px] shrink-0 font-semibold shadow-sm hover:border-primary/50">
-                          <Link to={`/servers/${s.server_id}/terminal`}>Terminal</Link>
+                        <Button size="xs" variant="outline" asChild className="h-6 px-2.5 text-xs shrink-0 font-semibold shadow-sm hover:border-primary/50">
+                          <Link to={`/servers/${s.server_id}/terminal`}>Терминал</Link>
                         </Button>
                       </div>
                     </div>
@@ -293,7 +293,7 @@ export default function UserDashboard() {
                       <TerminalIcon className="h-3 w-3 text-muted-foreground" />
                     </div>
                     <span className="font-semibold truncate text-foreground/95">{s.name}</span>
-                    <span className="ml-auto text-[10px] font-mono text-muted-foreground/50">{s.host}</span>
+                    <span className="ml-auto text-xs font-mono text-muted-foreground/50">{s.host}</span>
                   </Link>
                 ))}
                 {displayServers.length === 0 && (
@@ -322,7 +322,7 @@ export default function UserDashboard() {
                   const alertTone: StatusTone = a.severity === "critical" ? "danger" : a.severity === "warning" ? "warning" : "info";
                   return (
                     <div key={a.id} className="flex items-start gap-3 p-3 rounded-xl border border-border/80 bg-secondary/5 hover:border-primary/30 transition-all text-xs">
-                      <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-destructive text-[10px] font-bold">
+                      <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-destructive text-xs font-bold">
                         !
                       </div>
                       <div className="min-w-0 flex-1">
@@ -330,8 +330,8 @@ export default function UserDashboard() {
                           <strong className="font-semibold text-foreground/95 truncate">{a.title}</strong>
                           <StatusBadge label={a.severity} tone={alertTone} />
                         </div>
-                        <p className="mt-1 text-muted-foreground text-[11px] leading-relaxed">{a.message}</p>
-                        <p className="mt-1 text-[9px] text-muted-foreground/60">
+                        <p className="mt-1 text-muted-foreground text-xs leading-relaxed">{a.message}</p>
+                        <p className="mt-1 text-xs text-muted-foreground/60">
                           сервер: <strong>{a.server_name}</strong> • {relativeTime(a.created_at)}
                         </p>
                       </div>
@@ -368,9 +368,9 @@ export default function UserDashboard() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-semibold truncate text-foreground/90">{a.action}</span>
-                        <span className="text-[10px] text-muted-foreground/40 font-mono shrink-0">{relativeTime(a.created_at)}</span>
+                        <span className="text-xs text-muted-foreground/40 font-mono shrink-0">{relativeTime(a.created_at)}</span>
                       </div>
-                      <p className="mt-0.5 text-[11px] text-muted-foreground/70 leading-relaxed truncate">{a.description}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground/70 leading-relaxed truncate">{a.description}</p>
                     </div>
                   </div>
                 ))}
@@ -397,22 +397,22 @@ export default function UserDashboard() {
                 <Link to="/servers/hub" className="flex flex-col items-center justify-center p-3 rounded-xl border border-border/80 bg-card hover:border-primary/50 hover:bg-secondary/20 hover:shadow-sm transition-all text-center group">
                   <Server className="h-5 w-5 text-primary/80 mb-2 transition-transform group-hover:scale-110" />
                   <span className="font-semibold text-foreground/90">Хаб серверов</span>
-                  <span className="text-[9px] text-muted-foreground/60 mt-0.5">Все узлы</span>
+                  <span className="text-xs text-muted-foreground/60 mt-0.5">Все узлы</span>
                 </Link>
                 <Link to="/studio" className="flex flex-col items-center justify-center p-3 rounded-xl border border-border/80 bg-card hover:border-primary/50 hover:bg-secondary/20 hover:shadow-sm transition-all text-center group">
                   <Workflow className="h-5 w-5 text-primary/80 mb-2 transition-transform group-hover:scale-110" />
                   <span className="font-semibold text-foreground/90">Студия</span>
-                  <span className="text-[9px] text-muted-foreground/60 mt-0.5">Пайплайны</span>
+                  <span className="text-xs text-muted-foreground/60 mt-0.5">Пайплайны</span>
                 </Link>
-                <Link to="/studio/skills" className="flex flex-col items-center justify-center p-3 rounded-xl border border-border/80 bg-card hover:border-primary/50 hover:bg-secondary/20 hover:shadow-sm transition-all text-center group">
+                <Link to="/agents" className="flex flex-col items-center justify-center p-3 rounded-xl border border-border/80 bg-card hover:border-primary/50 hover:bg-secondary/20 hover:shadow-sm transition-all text-center group">
                   <Bot className="h-5 w-5 text-primary/80 mb-2 transition-transform group-hover:scale-110" />
-                  <span className="font-semibold text-foreground/90">Создать агента</span>
-                  <span className="text-[9px] text-muted-foreground/60 mt-0.5">AI Скиллы</span>
+                  <span className="font-semibold text-foreground/90">Агенты</span>
+                  <span className="text-xs text-muted-foreground/60 mt-0.5">Создать и запустить</span>
                 </Link>
                 <Link to="/settings" className="flex flex-col items-center justify-center p-3 rounded-xl border border-border/80 bg-card hover:border-primary/50 hover:bg-secondary/20 hover:shadow-sm transition-all text-center group">
                   <Settings className="h-5 w-5 text-primary/80 mb-2 transition-transform group-hover:scale-110" />
                   <span className="font-semibold text-foreground/90">Настройки</span>
-                  <span className="text-[9px] text-muted-foreground/60 mt-0.5">Параметры</span>
+                  <span className="text-xs text-muted-foreground/60 mt-0.5">Параметры</span>
                 </Link>
               </div>
             </SectionCard>
@@ -425,7 +425,7 @@ export default function UserDashboard() {
   return (
     <PageShell width={isFullWidth ? "full" : "7xl"}>
       <PageHero
-        kicker="Dashboard"
+        kicker="Операции"
         title="Мой воркспейс"
         description="Обзор активных задач, доступных серверов и последних событий в вашей рабочей среде."
         actions={

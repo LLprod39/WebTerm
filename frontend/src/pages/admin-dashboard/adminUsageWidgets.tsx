@@ -50,9 +50,9 @@ export function buildAdminUsageWidgets(d: AdminDashboardData, lang: string): Wid
                   <div key={provider} className="rounded-xl border border-border/70 bg-secondary/5 p-3 text-xs">
                     <div className="flex items-center justify-between gap-3">
                       <span className="font-bold text-foreground/90">{providerLabel(provider)}</span>
-                      <span className="font-mono text-[11px] text-muted-foreground">{usage.calls.toLocaleString()} выз.</span>
+                      <span className="font-mono text-xs text-muted-foreground">{usage.calls.toLocaleString()} выз.</span>
                     </div>
-                    <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                       <div>
                         <div className="text-muted-foreground">Вход</div>
                         <div className="font-mono text-foreground">{usage.input_tokens.toLocaleString()}</div>
@@ -80,7 +80,7 @@ export function buildAdminUsageWidgets(d: AdminDashboardData, lang: string): Wid
             <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-xs text-left">
                 <thead>
-                  <tr className="border-b border-border/60 text-muted-foreground text-[10px] uppercase font-bold tracking-wider">
+                  <tr className="border-b border-border/60 text-muted-foreground text-xs uppercase font-bold tracking-wider">
                     <th className="py-2.5">Провайдер</th>
                     <th className="py-2.5 text-right font-semibold">Вызовы</th>
                     <th className="py-2.5 text-right font-semibold">Входные токен</th>
@@ -138,7 +138,7 @@ export function buildAdminUsageWidgets(d: AdminDashboardData, lang: string): Wid
                     <div className={cn("h-2 w-2 rounded-full shrink-0", info.enabled ? "bg-emerald-500" : "bg-muted-foreground/30")} />
                     <span className="font-semibold text-foreground/95">{providerLabel(provider)}</span>
                   </div>
-                  <span className="text-[10px] font-mono text-muted-foreground bg-card border rounded-md px-2 py-0.5 max-w-[150px] truncate shadow-sm">
+                  <span className="text-xs font-mono text-muted-foreground bg-card border rounded-md px-2 py-0.5 max-w-[150px] truncate shadow-sm">
                     {info.model || emptyValueLabel(lang)}
                   </span>
                 </div>

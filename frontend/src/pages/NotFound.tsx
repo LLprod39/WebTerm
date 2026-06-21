@@ -16,19 +16,14 @@ const NotFound = () => {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6">
       <div className="w-full max-w-md text-center">
-        {/* Large 404 */}
-        <div className="relative mb-8 select-none">
-          <span className="text-[9rem] font-bold leading-none tracking-tighter text-border/30">
-            404
-          </span>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-border bg-card shadow-sm">
-              <Search className="h-7 w-7 text-primary" />
-            </div>
-          </div>
+        <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-border bg-card shadow-sm">
+          <Search className="h-7 w-7 text-primary" />
         </div>
 
-        {/* Message */}
+        <div className="mb-3 inline-flex items-center rounded-full border border-border bg-secondary/40 px-3 py-1 text-xs font-semibold text-muted-foreground">
+          {t("not_found.title")}
+        </div>
+
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">
           {t("not_found.title_long")}
         </h1>
@@ -36,7 +31,6 @@ const NotFound = () => {
           {t("not_found.text_long")}
         </p>
 
-        {/* Path hint */}
         {location.pathname !== "/" && (
           <div className="mx-auto mt-4 inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5">
             <span className="text-xs text-muted-foreground/60">{t("not_found.path")}</span>
@@ -44,7 +38,6 @@ const NotFound = () => {
           </div>
         )}
 
-        {/* Actions */}
         <div className="mt-8 flex items-center justify-center gap-3">
           <Button variant="outline" onClick={() => navigate(-1)} className="gap-2">
             <ArrowLeft className="h-4 w-4" />

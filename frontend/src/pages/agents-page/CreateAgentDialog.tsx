@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, Bot, Layers, Save, Server, Shield, Tag } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bot, Layers, Server, Shield, Tag } from "lucide-react";
 import {
   createAgent,
   fetchAgentTemplates,
@@ -17,6 +17,8 @@ import {
 } from "@/lib/api";
 import { localize, useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
+import { AsyncButton } from "@/components/system/AsyncButton";
+import { InlineAlert } from "@/components/system/InlineAlert";
 import {
   Dialog,
   DialogBody,
@@ -32,16 +34,21 @@ import {
   AGENT_WIZARD_STEPS,
   type AgentSudoPolicy,
   type AgentWizardStep,
+  buildAgentWizardReadiness,
   buildDefaultToolsConfig,
   defaultScheduleConfig,
   deriveScheduleMinutes,
   finalizeScheduleConfig,
+  firstFailedCheckForStep,
   HIDDEN_AGENT_TEMPLATE_TYPES,
   agentModeLabel,
   normalizeArtifactDraft,
   prepareArtifactForSave,
+  readinessPercent,
   scheduleConfigFromMinutes,
+  stepHasBlockingFailure,
   sudoAgentOption,
+  validateAgentWizardSchema,
 } from "./agentPageUtils";
 
 type CreateAgentDialogProps = {
@@ -81,23 +88,91 @@ export function CreateAgentDialog({
   const [activeArtifactIndex, setActiveArtifactIndex] = useState<number | null>(null);
   const [telegramEnabled, setTelegramEnabled] = useState(false);
   const [telegramChatId, setTelegramChatId] = useState("");
+  const [sudoRiskAcknowledged, setSudoRiskAcknowledged] = useState(false);
+  const [serverSearch, setServerSearch] = useState("");
   const [toolsExpanded, setToolsExpanded] = useState(false);
   const [skillsExpanded, setSkillsExpanded] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const { data: tplData } = useQuery({ queryKey: ["agents", "templates"], queryFn: fetchAgentTemplates, enabled: open });
   const { data: bootstrapData } = useQuery({ queryKey: ["frontend", "bootstrap"], queryFn: fetchFrontendBootstrap, staleTime: 30_000 });
-  const { data: availableSkills = [] } = useQuery<StudioSkill[]>({ queryKey: ["studio", "skills", "agent-picker"], queryFn: studioSkills.list, enabled: open });
+  const { data: availableSkillsData } = useQuery<unknown>({ queryKey: ["studio", "skills", "agent-picker"], queryFn: studioSkills.list, enabled: open });
 
   const templates = (tplData?.templates || [])
     .filter((template) => !HIDDEN_AGENT_TEMPLATE_TYPES.has(template.type))
     .filter((template) => template.mode === mode || (mode === "multi" && template.mode === "full"));
-  const servers = bootstrapData?.servers || [];
+  const servers = useMemo(() => bootstrapData?.servers ?? [], [bootstrapData?.servers]);
+  const availableSkills = Array.isArray(availableSkillsData) ? (availableSkillsData as StudioSkill[]) : [];
+  const visibleServers = useMemo(() => {
+    const query = serverSearch.trim().toLowerCase();
+    if (!query) return servers;
+    return servers.filter((server) =>
+      server.name.toLowerCase().includes(query) ||
+      server.host.toLowerCase().includes(query) ||
+      server.group_name.toLowerCase().includes(query),
+    );
+  }, [serverSearch, servers]);
   const allServerIds = servers.map((server) => server.id);
   const activeArtifact = activeArtifactIndex !== null ? inputArtifacts[activeArtifactIndex] : null;
   const currentStepIndex = Math.max(0, AGENT_WIZARD_STEPS.findIndex((item) => item.key === step));
   const commandCount = commands.split("\n").map((item) => item.trim()).filter(Boolean).length;
-  const canSave = Boolean((name || selectedType).trim()) && selectedServers.length > 0;
+  const readinessChecks = useMemo(() => buildAgentWizardReadiness({
+    selectedType,
+    mode,
+    name,
+    commands,
+    goal,
+    selectedServers,
+    sudoPolicy,
+    sudoRiskAcknowledged,
+    scheduleConfig,
+    schedule,
+    telegramEnabled,
+    telegramChatId,
+  }), [
+    commands,
+    goal,
+    mode,
+    name,
+    schedule,
+    scheduleConfig,
+    selectedServers,
+    selectedType,
+    sudoPolicy,
+    sudoRiskAcknowledged,
+    telegramChatId,
+    telegramEnabled,
+  ]);
+  const readiness = readinessPercent(readinessChecks);
+  const currentStepBlockingCheck = firstFailedCheckForStep(readinessChecks, step);
+  const schemaValidation = useMemo(() => validateAgentWizardSchema({
+    selectedType,
+    mode,
+    name,
+    commands,
+    goal,
+    selectedServers,
+    sudoPolicy,
+    sudoRiskAcknowledged,
+    scheduleConfig,
+    schedule,
+    telegramEnabled,
+    telegramChatId,
+  }), [
+    commands,
+    goal,
+    mode,
+    name,
+    schedule,
+    scheduleConfig,
+    selectedServers,
+    selectedType,
+    sudoPolicy,
+    sudoRiskAcknowledged,
+    telegramChatId,
+    telegramEnabled,
+  ]);
+  const canSave = readiness === 100 && schemaValidation.isValid;
 
   const resetForm = () => {
     setStep("template");
@@ -122,6 +197,8 @@ export function CreateAgentDialog({
     setActiveArtifactIndex(null);
     setTelegramEnabled(false);
     setTelegramChatId("");
+    setSudoRiskAcknowledged(false);
+    setServerSearch("");
     setToolsExpanded(false);
     setSkillsExpanded(false);
   };
@@ -155,6 +232,8 @@ export function CreateAgentDialog({
     const telegram = initialAgent.report_delivery?.telegram;
     setTelegramEnabled(Boolean(telegram?.enabled));
     setTelegramChatId(telegram?.chat_id || "");
+    setSudoRiskAcknowledged(sudoAgentOption(initialAgent.sudo_policy).value !== "approved");
+    setServerSearch("");
     setToolsExpanded(false);
     setSkillsExpanded(false);
   }, [open, initialAgent]);
@@ -171,6 +250,11 @@ export function CreateAgentDialog({
   };
 
   const onSave = async () => {
+    if (!schemaValidation.isValid) {
+      setStep(schemaValidation.issues[0]?.step || "basics");
+      return;
+    }
+
     setSaving(true);
     try {
       const normalizedSchedule = finalizeScheduleConfig(scheduleConfig, schedule);
@@ -209,7 +293,15 @@ export function CreateAgentDialog({
     }
   };
 
-  const goNext = () => setStep(AGENT_WIZARD_STEPS[Math.min(currentStepIndex + 1, AGENT_WIZARD_STEPS.length - 1)].key);
+  const canVisitStep = (targetStep: AgentWizardStep) => {
+    const targetIndex = AGENT_WIZARD_STEPS.findIndex((item) => item.key === targetStep);
+    if (targetIndex <= currentStepIndex) return true;
+    return AGENT_WIZARD_STEPS.slice(0, targetIndex).every((item) => !stepHasBlockingFailure(readinessChecks, item.key));
+  };
+  const goNext = () => {
+    if (currentStepBlockingCheck) return;
+    setStep(AGENT_WIZARD_STEPS[Math.min(currentStepIndex + 1, AGENT_WIZARD_STEPS.length - 1)].key);
+  };
   const goBack = () => setStep(AGENT_WIZARD_STEPS[Math.max(currentStepIndex - 1, 0)].key);
   const toggleServer = (id: number) => setSelectedServers((prev) => prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]);
   const hasAllServersSelected = allServerIds.length > 0 && allServerIds.every((id) => selectedServers.includes(id));
@@ -281,7 +373,7 @@ export function CreateAgentDialog({
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
-      <DialogContent className="max-h-[calc(100vh-32px)] max-w-[min(1420px,calc(100vw-32px))] rounded-lg border-primary/10 bg-card/95 p-0 shadow-[0_24px_90px_hsl(var(--background)_/_0.72)]">
+      <DialogContent className="flex max-h-[calc(100dvh-24px)] max-w-[min(1180px,calc(100vw-24px))] flex-col rounded-xl border-primary/10 bg-card/95 p-0 shadow-[0_24px_90px_hsl(var(--background)_/_0.72)]">
         <DialogHeader className="px-6 py-5">
           <div className="flex items-start gap-4 pr-12">
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/15 text-primary shadow-[0_0_28px_hsl(var(--primary)_/_0.16)]">
@@ -289,7 +381,7 @@ export function CreateAgentDialog({
             </span>
             <div className="min-w-0">
               <DialogTitle className="text-xl">{isEditing ? localize(lang, "Редактирование агента", "Edit agent") : localize(lang, "Создание агента", "Create agent")}</DialogTitle>
-              <DialogDescription>{localize(lang, "Настройте поведение, окружения, возможности и запуск.", "Configure behavior, targets, capabilities, and launch.")}</DialogDescription>
+              <DialogDescription>{localize(lang, "Настройте сценарий, поведение, окружение и проверки перед созданием.", "Configure scenario, behavior, targets, and checks before creation.")}</DialogDescription>
             </div>
           </div>
         </DialogHeader>
@@ -299,9 +391,10 @@ export function CreateAgentDialog({
           currentStepIndex={currentStepIndex}
           lang={lang}
           onStepChange={setStep}
+          canVisitStep={canVisitStep}
         />
 
-        <DialogBody className="max-h-[calc(100vh-250px)] overflow-y-auto px-6 py-4">
+        <DialogBody className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
           <AgentWizardStepContent
             step={step}
             lang={lang}
@@ -330,7 +423,10 @@ export function CreateAgentDialog({
             setMaxConnections={setMaxConnections}
             sudoPolicy={sudoPolicy}
             setSudoPolicy={setSudoPolicy}
-            servers={servers}
+            servers={visibleServers}
+            totalServerCount={servers.length}
+            serverSearch={serverSearch}
+            setServerSearch={setServerSearch}
             selectedServers={selectedServers}
             toggleServer={toggleServer}
             selectAll={selectAll}
@@ -370,29 +466,39 @@ export function CreateAgentDialog({
             setTelegramEnabled={setTelegramEnabled}
             telegramChatId={telegramChatId}
             setTelegramChatId={setTelegramChatId}
+            sudoRiskAcknowledged={sudoRiskAcknowledged}
+            setSudoRiskAcknowledged={setSudoRiskAcknowledged}
             summaryRows={summaryRows}
             commandCount={commandCount}
+            readiness={readiness}
+            readinessChecks={readinessChecks}
           />
         </DialogBody>
 
-        <DialogFooter className="items-center justify-between gap-3 px-6 py-4 sm:flex-row">
-          <Button size="sm" variant="outline" className="min-w-28 gap-2" onClick={currentStepIndex === 0 ? onClose : goBack}>
+        <DialogFooter className="shrink-0 items-stretch justify-between gap-3 px-4 py-4 sm:flex-row sm:items-center sm:px-6">
+          <Button variant="outline" className="min-w-28 gap-2" onClick={currentStepIndex === 0 ? onClose : goBack}>
             <ArrowLeft className="h-4 w-4" /> {currentStepIndex === 0 ? localize(lang, "Отмена", "Cancel") : t("agent.back")}
           </Button>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" className="min-w-44 gap-2" onClick={onSave} disabled={saving || !canSave}>
-              <Save className="h-4 w-4" /> {saving ? localize(lang, "Сохраняем...", "Saving...") : localize(lang, "Сохранить", "Save")}
+          {currentStepBlockingCheck ? (
+            <InlineAlert
+              tone={currentStepBlockingCheck.risk === "danger" ? "danger" : "warning"}
+              description={localize(lang, currentStepBlockingCheck.detailRu, currentStepBlockingCheck.detailEn)}
+              className="flex-1 px-3 py-2"
+            />
+          ) : (
+            <div className="hidden flex-1 items-center text-sm text-muted-foreground sm:flex">
+              {localize(lang, `Готовность ${readiness}%`, `${readiness}% ready`)}
+            </div>
+          )}
+          {step === "review" ? (
+            <AsyncButton className="min-w-40 gap-2" onClick={onSave} loading={saving} loadingLabel={localize(lang, "Сохраняем...", "Saving...")} disabled={!canSave}>
+              {isEditing ? localize(lang, "Сохранить", "Save") : t("agent.create")}
+            </AsyncButton>
+          ) : (
+            <Button className="min-w-32 gap-2" onClick={goNext} disabled={Boolean(currentStepBlockingCheck)}>
+              {localize(lang, "Далее", "Next")} <ArrowRight className="h-4 w-4" />
             </Button>
-            {step === "review" ? (
-              <Button size="sm" className="min-w-36 gap-2" onClick={onSave} disabled={saving || !canSave}>
-                {saving ? localize(lang, "Сохраняем...", "Saving...") : isEditing ? localize(lang, "Сохранить", "Save") : t("agent.create")}
-              </Button>
-            ) : (
-              <Button size="sm" className="min-w-32 gap-2" onClick={goNext}>
-                {localize(lang, "Далее", "Next")} <ArrowRight className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { installApiHarness, json } from "./support/apiHarness";
+import { installPlatformMocks } from "./support/platformFixtures";
 
 test.describe("Auth flows", () => {
   test("redirects unauthenticated user to login", async ({ page }) => {
@@ -51,7 +52,7 @@ test.describe("Auth flows", () => {
     await page.goto("/servers");
 
     await expect(page).toHaveURL(/\/login\?next=%2Fservers/);
-    await expect(page.getByRole("heading", { name: "WebTermAI" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /WebTermAI/ })).toBeVisible();
     await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
   });
 
@@ -122,6 +123,11 @@ test.describe("Auth flows", () => {
 
     await page.goto("/login");
 
+    await expect(page.getByRole("button", { name: "Corporate SSO" })).toBeVisible();
+    await page.getByRole("button", { name: "Corporate SSO" }).click();
+    await expect(page.getByRole("button", { name: "Continue through SSO" })).toBeVisible();
+    await page.getByRole("button", { name: "Local account" }).click();
+
     await page.getByRole("button", { name: "RU" }).click();
     await expect(page.getByRole("button", { name: "Войти" })).toBeVisible();
 
@@ -130,8 +136,26 @@ test.describe("Auth flows", () => {
 
     await page.getByLabel("Username").fill("operator");
     await page.getByLabel("Password").fill("pass123");
+    await page.getByRole("button", { name: "Show secret" }).click();
+    await expect(page.locator("#password")).toHaveAttribute("type", "text");
     await page.getByRole("button", { name: "Sign in" }).click();
 
+    await expect(page).toHaveURL(/\/servers$/);
+    await expect(page.getByRole("heading", { name: "Infrastructure" })).toBeVisible();
+  });
+
+  test("shows permission denied for disabled feature routes", async ({ page }) => {
+    await installPlatformMocks(page, {
+      authenticated: true,
+      features: { agents: false },
+    });
+
+    await page.goto("/agents");
+
+    await expect(page).toHaveURL(/\/agents$/);
+    await expect(page.getByRole("heading", { name: "You do not have access to this section" })).toBeVisible();
+
+    await page.getByRole("link", { name: "Open servers" }).click();
     await expect(page).toHaveURL(/\/servers$/);
     await expect(page.getByRole("heading", { name: "Infrastructure" })).toBeVisible();
   });

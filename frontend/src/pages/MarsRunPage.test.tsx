@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -59,6 +59,10 @@ function renderRunPage() {
   );
 }
 
+function activateTab(name: string) {
+  fireEvent.mouseDown(screen.getByRole("tab", { name }), { button: 0, ctrlKey: false });
+}
+
 describe("MarsRunPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -99,13 +103,19 @@ describe("MarsRunPage", () => {
 
     expect(await screen.findByText("Рабочая папка: Personal workspace")).toBeInTheDocument();
     expect(screen.queryByText("C:\\WebTrerm")).not.toBeInTheDocument();
-    expect(screen.getByText("frontend/src/App.tsx")).toBeInTheDocument();
-    expect(screen.getByText(/build stream/)).toBeInTheDocument();
-    expect(screen.getByText("Final answer")).toBeInTheDocument();
+
+    activateTab("Изменения");
+    expect(await screen.findByText("frontend/src/App.tsx")).toBeInTheDocument();
+    expect(screen.getByText("npm test passed")).toBeInTheDocument();
+
+    activateTab("Логи");
+    expect(await screen.findByText(/build stream/)).toBeInTheDocument();
+
+    activateTab("Отчет");
+    expect(await screen.findByText("Final answer")).toBeInTheDocument();
     expect(screen.getByText("Quality review ok")).toBeInTheDocument();
     expect(screen.queryByText(/Codex/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Gemini/i)).not.toBeInTheDocument();
-    expect(screen.getByText("npm test passed")).toBeInTheDocument();
     expect(screen.getByText(/MARS final report/)).toBeInTheDocument();
   });
 });

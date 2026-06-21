@@ -92,7 +92,7 @@ export function AgentNodePanel({
         {guidanceChecklist.length ? (
           <div className="mt-2 grid gap-1">
             {guidanceChecklist.slice(0, 3).map((item) => (
-              <div key={item} className="flex items-start gap-2 text-[11px] leading-5 text-muted-foreground">
+              <div key={item} className="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
                 <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
                 <span>{item}</span>
               </div>

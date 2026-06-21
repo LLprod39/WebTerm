@@ -155,7 +155,7 @@ export function PipelineRunDialog({
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   {manualTriggerOptions.length <= 1
                     ? localize(lang, "Если ручной триггер один, он будет выбран автоматически.", "When there is only one manual trigger, it is selected automatically.")
                     : localize(lang, "Этот триггер запустит только свою ветку графа.", "This trigger starts only its own branch of the graph.")}
@@ -183,7 +183,7 @@ export function PipelineRunDialog({
                       <p className="text-xs font-medium text-foreground">
                         {localize(lang, "Поля для этого шаблона", "Fields for this template")}
                       </p>
-                      <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                      <p className="mt-1 text-xs leading-4 text-muted-foreground">
                         {localize(
                           lang,
                           "Эти переменные найдены в шагах pipeline. Добавьте их в JSON context и заполните реальные значения перед запуском.",
@@ -207,7 +207,7 @@ export function PipelineRunDialog({
                       <button
                         key={field}
                         type="button"
-                        className="rounded-md border border-border bg-background px-2 py-1 font-mono text-[11px] text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
+                        className="rounded-md border border-border bg-background px-2 py-1 font-mono text-xs text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
                         onClick={onApplyRuntimeContextFields}
                       >
                         {`{${field}}`}
@@ -225,7 +225,7 @@ export function PipelineRunDialog({
                 >
                   <div>
                     <p className="text-xs font-medium">{localize(lang, "Расширенный контекст", "Advanced context")}</p>
-                    <p className="text-[11px] text-muted-foreground">{localize(lang, "Необязательные метаданные инициатора и дополнительные JSON-поля.", "Optional requester metadata and extra JSON fields.")}</p>
+                    <p className="text-xs text-muted-foreground">{localize(lang, "Необязательные метаданные инициатора и дополнительные JSON-поля.", "Optional requester metadata and extra JSON fields.")}</p>
                   </div>
                   {runAdvancedOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
                 </button>
@@ -265,7 +265,7 @@ export function PipelineRunDialog({
                         rows={8}
                         className="font-mono text-xs"
                       />
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-xs text-muted-foreground">
                         {localize(lang, "Эти поля объединяются с задачей перед стартом запуска.", "These fields are merged with the task text before the run starts.")}
                       </p>
                       {runContextError ? <p className="text-xs text-red-400">{runContextError}</p> : null}
@@ -299,7 +299,7 @@ export function PipelineRunDialog({
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <div className="text-sm font-medium text-foreground">{trigger.name || localize(lang, "Webhook-триггер", "Webhook trigger")}</div>
-                        <div className="text-[11px] text-muted-foreground">{localize(lang, "Нода", "Node")} `{trigger.node_id}`</div>
+                        <div className="text-xs text-muted-foreground">{localize(lang, "Нода", "Node")} `{trigger.node_id}`</div>
                       </div>
                       <Button size="sm" variant="outline" className="h-9" onClick={() => void handleCopyWebhookUrl(trigger.webhook_url)}>
                         <Copy className="mr-1.5 h-3.5 w-3.5" />
@@ -309,7 +309,7 @@ export function PipelineRunDialog({
                     <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground break-all">
                       {toAbsoluteWebhookUrl(trigger.webhook_url)}
                     </div>
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       {trigger.last_triggered_at
                         ? localize(lang, `Последний запуск: ${formatStudioDateTime(trigger.last_triggered_at)}`, `Last trigger: ${formatStudioDateTime(trigger.last_triggered_at)}`)
                         : localize(lang, "Ещё не вызывался.", "Has not been triggered yet.")}

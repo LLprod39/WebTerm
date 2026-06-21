@@ -46,10 +46,10 @@ export function ServerContextTab({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">
+              <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
                 {t("srv.scope_server")}
               </span>
-              <span className="inline-flex items-center rounded-full bg-secondary px-2.5 py-1 text-[11px] font-medium text-foreground">
+              <span className="inline-flex items-center rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-foreground">
                 {advancedServer?.group_id ? t("srv.inherits_global_group") : t("srv.inherits_global")}
               </span>
             </div>
@@ -99,7 +99,7 @@ export function ServerContextTab({
 
         <div className="space-y-4 rounded-lg border border-border bg-secondary/10 p-4">
           <div>
-            <div className="inline-flex items-center rounded-full bg-secondary px-2.5 py-1 text-[11px] font-medium text-foreground">
+            <div className="inline-flex items-center rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-foreground">
               {advancedServer?.group_id ? t("srv.preview_server_badge_group") : t("srv.preview_server_badge_global")}
             </div>
             <h3 className="mt-3 text-sm font-semibold text-foreground">{t("srv.preview_server_title")}</h3>

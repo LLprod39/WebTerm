@@ -67,6 +67,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [hasHydratedPipeline, setHasHydratedPipeline] = useState(!pipelineId);
   const [hasLocalChanges, setHasLocalChanges] = useState(false);
+  const [flowSummaryCollapsed, setFlowSummaryCollapsed] = useState(false);
   const nodeIdCounter = useRef(1);
   const pipelineNodes = nodes as unknown as PipelineNode[];
   const pipelineEdges = edges as unknown as PipelineEdge[];
@@ -243,10 +244,34 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     );
   };
 
+  const handleValidateGraph = () => {
+    if (pipelineId && !hasHydratedPipeline) {
+      toast({
+        variant: "destructive",
+        description: localize(
+          lang,
+          "Редактор еще загружает актуальную версию графа. Подождите секунду и попробуйте снова.",
+          "The editor is still loading the latest graph from the server. Wait a moment and try again.",
+        ),
+      });
+      return;
+    }
+    if (showClientValidationError()) return;
+    toast({
+      description: localize(
+        lang,
+        "Граф прошёл локальную проверку. Для проверки runtime context используйте dry-run в диалоге запуска.",
+        "Graph passed local validation. Use dry-run in the run dialog to validate runtime context.",
+      ),
+    });
+  };
+
   const handleNodesChange = useCallback(
     (changes: Parameters<typeof onNodesChangeRaw>[0]) => {
       if (changes?.length) {
-        setHasLocalChanges(true);
+        if (changes.some((change) => change.type !== "dimensions" && change.type !== "select")) {
+          setHasLocalChanges(true);
+        }
         if (
           changes.some(
             (change) =>
@@ -361,12 +386,19 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     );
   }
   const showMiniMap = nodes.length >= 6;
+  const showPipelineActivityBar =
+    Boolean(graphRunId) ||
+    !hasHydratedPipeline ||
+    pipelineActivityState.icon === "running" ||
+    pipelineActivityState.icon === "pending" ||
+    pipelineActivityState.icon === "warning";
 
   return (
     <div className="flex flex-col h-full">
       <PipelineEditorToolbar
         assistantOpen={assistantOpen}
         hasHydratedPipeline={hasHydratedPipeline}
+        hasLocalChanges={hasLocalChanges}
         lang={lang}
         pipelineId={pipelineId}
         pipelineName={pipelineName}
@@ -391,24 +423,29 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
           setHasLocalChanges(true);
         }}
         onSave={handleSave}
+        onValidateGraph={handleValidateGraph}
       />
 
-      <PipelineActivityBar
-        activityState={pipelineActivityState}
-        graphRunId={graphRunId}
-        graphRunLive={graphRunLive}
-        hasHydratedPipeline={hasHydratedPipeline}
-        highlightedNode={highlightedNode}
-        highlightedNodeLabel={highlightedNodeLabel}
-        lang={lang}
-        pipelineId={pipelineId}
-      />
+      {showPipelineActivityBar ? (
+        <PipelineActivityBar
+          activityState={pipelineActivityState}
+          graphRunId={graphRunId}
+          graphRunLive={graphRunLive}
+          hasHydratedPipeline={hasHydratedPipeline}
+          highlightedNode={highlightedNode}
+          highlightedNodeLabel={highlightedNodeLabel}
+          lang={lang}
+          pipelineId={pipelineId}
+        />
+      ) : null}
       <PipelineFlowSummaryBar
         nodes={pipelineNodes}
         edges={pipelineEdges}
         graphState={graphState}
         selectedNodeId={selectedNode?.id || null}
+        collapsed={flowSummaryCollapsed}
         lang={lang}
+        onCollapsedChange={setFlowSummaryCollapsed}
         onSelectNode={(node) => {
           setSelectedNode(node);
           setActiveRunId(null);

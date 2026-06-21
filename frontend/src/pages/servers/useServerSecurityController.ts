@@ -7,6 +7,7 @@ import {
   setMasterPassword as saveMasterPassword,
   type FrontendServer,
 } from "@/lib/api";
+import { notify } from "@/lib/notify";
 
 type Translate = (key: string) => string;
 
@@ -35,20 +36,20 @@ export function useServerSecurityController(activeServer: FrontendServer | null,
     if (!masterPassword.trim()) return;
     await saveMasterPassword(masterPassword.trim());
     setHasMasterPassword(true);
-    alert(t("srv.master_pw_saved"));
+    notify.success({ title: t("srv.master_pw_saved") });
   }, [masterPassword, t]);
 
   const onClearMasterPassword = useCallback(async () => {
     await clearMasterPassword();
     setHasMasterPassword(false);
-    alert(t("srv.master_pw_cleared"));
+    notify.success({ title: t("srv.master_pw_cleared") });
   }, [t]);
 
   const onRevealPassword = useCallback(async () => {
     if (!activeServer) return;
     const response = await revealServerPassword(activeServer.id, masterPassword.trim());
     if (response.success) setRevealedPassword(response.password || "");
-    else alert(response.error || t("srv.reveal_failed"));
+    else notify.error({ title: response.error || t("srv.reveal_failed") });
   }, [activeServer, masterPassword, t]);
 
   return {

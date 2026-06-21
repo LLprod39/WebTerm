@@ -3,6 +3,7 @@ import { Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { MemorySnapshotItem } from "@/lib/api";
 
 import {
@@ -102,18 +103,22 @@ export function ServerKnowledgeTab({
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">{t("srv.knowledge_kind_label")}</Label>
-            <select
+            <Select
               value={aiKnowledgeKindFilter}
-              onChange={(event) => setAiKnowledgeKindFilter(event.target.value as UserKnowledgeFilter)}
-              className="flex h-9 w-full rounded-md border border-input bg-secondary/50 px-3 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              onValueChange={(value) => setAiKnowledgeKindFilter(value as UserKnowledgeFilter)}
             >
-              <option value="all">{t("srv.knowledge_filter_all")}</option>
-              <option value="summary">{t("srv.knowledge_filter_summary")}</option>
-              <option value="access">{t("srv.knowledge_filter_access")}</option>
-              <option value="risks">{t("srv.knowledge_filter_risks")}</option>
-              <option value="changes">{t("srv.knowledge_filter_changes")}</option>
-              <option value="instructions">{t("srv.knowledge_filter_instructions")}</option>
-            </select>
+              <SelectTrigger className="h-9 bg-secondary/50" aria-label={t("srv.knowledge_kind_label")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t("srv.knowledge_filter_all")}</SelectItem>
+                <SelectItem value="summary">{t("srv.knowledge_filter_summary")}</SelectItem>
+                <SelectItem value="access">{t("srv.knowledge_filter_access")}</SelectItem>
+                <SelectItem value="risks">{t("srv.knowledge_filter_risks")}</SelectItem>
+                <SelectItem value="changes">{t("srv.knowledge_filter_changes")}</SelectItem>
+                <SelectItem value="instructions">{t("srv.knowledge_filter_instructions")}</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex items-end">
             <Button
@@ -129,7 +134,7 @@ export function ServerKnowledgeTab({
             </Button>
           </div>
         </div>
-        <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+        <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
           <span className="rounded-full border border-border px-2.5 py-1">
             {tr("srv.manual_count", { filtered: filteredManualKnowledge.length, total: manualKnowledge.length })}
           </span>
@@ -151,7 +156,7 @@ export function ServerKnowledgeTab({
               <h4 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 {tr("srv.manual_entries_count", { filtered: filteredManualKnowledge.length, total: manualKnowledge.length })}
               </h4>
-              <p className="mt-1 text-[11px] text-muted-foreground">{t("srv.manual_entries_help")}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{t("srv.manual_entries_help")}</p>
             </div>
             {filteredManualKnowledge.length > 0 ? (
               <Button
@@ -179,14 +184,14 @@ export function ServerKnowledgeTab({
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-sm font-medium text-foreground">{item.title}</p>
                         <span
-                          className={`rounded px-1.5 py-0.5 text-[10px] ${
+                          className={`rounded px-1.5 py-0.5 text-xs ${
                             item.is_active ? "bg-primary/15 text-primary" : "bg-secondary text-muted-foreground"
                           }`}
                         >
                           {item.category_label}
                         </span>
                         {item.updated_at ? (
-                          <span className="text-[10px] text-muted-foreground">
+                          <span className="text-xs text-muted-foreground">
                             {new Date(item.updated_at).toLocaleString()}
                           </span>
                         ) : null}
@@ -237,7 +242,7 @@ export function ServerKnowledgeTab({
             <h4 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               {tr("srv.ai_entries_count", { filtered: filteredAiKnowledge.length, total: autoKnowledge.length })}
             </h4>
-            <p className="mt-1 text-[11px] text-muted-foreground">{t("srv.ai_entries_help")}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{t("srv.ai_entries_help")}</p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             {filteredAiKnowledge.length > 0 ? (
@@ -276,11 +281,11 @@ export function ServerKnowledgeTab({
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-sm font-medium text-foreground">{item.title}</p>
-                      <span className={`rounded px-1.5 py-0.5 text-[10px] uppercase ${memorySnapshotAudienceBadgeClass(item)}`}>
+                      <span className={`rounded px-1.5 py-0.5 text-xs uppercase ${memorySnapshotAudienceBadgeClass(item)}`}>
                         {memorySnapshotAudienceLabel(item, t)}
                       </span>
                       {item.updated_at ? (
-                        <span className="text-[10px] text-muted-foreground">{new Date(item.updated_at).toLocaleString()}</span>
+                        <span className="text-xs text-muted-foreground">{new Date(item.updated_at).toLocaleString()}</span>
                       ) : null}
                     </div>
                     <p className="custom-scrollbar mt-2 max-h-[180px] overflow-y-auto whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">

@@ -41,7 +41,7 @@ export function AgentCoreSettingsSection({
           <Input
             value={form.name || ""}
             onChange={(event) => onFieldChange("name", event.target.value)}
-            placeholder={localize(lang, "Агент OPS-разбора", "Ops triage agent")}
+          placeholder={localize(lang, "OPS-разбор", "Ops triage profile")}
             disabled={readOnly}
           />
         </div>
@@ -54,8 +54,8 @@ export function AgentCoreSettingsSection({
           onChange={(event) => onFieldChange("description", event.target.value)}
           placeholder={localize(
             lang,
-            "Переиспользуемый агент для проверок инфраструктуры и предложений по ремонту",
-            "Reusable agent for infrastructure checks and repair suggestions",
+            "Профиль для проверок инфраструктуры и предложений по ремонту",
+            "Profile for infrastructure checks and repair suggestions",
           )}
           disabled={readOnly}
         />
@@ -213,7 +213,7 @@ export function AgentMcpServersSection({
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-medium text-foreground">{mcp.name}</span>
-                <Badge variant="outline" className="text-[10px] font-mono">
+                <Badge variant="outline" className="text-xs font-mono">
                   {mcp.transport}
                 </Badge>
                 {mcp.last_test_ok === true ? <Badge variant="secondary">OK</Badge> : null}
@@ -257,7 +257,7 @@ export function AgentSkillsSection({
           type="button"
           variant="outline"
           size="sm"
-          className="h-8 gap-1.5 rounded-md px-3 text-[11px]"
+          className="h-8 gap-1.5 rounded-md px-3 text-xs"
           onClick={onBrowseCatalog}
           disabled={readOnly}
         >
@@ -280,9 +280,9 @@ export function AgentSkillsSection({
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-medium text-foreground">{skill.name}</span>
-                <span className="font-mono text-[10px] text-muted-foreground">{skill.slug}</span>
-                {skill.service ? <span className="text-[10px] text-muted-foreground">{skill.service}</span> : null}
-                {skill.safety_level ? <span className="text-[10px] text-muted-foreground">{skill.safety_level}</span> : null}
+                <span className="font-mono text-xs text-muted-foreground">{skill.slug}</span>
+                {skill.service ? <span className="text-xs text-muted-foreground">{skill.service}</span> : null}
+                {skill.safety_level ? <span className="text-xs text-muted-foreground">{skill.safety_level}</span> : null}
               </div>
               <div className="text-xs text-muted-foreground">{skill.description}</div>
             </div>
@@ -320,8 +320,8 @@ export function AgentServerScopeSection({
       <p className="text-xs text-muted-foreground">
         {localize(
           lang,
-          "Оставьте пустым, чтобы агент работал со всеми доступными серверами. Выберите серверы, чтобы жёстко ограничить профиль.",
-          "Leave empty to allow all accessible servers. Select specific servers to hard-scope this agent.",
+          "Оставьте пустым, чтобы профиль работал со всеми доступными серверами. Выберите серверы, чтобы жёстко ограничить scope.",
+          "Leave empty to allow all accessible servers. Select specific servers to hard-scope this profile.",
         )}
       </p>
       <div className="grid gap-2 md:grid-cols-2">
@@ -372,8 +372,8 @@ export function AgentVisibilitySection({
       title={localize(lang, "Видимость", "Visibility")}
       description={localize(
         lang,
-        "Администратор управляет тем, кто может открывать и переиспользовать этот профиль агента.",
-        "Admin controls who can open and reuse this agent profile.",
+        "Администратор управляет тем, кто может открывать и переиспользовать этот профиль выполнения.",
+        "Admin controls who can open and reuse this execution profile.",
       )}
       isShared={isShared}
       sharedUserIds={sharedUserIds}

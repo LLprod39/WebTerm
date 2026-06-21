@@ -3,11 +3,8 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Copy, RefreshCw } from "lucide-react";
 
-import {
-  ListeningSocketRow,
-  extractSocketPort,
-  isSocketExposed,
-} from "@/components/terminal/linux-ui/network/ListeningSocketRow";
+import { ListeningSocketRow } from "@/components/terminal/linux-ui/network/ListeningSocketRow";
+import { extractSocketPort, isSocketExposed } from "@/components/terminal/linux-ui/network/socketUtils";
 import { SummaryCard } from "@/components/terminal/linux-ui/SummaryCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,7 +45,7 @@ function NetworkInterfaceRow({
         </div>
         <span
           className={cn(
-            "shrink-0 rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide",
+            "shrink-0 rounded-full border px-2 py-0.5 text-xs uppercase tracking-wide",
             item.state === "UP"
               ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
               : "border-border/70 bg-background/94 text-muted-foreground",
@@ -57,7 +54,7 @@ function NetworkInterfaceRow({
           {item.state}
         </span>
       </div>
-      <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+      <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
         <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5">
           {item.addresses.length} addr
         </span>
@@ -235,7 +232,7 @@ export function NetworkWindow({
               </Button>
             ))}
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span className="rounded-full border border-border/70 bg-background/94 px-2 py-1">
               ip {networkPayload?.tools.ip ? "ready" : "missing"}
             </span>
@@ -315,11 +312,11 @@ export function NetworkWindow({
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-mono text-sm text-foreground">{selectedInterface.name}</h3>
-                      <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-xs uppercase tracking-wide text-muted-foreground">
                         {selectedInterface.state}
                       </span>
                       {selectedInterface.mtu != null ? (
-                        <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                        <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-xs uppercase tracking-wide text-muted-foreground">
                           mtu {selectedInterface.mtu}
                         </span>
                       ) : null}
@@ -334,12 +331,12 @@ export function NetworkWindow({
                   </div>
                   <div className="mt-4 grid gap-2 lg:grid-cols-2">
                     <div className="rounded-2xl border border-border/70 bg-card/88 p-3">
-                      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Addresses</div>
+                      <div className="text-xs uppercase tracking-wide text-muted-foreground">Addresses</div>
                       <div className="mt-2 space-y-2">
                         {selectedInterface.addresses.length > 0 ? selectedInterface.addresses.map((address) => (
                           <div key={`${address.family}-${address.address}`} className="rounded-xl border border-border/70 bg-background/94 px-3 py-2">
                             <div className="font-mono text-xs text-foreground">{address.address}</div>
-                            <div className="mt-1 text-[11px] text-muted-foreground">
+                            <div className="mt-1 text-xs text-muted-foreground">
                               {address.family}{address.scope ? ` • ${address.scope}` : ""}
                             </div>
                           </div>
@@ -349,10 +346,10 @@ export function NetworkWindow({
                       </div>
                     </div>
                     <div className="rounded-2xl border border-border/70 bg-card/88 p-3">
-                      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Flags</div>
+                      <div className="text-xs uppercase tracking-wide text-muted-foreground">Flags</div>
                       <div className="mt-2 flex flex-wrap gap-2">
                         {selectedInterface.flags.length > 0 ? selectedInterface.flags.map((flag) => (
-                          <span key={flag} className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                          <span key={flag} className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-xs uppercase tracking-wide text-muted-foreground">
                             {flag}
                           </span>
                         )) : (
@@ -368,11 +365,11 @@ export function NetworkWindow({
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-mono text-sm text-foreground">{selectedSocket.local_address || "n/a"}</h3>
-                      <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-xs uppercase tracking-wide text-muted-foreground">
                         {selectedSocket.protocol}
                       </span>
                       {isSocketExposed(selectedSocket.local_address) ? (
-                        <span className="rounded-full border border-destructive/20 bg-destructive/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-destructive">
+                        <span className="rounded-full border border-destructive/20 bg-destructive/10 px-2 py-0.5 text-xs uppercase tracking-wide text-destructive">
                           exposed
                         </span>
                       ) : null}
@@ -388,9 +385,9 @@ export function NetworkWindow({
                     <SummaryCard label="Exposure" value={isSocketExposed(selectedSocket.local_address) ? "Public" : "Local"} hint="Bind scope" alert={isSocketExposed(selectedSocket.local_address)} />
                   </div>
                   <div className="rounded-2xl border border-border/70 bg-card/88 p-3">
-                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Process</div>
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Process</div>
                     <div className="mt-2 font-mono text-xs text-foreground">{selectedSocket.process || "Process metadata unavailable"}</div>
-                    <div className="mt-2 text-[11px] text-muted-foreground">{selectedSocket.peer_address || "No peer metadata"}</div>
+                    <div className="mt-2 text-xs text-muted-foreground">{selectedSocket.peer_address || "No peer metadata"}</div>
                   </div>
                 </div>
               ) : null}
@@ -404,7 +401,7 @@ export function NetworkWindow({
                         Copy route
                       </Button>
                     </div>
-                    <pre className="whitespace-pre-wrap break-words rounded-2xl border border-border/70 bg-card/88 px-3 py-3 font-mono text-[11px] leading-5 text-foreground">
+                    <pre className="whitespace-pre-wrap break-words rounded-2xl border border-border/70 bg-card/88 px-3 py-3 font-mono text-xs leading-5 text-foreground">
                       {selectedRoute}
                     </pre>
                   </div>
@@ -469,7 +466,7 @@ export function NetworkWindow({
                           : "border-border/70 bg-background/90 hover:border-primary/20 hover:bg-secondary/50",
                       )}
                     >
-                      <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-foreground">{route}</pre>
+                      <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-5 text-foreground">{route}</pre>
                     </button>
                   )) : (
                     <div className="rounded-2xl border border-dashed border-border/70 bg-background/92 px-3 py-6 text-center text-sm text-muted-foreground">

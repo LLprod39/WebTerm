@@ -42,7 +42,7 @@ function makeServersHandler() {
   let nextKnowledgeId = 201;
   let masterSet = false;
 
-  const groups = [{ id: 11, name: "Core" }];
+  const groups = [{ id: 11, name: "Core", description: "Core services", color: "#3b82f6", role: "owner", can_edit: true }];
   const servers: ServerItem[] = [
     {
       id: 1,
@@ -120,8 +120,7 @@ function makeServersHandler() {
     success: true,
     servers,
     groups: groups.map((group) => ({
-      id: group.id,
-      name: group.name,
+      ...group,
       server_count: servers.filter((server) => server.group_id === group.id).length,
     })),
     stats: { owned: servers.length, shared: 0, total: servers.length },
@@ -201,6 +200,13 @@ function makeServersHandler() {
       return json({ success: true, message: "Updated" });
     }
 
+    if (req.path.match(/^\/servers\/api\/\d+\/test\/$/) && req.method === "POST") {
+      const id = Number(req.path.split("/")[3]);
+      const target = servers.find((item) => item.id === id);
+      if (target) target.status = "online";
+      return json({ success: true, message: "Connection OK" });
+    }
+
     if (req.path.match(/^\/servers\/api\/\d+\/delete\/$/) && req.method === "POST") {
       const id = Number(req.path.split("/")[3]);
       const idx = servers.findIndex((item) => item.id === id);
@@ -211,7 +217,14 @@ function makeServersHandler() {
 
     if (req.path === "/servers/api/groups/create/" && req.method === "POST") {
       const id = nextGroupId++;
-      groups.push({ id, name: String(req.body?.name || `Group ${id}`) });
+      groups.push({
+        id,
+        name: String(req.body?.name || `Group ${id}`),
+        description: String(req.body?.description || ""),
+        color: String(req.body?.color || "#3b82f6"),
+        role: "owner",
+        can_edit: true,
+      });
       groupContexts[id] = { id, name: String(req.body?.name || `Group ${id}`), rules: "", forbidden_commands: [], environment_vars: {} };
       return json({ success: true, group_id: id });
     }
@@ -361,26 +374,27 @@ test("manages server catalog and groups", async ({ page }) => {
 
   await page.getByRole("button", { name: /Add Server/i }).click();
   const createDialog = page.getByRole("dialog").filter({ hasText: "Create Server" });
-  await createDialog.getByPlaceholder("e.g. prod-web-01").fill("Cache-01");
+  await createDialog.getByPlaceholder("prod-web-01").fill("Cache-01");
   await createDialog.getByPlaceholder("192.168.1.10").fill("10.0.0.33");
   await createDialog.getByPlaceholder("ubuntu").fill("cache");
-  await page.getByRole("button", { name: /^Create$/ }).click();
-  await expect(page.getByText("Cache-01")).toBeVisible();
+  await page.getByRole("button", { name: "Save & test" }).click();
+  await expect(page.getByText("Cache-01", { exact: true })).toBeVisible();
+  await expect.poll(() => harness.getCalls("/servers/api/2/test/", "POST").length).toBe(1);
 
   await page.getByRole("tab", { name: "Groups" }).click();
-  await page.getByPlaceholder("Group name").fill("Edge Group");
-  await page.getByPlaceholder("Description").fill("Edge nodes");
   await page.getByRole("button", { name: "Create Group" }).click();
+  const groupDialog = page.getByRole("dialog", { name: "Create Group" });
+  await groupDialog.getByPlaceholder("Group name").fill("Edge Group");
+  await groupDialog.getByPlaceholder("Description").fill("Edge nodes");
+  await groupDialog.getByRole("button", { name: /^Create$/ }).click();
   await expect(page.getByText("Edge Group")).toBeVisible();
 
-  page.once("dialog", async (dialog) => {
-    await dialog.accept("Edge Team");
-  });
-  await page.getByRole("button", { name: "Rename" }).last().click();
+  await page.getByRole("button", { name: "Settings Edge Group" }).click();
+  const editGroupDialog = page.getByRole("dialog", { name: "Edit Group" });
+  await editGroupDialog.getByPlaceholder("Group name").fill("Edge Team");
+  await editGroupDialog.getByRole("button", { name: /^Update$/ }).click();
   await expect(page.getByText("Edge Team")).toBeVisible();
-
-  await page.getByRole("button", { name: "Follow" }).last().click();
-  await expect.poll(() => harness.getCalls("/servers/api/groups/12/subscribe/", "POST").length).toBe(1);
+  await expect.poll(() => harness.getCalls("/servers/api/groups/12/update/", "POST").length).toBe(1);
 });
 
 test("uses advanced server actions for sharing, knowledge, context, security and command run", async ({ page }) => {
@@ -401,9 +415,12 @@ test("uses advanced server actions for sharing, knowledge, context, security and
   await expect(advancedDialog.getByText(/^alice$/)).toBeVisible();
 
   await advancedDialog.getByRole("button", { name: "Knowledge" }).click();
-  await page.getByPlaceholder("Title").fill("Rotation note");
-  await page.getByPlaceholder("Content").fill("Rotate secrets every 30 days");
-  await page.getByRole("button", { name: "Add" }).click();
+  await advancedDialog.getByRole("button", { name: /^Add$/ }).click();
+  const knowledgeDialog = page.getByRole("dialog", { name: "Add" });
+  await knowledgeDialog.getByPlaceholder("Entry title").fill("Rotation note");
+  await knowledgeDialog.getByPlaceholder("Knowledge content...").fill("Rotate secrets every 30 days");
+  await knowledgeDialog.getByRole("button", { name: /^Add$/ }).click();
+  await expect(knowledgeDialog).toBeHidden();
   await expect(page.getByText("Rotation note")).toBeVisible();
 
   await advancedDialog.getByRole("button", { name: "Server Rules" }).click();

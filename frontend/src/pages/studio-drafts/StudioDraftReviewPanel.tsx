@@ -1,4 +1,4 @@
-import { CheckCircle2, GitBranch, Loader2, Route, ShieldCheck, Wand2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, GitBranch, Loader2, Route, ShieldCheck, Wand2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import type { StudioDraftMobilePane } from "./studioDraftsModel";
 export function StudioDraftReviewPanel({
   lang,
   mobilePane,
+  mode = "check",
   activeResponse,
   activeGraphCounts,
   hasOpenQuestions,
@@ -35,6 +36,7 @@ export function StudioDraftReviewPanel({
 }: {
   lang: string;
   mobilePane: StudioDraftMobilePane;
+  mode?: "check" | "changes";
   activeResponse: StudioPipelineAssistantResponse | null;
   activeGraphCounts: { nodes: number; edges: number };
   hasOpenQuestions: boolean;
@@ -51,80 +53,100 @@ export function StudioDraftReviewPanel({
   onUseTemplate: () => void;
   onSelectedSkeletonSlugChange: (slug: string) => void;
 }) {
+  const showActions = mode === "check";
+  const dangerousRisk = activeResponse?.risk?.level === "dangerous";
+
   return (
     <ScrollArea className={cn("min-h-0 flex-1 p-4 xl:block", mobilePane === "compose" ? "hidden" : "block")}>
       {activeResponse ? (
-        <PipelineDraftReview
-          response={activeResponse}
-          lang={lang}
-          graphCounts={activeGraphCounts}
-          hideQuestions={hasOpenQuestions}
-          actions={
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-1">
-              <Button type="button" className="h-10 gap-1.5" disabled={!activeCanApply || applyPending} onClick={() => onApply(false)}>
-                {applyPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                {localize(lang, "Создать пайплайн", "Create pipeline")}
-              </Button>
-              <Button type="button" variant="outline" className="h-10 gap-1.5" disabled={!activeCanApply || applyPending} onClick={() => onApply(true)}>
-                <Route className="h-3.5 w-3.5" />
-                {localize(lang, "Открыть редактор", "Open editor")}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="h-10 gap-1.5"
-                disabled={!activeCanValidate || validatePending || applyPending || useTemplatePending}
-                onClick={onValidate}
-              >
-                {validatePending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
-                {localize(lang, "Проверить dry-run", "Validate dry-run")}
-              </Button>
-              {activeTemplateRecommendations.length ? (
-                <div className="rounded-lg border border-border/70 bg-background/45 p-3">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                        {localize(lang, "Пилотный шаблон", "Pilot template")}
+        <div className="flex min-h-full flex-col gap-3">
+          {hasOpenQuestions ? (
+            <div className="rounded-lg border border-sky-500/25 bg-sky-500/10 px-3 py-3 text-xs leading-5 text-sky-100">
+              <ShieldCheck className="mr-2 inline h-3.5 w-3.5" />
+              {localize(lang, "Apply заблокирован: ответьте на вопросы во вкладке «Запрос».", "Apply is blocked: answer the questions in the Request tab.")}
+            </div>
+          ) : null}
+          {dangerousRisk ? (
+            <div className="rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-3 text-xs leading-5 text-red-100">
+              <AlertTriangle className="mr-2 inline h-3.5 w-3.5" />
+              {localize(lang, "Apply заблокирован: risk level dangerous. Исправьте команды или scope перед применением.", "Apply is blocked: risk level is dangerous. Fix commands or scope before applying.")}
+            </div>
+          ) : null}
+          <PipelineDraftReview
+            response={activeResponse}
+            lang={lang}
+            compact={mode === "changes"}
+            graphCounts={activeGraphCounts}
+            hideQuestions={hasOpenQuestions}
+            actions={
+              showActions ? (
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-1">
+                  <Button type="button" className="h-10 gap-1.5" disabled={!activeCanApply || applyPending} onClick={() => onApply(false)}>
+                    {applyPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                    {localize(lang, "Создать пайплайн", "Create pipeline")}
+                  </Button>
+                  <Button type="button" variant="outline" className="h-10 gap-1.5" disabled={!activeCanApply || applyPending} onClick={() => onApply(true)}>
+                    <Route className="h-3.5 w-3.5" />
+                    {localize(lang, "Открыть редактор", "Open editor")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 gap-1.5"
+                    disabled={!activeCanValidate || validatePending || applyPending || useTemplatePending}
+                    onClick={onValidate}
+                  >
+                    {validatePending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+                    {localize(lang, "Проверить dry-run", "Validate dry-run")}
+                  </Button>
+                  {activeTemplateRecommendations.length ? (
+                    <div className="rounded-lg border border-border/70 bg-background/45 p-3">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                            {localize(lang, "Пилотный шаблон", "Pilot template")}
+                          </div>
+                          <div className="mt-0.5 truncate text-xs text-muted-foreground/80">
+                            {activeResponse.selected_template?.name || localize(lang, "Рекомендованный шаблон", "Recommended template")}
+                          </div>
+                        </div>
+                        {activeResponse.selected_template?.slug ? (
+                          <Badge variant="outline" className="shrink-0 border-primary/25 bg-primary/10 text-xs text-primary">
+                            {activeResponse.selected_template.slug}
+                          </Badge>
+                        ) : null}
                       </div>
-                      <div className="mt-0.5 truncate text-[11px] text-muted-foreground/80">
-                        {activeResponse.selected_template?.name || localize(lang, "Рекомендованный шаблон", "Recommended template")}
+                      <div className="grid gap-2">
+                        <Select value={selectedSkeletonSlug} onValueChange={onSelectedSkeletonSlugChange} disabled={!activeCanSwitchTemplate || useTemplatePending}>
+                          <SelectTrigger className="h-9 bg-card/70 text-xs" aria-label={localize(lang, "Пилотный шаблон", "Pilot template")}>
+                            <SelectValue placeholder={localize(lang, "Выберите шаблон", "Select template")} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {activeTemplateRecommendations.map((item) => (
+                              <SelectItem key={item.slug} value={item.slug}>
+                                {item.name || item.slug}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-9 gap-1.5"
+                          disabled={!activeCanSwitchTemplate || !selectedSkeletonSlug || useTemplatePending || applyPending}
+                          onClick={onUseTemplate}
+                        >
+                          {useTemplatePending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <GitBranch className="h-3.5 w-3.5" />}
+                          {localize(lang, "Использовать шаблон", "Use template")}
+                        </Button>
                       </div>
                     </div>
-                    {activeResponse.selected_template?.slug ? (
-                      <Badge variant="outline" className="shrink-0 border-primary/25 bg-primary/10 text-[10px] text-primary">
-                        {activeResponse.selected_template.slug}
-                      </Badge>
-                    ) : null}
-                  </div>
-                  <div className="grid gap-2">
-                    <Select value={selectedSkeletonSlug} onValueChange={onSelectedSkeletonSlugChange} disabled={!activeCanSwitchTemplate || useTemplatePending}>
-                      <SelectTrigger className="h-9 bg-card/70 text-xs" aria-label={localize(lang, "Пилотный шаблон", "Pilot template")}>
-                        <SelectValue placeholder={localize(lang, "Выберите шаблон", "Select template")} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {activeTemplateRecommendations.map((item) => (
-                          <SelectItem key={item.slug} value={item.slug}>
-                            {item.name || item.slug}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-9 gap-1.5"
-                      disabled={!activeCanSwitchTemplate || !selectedSkeletonSlug || useTemplatePending || applyPending}
-                      onClick={onUseTemplate}
-                    >
-                      {useTemplatePending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <GitBranch className="h-3.5 w-3.5" />}
-                      {localize(lang, "Использовать шаблон", "Use template")}
-                    </Button>
-                  </div>
+                  ) : null}
                 </div>
-              ) : null}
-            </div>
-          }
-        />
+              ) : undefined
+            }
+          />
+        </div>
       ) : (
         <div className="rounded-xl border border-dashed border-border/80 bg-background/45 p-5">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-primary/20 bg-primary/10">

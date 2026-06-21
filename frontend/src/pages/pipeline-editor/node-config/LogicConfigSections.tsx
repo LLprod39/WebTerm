@@ -56,7 +56,7 @@ function ConditionConfig({ data, lang, onSet }: LogicProps) {
           <Label className="text-xs">{localize(lang, "Текст для проверки", "Check value")}</Label>
           <Input value={(data.check_value as string) || ""} onChange={(event) => onSet("check_value", event.target.value)} placeholder="error" className="h-8 text-xs" />
           {!String(data.check_value || "").trim() ? (
-            <p className="text-[10px] text-red-400">
+            <p className="text-xs text-red-400">
               {localize(lang, "Обязательное поле для contains/not_contains.", "Required for contains/not_contains checks.")}
             </p>
           ) : null}
@@ -125,7 +125,7 @@ function HumanApprovalConfig({ data, lang, onSet }: LogicProps) {
         <div className="flex items-start justify-between gap-3 rounded-lg border border-yellow-500/20 bg-yellow-500/10 px-3 py-2">
           <div className="min-w-0 space-y-1">
             <Label className="text-xs">{localize(lang, "Ручная ссылка без доставки", "Manual link only")}</Label>
-            <p className="text-[11px] leading-relaxed text-yellow-100/80">
+            <p className="text-xs leading-relaxed text-yellow-100/80">
               {localize(
                 lang,
                 "Email/Telegram не отправляются; запуск будет ждать решение по approve/reject ссылкам.",
@@ -166,7 +166,7 @@ function TelegramInputConfig({ data, lang, onSet }: LogicProps) {
         title={localize(lang, "Доставка", "Delivery")}
         description={localize(lang, "Сообщение оператору и ожидание текстового ответа.", "Prompt the operator and wait for a plain text reply.")}
       >
-        <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-[11px] text-cyan-100">
+        <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-100">
           Этот узел отправляет сообщение в Telegram и ждёт обычный текстовый reply от оператора.
         </div>
         <TextTemplateField label={localize(lang, "Шаблон сообщения", "Message template")} value={(data.message as string) || ""} placeholder="Опишите, какой ответ вы ждёте от оператора" hint={<>Переменные: {"{pipeline_name}"}, {"{run_id}"}, {"{all_outputs}"}</>} rows={6} textarea onChange={(value) => onSet("message", value)} />

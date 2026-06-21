@@ -1,23 +1,8 @@
 import { cn } from "@/lib/utils";
 import type { FleetHealthStatus, ServerStatus } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-
-const statusConfig: Record<ServerStatus, { color: string; labelKey: string; pulse: boolean }> = {
-  online: { color: "bg-primary", labelKey: "status.online", pulse: true },
-  offline: { color: "bg-destructive", labelKey: "status.offline", pulse: false },
-  unknown: { color: "bg-muted-foreground", labelKey: "status.unknown", pulse: false },
-};
-
-const fleetHealthConfig: Record<
-  FleetHealthStatus,
-  { color: string; labelKey: string; pulse: boolean }
-> = {
-  healthy: { color: "bg-primary", labelKey: "health.healthy", pulse: false },
-  warning: { color: "bg-yellow-500", labelKey: "health.warning", pulse: false },
-  critical: { color: "bg-destructive", labelKey: "health.critical", pulse: true },
-  unreachable: { color: "bg-destructive", labelKey: "health.unreachable", pulse: false },
-  unknown: { color: "bg-muted-foreground", labelKey: "health.unknown", pulse: false },
-};
+import { StatusBadge } from "@/components/system/StatusBadge";
+import { fleetHealthPresentation, serverStatusPresentation } from "@/design/status";
 
 export function FleetHealthIndicator({
   status,
@@ -29,57 +14,44 @@ export function FleetHealthIndicator({
   stale?: boolean;
 }) {
   const { t } = useI18n();
-  const cfg = fleetHealthConfig[status] || fleetHealthConfig.unknown;
+  const cfg = fleetHealthPresentation(status);
+  const label = stale ? `${t(cfg.labelKey)} · ${t("health.stale")}` : t(cfg.labelKey);
+
+  if (showLabel) {
+    return <StatusBadge label={label} tone={cfg.tone} pulse={cfg.pulse} />;
+  }
+
   return (
     <span
       className="inline-flex items-center gap-1.5"
-      title={stale ? `${t(cfg.labelKey)} · ${t("health.stale")}` : t(cfg.labelKey)}
+      title={label}
     >
       <span className="relative flex h-2 w-2 shrink-0">
         {cfg.pulse && (
-          <span className={cn("absolute inline-flex h-full w-full animate-ping rounded-full opacity-60", cfg.color)} />
+          <span className={cn("absolute inline-flex h-full w-full animate-ping rounded-full opacity-60", cfg.tone === "success" ? "bg-success" : cfg.tone === "warning" ? "bg-warning" : cfg.tone === "danger" ? "bg-destructive" : "bg-muted-foreground/70")} />
         )}
-        <span className={cn("relative inline-flex h-2 w-2 rounded-full", cfg.color, stale && "opacity-50")} />
+        <span className={cn("relative inline-flex h-2 w-2 rounded-full", cfg.tone === "success" ? "bg-success" : cfg.tone === "warning" ? "bg-warning" : cfg.tone === "danger" ? "bg-destructive" : "bg-muted-foreground/70", stale && "opacity-50")} />
       </span>
-      {showLabel && (
-        <span
-          className={cn(
-            "text-[11px] font-medium",
-            status === "healthy"
-              ? "text-primary"
-              : status === "warning"
-                ? "text-yellow-500"
-                : status === "critical" || status === "unreachable"
-                  ? "text-destructive"
-                  : "text-muted-foreground",
-          )}
-        >
-          {t(cfg.labelKey)}
-        </span>
-      )}
     </span>
   );
 }
 
 export function StatusIndicator({ status, showLabel = true }: { status: ServerStatus; showLabel?: boolean }) {
   const { t } = useI18n();
-  const cfg = statusConfig[status] || statusConfig.unknown;
+  const cfg = serverStatusPresentation(status);
+
+  if (showLabel) {
+    return <StatusBadge label={t(cfg.labelKey)} tone={cfg.tone} pulse={cfg.pulse} />;
+  }
+
   return (
     <span className="inline-flex items-center gap-1.5" title={t(cfg.labelKey)}>
       <span className="relative flex h-2 w-2 shrink-0">
         {cfg.pulse && (
-          <span className={cn("absolute inline-flex h-full w-full animate-ping rounded-full opacity-60", cfg.color)} />
+          <span className={cn("absolute inline-flex h-full w-full animate-ping rounded-full opacity-60", cfg.tone === "success" ? "bg-success" : cfg.tone === "danger" ? "bg-destructive" : "bg-muted-foreground/70")} />
         )}
-        <span className={cn("relative inline-flex h-2 w-2 rounded-full", cfg.color)} />
+        <span className={cn("relative inline-flex h-2 w-2 rounded-full", cfg.tone === "success" ? "bg-success" : cfg.tone === "danger" ? "bg-destructive" : "bg-muted-foreground/70")} />
       </span>
-      {showLabel && (
-        <span className={cn(
-          "text-[11px] font-medium",
-          status === "online" ? "text-primary" : status === "offline" ? "text-destructive" : "text-muted-foreground"
-        )}>
-          {t(cfg.labelKey)}
-        </span>
-      )}
     </span>
   );
 }

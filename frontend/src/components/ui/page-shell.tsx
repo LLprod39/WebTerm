@@ -108,7 +108,7 @@ export function MetricCard({
       <div className="px-5 py-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">{label}</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">{label}</p>
             <div className="mt-2 text-3xl font-bold tracking-tight text-foreground">{value}</div>
             <div className="mt-1.5 text-xs leading-5 text-muted-foreground/80">{description}</div>
           </div>
@@ -218,7 +218,7 @@ export function EmptyState({
         <div className="max-w-sm text-xs leading-5 text-muted-foreground/60">{description}</div>
       </div>
       {actions ? <div className="flex flex-wrap items-center justify-center gap-2">{actions}</div> : null}
-      {hint ? <div className="rounded-lg border border-border/40 bg-card/60 px-3 py-2 text-[11px] text-muted-foreground/50 max-w-xs">{hint}</div> : null}
+      {hint ? <div className="rounded-lg border border-border/40 bg-card/60 px-3 py-2 text-xs text-muted-foreground/50 max-w-xs">{hint}</div> : null}
     </div>
   );
 }
@@ -243,7 +243,7 @@ export function StatusBadge({
   }[tone];
 
   return (
-    <span className={cn("inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide", styles.badge, className)}>
+    <span className={cn("inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-semibold uppercase tracking-wide", styles.badge, className)}>
       {dot ? (
         <span className="relative flex h-1.5 w-1.5">
           {styles.pulse && <span className={cn("absolute inline-flex h-full w-full animate-ping rounded-full opacity-60", styles.dot)} />}

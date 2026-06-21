@@ -1,25 +1,6 @@
 import type { LinuxUiListeningSocket } from "@/lib/api";
 import { cn } from "@/lib/utils";
-
-export function extractSocketPort(localAddress: string) {
-  const raw = String(localAddress || "").trim();
-  if (!raw) return "";
-  const bracketMatch = raw.match(/\]:(\d+)$/);
-  if (bracketMatch?.[1]) return bracketMatch[1];
-  const plainMatch = raw.match(/:(\d+)$/);
-  return plainMatch?.[1] || "";
-}
-
-export function isSocketExposed(localAddress: string) {
-  const raw = String(localAddress || "").trim().toLowerCase();
-  return (
-    raw.startsWith("0.0.0.0:") ||
-    raw.startsWith("[::]:") ||
-    raw.startsWith("*:") ||
-    raw.startsWith(":::") ||
-    raw === "::"
-  );
-}
+import { extractSocketPort, isSocketExposed } from "./socketUtils";
 
 export function ListeningSocketRow({
   item,
@@ -44,25 +25,25 @@ export function ListeningSocketRow({
       )}
     >
       <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+        <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-xs uppercase tracking-wide text-muted-foreground">
           {item.protocol}
         </span>
-        <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+        <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-xs uppercase tracking-wide text-muted-foreground">
           {item.state || "unknown"}
         </span>
         {exposed ? (
-          <span className="rounded-full border border-destructive/20 bg-destructive/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-destructive">
+          <span className="rounded-full border border-destructive/20 bg-destructive/10 px-2 py-0.5 text-xs uppercase tracking-wide text-destructive">
             exposed
           </span>
         ) : null}
         {extractSocketPort(item.local_address) ? (
-          <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+          <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-xs uppercase tracking-wide text-muted-foreground">
             port {extractSocketPort(item.local_address)}
           </span>
         ) : null}
       </div>
       <div className="mt-2 font-mono text-xs text-foreground">{item.local_address || "n/a"}</div>
-      <div className="mt-1 text-[11px] text-muted-foreground">{item.process || item.peer_address || "Process metadata unavailable"}</div>
+      <div className="mt-1 text-xs text-muted-foreground">{item.process || item.peer_address || "Process metadata unavailable"}</div>
     </button>
   );
 }

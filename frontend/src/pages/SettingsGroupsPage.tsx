@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Trash2, FolderPlus, Users, ChevronUp, FolderOpen } from "lucide-react";
+import { FolderOpen, FolderPlus, Pencil, Search, Shield, Trash2, Users } from "lucide-react";
 
 import {
   ACCESS_FEATURE_OPTIONS,
@@ -10,26 +10,41 @@ import {
   fetchAccessUsers,
   updateAccessGroup,
   type AccessGroup,
+  type AccessUser,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState, StatusBadge } from "@/components/ui/page-shell";
+import { DeleteDialog } from "@/components/system/ConfirmDialog";
 import { useI18n } from "@/lib/i18n";
+import { notify } from "@/lib/notify";
 import {
   ACCESS_UI_TEXT,
   formatAccessText,
   getAccessFeatureLabel,
   localizeAccessFeatures,
 } from "@/lib/accessUiText";
+import { cn } from "@/lib/utils";
 
 type PermissionMode = "inherit" | "allow" | "deny";
-
-const SELECT_CLASS =
-  "h-10 w-full rounded-lg border border-border bg-secondary/30 px-3 text-sm text-foreground outline-none ring-0 transition-all focus:border-primary/40 focus:ring-1 focus:ring-primary/30";
+type GroupDraft = {
+  id?: number;
+  name: string;
+  members: number[];
+  permission_modes: Record<string, PermissionMode>;
+};
 
 const FALLBACK_FEATURES = ACCESS_FEATURE_OPTIONS;
 
-/* ── helpers ── */
 function createPermissionModesFromExplicit(
   features: Array<{ value: string; label: string }>,
   explicit?: Record<string, boolean>,
@@ -52,58 +67,19 @@ function toggleId(source: number[], id: number) {
   return source.includes(id) ? source.filter((value) => value !== id) : [...source, id];
 }
 
-/* ── micro-components ── */
+function emptyDraft(): GroupDraft {
+  return { name: "", members: [], permission_modes: {} };
+}
+
 function FieldLabel({ htmlFor, children }: { htmlFor?: string; children: string }) {
   return (
-    <label htmlFor={htmlFor} className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+    <label htmlFor={htmlFor} className="mb-1.5 block text-sm font-medium text-foreground">
       {children}
     </label>
   );
 }
 
-function GroupAvatar({ name, count }: { name: string; count: number }) {
-  const initials = name.slice(0, 2).toUpperCase();
-  return (
-    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-500/15 text-xs font-bold tracking-wide text-violet-400 ring-1 ring-violet-500/20">
-      {initials}
-    </div>
-  );
-}
-
-function MemberPicker({
-  users,
-  selectedIds,
-  onToggle,
-}: {
-  users: Array<{ id: number; username: string }>;
-  selectedIds: number[];
-  onToggle: (id: number) => void;
-}) {
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {users.map((user) => {
-        const active = selectedIds.includes(user.id);
-        return (
-          <button
-            key={user.id}
-            type="button"
-            onClick={() => onToggle(user.id)}
-            className={`min-h-8 rounded-lg px-2.5 py-1 text-xs font-medium transition-all ${
-              active
-                ? "bg-primary/15 text-primary ring-1 ring-primary/25"
-                : "bg-secondary/20 text-muted-foreground ring-1 ring-border/40 hover:bg-secondary/40 hover:text-foreground"
-            }`}
-          >
-            {user.username}
-          </button>
-        );
-      })}
-      {users.length === 0 && <span className="text-xs text-muted-foreground/50 italic">Нет пользователей</span>}
-    </div>
-  );
-}
-
-function PermissionModeField({
+function PolicyModeControl({
   lang,
   label,
   mode,
@@ -114,36 +90,200 @@ function PermissionModeField({
   mode: PermissionMode;
   onChange: (value: PermissionMode) => void;
 }) {
-  const t = ACCESS_UI_TEXT[lang].common;
+  const common = ACCESS_UI_TEXT[lang].common;
+  const options: Array<{ value: PermissionMode; label: string; className: string }> = [
+    { value: "inherit", label: common.inherit, className: "data-[active=true]:border-border data-[active=true]:bg-secondary" },
+    { value: "allow", label: common.allow, className: "data-[active=true]:border-emerald-500/40 data-[active=true]:bg-emerald-500/10 data-[active=true]:text-emerald-300" },
+    { value: "deny", label: common.deny, className: "data-[active=true]:border-red-500/40 data-[active=true]:bg-red-500/10 data-[active=true]:text-red-300" },
+  ];
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-border/40 bg-secondary/10 px-3 py-2.5 transition-colors hover:bg-secondary/20">
-      <div className="text-[13px] font-medium text-foreground/90">{label}</div>
-      <select
-        value={mode}
-        onChange={(e) => onChange(e.target.value as PermissionMode)}
-        className="h-8 rounded-md border border-border bg-secondary/30 px-2 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary/30"
-        aria-label={`${label} mode`}
-      >
-        <option value="inherit">{t.unset || t.inherit}</option>
-        <option value="allow">{t.allow}</option>
-        <option value="deny">{t.deny}</option>
-      </select>
+    <div className="rounded-lg border border-border/60 bg-secondary/10 px-3 py-3">
+      <div className="text-sm font-medium text-foreground">{label}</div>
+      <div className="mt-2 grid grid-cols-3 gap-1.5">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            data-active={mode === option.value}
+            onClick={() => onChange(option.value)}
+            className={cn(
+              "min-h-9 rounded-md border border-border/50 px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground",
+              option.className,
+            )}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
 
-/* ── page ── */
+function GroupSheet({
+  lang,
+  open,
+  mode,
+  draft,
+  users,
+  features,
+  saving,
+  memberSearch,
+  onMemberSearchChange,
+  onOpenChange,
+  onDraftChange,
+  onSave,
+}: {
+  lang: "en" | "ru";
+  open: boolean;
+  mode: "create" | "edit" | null;
+  draft: GroupDraft;
+  users: AccessUser[];
+  features: Array<{ value: string; label: string }>;
+  saving: boolean;
+  memberSearch: string;
+  onMemberSearchChange: (value: string) => void;
+  onOpenChange: (open: boolean) => void;
+  onDraftChange: (draft: GroupDraft) => void;
+  onSave: () => void | Promise<void>;
+}) {
+  const copy = ACCESS_UI_TEXT[lang].groupsPage;
+  const common = ACCESS_UI_TEXT[lang].common;
+  const filteredUsers = users.filter((user) =>
+    [user.username, user.email, ...(user.groups || []).map((group) => group.name)]
+      .join(" ")
+      .toLowerCase()
+      .includes(memberSearch.trim().toLowerCase()),
+  );
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="flex w-[calc(100vw-1rem)] max-w-[680px] flex-col p-0 sm:w-[680px] sm:max-w-[680px]">
+        <SheetHeader className="border-b border-border/70 px-5 py-4 pr-12 text-left">
+          <SheetTitle className="text-lg">
+            {mode === "edit" ? copy.editAction : copy.createTitle}
+          </SheetTitle>
+          <SheetDescription>
+            {lang === "ru"
+              ? "Задайте участников и групповые правила. Не задано означает наследование от профиля или системных defaults."
+              : "Set members and group rules. Unset means access falls back to profile or system defaults."}
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="flex-1 space-y-6 overflow-auto px-5 py-5">
+          <div>
+            <FieldLabel htmlFor="group-name">{copy.namePlaceholder}</FieldLabel>
+            <Input
+              id="group-name"
+              value={draft.name}
+              onChange={(event) => onDraftChange({ ...draft, name: event.target.value })}
+              placeholder={copy.namePlaceholder}
+              className="h-10"
+            />
+          </div>
+
+          <section>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-foreground">{common.members}</h3>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  {lang === "ru" ? "Фильтруйте пользователей и добавляйте их в группу." : "Filter users and add them to the group."}
+                </p>
+              </div>
+              <StatusBadge label={String(draft.members.length)} tone="info" dot={false} />
+            </div>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={memberSearch}
+                onChange={(event) => onMemberSearchChange(event.target.value)}
+                placeholder={lang === "ru" ? "Поиск по логину, email или группе" : "Search by username, email, or group"}
+                className="h-10 pl-9"
+              />
+            </div>
+            <div className="mt-3 max-h-56 overflow-auto rounded-lg border border-border/70">
+              {filteredUsers.length ? (
+                filteredUsers.map((user) => {
+                  const active = draft.members.includes(user.id);
+                  return (
+                    <button
+                      key={user.id}
+                      type="button"
+                      onClick={() => onDraftChange({ ...draft, members: toggleId(draft.members, user.id) })}
+                      className={cn(
+                        "flex min-h-12 w-full items-center justify-between gap-3 border-b border-border/50 px-3 py-2 text-left last:border-b-0 hover:bg-secondary/30",
+                        active && "bg-primary/10",
+                      )}
+                    >
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium text-foreground">{user.username}</span>
+                        <span className="block truncate text-sm text-muted-foreground">{user.email || common.noEmail}</span>
+                      </span>
+                      <span className={cn("rounded-md border px-2 py-1 text-xs", active ? "border-primary/40 text-primary" : "border-border/60 text-muted-foreground")}>
+                        {active ? common.allowed : common.none}
+                      </span>
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="px-3 py-8 text-center text-sm text-muted-foreground">
+                  {lang === "ru" ? "Пользователи не найдены." : "No users found."}
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section>
+            <div className="mb-3">
+              <h3 className="text-base font-semibold text-foreground">{copy.policyTitle}</h3>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                {lang === "ru"
+                  ? "Показывайте только явные групповые исключения. Остальное оставляйте наследоваться."
+                  : "Only set explicit group exceptions. Leave everything else inherited."}
+              </p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {features.map((feature) => (
+                <PolicyModeControl
+                  key={feature.value}
+                  lang={lang}
+                  label={feature.label}
+                  mode={draft.permission_modes[feature.value] || "inherit"}
+                  onChange={(value) =>
+                    onDraftChange({
+                      ...draft,
+                      permission_modes: { ...draft.permission_modes, [feature.value]: value },
+                    })
+                  }
+                />
+              ))}
+            </div>
+          </section>
+        </div>
+
+        <SheetFooter className="border-t border-border/70 px-5 py-4">
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>
+            {common.cancel}
+          </Button>
+          <Button onClick={() => void onSave()} disabled={saving || !draft.name.trim()}>
+            {saving ? common.saving : mode === "edit" ? common.save : copy.createAction}
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 export default function SettingsGroupsPage() {
   const { lang } = useI18n();
   const copy = ACCESS_UI_TEXT[lang].groupsPage;
   const common = ACCESS_UI_TEXT[lang].common;
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editing, setEditing] = useState<Record<string, unknown>>({});
-  const [createName, setCreateName] = useState("");
-  const [createMembers, setCreateMembers] = useState<number[]>([]);
-  const [createPModes, setCreatePModes] = useState<Record<string, PermissionMode>>({});
+  const [search, setSearch] = useState("");
+  const [sheetMode, setSheetMode] = useState<"create" | "edit" | null>(null);
+  const [draft, setDraft] = useState<GroupDraft>(() => emptyDraft());
+  const [memberSearch, setMemberSearch] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<AccessGroup | null>(null);
 
   const { data: groupsData, isLoading, error } = useQuery({
     queryKey: ["access", "groups"],
@@ -161,6 +301,21 @@ export default function SettingsGroupsPage() {
     [groupsData?.features, lang, usersData?.features],
   );
 
+  const filteredGroups = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    if (!needle) return groups;
+    return groups.filter((group) =>
+      [group.name, ...(group.members || []).map((member) => member.username)]
+        .join(" ")
+        .toLowerCase()
+        .includes(needle),
+    );
+  }, [groups, search]);
+
+  const totalMembers = groups.reduce((sum, group) => sum + group.member_count, 0);
+  const groupsWithPolicy = groups.filter((group) => Object.keys(group.explicit_permissions || {}).length > 0).length;
+  const emptyGroups = groups.filter((group) => group.member_count === 0).length;
+
   const refreshAll = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["access", "groups"] }),
@@ -170,60 +325,70 @@ export default function SettingsGroupsPage() {
     ]);
   };
 
-  const startEdit = (group: AccessGroup) => {
-    setEditingId(group.id);
-    setEditing({
+  const closeSheet = () => {
+    setSheetMode(null);
+    setDraft(emptyDraft());
+    setMemberSearch("");
+  };
+
+  const openCreate = () => {
+    setDraft(emptyDraft());
+    setMemberSearch("");
+    setSheetMode("create");
+  };
+
+  const openEdit = (group: AccessGroup) => {
+    setDraft({
+      id: group.id,
       name: group.name,
       members: (group.members || []).map((member) => member.id),
       permission_modes: createPermissionModesFromExplicit(features, group.explicit_permissions),
     });
+    setMemberSearch("");
+    setSheetMode("edit");
   };
 
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditing({});
-  };
-
-  const createGroup = async () => {
-    if (!createName.trim()) return;
+  const saveDraft = async () => {
+    if (!draft.name.trim()) return;
     setSaving(true);
     try {
-      await createAccessGroup({
-        name: createName.trim(),
-        members: createMembers,
-        explicit_permissions: buildExplicitPayload(createPModes),
-      });
-      setCreateName("");
-      setCreateMembers([]);
-      setCreatePModes({});
+      if (sheetMode === "edit" && draft.id) {
+        await updateAccessGroup(draft.id, {
+          name: draft.name.trim(),
+          members: draft.members,
+          explicit_permissions: buildExplicitPayload(draft.permission_modes),
+        });
+        notify.success({ title: common.save, description: draft.name.trim() });
+      } else {
+        await createAccessGroup({
+          name: draft.name.trim(),
+          members: draft.members,
+          explicit_permissions: buildExplicitPayload(draft.permission_modes),
+        });
+        notify.success({ title: copy.createAction, description: draft.name.trim() });
+      }
+      closeSheet();
       await refreshAll();
+    } catch (err) {
+      notify.error({ title: copy.error, description: err instanceof Error ? err.message : String(err) });
     } finally {
       setSaving(false);
     }
   };
 
-  const saveEdit = async () => {
-    if (!editingId) return;
+  const confirmRemoveGroup = async () => {
+    if (!deleteTarget) return;
     setSaving(true);
     try {
-      await updateAccessGroup(editingId, {
-        name: editing.name,
-        members: editing.members,
-        explicit_permissions: buildExplicitPayload(
-          (editing.permission_modes as Record<string, PermissionMode> | undefined) || {},
-        ),
-      });
-      cancelEdit();
+      await deleteAccessGroup(deleteTarget.id);
+      notify.success({ title: common.delete, description: deleteTarget.name });
+      setDeleteTarget(null);
       await refreshAll();
+    } catch (err) {
+      notify.error({ title: copy.error, description: err instanceof Error ? err.message : String(err) });
     } finally {
       setSaving(false);
     }
-  };
-
-  const removeGroup = async (group: AccessGroup) => {
-    if (!confirm(formatAccessText(copy.deleteConfirm, { name: group.name }))) return;
-    await deleteAccessGroup(group.id);
-    await refreshAll();
   };
 
   if (isLoading) {
@@ -237,261 +402,190 @@ export default function SettingsGroupsPage() {
     return <div className="p-6 text-sm text-destructive">{copy.error}</div>;
   }
 
-  const totalMembers = groups.reduce((sum, g) => sum + g.member_count, 0);
-
   return (
-    <div className="space-y-6 pb-10">
-      {/* ── Header ── */}
-      <div className="flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
-          <FolderOpen className="h-4 w-4 text-primary" />
+    <>
+      <div className="space-y-6 pb-10">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+              <FolderOpen className="h-4 w-4 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight text-foreground">{copy.title}</h1>
+              <p className="mt-1 text-sm leading-5 text-muted-foreground">{copy.subtitle}</p>
+            </div>
+          </div>
+          <Button className="h-10 gap-2" onClick={openCreate}>
+            <FolderPlus className="h-4 w-4" />
+            {copy.createAction}
+          </Button>
         </div>
-        <div>
-          <h1 className="text-base font-semibold tracking-tight text-foreground">{copy.title}</h1>
-          <p className="text-[11px] text-muted-foreground">{copy.subtitle}</p>
-        </div>
-      </div>
 
-      {/* ── Stats row ── */}
-      <div className="flex flex-wrap items-center gap-5 rounded-xl border border-border/60 bg-secondary/10 px-5 py-3 shadow-sm">
-        <div className="flex items-center gap-2">
-          <Users className="h-4 w-4 text-muted-foreground/50" />
-          <span className="text-sm font-medium text-foreground">{groups.length}</span>
-          <span className="text-xs text-muted-foreground/60">{lang === "ru" ? "групп" : "groups"}</span>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-lg border border-border/70 bg-secondary/10 px-4 py-3">
+            <div className="text-2xl font-semibold leading-8 text-foreground">{groups.length}</div>
+            <div className="mt-1 text-sm leading-5 text-muted-foreground">{lang === "ru" ? "групп" : "groups"}</div>
+          </div>
+          <div className="rounded-lg border border-border/70 bg-secondary/10 px-4 py-3">
+            <div className="text-2xl font-semibold leading-8 text-foreground">{totalMembers}</div>
+            <div className="mt-1 text-sm leading-5 text-muted-foreground">{common.members.toLowerCase()}</div>
+          </div>
+          <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-4 py-3">
+            <div className="text-2xl font-semibold leading-8 text-foreground">{groupsWithPolicy}</div>
+            <div className="mt-1 text-sm leading-5 text-amber-300">{copy.explicitPolicy}</div>
+          </div>
+          <div className="rounded-lg border border-border/70 bg-secondary/10 px-4 py-3">
+            <div className="text-2xl font-semibold leading-8 text-foreground">{emptyGroups}</div>
+            <div className="mt-1 text-sm leading-5 text-muted-foreground">{lang === "ru" ? "без участников" : "empty groups"}</div>
+          </div>
         </div>
-        <div className="h-4 w-px bg-border/60" />
-        <div className="flex items-center gap-1.5">
-          <div className="h-2 w-2 rounded-full bg-violet-400/80" />
-          <span className="text-sm font-medium text-foreground">{totalMembers}</span>
-          <span className="text-xs text-muted-foreground/60">{common.members.toLowerCase()}</span>
-        </div>
-        <div className="h-4 w-px bg-border/60" />
-        <div className="flex items-center gap-1.5">
-          <div className="h-2 w-2 rounded-full bg-amber-400/80" />
-          <span className="text-sm font-medium text-foreground">{features.length}</span>
-          <span className="text-xs text-muted-foreground/60">{lang === "ru" ? "модулей" : "features"}</span>
-        </div>
-      </div>
 
-      {/* ── Main 2-col layout ── */}
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-
-        {/* ── Group directory ── */}
-        <div className="space-y-3">
-          {groups.length === 0 && (
-            <EmptyState
-              icon={<Users className="h-6 w-6" />}
-              title={lang === "ru" ? "Групп пока нет" : "No groups yet"}
-              description={lang === "ru" ? "Создайте первую группу справа." : "Create the first group on the right."}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card px-4 py-3">
+          <div className="relative min-w-64 flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder={lang === "ru" ? "Поиск группы или участника" : "Search group or member"}
+              className="h-10 pl-9"
             />
-          )}
-
-          {groups.map((group) => {
-            const isEditing = editingId === group.id;
-            const draft = editing as {
-              name?: string;
-              members?: number[];
-              permission_modes?: Record<string, PermissionMode>;
-            };
-
-            return (
-              <div
-                key={group.id}
-                className={`rounded-xl border transition-all duration-200 ${
-                  isEditing
-                    ? "border-primary/30 bg-primary/4 shadow-[0_0_0_1px_rgba(var(--primary-rgb),0.1)]"
-                    : "border-border/60 bg-card hover:bg-secondary/20 hover:border-border"
-                }`}
-              >
-                {/* Card head */}
-                <div className="flex items-center gap-3 px-4 py-3.5">
-                  <GroupAvatar name={group.name} count={group.member_count} />
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[15px] font-semibold text-foreground">{group.name}</span>
-                      <StatusBadge label={`${group.member_count} ${common.members.toLowerCase()}`} tone="info" dot={false} />
-                    </div>
-                    <div className="mt-0.5 text-xs text-muted-foreground/60">
-                      {group.members?.length
-                        ? group.members.map((m) => m.username).join(", ")
-                        : lang === "ru" ? "Нет участников" : "No members"}
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex shrink-0 items-center gap-1">
-                    <button
-                      onClick={() => (isEditing ? cancelEdit() : startEdit(group))}
-                      className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground/60 transition-colors hover:bg-secondary/40 hover:text-foreground"
-                      aria-label={isEditing ? common.cancel : copy.editAction}
-                      title={isEditing ? common.cancel : copy.editAction}
-                    >
-                      {isEditing ? <ChevronUp className="h-4 w-4" /> : <Pencil className="h-3.5 w-3.5" />}
-                    </button>
-                    <button
-                      onClick={() => void removeGroup(group)}
-                      className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground/60 transition-colors hover:bg-red-500/10 hover:text-red-400"
-                      aria-label={common.delete}
-                      title={common.delete}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Policy summary — shown when not editing */}
-                {!isEditing && group.explicit_permissions && Object.keys(group.explicit_permissions).length > 0 && (
-                  <div className="border-t border-border/40 px-4 py-2.5">
-                    <div className="flex flex-wrap gap-1.5">
-                      {Object.entries(group.explicit_permissions).map(([feat, allowed]) => (
-                        <span
-                          key={feat}
-                          className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium ${
-                            allowed
-                              ? "bg-emerald-500/10 text-emerald-400"
-                              : "bg-red-500/8 text-red-400/80"
-                          }`}
-                        >
-                          {getAccessFeatureLabel(lang, feat)}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* ── Edit panel ── */}
-                {isEditing && (
-                  <div className="border-t border-primary/15 px-4 pb-5 pt-4 space-y-5">
-                    <div>
-                      <FieldLabel htmlFor={`group-name-${group.id}`}>{copy.namePlaceholder}</FieldLabel>
-                      <Input
-                        id={`group-name-${group.id}`}
-                        name="group-name"
-                        value={draft.name || ""}
-                        onChange={(e) => setEditing((s) => ({ ...s, name: e.target.value }))}
-                        className="h-10 bg-secondary/20 border-border/60"
-                      />
-                    </div>
-
-                    <div>
-                      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">{common.members}</div>
-                      <MemberPicker
-                        users={users.map((u) => ({ id: u.id, username: u.username }))}
-                        selectedIds={(draft.members as number[]) || []}
-                        onToggle={(id) =>
-                          setEditing((s) => ({
-                            ...s,
-                            members: toggleId(((s.members as number[]) || []), id),
-                          }))
-                        }
-                      />
-                    </div>
-
-                    <div>
-                      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">{copy.policyTitle}</div>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {features.map((feature) => (
-                          <PermissionModeField
-                            key={feature.value}
-                            lang={lang}
-                            label={feature.label}
-                            mode={draft.permission_modes?.[feature.value] || "inherit"}
-                            onChange={(value) =>
-                              setEditing((s) => ({
-                                ...s,
-                                permission_modes: {
-                                  ...((s.permission_modes as Record<string, PermissionMode> | undefined) || {}),
-                                  [feature.value]: value,
-                                },
-                              }))
-                            }
-                          />
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2 pt-2">
-                      <Button className="h-10" onClick={() => void saveEdit()} disabled={saving}>
-                        {saving ? common.saving : common.save}
-                      </Button>
-                      <Button className="h-10" variant="ghost" onClick={cancelEdit} disabled={saving}>
-                        {common.cancel}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          </div>
+          <div className="text-sm text-muted-foreground">
+            {lang === "ru" ? `${filteredGroups.length} из ${groups.length}` : `${filteredGroups.length} of ${groups.length}`}
+          </div>
         </div>
 
-        {/* ── Create group sidebar ── */}
-        {editingId === null ? (
-          <div className="order-first h-fit rounded-xl border border-border bg-card shadow-sm xl:order-none xl:sticky xl:top-4">
-            <div className="flex items-center gap-3 border-b border-border/60 px-5 py-4">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/15 text-violet-400">
-                <FolderPlus className="h-4 w-4" />
-              </div>
-              <div>
-                <h2 className="text-sm font-semibold text-foreground">{copy.createTitle}</h2>
-                <p className="text-[11px] text-muted-foreground/60">{lang === "ru" ? "Задайте название, участников и политику" : "Set name, members and policy"}</p>
-              </div>
-            </div>
-            <div className="space-y-4 px-5 py-5">
-              <div>
-                <FieldLabel htmlFor="create-group-name">{copy.namePlaceholder}</FieldLabel>
-                <Input
-                  id="create-group-name"
-                  name="group-name"
-                  value={createName}
-                  onChange={(e) => setCreateName(e.target.value)}
-                  placeholder={copy.namePlaceholder}
-                  className="h-10 bg-secondary/20 border-border/60"
-                />
-              </div>
-
-              <div>
-                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">{common.members}</div>
-                <MemberPicker
-                  users={users.map((u) => ({ id: u.id, username: u.username }))}
-                  selectedIds={createMembers}
-                  onToggle={(id) => setCreateMembers((prev) => toggleId(prev, id))}
-                />
-              </div>
-
-              <div>
-                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">{copy.policyTitle}</div>
-                <div className="grid gap-2">
-                  {features.map((feature) => (
-                    <PermissionModeField
-                      key={feature.value}
-                      lang={lang}
-                      label={feature.label}
-                      mode={createPModes[feature.value] || "inherit"}
-                      onChange={(value) =>
-                        setCreatePModes((s) => ({ ...s, [feature.value]: value }))
-                      }
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <Button className="h-10 w-full" onClick={() => void createGroup()} disabled={saving || !createName.trim()}>
-                {saving ? copy.creatingAction : copy.createAction}
-              </Button>
-            </div>
-          </div>
+        {filteredGroups.length ? (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{lang === "ru" ? "Группа" : "Group"}</TableHead>
+                <TableHead>{common.members}</TableHead>
+                <TableHead>{copy.explicitPolicy}</TableHead>
+                <TableHead className="w-28 text-right">{lang === "ru" ? "Действия" : "Actions"}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredGroups.map((group) => {
+                const policyEntries = Object.entries(group.explicit_permissions || {});
+                return (
+                  <TableRow key={group.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-sm font-semibold text-primary">
+                          {group.name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="truncate font-semibold text-foreground">{group.name}</div>
+                          <div className="mt-0.5 text-sm text-muted-foreground">
+                            {lang === "ru" ? "ID группы" : "Group ID"} {group.id}
+                          </div>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium text-foreground">{group.member_count}</span>
+                      </div>
+                      <div className="mt-1 max-w-md truncate text-sm text-muted-foreground">
+                        {group.members?.length
+                          ? group.members.map((member) => member.username).join(", ")
+                          : lang === "ru" ? "Нет участников" : "No members"}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {policyEntries.length ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {policyEntries.slice(0, 3).map(([feature, allowed]) => (
+                            <span
+                              key={feature}
+                              className={cn(
+                                "inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium",
+                                allowed
+                                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                                  : "border-red-500/30 bg-red-500/10 text-red-300",
+                              )}
+                            >
+                              {getAccessFeatureLabel(lang, feature)}
+                            </span>
+                          ))}
+                          {policyEntries.length > 3 ? (
+                            <StatusBadge label={`+${policyEntries.length - 3}`} tone="neutral" dot={false} />
+                          ) : null}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">{common.inherit}</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex justify-end gap-1">
+                        <button
+                          type="button"
+                          onClick={() => openEdit(group)}
+                          className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                          aria-label={copy.editAction}
+                          title={copy.editAction}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteTarget(group)}
+                          className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-300"
+                          aria-label={common.delete}
+                          title={common.delete}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         ) : (
-          <div className="order-first h-fit rounded-xl border border-dashed border-border/50 bg-secondary/5 px-5 py-8 text-center xl:order-none xl:sticky xl:top-4">
-            <p className="text-xs text-muted-foreground/50">
-              {lang === "ru"
-                ? "Завершите редактирование группы, чтобы создать новую."
-                : "Finish editing the current group to create a new one."}
-            </p>
-          </div>
+          <EmptyState
+            icon={<Users className="h-6 w-6" />}
+            title={groups.length ? (lang === "ru" ? "Группы не найдены" : "No groups found") : lang === "ru" ? "Групп пока нет" : "No groups yet"}
+            description={groups.length ? (lang === "ru" ? "Измените поиск." : "Adjust the search.") : lang === "ru" ? "Создайте первую группу." : "Create the first group."}
+          />
         )}
       </div>
-    </div>
+
+      <GroupSheet
+        lang={lang}
+        open={sheetMode !== null}
+        mode={sheetMode}
+        draft={draft}
+        users={users}
+        features={features}
+        saving={saving}
+        memberSearch={memberSearch}
+        onMemberSearchChange={setMemberSearch}
+        onOpenChange={(open) => {
+          if (!open && !saving) closeSheet();
+        }}
+        onDraftChange={setDraft}
+        onSave={saveDraft}
+      />
+
+      <DeleteDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open && !saving) setDeleteTarget(null);
+        }}
+        title={formatAccessText(copy.deleteConfirm, { name: deleteTarget?.name || "" })}
+        description={
+          lang === "ru"
+            ? `Группа "${deleteTarget?.name || ""}" будет удалена. Участники потеряют наследуемые групповые правила.`
+            : `Group "${deleteTarget?.name || ""}" will be removed. Members will lose inherited group policies.`
+        }
+        confirmLabel={common.delete}
+        cancelLabel={common.cancel}
+        onConfirm={confirmRemoveGroup}
+      />
+    </>
   );
 }

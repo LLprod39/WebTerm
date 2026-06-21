@@ -328,7 +328,7 @@ export function NodeConfigPanel({
           </span>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-foreground">{(d.label as string) || typeInfo.label}</p>
-            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">
               {nodeGuidance.category} / {typeInfo.label} · {node.id}
             </p>
           </div>
@@ -357,11 +357,11 @@ export function NodeConfigPanel({
           </div>
           {nodeGuidance.checklist.length ? (
             <div className="mt-3 space-y-1.5">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 {localize(uiLang, "Нужно настроить", "Required setup")}
               </p>
               {nodeGuidance.checklist.map((item) => (
-                <div key={item} className="flex items-start gap-2 text-[11px] leading-5 text-muted-foreground">
+                <div key={item} className="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
                   <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
                   <span>{item}</span>
                 </div>

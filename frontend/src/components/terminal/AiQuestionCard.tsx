@@ -73,7 +73,7 @@ export function AiQuestionCard({ msg, onReply }: AiQuestionCardProps) {
           <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
           <span>{t("terminal.ai.question.title")}</span>
         </div>
-        <span className="rounded border border-border/50 bg-background/50 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+        <span className="rounded border border-border/50 bg-background/50 px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
           {sourceLabel}
         </span>
       </div>
@@ -89,7 +89,7 @@ export function AiQuestionCard({ msg, onReply }: AiQuestionCardProps) {
         ) : null}
         {options.length > 0 ? (
           <div className="space-y-2">
-            <div className="text-[11px] text-muted-foreground">
+            <div className="text-xs text-muted-foreground">
               {allowMultiple ? t("terminal.ai.question.pickMany") : t("terminal.ai.question.pickOne")}
             </div>
             <div className="grid gap-2">
@@ -109,7 +109,7 @@ export function AiQuestionCard({ msg, onReply }: AiQuestionCardProps) {
                     <span className="min-w-0 flex-1">
                       <span className="block text-[13px] font-medium">{option.label}</span>
                       {option.description ? (
-                        <span className="mt-0.5 block text-[11px] text-muted-foreground">{option.description}</span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground">{option.description}</span>
                       ) : null}
                     </span>
                   </button>
@@ -121,7 +121,7 @@ export function AiQuestionCard({ msg, onReply }: AiQuestionCardProps) {
         {freeTextAllowed && !answered ? (
           <div className="space-y-1.5">
             {options.length > 0 ? (
-              <div className="text-[11px] text-muted-foreground">{t("terminal.ai.question.customAnswer")}</div>
+              <div className="text-xs text-muted-foreground">{t("terminal.ai.question.customAnswer")}</div>
             ) : null}
             <div className="flex gap-1.5">
               <input
@@ -146,7 +146,7 @@ export function AiQuestionCard({ msg, onReply }: AiQuestionCardProps) {
         ) : null}
         {!freeTextAllowed && allowMultiple && !answered ? (
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] text-muted-foreground">{fillTemplate(t("terminal.ai.question.selected"), { count: selectedValues.length })}</span>
+            <span className="text-xs text-muted-foreground">{fillTemplate(t("terminal.ai.question.selected"), { count: selectedValues.length })}</span>
             <Button size="sm" className="h-8 gap-1 px-3 text-xs" onClick={() => submit(replyText)} disabled={!selectedValues.length}>
               <Send className="h-3 w-3" />
               {t("terminal.ai.question.submit")}

@@ -129,8 +129,8 @@ describe("StudioPage quick run", () => {
 
     expect(await screen.findByText(/Choose manual trigger/i)).toBeInTheDocument();
 
-    const select = screen.getByRole("combobox");
-    fireEvent.change(select, { target: { value: "manual_b" } });
+    fireEvent.click(screen.getByRole("combobox"));
+    fireEvent.click(await screen.findByRole("option", { name: "Manual B" }));
     fireEvent.click(screen.getByRole("button", { name: /^Run$/ }));
 
     await waitFor(() => {

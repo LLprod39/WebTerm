@@ -76,7 +76,7 @@ export function McpCallConfigSection({
           <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 space-y-2">
             {selectedTool.description && <p className="text-xs">{selectedTool.description}</p>}
             {selectedTool.inputSchema && (
-              <pre className="text-[10px] text-muted-foreground whitespace-pre-wrap break-all max-h-40 overflow-auto">
+              <pre className="text-xs text-muted-foreground whitespace-pre-wrap break-all max-h-40 overflow-auto">
                 {JSON.stringify(selectedTool.inputSchema, null, 2)}
               </pre>
             )}
@@ -123,7 +123,7 @@ export function McpCallConfigSection({
           <FieldHint>
             {localize(lang, "Аргументы поддерживают переменные pipeline вроде", "Arguments support pipeline variables like")} <code>{"{branch}"}</code> {localize(lang, "и", "and")} <code>{"{node_2_output}"}</code>.
           </FieldHint>
-          {mcpArgsError && <p className="text-[10px] text-red-400">{mcpArgsError}</p>}
+          {mcpArgsError && <p className="text-xs text-red-400">{mcpArgsError}</p>}
         </div>
       </AdvancedDisclosure>
       <NodeFormSection title={localize(lang, "Ошибки", "Errors")}>
@@ -225,8 +225,8 @@ function TypedMcpArguments({ lang, properties, requiredFields, values, onSetMcpA
             <div key={key} className="rounded-lg border border-border/70 bg-background/40 px-3 py-2">
               <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
                 <Label className="text-xs">{key}</Label>
-                {required && <Badge variant="secondary" className="text-[9px]">required</Badge>}
-                <Badge variant="outline" className="text-[9px]">{schemaType}</Badge>
+                {required && <Badge variant="secondary" className="text-xs">required</Badge>}
+                <Badge variant="outline" className="text-xs">{schemaType}</Badge>
               </div>
               {schemaType === "boolean" ? (
                 <div className="flex items-center gap-2">
@@ -255,13 +255,13 @@ function McpPolicySection({ data, lang, selectedMcp, mcpLooksMutating, mcpRiskRe
     >
       <div className="rounded-lg border border-border/70 bg-background/40 px-3 py-2">
         <div className="mb-2 flex flex-wrap items-center gap-2">
-          <Badge variant={mcpLooksMutating ? "secondary" : "outline"} className="text-[10px]">
+          <Badge variant={mcpLooksMutating ? "secondary" : "outline"} className="text-xs">
             {mcpLooksMutating ? localize(lang, "Review required", "Review required") : localize(lang, "Low/unknown risk", "Low/unknown risk")}
           </Badge>
-          {selectedMcp?.last_test_ok === true && <Badge variant="outline" className="text-[10px]">MCP tested</Badge>}
-          {selectedSkillSlugs.length > 0 && <Badge variant="outline" className="text-[10px]">{selectedSkillSlugs.length} skills</Badge>}
+          {selectedMcp?.last_test_ok === true && <Badge variant="outline" className="text-xs">MCP tested</Badge>}
+          {selectedSkillSlugs.length > 0 && <Badge variant="outline" className="text-xs">{selectedSkillSlugs.length} skills</Badge>}
         </div>
-        <ul className="space-y-1 text-[11px] text-muted-foreground">
+        <ul className="space-y-1 text-xs text-muted-foreground">
           {mcpRiskReasons.map((reason) => <li key={reason}>- {reason}</li>)}
         </ul>
       </div>
@@ -279,7 +279,7 @@ function McpPolicySection({ data, lang, selectedMcp, mcpLooksMutating, mcpRiskRe
         <div className="space-y-1.5">
           <div className="flex items-center justify-between gap-2">
             <Label className="text-xs">{localize(lang, "Skills / политики", "Skills / policies")}</Label>
-            <Button variant="outline" size="sm" className="h-7 gap-1.5 text-[11px]" onClick={onBrowseCatalog}>
+            <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" onClick={onBrowseCatalog}>
               <BookOpen className="h-3 w-3" />
               {localize(lang, "Каталог", "Browse Catalog")}
             </Button>
@@ -306,18 +306,18 @@ function SkillChecklist({ skills, selectedSkillSlugs, selectedSkills, onSet }: {
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="text-xs font-medium">{skill.name}</span>
-                {skill.service ? <Badge variant="outline" className="text-[9px]">{skill.service}</Badge> : null}
-                {skill.runtime_enforced ? <Badge variant="secondary" className="text-[9px]">runtime</Badge> : null}
-                {skill.safety_level ? <Badge variant="outline" className="text-[9px]">{skill.safety_level}</Badge> : null}
+                {skill.service ? <Badge variant="outline" className="text-xs">{skill.service}</Badge> : null}
+                {skill.runtime_enforced ? <Badge variant="secondary" className="text-xs">runtime</Badge> : null}
+                {skill.safety_level ? <Badge variant="outline" className="text-xs">{skill.safety_level}</Badge> : null}
               </div>
-              {skill.guardrail_summary?.length ? <p className="mt-1 text-[10px] text-muted-foreground">{skill.guardrail_summary.slice(0, 2).join(" • ")}</p> : null}
+              {skill.guardrail_summary?.length ? <p className="mt-1 text-xs text-muted-foreground">{skill.guardrail_summary.slice(0, 2).join(" • ")}</p> : null}
             </div>
           </label>
         ))}
       </div>
       {selectedSkills.length > 0 ? (
         <div className="flex flex-wrap gap-1">
-          {selectedSkills.map((skill) => <span key={skill.slug} className="rounded bg-muted/60 px-1 py-0.5 text-[9px] text-muted-foreground">{skill.name}</span>)}
+          {selectedSkills.map((skill) => <span key={skill.slug} className="rounded bg-muted/60 px-1 py-0.5 text-xs text-muted-foreground">{skill.name}</span>)}
         </div>
       ) : null}
     </>

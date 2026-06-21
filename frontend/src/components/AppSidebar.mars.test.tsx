@@ -49,11 +49,11 @@ describe("AppSidebar MARS and Kubernetes nav", () => {
     vi.clearAllMocks();
   });
 
-  it("renders new sidebar items only when feature access is enabled", async () => {
+  it("renders MARS when enabled and keeps Kubernetes hidden until ready", async () => {
     renderSidebar({ servers: true, dashboard: true, agents: true, studio: true, kubernetes: true, mars: true, settings: true });
 
-    expect(await screen.findByText("Кубернетес")).toBeInTheDocument();
-    expect(screen.getByText("MARS")).toBeInTheDocument();
+    expect(await screen.findByText("MARS")).toBeInTheDocument();
+    expect(screen.queryByText("Кубернетес")).not.toBeInTheDocument();
   });
 
   it("hides new sidebar items without feature access", async () => {

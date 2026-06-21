@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
 import { StudioNav } from "@/components/StudioNav";
+import { DeleteDialog, UnsavedChangesDialog } from "@/components/system/ConfirmDialog";
 import { useToast } from "@/hooks/use-toast";
 import {
   fetchAuthSession,
@@ -44,6 +45,11 @@ async function upsertSkillWorkspaceFile(slug: string, file: { path: string; cont
   }
 }
 
+type PendingWorkspaceNavigation =
+  | { type: "skill"; slug: string }
+  | { type: "file"; path: string }
+  | { type: "back" };
+
 export default function StudioSkillsPage() {
   const { lang } = useI18n();
   const tr = (ru: string, en: string) => (lang === "ru" ? ru : en);
@@ -57,6 +63,8 @@ export default function StudioSkillsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [validateOpen, setValidateOpen] = useState(false);
   const [createFileOpen, setCreateFileOpen] = useState(false);
+  const [deleteFileTarget, setDeleteFileTarget] = useState<string | null>(null);
+  const [pendingNavigation, setPendingNavigation] = useState<PendingWorkspaceNavigation | null>(null);
   const [selectedTemplateSlug, setSelectedTemplateSlug] = useState("__none__");
   const [selectedFilePath, setSelectedFilePath] = useState("");
   const [createFilePath, setCreateFilePath] = useState("");
@@ -118,7 +126,7 @@ export default function StudioSkillsPage() {
     [templates, selectedTemplateSlug],
   );
 
-  const filteredSignature = filteredSkills.map((skill) => skill.slug).join("|");
+  const skillsSignature = skills.map((skill) => skill.slug).join("|");
   const runtimeEnforcedCount = skills.filter((skill) => skill.runtime_enforced).length;
   const serviceCount = services.length;
   const starterFiles = starterFilesFromWizard(wizard);
@@ -181,10 +189,10 @@ export default function StudioSkillsPage() {
   });
 
   useEffect(() => {
-    if (selectedSlug && !filteredSkills.some((skill) => skill.slug === selectedSlug)) {
+    if (selectedSlug && skills.length > 0 && !skills.some((skill) => skill.slug === selectedSlug)) {
       setSelectedSlug("");
     }
-  }, [filteredSignature, filteredSkills, selectedSlug]);
+  }, [skills, skillsSignature, selectedSlug]);
 
   const { data: selectedSkill, isFetching: isFetchingSkill } = useQuery({
     queryKey: ["studio", "skills", selectedSlug],
@@ -322,6 +330,28 @@ export default function StudioSkillsPage() {
   const canShareSkill = Boolean(selectedSkill?.can_share && isAdmin);
   const canEditSelectedFile = Boolean(selectedWorkspaceFile?.editable && canEditSkill);
 
+  const applyWorkspaceNavigation = (target: PendingWorkspaceNavigation) => {
+    if (target.type === "skill") {
+      setSelectedSlug(target.slug);
+      setSelectedFilePath("");
+      return;
+    }
+    if (target.type === "file") {
+      setSelectedFilePath(target.path);
+      return;
+    }
+    setSelectedSlug("");
+    setSelectedFilePath("");
+  };
+
+  const requestWorkspaceNavigation = (target: PendingWorkspaceNavigation) => {
+    if (isEditorDirty) {
+      setPendingNavigation(target);
+      return;
+    }
+    applyWorkspaceNavigation(target);
+  };
+
   const saveSkillSettings = () => {
     if (!selectedSkill || !canEditSkill) return;
     const name = skillSettingsDraft.name.trim();
@@ -372,11 +402,13 @@ export default function StudioSkillsPage() {
 
   const removeCurrentFile = () => {
     if (!selectedFilePath || selectedFilePath === "SKILL.md" || !canEditSelectedFile) return;
-    const confirmed = window.confirm(
-      tr(`Удалить файл ${selectedFilePath}? Это действие нельзя отменить.`, `Delete ${selectedFilePath}? This cannot be undone.`),
-    );
-    if (!confirmed) return;
-    deleteFileMutation.mutate(selectedFilePath);
+    setDeleteFileTarget(selectedFilePath);
+  };
+
+  const confirmRemoveFile = () => {
+    if (!deleteFileTarget) return;
+    deleteFileMutation.mutate(deleteFileTarget);
+    setDeleteFileTarget(null);
   };
 
   return (
@@ -405,7 +437,7 @@ export default function StudioSkillsPage() {
           canOpenAgents={canOpenAgents}
           onSearchChange={setSearch}
           onServiceFilterChange={setServiceFilter}
-          onSelectSkill={setSelectedSlug}
+          onSelectSkill={(slug) => requestWorkspaceNavigation({ type: "skill", slug })}
           onCreateSkill={() => openCreateDialog()}
           onValidate={() => validateMutation.mutate()}
           onOpenMcp={() => navigate("/studio/mcp")}
@@ -439,11 +471,11 @@ export default function StudioSkillsPage() {
           isSavingAccess={updateSkillAccessMutation.isPending}
           setSkillSettingsDraft={setSkillSettingsDraft}
           setSkillAccessDraft={setSkillAccessDraft}
-          onBack={() => setSelectedSlug("")}
+          onBack={() => requestWorkspaceNavigation({ type: "back" })}
           onCreateFile={() => setCreateFileOpen(true)}
           onSaveFile={saveCurrentFile}
           onRemoveFile={removeCurrentFile}
-          onSelectFile={setSelectedFilePath}
+          onSelectFile={(path) => requestWorkspaceNavigation({ type: "file", path })}
           onEditorValueChange={setEditorValue}
           onSaveSettings={saveSkillSettings}
           onSaveAccess={() => updateSkillAccessMutation.mutate()}
@@ -491,6 +523,42 @@ export default function StudioSkillsPage() {
         report={validationReport}
         onStrictValidationChange={setStrictValidation}
         onValidate={() => validateMutation.mutate()}
+      />
+
+      <UnsavedChangesDialog
+        open={Boolean(pendingNavigation)}
+        onOpenChange={(open) => {
+          if (!open) setPendingNavigation(null);
+        }}
+        title={tr("Есть несохранённые изменения", "Unsaved file changes")}
+        description={tr(
+          "Текущий файл изменён. Сохраните его или подтвердите переход, чтобы отбросить правки.",
+          "The current file has unsaved edits. Save it or continue to discard those edits.",
+        )}
+        confirmLabel={tr("Отбросить и перейти", "Discard and continue")}
+        cancelLabel={tr("Остаться", "Stay")}
+        onConfirm={() => {
+          if (!pendingNavigation) return;
+          applyWorkspaceNavigation(pendingNavigation);
+          setPendingNavigation(null);
+        }}
+        contentClassName="max-w-sm"
+      />
+
+      <DeleteDialog
+        open={Boolean(deleteFileTarget)}
+        onOpenChange={(open) => {
+          if (!open) setDeleteFileTarget(null);
+        }}
+        title={deleteFileTarget ? tr(`Удалить файл ${deleteFileTarget}?`, `Delete ${deleteFileTarget}?`) : tr("Удалить файл?", "Delete file?")}
+        description={tr(
+          "Файл будет удалён из рабочей области скилла. Это действие нельзя отменить.",
+          "The file will be removed from the skill workspace. This cannot be undone.",
+        )}
+        confirmLabel={tr("Удалить", "Delete")}
+        cancelLabel={tr("Отмена", "Cancel")}
+        onConfirm={confirmRemoveFile}
+        contentClassName="max-w-sm"
       />
     </div>
   );

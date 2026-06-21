@@ -53,7 +53,7 @@ export function LoggingSettingsPanel({
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium">{item.label}</p>
-                  <p className="text-[10px] text-muted-foreground">{item.desc}</p>
+                  <p className="text-xs text-muted-foreground">{item.desc}</p>
                 </div>
                 <Switch
                   checked={enabled}
@@ -99,7 +99,7 @@ export function LoggingSettingsPanel({
           </div>
         </div>
         <div className="mt-4 rounded-lg border border-border bg-muted/20 px-4 py-3">
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Логи хранятся на сервере в таблице <code className="text-foreground">core_ui_useractivitylog</code>.
             При превышении срока хранения старые записи автоматически удаляются.
             Экспорт доступен через API: <code className="text-foreground">GET /api/settings/activity/?format=json&days=30</code>
@@ -114,12 +114,12 @@ export function LoggingSettingsPanel({
         </div>
         <div className="flex flex-wrap gap-2">
           {LOGGING_ITEMS.filter((item) => loggingConfig[item.key]).map((item) => (
-            <Badge key={item.key} variant="secondary" className="text-[10px] gap-1">
+            <Badge key={item.key} variant="secondary" className="text-xs gap-1">
               <item.icon className="h-2.5 w-2.5" /> {item.label}
             </Badge>
           ))}
           {LOGGING_ITEMS.every((item) => !loggingConfig[item.key]) && (
-            <p className="text-[11px] text-muted-foreground">Все категории отключены</p>
+            <p className="text-xs text-muted-foreground">Все категории отключены</p>
           )}
         </div>
       </div>

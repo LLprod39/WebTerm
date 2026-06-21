@@ -119,7 +119,7 @@ export function PipelineAssistantPanel({
             </span>
             <div>
               <h3 className="text-sm font-semibold text-foreground">{localize(lang, "AI pipeline", "Pipeline AI")}</h3>
-              <p className="text-[11px] text-muted-foreground">{selectedLabel}</p>
+              <p className="text-xs text-muted-foreground">{selectedLabel}</p>
             </div>
           </div>
         </div>
@@ -159,7 +159,7 @@ export function PipelineAssistantPanel({
                       : "border-border bg-background/70 text-muted-foreground",
                   )}
                 >
-                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     {item.role === "user" ? localize(lang, "Запрос", "Request") : localize(lang, "AI", "AI")}
                   </div>
                   <div className="whitespace-pre-wrap">{item.content}</div>

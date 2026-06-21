@@ -70,7 +70,7 @@ export function SkillWorkspaceTab({
           </div>
           <div>
             <h3 className="text-sm font-semibold text-foreground">{tr("Редактор файлов", "Workspace Editor")}</h3>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               {tr("Правьте SKILL.md и текстовые файлы в references/, scripts/ и assets/.", "Edit SKILL.md and text files under references/, scripts/, and assets/.")}
             </p>
           </div>
@@ -101,7 +101,7 @@ export function SkillWorkspaceTab({
               <p className="text-xs font-medium text-red-200">{tr("Ошибки пакета", "Package errors")}</p>
               <div className="mt-2 space-y-1">
                 {workspaceErrors.map((item) => (
-                  <p key={item} className="text-[11px] text-red-100">• {item}</p>
+                  <p key={item} className="text-xs text-red-100">• {item}</p>
                 ))}
               </div>
             </div>
@@ -111,7 +111,7 @@ export function SkillWorkspaceTab({
               <p className="text-xs font-medium text-amber-100">{tr("Предупреждения пакета", "Package warnings")}</p>
               <div className="mt-2 space-y-1">
                 {workspaceWarnings.map((item) => (
-                  <p key={item} className="text-[11px] text-amber-50">• {item}</p>
+                  <p key={item} className="text-xs text-amber-50">• {item}</p>
                 ))}
               </div>
             </div>
@@ -124,7 +124,7 @@ export function SkillWorkspaceTab({
           <div className="mb-2 flex items-center justify-between gap-2">
             <div>
               <p className="text-sm font-semibold text-foreground">{tr("Файлы пакета", "Package Files")}</p>
-              <p className="text-[11px] text-muted-foreground">{tr("SKILL.md, references/, scripts/, assets/", "SKILL.md, references/, scripts/, assets/")}</p>
+              <p className="text-xs text-muted-foreground">{tr("SKILL.md, references/, scripts/, assets/", "SKILL.md, references/, scripts/, assets/")}</p>
             </div>
             {isFetchingWorkspace ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
           </div>
@@ -145,12 +145,12 @@ export function SkillWorkspaceTab({
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="truncate text-sm font-medium text-foreground">{file.name}</span>
-                    <span className="shrink-0 text-[11px] text-muted-foreground">{formatFileSize(file.size)}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">{formatFileSize(file.size)}</span>
                   </div>
-                  <div className="mt-1 truncate font-mono text-[11px] text-muted-foreground">{file.path}</div>
+                  <div className="mt-1 truncate font-mono text-xs text-muted-foreground">{file.path}</div>
                   <div className="mt-2 flex flex-wrap gap-1">
-                    <Badge variant="outline" className="text-[10px]">{fileKindLabel(file.kind, lang)}</Badge>
-                    <Badge variant="secondary" className="text-[10px]">{file.language}</Badge>
+                    <Badge variant="outline" className="text-xs">{fileKindLabel(file.kind, lang)}</Badge>
+                    <Badge variant="secondary" className="text-xs">{file.language}</Badge>
                   </div>
                 </button>
               ))}
@@ -180,14 +180,14 @@ export function SkillWorkspaceTab({
                     <div className="flex items-center gap-2">
                       <FileCode2 className="h-4 w-4 text-primary/70" />
                       <div className="text-sm font-semibold text-foreground">{selectedWorkspaceFile.name}</div>
-                      {isEditorDirty && <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-600 dark:text-amber-400">{tr("не сохранено", "unsaved")}</Badge>}
+                      {isEditorDirty && <Badge variant="outline" className="text-xs border-amber-500/50 text-amber-600 dark:text-amber-400">{tr("не сохранено", "unsaved")}</Badge>}
                     </div>
-                    <div className="mt-1 break-all font-mono text-[11px] text-muted-foreground">{selectedWorkspaceFile.path}</div>
+                    <div className="mt-1 break-all font-mono text-xs text-muted-foreground">{selectedWorkspaceFile.path}</div>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    <Badge variant="outline" className="text-[10px]">{fileKindLabel(selectedWorkspaceFile.kind, lang)}</Badge>
-                    <Badge variant="secondary" className="text-[10px]">{selectedWorkspaceFile.language}</Badge>
-                    <Badge variant="outline" className="text-[10px]">{formatFileSize(selectedWorkspaceFile.size)}</Badge>
+                    <Badge variant="outline" className="text-xs">{fileKindLabel(selectedWorkspaceFile.kind, lang)}</Badge>
+                    <Badge variant="secondary" className="text-xs">{selectedWorkspaceFile.language}</Badge>
+                    <Badge variant="outline" className="text-xs">{formatFileSize(selectedWorkspaceFile.size)}</Badge>
                   </div>
                 </div>
               </div>

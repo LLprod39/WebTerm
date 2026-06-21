@@ -26,7 +26,7 @@ export function ConditionNode({ data, selected }: NodeProps) {
       categoryColor="#f97316"
       {...getNodeRuntimeProps(d)}
     >
-      <div className="text-[10px] text-muted-foreground">{localize(lang, "Ветвление Да / Нет", "Explicit true / false branch")}</div>
+      <div className="text-xs text-muted-foreground">{localize(lang, "Ветвление Да / Нет", "Explicit true / false branch")}</div>
     </NodeBase>
   );
 }

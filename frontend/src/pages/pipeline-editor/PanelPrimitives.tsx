@@ -21,8 +21,8 @@ export function NodeFormSection({
   return (
     <section className="space-y-3 rounded-lg border border-border/70 bg-background/55 px-3 py-3">
       <div className="space-y-1">
-        <h4 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{title}</h4>
-        {description ? <p className="text-[11px] leading-relaxed text-muted-foreground">{description}</p> : null}
+        <h4 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{title}</h4>
+        {description ? <p className="text-xs leading-relaxed text-muted-foreground">{description}</p> : null}
       </div>
       {children}
     </section>
@@ -30,7 +30,7 @@ export function NodeFormSection({
 }
 
 export function FieldHint({ children }: { children: ReactNode }) {
-  return <p className="text-[10px] leading-relaxed text-muted-foreground">{children}</p>;
+  return <p className="text-xs leading-relaxed text-muted-foreground">{children}</p>;
 }
 
 export function RunRiskSummaryPanel({ summary, lang }: { summary: PipelineRiskSummary; lang: string }) {
@@ -66,22 +66,22 @@ export function RunRiskSummaryPanel({ summary, lang }: { summary: PipelineRiskSu
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-semibold text-foreground">{localize(lang, "Риск перед запуском", "Risk before run")}</p>
-            <Badge variant={summary.level === "safe" ? "outline" : "secondary"} className="text-[10px]">
+            <Badge variant={summary.level === "safe" ? "outline" : "secondary"} className="text-xs">
               {levelText}
             </Badge>
             {summary.missingApprovalCount > 0 ? (
-              <Badge variant="destructive" className="text-[10px]">
+              <Badge variant="destructive" className="text-xs">
                 {localize(lang, `${summary.missingApprovalCount} без подтверждения`, `${summary.missingApprovalCount} missing approval`)}
               </Badge>
             ) : null}
           </div>
-          <div className="mt-2 grid gap-2 text-[11px] text-muted-foreground sm:grid-cols-3">
+          <div className="mt-2 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
             <div>{localize(lang, "Изменяющие шаги", "Mutating steps")}: <span className="text-foreground">{summary.mutatingCount}</span></div>
             <div>{localize(lang, "Подтверждения", "Approval gates")}: <span className="text-foreground">{summary.approvalCount}</span></div>
             <div>{localize(lang, "Проверки", "Verification")}: <span className="text-foreground">{summary.verificationCount}</span></div>
           </div>
           {summary.items.length ? (
-            <ul className="mt-2 space-y-1 text-[11px] text-muted-foreground">
+            <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
               {summary.items.slice(0, 4).map((item) => (
                 <li key={item.nodeId} className="flex items-start gap-1.5">
                   <span className={item.hasApproval ? "text-emerald-400" : "text-red-400"}>{item.hasApproval ? "ok" : "!"}</span>
@@ -92,7 +92,7 @@ export function RunRiskSummaryPanel({ summary, lang }: { summary: PipelineRiskSu
               ))}
             </ul>
           ) : (
-            <p className="mt-2 text-[11px] text-muted-foreground">
+            <p className="mt-2 text-xs text-muted-foreground">
               {localize(lang, "Изменяющих действий не найдено.", "No mutating actions detected.")}
             </p>
           )}
@@ -116,7 +116,7 @@ export function AdvancedDisclosure({
       className="group rounded-lg border border-dashed border-border/70 bg-muted/10 px-3 py-2"
       open={defaultOpen}
     >
-      <summary className="flex cursor-pointer list-none items-center justify-between text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+      <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
         {title}
         <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
       </summary>

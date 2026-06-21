@@ -52,7 +52,7 @@ export function ActivityLogPanel({
                 key={preset.days}
                 size="sm"
                 variant={activityDays === preset.days ? "default" : "outline"}
-                className="h-7 text-[10px] px-2"
+                className="h-7 text-xs px-2"
                 onClick={() => {
                   onActivityDaysChange(preset.days);
                   onDateFromChange(subDays(new Date(), preset.days || 0));
@@ -67,7 +67,7 @@ export function ActivityLogPanel({
           <div className="flex items-center gap-1.5">
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1 px-2">
+                <Button variant="outline" size="sm" className="h-7 text-xs gap-1 px-2">
                   <CalendarIcon className="h-3 w-3" />
                   {dateFrom ? format(dateFrom, "dd.MM.yy") : "От"}
                 </Button>
@@ -82,10 +82,10 @@ export function ActivityLogPanel({
                 />
               </PopoverContent>
             </Popover>
-            <span className="text-[10px] text-muted-foreground">—</span>
+            <span className="text-xs text-muted-foreground">—</span>
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1 px-2">
+                <Button variant="outline" size="sm" className="h-7 text-xs gap-1 px-2">
                   <CalendarIcon className="h-3 w-3" />
                   {dateTo ? format(dateTo, "dd.MM.yy") : "До"}
                 </Button>
@@ -102,7 +102,7 @@ export function ActivityLogPanel({
             </Popover>
           </div>
 
-          <Badge variant="outline" className="text-[10px] shrink-0">
+          <Badge variant="outline" className="text-xs shrink-0">
             {filteredActivity.length} записей
           </Badge>
         </div>
@@ -111,7 +111,7 @@ export function ActivityLogPanel({
           <div className="max-h-[500px] overflow-auto">
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-card z-10">
-                <tr className="text-[10px] text-muted-foreground uppercase border-b border-border">
+                <tr className="text-xs text-muted-foreground uppercase border-b border-border">
                   <th className="px-3 py-2 text-left font-medium w-10">Тип</th>
                   <th className="px-3 py-2 text-left font-medium">Пользователь</th>
                   <th className="px-3 py-2 text-left font-medium">Действие</th>
@@ -138,7 +138,7 @@ export function ActivityLogPanel({
                         </td>
                         <td className="px-3 py-2 font-medium text-foreground whitespace-nowrap">{event.username}</td>
                         <td className="px-3 py-2">
-                          <Badge variant="outline" className="text-[9px] font-normal">{event.action}</Badge>
+                          <Badge variant="outline" className="text-xs font-normal">{event.action}</Badge>
                         </td>
                         <td className="px-3 py-2 text-muted-foreground max-w-xs truncate">{event.description || "—"}</td>
                         <td className="px-3 py-2 text-right text-muted-foreground whitespace-nowrap">

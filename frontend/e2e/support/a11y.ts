@@ -7,6 +7,7 @@ export type A11yViolationSummary = {
   id: string;
   impact: A11yImpact;
   nodes: number;
+  targets: string[];
 };
 
 export type A11yBudget = Record<
@@ -19,7 +20,12 @@ export type A11yBudget = Record<
 
 function formatSummaries(violations: readonly A11yViolationSummary[]): string {
   if (!violations.length) return "none";
-  return violations.map((violation) => `${violation.id} (${violation.impact}) nodes=${violation.nodes}`).join("; ");
+  return violations
+    .map((violation) => {
+      const targets = violation.targets.length ? ` targets=${violation.targets.join(", ")}` : "";
+      return `${violation.id} (${violation.impact}) nodes=${violation.nodes}${targets}`;
+    })
+    .join("; ");
 }
 
 export async function collectSeriousAndCriticalViolations(page: Page): Promise<A11yViolationSummary[]> {
@@ -30,6 +36,7 @@ export async function collectSeriousAndCriticalViolations(page: Page): Promise<A
       id: violation.id,
       impact: violation.impact as A11yImpact,
       nodes: violation.nodes.length,
+      targets: violation.nodes.slice(0, 8).flatMap((node) => node.target),
     }));
 }
 
@@ -42,7 +49,10 @@ export function expectViolationsWithinBudget(violations: readonly A11yViolationS
   for (const [id, expected] of Object.entries(budget)) {
     const actual = byId.get(id);
     if (!actual) continue;
-    expect(actual.nodes, `Violation '${id}' exceeded node budget (${expected.maxNodes})`).toBeLessThanOrEqual(expected.maxNodes);
+    expect(
+      actual.nodes,
+      `Violation '${id}' exceeded node budget (${expected.maxNodes}); targets=${actual.targets.join(", ")}`,
+    ).toBeLessThanOrEqual(expected.maxNodes);
     if (expected.impact) {
       expect(actual.impact, `Violation '${id}' has unexpected impact`).toBe(expected.impact);
     }

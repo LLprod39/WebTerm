@@ -51,11 +51,11 @@ export function NodePalette({ onAddNode, lang }: { onAddNode: (type: NodeType) =
               <div key={cat.category}>
                 <button
                   onClick={() => toggleCat(cat.category)}
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
                 >
                   <CategoryIcon className="h-3.5 w-3.5" />
                   <span className="flex-1">{getNodeCategoryLabel(cat.category, lang)}</span>
-                  <span className="rounded bg-muted/50 px-1.5 py-0.5 text-[9px] font-normal">{cat.nodes.length}</span>
+                  <span className="rounded bg-muted/50 px-1.5 py-0.5 text-xs font-normal">{cat.nodes.length}</span>
                   {expandedCats.has(cat.category) ? (
                     <ChevronUp className="h-3 w-3" />
                   ) : (
@@ -84,7 +84,7 @@ export function NodePalette({ onAddNode, lang }: { onAddNode: (type: NodeType) =
                             </span>
                             <div className="min-w-0 flex-1">
                               <div className="truncate text-[12px] font-medium text-foreground">{nodeText.label}</div>
-                              <div className="mt-0.5 truncate text-[10px] leading-tight text-muted-foreground">{nodeText.description}</div>
+                              <div className="mt-0.5 truncate text-xs leading-tight text-muted-foreground">{nodeText.description}</div>
                             </div>
                             <Plus className="ml-auto h-3.5 w-3.5 shrink-0 text-primary opacity-0 transition-opacity group-hover:opacity-100" />
                           </button>
@@ -97,13 +97,13 @@ export function NodePalette({ onAddNode, lang }: { onAddNode: (type: NodeType) =
                               </span>
                               <div className="min-w-0">
                                 <p className="text-sm font-semibold text-foreground">{nodeText.label}</p>
-                                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{guidance.category}</p>
+                                <p className="text-xs uppercase tracking-wide text-muted-foreground">{guidance.category}</p>
                               </div>
                             </div>
                             <p className="text-[12px] leading-5 text-foreground/80">{guidance.summary}</p>
                             <div className="space-y-1">
                               {guidance.checklist.slice(0, 2).map((item) => (
-                                <p key={item} className="text-[11px] leading-4 text-muted-foreground">
+                                <p key={item} className="text-xs leading-4 text-muted-foreground">
                                   - {item}
                                 </p>
                               ))}
@@ -117,14 +117,14 @@ export function NodePalette({ onAddNode, lang }: { onAddNode: (type: NodeType) =
             );
           })}
           {filtered.length === 0 && search.trim() && (
-            <p className="py-4 text-center text-[11px] text-muted-foreground">
+            <p className="py-4 text-center text-xs text-muted-foreground">
               {localize(lang, `Ничего не найдено по запросу "${search}"`, `No nodes match "${search}"`)}
             </p>
           )}
         </div>
       </TooltipProvider>
       <div className="border-t border-border/80 px-3 py-2">
-        <p className="text-center text-[9px] text-muted-foreground">
+        <p className="text-center text-xs text-muted-foreground">
           {localize(lang, "Кликните по ноде или перетащите её на холст", "Click a node or drag it onto the canvas")}
         </p>
       </div>

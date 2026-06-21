@@ -9,7 +9,7 @@ import {
   type DashboardWidgetConfig,
 } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { toast } from "sonner";
+import { notify } from "@/lib/notify";
 
 import { DashboardControls, DashboardEditHelp } from "./DashboardControls";
 import { DashboardGrid } from "./DashboardGrid";
@@ -66,12 +66,12 @@ export function CustomizableDashboard({
   const saveMutation = useMutation({
     mutationFn: (layout: DashboardLayoutData) => saveDashboardLayout(type, layout),
     onSuccess: () => {
-      toast.success(t("dash.layout_saved") || "Раскладка успешно сохранена");
+      notify.success({ title: t("dash.layout_saved") || "Раскладка успешно сохранена" });
       setIsEditing(false);
       queryClient.invalidateQueries({ queryKey: ["dashboard", "layout", type] });
     },
     onError: (error) => {
-      toast.error(t("dash.layout_save_error") || "Ошибка сохранения");
+      notify.error({ title: t("dash.layout_save_error") || "Ошибка сохранения" });
       console.error(error);
     },
   });
@@ -89,17 +89,17 @@ export function CustomizableDashboard({
   const handleReset = () => {
     const presets = getCuratedDefaultDashboardLayout(type);
     setLocalLayout(presets.filter((preset) => availableWidgets.some((widget) => widget.id === preset.id)));
-    toast.info("Сброшено к красивой дефолтной раскладке");
+    notify.info({ title: "Сброшено к красивой дефолтной раскладке" });
   };
 
   const addAllWidgets = () => {
     const missingWidgets = getMissingDashboardWidgets(localLayout, availableWidgets);
     if (!missingWidgets.length) {
-      toast.info("Все виджеты уже добавлены");
+      notify.info({ title: "Все виджеты уже добавлены" });
       return;
     }
     setLocalLayout((current) => [...current, ...getMissingDashboardWidgets(current, availableWidgets)]);
-    toast.success(`Добавлено виджетов: ${missingWidgets.length}`);
+    notify.success({ title: `Добавлено виджетов: ${missingWidgets.length}` });
   };
 
   const toggleWidget = (id: string) => {

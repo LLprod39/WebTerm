@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { localize } from "@/lib/i18n";
 import { toAbsoluteWebhookUrl, type TriggerInfoTarget } from "@/components/studio/StudioPipelineTriggers";
@@ -61,17 +62,21 @@ export function ManualTriggerDialog({
         <div className="space-y-3 py-2">
           <label className="space-y-2 text-sm">
             <span className="text-muted-foreground">{localize(lang, "Ручной вход", "Manual trigger")}</span>
-            <select
+            <Select
               value={entryNodeId}
-              onChange={(event) => onEntryNodeChange(event.target.value)}
-              className="flex h-10 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground"
+              onValueChange={onEntryNodeChange}
             >
-              {options.map((option) => (
-                <option key={option.nodeId} value={option.nodeId}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="h-10 rounded-xl bg-background" aria-label={localize(lang, "Ручной вход", "Manual trigger")}>
+                <SelectValue placeholder={localize(lang, "Выберите вход", "Choose trigger")} />
+              </SelectTrigger>
+              <SelectContent>
+                {options.map((option) => (
+                  <SelectItem key={option.nodeId} value={option.nodeId}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           {error ? <p className="text-xs text-destructive">{error}</p> : null}
         </div>
@@ -156,7 +161,7 @@ export function TriggerInfoDialog({ lang, target, onClose, onOpenEditor }: Trigg
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="text-sm font-medium text-foreground">{trigger.name || localize(lang, "Webhook-триггер", "Webhook trigger")}</div>
-                  <div className="text-[11px] text-muted-foreground">Node `{trigger.node_id}`</div>
+                  <div className="text-xs text-muted-foreground">Node `{trigger.node_id}`</div>
                 </div>
                 <Button size="sm" variant="outline" className="h-9" onClick={() => void handleCopyWebhookUrl(trigger.webhook_url)}>
                   <Copy className="mr-1.5 h-3.5 w-3.5" />
@@ -172,7 +177,7 @@ export function TriggerInfoDialog({ lang, target, onClose, onOpenEditor }: Trigg
           {target?.scheduleTriggers.map((trigger) => (
             <div key={trigger.id} className="space-y-1 rounded-xl border border-border bg-background/60 p-3">
               <div className="text-sm font-medium text-foreground">{trigger.name || localize(lang, "Schedule-триггер", "Schedule trigger")}</div>
-              <div className="text-[11px] text-muted-foreground">Node `{trigger.node_id}`</div>
+              <div className="text-xs text-muted-foreground">Node `{trigger.node_id}`</div>
               <div className="text-xs text-muted-foreground">Cron: {trigger.cron_expression || localize(lang, "не задан", "not set")}</div>
             </div>
           ))}
@@ -194,7 +199,7 @@ export function TriggerInfoDialog({ lang, target, onClose, onOpenEditor }: Trigg
             return (
               <div key={trigger.id} className="space-y-1 rounded-xl border border-border bg-background/60 p-3">
                 <div className="text-sm font-medium text-foreground">{trigger.name || localize(lang, "Monitoring-триггер", "Monitoring trigger")}</div>
-                <div className="text-[11px] text-muted-foreground">Node `{trigger.node_id}`</div>
+                <div className="text-xs text-muted-foreground">Node `{trigger.node_id}`</div>
                 <div className="text-xs text-muted-foreground">{localize(lang, "Серверы", "Servers")}: {serverIds}</div>
                 <div className="text-xs text-muted-foreground">{localize(lang, "Важность", "Severity")}: {severities}</div>
                 <div className="text-xs text-muted-foreground">{localize(lang, "Тип alert", "Alert type")}: {alertTypes}</div>

@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import type { AiAssistantSettings } from "../ai-types";
 import { NovaContextSettings } from "../nova/NovaContextSettings";
@@ -27,7 +28,7 @@ function SettingsSection({
     <section className="space-y-2.5">
       <div className="px-0.5">
         <h4 className="text-[13px] font-semibold text-foreground">{title}</h4>
-        <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">{description}</p>
+        <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{description}</p>
       </div>
       <div className="rounded-lg border border-border/50 bg-secondary/15 p-3">
         {children}
@@ -51,7 +52,7 @@ function ToggleRow({
     <div className="flex items-center justify-between gap-3 py-1.5">
       <div className="min-w-0">
         <div className="text-[13px] font-medium text-foreground">{title}</div>
-        <p className="mt-0.5 text-[11px] text-muted-foreground">{description}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
       </div>
       <Switch checked={checked} onCheckedChange={onCheckedChange} />
     </div>
@@ -87,7 +88,7 @@ export function AiPanelSettingsDialog({
             <Settings2 className="h-4 w-4 text-muted-foreground" />
             Настройки AI
           </DialogTitle>
-          <DialogDescription className="text-[11px]">
+          <DialogDescription className="text-xs">
             Параметры применяются сразу к текущему чату.
           </DialogDescription>
         </DialogHeader>
@@ -108,15 +109,19 @@ export function AiPanelSettingsDialog({
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[13px] text-foreground">Авто-отчёт</span>
-                <select
+                <Select
                   value={settings.autoReport}
-                  onChange={(event) => onSettingsPatch({ autoReport: event.target.value === "on" || event.target.value === "off" ? event.target.value : "auto" })}
-                  className="h-8 rounded-md border border-border bg-background px-2.5 text-xs text-foreground focus:border-primary focus:outline-none"
+                  onValueChange={(value) => onSettingsPatch({ autoReport: value === "on" || value === "off" ? value : "auto" })}
                 >
-                  <option value="auto">Auto</option>
-                  <option value="on">Всегда On</option>
-                  <option value="off">Всегда Off</option>
-                </select>
+                  <SelectTrigger className="h-8 w-36 rounded-md bg-background text-xs" aria-label="Авто-отчёт">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">Auto</SelectItem>
+                    <SelectItem value="on">Всегда On</SelectItem>
+                    <SelectItem value="off">Всегда Off</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </SettingsSection>
@@ -136,7 +141,7 @@ export function AiPanelSettingsDialog({
               <div className="flex items-center justify-between gap-3 py-1.5">
                 <div>
                   <div className="text-[13px] font-medium text-foreground">TTL памяти</div>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">Количество запросов (1-20)</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">Количество запросов (1-20)</p>
                 </div>
                 <input
                   type="number"

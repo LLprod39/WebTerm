@@ -37,6 +37,14 @@ import type { AgentRunTab } from "./agent-run/types";
 export default function AgentRunPage() {
   const { runId } = useParams<{ runId: string }>();
   const { t } = useI18n();
+  const tr = (key: string, vars?: Record<string, string | number>) => {
+    let text = t(key);
+    if (!vars) return text;
+    for (const [name, value] of Object.entries(vars)) {
+      text = text.split(`{${name}}`).join(String(value));
+    }
+    return text;
+  };
   const queryClient = useQueryClient();
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
@@ -184,14 +192,14 @@ export default function AgentRunPage() {
         <div className="max-w-md rounded-2xl border border-border/70 bg-card/70 px-5 py-4 text-sm text-muted-foreground shadow-[0_18px_48px_rgba(0,0,0,0.18)]">
           <div className="mb-2 flex items-center gap-2 text-foreground">
             <AlertTriangle className="h-4 w-4 text-amber-400" />
-            <span className="font-medium">Запуск не найден</span>
+            <span className="font-medium">{t("run.not_found_title")}</span>
           </div>
           <p>{message}</p>
           <div className="mt-4">
             <Link to="/agents">
               <Button size="sm" variant="outline" className="gap-1.5">
                 <ArrowLeft className="h-3.5 w-3.5" />
-                К списку агентов
+                {t("run.back_to_agents")}
               </Button>
             </Link>
           </div>
@@ -232,9 +240,9 @@ export default function AgentRunPage() {
             <div className="flex flex-wrap items-center justify-end gap-2">
               <StatusBadge status={run.status} />
               {isMulti ? (
-                <span className="inline-flex h-7 items-center gap-1 rounded-full border border-violet-500/25 bg-violet-500/10 px-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-violet-300">
+                <span className="inline-flex min-h-7 items-center gap-1.5 rounded-md border border-[color:var(--wt-ai)] bg-[color:rgb(155_135_245_/_0.10)] px-2.5 py-1 text-xs font-medium leading-4 text-[color:var(--wt-ai)]">
                   <Layers className="h-3 w-3" />
-                  Pipeline
+                  {t("run.mode_pipeline")}
                 </span>
               ) : null}
               <div className="rounded-xl border border-border/70 bg-card/70 p-0.5">
@@ -247,7 +255,7 @@ export default function AgentRunPage() {
                   >
                     <span className="inline-flex items-center gap-1.5">
                       <Layers className="h-3.5 w-3.5" />
-                      Pipeline
+                      {t("run.tab_pipeline")}
                       {isActive || isPlanReview ? <span className="h-1.5 w-1.5 rounded-full bg-violet-400" /> : null}
                     </span>
                   </button>
@@ -260,7 +268,7 @@ export default function AgentRunPage() {
                 >
                   <span className="inline-flex items-center gap-1.5">
                     <Activity className="h-3.5 w-3.5" />
-                    Timeline
+                    {t("run.tab_timeline")}
                     {events.length > 0 ? <span className="h-1.5 w-1.5 rounded-full bg-sky-400" /> : null}
                   </span>
                 </button>
@@ -272,7 +280,7 @@ export default function AgentRunPage() {
                 >
                   <span className="inline-flex items-center gap-1.5">
                     <FileText className="h-3.5 w-3.5" />
-                    {t("agent.report")}
+                    {t("run.tab_report")}
                     {hasReport && !isActive ? <CheckCircle2 className="h-3 w-3 text-emerald-300" /> : null}
                   </span>
                 </button>
@@ -295,9 +303,9 @@ export default function AgentRunPage() {
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
             <span>{formatDuration(elapsed)}</span>
             <span className="text-muted-foreground/40">·</span>
-            <span>{isMulti ? `${planTasks.length} tasks` : `${run.total_iterations} iterations`}</span>
+            <span>{isMulti ? `${planTasks.length} ${t("run.metric_tasks")}` : `${run.total_iterations} ${t("run.metric_iterations")}`}</span>
             <span className="text-muted-foreground/40">·</span>
-            <span>{connectedServerNames.length} servers</span>
+            <span>{connectedServerNames.length} ${t("run.metric_servers")}</span>
             <span className="text-muted-foreground/40">·</span>
             <span>{formatCompactDateTime(run.started_at)}</span>
 
@@ -307,13 +315,13 @@ export default function AgentRunPage() {
                 <div className="flex flex-wrap items-center gap-1">
                   {run.connected_servers.length > 0 ? run.connected_servers.map((server) => (
                     <Link key={server.server_id} to={`/servers/${server.server_id}/terminal`}>
-                      <span className="inline-flex h-6 items-center gap-1 rounded-full border border-border/70 bg-card/70 px-2 text-[11px] text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary/10 hover:text-primary">
+                      <span className="inline-flex min-h-7 items-center gap-1 rounded-md border border-border/70 bg-card/70 px-2 text-xs text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary/10 hover:text-primary">
                         <Terminal className="h-3 w-3" />
                         {server.server_name}
                       </span>
                     </Link>
                   )) : (
-                    <span className="inline-flex h-6 items-center gap-1 rounded-full border border-border/70 bg-card/70 px-2 text-[11px] text-muted-foreground">
+                    <span className="inline-flex min-h-7 items-center gap-1 rounded-md border border-border/70 bg-card/70 px-2 text-xs text-muted-foreground">
                       <Terminal className="h-3 w-3" />
                       {run.server_name}
                     </span>
@@ -333,8 +341,8 @@ export default function AgentRunPage() {
                 <span className="font-medium text-foreground/80">
                   {doneTasks}/{planTasks.length}
                 </span>
-                {runningTasks > 0 ? <span className="text-sky-300">{runningTasks} running</span> : null}
-                {failedTasks > 0 ? <span className="text-red-300">{failedTasks} failed</span> : null}
+                {runningTasks > 0 ? <span className="text-info">{tr("run.progress_running", { count: runningTasks })}</span> : null}
+                {failedTasks > 0 ? <span className="text-destructive">{tr("run.progress_failed", { count: failedTasks })}</span> : null}
                 <button
                   type="button"
                   onClick={() => setAutoScroll((current) => !current)}
@@ -354,29 +362,29 @@ export default function AgentRunPage() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.03),transparent_48%),linear-gradient(180deg,rgba(255,255,255,0.02),transparent_40%)]">
+      <div className="min-h-0 flex-1 overflow-hidden bg-background">
         {activeTab === "pipeline" && isMulti ? (
           <div className="h-full overflow-y-auto">
             <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-5 sm:px-6">
               {isPlanReview ? (
-                <div className="rounded-[24px] border border-amber-500/30 bg-amber-500/10 p-4 sm:p-5">
+                <div className="rounded-lg border border-warning/35 bg-warning/10 p-4 sm:p-5">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="flex min-w-0 gap-3">
                       <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-amber-500/25 bg-background/40">
                         <AlertTriangle className="h-5 w-5 text-amber-300" />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-amber-200">{t("run.plan_review_title")}</p>
-                        <p className="mt-1 text-sm leading-6 text-amber-50/75">
+                        <p className="text-sm font-semibold text-warning">{t("run.plan_review_title")}</p>
+                        <p className="mt-1 text-sm leading-6 text-foreground/85">
                           {t("run.plan_review_desc")}
                         </p>
-                        {approveError ? <p className="mt-2 text-sm text-red-300">{approveError}</p> : null}
+                        {approveError ? <p className="mt-2 text-sm text-destructive">{approveError}</p> : null}
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Button
                         size="sm"
-                        className="h-10 rounded-xl bg-emerald-600 px-4 text-white hover:bg-emerald-500"
+                        className="h-10 px-4"
                         onClick={onApprovePlan}
                         disabled={approving}
                       >
@@ -386,7 +394,7 @@ export default function AgentRunPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-10 rounded-xl border-red-500/30 px-4 text-red-300 hover:bg-red-500/10 hover:text-red-200"
+                        className="h-10 border-destructive/35 px-4 text-destructive hover:bg-destructive/10"
                         onClick={onStop}
                         disabled={stopping}
                       >

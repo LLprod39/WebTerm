@@ -31,7 +31,7 @@ export function StudioDraftsHeader({
           <h1 className="truncate text-sm font-semibold text-foreground">
             {localize(lang, "Черновики пайплайнов", "Pipeline drafts")}
           </h1>
-          <p className="truncate text-[11px] text-muted-foreground">
+          <p className="truncate text-xs text-muted-foreground">
             {localize(lang, "Сборка пайплайна по описанию", "Draft pipelines from an operations request")}
           </p>
         </div>

@@ -278,6 +278,17 @@ function makeSettingsHandler() {
       });
     }
 
+    if (req.path === "/api/access/group-permissions/" && req.method === "GET") {
+      return json({
+        permissions: [],
+        features: [
+          { value: "servers", label: "Servers" },
+          { value: "settings", label: "Settings" },
+          { value: "orchestrator", label: "Orchestrator" },
+        ],
+      });
+    }
+
     if (req.path === "/api/access/permissions/" && req.method === "POST") {
       let target = permissions.find((perm) => perm.user_id === Number(req.body?.user_id) && perm.feature === String(req.body?.feature));
       if (!target) {
@@ -329,30 +340,48 @@ test("updates AI settings from the settings workspace", async ({ page }) => {
     .toBeGreaterThan(0);
 });
 
+test("validates and saves SSO settings", async ({ page }) => {
+  const harness = await installApiHarness(page, makeSettingsHandler());
+
+  await page.goto("/settings/sso");
+  await expect(page.getByRole("heading", { name: "Domain Authentication" })).toBeVisible();
+  await expect(page.getByText("SSO is enabled")).toBeVisible();
+
+  await page.getByLabel("HTTP Header").fill("X-Forwarded-User");
+  await page.getByLabel("Test header value").fill("DOMAIN\\Operator");
+  await page.getByRole("button", { name: "Test header" }).click();
+  await expect(page.getByText("X-Forwarded-User: domain\\operator")).toBeVisible();
+
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect
+    .poll(() => harness.getCalls("/api/settings/", "POST").length)
+    .toBeGreaterThan(0);
+});
+
 test("manages users from access catalog", async ({ page }) => {
   const harness = await installApiHarness(page, makeSettingsHandler());
 
   await page.goto("/settings/users");
   await expect(page.getByRole("heading", { name: "Users" })).toBeVisible();
 
-  await page.getByPlaceholder("Username").fill("qa-user");
-  await page.getByPlaceholder("Email").fill("qa@example.com");
-  await page.getByPlaceholder("Password").fill("Temp1234");
   await page.getByRole("button", { name: "Create User" }).click();
+  const createUserDialog = page.getByRole("dialog", { name: "Create User" });
+  await createUserDialog.getByPlaceholder("Username").fill("qa-user");
+  await createUserDialog.getByPlaceholder("Email").fill("qa@example.com");
+  await createUserDialog.getByPlaceholder("Password").fill("TempUser1234!");
+  await createUserDialog.getByRole("button", { name: "Create User" }).click();
   await expect(page.getByText("qa-user")).toBeVisible();
 
-  await page.evaluate(() => {
-    window.prompt = () => "NewPass123!";
-    window.confirm = () => true;
-    window.alert = () => undefined;
-  });
-
   await page.getByRole("button", { name: "Password" }).last().click();
+  await expect(page.getByRole("dialog", { name: "Reset password" })).toBeVisible();
+  await page.getByRole("button", { name: "Update password" }).click();
   await expect
     .poll(() => harness.getCalls("/api/access/users/3/password/", "POST").length)
     .toBeGreaterThan(0);
 
   await page.getByRole("button", { name: "Delete" }).last().click();
+  await expect(page.getByRole("alertdialog", { name: "Delete user qa-user?" })).toBeVisible();
+  await page.getByRole("button", { name: "Delete user" }).click();
   await expect
     .poll(() => harness.getCalls("/api/access/users/3/", "DELETE").length)
     .toBeGreaterThan(0);
@@ -365,29 +394,35 @@ test("manages groups and explicit permissions", async ({ page }) => {
   await page.goto("/settings/groups");
   await expect(page.getByRole("heading", { name: "Groups" })).toBeVisible();
 
-  await page.getByPlaceholder("Group name").fill("SRE Team");
   await page.getByRole("button", { name: "Create Group" }).click();
-  await expect(page.getByText("SRE Team")).toBeVisible();
+  let groupDialog = page.getByRole("dialog", { name: "Create Group" });
+  await groupDialog.getByPlaceholder("Group name").fill("SRE Team");
+  await groupDialog.getByRole("button", { name: "Create Group" }).click();
+  await expect(page.locator("tbody").getByText("SRE Team")).toBeVisible();
 
-  await page.getByRole("button", { name: "Edit Group" }).last().click();
-  await page.locator("input").last().fill("SRE Core");
-  await page.getByRole("button", { name: "Save" }).last().click();
+  await page.getByPlaceholder("Search group or member").fill("SRE Team");
+  await page.getByRole("button", { name: "Edit Group" }).click();
+  groupDialog = page.getByRole("dialog", { name: "Edit Group" });
+  await groupDialog.getByLabel("Group name").fill("SRE Core");
+  await groupDialog.getByRole("button", { name: "Save" }).click();
   await expect
     .poll(() => harness.getCalls("/api/access/groups/3/", "PUT").length)
     .toBeGreaterThan(0);
-  await expect(page.getByText("SRE Core")).toBeVisible();
+  await page.getByPlaceholder("Search group or member").fill("SRE Core");
+  await expect(page.locator("tbody").getByText("SRE Core")).toBeVisible();
 
   await page.goto("/settings/permissions");
   await expect(page.getByRole("heading", { name: "Permissions", exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "Save" }).first().click();
+  await page.getByRole("button", { name: "Add exception" }).click();
+  await page.getByRole("dialog", { name: "Add / Update User Override" }).getByRole("button", { name: "Save" }).click();
   await expect
     .poll(() => harness.getCalls("/api/access/permissions/", "POST").length)
     .toBeGreaterThan(0);
 
   await page.getByRole("button", { name: "Toggle" }).first().click();
-  page.once("dialog", async (dialog) => {
-    await dialog.accept();
-  });
   await page.getByRole("button", { name: "Delete" }).first().click();
+  const deletePermissionDialog = page.getByRole("alertdialog", { name: "Delete user permission?" });
+  await expect(deletePermissionDialog).toBeVisible();
+  await deletePermissionDialog.getByRole("button", { name: "Delete" }).click();
 });

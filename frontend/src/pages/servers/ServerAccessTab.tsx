@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { FrontendGroup, FrontendServer, ServerGroupRole } from "@/lib/api";
 
 import type { ShareItem } from "./types";
@@ -157,16 +158,20 @@ export function ServerAccessTab({
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">{t("srv.role")}</Label>
-              <select
+              <Select
                 value={groupMemberRole}
-                onChange={(event) => setGroupMemberRole(event.target.value as ServerGroupRole)}
-                className="flex h-9 w-full rounded-md border border-input bg-secondary/50 px-3 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                onValueChange={(value) => setGroupMemberRole(value as ServerGroupRole)}
               >
-                <option value="owner">{t("srv.role_owner")}</option>
-                <option value="admin">{t("srv.role_admin")}</option>
-                <option value="member">{t("srv.role_member")}</option>
-                <option value="viewer">{t("srv.role_viewer")}</option>
-              </select>
+                <SelectTrigger className="h-9 bg-secondary/50" aria-label={t("srv.role")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="owner">{t("srv.role_owner")}</SelectItem>
+                  <SelectItem value="admin">{t("srv.role_admin")}</SelectItem>
+                  <SelectItem value="member">{t("srv.role_member")}</SelectItem>
+                  <SelectItem value="viewer">{t("srv.role_viewer")}</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex items-end">
               <Button size="sm" className="h-9 w-full" onClick={onAddGroupMember}>

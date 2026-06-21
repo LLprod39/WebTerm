@@ -1,11 +1,9 @@
-import { statusClasses, statusLabel } from "./formatters";
+import { StatusBadge as SystemStatusBadge } from "@/components/system/StatusBadge";
+import { agentRunStatusPresentation } from "@/design/status";
+import { useI18n } from "@/lib/i18n";
 
 export function StatusBadge({ status }: { status: string }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusClasses(status)}`}
-    >
-      {statusLabel(status)}
-    </span>
-  );
+  const { t } = useI18n();
+  const presentation = agentRunStatusPresentation(status);
+  return <SystemStatusBadge label={t(presentation.labelKey)} tone={presentation.tone} pulse={presentation.pulse} />;
 }

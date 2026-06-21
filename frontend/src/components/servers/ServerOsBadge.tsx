@@ -10,9 +10,9 @@ import { osBadgeStyles, osIconSrc } from "@/components/servers/os-icon-map";
 
 const sizeMap = {
 
-  sm: { box: "h-7 w-7 rounded-lg", icon: "h-3.5 w-3.5", text: "text-[10px]" },
+  sm: { box: "h-7 w-7 rounded-lg", icon: "h-3.5 w-3.5", text: "text-xs" },
 
-  md: { box: "h-9 w-9 rounded-xl", icon: "h-4 w-4", text: "text-[11px]" },
+  md: { box: "h-9 w-9 rounded-xl", icon: "h-4 w-4", text: "text-xs" },
 
   lg: { box: "h-11 w-11 rounded-xl", icon: "h-5 w-5", text: "text-xs" },
 
@@ -102,7 +102,9 @@ export function ServerOsBadge({
 
         title={label}
 
-        aria-label={label}
+        role={showLabel ? undefined : "img"}
+
+        aria-label={showLabel ? undefined : label}
 
       >
 

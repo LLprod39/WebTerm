@@ -8,7 +8,7 @@ import type {
 
 export function MemorySnapshotAudit({ item }: { item: ServerMemorySnapshotRecord }) {
   return (
-    <div className="mt-3 space-y-2 text-[10px] text-muted-foreground">
+    <div className="mt-3 space-y-2 text-xs text-muted-foreground">
       <div className="flex flex-wrap items-center gap-2">
         <span className="rounded bg-secondary px-1.5 py-0.5">{item.source_kind}</span>
         {item.source_ref ? <span className="rounded bg-secondary/60 px-1.5 py-0.5">{item.source_ref}</span> : null}
@@ -18,12 +18,12 @@ export function MemorySnapshotAudit({ item }: { item: ServerMemorySnapshotRecord
         {item.created_by_username ? <span>by {item.created_by_username}</span> : null}
         {item.updated_at ? <span>{new Date(item.updated_at).toLocaleString()}</span> : null}
       </div>
-      {item.action_summary ? <p className="text-[11px] text-foreground/80">{item.action_summary}</p> : null}
+      {item.action_summary ? <p className="text-xs text-foreground/80">{item.action_summary}</p> : null}
       {item.rewrite_reason ? <p>Reason: {item.rewrite_reason}</p> : null}
       {item.prior_version ? <p>Prior version: v{item.prior_version}</p> : null}
       {item.history.length > 1 ? (
         <details className="rounded-md border border-border/60 bg-background/30 px-3 py-2">
-          <summary className="cursor-pointer text-[11px] font-medium text-foreground">
+          <summary className="cursor-pointer text-xs font-medium text-foreground">
             Version history ({item.history.length})
           </summary>
           <div className="mt-2 space-y-2">
@@ -36,10 +36,10 @@ export function MemorySnapshotAudit({ item }: { item: ServerMemorySnapshotRecord
                   {historyItem.created_by_username ? <span>by {historyItem.created_by_username}</span> : null}
                   {historyItem.updated_at ? <span>{new Date(historyItem.updated_at).toLocaleString()}</span> : null}
                 </div>
-                {historyItem.action_summary ? <p className="mt-1 text-[11px] text-foreground/80">{historyItem.action_summary}</p> : null}
+                {historyItem.action_summary ? <p className="mt-1 text-xs text-foreground/80">{historyItem.action_summary}</p> : null}
                 {historyItem.rewrite_reason ? <p className="mt-1">Reason: {historyItem.rewrite_reason}</p> : null}
                 {historyItem.content_preview ? (
-                  <p className="mt-1 whitespace-pre-wrap text-[11px] leading-relaxed">{historyItem.content_preview}</p>
+                  <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed">{historyItem.content_preview}</p>
                 ) : null}
               </div>
             ))}
@@ -68,7 +68,7 @@ export function WorkerStateCard({
     <div className="rounded-lg border border-border bg-secondary/10 px-3 py-3">
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-sm font-medium text-foreground">{label}</p>
-        <span className={cn("rounded border px-1.5 py-0.5 text-[10px] uppercase tracking-wide", statusTone)}>
+        <span className={cn("rounded border px-1.5 py-0.5 text-xs uppercase tracking-wide", statusTone)}>
           {state.status}
         </span>
         {state.is_stale ? <Badge variant="destructive">stale</Badge> : null}
@@ -83,8 +83,8 @@ export function WorkerStateCard({
         {state.last_error ? <p className="text-destructive">error: {state.last_error}</p> : null}
         {Object.keys(state.last_summary || {}).length ? (
           <details className="rounded border border-border/50 bg-background/30 px-2 py-2">
-            <summary className="cursor-pointer text-[11px] font-medium text-foreground">Last summary</summary>
-            <pre className="mt-2 whitespace-pre-wrap text-[10px] leading-relaxed text-muted-foreground">
+            <summary className="cursor-pointer text-xs font-medium text-foreground">Last summary</summary>
+            <pre className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
               {JSON.stringify(state.last_summary, null, 2)}
             </pre>
           </details>

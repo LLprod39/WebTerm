@@ -24,11 +24,13 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { UnsavedChangesDialog } from "@/components/system/ConfirmDialog";
 import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/lib/i18n";
 import { readServerTextFile, writeServerTextFile } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { CodeEditor, getLanguageLabel } from "./CodeEditor";
+import { CodeEditor } from "./CodeEditor";
+import { getLanguageLabel } from "./codeEditorLanguage";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                               */
@@ -79,6 +81,7 @@ export function FileEditorModal({ serverId, open, initialPath, onClose }: FileEd
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [openPath, setOpenPath] = useState("");
   const [showOpen, setShowOpen] = useState(false);
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const consumedPathRef = useRef<string | null>(null);
 
   /* ---- window state ---- */
@@ -127,7 +130,7 @@ export function FileEditorModal({ serverId, open, initialPath, onClose }: FileEd
     const onUp = () => { resizeRef.current = null; window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
-  }, [mode, rect.w, rect.h]);
+  }, [mode, rect.w, rect.h, rect.x, rect.y]);
 
   /* ---- open file ---- */
   const openFile = useCallback(
@@ -224,16 +227,23 @@ export function FileEditorModal({ serverId, open, initialPath, onClose }: FileEd
     toast({ title: t("editor.pathCopied"), description: activeTab.path });
   }, [activeTab?.path, toast, t]);
 
-  /* ---- close window ---- */
-  const handleClose = useCallback(() => {
-    const dirty = tabs.some((tb) => tb.dirty);
-    if (dirty && !window.confirm(t("editor.unsavedWarn"))) return;
+  const closeWindow = useCallback(() => {
     setTabs([]);
     setActiveTabId(null);
     setShowOpen(false);
     setMode("normal");
     onClose();
-  }, [tabs, onClose, t]);
+  }, [onClose]);
+
+  /* ---- close window ---- */
+  const handleClose = useCallback(() => {
+    const dirty = tabs.some((tb) => tb.dirty);
+    if (dirty) {
+      setConfirmCloseOpen(true);
+      return;
+    }
+    closeWindow();
+  }, [closeWindow, tabs]);
 
   /* ---- keyboard ---- */
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -248,9 +258,25 @@ export function FileEditorModal({ serverId, open, initialPath, onClose }: FileEd
 
   if (!open) return null;
 
+  const unsavedCloseDialog = (
+    <UnsavedChangesDialog
+      open={confirmCloseOpen}
+      onOpenChange={setConfirmCloseOpen}
+      title={t("editor.unsavedTitle")}
+      description={t("editor.unsavedWarn")}
+      confirmLabel={t("editor.discardChanges")}
+      cancelLabel={t("editor.cancel")}
+      onConfirm={() => {
+        setConfirmCloseOpen(false);
+        closeWindow();
+      }}
+    />
+  );
+
   /* ---- minimized bar ---- */
   if (mode === "minimized") {
     return (
+      <>
       <div
         className="fixed bottom-4 left-4 z-[60] flex h-10 items-center gap-2 rounded-lg border border-white/10 bg-[#161b22] px-3 shadow-xl cursor-pointer select-none"
       >
@@ -264,7 +290,7 @@ export function FileEditorModal({ serverId, open, initialPath, onClose }: FileEd
           <FileCode2 className="h-4 w-4 text-blue-400" />
           <span className="text-xs font-medium text-zinc-300">{t("editor.title")}</span>
           {tabs.some((tb) => tb.dirty) && <span className="h-2 w-2 rounded-full bg-blue-500" />}
-          <span className="text-[10px] text-zinc-500">{tabCountLabel}</span>
+          <span className="text-xs text-zinc-500">{tabCountLabel}</span>
         </button>
         <button
           type="button"
@@ -276,6 +302,8 @@ export function FileEditorModal({ serverId, open, initialPath, onClose }: FileEd
           <X className="h-3 w-3" />
         </button>
       </div>
+      {unsavedCloseDialog}
+      </>
     );
   }
 
@@ -285,6 +313,7 @@ export function FileEditorModal({ serverId, open, initialPath, onClose }: FileEd
     : { position: "fixed", left: rect.x, top: rect.y, width: rect.w, height: rect.h };
 
   return (
+    <>
     <div
       ref={windowRef}
       role="dialog"
@@ -305,7 +334,7 @@ export function FileEditorModal({ serverId, open, initialPath, onClose }: FileEd
       >
         <FileCode2 className="h-3.5 w-3.5 text-blue-400 shrink-0" />
         <span className="text-xs font-semibold text-zinc-200 truncate">{t("editor.title")}</span>
-        {activeTab && <span className="text-[10px] text-zinc-500 truncate hidden sm:inline">— {activeTab.path}</span>}
+        {activeTab && <span className="text-xs text-zinc-500 truncate hidden sm:inline">— {activeTab.path}</span>}
 
         <div className="ml-auto flex items-center gap-0.5 shrink-0">
           <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200" onClick={() => setShowOpen(true)} title={t("editor.open")} aria-label={t("editor.open")}>
@@ -339,7 +368,7 @@ export function FileEditorModal({ serverId, open, initialPath, onClose }: FileEd
           <div
             key={tab.id}
             className={cn(
-              "group flex items-center gap-1.5 rounded px-2 py-0.5 text-[11px] transition-colors shrink-0",
+              "group flex items-center gap-1.5 rounded px-2 py-0.5 text-xs transition-colors shrink-0",
               activeTabId === tab.id ? "bg-[#161b22] text-zinc-200" : "text-zinc-500 hover:bg-white/5 hover:text-zinc-300",
             )}
           >
@@ -380,15 +409,15 @@ export function FileEditorModal({ serverId, open, initialPath, onClose }: FileEd
               onChange={(e) => setOpenPath(e.target.value)}
               placeholder={t("editor.pathPlaceholder")}
               aria-label={t("editor.pathInput")}
-              className="h-7 flex-1 border-zinc-700 bg-[#0d1117] font-mono text-[11px] text-zinc-200 placeholder:text-zinc-600"
+              className="h-7 flex-1 border-zinc-700 bg-[#0d1117] font-mono text-xs text-zinc-200 placeholder:text-zinc-600"
               onKeyDown={(e) => { if (e.key === "Enter" && openPath.trim()) { e.preventDefault(); void openFile(openPath.trim()); } }}
               autoFocus
             />
-            <Button size="sm" className="h-7 text-[11px]" disabled={!openPath.trim()} onClick={() => void openFile(openPath.trim())}>
+            <Button size="sm" className="h-7 text-xs" disabled={!openPath.trim()} onClick={() => void openFile(openPath.trim())}>
               {t("editor.openBtn")}
             </Button>
             {tabs.length > 0 && (
-              <Button size="sm" variant="ghost" className="h-7 text-[11px] text-zinc-500" onClick={() => setShowOpen(false)}>
+              <Button size="sm" variant="ghost" className="h-7 text-xs text-zinc-500" onClick={() => setShowOpen(false)}>
                 {t("editor.cancel")}
               </Button>
             )}
@@ -415,7 +444,7 @@ export function FileEditorModal({ serverId, open, initialPath, onClose }: FileEd
             <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-4 text-center">
               <AlertTriangle className="mx-auto h-5 w-5 text-red-400" />
               <div className="mt-1 text-xs text-red-300">{activeTab.error}</div>
-              <Button size="sm" variant="outline" className="mt-2 text-[11px]" onClick={() => { closeTab(activeTab.id); setShowOpen(true); }}>
+              <Button size="sm" variant="outline" className="mt-2 text-xs" onClick={() => { closeTab(activeTab.id); setShowOpen(true); }}>
                 {t("editor.tryAnother")}
               </Button>
             </div>
@@ -431,19 +460,19 @@ export function FileEditorModal({ serverId, open, initialPath, onClose }: FileEd
       </div>
 
       {/* ---- status bar ---- */}
-      <div className={cn("flex h-6 items-center justify-between border-t border-white/5 bg-[#161b22] px-3 text-[10px] text-zinc-500", !isMax && "rounded-b-lg")}>
+      <div className={cn("flex h-6 items-center justify-between border-t border-white/5 bg-[#161b22] px-3 text-xs text-zinc-500", !isMax && "rounded-b-lg")}>
         <div className="flex items-center gap-2">
           {activeTab && (
             <>
               <span className="max-w-48 truncate font-mono">{activeTab.path}</span>
               <span>{getLanguageLabel(activeTab.filename)}</span>
               <span>{activeTab.encoding}</span>
-              {activeTab.isNew && <span className="rounded bg-zinc-800 px-1 py-0.5 text-[9px]">{t("editor.newFile")}</span>}
+              {activeTab.isNew && <span className="rounded bg-zinc-800 px-1 py-0.5 text-xs">{t("editor.newFile")}</span>}
             </>
           )}
         </div>
         <div className="flex items-center gap-2">
-          {activeTab?.dirty && <span className="rounded bg-blue-500/10 px-1 py-0.5 text-[9px] text-blue-400">{t("editor.modified")}</span>}
+          {activeTab?.dirty && <span className="rounded bg-blue-500/10 px-1 py-0.5 text-xs text-blue-400">{t("editor.modified")}</span>}
           {activeTab && (
             <>
               <span>{lineCount} {t("editor.lines")}</span>
@@ -462,5 +491,7 @@ export function FileEditorModal({ serverId, open, initialPath, onClose }: FileEd
         />
       )}
     </div>
+    {unsavedCloseDialog}
+    </>
   );
 }
