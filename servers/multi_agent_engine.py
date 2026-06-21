@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import time
 from collections.abc import Callable, Coroutine
 from contextlib import suppress
 
@@ -12,70 +11,56 @@ from django.utils import timezone
 from loguru import logger
 
 from app.agent_kernel import mcp_runtime_registry, skill_provider_registry
-from app.agent_kernel.domain.roles import ROLE_SPECS, get_role_spec
+from app.agent_kernel.domain.roles import get_role_spec
 from app.agent_kernel.domain.specs import MCPRuntimeProvider, SkillProvider
 from app.agent_kernel.hooks.manager import HookManager
-from app.agent_kernel.mcp_runtime import load_mcp_bindings
-from app.agent_kernel.memory.compaction import build_run_summary_payload
-from app.agent_kernel.memory.server_cards import render_server_cards_prompt
 from app.agent_kernel.permissions.engine import PermissionEngine
-from app.agent_kernel.runtime.context import build_ops_prompt_context
 from app.agent_kernel.runtime.parsing import parse_action as _parse_action  # noqa: F401
 from app.agent_kernel.runtime.parsing import parse_response
 from app.agent_kernel.sandbox.manager import SandboxManager
 from app.agent_kernel.tools.registry import ToolRegistry
-from app.core.llm import LLMProvider
 from app.core.model_utils import resolve_provider_and_model
 from core_ui.audit import audit_context
 from servers.adapters.memory_store import DjangoServerMemoryStore
-from servers.agent_inputs import build_agent_materials_prompt
 from servers.agent_runtime import (
     build_runtime_control_state,
-    is_runtime_stop_requested,
-    register_engine,
-    reset_runtime_control_state,
-    unregister_engine,
     update_runtime_control,
 )
 from servers.agent_sessions import AgentSessionManager
-from servers.agent_tools import AGENT_TOOLS, get_enabled_tools
+from servers.agent_tools import get_enabled_tools
 from servers.models import AgentRun, Server, ServerAgent
-from servers.multi_agent_plan_executor import PlanExecutionCallbacks, execute_plan_tasks
-from servers.multi_agent_plan_helpers import (
-    build_tasks_table,
-    inject_tasks_table_into_report,
-    parse_decision_response,
-    parse_plan_response,
+from servers.multi_agent_engine_config import (
+    CONTROL_POLL_INTERVAL,
+    MAX_TASK_ITERATIONS,
+    SESSION_TIMEOUT_DEFAULT,
+)
+from servers.multi_agent_engine_runner import (
+    execute_existing_multi_agent_plan,
+    run_multi_agent_engine,
+)
+from servers.multi_agent_llm import call_multi_agent_llm_history, call_multi_agent_llm_raw
+from servers.multi_agent_memory import (
+    build_multi_agent_ops_prompt_context,
+    persist_multi_agent_ops_summary,
+)
+from servers.multi_agent_plan_executor import PlanExecutionCallbacks
+from servers.multi_agent_planning import (
+    handle_multi_agent_failure,
+    plan_multi_agent_tasks,
+    replan_multi_agent_tasks,
+    synthesize_multi_agent_report,
 )
 from servers.multi_agent_subagents import (
     build_subagent_prompt_context,
     build_task_subagent,
     prepare_plan_tasks,
 )
-from servers.multi_agent_task_iterations import (
-    append_observation_history,
-    append_verification_blocked_history,
-    build_iteration_thought_event,
-    build_task_iteration_entry,
-    merge_task_update_into_plan_tasks,
-    record_final_answer_iteration,
-    record_observed_iteration,
-    record_verification_blocked_iteration,
-)
-from servers.multi_agent_task_prompts import build_multi_agent_task_prompt
-from servers.multi_agent_task_setup import prepare_multi_agent_task_runtime
+from servers.multi_agent_task_runner import run_multi_agent_task, summarize_multi_agent_task
 from servers.multi_agent_tool_execution import MultiAgentToolExecutionContext, execute_multi_agent_tool
-from servers.report_delivery import deliver_agent_report_async
 
 
 def sync_to_async(func, thread_sensitive=False):
     return _s2a(func, thread_sensitive=thread_sensitive)
-
-MAX_PLAN_TASKS = 15
-MAX_TASK_ITERATIONS = 7
-SESSION_TIMEOUT_DEFAULT = 900
-CONTROL_POLL_INTERVAL = 0.5
-
 
 # ---------------------------------------------------------------------------
 # MultiAgentEngine
@@ -221,429 +206,17 @@ class MultiAgentEngine:
     # ------------------------------------------------------------------
 
     async def run(self, plan_only: bool = False, run_record: AgentRun | None = None) -> AgentRun:
-        """Run the full pipeline or planning-only phase.
-
-        If plan_only=True: plans tasks, sets status=plan_review, and returns
-        without executing. Call execute_existing_plan() to continue.
-        """
-        self._loop = asyncio.get_running_loop()
-        primary_server = self.servers[0] if self.servers else None
-        if run_record is None:
-            run = await sync_to_async(AgentRun.objects.create)(
-                agent=self.agent if self.agent.pk else None,
-                server=primary_server,
-                user=self.user,
-                status=AgentRun.STATUS_RUNNING,
-                runtime_control=reset_runtime_control_state(),
-            )
-        else:
-            current_status = await sync_to_async(
-                lambda: AgentRun.objects.filter(pk=run_record.pk).values("status", "runtime_control").first()
-            )()
-            run = run_record
-            if not current_status:
-                self.run_record = run
-                return run
-            if current_status["status"] == AgentRun.STATUS_STOPPED or is_runtime_stop_requested(current_status["runtime_control"]):
-                self.run_record = run
-                return run
-            await sync_to_async(self._update_run)(
-                run,
-                agent=self.agent if self.agent.pk else None,
-                server=primary_server,
-                user=self.user,
-                status=AgentRun.STATUS_RUNNING,
-                ai_analysis="",
-                commands_output=[],
-                duration_ms=0,
-                completed_at=None,
-                total_iterations=0,
-                connected_servers=[],
-                runtime_control=reset_runtime_control_state(),
-                pending_question="",
-                final_report="",
-                plan_tasks=[],
-                orchestrator_log=[],
-                started_at=timezone.now(),
-            )
-        self.run_record = run
-        register_engine(run.id, getattr(self.agent, "id", None), self)
-        self._control_task = asyncio.create_task(self._watch_runtime_control())
-        await self._sync_runtime_control()
-        t0 = time.monotonic()
-
-        self.session = AgentSessionManager(
-            allowed_servers=self.servers,
-            max_connections=self.agent.max_connections or 5,
-            command_timeout=30,
-            event_callback=self.event_callback,
-            available_skills=[skill.to_detail_dict() for skill in self.skills],
-            sudo_policy=self.permission_engine.sudo_policy,
-        )
-
-        plan_tasks: list[dict] = []
-        orchestrator_log: list[dict] = []
-
-        try:
-            if self.skill_policy_errors:
-                raise RuntimeError(
-                    "Invalid skill policy configuration: "
-                    + "; ".join(self.skill_policy_errors)
-                )
-            await self._emit("agent_status", {"status": "connecting"})
-
-            if self.servers:
-                if self.agent.allow_multi_server:
-                    for srv in self.servers:
-                        try:
-                            await self.session.open(srv)
-                        except Exception as exc:
-                            logger.warning("Failed to connect to {}: {}", srv.name, exc)
-                else:
-                    await self.session.open(primary_server)
-
-            loaded_mcp_tools, self.mcp_tool_errors = await load_mcp_bindings(self._mcp_runtime_provider, self.mcp_servers)
-            if self.allowed_tool_names is None:
-                self.mcp_tools = loaded_mcp_tools
-                self.disabled_mcp_tools = set()
-            else:
-                self.mcp_tools = {
-                    name: binding for name, binding in loaded_mcp_tools.items() if name in self.allowed_tool_names
-                }
-                self.disabled_mcp_tools = set(loaded_mcp_tools) - set(self.mcp_tools)
-            self.tool_registry = ToolRegistry.from_sources(
-                self.enabled_tools,
-                self.mcp_tools,
-                agent_tools=AGENT_TOOLS,
-            )
-            self.ops_prompt_context = await self._build_ops_prompt_context()
-
-            connected = self.session.get_connected_info()
-            await sync_to_async(self._update_run)(run, connected_servers=[
-                {"server_id": c["server_id"], "server_name": c["server_name"]}
-                for c in connected
-            ])
-
-            if not self.session.connections and not self.mcp_tools and not self.skills:
-                raise RuntimeError("No servers connected, no MCP tools available, and no skills attached.")
-
-            goal = self.agent.goal or self.agent.ai_prompt or "Analyse the servers."
-
-            # ----------------------------------------------------------------
-            # Phase 1: Orchestrator creates the plan
-            # ----------------------------------------------------------------
-            await self._emit("agent_status", {"status": "planning"})
-            await self._emit("agent_pipeline_phase", {"phase": "planning", "message": "Orchestrator is creating a task plan…"})
-
-            plan_tasks = await self._plan(goal, orchestrator_log)
-
-            await sync_to_async(self._update_run)(run, plan_tasks=plan_tasks, orchestrator_log=orchestrator_log)
-            await self._emit("agent_plan", {"tasks": plan_tasks})
-
-            if plan_only:
-                # Stop here — wait for human approval
-                run.status = AgentRun.STATUS_PLAN_REVIEW
-                run.plan_tasks = plan_tasks
-                run.orchestrator_log = orchestrator_log
-                run.duration_ms = int((time.monotonic() - t0) * 1000)
-                await sync_to_async(run.save)()
-                await self._emit("agent_status", {"status": "plan_review"})
-                await self._emit("agent_pipeline_phase", {
-                    "phase": "plan_review",
-                    "message": "План готов. Ожидаем подтверждения пользователя…",
-                })
-                return run
-
-            # ----------------------------------------------------------------
-            # Phase 2: Execute tasks sequentially (with optional replan on failure)
-            # ----------------------------------------------------------------
-            deadline = time.monotonic() + self.session_timeout
-            await execute_plan_tasks(
-                goal=goal,
-                plan_tasks=plan_tasks,
-                orchestrator_log=orchestrator_log,
-                deadline=deadline,
-                callbacks=self._build_plan_execution_callbacks(run),
-                skip_completed=True,
-            )
-
-            # ----------------------------------------------------------------
-            # Phase 3: Synthesize final report
-            # ----------------------------------------------------------------
-            await self._emit("agent_pipeline_phase", {"phase": "synthesizing", "message": "Generating final report…"})
-            final_report = await self._synthesize(goal, plan_tasks, orchestrator_log)
-            final_report = await self.hook_manager.run_finished(
-                final_report,
-                self.permission_engine.verification_summary(),
-            )
-
-            final_status = AgentRun.STATUS_COMPLETED
-            if self._stop_requested:
-                final_status = AgentRun.STATUS_STOPPED
-            elif any(t["status"] == "failed" for t in plan_tasks):
-                final_status = AgentRun.STATUS_COMPLETED  # partial success still completes
-
-            run.status = final_status
-            run.plan_tasks = plan_tasks
-            run.orchestrator_log = orchestrator_log
-            run.total_iterations = sum(len(t.get("iterations", [])) for t in plan_tasks)
-            run.final_report = final_report
-            run.ai_analysis = final_report
-            run.completed_at = timezone.now()
-            run.duration_ms = int((time.monotonic() - t0) * 1000)
-            await sync_to_async(run.save)()
-            await self._persist_ops_summary(
-                run=run,
-                final_status=final_status,
-                final_report=final_report,
-                plan_tasks=plan_tasks,
-            )
-            await deliver_agent_report_async(run)
-
-            await sync_to_async(self._touch_agent_last_run)()
-            await self._emit("agent_status", {"status": final_status})
-            await self._emit("agent_report", {"text": final_report, "interim": False})
-
-        except Exception as exc:
-            logger.exception("MultiAgentEngine error: {}", exc)
-            run.status = AgentRun.STATUS_FAILED
-            run.ai_analysis = f"Pipeline failed: {exc}"
-            run.plan_tasks = plan_tasks
-            run.orchestrator_log = orchestrator_log
-            run.completed_at = timezone.now()
-            run.duration_ms = int((time.monotonic() - t0) * 1000)
-            await sync_to_async(run.save)()
-            await self._persist_ops_summary(
-                run=run,
-                final_status=run.status,
-                final_report=run.ai_analysis,
-                plan_tasks=plan_tasks,
-            )
-            await deliver_agent_report_async(run)
-            await self._emit("agent_status", {"status": "failed", "error": str(exc)})
-        finally:
-            unregister_engine(run.id, self)
-            if self._control_task:
-                self._control_task.cancel()
-                with suppress(asyncio.CancelledError):
-                    await self._control_task
-                self._control_task = None
-            self._loop = None
-            if self.session:
-                await self.session.close_all()
-
-        return run
+        return await run_multi_agent_engine(self, plan_only=plan_only, run_record=run_record)
 
     async def execute_existing_plan(self, run: AgentRun) -> AgentRun:
-        """Execute Phase 2 + 3 for an existing plan_review run.
-
-        Called after the user approves the plan. Re-opens SSH connections and
-        runs task execution starting from the saved plan_tasks.
-        """
-        self._loop = asyncio.get_running_loop()
-        current_status = await sync_to_async(
-            lambda: AgentRun.objects.filter(pk=run.pk).values("status", "runtime_control").first()
-        )()
-        if not current_status:
-            self.run_record = run
-            return run
-        if current_status["status"] == AgentRun.STATUS_STOPPED or is_runtime_stop_requested(current_status["runtime_control"]):
-            self.run_record = run
-            return run
-        self.run_record = run
-        register_engine(run.id, getattr(self.agent, "id", None), self)
-        self._control_task = asyncio.create_task(self._watch_runtime_control())
-        await self._sync_runtime_control()
-        plan_tasks: list[dict] = list(run.plan_tasks or [])
-        orchestrator_log: list[dict] = list(run.orchestrator_log or [])
-        primary_server = self.servers[0]
-        t0 = time.monotonic()
-
-        self.session = AgentSessionManager(
-            allowed_servers=self.servers,
-            max_connections=self.agent.max_connections or 5,
-            command_timeout=30,
-            event_callback=self.event_callback,
-            sudo_policy=self.permission_engine.sudo_policy,
-        )
-
-        try:
-            await self._emit("agent_status", {"status": "connecting"})
-
-            if self.agent.allow_multi_server:
-                for srv in self.servers:
-                    try:
-                        await self.session.open(srv)
-                    except Exception as exc:
-                        logger.warning("Failed to connect to {}: {}", srv.name, exc)
-            else:
-                await self.session.open(primary_server)
-
-            if not self.session.connections:
-                raise RuntimeError("No servers connected.")
-
-            self.tool_registry = ToolRegistry.from_sources(
-                self.enabled_tools,
-                self.mcp_tools,
-                agent_tools=AGENT_TOOLS,
-            )
-            self.ops_prompt_context = await self._build_ops_prompt_context()
-            # Mark as running
-            await sync_to_async(self._update_run)(run, status=AgentRun.STATUS_RUNNING)
-            await self._emit("agent_status", {"status": "running"})
-            await self._emit("agent_pipeline_phase", {"phase": "executing", "message": "Выполняю задачи пайплайна…"})
-
-            goal = self.agent.goal or self.agent.ai_prompt or "Analyse the servers."
-
-            # ----------------------------------------------------------------
-            # Phase 2: Execute tasks sequentially (with optional replan on failure)
-            # ----------------------------------------------------------------
-            deadline = time.monotonic() + self.session_timeout
-            await execute_plan_tasks(
-                goal=goal,
-                plan_tasks=plan_tasks,
-                orchestrator_log=orchestrator_log,
-                deadline=deadline,
-                callbacks=self._build_plan_execution_callbacks(run),
-                skip_completed=True,
-            )
-
-            # ----------------------------------------------------------------
-            # Phase 3: Synthesize final report
-            # ----------------------------------------------------------------
-            await self._emit("agent_pipeline_phase", {"phase": "synthesizing", "message": "Generating final report…"})
-            final_report = await self._synthesize(goal, plan_tasks, orchestrator_log)
-            final_report = await self.hook_manager.run_finished(
-                final_report,
-                self.permission_engine.verification_summary(),
-            )
-
-            final_status = AgentRun.STATUS_COMPLETED
-            if self._stop_requested:
-                final_status = AgentRun.STATUS_STOPPED
-            elif any(t["status"] == "failed" for t in plan_tasks):
-                final_status = AgentRun.STATUS_COMPLETED
-
-            run.status = final_status
-            run.plan_tasks = plan_tasks
-            run.orchestrator_log = orchestrator_log
-            run.total_iterations = sum(len(t.get("iterations", [])) for t in plan_tasks)
-            run.final_report = final_report
-            run.ai_analysis = final_report
-            run.completed_at = timezone.now()
-            run.duration_ms = int((run.duration_ms or 0) + (time.monotonic() - t0) * 1000)
-            await sync_to_async(run.save)()
-            await self._persist_ops_summary(
-                run=run,
-                final_status=final_status,
-                final_report=final_report,
-                plan_tasks=plan_tasks,
-            )
-            await deliver_agent_report_async(run)
-
-            await sync_to_async(self._touch_agent_last_run)()
-            await self._emit("agent_status", {"status": final_status})
-            await self._emit("agent_report", {"text": final_report, "interim": False})
-
-        except Exception as exc:
-            logger.exception("MultiAgentEngine execute_existing_plan error: {}", exc)
-            run.status = AgentRun.STATUS_FAILED
-            run.ai_analysis = f"Pipeline failed: {exc}"
-            run.plan_tasks = plan_tasks
-            run.orchestrator_log = orchestrator_log
-            run.completed_at = timezone.now()
-            run.duration_ms = int((run.duration_ms or 0) + (time.monotonic() - t0) * 1000)
-            await sync_to_async(run.save)()
-            await self._persist_ops_summary(
-                run=run,
-                final_status=run.status,
-                final_report=run.ai_analysis,
-                plan_tasks=plan_tasks,
-            )
-            await deliver_agent_report_async(run)
-            await self._emit("agent_status", {"status": "failed", "error": str(exc)})
-        finally:
-            unregister_engine(run.id, self)
-            if self._control_task:
-                self._control_task.cancel()
-                with suppress(asyncio.CancelledError):
-                    await self._control_task
-                self._control_task = None
-            self._loop = None
-            if self.session:
-                await self.session.close_all()
-
-        return run
+        return await execute_existing_multi_agent_plan(self, run)
 
     # ------------------------------------------------------------------
     # Phase 1: Planning
     # ------------------------------------------------------------------
 
     async def _plan(self, goal: str, orchestrator_log: list) -> list[dict]:
-        """Call orchestrator LLM to decompose goal into tasks."""
-        connected = self.session.get_connected_info()
-        servers_desc = "\n".join(f"- {c['server_name']} (id: {c['server_id']})" for c in connected)
-        custom_system = self.agent.system_prompt or ""
-        materials_prompt = build_agent_materials_prompt(self.agent.input_artifacts)
-        skills_desc = self._skill_provider.build_skill_catalog_description(self.skills) if self._skill_provider else ""
-        role_options = "\n".join(
-            f"- {slug}: {spec.title}; фокус: {', '.join(spec.focus_areas)}"
-            for slug, spec in ROLE_SPECS.items()
-            if slug != "custom"
-        )
-        skill_errors = ""
-        if self.skill_errors:
-            skill_errors = "\nSkills с ошибками:\n" + "\n".join(f"- {item}" for item in self.skill_errors)
-
-        system_prompt = f"""Ты — мастер-оркестратор DevOps-агентов. Твоя задача — разбить цель на конкретные задачи для исполнительных агентов.
-Каждый агент умеет: выполнять SSH-команды, читать файлы, проверять сервисы, анализировать логи.
-Отвечай ТОЛЬКО валидным JSON-массивом. Без пояснений до или после JSON.
-{self.ops_prompt_context}
-{custom_system}
-{materials_prompt}
-
-Подключённые серверы:
-{servers_desc}
-
-Attached skills:
-{skills_desc or "- Skills не подключены"}
-{skill_errors}
-
-Правила декомпозиции:
-- Максимум {MAX_PLAN_TASKS} задач
-- Каждая задача должна быть самодостаточной и конкретной
-- Используй русский язык для имён и описаний
-- Порядок задач важен — они выполняются последовательно
-- Каждая задача должна быть выполнима за 5-7 SSH-команд максимум
-- Если attached skills содержат runtime guardrails, учитывай их как обязательные ограничения
-
-Доступные subagent roles:
-{role_options}"""
-
-        user_msg = f"""Цель: {goal}
-
-Верни JSON-массив задач в формате:
-[
-  {{
-    "name": "Краткое название задачи",
-    "description": "Что именно нужно сделать, какие команды запустить, что проверить",
-    "role": "incident_commander|deploy_operator|infra_scout|log_investigator|security_patrol|post_change_verifier|watcher_daemon|custom"
-  }},
-  ...
-]"""
-
-        orchestrator_log.append({"role": "system", "content": system_prompt, "timestamp": timezone.now().isoformat()})
-        orchestrator_log.append({"role": "user", "content": user_msg, "timestamp": timezone.now().isoformat()})
-
-        response = await self._call_llm_raw(system_prompt, user_msg)
-        orchestrator_log.append({"role": "assistant", "content": response, "timestamp": timezone.now().isoformat()})
-
-        tasks = parse_plan_response(
-            response,
-            max_tasks=MAX_PLAN_TASKS,
-            fallback_goal=self.agent.goal or self.agent.ai_prompt,
-        )
-        return self._prepare_plan_tasks(tasks)
+        return await plan_multi_agent_tasks(self, goal, orchestrator_log)
 
     def _prepare_plan_tasks(self, tasks: list[dict]) -> list[dict]:
         return prepare_plan_tasks(
@@ -710,189 +283,10 @@ Attached skills:
     # ------------------------------------------------------------------
 
     async def _run_task(self, task: dict, context_summary: str, deadline: float) -> tuple[str, list]:
-        """Run a single task with a mini ReAct loop. Returns (result_summary, iterations_list)."""
-        task_subagent = self._build_task_subagent(task)
-        task_runtime = await prepare_multi_agent_task_runtime(
-            task,
-            task_subagent,
-            memory_store=self.memory_store,
-            servers=self.servers,
-        )
-        task_role_spec = task_runtime.role_spec
-        task_permission_engine = task_runtime.permission_engine
-        task_tool_registry = task_runtime.tool_registry
-        task_tool_names = task_runtime.tool_names
-        task_max_iterations = task_runtime.max_iterations
-
-        prompt = build_multi_agent_task_prompt(
-            task=task,
-            role_spec=task_role_spec,
-            subagent_prompt_context=self._build_subagent_prompt_context(task_subagent),
-            agent_input_artifacts=self.agent.input_artifacts,
-            connected_servers=self.session.get_connected_info(),
-            tool_names=task_tool_names,
-            mcp_runtime_provider=self._mcp_runtime_provider,
-            mcp_tools=self.mcp_tools,
-            skill_provider=self._skill_provider,
-            skills=self.skills,
-            mcp_tool_errors=self.mcp_tool_errors,
-            skill_errors=self.skill_errors,
-            sudo_policy=task_permission_engine.sudo_policy,
-            max_iterations=task_max_iterations,
-            context_summary=context_summary,
-        )
-        history = prompt.history
-
-        iterations: list[dict] = []
-        final_answer = ""
-        await self._emit("agent_subagent_start", {
-            "task_id": task["id"],
-            "role": task_role_spec.slug,
-            "title": task_runtime.title,
-            "permission_mode": task_permission_engine.mode,
-            "tool_names": list(task_tool_names),
-            "max_iterations": task_max_iterations,
-        })
-
-        for iteration in range(1, task_max_iterations + 1):
-            if self._stop_requested:
-                raise RuntimeError("Stopped by user")
-            if time.monotonic() > deadline:
-                raise RuntimeError("Session timeout")
-
-            await self._pause_event.wait()
-
-            await self._emit("agent_status", {"status": "thinking", "task_id": task["id"], "iteration": iteration})
-
-            llm_response = await self._call_llm_history(history)
-            if not llm_response:
-                break
-
-            thought, action_name, action_args = self._parse_response(llm_response)
-            task["thought"] = thought  # update current thought for live display
-
-            iter_entry = build_task_iteration_entry(
-                iteration=iteration,
-                thought=thought,
-                action_name=action_name,
-                action_args=action_args,
-            )
-
-            await self._emit("agent_task_iteration", build_iteration_thought_event(task["id"], iter_entry))
-
-            if action_name is None:
-                verification_summary = task_permission_engine.verification_summary()
-                if task_permission_engine.pending_verifications:
-                    event = record_verification_blocked_iteration(
-                        task=task,
-                        iterations=iterations,
-                        entry=iter_entry,
-                        verification_summary=verification_summary,
-                    )
-                    await self._emit("agent_task_iteration", event)
-                    append_verification_blocked_history(
-                        history=history,
-                        llm_response=llm_response,
-                        verification_summary=verification_summary,
-                        hook_manager=self.hook_manager,
-                    )
-                    continue
-
-                final_answer = thought or llm_response
-                record_final_answer_iteration(
-                    task=task,
-                    iterations=iterations,
-                    entry=iter_entry,
-                    verification_summary=verification_summary,
-                )
-                history.append({"role": "assistant", "content": llm_response})
-                break
-
-            if action_name == "ask_user":
-                question = action_args.get("question", "Нужна помощь пользователя")
-                if self.run_record:
-                    await sync_to_async(self._update_run)(
-                        self.run_record,
-                        status=AgentRun.STATUS_WAITING,
-                        pending_question=question,
-                    )
-                await self._emit("agent_status", {"status": "waiting"})
-                answer = await self._wait_for_user_reply()
-                if self.run_record:
-                    await sync_to_async(self._update_run)(
-                        self.run_record, status=AgentRun.STATUS_RUNNING, pending_question="",
-                    )
-                observation = f"Пользователь ответил: {answer}"
-            else:
-                observation = await self._execute_tool(
-                    action_name,
-                    action_args,
-                    permission_engine=task_permission_engine,
-                    tool_registry=task_tool_registry,
-                    allowed_tool_names=task_tool_names,
-                )
-
-            await self._emit(
-                "agent_task_iteration",
-                record_observed_iteration(
-                    task=task,
-                    iterations=iterations,
-                    entry=iter_entry,
-                    observation=observation,
-                ),
-            )
-            append_observation_history(
-                history=history,
-                llm_response=llm_response,
-                observation=observation,
-                hook_manager=self.hook_manager,
-            )
-
-            # Save live iterations to DB
-            if self.run_record:
-                plan_tasks_copy = merge_task_update_into_plan_tasks(self.run_record.plan_tasks or [], task)
-                await sync_to_async(self._update_run)(self.run_record, plan_tasks=plan_tasks_copy)
-
-        if not final_answer:
-            if task_permission_engine.pending_verifications:
-                raise RuntimeError(task_permission_engine.verification_summary())
-            # Synthesize from iterations if no explicit final answer
-            final_answer = await self._summarize_task(task, iterations)
-
-        task["verification_summary"] = task_permission_engine.verification_summary()
-        await self._emit("agent_subagent_done", {
-            "task_id": task["id"],
-            "role": task_role_spec.slug,
-            "verification_summary": task["verification_summary"],
-            "pending_verifications": sorted(task_permission_engine.pending_verifications),
-        })
-        return final_answer, iterations
+        return await run_multi_agent_task(self, task, context_summary, deadline)
 
     async def _summarize_task(self, task: dict, iterations: list[dict]) -> str:
-        """Ask LLM to summarize task results if no explicit final answer was given."""
-        obs_summary = "\n".join(
-            f"Шаг {it['iteration']} ({it.get('action', 'N/A')}): {it.get('observation', '')[:300]}"
-            for it in iterations
-        )
-        prompt = f"""Кратко суммируй результат выполнения задачи.
-Задача: {task['name']}
-Описание: {task['description']}
-
-Выполненные шаги:
-{obs_summary}
-
-Дай краткий вывод (2-4 предложения) о том, что было сделано и каков результат."""
-        provider = LLMProvider()
-        chunks = []
-        with self._audit_scope():
-            async for chunk in provider.stream_chat(
-                prompt,
-                model=self.model_preference,
-                specific_model=self.specific_model,
-                purpose="opssummary",
-            ):
-                chunks.append(chunk)
-        return "".join(chunks)
+        return await summarize_multi_agent_task(self, task, iterations)
 
     # ------------------------------------------------------------------
     # Phase 2.5: Error handling
@@ -905,229 +299,27 @@ Attached skills:
         all_tasks: list[dict],
         orchestrator_log: list,
     ) -> dict:
-        """Ask orchestrator LLM what to do after a task failure."""
-        done_tasks = [t for t in all_tasks if t["status"] == "done"]
-        pending_tasks = [t for t in all_tasks if t["status"] == "pending"]
-
-        system_prompt = """Ты — оркестратор агентного пайплайна. Одна из задач завершилась с ошибкой.
-Реши, что делать дальше. Ответь ТОЛЬКО валидным JSON-объектом без пояснений."""
-
-        timeout_hint = ""
-        if "Session timeout" in error or "session timeout" in error.lower():
-            timeout_hint = (
-                "\n\nВажно: при ошибке «Session timeout» лимит времени сессии исчерпан. "
-                "Лучше выбрать \"replan\" — перепланировать оставшуюся работу (меньше/проще задач), чтобы уложиться во время и довести цель до конца."
-            )
-
-        user_msg = f"""Задача, которая упала: {failed_task['name']}
-Описание: {failed_task['description']}
-Ошибка: {error}
-
-Уже выполнено задач: {len(done_tasks)}
-Осталось задач: {len(pending_tasks)}
-{timeout_hint}
-
-Доступные действия:
-- "replan"   — перепланировать: составить НОВЫЙ план оставшихся задач с учётом сделанного и ошибок (меньше задач, проще формулировки), чтобы достичь цели
-- "retry"    — повторить эту задачу ещё раз
-- "skip"     — пропустить и продолжить со следующей задачей
-- "ask_user" — спросить пользователя (нужно поле "message" с вопросом)
-- "abort"    — прервать весь пайплайн (нужно поле "reason")
-
-Верни JSON:
-{{"action": "replan"|"retry"|"skip"|"ask_user"|"abort", "reason": "...", "message": "..."}}"""
-
-        orchestrator_log.append({"role": "user", "content": user_msg, "timestamp": timezone.now().isoformat()})
-        response = await self._call_llm_raw(system_prompt, user_msg)
-        orchestrator_log.append({"role": "assistant", "content": response, "timestamp": timezone.now().isoformat()})
-
-        return parse_decision_response(response)
+        return await handle_multi_agent_failure(self, failed_task, error, all_tasks, orchestrator_log)
 
     async def _replan(self, goal: str, plan_tasks: list[dict], orchestrator_log: list) -> list[dict]:
-        """Ask orchestrator to produce a new plan for remaining work (full picture: done, failed, pending)."""
-        done_tasks = [t for t in plan_tasks if t["status"] == "done"]
-        failed_or_skipped = [t for t in plan_tasks if t["status"] in ("failed", "skipped")]
-        pending_tasks = [t for t in plan_tasks if t["status"] == "pending"]
-
-        done_block = "\n".join(
-            f"- {t['name']}: { (t.get('result') or '')[:300]}"
-            for t in done_tasks
-        ) or "(нет)"
-        failed_block = "\n".join(
-            f"- {t['name']}: ошибка — {t.get('error', '')[:200]}"
-            for t in failed_or_skipped
-        ) or "(нет)"
-        pending_block = "\n".join(
-            f"- {t['name']}: {t.get('description', '')[:200]}"
-            for t in pending_tasks
-        ) or "(нет)"
-
-        system_prompt = """Ты — оркестратор. Нужно перепланировать оставшуюся работу с учётом полной картины.
-Учитывай уже выполненное, провалы и ограничения (например нехватка времени). Составь НОВЫЙ короткий план задач, чтобы достичь исходной цели.
-Отвечай ТОЛЬКО валидным JSON-массивом задач. Без пояснений до или после JSON."""
-
-        user_msg = f"""Цель пайплайна: {goal}
-
-Уже выполнено (результаты):
-{done_block}
-
-Провалено или пропущено (ошибки):
-{failed_block}
-
-Не начато по старому плану:
-{pending_block}
-
-Составь НОВЫЙ план — только те задачи, которые ОСТАЛОСЬ выполнить для достижения цели. Учитывай сделанное (не дублируй). Для проваленного — упрости или объедини задачи. Сократи число задач (макс. {MAX_PLAN_TASKS}), чтобы уложиться во время. Каждая задача — конкретные команды/шаги.
-
-Формат ответа — JSON-массив:
-[
-  {{"name": "Краткое название", "description": "Что сделать"}},
-  ...
-]"""
-
-        orchestrator_log.append({"role": "user", "content": user_msg, "timestamp": timezone.now().isoformat()})
-        response = await self._call_llm_raw(system_prompt, user_msg)
-        orchestrator_log.append({"role": "assistant", "content": response, "timestamp": timezone.now().isoformat()})
-
-        tasks = parse_plan_response(
-            response,
-            max_tasks=MAX_PLAN_TASKS,
-            fallback_goal=self.agent.goal or self.agent.ai_prompt,
-        )
-        return self._prepare_plan_tasks(tasks[:MAX_PLAN_TASKS])
+        return await replan_multi_agent_tasks(self, goal, plan_tasks, orchestrator_log)
 
     # ------------------------------------------------------------------
     # Phase 3: Final synthesis
     # ------------------------------------------------------------------
 
     async def _synthesize(self, goal: str, plan_tasks: list[dict], orchestrator_log: list) -> str:
-        """Generate the final consolidated report."""
-        task_summaries = []
-        for task in plan_tasks:
-            status_emoji = {"done": "✅", "failed": "❌", "skipped": "⏭️", "running": "⚠️"}.get(task["status"], "❓")
-            result_text = task.get("result", "") or task.get("error", "Нет данных")
-            task_summaries.append(f"{status_emoji} **{task['name']}**: {result_text[:400]}")
-
-        tasks_block = "\n\n".join(task_summaries)
-        tasks_table = build_tasks_table(plan_tasks)
-
-        system_prompt = """Ты — старший технический аналитик. Создай профессиональный деловой отчёт в формате Markdown.
-Язык: русский. Стиль: чёткий, структурированный, без воды. Только факты и конкретные данные.
-
-ПРАВИЛА ФОРМАТИРОВАНИЯ:
-- В отчёте секция «Результаты по задачам» уже заполнена готовой таблицей — НЕ переписывай и НЕ меняй её.
-- Списки — через дефис (-), без лишних отступов.
-- Не повторяй одно и то же в разных секциях."""
-
-        user_msg = f"""Создай финальный отчёт по результатам работы агентного пайплайна.
-
-Цель пайплайна: {goal}
-
-Результаты задач (для контекста):
-{tasks_block}
-
-Сгенерируй отчёт СТРОГО в следующем формате. Секцию «Результаты по задачам» оформи ТОЧНО так (скопируй таблицу как есть):
-
-# [Название — кратко суть результата]
-
-> [Одно предложение — главный итог пайплайна]
-
-## Итог
-
-[3–4 предложения: общий результат, статус системы, ключевые выводы]
-
-## Результаты по задачам
-
-{tasks_table}
-
-## Ключевые находки
-
-- **[Категория]:** [Факт с конкретными данными — цифры, имена, версии]
-- **[Категория]:** [...]
-
-## Проблемы и риски
-
-- [Проблема — что обнаружено и почему важно]
-- [Если критических проблем нет — написать: Критических проблем не обнаружено]
-
-## Рекомендации
-
-1. [Конкретное действие — что именно сделать]
-2. [Следующий шаг]
-
----
-
-**Статус пайплайна:** ✅ Успех / ⚠️ Частичный успех / ❌ Ошибка"""
-
-        orchestrator_log.append({"role": "user", "content": user_msg, "timestamp": timezone.now().isoformat()})
-        provider = LLMProvider()
-        chunks = []
-        try:
-            with self._audit_scope():
-                async for chunk in provider.stream_chat(
-                    f"[SYSTEM]\n{system_prompt}\n\n[USER]\n{user_msg}",
-                    model=self.model_preference,
-                    specific_model=self.specific_model,
-                    purpose="opssummary",
-                ):
-                    chunks.append(chunk)
-                    if chunks and len(chunks) % 20 == 0:
-                        await self._emit("agent_report", {"text": "".join(chunks), "interim": True})
-            result = "".join(chunks)
-            orchestrator_log.append({"role": "assistant", "content": result, "timestamp": timezone.now().isoformat()})
-            # Подставляем гарантированно корректную таблицу «Результаты по задачам»
-            result = inject_tasks_table_into_report(result, tasks_table)
-            return result
-        except Exception as exc:
-            logger.error("Synthesis failed: {}", exc)
-            fallback = f"# Отчёт пайплайна\n\n## Результаты по задачам\n\n{tasks_table}\n\n*Ошибка генерации финального отчёта: {exc}*"
-            return fallback
+        return await synthesize_multi_agent_report(self, goal, plan_tasks, orchestrator_log)
 
     # ------------------------------------------------------------------
     # LLM helpers
     # ------------------------------------------------------------------
 
     async def _call_llm_raw(self, system_prompt: str, user_msg: str) -> str:
-        """Call LLM with explicit system/user messages. Raises on failure."""
-        prompt = f"[SYSTEM]\n{system_prompt}\n\n[USER]\n{user_msg}"
-        provider = LLMProvider()
-        chunks = []
-        try:
-            with self._audit_scope():
-                async for chunk in provider.stream_chat(
-                    prompt,
-                    model=self.model_preference,
-                    specific_model=self.specific_model,
-                    purpose="opsplan",
-                ):
-                    chunks.append(chunk)
-        except Exception as exc:
-            logger.error("Orchestrator LLM call failed: {}", exc)
-            raise
-        return "".join(chunks)
+        return await call_multi_agent_llm_raw(self, system_prompt, user_msg)
 
     async def _call_llm_history(self, history: list[dict]) -> str:
-        """Call LLM with a history list. Raises on failure."""
-        parts = []
-        for msg in history:
-            role = msg["role"].upper()
-            parts.append(f"[{role}]\n{msg['content']}")
-        prompt = "\n\n".join(parts)
-        provider = LLMProvider()
-        chunks = []
-        try:
-            with self._audit_scope():
-                async for chunk in provider.stream_chat(
-                    prompt,
-                    model=self.model_preference,
-                    specific_model=self.specific_model,
-                    purpose="ops",
-                ):
-                    chunks.append(chunk)
-        except Exception as exc:
-            logger.error("Task LLM call failed: {}", exc)
-            raise
-        return "".join(chunks)
+        return await call_multi_agent_llm_history(self, history)
 
     # ------------------------------------------------------------------
     # Response parsing
@@ -1173,38 +365,7 @@ Attached skills:
         )
 
     async def _build_ops_prompt_context(self) -> str:
-        cards = []
-        server_ids: list[int] = []
-        group_ids: list[int] = []
-        for server in self.servers[:3]:
-            server_ids.append(server.id)
-            if getattr(server, "group_id", None):
-                group_ids.append(server.group_id)
-            try:
-                cards.append(await self.memory_store.get_server_card(server.id))
-            except Exception as exc:
-                logger.debug("Failed to load memory card for server {}: {}", getattr(server, "id", "?"), exc)
-        server_memory_prompt = render_server_cards_prompt(cards, max_cards=3, max_records=6)
-        self.server_memory_prompt = server_memory_prompt
-        recipes_query = "\n".join(
-            part for part in [self.agent.goal or self.agent.ai_prompt or "", *self.role_spec.focus_areas] if part
-        )
-        self.operational_recipes_prompt = await self.memory_store.build_operational_recipes_prompt(
-            recipes_query,
-            server_ids=server_ids,
-            group_ids=list(dict.fromkeys(group_ids)),
-            limit=5,
-        )
-        tool_registry_prompt = self.tool_registry.build_prompt_slice(limit=10) if self.tool_registry else ""
-        return build_ops_prompt_context(
-            role_spec=self.role_spec,
-            permission_mode=self.permission_engine.mode,
-            server_memory_prompt=server_memory_prompt,
-            operational_recipes_prompt=self.operational_recipes_prompt,
-            tool_registry_prompt=tool_registry_prompt,
-            max_iterations=MAX_TASK_ITERATIONS,
-            session_timeout=self.session_timeout,
-        )
+        return await build_multi_agent_ops_prompt_context(self)
 
     async def _persist_ops_summary(
         self,
@@ -1214,27 +375,13 @@ Attached skills:
         final_report: str,
         plan_tasks: list[dict],
     ):
-        if not getattr(run, "pk", None):
-            return
-        flat_iterations = []
-        for task in plan_tasks:
-            for item in task.get("iterations", [])[-2:]:
-                flat_iterations.append(item)
-        tool_calls = [
-            {"tool": item.get("action"), "result": item.get("observation", "")}
-            for item in flat_iterations
-            if item.get("action")
-        ]
-        payload = build_run_summary_payload(
+        await persist_multi_agent_ops_summary(
+            self,
             run=run,
-            role_slug=self.role_spec.slug,
             final_status=final_status,
             final_report=final_report,
-            iterations=flat_iterations,
-            tool_calls=tool_calls,
-            verification_summary=self.permission_engine.verification_summary(),
+            plan_tasks=plan_tasks,
         )
-        await self.memory_store.append_run_summary(run.pk, payload)
 
     # ------------------------------------------------------------------
     # Runtime control

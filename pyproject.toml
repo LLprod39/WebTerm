@@ -88,15 +88,3 @@ config_filename = ".importlinter"
 # standard limit.
 [tool.architecture.legacy_baselines]
 "servers/consumers/ssh_terminal.py" = 2426
-"key_mcp.py" = 1304
-"tests/test_servers_api_smoke.py" = 1188
-"servers/multi_agent_engine.py" = 1322
-"tests/test_ops_agent_kernel.py" = 1293
-"servers/models.py" = 1301
-"studio/keycloak_provisioning.py" = 1167
-"studio/services/pipeline_assistant.py" = 1070
-"tests/test_studio_node_executors.py" = 962
-"servers/agent_engine.py" = 961
-"tests/test_studio_api_smoke.py" = 891
-"tests/test_studio_pipeline_v2.py" = 879
-"mars/services.py" = 1169

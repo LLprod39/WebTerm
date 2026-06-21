@@ -8,24 +8,10 @@ This report captures architecture and maintainability risks found in the current
 
 - `python scripts\check_architecture_sizes.py --strict-new` passes: import boundaries and size guard are green.
 - `.importlinter` has no `ignore_imports` entries; all declared import-boundary contracts are exception-free.
-- `[tool.architecture.legacy_baselines]` still pins 13 large files in `pyproject.toml`.
+- `[tool.architecture.legacy_baselines]` still pins 1 large file in `pyproject.toml`.
 - The guard prevents legacy files from growing above their pins; below-limit files should be removed from this table only after `python scripts\check_architecture_sizes.py --strict-new` proves they pass without the pin.
 - Largest current files include:
   - `servers/consumers/ssh_terminal.py` - 2426 lines.
-  - `servers/multi_agent_engine.py` - 1322 lines.
-  - `key_mcp.py` - 1304 lines.
-  - `servers/models.py` - 1301 lines.
-  - `tests/test_ops_agent_kernel.py` - 1293 lines.
-  - `tests/test_servers_api_smoke.py` - 1188 lines.
-  - `mars/services.py` - 1169 lines.
-  - `studio/keycloak_provisioning.py` - 1167 lines.
-  - `studio/services/pipeline_assistant.py` - 1070 lines.
-  - `tests/test_studio_node_executors.py` - 962 lines.
-  - `servers/agent_engine.py` - 961 lines.
-  - `tests/test_studio_api_smoke.py` - 891 lines.
-  - `tests/test_studio_pipeline_v2.py` - 879 lines.
-  - `studio/docker_service_recovery.py` - 858 lines.
-  - `studio/demo_showcase.py` - 840 lines.
 - `frontend/src/pages/AgentRunPage.tsx` is now 430 lines and removed from legacy baselines; pipeline, flow-node, report, timeline, status badge, task-edit modal, formatter, and page-local type modules live under `frontend/src/pages/agent-run/`.
 - `frontend/src/pages/AgentsPage.tsx` is now 291 lines and removed from legacy baselines; the create/edit wizard dialog lives in `frontend/src/pages/agents-page/CreateAgentDialog.tsx`.
 - `frontend/src/pages/AgentConfigPage.tsx` is now 455 lines and removed from legacy baselines; core settings plus access/integration/visibility form sections live in `frontend/src/pages/agent-config/AgentFormAccessSections.tsx`.
@@ -51,6 +37,18 @@ This report captures architecture and maintainability risks found in the current
 - `studio/demo_showcase.py` is now a 131-line facade and removed from legacy baselines; incident/content/detective showcase graph definitions live in focused `studio/demo_showcase_*.py` modules, and the incident demo graph now uses an explicit merge for rejected/timeout approval branches.
 - `studio/models.py` is now 496 lines and removed from legacy baselines; Django model classes stay in the original module for ORM/migration stability, while model serialization, pipeline trigger sync, template instantiation, and monitoring-filter normalization live in focused helper/service modules.
 - `studio/docker_service_recovery.py` is now an 89-line facade and removed from legacy baselines; shell command builders, recovery graph assembly, pre-approval nodes, and recovery-loop nodes live in focused `studio/docker_service_recovery_*.py` modules.
+- `tests/test_studio_pipeline_v2.py` is now 355 lines and removed from legacy baselines; API run, generated graph, schedule, validation, and shared harness coverage live in focused `tests/test_studio_pipeline_v2_*.py` modules.
+- `tests/test_studio_api_smoke.py` is now 412 lines and removed from legacy baselines; pipeline-assistant smoke scenarios and shared API smoke helpers live in focused `tests/test_studio_pipeline_assistant_smoke.py` and `tests/studio_api_smoke_harness.py`.
+- `tests/test_studio_node_executors.py` is now 177 lines and removed from legacy baselines; runtime coverage fixtures, logic nodes, human/Telegram interaction nodes, and SSH/LLM/MCP integration node tests live in focused `tests/studio_node_executor_harness.py` and `tests/test_studio_*_node_executors.py` modules.
+- `tests/test_servers_api_smoke.py` is now 267 lines and removed from legacy baselines; memory API, monitoring/watcher API, agent run/schedule API, and shared server API smoke helpers live in focused `tests/test_servers_*_api*.py` modules.
+- `tests/test_ops_agent_kernel.py` is now 307 lines and removed from legacy baselines; memory store core, pattern-learning, and lifecycle/dream coverage live in focused `tests/test_ops_agent_memory_*.py` modules.
+- `studio/keycloak_provisioning.py` is now a 113-line compatibility facade and removed from legacy baselines; Keycloak constants/tool lists, prompt builders, provisioning graph assembly, and ops graph assembly live in focused `studio/keycloak_*` modules.
+- `studio/services/pipeline_assistant.py` is now a 191-line compatibility surface and removed from legacy baselines; assistant catalog aliases, prompt/context normalization, graph-reference repair, and graph-patch sanitation live in focused `studio/services/pipeline_assistant_*` modules.
+- `servers/agent_engine.py` is now 409 lines and removed from legacy baselines; the main run loop and tool execution/argument validation live in focused `servers/agent_engine_runner.py` and `servers/agent_engine_tools.py` modules while `AgentEngine` remains the public API surface.
+- `mars/services.py` is now 308 lines and removed from legacy baselines; CLI/Docker runtime helpers, interview question normalization, and Codex interview execution live in focused `mars/runtime_cli.py`, `mars/interview_questions.py`, and `mars/interview_codex.py` modules.
+- `servers/multi_agent_engine.py` is now a 469-line compatibility coordinator and removed from legacy baselines; lifecycle execution, planning/report synthesis, task mini-ReAct execution, LLM calls, and memory summary context live in focused `servers/multi_agent_*` modules.
+- `key_mcp.py` is now a 483-line compatibility entry point and removed from legacy baselines; Keycloak admin client core, user/client/group operations, shared client support, and non-role handlers live in focused `key_mcp_client*.py` and `key_mcp_handlers.py` modules.
+- `servers/models.py` is now a 67-line compatibility export and removed from legacy baselines; group, inventory, knowledge, monitoring, memory, and agent ORM classes live in focused `servers/models_*.py` modules while Django model discovery and public imports still go through `servers.models`.
 - `frontend/src/components/pipeline/nodes/nodeMeta.tsx` is now 191 lines and removed from legacy baselines; node guidance metadata and shared metadata types live in focused `nodeGuidanceMeta.ts` and `nodeMetaTypes.ts` modules.
 - `servers/services/terminal_ai/prompts.py` is now 469 lines and removed from legacy baselines; prompt sanitisation lives in `servers/services/terminal_ai/prompt_safety.py`, while report, output-explanation, and memory-extraction prompt builders live in `servers/services/terminal_ai/prompt_reporting.py`.
 - `frontend/src/pages/StudioDraftsPage.tsx` is now 374 lines and removed from legacy baselines; draft payload helpers, queue rendering, graph wrapper, composer, review actions, and mobile tabs live under `frontend/src/pages/studio-drafts/`.
@@ -368,7 +366,7 @@ Evidence:
 - `servers/agent_tools.py:218-348` declares `tool_spec` metadata next to every built-in agent tool implementation.
 - `app/agent_kernel/tools/registry.py:61-79` builds `ToolSpec` from declared metadata before considering compatibility inference.
 - `app/agent_kernel/tools/registry.py:86-99` receives the built-in agent tool source as an explicit dependency instead of importing `servers.agent_tools`.
-- `servers/agent_engine.py:327-331` and `servers/multi_agent_engine.py:300-304`, `567-571` inject `AGENT_TOOLS` at the server-runtime boundary.
+- `servers/agent_engine_runner.py` and `servers/multi_agent_engine_runner.py` inject `AGENT_TOOLS` at the server-runtime boundary.
 - `app/agent_kernel/tools/registry.py:105-113` keeps name-based inference only as a logged compatibility fallback for undeclared built-in tools and generic MCP bindings.
 - `tests/test_agent_tool_registry.py:5-37` asserts built-in metadata is mandatory and declared metadata wins over legacy name inference.
 
@@ -417,22 +415,25 @@ Recommended direction:
 - Add a parity checklist for each new node: manifest, validation, dry-run, production execution, redaction, policy, tests.
 - Retire compatibility aliases only after call-site search proves they are unused.
 
-### 9. Partially Mitigated: Multi-Agent Engine Still Owns Run Finalization and Mini ReAct Logic
+### 9. Mitigated: Multi-Agent Engine Is Now a Compatibility Coordinator
 
 Evidence:
 
-- `servers/multi_agent_engine.py:223-435` still owns top-level run setup, planning, final synthesis, report delivery, and cleanup.
-- `servers/multi_agent_engine.py:437-580` still owns existing-plan connection setup, final synthesis, report delivery, and cleanup.
-- `servers/multi_agent_engine.py:712-870` still owns the mini ReAct task loop.
+- `servers/multi_agent_engine.py` is now 469 lines, below the standard architecture limit, and no longer appears in `[tool.architecture.legacy_baselines]`.
+- `servers/multi_agent_engine_runner.py` owns normal run and approved-plan lifecycle setup, MCP/tool registry loading, plan execution handoff, finalization, report delivery, and cleanup.
+- `servers/multi_agent_planning.py` owns plan generation, failure decisions, replanning, and final report synthesis.
+- `servers/multi_agent_task_runner.py` owns the mini ReAct task loop and ask-user task flow.
+- `servers/multi_agent_llm.py` owns orchestrator/task LLM calls.
+- `servers/multi_agent_memory.py` owns ops prompt memory context and compact run-summary persistence.
 - `servers/multi_agent_plan_executor.py:24-132` now owns the shared plan-task execution control flow used by both normal `run()` and approved `execute_existing_plan()` paths: completed/skipped task filtering, pause/stop/timeout checks, task start/done/failure events, persistence callbacks, replan restart, ask-user waiting state, and retry handling.
 - `servers/multi_agent_run_state.py:18-75` now owns shared task lifecycle helpers used by both run loops: skipped/running/done/failed/stopped task mutation, task start/done/failure event payloads, context-summary result/user-answer chunks, replanned task id assignment, and session-timeout retry-deadline calculation.
 - `servers/multi_agent_subagents.py:13-122` now owns plan-task preparation, task subagent construction, fallback no-registry subagents, tool-slice selection, and subagent prompt context construction.
-- `servers/multi_agent_engine.py:648-674` keeps compatibility methods for plan-task preparation and subagent prompt context, but delegates their behavior to `servers.multi_agent_subagents`.
+- `servers/multi_agent_engine.py` keeps compatibility methods for plan-task preparation and subagent prompt context, but delegates their behavior to `servers.multi_agent_subagents`.
 - `servers/multi_agent_task_setup.py:12-87` now owns task runtime setup: role/permission/tool metadata application, subagent metadata merging, task-specific operational recipe query construction, server/group recipe scope selection, and memory-store recipe prompt loading.
 - `servers/multi_agent_task_iterations.py:15-132` now owns task-iteration entry/event helpers, observation/final/verification-blocked state updates, observation-history message appends, verification-blocked continuation wording, observation truncation limits, and live `plan_tasks` merge helpers for persistence.
 - `servers/multi_agent_task_prompts.py:15-113` now owns task-agent prompt assembly: connected-server text, tool/MCP description filtering by task tool slice, skill catalog text, operator-provided materials, MCP/skill error blocks, sudo-policy instruction text, prior-task context, and initial chat history.
 - `servers/multi_agent_tool_execution.py:17-149` now owns the per-tool execution boundary: subagent tool-slice checks, tool-registry lookup, permission decisions, sudo argument preparation, sandbox validation, MCP skill-policy application, MCP success recording, built-in tool dispatch, and post-tool hooks.
-- `servers/multi_agent_engine.py:1144-1173` keeps the compatibility `_execute_tool` method, but delegates behavior to `execute_multi_agent_tool`.
+- `servers/multi_agent_engine.py` keeps the compatibility `_execute_tool` method, but delegates behavior to `execute_multi_agent_tool`.
 - `tests/test_multi_agent_run_state.py:20-87` covers shared task lifecycle status/event mutations, legacy stopped/timeout reason strings, context-summary formats, replanned task id assignment, and timeout-only retry deadline extension.
 - `tests/test_multi_agent_subagents.py:36-94` covers legacy task shape without a registry, subagent metadata/tool filtering with a registry, and task-specific recipe prompt precedence.
 - `tests/test_multi_agent_task_setup.py:26-139` covers task runtime metadata merging, deterministic recipe query/scope construction, recipe prompt loading/skipping, and the combined runtime preparation path.
@@ -443,35 +444,34 @@ Evidence:
 
 SOLID / Clean Code impact:
 
-- SRP risk is lower for shared task lifecycle/context/replan state, common plan execution control flow, role/tool slicing, task runtime setup/recipe loading, task-iteration state/history/persistence helpers, task-agent prompt construction, subagent prompt context construction, and per-tool execution because those behaviors are now isolated and unit-testable without a running `MultiAgentEngine`.
-- SRP risk remains in the top-level run methods and mini ReAct loop, which still mix connection setup, LLM calls, run finalization, report delivery, and runtime control.
-- OCP risk remains for adding new orchestration modes or subagent lifecycle behaviors because most execution policy still routes through one large class.
+- SRP risk is now materially lower: lifecycle orchestration, planning/reporting, task execution, LLM access, memory context, plan execution, task runtime setup, prompt construction, task-iteration state, and tool execution each have focused modules.
+- OCP improves because new planning strategies, task-loop policies, memory providers, or report synthesis behavior can be added around the focused service modules instead of expanding the compatibility class.
 
 Future problem:
 
-- Adding new multi-agent modes or plugin-driven subagents can still regress verification gating, event ordering, final synthesis, or run status persistence unless the remaining engine-owned phases are split behind narrower services.
+- Plugin-driven subagents still need a formal extension contract. Without manifests, registry hooks, lifecycle hooks, and isolation rules, new plugin behavior can still drift into service modules ad hoc.
 
 Recommended direction:
 
-- Continue extracting multi-agent execution phases around task mini-ReAct execution, failure/replan decisions, final synthesis, and report delivery.
 - Keep `MultiAgentEngine` as the compatibility coordinator and push new subagent behavior into focused modules first.
+- Add an explicit plugin contract layer before marketing multi-agent extensions as fully plug-and-play.
 
 ### 10. Partially Mitigated: Test Files Are Also Becoming God Files
 
 Evidence:
 
-- `tests/test_servers_api_smoke.py` is 1188 lines after moving host-key, agent-control, and knowledge/master-password API coverage out.
+- `tests/test_servers_api_smoke.py` is 267 lines after moving host-key, agent-control, knowledge/master-password, memory, monitoring/watcher, and agent-run API coverage out.
 - `tests/test_servers_host_key_api.py:1-121` now owns trusted-host-key update/test/refresh-sharing coverage.
 - `tests/test_servers_agent_control_api.py:1-430` now owns agent CRUD/run/control, runtime reply sync, live-engine-free reply/stop, targeted stop, and queued-dispatch cancellation coverage.
 - `tests/test_servers_knowledge_api.py:1-293` now owns server sharing, master-password, knowledge, memory snapshot CRUD/bulk delete, memory policy, dream-run, and reveal-password endpoint coverage.
-- `tests/test_studio_node_executors.py` is 962 lines after moving agent-node, output-node, and ops-node coverage out.
+- `tests/test_studio_node_executors.py` is 177 lines after moving runtime fixtures, logic-node, interaction-node, and SSH/LLM/MCP integration coverage out.
 - `tests/test_studio_agent_node_executors.py:1-121` now owns `agent/react` and `agent/multi` rendered-goal/runtime dispatch coverage.
 - `tests/test_studio_notification_node_executors.py:1-305` now owns `output/email` and `output/telegram` rendering, redaction, transport, and failure coverage.
 - `tests/test_studio_output_node_executors.py:1-244` now owns `output/report` and `output/webhook` summary, redaction, payload, and failure coverage.
 - `tests/test_studio_ops_node_executors.py:1-496` now owns `ops/server_snapshot`, `ops/log_query`, `ops/file_action`, `ops/package_action`, `ops/disk_cleanup`, `ops/backup_restore_check`, `ops/http_check`, and `ops/alert_update` runtime coverage.
-- `tests/test_ops_agent_kernel.py` is 1293 lines after moving SSH terminal manual-input compatibility coverage out.
+- `tests/test_ops_agent_kernel.py` is 307 lines after moving SSH terminal manual-input compatibility plus memory store core, pattern-learning, lifecycle, and dream coverage out.
 - `tests/test_ssh_terminal_manual_input_compat.py:1-89` now owns consumer-level manual terminal marker/persistence compatibility tests.
-- These are pinned in `pyproject.toml` legacy baselines.
+- Remaining oversized test files are pinned in `pyproject.toml` legacy baselines until split.
 
 SOLID / Clean Code impact:
 
