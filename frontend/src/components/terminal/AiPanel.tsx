@@ -74,6 +74,77 @@ const chatModeConfig: Record<AiChatMode, { label: string; desc: string }> = {
   },
 };
 
+const exposedChatModes: AiChatMode[] = ["ask", "agent"];
+const exposedExecutionModes: AiExecutionMode[] = ["fast", "agent"];
+
+function ChatModeSelector({
+  mode,
+  onChange,
+}: {
+  mode: AiChatMode;
+  onChange: (mode: AiChatMode) => void;
+}) {
+  return (
+    <div className="grid min-w-[132px] grid-cols-2 rounded-md border border-border/60 bg-background/50 p-0.5">
+      {exposedChatModes.map((item) => {
+        const config = chatModeConfig[item];
+        const active = mode === item;
+        return (
+          <button
+            key={item}
+            type="button"
+            title={config.desc}
+            aria-pressed={active}
+            onClick={() => onChange(item)}
+            className={`h-7 rounded px-2 text-[11px] font-medium transition-colors ${
+              active
+                ? "bg-secondary text-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+            }`}
+          >
+            {config.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ModeSelector({
+  mode,
+  onChange,
+}: {
+  mode: AiExecutionMode;
+  onChange: (mode: AiExecutionMode) => void;
+}) {
+  return (
+    <div className="grid min-w-[132px] grid-cols-2 rounded-md border border-border/60 bg-background/50 p-0.5">
+      {exposedExecutionModes.map((item) => {
+        const config = modeConfig[item];
+        const Icon = config.icon;
+        const active = mode === item;
+        return (
+          <button
+            key={item}
+            type="button"
+            title={config.desc}
+            aria-pressed={active}
+            onClick={() => onChange(item)}
+            className={`flex h-7 items-center justify-center gap-1 rounded px-2 text-[11px] font-medium transition-colors ${
+              active
+                ? "bg-secondary text-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+            }`}
+          >
+            <Icon className="h-3 w-3" />
+            <span>{config.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function AiPanel({
   onClose,
   onSend,

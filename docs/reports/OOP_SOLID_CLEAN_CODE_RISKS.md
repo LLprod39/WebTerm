@@ -8,10 +8,8 @@ This report captures architecture and maintainability risks found in the current
 
 - `python scripts\check_architecture_sizes.py --strict-new` passes: import boundaries and size guard are green.
 - `.importlinter` has no `ignore_imports` entries; all declared import-boundary contracts are exception-free.
-- `[tool.architecture.legacy_baselines]` still pins 1 large file in `pyproject.toml`.
-- The guard prevents legacy files from growing above their pins; below-limit files should be removed from this table only after `python scripts\check_architecture_sizes.py --strict-new` proves they pass without the pin.
-- Largest current files include:
-  - `servers/consumers/ssh_terminal.py` - 2426 lines.
+- `[tool.architecture.legacy_baselines]` is now empty in `pyproject.toml`; no current file is pinned as a size exception.
+- The guard prevents future over-limit files from entering the tree without an explicit baseline decision.
 - `frontend/src/pages/AgentRunPage.tsx` is now 430 lines and removed from legacy baselines; pipeline, flow-node, report, timeline, status badge, task-edit modal, formatter, and page-local type modules live under `frontend/src/pages/agent-run/`.
 - `frontend/src/pages/AgentsPage.tsx` is now 291 lines and removed from legacy baselines; the create/edit wizard dialog lives in `frontend/src/pages/agents-page/CreateAgentDialog.tsx`.
 - `frontend/src/pages/AgentConfigPage.tsx` is now 455 lines and removed from legacy baselines; core settings plus access/integration/visibility form sections live in `frontend/src/pages/agent-config/AgentFormAccessSections.tsx`.
@@ -49,6 +47,7 @@ This report captures architecture and maintainability risks found in the current
 - `servers/multi_agent_engine.py` is now a 469-line compatibility coordinator and removed from legacy baselines; lifecycle execution, planning/report synthesis, task mini-ReAct execution, LLM calls, and memory summary context live in focused `servers/multi_agent_*` modules.
 - `key_mcp.py` is now a 483-line compatibility entry point and removed from legacy baselines; Keycloak admin client core, user/client/group operations, shared client support, and non-role handlers live in focused `key_mcp_client*.py` and `key_mcp_handlers.py` modules.
 - `servers/models.py` is now a 67-line compatibility export and removed from legacy baselines; group, inventory, knowledge, monitoring, memory, and agent ORM classes live in focused `servers/models_*.py` modules while Django model discovery and public imports still go through `servers.models`.
+- `servers/consumers/ssh_terminal.py` is now a 77-line compatibility WebSocket consumer and removed from legacy baselines; connection lifecycle, session input, AI controls, AI plan helpers, queue execution, agent orchestration, agent support, stream IO, and compatibility lookups live in focused `servers/consumers/ssh_terminal_*.py` modules.
 - `frontend/src/components/pipeline/nodes/nodeMeta.tsx` is now 191 lines and removed from legacy baselines; node guidance metadata and shared metadata types live in focused `nodeGuidanceMeta.ts` and `nodeMetaTypes.ts` modules.
 - `servers/services/terminal_ai/prompts.py` is now 469 lines and removed from legacy baselines; prompt sanitisation lives in `servers/services/terminal_ai/prompt_safety.py`, while report, output-explanation, and memory-extraction prompt builders live in `servers/services/terminal_ai/prompt_reporting.py`.
 - `frontend/src/pages/StudioDraftsPage.tsx` is now 374 lines and removed from legacy baselines; draft payload helpers, queue rendering, graph wrapper, composer, review actions, and mobile tabs live under `frontend/src/pages/studio-drafts/`.
@@ -62,110 +61,63 @@ This report captures architecture and maintainability risks found in the current
 
 ## Findings
 
-### 1. Partially Mitigated: Legacy Baselines Can Hide Future SRP Regressions
+### 1. Fixed: Legacy Baselines No Longer Hide Size Regressions
 
 Evidence:
 
-- `pyproject.toml:89` starts the legacy baseline list.
-- Many files are still allowed to exceed the standard size limit, including terminal, API, frontend pages, tests, model config, and agent engines.
-- Baselines were lowered or removed during this review, so the guard will catch growth in the remaining pinned files and no longer accepts already-small files as legacy exceptions.
-- `docs/architecture/README.md` says large legacy files are pinned and should not grow.
+- `pyproject.toml:89` keeps `[tool.architecture.legacy_baselines]`, but the table is empty.
+- `python scripts\check_architecture_sizes.py --strict-new` passes without any pinned large files.
+- Previously pinned backend, frontend, and test files now sit under the standard architecture limit through focused modules or compatibility facades.
 
 SOLID / Clean Code impact:
 
-- Single Responsibility Principle risk: large files often mix orchestration, state, rendering, persistence, and integration logic.
-- Open/Closed Principle risk: new behavior is likely to be added to existing large files instead of new extension points.
-- Clean Code risk: reviewers may treat a green guard as "done" even when the design still has large compatibility centers.
+- Single Responsibility Principle risk is materially lower because large compatibility centers were split into smaller owner modules.
+- Open/Closed Principle risk is lower for common extension paths because providers, terminal AI behavior, Keycloak MCP operations, multi-agent execution, model groups, and frontend workflows now have narrower module boundaries.
+- Clean Code risk is still not zero: future changes can reintroduce large files if new extension points are bypassed.
 
 Future problem:
 
-- The project can pass guard while still being hard to extend. New plugin or provider work may land in already-large files because those files remain accepted compatibility surfaces.
+- A green guard does not automatically create a full plugin platform. New plugin/provider work still needs explicit contracts, registries, and hook points instead of ad-hoc additions to compatibility facades.
 
 Recommended direction:
 
-- Keep lowering baselines after every split.
-- Add a short owner comment for each remaining baseline: why it exists, what owns the next extraction, and what condition removes it.
+- Keep `[tool.architecture.legacy_baselines]` empty by default.
+- If a temporary baseline is ever reintroduced, add an owner, removal condition, and focused follow-up task in the same change.
+- For plugin work, add stable extension contracts first, then wire feature modules through those contracts.
 
-### 2. Partially Mitigated: SSH Terminal Consumer Is Still a Large Stateful Object
+### 2. Mitigated: SSH Terminal Consumer Is Now a Compatibility Shell
 
 Evidence:
 
-- `servers/consumers/ssh_terminal.py:81` defines `SSHTerminalConsumer`.
-- `servers/consumers/ssh_terminal.py:98-119` declares many `_ai_*` state fields.
-- `servers/services/terminal_ai/session.py:96` now stores per-request forbidden command patterns alongside the plan queue and run context.
-- `servers/services/terminal_ai/session.py:179` now owns initial plan installation, including cursor reset, next-id tracking, and forbidden-pattern request state.
-- `servers/services/terminal_ai/session.py:255-433` now owns parallel-batch snapshot/cursor advancement, next-command preparation, current-command completion, explicit plan-index completion, remaining-command skip, and stop transitions for queued commands.
-- `servers/services/terminal_ai/legacy_state.py:10-47` owns transitional sync helpers between legacy consumer `_ai_*` request-state fields and `TerminalAiSession`.
-- `servers/services/terminal_ai/plan_insertions.py:11-43` now owns retry/adaptive plan-item reservation helpers, including retry-count registration and adaptive-step limit accounting.
-- `servers/services/terminal_ai/run_controller.py:9-72` now owns the asyncio lock, active AI task, user-reply futures, and shared ask-user send/wait/cleanup flow.
-- `servers/services/terminal_ai/active_command.py:12-68` now owns active PTY command id, exit-future lookup/resolution/cancel cleanup, bounded active-output capture, tail projection, and active-command clear behavior.
-- `servers/services/terminal_ai/pty_command.py:29-143` now owns PTY marker-future waiting, streaming timeout fallback, install-progress monitoring, install-error interrupt callbacks, task cleanup, and active-output tail return for interactive Terminal AI commands.
-- `servers/services/terminal_ai/recovery.py:10-433` now owns recovery retry limits, recovery-action normalization, retry-candidate projection, recovery question/abort text defaults, retry-candidate insertion, fast-mode error-recovery orchestration, and step-mode post-command orchestration through consumer-compatible owner hooks.
-- `servers/services/terminal_ai/queue_completion.py:22-94` now owns final done-item snapshotting, auto-report generation, report status emission, dry-run report labeling, execution-history summary writes, memory candidate projection, and memory-extraction task spawning.
-- `servers/services/terminal_events.py:44-145` now owns common Terminal AI WebSocket event builders for status, error, response, command status, parallel-batch status, install progress, direct output, reports, recovery, and questions.
-- `servers/services/terminal_direct_execution.py:16-57` now owns non-PTY direct command execution: SSH channel run, timeout-to-124 mapping, stdout/stderr merging, output truncation, null-exit fallback, and direct-output event emission.
-- `servers/services/terminal_parallel_batch.py:20-96` now owns parallel direct-command batch execution: batch start/done events, per-item running/done events, dry-run direct-output previews, pre-execution snapshots, concurrent direct execution, command-history writes, unavailable-command recording, and explicit plan-index completion callbacks.
-- `servers/services/terminal_manual_input.py:15-177` now owns manual terminal input capture orchestration: capture-buffer updates, editor intercept cancellation/event payloads, single-command marker injection, immediate persistence for commands that cannot be marker-wrapped, manual command activity logging, and pending-command queue bookkeeping.
-- `servers/services/terminal_agent_context.py:158-207` now owns authorised terminal-agent extra-target connection setup: ACL lookup, master-password fallback, secret resolution, connect-kwargs construction, `asyncssh.connect`, and best-effort failure handling.
-- `servers/services/terminal_manual_command_state.py:14-15` now routes Terminal AI output capture through the active-command helper instead of mutating `_ai_active_*` fields directly.
-- `servers/consumers/ssh_terminal.py:592-602` now delegates manual terminal input handling to `servers.services.terminal_manual_input`.
-- `servers/consumers/ssh_terminal.py:701-719` now delegates `ai_stop` pending-skip selection to `TerminalAiSession`.
-- `servers/consumers/ssh_terminal.py:721-734` now uses `TerminalAiSession.clear()` for cancel-path queue/request-state reset.
-- `servers/consumers/ssh_terminal.py:761-799` now uses `TerminalAiSession.reset_for_new_request()` when starting a new AI turn.
-- `servers/consumers/ssh_terminal.py` now delegates AI task start/cancel, active-task checks, current-task cleanup, `ai_reply` future resolution, and repeated `ai_question` wait/cleanup handling to `TerminalAiRunController`.
-- `servers/consumers/ssh_terminal.py` now delegates active PTY command registration, exit-future lifecycle, interrupt lookup, active-output tail reads, and clear/cancel cleanup to `servers.services.terminal_ai.active_command`.
-- `servers/consumers/ssh_terminal.py` now delegates PTY command completion waiting, install-progress event emission, install-error interrupts, streaming timeout fallback, and cleanup of command helper tasks to `servers.services.terminal_ai.pty_command`.
-- `servers/consumers/ssh_terminal.py` now delegates recovery-attempt gating, recovery-action normalization, retry-command validation, recovery text defaults, retry-item insertion/event emission, user-question retry follow-up, abort event emission, fast-mode recovery exception handling, adaptive step insertion, step-mode goal completion, and step-mode post-command exception handling to `servers.services.terminal_ai.recovery`.
-- `servers/consumers/ssh_terminal.py` now delegates queue cursor mutation for blocked/confirm/running/done/goal-achieved transitions to `TerminalAiSession`.
-- `servers/consumers/ssh_terminal.py` now delegates per-run id allocation and retry/adaptive queue insertion positions to `TerminalAiSession`.
-- `servers/consumers/ssh_terminal.py` now delegates retry/adaptive plan-item reservations to `servers.services.terminal_ai.plan_insertions`.
-- `servers/consumers/ssh_terminal.py` now delegates recovery remaining-command projections and report/memory done-item projections to `TerminalAiSession`.
-- `servers/consumers/ssh_terminal.py` now delegates initial plan installation to `TerminalAiSession.load_plan()`.
-- `servers/consumers/ssh_terminal.py` now delegates dry-run report labeling and command execution summary formatting to `servers.services.terminal_ai.reporter`.
-- `servers/consumers/ssh_terminal.py` now delegates post-queue report/history/memory side effects to `servers.services.terminal_ai.queue_completion`.
-- `servers/consumers/ssh_terminal.py` now delegates exit-127 unavailable-command extraction to `servers.services.terminal_ai.command_outcome`.
-- `servers/consumers/ssh_terminal.py` now delegates parallel-batch selection and cursor advancement to `TerminalAiSession`.
-- `servers/consumers/ssh_terminal.py` now delegates parallel-batch plan item completion to `TerminalAiSession.mark_plan_index_done()`, which rejects negative indices instead of relying on Python list indexing.
-- `servers/consumers/ssh_terminal.py:1613-1645` now keeps a compatibility `_execute_parallel_batch` method that delegates batch execution behavior to `servers.services.terminal_parallel_batch`.
-- `servers/consumers/ssh_terminal.py` now constructs standard Terminal AI status, error, response, and direct-output events through `servers.services.terminal_events` instead of ad-hoc dictionaries.
-- `servers/consumers/ssh_terminal.py:1039-1093` now delegates `ai_confirm` and `ai_cancel` queue mutations to `TerminalAiSession`.
-- `servers/consumers/ssh_terminal.py:1973-1986` now keeps only a compatibility `_open_agent_target_conn` delegate for agent extra-target SSH connection setup.
-- `servers/consumers/ssh_terminal.py:327-379` routes many WebSocket message types.
-- `servers/consumers/ssh_terminal.py:761`, `1317`, `1571`, and `1763` show AI request handling, queue execution, direct command compatibility delegation, and agent mode in the same class.
-- `tests/test_terminal_ai_session_queue.py` covers per-run id allocation, retry/adaptive insertion positions, next-command preparation, completion, skip-remaining transitions, remaining-command projections, and done-item projections.
-- `tests/test_terminal_ai_session.py` covers confirm/cancel/stop current-command state transitions, request reset, cancel clear, and the session lifecycle.
-- `tests/test_terminal_ai_legacy_state.py` covers legacy consumer attribute sync/apply behavior separately from the session state-machine tests.
-- `tests/test_terminal_ai_reporter_memory.py` covers report status, fallback reports, dry-run report labeling, execution summary formatting, and memory helper behavior.
-- `tests/test_terminal_ai_command_outcome.py` covers unavailable-command extraction for command-not-found outcomes.
-- `tests/test_terminal_ai_run_controller.py` covers task start/cancel/current-task cleanup, reply-future lifecycle, and ask-user timeout cleanup.
-- `tests/test_terminal_ai_active_command.py` covers active-command initialization, registration, future resolution/pop/cancel cleanup, bounded output capture, tail projection, and guarded clear behavior.
-- `tests/test_terminal_ai_pty_command.py` covers PTY marker-future completion cleanup, active-output tail return, install-progress last-line events, and install-error interrupt callbacks.
-- `tests/test_terminal_ai_recovery.py` covers recovery gating, action normalization, retry candidate projection, retry-item insertion/event emission, recovery text defaults, fast-mode retry/ask/abort/no-op orchestration, step-mode retry/next/done/abort orchestration, and the `_no_recovery=True` retry-item regression.
-- `tests/test_terminal_ai_queue_completion.py` covers auto-report event emission, history writes, memory-extraction task spawning, no-op behavior without a user message, and disabled report/memory settings.
-- `tests/test_terminal_ai_plan_insertions.py` covers retry/adaptive item reservation, retry-count registration, and adaptive-step limit handling.
-- `tests/test_terminal_events.py` covers the shared Terminal AI event builders, including parallel-batch payloads.
-- `tests/test_terminal_manual_input.py:71-121` covers manual input marker injection, immediate no-marker persistence for unfinished shell syntax, and editor command intercept behavior.
-- `tests/test_ssh_terminal_manual_input_compat.py:60-89` keeps the consumer compatibility path covered for manual terminal marker injection, output persistence, and multiline no-marker fallback.
-- `tests/test_terminal_direct_execution.py:30-94` covers service-level direct execution event emission, timeout mapping, and empty-command short-circuit behavior.
-- `tests/test_terminal_parallel_batch.py:41-121` covers service-level parallel batch execution, dry-run remote-execution bypass, per-item plan-index completion, and unavailable-command recording.
-- `tests/test_exec_direct.py:72-177` keeps the consumer compatibility delegate covered for stdout/stderr handling, non-zero exits, timeouts, no-connection errors, truncation, null exit status, and PTY isolation.
+- `servers/consumers/ssh_terminal.py` is now a small compatibility WebSocket class that preserves the public `SSHTerminalConsumer` import path and state annotations.
+- Focused consumer mixins now own the former large-method groups:
+  - `servers/consumers/ssh_terminal_lifecycle.py` owns connection setup, dispatch, run ids, send helpers, and heartbeat behavior.
+  - `servers/consumers/ssh_terminal_session_ops.py` owns interactive input, manual command capture, resize, interrupt, and Nova session context behavior.
+  - `servers/consumers/ssh_terminal_ai_controls.py` owns AI request, confirm/cancel/stop, memory clear, and execution-mode handling.
+  - `servers/consumers/ssh_terminal_ai_tools.py` owns explain/report handlers, history, and plan-item helpers.
+  - `servers/consumers/ssh_terminal_ai_execution.py` owns queue execution, PTY/direct command execution, parallel batch dispatch, and command-error handling.
+  - `servers/consumers/ssh_terminal_agent_runner.py` owns agent run orchestration.
+  - `servers/consumers/ssh_terminal_agent_support.py` owns agent extras, memory context, reports, memory extraction, profile saving, and confirm policy helpers.
+  - `servers/consumers/ssh_terminal_io.py` owns SSH cleanup, stream reads, marker filtering, output buffers, process exit waiting, persistence, and async DB helper hooks.
+  - `servers/consumers/ssh_terminal_compat.py` preserves historical module-level monkeypatch/extension lookups.
+- Existing service extractions remain in place for terminal AI state, active commands, PTY command waiting, recovery, reporting, queue completion, event payloads, direct execution, parallel batches, manual input, stream state, and agent target context.
+- Focused verification passed for `SSHTerminalConsumer` compatibility tests, terminal AI recovery/session/legacy-state tests, direct execution tests, manual input tests, Django system check, ruff, py_compile, and the architecture guard.
 
 SOLID / Clean Code impact:
 
-- SRP risk remains: one class still coordinates WebSocket protocol, SSH lifecycle, terminal input/output, AI planning, command execution, recovery, reporting, memory, audit, and redaction.
-- Queue cursor mutation, initial plan installation, parallel-batch selection/cursor advancement/item completion, parallel direct-command batch execution, retry/adaptive insertion positioning and reservation, retry gating/candidate projection/insertion, fast-mode recovery orchestration, step-mode post-command orchestration, per-run id allocation, remaining-command/done-item projections, post-queue report/history/memory side effects, report formatting, command-outcome classification, common event payload construction, non-PTY direct command execution, manual input capture/marker/persistence behavior, confirm/cancel/stop queue-state mutation, per-request forbidden patterns, new-request/cancel request-state reset, active AI task lifecycle, user reply futures, ask-user send/wait/cleanup flow, active PTY command future/output-tail state, PTY marker waiting, and install-progress monitoring are now isolated and unit-testable without a WebSocket consumer harness.
-- Interface Segregation risk: small features depend on a huge consumer surface instead of narrow ports.
-- Testability risk: async state transitions are hard to test without building a full consumer/SSH context.
+- The consumer still presents one compatibility class to Channels and existing tests, but behavior is split by responsibility.
+- New terminal AI behavior can now be placed near the relevant lifecycle, controls, execution, agent, or IO module instead of expanding a 2k+ line file.
+- The compatibility class keeps old private methods available through inheritance, which lowers migration risk while allowing gradual replacement with cleaner public service interfaces.
 
 Future problem:
 
-- Adding new terminal AI modes, approvals, or plugin-controlled terminal tools can create subtle regressions in lock handling, event order, cancellation, and memory/report side effects.
+- The terminal still has a large runtime state surface on the WebSocket object. That is acceptable for the current compatibility layer, but future plugin-style terminal features should prefer service contracts or event handlers instead of adding more `_ai_*` state fields.
 
 Recommended direction:
 
-- Continue expanding Terminal AI services so command execution and retry orchestration move out of `SSHTerminalConsumer` behind narrow callbacks.
-- Keep `SSHTerminalConsumer` focused on WebSocket transport and SSH stream plumbing.
-- Add state-machine tests around cancel/stop/confirm/retry/ask-user flows before deeper extraction.
+- Treat `SSHTerminalConsumer` as a transport/compatibility shell.
+- Add new Terminal AI or terminal-plugin behavior through focused service modules or explicit hook registries.
+- Keep compatibility exports in `ssh_terminal.py` only for existing integration points; new callers should target the focused module or service that owns the behavior.
 
 ### 3. Mitigated: Servers Page Is Below The Size Limit, But Still Coordinates Workflows
 

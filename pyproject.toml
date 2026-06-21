@@ -87,4 +87,3 @@ config_filename = ".importlinter"
 # grow.  Remove a file from this list once it has been refactored under the
 # standard limit.
 [tool.architecture.legacy_baselines]
-"servers/consumers/ssh_terminal.py" = 2426

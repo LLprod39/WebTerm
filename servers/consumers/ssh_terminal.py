@@ -7,8 +7,10 @@ import asyncio
 from typing import Any
 
 import asyncssh
+from channels.db import database_sync_to_async as database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
+from core_ui.activity import log_user_activity_async as log_user_activity_async
 from servers.consumers.ssh_terminal_agent_runner import SSHTerminalAgentRunnerMixin
 from servers.consumers.ssh_terminal_agent_support import SSHTerminalAgentSupportMixin
 from servers.consumers.ssh_terminal_ai_controls import SSHTerminalAiControlsMixin
@@ -23,6 +25,8 @@ from servers.services.terminal_ai.run_controller import TerminalAiRunController
 from servers.services.terminal_ai.session import TerminalAiSession
 
 _TermSize = terminal_input.TerminalSize
+
+__all__ = ["SSHTerminalConsumer", "database_sync_to_async", "log_user_activity_async"]
 
 
 class SSHTerminalConsumer(

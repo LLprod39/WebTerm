@@ -9,6 +9,7 @@ from channels.db import database_sync_to_async
 from loguru import logger
 
 from core_ui.activity import log_user_activity_async
+from servers.consumers.ssh_terminal_compat import consumer_module_attr
 from servers.models import Server
 from servers.services import terminal_input
 from servers.services.terminal_ai.active_command import (
@@ -38,6 +39,8 @@ _TermSize = terminal_input.TerminalSize
 
 class SSHTerminalIoMixin:
     async def _disconnect_ssh(self):
+        log_activity_async = consumer_module_attr("log_user_activity_async", log_user_activity_async)
+
         was_connected = bool(self._ssh_conn or self._ssh_proc)
 
         await self._stop_connection_heartbeat()
@@ -77,7 +80,7 @@ class SSHTerminalIoMixin:
             await self._safe_send_json({"type": "status", "status": "disconnected"})
 
         if was_connected and self.server and self._user_id:
-            await log_user_activity_async(
+            await log_activity_async(
                 user_id=self._user_id,
                 category="servers",
                 action="terminal_disconnect",
@@ -153,7 +156,17 @@ class SSHTerminalIoMixin:
         append_manual_output(self, text)
 
     async def _finalize_manual_terminal_command(self, cmd_id: int, exit_code: int) -> None:
-        await finalize_manual_terminal_command(self, cmd_id, exit_code, persist_result=database_sync_to_async(self._persist_manual_terminal_command_result, thread_sensitive=True))
+        sync_to_async = consumer_module_attr("database_sync_to_async", database_sync_to_async)
+
+        await finalize_manual_terminal_command(
+            self,
+            cmd_id,
+            exit_code,
+            persist_result=sync_to_async(
+                self._persist_manual_terminal_command_result,
+                thread_sensitive=True,
+            ),
+        )
 
     _normalize_manual_command_output = staticmethod(terminal_input.normalize_manual_command_output)
     _strip_ansi_and_controls = staticmethod(terminal_input.strip_ansi_and_controls)
