@@ -1,5 +1,7 @@
+import pytest
 from asgiref.sync import async_to_sync
 from django.core.management import call_command
+from django.core.management.base import CommandError
 
 from app.agent_kernel.domain.roles import get_role_spec, resolve_task_role_slug
 from app.agent_kernel.domain.specs import ToolSpec
@@ -57,12 +59,37 @@ def test_run_ops_supervisor_once_spawns_expected_workers(monkeypatch):
 
     monkeypatch.setattr("subprocess.Popen", DummyProcess)
 
-    call_command("run_ops_supervisor", "--once", "--with-watchers")
+    call_command("run_ops_supervisor", "--once", "--with-scheduled-agents", "--with-watchers")
 
     joined = [" ".join(args) for args in spawned]
     assert any("run_memory_dreams --once" in item for item in joined)
     assert any("run_agent_execution_plane --once" in item for item in joined)
+    assert any("run_agent_execution_plane --once --worker-key default" in item for item in joined)
+    assert any("run_scheduled_agents --once --worker-key default" in item for item in joined)
     assert any("run_watchers --once" in item for item in joined)
+
+def test_run_ops_supervisor_once_fails_when_child_worker_fails(monkeypatch):
+    class DummyProcess:
+        def __init__(self, args, **_kwargs):
+            self._args = list(args)
+            self._returncode = 7 if "run_agent_execution_plane" in self._args else 0
+
+        def wait(self, timeout=None):
+            return self._returncode
+
+        def poll(self):
+            return self._returncode
+
+        def terminate(self):
+            self._returncode = 0
+
+        def kill(self):
+            self._returncode = 0
+
+    monkeypatch.setattr("subprocess.Popen", DummyProcess)
+
+    with pytest.raises(CommandError, match="agent_execution=7"):
+        call_command("run_ops_supervisor", "--once")
 
 def test_terminal_memory_capture_filters_trivial_commands():
     commands = [

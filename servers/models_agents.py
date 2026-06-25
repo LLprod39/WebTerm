@@ -157,7 +157,7 @@ class AgentRun(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_RUNNING)
     commands_output = models.JSONField(default=list, help_text="[{cmd, stdout, stderr, exit_code, duration_ms}]")
     ai_analysis = models.TextField(blank=True)
-    duration_ms = models.IntegerField(default=0)
+    duration_ms = models.BigIntegerField(default=0)
     started_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)
 
@@ -188,6 +188,11 @@ class AgentRun(models.Model):
     )
     pending_question = models.TextField(blank=True, help_text="Question agent is waiting user to answer")
     final_report = models.TextField(blank=True, help_text="Final structured report from full agent")
+    report_payload = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Canonical structured report payload rendered by the agent run UI.",
+    )
 
     # Multi-agent pipeline fields
     plan_tasks = models.JSONField(
@@ -216,6 +221,43 @@ class AgentRun(models.Model):
         agent_name = self.agent.name if self.agent_id and self.agent else "Agent"
         server_name = self.server.name if self.server_id and self.server else "no-server"
         return f"{agent_name} on {server_name} [{self.status}]"
+
+
+class AgentRunArtifact(models.Model):
+    """Persisted report artifact generated from a completed agent run."""
+
+    run = models.ForeignKey(AgentRun, on_delete=models.CASCADE, related_name="artifacts")
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="agent_run_artifacts",
+        null=True,
+        blank=True,
+    )
+    artifact_key = models.CharField(max_length=80)
+    name = models.CharField(max_length=255)
+    artifact_type = models.CharField(max_length=40, default="JSON")
+    description = models.TextField(blank=True)
+    content_type = models.CharField(max_length=120, default="application/octet-stream")
+    content = models.TextField(blank=True)
+    size_bytes = models.BigIntegerField(default=0)
+    truncated = models.BooleanField(default=False)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name", "id"]
+        constraints = [
+            models.UniqueConstraint(fields=["run", "artifact_key"], name="uniq_agent_run_artifact_key"),
+        ]
+        indexes = [
+            models.Index(fields=["run", "artifact_key"]),
+            models.Index(fields=["user", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"run={self.run_id} {self.name}"
 
 
 class AgentRunDispatch(models.Model):

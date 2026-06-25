@@ -2,22 +2,47 @@
 Server agent run history, control, and task editing endpoints.
 """
 
+import io
 import json
+import zipfile
+from urllib.parse import quote
 
+from asgiref.sync import async_to_sync
 from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse
+from django.db.models import Q
+from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_http_methods
 
 from core_ui.decorators import require_feature
+from servers.agent_run_report import build_agent_run_events_payload, build_agent_run_report_response, refresh_agent_run_report_payload
 from servers.agent_dispatch import serialize_agent_dispatch
 from servers.agent_service import (
     approve_agent_plan_for_user,
     reply_to_agent_run_for_user,
     stop_agent_run_for_user,
 )
-from servers.models import AgentRun, AgentRunEvent, ServerAgent
-from servers.run_events import serialize_run_event
+from servers.report_delivery import deliver_agent_report_async
+from servers.models import AgentRun, AgentRunArtifact, AgentRunEvent, ServerAgent
 from servers.views.server_helpers import _accessible_servers_queryset
+
+
+def _owned_agent_run(user, run_id: int) -> AgentRun | None:
+    run = AgentRun.objects.filter(id=run_id, user=user).select_related("agent", "server").first()
+    if run:
+        return run
+    return AgentRun.objects.filter(id=run_id, agent__user=user).select_related("agent", "server").first()
+
+
+def _run_agent_name(run: AgentRun) -> str:
+    return run.agent.name if run.agent_id and run.agent else "Agent"
+
+
+def _run_agent_type(run: AgentRun) -> str:
+    return run.agent.agent_type if run.agent_id and run.agent else ""
+
+
+def _run_agent_mode(run: AgentRun) -> str:
+    return run.agent.mode if run.agent_id and run.agent else ""
 
 
 @login_required
@@ -55,18 +80,16 @@ def agent_runs(request, agent_id):
 @require_http_methods(["GET"])
 def agent_run_detail(request, run_id):
     """Single run detail (supports both mini and full agents)."""
-    run = AgentRun.objects.filter(id=run_id, user=request.user).select_related("agent", "server").first()
-    if not run:
-        run = AgentRun.objects.filter(id=run_id, agent__user=request.user).select_related("agent", "server").first()
+    run = _owned_agent_run(request.user, run_id)
     if not run:
         return JsonResponse({"success": False, "error": "Run not found"}, status=404)
 
     data = {
         "id": run.id,
         "agent_id": run.agent_id,
-        "agent_name": run.agent.name,
-        "agent_type": run.agent.agent_type,
-        "agent_mode": run.agent.mode,
+        "agent_name": _run_agent_name(run),
+        "agent_type": _run_agent_type(run),
+        "agent_mode": _run_agent_mode(run),
         "server_name": run.server.name if run.server_id else "?",
         "status": run.status,
         "ai_analysis": run.ai_analysis,
@@ -86,6 +109,105 @@ def agent_run_detail(request, run_id):
     }
 
     return JsonResponse({"success": True, "run": data})
+
+
+@login_required
+@require_feature("agents")
+@require_http_methods(["GET"])
+def agent_run_report(request, run_id):
+    """Canonical structured report for an agent run."""
+    run = _owned_agent_run(request.user, run_id)
+    if not run:
+        return JsonResponse({"success": False, "error": "Run not found"}, status=404)
+
+    return JsonResponse(build_agent_run_report_response(run))
+
+
+@login_required
+@require_feature("agents")
+@require_http_methods(["POST"])
+def agent_run_report_deliver(request, run_id):
+    """Retry external delivery for a completed agent report."""
+    run = _owned_agent_run(request.user, run_id)
+    if not run:
+        return JsonResponse({"success": False, "error": "Run not found"}, status=404)
+
+    payload = build_agent_run_report_response(run)
+    if not payload.get("report_state", {}).get("report_ready"):
+        return JsonResponse(
+            {
+                "success": False,
+                "error": "Report is not ready",
+                "report_state": payload.get("report_state", {}),
+                "delivery_state": payload.get("delivery_state", {}),
+            },
+            status=409,
+        )
+
+    async_to_sync(deliver_agent_report_async)(run)
+    run.refresh_from_db()
+    refresh_agent_run_report_payload(run)
+    return JsonResponse(build_agent_run_report_response(run))
+
+
+@login_required
+@require_feature("agents")
+@require_http_methods(["GET"])
+def agent_run_artifact_download(request, run_id, artifact_id):
+    """Download a persisted report artifact for an owned agent run."""
+    run = _owned_agent_run(request.user, run_id)
+    if not run:
+        return JsonResponse({"success": False, "error": "Run not found"}, status=404)
+
+    artifact = AgentRunArtifact.objects.filter(id=artifact_id, run=run).first()
+    if not artifact:
+        return JsonResponse({"success": False, "error": "Artifact not found"}, status=404)
+
+    filename = (artifact.name or "agent-run-artifact.txt").replace("\\", "_").replace("/", "_").replace('"', "")
+    response = HttpResponse(artifact.content or "", content_type=artifact.content_type or "application/octet-stream")
+    response["Content-Disposition"] = f"attachment; filename*=UTF-8''{quote(filename)}"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+@login_required
+@require_feature("agents")
+@require_http_methods(["GET"])
+def agent_run_artifacts_download_all(request, run_id):
+    """Download all persisted report artifacts for an owned agent run as a zip bundle."""
+    run = _owned_agent_run(request.user, run_id)
+    if not run:
+        return JsonResponse({"success": False, "error": "Run not found"}, status=404)
+
+    artifacts = list(AgentRunArtifact.objects.filter(run=run).order_by("name", "id"))
+    if not artifacts:
+        return JsonResponse({"success": False, "error": "Artifacts not found"}, status=404)
+
+    buffer = io.BytesIO()
+    used_names: set[str] = set()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for artifact in artifacts:
+            filename = (artifact.name or f"artifact-{artifact.id}.txt").replace("\\", "_").replace("/", "_").replace('"', "")
+            if not filename:
+                filename = f"artifact-{artifact.id}.txt"
+            base_name = filename
+            suffix = 2
+            while filename.lower() in used_names:
+                if "." in base_name:
+                    stem, ext = base_name.rsplit(".", 1)
+                    filename = f"{stem}-{suffix}.{ext}"
+                else:
+                    filename = f"{base_name}-{suffix}"
+                suffix += 1
+            used_names.add(filename.lower())
+            archive.writestr(filename, artifact.content or "")
+
+    buffer.seek(0)
+    filename = f"agent-run-{run.id}-artifacts.zip"
+    response = HttpResponse(buffer.getvalue(), content_type="application/zip")
+    response["Content-Disposition"] = f"attachment; filename*=UTF-8''{quote(filename)}"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 @login_required
@@ -175,7 +297,8 @@ def agent_run_events(request, run_id):
     if event_types:
         qs = qs.filter(event_type__in=event_types)
     total = qs.count()
-    events = [serialize_run_event(item) for item in qs[:limit]]
+    event_rows = list(qs[:limit])
+    events = build_agent_run_events_payload(run, event_rows=event_rows)
     return JsonResponse(
         {
             "success": True,
@@ -238,6 +361,7 @@ def agent_run_task_update(request, run_id, task_id):
 
     run.plan_tasks = tasks
     run.save(update_fields=["plan_tasks"])
+    refresh_agent_run_report_payload(run)
     return JsonResponse({"success": True, "plan_tasks": tasks})
 
 
@@ -324,6 +448,7 @@ def agent_run_task_ai_refine(request, run_id, task_id):
 
     run.plan_tasks = tasks
     run.save(update_fields=["plan_tasks"])
+    refresh_agent_run_report_payload(run)
 
     return JsonResponse({"success": True, "task": target, "plan_tasks": tasks})
 
@@ -340,14 +465,15 @@ def agent_dashboard_runs(request):
         AgentRun.STATUS_WAITING,
         AgentRun.STATUS_PLAN_REVIEW,
     ]
+    owned_runs = AgentRun.objects.filter(Q(user=request.user) | Q(agent__user=request.user)).distinct()
     active_runs = list(
-        AgentRun.objects.filter(agent__user=request.user, status__in=active_statuses)
+        owned_runs.filter(status__in=active_statuses)
         .select_related("agent", "server")
         .order_by("-started_at")[:10]
     )
     active_ids = {run.id for run in active_runs}
     recent_runs = list(
-        AgentRun.objects.filter(agent__user=request.user)
+        owned_runs
         .exclude(id__in=active_ids)
         .select_related("agent", "server")
         .order_by("-started_at")[:10]
@@ -357,9 +483,9 @@ def agent_dashboard_runs(request):
         return {
             "id": run.id,
             "agent_id": run.agent_id,
-            "agent_name": run.agent.name,
-            "agent_mode": run.agent.mode,
-            "agent_type": run.agent.agent_type,
+            "agent_name": _run_agent_name(run),
+            "agent_mode": _run_agent_mode(run),
+            "agent_type": _run_agent_type(run),
             "server_name": run.server.name if run.server_id else "?",
             "server_id": run.server_id,
             "status": run.status,

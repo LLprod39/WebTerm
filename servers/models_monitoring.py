@@ -156,10 +156,12 @@ class BackgroundWorkerState(models.Model):
 
     KIND_MEMORY_DREAMS = "memory_dreams"
     KIND_AGENT_EXECUTION = "agent_execution"
+    KIND_SCHEDULED_AGENTS = "scheduled_agents"
     KIND_WATCHERS = "watchers"
     KIND_CHOICES = [
         (KIND_MEMORY_DREAMS, "Memory Dreams"),
         (KIND_AGENT_EXECUTION, "Agent Execution"),
+        (KIND_SCHEDULED_AGENTS, "Scheduled Agents"),
         (KIND_WATCHERS, "Watchers"),
     ]
 

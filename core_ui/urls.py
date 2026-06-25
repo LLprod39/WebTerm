@@ -13,6 +13,7 @@ from .views import (
     access_group_views,
     access_views,
     admin_views,
+    assistant_chat_views,
     auth_views,
     health_views,
     model_views,
@@ -105,4 +106,27 @@ urlpatterns = [
     path("api/terminal/preferences/", views.api_terminal_preferences, name="api_terminal_preferences"),
     # Dashboard layout (Distinct path to avoid conflicts)
     path("api/dashboard-custom/layout/<str:dashboard_type>/", views.api_dashboard_layout, name="api_dashboard_layout"),
+    # Assistant chat
+    path("api/assistant/chats/", assistant_chat_views.api_assistant_chats, name="api_assistant_chats"),
+    path(
+        "api/assistant/chats/message/",
+        assistant_chat_views.api_assistant_chat_create_and_message,
+        name="api_assistant_chat_create_and_message",
+    ),
+    path("api/assistant/chats/<int:chat_id>/", assistant_chat_views.api_assistant_chat_detail, name="api_assistant_chat_detail"),
+    path(
+        "api/assistant/chats/<int:chat_id>/message/",
+        assistant_chat_views.api_assistant_chat_message,
+        name="api_assistant_chat_message",
+    ),
+    path(
+        "api/assistant/actions/<int:action_id>/confirm/",
+        assistant_chat_views.api_assistant_action_confirm,
+        name="api_assistant_action_confirm",
+    ),
+    path(
+        "api/assistant/actions/<int:action_id>/cancel/",
+        assistant_chat_views.api_assistant_action_cancel,
+        name="api_assistant_action_cancel",
+    ),
 ]

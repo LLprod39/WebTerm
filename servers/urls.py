@@ -211,6 +211,7 @@ urlpatterns = [
     path("api/<int:server_id>/ai-analyze/", server_monitoring_actions.ai_analyze_server, name="ai_analyze_server"),
     # Agents (mini + full)
     path("api/agents/", server_agents.agent_list, name="agent_list"),
+    path("api/agents/runtime/cleanup-stale/", server_agents.agent_runtime_cleanup_stale, name="agent_runtime_cleanup_stale"),
     path("api/agents/schedules/", server_agents.agent_schedule_overview, name="agent_schedule_overview"),
     path("api/agents/schedules/dispatch/", server_agents.agent_schedule_dispatch, name="agent_schedule_dispatch"),
     path("api/agents/templates/", server_agents.agent_templates, name="agent_templates"),
@@ -221,6 +222,18 @@ urlpatterns = [
     path("api/agents/<int:agent_id>/stop/", server_agent_runs.agent_stop, name="agent_stop"),
     path("api/agents/<int:agent_id>/runs/", server_agent_runs.agent_runs, name="agent_runs"),
     path("api/agents/runs/<int:run_id>/", server_agent_runs.agent_run_detail, name="agent_run_detail"),
+    path("api/agents/runs/<int:run_id>/report/", server_agent_runs.agent_run_report, name="agent_run_report"),
+    path("api/agents/runs/<int:run_id>/report/deliver/", server_agent_runs.agent_run_report_deliver, name="agent_run_report_deliver"),
+    path(
+        "api/agents/runs/<int:run_id>/artifacts/download-all/",
+        server_agent_runs.agent_run_artifacts_download_all,
+        name="agent_run_artifacts_download_all",
+    ),
+    path(
+        "api/agents/runs/<int:run_id>/artifacts/<int:artifact_id>/download/",
+        server_agent_runs.agent_run_artifact_download,
+        name="agent_run_artifact_download",
+    ),
     path("api/agents/runs/<int:run_id>/log/", server_agent_runs.agent_run_log, name="agent_run_log"),
     path("api/agents/runs/<int:run_id>/events/", server_agent_runs.agent_run_events, name="agent_run_events"),
     path("api/agents/runs/<int:run_id>/reply/", server_agent_runs.agent_run_reply, name="agent_run_reply"),

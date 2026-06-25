@@ -1,4 +1,4 @@
-import { Bot, Boxes, BrainCircuit, Languages, LayoutDashboard, LogOut, PanelLeftClose, PanelLeftOpen, Server, Settings, ShieldCheck, Workflow } from "lucide-react";
+import { Bot, Boxes, BrainCircuit, Languages, LayoutDashboard, LogOut, MessageSquare, PanelLeftClose, PanelLeftOpen, Server, Settings, ShieldCheck, Workflow } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useNavigate } from "react-router-dom";
 import {
@@ -18,6 +18,7 @@ import { localize, useI18n } from "@/lib/i18n";
 import { canAccessStudio, hasFeatureAccess } from "@/lib/featureAccess";
 
 const KUBERNETES_NAV_READY = false;
+const CHAT_NAV_READY = false;
 
 export function AppSidebar() {
   const { state, toggleSidebar } = useSidebar();
@@ -36,6 +37,7 @@ export function AppSidebar() {
     { titleKey: "nav.dashboard", url: "/dashboard", icon: LayoutDashboard, feature: "dashboard" },
     { titleKey: "nav.servers", url: "/servers", icon: Server, feature: null },
     { titleKey: "nav.agents", url: "/agents", icon: Bot, feature: "agents" },
+    { titleKey: "nav.chat", url: "/chat", icon: MessageSquare, feature: "orchestrator", ready: CHAT_NAV_READY },
     { titleKey: "nav.studio", url: "/studio", icon: Workflow, feature: "studio" },
     { titleKey: "nav.kubernetes", url: "/kubernetes", icon: Boxes, feature: "kubernetes", ready: KUBERNETES_NAV_READY },
     { titleKey: "nav.mars", url: "/mars", icon: BrainCircuit, feature: "mars" },

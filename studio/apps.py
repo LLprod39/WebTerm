@@ -17,12 +17,14 @@ class StudioConfig(AppConfig):
         from studio.skill_adapter import StudioSkillProvider
         from studio.skill_promotion import StudioSkillPromotionGateway
         from studio.smoke_seed_provider import DjangoSmokePipelineSeedProvider
+        from studio.assistant_actions import register_assistant_actions
 
         mcp_runtime_registry.register(StudioMCPRuntimeProvider())
         register_pipeline_run_limit_provider(DjangoPipelineRunLimitProvider())
         skill_provider_registry.register(StudioSkillProvider())
         skill_promotion_registry.register(StudioSkillPromotionGateway())
         register_smoke_pipeline_seed_provider(DjangoSmokePipelineSeedProvider())
+        register_assistant_actions()
 
         from app.monitoring_events import server_alert_opened
         from studio.trigger_dispatch import launch_monitoring_triggers_for_alert_id

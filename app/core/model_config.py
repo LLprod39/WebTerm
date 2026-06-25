@@ -209,7 +209,7 @@ class ModelManager:
         try:
             from asgiref.sync import sync_to_async
 
-            return await sync_to_async(cls._get_managed_llm_api_key, thread_sensitive=True)(provider)
+            return await sync_to_async(cls._get_managed_llm_api_key, thread_sensitive=False)(provider)
         except Exception as exc:
             logger.debug(f"Async managed LLM API key lookup skipped for {provider}: {exc}")
             return ""
@@ -286,7 +286,12 @@ class ModelManager:
         if self.gemini_api_key or (os.getenv("GEMINI_API_KEY") or "").strip() or await self._aget_managed_llm_api_key("gemini"):
             await self.fetch_available_gemini_models()
 
-        if self.grok_api_key or (os.getenv("GROK_API_KEY") or "").strip() or await self._aget_managed_llm_api_key("grok"):
+        if (
+            self.grok_api_key
+            or (os.getenv("GROK_API_KEY") or "").strip()
+            or (os.getenv("XAI_API_KEY") or "").strip()
+            or await self._aget_managed_llm_api_key("grok")
+        ):
             await self.fetch_available_grok_models()
 
         if (

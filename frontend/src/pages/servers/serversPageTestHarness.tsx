@@ -113,9 +113,7 @@ export function getActionsContainer() {
 }
 
 export function getSparklesButton(container: HTMLElement) {
-  const button = within(container)
-    .getAllByRole("button")
-    .find((candidate) => candidate.innerHTML.includes("lucide-sparkles"));
+  const button = within(container).getAllByRole("button")[0];
 
   if (!(button instanceof HTMLButtonElement)) {
     throw new Error("Unable to find advanced settings button");

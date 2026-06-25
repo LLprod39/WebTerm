@@ -155,7 +155,7 @@ def is_config_provider_enabled(config: Any, provider: str | None) -> bool:
 
 def extract_model_ids(payload: dict) -> list[str]:
     out: list[str] = []
-    for item in payload.get("data", []) or []:
+    for item in [*(payload.get("data", []) or []), *(payload.get("models", []) or [])]:
         model_id = item.get("id")
         if isinstance(model_id, str) and model_id:
             out.append(model_id)

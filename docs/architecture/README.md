@@ -33,7 +33,7 @@ python scripts/check_architecture_sizes.py --strict-new
 
 ## Active Refactor Status
 
-- Current architecture command status: import boundaries pass; size guard passes under `--strict-new`.
+- Current architecture command status: rechecked on 2026-06-25; `python scripts/check_architecture_sizes.py --strict-new` currently fails in the dirty worktree because `core_ui.services.assistant_chat` imports `servers`/`studio` directly and several new or changed files exceed the size guard. See `PLUGIN_MARKETPLACE_IMPLEMENTATION_PLAN.md`, section "Current Architecture Cleanup Gate Before Marketplace", before starting marketplace implementation.
 - Backend view endpoint groups have mostly been split into focused modules.
 - `core_ui/views/_views_all.py`, `servers/views/_views_all.py`, and `studio/views/_views_all.py` remain compatibility shims.
 - `studio/pipeline_executor.py` remains the production pipeline executor.
@@ -54,4 +54,5 @@ python scripts/check_architecture_sizes.py --strict-new
 
 - `STUDIO_OPS_AUTOMATION_PLATFORM_PLAN.md` describes the target shape for turning Studio into a broad admin/DevOps automation platform using pipeline nodes, MCP connectors, skills, policy, approvals, and domain capability packs.
 - `PLUGIN_PLATFORM_ARCHITECTURE_PLAN.md` describes the next plugin-platform layer: manifests, registries, hooks, connector contracts, dashboard widgets, plugin pages, Studio nodes, agent tools, terminal actions, permissions, and rollout phases.
+- `PLUGIN_MARKETPLACE_IMPLEMENTATION_PLAN.md` describes the implementation roadmap for turning the plugin layer into a marketplace: package format, local install store, permissions, signing, review flow, private catalog, public publishing, updates, uninstall safety, and ecosystem phases.
 - `PLATFORM_DEVELOPMENT_RULES.md` is the short working contract for changing the platform safely: ownership, boundaries, permissions, frontend/backend patterns, Studio, terminal, dashboards, integrations, checks, and stop conditions.

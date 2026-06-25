@@ -5,10 +5,10 @@ from django.utils import timezone
 
 from app.runtime_limits import ACTIVE_AGENT_RUN_STATUSES, get_agent_run_limit_error
 from servers.agent_launch import launch_full_agent_run
+from servers.agent_run_report import record_run_event_and_refresh_report
 from servers.agent_schedule import is_agent_due_by_schedule
 from servers.agents import run_agent_on_all_servers
 from servers.models import AgentRun, Server, ServerAgent
-from servers.run_events import record_run_event
 
 
 def is_agent_due(agent: ServerAgent, now=None) -> bool:
@@ -93,8 +93,8 @@ def dispatch_scheduled_agents(*, now=None, limit: int = 50, agent_ids: list[int]
                     continue
 
                 run = launch_result["run"]
-                record_run_event(
-                    run.id,
+                record_run_event_and_refresh_report(
+                    run,
                     "agent_scheduled_dispatch",
                     {
                         "source": "schedule_config",
@@ -113,8 +113,8 @@ def dispatch_scheduled_agents(*, now=None, limit: int = 50, agent_ids: list[int]
             runs = async_to_sync(run_agent_on_all_servers)(agent, agent.user)
             created_runs = 0
             for run in runs or []:
-                record_run_event(
-                    run.id,
+                record_run_event_and_refresh_report(
+                    run,
                     "agent_scheduled_dispatch",
                     {
                         "source": "schedule_config",

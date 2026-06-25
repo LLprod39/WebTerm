@@ -27,6 +27,7 @@ const SettingsAuditPage = lazy(() => import("./pages/settings/SettingsAuditPage"
 const SettingsSSOPage = lazy(() => import("./pages/settings/SettingsSSOPage"));
 const AgentsPage = lazy(() => import("./pages/AgentsPage"));
 const AgentRunPage = lazy(() => import("./pages/AgentRunPage"));
+const ChatPage = lazy(() => import("./pages/ChatPage"));
 const StudioPage = lazy(() => import("./pages/StudioPage"));
 const StudioDraftsPage = lazy(() => import("./pages/StudioDraftsPage"));
 const PipelineEditorPage = lazy(() => import("./pages/PipelineEditorPage"));
@@ -182,6 +183,14 @@ const App = () => (
                   element={(
                     <FeatureGate feature="agents">
                       <AgentRunPage />
+                    </FeatureGate>
+                  )}
+                />
+                <Route
+                  path="/chat"
+                  element={(
+                    <FeatureGate feature="orchestrator">
+                      <ChatPage />
                     </FeatureGate>
                   )}
                 />

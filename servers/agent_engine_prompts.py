@@ -95,6 +95,69 @@ ACTION: tool_name {{"param1": "value1", "param2": "value2"}}
 Когда задача завершена (больше нет действий), выведи итоговый анализ БЕЗ строки ACTION."""
 
 
+def build_fallback_final_report(engine, iterations: list[dict], *, error: str = "") -> str:
+    goal = engine.agent.goal or engine.agent.ai_prompt or "Не указана"
+    action_lines = []
+    evidence_lines = []
+    for item in iterations[-12:]:
+        action = item.get("action") or "final_answer"
+        args = safe_payload_preview(item.get("args", {}), limit=140)
+        observation = str(item.get("observation") or "").strip()
+        if action:
+            action_lines.append(f"- {action}({args})")
+        if observation and observation != "(final answer)":
+            evidence_lines.append(f"- {observation[:240]}")
+
+    if not action_lines:
+        action_lines = ["- Действия агента не были сохранены в журнале итераций."]
+    if not evidence_lines:
+        evidence_lines = ["- Сохранённых доказательств недостаточно для технического вывода."]
+
+    risk_line = (
+        f"- Генерация LLM-отчёта завершилась ошибкой: {error[:500]}"
+        if error
+        else "- Критических проблем не обнаружено по сохранённому журналу; полнота вывода требует ручной проверки."
+    )
+    status = "⚠️ Частичный успех" if error else "⚠️ Частичный успех"
+    return f"""# Отчёт агента: {engine.agent.name}
+
+> Финальный Markdown собран детерминированным fallback по сохранённому журналу запуска.
+
+## Что произошло
+
+Агент выполнял цель: {goal}. Основной LLM-синтез финального отчёта не дал полноценный структурированный результат, поэтому backend сформировал безопасный fallback-отчёт из сохранённых итераций.
+
+## Итог
+
+Корневая причина не подтверждена фактами. Текущий результат нужно читать как техническую сводку по доступным событиям, а не как полный экспертный анализ.
+
+## Доказательства
+
+{chr(10).join(evidence_lines)}
+
+## Выполненные действия
+
+{chr(10).join(action_lines)}
+
+## Ключевые находки
+
+- Доступно итераций агента: {len(iterations)}.
+- Полный вывод ограничен сохранённым журналом запуска.
+
+## Проблемы и риски
+
+{risk_line}
+
+## Рекомендации
+
+- Проверить вкладки «События», «Логи» и «Ход агента» для первичных данных.
+- При необходимости перезапустить агента после исправления причины сбоя синтеза.
+
+---
+
+**Статус:** {status}"""
+
+
 async def generate_final_report(engine, history: list[dict], iterations: list[dict]) -> str:
     summary_parts = []
     for item in iterations:
@@ -117,15 +180,25 @@ async def generate_final_report(engine, history: list[dict], iterations: list[di
 - Шаги агента: {steps_summary}
 - Итоговый ответ агента: {history[-1]['content'][:3000] if history else 'Нет данных'}
 
-Сгенерируй отчёт СТРОГО в следующем формате — не добавляй лишних секций, не меняй структуру:
+Сгенерируй отчёт СТРОГО в следующем формате — не добавляй лишних секций, не меняй структуру.
+Если корневая причина не подтверждена фактами, прямо напиши: "Корневая причина не подтверждена".
 
 # [Краткое название того что было сделано]
 
 > [Одно предложение — главный итог работы агента]
 
-## Результат
+## Что произошло
+
+[2–4 предложения: что именно проверял агент, какие системы/серверы затронуты, чем завершился запуск]
+
+## Итог
 
 [2–4 предложения об общем результате и текущем состоянии системы]
+
+## Доказательства
+
+- [Факт 1 — конкретный вывод команды, путь, сервис, версия, статус или число]
+- [Факт 2]
 
 ## Выполненные действия
 
@@ -138,6 +211,11 @@ async def generate_final_report(engine, history: list[dict], iterations: list[di
 - [Находка 1 — факт с конкретными данными: цифры, названия, пути]
 - [Находка 2]
 - [...]
+
+## Проблемы и риски
+
+- [Риск 1 — что может сломаться или что требует проверки]
+- [Если критических проблем нет — написать: Критических проблем не обнаружено]
 
 ## Рекомендации
 
@@ -163,13 +241,15 @@ async def generate_final_report(engine, history: list[dict], iterations: list[di
             purpose="opssummary",
         ):
             chunks.append(chunk)
-        report = "".join(chunks)
+        report = "".join(chunks).strip()
         logger.info(
             "agent_run {} final report llm done: chars={}",
             engine.run_record.pk if engine.run_record else "?",
             len(report),
         )
+        if not report:
+            return build_fallback_final_report(engine, iterations, error="LLM вернул пустой финальный отчёт")
         return report
     except Exception as exc:
         logger.error("Final report generation failed: {}", exc)
-        return f"Report generation failed: {exc}\n\nRaw steps:\n{steps_summary}"
+        return build_fallback_final_report(engine, iterations, error=str(exc))

@@ -99,10 +99,11 @@ export function MemoryOverviewSections({
     <>
       <MemoryStats stats={memoryOverview.stats} />
 
-      <SectionCard title="Состояние фоновых служб" icon={Activity} description="Мониторинг фоновых процессов анализа и выполнения">
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
+      <SectionCard title="Состояние фоновых служб" icon={Activity} description="Мониторинг фоновых процессов анализа, расписания и выполнения">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-4">
           <MemoryWorkerStateCard label="Консолидация памяти" state={memoryOverview.worker_states?.memory_dreams || memoryOverview.daemon_state} />
           <MemoryWorkerStateCard label="Выполнение агентов" state={memoryOverview.worker_states?.agent_execution} />
+          <MemoryWorkerStateCard label="Расписание агентов" state={memoryOverview.worker_states?.scheduled_agents} />
           <MemoryWorkerStateCard label="Службы наблюдения" state={memoryOverview.worker_states?.watchers} />
         </div>
       </SectionCard>

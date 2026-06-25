@@ -11,6 +11,7 @@ from loguru import logger
 
 from app.agent_kernel.mcp_runtime import load_mcp_bindings
 from app.agent_kernel.tools.registry import ToolRegistry
+from servers.agent_run_report import build_agent_run_report_payload
 from servers.agent_runtime import (
     is_runtime_stop_requested,
     register_engine,
@@ -157,6 +158,7 @@ async def run_multi_agent_engine(
             run.plan_tasks = plan_tasks
             run.orchestrator_log = orchestrator_log
             run.duration_ms = int((time.monotonic() - t0) * 1000)
+            run.report_payload = await sync_to_async(build_agent_run_report_payload, thread_sensitive=True)(run)
             await sync_to_async(run.save)()
             await engine._emit("agent_status", {"status": "plan_review"})
             await engine._emit("agent_pipeline_phase", {
@@ -185,6 +187,7 @@ async def run_multi_agent_engine(
         run.orchestrator_log = orchestrator_log
         run.completed_at = timezone.now()
         run.duration_ms = int((time.monotonic() - t0) * 1000)
+        run.report_payload = await sync_to_async(build_agent_run_report_payload, thread_sensitive=True)(run)
         await sync_to_async(run.save)()
         await engine._persist_ops_summary(
             run=run,
@@ -284,6 +287,7 @@ async def execute_existing_multi_agent_plan(engine: Any, run: AgentRun) -> Agent
         run.orchestrator_log = orchestrator_log
         run.completed_at = timezone.now()
         run.duration_ms = int((run.duration_ms or 0) + (time.monotonic() - t0) * 1000)
+        run.report_payload = await sync_to_async(build_agent_run_report_payload, thread_sensitive=True)(run)
         await sync_to_async(run.save)()
         await engine._persist_ops_summary(
             run=run,
@@ -331,6 +335,7 @@ async def _finalize_multi_agent_run(
     run.completed_at = timezone.now()
     elapsed_ms = int((time.monotonic() - t0) * 1000)
     run.duration_ms = int((run.duration_ms or 0) + elapsed_ms) if append_duration else elapsed_ms
+    run.report_payload = await sync_to_async(build_agent_run_report_payload, thread_sensitive=True)(run)
     await sync_to_async(run.save)()
     await engine._persist_ops_summary(
         run=run,

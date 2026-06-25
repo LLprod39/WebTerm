@@ -7,6 +7,7 @@ from typing import Any
 
 from django.apps import apps
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 
@@ -151,6 +152,27 @@ def stop_background_worker(
     return state
 
 
+def cleanup_stale_background_workers(worker_kind: str | None = None) -> int:
+    model = _worker_state_model()
+    now = timezone.now()
+    queryset = model.objects.filter(status=model.STATUS_RUNNING).filter(
+        Q(lease_expires_at__isnull=True) | Q(lease_expires_at__lte=now)
+    )
+    if worker_kind:
+        queryset = queryset.filter(worker_kind=worker_kind)
+
+    count = 0
+    for state in queryset:
+        state.status = model.STATUS_STOPPED
+        state.lease_expires_at = state.lease_expires_at or now
+        state.last_stopped_at = now
+        if not state.last_error:
+            state.last_error = "Worker lease expired before clean shutdown."
+        state.save(update_fields=["status", "lease_expires_at", "last_stopped_at", "last_error", "updated_at"])
+        count += 1
+    return count
+
+
 def serialize_background_worker_state(worker_kind: str, *, worker_key: str = "default") -> dict[str, Any]:
     model = _worker_state_model()
     state = model.objects.filter(worker_kind=worker_kind, worker_key=worker_key).first()
@@ -176,8 +198,7 @@ def serialize_background_worker_state(worker_kind: str, *, worker_key: str = "de
     lease_expires_at = state.lease_expires_at
     is_stale = bool(
         state.status == model.STATUS_RUNNING
-        and lease_expires_at is not None
-        and lease_expires_at <= now
+        and (lease_expires_at is None or lease_expires_at <= now)
     )
     return {
         "worker_kind": state.worker_kind,

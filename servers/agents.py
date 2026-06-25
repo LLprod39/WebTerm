@@ -19,6 +19,7 @@ from app.tools.safety import is_dangerous_command
 from core_ui.activity import log_user_activity
 from core_ui.audit import audit_context
 from servers.agent_analysis import get_ai_analysis
+from servers.agent_run_report import build_agent_run_report_payload
 from servers.models import AgentRun, Server, ServerAgent
 from servers.monitor import _build_connect_kwargs
 from servers.report_delivery import deliver_agent_report_async
@@ -295,6 +296,7 @@ async def run_agent(agent: ServerAgent, server: Server, user) -> AgentRun:
         run.ai_analysis = f"Cannot connect to server: {exc}"
         run.completed_at = timezone.now()
         run.duration_ms = int((time.monotonic() - t0) * 1000)
+        run.report_payload = await sync_to_async(build_agent_run_report_payload, thread_sensitive=True)(run)
         await sync_to_async(run.save)()
         await deliver_agent_report_async(run)
         return run
@@ -384,6 +386,7 @@ async def run_agent(agent: ServerAgent, server: Server, user) -> AgentRun:
         run.ai_analysis = f"SSH connection failed: {exc}"
         run.completed_at = timezone.now()
         run.duration_ms = int((time.monotonic() - t0) * 1000)
+        run.report_payload = await sync_to_async(build_agent_run_report_payload, thread_sensitive=True)(run)
         await sync_to_async(run.save)()
         await deliver_agent_report_async(run)
         return run
@@ -404,6 +407,7 @@ async def run_agent(agent: ServerAgent, server: Server, user) -> AgentRun:
     run.ai_analysis = ai_analysis
     run.completed_at = timezone.now()
     run.duration_ms = int((time.monotonic() - t0) * 1000)
+    run.report_payload = await sync_to_async(build_agent_run_report_payload, thread_sensitive=True)(run)
     await sync_to_async(run.save)()
     await deliver_agent_report_async(run)
 

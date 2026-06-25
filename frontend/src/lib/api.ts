@@ -6,6 +6,7 @@ import { demoFallback } from "./api-demo-fallback";
 export * from "./access-features";
 export * from "@/api/auth";
 export * from "@/api/agents";
+export * from "@/api/assistant-chat";
 export * from "@/api/linux-ui";
 export * from "@/api/mars";
 export * from "@/api/monitoring";

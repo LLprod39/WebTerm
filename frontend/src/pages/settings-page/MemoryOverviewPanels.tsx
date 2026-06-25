@@ -77,14 +77,15 @@ export function MemoryOverviewPanels({
       <SectionCard
         title="Worker status"
         icon={Activity}
-        description="Состояние фоновых workers, которые крутят dreams, execution plane и watcher scans."
+        description="Состояние фоновых workers, которые крутят dreams, execution plane, scheduler и watcher scans."
       >
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-4">
           <WorkerStateCard
             label="Memory dreams"
             state={memoryOverview.worker_states?.memory_dreams || memoryOverview.daemon_state}
           />
           <WorkerStateCard label="Agent execution" state={memoryOverview.worker_states?.agent_execution} />
+          <WorkerStateCard label="Agent scheduler" state={memoryOverview.worker_states?.scheduled_agents} />
           <WorkerStateCard label="Watchers" state={memoryOverview.worker_states?.watchers} />
         </div>
       </SectionCard>

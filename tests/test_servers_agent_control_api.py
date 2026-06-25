@@ -1,15 +1,17 @@
 import json
 from concurrent.futures import Future
+from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
 from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
 from django.test import Client
+from django.utils import timezone
 
 from core_ui.models import UserAppPermission
 from servers.agent_engine import AgentEngine
-from servers.models import AgentRun, AgentRunDispatch, AgentRunEvent, Server, ServerAgent
+from servers.models import AgentRun, AgentRunDispatch, AgentRunEvent, BackgroundWorkerState, Server, ServerAgent
 
 
 def _json(payload: dict) -> str:
@@ -81,6 +83,8 @@ def test_agent_endpoints_crud_run_and_control_flow(monkeypatch):
     assert listed_agent["report_delivery"]["telegram"]["enabled"] is False
     assert listed_agent["session_timeout_seconds"] == 600
     assert listed_agent["max_connections"] == 5
+    assert listed_agent["execution_readiness"]["required"] is False
+    assert listed_agent["execution_readiness"]["ready"] is True
 
     update_agent = client.post(
         f"/servers/api/agents/{agent_id}/update/",
@@ -158,6 +162,8 @@ def test_agent_endpoints_crud_run_and_control_flow(monkeypatch):
     assert run_agent.json()["success"] is True
     run_id = run_agent.json()["runs"][0]["run_id"]
     assert AgentRunEvent.objects.filter(run=completed_run, event_type="agent_manual_dispatch").exists()
+    completed_run.refresh_from_db()
+    assert any(item["event_type"] == "agent_manual_dispatch" for item in completed_run.report_payload["events"])
 
     runs = client.get(f"/servers/api/agents/{agent_id}/runs/")
     assert runs.status_code == 200
@@ -175,9 +181,10 @@ def test_agent_endpoints_crud_run_and_control_flow(monkeypatch):
     waiting_run.pending_question = "Need approval?"
     waiting_run.save(update_fields=["pending_question"])
 
+    answer = "Proceed token=super-secret-token-value"
     reply = client.post(
         f"/servers/api/agents/runs/{waiting_run.id}/reply/",
-        data=_json({"answer": "Proceed"}),
+        data=_json({"answer": answer}),
         content_type="application/json",
     )
     assert reply.status_code == 200
@@ -185,17 +192,29 @@ def test_agent_endpoints_crud_run_and_control_flow(monkeypatch):
     waiting_run.refresh_from_db()
     assert waiting_run.runtime_control["reply_nonce"] == 1
     assert waiting_run.runtime_control["reply_ack_nonce"] == 0
-    assert waiting_run.runtime_control["reply_text"] == "Proceed"
+    assert waiting_run.runtime_control["reply_text"] == answer
     assert waiting_run.status == AgentRun.STATUS_RUNNING
     assert waiting_run.pending_question == ""
     assert AgentRunEvent.objects.filter(run=waiting_run, event_type="agent_user_reply").exists()
+    assert waiting_run.report_payload["run"]["status"] == AgentRun.STATUS_RUNNING
+    assert waiting_run.report_payload["run"]["pending_question"] == ""
+    assert any(item["event_type"] == "agent_user_reply" for item in waiting_run.report_payload["events"])
+    serialized_report = _json(waiting_run.report_payload)
+    assert "super-secret-token-value" not in serialized_report
+    assert "[REDACTED:secret_assignment]" in serialized_report
 
     running_run = _build_run(AgentRun.STATUS_RUNNING)
-    stop = client.post(f"/servers/api/agents/{agent_id}/stop/")
+    AgentRun.objects.filter(pk=running_run.pk).update(started_at=timezone.now() - timedelta(seconds=75))
+    stop = client.post(
+        f"/servers/api/agents/{agent_id}/stop/",
+        data=_json({"run_id": running_run.id}),
+        content_type="application/json",
+    )
     assert stop.status_code == 200
     assert stop.json()["success"] is True
     running_run.refresh_from_db()
     assert running_run.status == AgentRun.STATUS_STOPPED
+    assert running_run.duration_ms >= 75_000
     assert running_run.runtime_control["stop_requested"] is True
     assert running_run.runtime_control["pause_requested"] is False
     assert AgentRunEvent.objects.filter(run=running_run, event_type="agent_control_stop_requested").exists()
@@ -237,6 +256,250 @@ def test_agent_endpoints_crud_run_and_control_flow(monkeypatch):
     delete_agent = client.post(f"/servers/api/agents/{agent_id}/delete/")
     assert delete_agent.status_code == 200
     assert delete_agent.json()["success"] is True
+
+
+@pytest.mark.django_db
+def test_agent_list_runtime_overview_exposes_queue_and_blockers(settings):
+    settings.AGENT_RUN_STALE_SECONDS = 60
+    user = User.objects.create_user(username="agent-runtime-overview-user", password="x")
+    _grant_feature(user, "agents")
+    client = Client()
+    client.force_login(user)
+    server = _create_server(user, name="runtime-overview-srv", server_type="ssh")
+
+    agent = ServerAgent.objects.create(
+        user=user,
+        name="Queued Runtime Agent",
+        mode=ServerAgent.MODE_FULL,
+        agent_type=ServerAgent.TYPE_CUSTOM,
+        goal="Expose runtime overview",
+        schedule_minutes=5,
+        last_run_at=timezone.now() - timedelta(minutes=10),
+    )
+    agent.servers.set([server])
+    run = AgentRun.objects.create(
+        agent=agent,
+        server=server,
+        user=user,
+        status=AgentRun.STATUS_PENDING,
+    )
+    stale_started_at = timezone.now() - timedelta(minutes=5)
+    AgentRun.objects.filter(pk=run.pk).update(started_at=stale_started_at)
+    run.refresh_from_db()
+    dispatch = AgentRunDispatch.objects.create(
+        run=run,
+        agent=agent,
+        user=user,
+        dispatch_kind=AgentRunDispatch.KIND_LAUNCH,
+        status=AgentRunDispatch.STATUS_QUEUED,
+        server_ids=[server.id],
+    )
+
+    response = client.get("/servers/api/agents/")
+
+    assert response.status_code == 200
+    overview = response.json()["runtime_overview"]
+    assert overview["status"] == "needs_attention"
+    assert overview["summary"]["active_runs"] == 1
+    assert overview["summary"]["pending_runs"] == 1
+    assert overview["summary"]["queued_dispatches"] == 1
+    assert overview["schedule"]["due_now"] == 1
+    issue_ids = {issue["id"] for issue in overview["issues"]}
+    assert "execution_worker_not_ready" in issue_ids
+    assert "scheduled_agents_worker_not_ready" in issue_ids
+    assert "run_agent_execution_plane" in overview["commands"]["execution_worker"]
+    assert "run_scheduled_agents" in overview["commands"]["scheduled_agents_worker"]
+    assert "run_ops_supervisor" in overview["commands"]["ops_supervisor"]
+    assert overview["items"]["active_runs"][0]["run_id"] == run.id
+    assert overview["items"]["active_runs"][0]["agent_name"] == agent.name
+    assert overview["items"]["active_runs"][0]["server_name"] == server.name
+    assert overview["items"]["active_runs"][0]["is_stale_candidate"] is True
+    assert overview["items"]["queued_dispatches"][0]["dispatch_id"] == dispatch.id
+    assert overview["items"]["queued_dispatches"][0]["run_id"] == run.id
+    assert overview["items"]["queued_dispatches"][0]["queued_age_seconds"] >= 0
+    assert overview["items"]["scheduled_due"][0]["agent_id"] == agent.id
+    assert overview["items"]["scheduled_due"][0]["active_run_id"] == run.id
+    assert overview["items"]["stale_candidates"][0]["run_id"] == run.id
+
+
+@pytest.mark.django_db
+def test_agent_runtime_cleanup_stale_runs_is_user_scoped(settings):
+    settings.AGENT_RUN_STALE_SECONDS = 60
+    user = User.objects.create_user(username="agent-runtime-cleanup-user", password="x")
+    other = User.objects.create_user(username="agent-runtime-cleanup-other", password="x")
+    _grant_feature(user, "agents")
+    _grant_feature(other, "agents")
+    client = Client()
+    client.force_login(user)
+    server = _create_server(user, name="cleanup-srv", server_type="ssh")
+    other_server = _create_server(other, name="cleanup-other-srv", server_type="ssh")
+
+    agent = ServerAgent.objects.create(
+        user=user,
+        name="Cleanup Agent",
+        mode=ServerAgent.MODE_FULL,
+        agent_type=ServerAgent.TYPE_CUSTOM,
+        goal="Cleanup stale run",
+    )
+    agent.servers.set([server])
+    other_agent = ServerAgent.objects.create(
+        user=other,
+        name="Other Cleanup Agent",
+        mode=ServerAgent.MODE_FULL,
+        agent_type=ServerAgent.TYPE_CUSTOM,
+        goal="Do not cleanup",
+    )
+    other_agent.servers.set([other_server])
+
+    stale_at = timezone.now() - timedelta(minutes=5)
+    run = AgentRun.objects.create(agent=agent, server=server, user=user, status=AgentRun.STATUS_PENDING)
+    other_run = AgentRun.objects.create(agent=other_agent, server=other_server, user=other, status=AgentRun.STATUS_PENDING)
+    AgentRun.objects.filter(pk__in=[run.pk, other_run.pk]).update(started_at=stale_at)
+    run.refresh_from_db()
+    other_run.refresh_from_db()
+    dispatch = AgentRunDispatch.objects.create(
+        run=run,
+        agent=agent,
+        user=user,
+        dispatch_kind=AgentRunDispatch.KIND_LAUNCH,
+        status=AgentRunDispatch.STATUS_QUEUED,
+        server_ids=[server.id],
+    )
+    other_dispatch = AgentRunDispatch.objects.create(
+        run=other_run,
+        agent=other_agent,
+        user=other,
+        dispatch_kind=AgentRunDispatch.KIND_LAUNCH,
+        status=AgentRunDispatch.STATUS_QUEUED,
+        server_ids=[other_server.id],
+    )
+
+    response = client.post(
+        "/servers/api/agents/runtime/cleanup-stale/",
+        data=_json({"limit": 20}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["cleanup"]["cleaned"] == 1
+    assert payload["cleanup"]["canceled_dispatches"] == 1
+    assert payload["cleanup"]["runs"][0]["run_id"] == run.id
+    assert payload["runtime_overview"]["summary"]["active_runs"] == 0
+    run.refresh_from_db()
+    dispatch.refresh_from_db()
+    other_run.refresh_from_db()
+    other_dispatch.refresh_from_db()
+    assert run.status == AgentRun.STATUS_FAILED
+    assert "operator cleanup" in run.ai_analysis
+    assert dispatch.status == AgentRunDispatch.STATUS_CANCELED
+    assert AgentRunEvent.objects.filter(run=run, event_type="agent_stale_cleanup").exists()
+    assert any(item["event_type"] == "agent_stale_cleanup" for item in run.report_payload["events"])
+    assert other_run.status == AgentRun.STATUS_PENDING
+    assert other_dispatch.status == AgentRunDispatch.STATUS_QUEUED
+
+
+@pytest.mark.django_db
+def test_agent_list_exposes_execution_readiness_for_full_agents():
+    user = User.objects.create_user(username="agent-readiness-user", password="x")
+    _grant_feature(user, "agents")
+    client = Client()
+    client.force_login(user)
+    server = _create_server(user, name="readiness-srv", server_type="ssh")
+
+    agent = ServerAgent.objects.create(
+        user=user,
+        name="Full Readiness Agent",
+        mode=ServerAgent.MODE_FULL,
+        agent_type=ServerAgent.TYPE_CUSTOM,
+        goal="Inspect worker readiness",
+        schedule_minutes=15,
+    )
+    agent.servers.set([server])
+
+    missing_response = client.get("/servers/api/agents/")
+    assert missing_response.status_code == 200
+    assert missing_response.json()["worker_states"]["scheduled_agents"]["status"] == "missing"
+    listed = next(item for item in missing_response.json()["agents"] if item["id"] == agent.id)
+    readiness = listed["execution_readiness"]
+    assert readiness["required"] is True
+    assert readiness["ready"] is False
+    assert readiness["status"] == "missing"
+    assert readiness["severity"] == "warning"
+    assert "run_agent_execution_plane" in readiness["next_action"]
+    assert "run_ops_supervisor" in readiness["supervisor_action"]
+    assert "run_ops_supervisor" in readiness["commands"]["ops_supervisor"]
+
+    now = timezone.now()
+    BackgroundWorkerState.objects.create(
+        worker_kind=BackgroundWorkerState.KIND_AGENT_EXECUTION,
+        worker_key="default",
+        status=BackgroundWorkerState.STATUS_RUNNING,
+        heartbeat_at=now,
+        lease_expires_at=now + timedelta(seconds=180),
+    )
+    ready_response = client.get("/servers/api/agents/")
+    assert ready_response.status_code == 200
+    assert ready_response.json()["worker_states"]["agent_execution"]["status"] == BackgroundWorkerState.STATUS_RUNNING
+    listed = next(item for item in ready_response.json()["agents"] if item["id"] == agent.id)
+    assert listed["execution_readiness"]["ready"] is True
+    assert listed["execution_readiness"]["severity"] == "success"
+
+    BackgroundWorkerState.objects.create(
+        worker_kind=BackgroundWorkerState.KIND_SCHEDULED_AGENTS,
+        worker_key="default",
+        status=BackgroundWorkerState.STATUS_RUNNING,
+        heartbeat_at=now,
+        lease_expires_at=now + timedelta(seconds=180),
+        last_summary={"scanned": 2, "due": 1, "launched_agents": 1},
+    )
+    schedule_response = client.get("/servers/api/agents/schedules/")
+    assert schedule_response.status_code == 200
+    schedule_payload = schedule_response.json()
+    assert schedule_payload["worker_states"]["scheduled_agents"]["status"] == BackgroundWorkerState.STATUS_RUNNING
+    assert schedule_payload["scheduled_agents_worker"]["last_summary"]["due"] == 1
+    assert schedule_payload["execution_readiness"]["ready"] is True
+    assert schedule_payload["scheduled_agents"][0]["execution_readiness"]["ready"] is True
+
+
+@pytest.mark.django_db
+def test_agent_list_cleans_expired_execution_worker_before_readiness():
+    user = User.objects.create_user(username="agent-expired-worker-user", password="x")
+    _grant_feature(user, "agents")
+    client = Client()
+    client.force_login(user)
+    server = _create_server(user, name="expired-readiness-srv", server_type="ssh")
+
+    agent = ServerAgent.objects.create(
+        user=user,
+        name="Expired Worker Agent",
+        mode=ServerAgent.MODE_FULL,
+        agent_type=ServerAgent.TYPE_CUSTOM,
+        goal="Inspect worker expiry",
+    )
+    agent.servers.set([server])
+    expired_at = timezone.now() - timedelta(minutes=5)
+    worker = BackgroundWorkerState.objects.create(
+        worker_kind=BackgroundWorkerState.KIND_AGENT_EXECUTION,
+        worker_key="default",
+        status=BackgroundWorkerState.STATUS_RUNNING,
+        heartbeat_at=expired_at - timedelta(minutes=1),
+        lease_expires_at=expired_at,
+    )
+
+    response = client.get("/servers/api/agents/")
+    assert response.status_code == 200
+    listed = next(item for item in response.json()["agents"] if item["id"] == agent.id)
+    readiness = listed["execution_readiness"]
+    assert readiness["ready"] is False
+    assert readiness["status"] == BackgroundWorkerState.STATUS_STOPPED
+    assert readiness["severity"] == "warning"
+
+    worker.refresh_from_db()
+    assert worker.status == BackgroundWorkerState.STATUS_STOPPED
+    assert worker.last_stopped_at is not None
+    assert "lease expired" in worker.last_error
 
 
 @pytest.mark.django_db
@@ -311,6 +574,7 @@ def test_agent_control_paths_do_not_require_live_engine(monkeypatch):
         user=user,
         status=AgentRun.STATUS_RUNNING,
     )
+    AgentRun.objects.filter(pk=running_run.pk).update(started_at=timezone.now() - timedelta(seconds=42))
 
     monkeypatch.setattr("servers.agent_service.get_engine_for_run", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("servers.agent_service.get_engine_for_agent", lambda *_args, **_kwargs: None)
@@ -327,13 +591,81 @@ def test_agent_control_paths_do_not_require_live_engine(monkeypatch):
     assert waiting_run.runtime_control["reply_ack_nonce"] == 0
     assert waiting_run.runtime_control["reply_text"] == "Proceed without local engine"
 
-    stop = client.post(f"/servers/api/agents/{agent.id}/stop/")
+    stop = client.post(
+        f"/servers/api/agents/{agent.id}/stop/",
+        data=_json({"run_id": running_run.id}),
+        content_type="application/json",
+    )
     assert stop.status_code == 200
     assert stop.json()["stop_signal_sent"] is False
     running_run.refresh_from_db()
     assert running_run.status == AgentRun.STATUS_STOPPED
+    assert running_run.duration_ms >= 42_000
     assert running_run.runtime_control["stop_requested"] is True
     assert running_run.runtime_control["pause_requested"] is False
+
+
+@pytest.mark.django_db
+def test_user_owned_null_agent_run_detail_dashboard_and_reply_are_safe():
+    user = User.objects.create_user(username="agent-null-run-owner", password="x")
+    other = User.objects.create_user(username="agent-null-run-other", password="x")
+    _grant_feature(user, "agents")
+    _grant_feature(other, "agents")
+    client = Client()
+    client.force_login(user)
+    server = _create_server(user, name="null-agent-run-srv", server_type="ssh")
+    run = AgentRun.objects.create(
+        agent=None,
+        server=server,
+        user=user,
+        status=AgentRun.STATUS_WAITING,
+        pending_question="Continue without attached agent?",
+    )
+
+    detail = client.get(f"/servers/api/agents/runs/{run.id}/")
+    assert detail.status_code == 200
+    detail_payload = detail.json()["run"]
+    assert detail_payload["agent_id"] is None
+    assert detail_payload["agent_name"] == "Agent"
+    assert detail_payload["agent_type"] == ""
+    assert detail_payload["agent_mode"] == ""
+    assert detail_payload["pending_question"] == "Continue without attached agent?"
+
+    report = client.get(f"/servers/api/agents/runs/{run.id}/report/")
+    assert report.status_code == 200
+    assert report.json()["run"]["pending_question"] == "Continue without attached agent?"
+
+    dashboard = client.get("/servers/api/agents/dashboard/")
+    assert dashboard.status_code == 200
+    active = dashboard.json()["active"]
+    assert active[0]["id"] == run.id
+    assert active[0]["agent_id"] is None
+    assert active[0]["agent_name"] == "Agent"
+    assert active[0]["pending_question"] == "Continue without attached agent?"
+
+    other_client = Client()
+    other_client.force_login(other)
+    denied = other_client.post(
+        f"/servers/api/agents/runs/{run.id}/reply/",
+        data=_json({"answer": "Nope"}),
+        content_type="application/json",
+    )
+    assert denied.status_code == 404
+
+    reply = client.post(
+        f"/servers/api/agents/runs/{run.id}/reply/",
+        data=_json({"answer": "Proceed"}),
+        content_type="application/json",
+    )
+    assert reply.status_code == 200
+    assert reply.json()["success"] is True
+    run.refresh_from_db()
+    assert run.status == AgentRun.STATUS_RUNNING
+    assert run.pending_question == ""
+    assert run.runtime_control["reply_text"] == "Proceed"
+    assert run.report_payload["run"]["status"] == AgentRun.STATUS_RUNNING
+    assert run.report_payload["run"]["pending_question"] == ""
+    assert any(item["event_type"] == "agent_user_reply" for item in run.report_payload["events"])
 
 
 @pytest.mark.django_db
@@ -358,6 +690,7 @@ def test_agent_stop_can_target_specific_run():
         user=user,
         status=AgentRun.STATUS_RUNNING,
     )
+    AgentRun.objects.filter(pk=target_run.pk).update(started_at=timezone.now() - timedelta(seconds=33))
     other_run = AgentRun.objects.create(
         agent=agent,
         server=server,
@@ -376,6 +709,7 @@ def test_agent_stop_can_target_specific_run():
     target_run.refresh_from_db()
     other_run.refresh_from_db()
     assert target_run.status == AgentRun.STATUS_STOPPED
+    assert target_run.duration_ms >= 33_000
     assert target_run.runtime_control["stop_requested"] is True
     assert AgentRunEvent.objects.filter(run=target_run, event_type="agent_control_stop_requested").exists()
     assert other_run.status == AgentRun.STATUS_WAITING
@@ -404,6 +738,7 @@ def test_agent_stop_cancels_queued_dispatch():
         user=user,
         status=AgentRun.STATUS_PENDING,
     )
+    AgentRun.objects.filter(pk=run.pk).update(started_at=timezone.now() - timedelta(seconds=18))
     dispatch = AgentRunDispatch.objects.create(
         run=run,
         agent=agent,
@@ -426,5 +761,6 @@ def test_agent_stop_cancels_queued_dispatch():
     run.refresh_from_db()
     dispatch.refresh_from_db()
     assert run.status == AgentRun.STATUS_STOPPED
+    assert run.duration_ms >= 18_000
     assert dispatch.status == AgentRunDispatch.STATUS_CANCELED
     assert AgentRunEvent.objects.filter(run=run, event_type="agent_dispatch_canceled").exists()

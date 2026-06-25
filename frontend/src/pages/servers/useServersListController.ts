@@ -31,6 +31,24 @@ export function useServersListController(servers: FrontendServer[]) {
   };
 
   useEffect(() => {
+    const entries = Object.entries(grouped);
+    if (entries.length <= 1) return;
+
+    setCollapsed((current) => {
+      let changed = false;
+      const next = { ...current };
+
+      for (const [groupName, groupServers] of entries) {
+        if (next[groupName] !== undefined || groupServers.length > 2) continue;
+        next[groupName] = true;
+        changed = true;
+      }
+
+      return changed ? next : current;
+    });
+  }, [grouped]);
+
+  useEffect(() => {
     if (!filtered.length) {
       setSelectedServerId(null);
       return;

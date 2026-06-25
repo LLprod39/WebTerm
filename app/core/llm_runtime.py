@@ -58,12 +58,13 @@ def _provider_timeout_seconds(provider: str, *, endpoint_name: str | None = None
     return _setting_int("LLM_PROVIDER_TIMEOUT_SECONDS", 90, minimum=1)
 
 
-def _grok_reasoning_effort(model: str) -> str | None:
+def _grok_reasoning_effort(model: str, *, purpose: str = "") -> str | None:
     normalized_model = (model or "").strip().lower()
     if not normalized_model.startswith("grok-4.3"):
         return None
 
-    value = _setting_str("LLM_GROK_REASONING_EFFORT", "none").lower()
+    default = "medium" if (purpose or "").strip().lower() == "orchestrator" else "none"
+    value = _setting_str("LLM_GROK_REASONING_EFFORT", default).lower()
     if value in {"", "default", "auto"}:
         return None
     if value in {"none", "low", "medium", "high"}:

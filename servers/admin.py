@@ -2,6 +2,7 @@ from django.contrib import admin
 
 from .models import (
     AgentRun,
+    AgentRunArtifact,
     Server,
     ServerAgent,
     ServerAlert,
@@ -100,3 +101,11 @@ class AgentRunAdmin(admin.ModelAdmin):
     list_filter = ['status', 'started_at']
     readonly_fields = ['started_at', 'completed_at']
     search_fields = ['agent__name', 'server__name']
+
+
+@admin.register(AgentRunArtifact)
+class AgentRunArtifactAdmin(admin.ModelAdmin):
+    list_display = ['name', 'run', 'user', 'artifact_type', 'size_bytes', 'created_at']
+    list_filter = ['artifact_type', 'created_at']
+    readonly_fields = ['created_at', 'updated_at']
+    search_fields = ['name', 'run__agent__name', 'user__username']

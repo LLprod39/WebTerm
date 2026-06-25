@@ -230,13 +230,13 @@ python manage.py migrate
 python manage.py createsuperuser
 python manage.py runserver
 python manage.py run_scheduled_pipelines
-python manage.py run_scheduled_agents
+python manage.py run_scheduled_agents --daemon --worker-key default
 python manage.py run_monitor
 python manage.py run_telegram_bot
 python manage.py run_watchers
 python manage.py run_memory_dreams
-python manage.py run_agent_execution_plane
-python manage.py run_ops_supervisor --with-watchers
+python manage.py run_agent_execution_plane --worker-key default
+python manage.py run_ops_supervisor --with-scheduled-agents --with-watchers
 ```
 
 Frontend:

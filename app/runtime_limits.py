@@ -22,6 +22,8 @@ ACTIVE_TERMINAL_CONNECTION_STATUSES = ["connected"]
 
 
 class AgentRunLimitProvider(Protocol):
+    def cleanup_stale_runs(self, *, stale_seconds: int) -> int: ...
+
     def count_active_runs(self, *, user_id: int | None = None) -> int: ...
 
 
@@ -109,6 +111,19 @@ def _pipeline_run_stale_seconds() -> int:
     return _limit_value("PIPELINE_RUN_STALE_SECONDS")
 
 
+def _agent_run_stale_seconds() -> int:
+    return _limit_value("AGENT_RUN_STALE_SECONDS")
+
+
+def cleanup_stale_agent_runs() -> int:
+    stale_seconds = _agent_run_stale_seconds()
+    if stale_seconds <= 0:
+        return 0
+    if _agent_run_limit_provider is None:
+        return 0
+    return _agent_run_limit_provider.cleanup_stale_runs(stale_seconds=stale_seconds)
+
+
 def cleanup_stale_pipeline_runs() -> int:
     stale_seconds = _pipeline_run_stale_seconds()
     if stale_seconds <= 0:
@@ -141,6 +156,8 @@ def get_active_pipeline_runs_queryset(*, cleanup_stale: bool = True):
 
 
 def get_agent_run_limit_error(user: User | None) -> dict[str, object] | None:
+    cleanup_stale_agent_runs()
+
     if user is not None:
         per_user_limit = _limit_value("AGENT_ACTIVE_RUNS_PER_USER_LIMIT")
         if per_user_limit:

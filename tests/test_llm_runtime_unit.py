@@ -4,6 +4,7 @@ import pytest
 from django.test import override_settings
 
 from app.core.llm import LLMProvider, _is_timeout_error, _log_llm_usage, _provider_timeout_seconds
+from app.core.llm_runtime import _grok_reasoning_effort
 from app.core.model_config import ModelManager, model_manager
 from core_ui.audit import audit_context
 
@@ -23,6 +24,15 @@ def test_provider_timeout_seconds_uses_django_settings():
     assert _provider_timeout_seconds("grok") == 77
     assert _provider_timeout_seconds("openai", endpoint_name="responses") == 222
     assert _provider_timeout_seconds("ollama") == 333
+
+
+@override_settings(LLM_GROK_REASONING_EFFORT=None)
+def test_grok_reasoning_defaults_to_orchestrator_only(monkeypatch):
+    monkeypatch.delenv("LLM_GROK_REASONING_EFFORT", raising=False)
+
+    assert _grok_reasoning_effort("grok-4.3", purpose="chat") == "none"
+    assert _grok_reasoning_effort("grok-4.3", purpose="orchestrator") == "medium"
+    assert _grok_reasoning_effort("grok-4-1-fast-non-reasoning", purpose="orchestrator") is None
 
 
 @pytest.mark.asyncio

@@ -101,3 +101,48 @@ async def test_fetch_available_openai_models_filters_non_text_models(monkeypatch
 
     assert models == ["gpt-5-mini", "o4-mini"]
     assert manager.available_openai_models == models
+
+
+@pytest.mark.asyncio
+async def test_fetch_available_grok_models_accepts_xai_env_and_language_models_payload(monkeypatch):
+    manager = ModelManager()
+    calls: list[dict] = []
+
+    async def fake_managed_key(_provider: str) -> str:
+        return ""
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def get(self, url, headers=None, timeout=None):
+            calls.append({"url": url, "headers": headers, "timeout": timeout})
+            assert url == "https://api.x.ai/v1/language-models"
+            assert headers == {"Authorization": "Bearer xai-key"}
+            return _FakeResponse(
+                200,
+                {
+                    "models": [
+                        {"id": "grok-4.3"},
+                        {"id": "grok-4.3-mini"},
+                    ]
+                },
+            )
+
+    monkeypatch.setattr(manager, "_aget_managed_llm_api_key", fake_managed_key)
+    monkeypatch.setenv("XAI_API_KEY", "xai-key")
+    monkeypatch.delenv("GROK_API_KEY", raising=False)
+    monkeypatch.setattr("app.core.model_refresh.httpx.AsyncClient", FakeAsyncClient)
+
+    models = await model_refresh.fetch_available_grok_models(manager)
+
+    assert models == ["grok-4.3", "grok-4.3-mini"]
+    assert manager.grok_api_key == "xai-key"
+    assert manager.available_grok_models == models
+    assert len(calls) == 1

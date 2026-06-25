@@ -111,8 +111,8 @@ def api_models_refresh(request):
 
     if provider == "gemini" and not _has_llm_api_key("gemini", "GEMINI_API_KEY"):
         return JsonResponse({"error": "GEMINI_API_KEY is not configured"}, status=400)
-    if provider == "grok" and not _has_llm_api_key("grok", "GROK_API_KEY"):
-        return JsonResponse({"error": "GROK_API_KEY is not configured"}, status=400)
+    if provider == "grok" and not _has_llm_api_key("grok", "GROK_API_KEY", "XAI_API_KEY"):
+        return JsonResponse({"error": "GROK_API_KEY or XAI_API_KEY is not configured"}, status=400)
     if provider == "openai" and not _has_llm_api_key("openai", "OPENAI_API_KEY", "CODEX_API_KEY"):
         return JsonResponse({"error": "OPENAI_API_KEY or CODEX_API_KEY is not configured"}, status=400)
     if provider == "fair" and not _has_llm_api_key("fair", "FAIR_HYPERION_API_KEY", "FAIR_API_KEY"):

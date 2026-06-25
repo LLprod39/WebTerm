@@ -2,17 +2,20 @@ from datetime import timedelta
 
 import pytest
 from django.contrib.auth.models import User
+from django.db import DataError
 from django.utils import timezone
 
 from app.runtime_limits import (
+    cleanup_stale_agent_runs,
     cleanup_stale_pipeline_runs,
     get_active_pipeline_runs_queryset,
     get_active_terminal_connections_queryset,
+    get_agent_run_limit_error,
     get_pipeline_run_limit_error,
     get_terminal_session_limit_error,
 )
 from core_ui.models import UserAppPermission
-from servers.models import Server, ServerConnection
+from servers.models import AgentRun, AgentRunDispatch, AgentRunEvent, Server, ServerAgent, ServerConnection
 from studio.models import Pipeline, PipelineRun
 
 
@@ -44,6 +47,113 @@ def _create_pipeline(user: User, *, name: str = "Runtime Limit Pipeline") -> Pip
         nodes=[{"id": "manual", "type": "trigger/manual", "position": {"x": 0, "y": 0}, "data": {}}],
         edges=[],
     )
+
+
+def _create_agent(user: User, server: Server, *, name: str = "Runtime Limit Agent") -> ServerAgent:
+    agent = ServerAgent.objects.create(
+        user=user,
+        name=name,
+        mode=ServerAgent.MODE_FULL,
+        goal="Check runtime limits",
+    )
+    agent.servers.set([server])
+    return agent
+
+
+@pytest.mark.django_db
+def test_agent_limit_ignores_and_fails_stale_active_runs(settings):
+    settings.AGENT_ACTIVE_RUNS_PER_USER_LIMIT = 1
+    settings.AGENT_ACTIVE_RUNS_GLOBAL_LIMIT = 0
+    settings.AGENT_RUN_STALE_SECONDS = 180
+
+    user = User.objects.create_user(username="stale-agent-limit-user", password="x")
+    server = _create_server(user, name="Stale Agent Server")
+    agent = _create_agent(user, server, name="Stale Agent")
+    run = AgentRun.objects.create(
+        agent=agent,
+        server=server,
+        user=user,
+        status=AgentRun.STATUS_PENDING,
+    )
+    dispatch = AgentRunDispatch.objects.create(
+        run=run,
+        agent=agent,
+        user=user,
+        dispatch_kind=AgentRunDispatch.KIND_LAUNCH,
+        status=AgentRunDispatch.STATUS_QUEUED,
+        server_ids=[server.id],
+    )
+    stale_at = timezone.now() - timedelta(minutes=10)
+    AgentRun.objects.filter(pk=run.pk).update(started_at=stale_at)
+
+    assert get_agent_run_limit_error(user) is None
+
+    run.refresh_from_db()
+    dispatch.refresh_from_db()
+    assert run.status == AgentRun.STATUS_FAILED
+    assert run.completed_at is not None
+    assert "stale runtime threshold" in run.ai_analysis
+    assert run.report_payload["report_state"]["phase"] == "failed"
+    assert run.report_payload["report_state"]["report_ready"] is False
+    assert dispatch.status == AgentRunDispatch.STATUS_CANCELED
+    assert AgentRunEvent.objects.filter(run=run, event_type="agent_stale_failed").exists()
+
+
+@pytest.mark.django_db
+def test_cleanup_stale_agent_runs_is_disabled_when_timeout_is_zero(settings):
+    settings.AGENT_RUN_STALE_SECONDS = 0
+
+    user = User.objects.create_user(username="agent-stale-disabled-user", password="x")
+    server = _create_server(user, name="Disabled Stale Agent Server")
+    agent = _create_agent(user, server, name="Disabled Stale Agent")
+    run = AgentRun.objects.create(
+        agent=agent,
+        server=server,
+        user=user,
+        status=AgentRun.STATUS_PENDING,
+    )
+    stale_at = timezone.now() - timedelta(days=2)
+    AgentRun.objects.filter(pk=run.pk).update(started_at=stale_at)
+
+    assert cleanup_stale_agent_runs() == 0
+    run.refresh_from_db()
+    assert run.status == AgentRun.STATUS_PENDING
+
+
+@pytest.mark.django_db
+def test_cleanup_stale_agent_runs_handles_legacy_integer_duration_overflow(settings, monkeypatch):
+    settings.AGENT_RUN_STALE_SECONDS = 180
+
+    user = User.objects.create_user(username="agent-legacy-duration-user", password="x")
+    server = _create_server(user, name="Legacy Duration Agent Server")
+    agent = _create_agent(user, server, name="Legacy Duration Agent")
+    run = AgentRun.objects.create(
+        agent=agent,
+        server=server,
+        user=user,
+        status=AgentRun.STATUS_RUNNING,
+    )
+    stale_at = timezone.now() - timedelta(days=60)
+    AgentRun.objects.filter(pk=run.pk).update(started_at=stale_at)
+
+    original_save = AgentRun.save
+    failures: list[int] = []
+
+    def flaky_save(instance, *args, **kwargs):
+        update_fields = kwargs.get("update_fields") or []
+        if instance.pk == run.pk and "duration_ms" in update_fields and not failures:
+            failures.append(int(instance.duration_ms or 0))
+            raise DataError("integer out of range")
+        return original_save(instance, *args, **kwargs)
+
+    monkeypatch.setattr(AgentRun, "save", flaky_save)
+
+    assert cleanup_stale_agent_runs() == 1
+
+    run.refresh_from_db()
+    assert failures and failures[0] > 2_147_483_647
+    assert run.status == AgentRun.STATUS_FAILED
+    assert run.duration_ms == 2_147_483_647
 
 
 @pytest.mark.django_db

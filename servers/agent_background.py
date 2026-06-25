@@ -25,6 +25,7 @@ from servers.agent_dispatch import (
     fail_agent_dispatch,
     heartbeat_agent_dispatch,
 )
+from servers.agent_run_report import refresh_agent_run_report_payload
 from servers.agent_engine import AgentEngine
 from servers.agent_runtime import is_runtime_stop_requested
 from servers.models import AgentRun, AgentRunDispatch, Server, ServerAgent
@@ -64,11 +65,14 @@ def _mark_background_failure(run_id: int, exc: Exception, *, phase: str) -> None
             "message": message,
         },
     )
-    AgentRun.objects.filter(pk=run_id).update(
-        status=AgentRun.STATUS_FAILED,
-        ai_analysis=message,
-        completed_at=timezone.now(),
-    )
+    run = AgentRun.objects.filter(pk=run_id).select_related("agent", "server").first()
+    if run is None:
+        return
+    run.status = AgentRun.STATUS_FAILED
+    run.ai_analysis = message
+    run.completed_at = timezone.now()
+    run.save(update_fields=["status", "ai_analysis", "completed_at"])
+    refresh_agent_run_report_payload(run)
 
 
 def launch_agent_run_background(run_id: int, agent_id: int, server_ids: list[int], user_id: int, *, plan_only: bool = False) -> AgentRunDispatch:

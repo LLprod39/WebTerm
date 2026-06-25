@@ -26,6 +26,7 @@ class ServersConfig(AppConfig):
         from app.tools.ssh_host_key_provider import register_ssh_host_key_provider
         from servers.admin_metrics_provider import DjangoAdminServerMetricsProvider
         from servers.agent_tool_catalog_provider import DjangoAgentToolCatalogProvider
+        from servers.assistant_actions import register_assistant_actions
         from servers.chat_server_provider import DjangoChatServerProvider
         from servers.command_history_provider import DjangoCommandHistoryProvider
         from servers.ops_runtime_adapter import ServersOpsRuntimeProvider
@@ -61,5 +62,6 @@ class ServersConfig(AppConfig):
             tofu_known_hosts_for_host=tofu_known_hosts_for_host,
             parse_host_port_value=parse_host_port_value,
         )
+        register_assistant_actions()
 
         from . import signals  # noqa: F401

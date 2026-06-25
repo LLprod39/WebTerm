@@ -4,11 +4,11 @@ import { Outlet, useLocation, Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { localize, useI18n } from "@/lib/i18n";
 
-const immersiveMeta: Array<{ match: RegExp; title: string; backTo: string; hideHeader?: boolean }> = [
-  { match: /^\/servers\/hub$/, title: "Terminal Hub", backTo: "/servers", hideHeader: true },
-  { match: /^\/servers\/\d+\/terminal$/, title: "Terminal", backTo: "/servers", hideHeader: true },
-  { match: /^\/agents\/run\/\d+$/, title: "Agent Run", backTo: "/agents" },
-  { match: /^\/studio\/pipeline\/(?:new|\d+)$/, title: "Pipeline Editor", backTo: "/studio", hideHeader: true },
+const immersiveMeta: Array<{ match: RegExp; titleRu: string; titleEn: string; backTo: string; hideHeader?: boolean }> = [
+  { match: /^\/servers\/hub$/, titleRu: "Терминалы", titleEn: "Terminal Hub", backTo: "/servers", hideHeader: true },
+  { match: /^\/servers\/\d+\/terminal$/, titleRu: "Терминал", titleEn: "Terminal", backTo: "/servers", hideHeader: true },
+  { match: /^\/agents\/run\/\d+$/, titleRu: "Отчёт агента", titleEn: "Agent Run", backTo: "/agents" },
+  { match: /^\/studio\/pipeline\/(?:new|\d+)$/, titleRu: "Редактор пайплайна", titleEn: "Pipeline Editor", backTo: "/studio", hideHeader: true },
 ];
 
 export default function AppLayout() {
@@ -41,9 +41,9 @@ export default function AppLayout() {
                   className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                 >
                   <ArrowLeft className="h-3 w-3" />
-                  Back
+                  {localize(lang, "Назад", "Back")}
                 </Link>
-                <span className="text-xs font-medium text-foreground">{immersive.title}</span>
+                <span className="text-xs font-medium text-foreground">{localize(lang, immersive.titleRu, immersive.titleEn)}</span>
               </header>
             )}
             <main className="min-h-0 flex-1 overflow-hidden pt-16 animate-in fade-in duration-200 md:pt-0">

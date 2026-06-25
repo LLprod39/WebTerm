@@ -56,6 +56,7 @@ def build_memory_overview_payload(server_id: int, policy: Any) -> dict[str, Any]
         "worker_states": {
             "memory_dreams": serialize_background_worker_state("memory_dreams"),
             "agent_execution": serialize_background_worker_state("agent_execution"),
+            "scheduled_agents": serialize_background_worker_state("scheduled_agents"),
             "watchers": serialize_background_worker_state("watchers"),
         },
         "canonical": [serialize_snapshot(item, history_items=history_map.get(item.version_group_id, [])) for item in canonical],

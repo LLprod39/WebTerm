@@ -54,6 +54,7 @@ def test_memory_overview_exposes_worker_states_and_richer_history():
 
     assert "worker_states" in overview
     assert overview["worker_states"]["agent_execution"]["status"] == "running"
+    assert overview["worker_states"]["scheduled_agents"]["status"] == "missing"
     assert current["source_ref"] == "episode:456"
     assert current["created_by_username"] == owner.username
     assert current["history"]

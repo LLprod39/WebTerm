@@ -196,6 +196,74 @@ def test_non_staff_cannot_access_activity_logs_or_update_audit_settings():
 
 
 @pytest.mark.django_db
+def test_non_staff_cannot_update_domain_auth_settings():
+    user = User.objects.create_user(username="settings-domain-auth-user", password="x")
+    UserAppPermission.objects.update_or_create(
+        user=user,
+        feature="settings",
+        defaults={"allowed": True},
+    )
+    client = Client(enforce_csrf_checks=True)
+    client.force_login(user)
+
+    token = _csrf_token(client)
+    update = client.post(
+        "/api/settings/",
+        data=_json(
+            {
+                "domain_auth_enabled": True,
+                "domain_auth_header": "X-Remote-User",
+                "domain_auth_auto_create": True,
+                "domain_auth_default_profile": "admin_full",
+            }
+        ),
+        content_type="application/json",
+        HTTP_X_CSRFTOKEN=token,
+    )
+
+    assert update.status_code == 403
+    assert "Only admins can update domain authentication settings" in update.json()["error"]
+
+
+@pytest.mark.django_db
+def test_staff_can_update_domain_auth_settings(monkeypatch):
+    from core_ui.views import settings_config_views
+
+    staff = User.objects.create_user(username="staff-domain-auth", password="x", is_staff=True)
+    updates: list[dict] = []
+    monkeypatch.setattr(settings_config_views.model_manager, "update_config", lambda **kwargs: updates.append(kwargs))
+    monkeypatch.setattr(settings_config_views.model_manager, "save_config", lambda: None)
+
+    client = Client(enforce_csrf_checks=True)
+    client.force_login(staff)
+
+    token = _csrf_token(client)
+    update = client.post(
+        "/api/settings/",
+        data=_json(
+            {
+                "domain_auth_enabled": True,
+                "domain_auth_header": "X-Remote-User",
+                "domain_auth_auto_create": True,
+                "domain_auth_default_profile": "admin_full",
+            }
+        ),
+        content_type="application/json",
+        HTTP_X_CSRFTOKEN=token,
+    )
+
+    changed = {}
+    for item in updates:
+        changed.update(item)
+
+    assert update.status_code == 200
+    assert changed["domain_auth_enabled"] is True
+    assert changed["domain_auth_header"] == "X-Remote-User"
+    assert changed["domain_auth_auto_create"] is True
+    assert changed["domain_auth_default_profile"] == "admin_full"
+
+
+@pytest.mark.django_db
 def test_log_user_activity_normalizes_datetime_metadata_and_uses_audit_context():
     user = User.objects.create_user(username="audit-user", password="x")
     finished_at = timezone.now()

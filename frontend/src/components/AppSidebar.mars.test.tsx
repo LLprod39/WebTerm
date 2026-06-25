@@ -44,22 +44,24 @@ function renderSidebar(features: Partial<Record<FeatureFlag, boolean>>) {
   );
 }
 
-describe("AppSidebar MARS and Kubernetes nav", () => {
+describe("AppSidebar preview-gated nav", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("renders MARS when enabled and keeps Kubernetes hidden until ready", async () => {
-    renderSidebar({ servers: true, dashboard: true, agents: true, studio: true, kubernetes: true, mars: true, settings: true });
+  it("renders MARS when enabled and keeps Chat/Kubernetes hidden until ready", async () => {
+    renderSidebar({ servers: true, dashboard: true, agents: true, studio: true, orchestrator: true, kubernetes: true, mars: true, settings: true });
 
     expect(await screen.findByText("MARS")).toBeInTheDocument();
+    expect(screen.queryByText("Чат")).not.toBeInTheDocument();
     expect(screen.queryByText("Кубернетес")).not.toBeInTheDocument();
   });
 
   it("hides new sidebar items without feature access", async () => {
-    renderSidebar({ servers: true, dashboard: true, agents: true, studio: true, kubernetes: false, mars: false, settings: true });
+    renderSidebar({ servers: true, dashboard: true, agents: true, studio: true, orchestrator: false, kubernetes: false, mars: false, settings: true });
 
     await screen.findByText("Серверы");
+    expect(screen.queryByText("Чат")).not.toBeInTheDocument();
     expect(screen.queryByText("Кубернетес")).not.toBeInTheDocument();
     expect(screen.queryByText("MARS")).not.toBeInTheDocument();
   });

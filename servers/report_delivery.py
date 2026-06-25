@@ -1,10 +1,36 @@
 from __future__ import annotations
 
+import contextlib
+
+from asgiref.sync import sync_to_async
 import httpx
 
 from core_ui.services.notification_config import load_notification_config
 from servers.agent_inputs import format_telegram_report_message, normalize_report_delivery
 from servers.run_events import record_run_event_async
+
+
+def _redacted_chat_id(chat_id: str) -> str:
+    value = str(chat_id or "").strip()
+    if not value:
+        return ""
+    if len(value) <= 4:
+        return "***"
+    return f"***{value[-4:]}"
+
+
+def _refresh_report_payload(run_id: int) -> None:
+    from servers.agent_run_report import refresh_agent_run_report_payload
+    from servers.models import AgentRun
+
+    run = AgentRun.objects.select_related("agent", "server").get(id=run_id)
+    refresh_agent_run_report_payload(run)
+
+
+async def _record_delivery_event(run_id: int, event_type: str, payload: dict) -> None:
+    await record_run_event_async(run_id, event_type, payload)
+    with contextlib.suppress(Exception):
+        await sync_to_async(_refresh_report_payload, thread_sensitive=True)(run_id)
 
 
 async def deliver_agent_report_async(run) -> None:
@@ -18,7 +44,7 @@ async def deliver_agent_report_async(run) -> None:
     bot_token = str(cfg.get("telegram_bot_token") or "").strip()
     chat_id = str(telegram.get("chat_id") or cfg.get("telegram_chat_id") or "").strip()
     if not bot_token or not chat_id:
-        await record_run_event_async(
+        await _record_delivery_event(
             run.id,
             "agent_report_delivery_skipped",
             {
@@ -46,25 +72,25 @@ async def deliver_agent_report_async(run) -> None:
                 },
             )
         if response.status_code == 200:
-            await record_run_event_async(
+            await _record_delivery_event(
                 run.id,
                 "agent_report_delivery_sent",
-                {"channel": "telegram", "chat_id": chat_id},
+                {"channel": "telegram", "chat_id": _redacted_chat_id(chat_id)},
             )
             return
-        await record_run_event_async(
+        await _record_delivery_event(
             run.id,
             "agent_report_delivery_failed",
             {
                 "channel": "telegram",
-                "chat_id": chat_id,
+                "chat_id": _redacted_chat_id(chat_id),
                 "status_code": response.status_code,
                 "body": response.text[:300],
             },
         )
     except Exception as exc:
-        await record_run_event_async(
+        await _record_delivery_event(
             run.id,
             "agent_report_delivery_failed",
-            {"channel": "telegram", "chat_id": chat_id, "error": str(exc)},
+            {"channel": "telegram", "chat_id": _redacted_chat_id(chat_id), "error": str(exc)},
         )

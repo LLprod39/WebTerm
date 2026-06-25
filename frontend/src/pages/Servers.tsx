@@ -229,9 +229,8 @@ export default function Servers() {
   }
 
   return (
-    <PageShell width="full" className="max-w-[1500px] space-y-6">
+    <PageShell width="full" className="space-y-6">
       <PageHeader
-        eyebrow={t("srv.inventory_kicker")}
         title={t("srv.title")}
         description={t("srv.groups_description")}
         meta={
@@ -260,73 +259,77 @@ export default function Servers() {
         }
       />
 
-      <ContentPanel className="overflow-hidden">
-        <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as MainTab)}>
-          <div className="border-b border-border/70 px-4 pt-4">
+      <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as MainTab)} className="space-y-4">
+        <ContentPanel className="overflow-hidden">
+          <div className="px-4 pt-4">
             <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto bg-transparent p-0">
-              <TabsTrigger value="servers" className="min-h-10 gap-2 rounded-b-none px-3">
+              <TabsTrigger value="servers" className="min-h-11 gap-2 rounded-b-none px-4">
                 <Server className="h-4 w-4" /> {t("srv.list")}
               </TabsTrigger>
-              <TabsTrigger value="groups" className="min-h-10 gap-2 rounded-b-none px-3">
+              <TabsTrigger value="groups" className="min-h-11 gap-2 rounded-b-none px-4">
                 <Layers className="h-4 w-4" /> {t("srv.groups")}
               </TabsTrigger>
-              <TabsTrigger value="rules" className="min-h-10 gap-2 rounded-b-none px-3">
+              <TabsTrigger value="rules" className="min-h-11 gap-2 rounded-b-none px-4">
                 <Settings className="h-4 w-4" /> {t("srv.rules_tab")}
               </TabsTrigger>
-              <TabsTrigger value="playbook" className="min-h-10 gap-2 rounded-b-none px-3">
+              <TabsTrigger value="playbook" className="min-h-11 gap-2 rounded-b-none px-4">
                 <BookOpen className="h-4 w-4" /> {t("pb.title")}
               </TabsTrigger>
             </TabsList>
           </div>
+        </ContentPanel>
 
-          <div className="p-4 sm:p-5">
-            <TabsContent value="servers" className="mt-0 space-y-3">
-              <ServersListTab
-                grouped={grouped}
-                filteredCount={filtered.length}
-                totalServers={servers.length}
-                collapsed={collapsed}
-                fleetHealthByServerId={fleetHealthByServerId}
-                t={t}
-                tr={tr}
-                lang={lang}
-                onToggleGroup={toggleGroup}
-                onOpenCreate={openCreate}
-                onOpenAdvanced={openAdvanced}
-                onOpenEdit={openEdit}
-                onRequestDeleteServer={requestDeleteServer}
-                onClearSearch={() => setSearch("")}
-              />
-            </TabsContent>
+        <TabsContent value="servers" className="mt-0 space-y-3">
+          <ServersListTab
+            grouped={grouped}
+            filteredCount={filtered.length}
+            totalServers={servers.length}
+            collapsed={collapsed}
+            fleetHealthByServerId={fleetHealthByServerId}
+            t={t}
+            tr={tr}
+            lang={lang}
+            onToggleGroup={toggleGroup}
+            onOpenCreate={openCreate}
+            onOpenAdvanced={openAdvanced}
+            onOpenEdit={openEdit}
+            onRequestDeleteServer={requestDeleteServer}
+            onClearSearch={() => setSearch("")}
+          />
+        </TabsContent>
 
-            <TabsContent value="groups" className="mt-0 space-y-3">
-              <ServerGroupsTab
-                manageableGroups={manageableGroups}
-                groupCount={groupCount}
-                t={t}
-                tr={tr}
-                onOpenCreateGroup={openCreateGroup}
-                onOpenGroupRules={openGroupRules}
-                onOpenGroupSettings={openGroupSettings}
-                onRequestDeleteGroup={requestDeleteGroup}
-              />
-            </TabsContent>
+        <TabsContent value="groups" className="mt-0 space-y-3">
+          <ContentPanel className="p-4 sm:p-5">
+            <ServerGroupsTab
+              manageableGroups={manageableGroups}
+              groupCount={groupCount}
+              t={t}
+              tr={tr}
+              onOpenCreateGroup={openCreateGroup}
+              onOpenGroupRules={openGroupRules}
+              onOpenGroupSettings={openGroupSettings}
+              onRequestDeleteGroup={requestDeleteGroup}
+            />
+          </ContentPanel>
+        </TabsContent>
 
-            <TabsContent value="rules" className="mt-0 space-y-3">
-              <ServerRulesTab
-                controller={rulesController}
-                manageableGroups={manageableGroups}
-                t={t}
-                tr={tr}
-              />
-            </TabsContent>
+        <TabsContent value="rules" className="mt-0 space-y-3">
+          <ContentPanel className="p-4 sm:p-5">
+            <ServerRulesTab
+              controller={rulesController}
+              manageableGroups={manageableGroups}
+              t={t}
+              tr={tr}
+            />
+          </ContentPanel>
+        </TabsContent>
 
-            <TabsContent value="playbook" className="mt-0 space-y-3">
-              <PlaybooksPanel {...playbooksPanel} />
-            </TabsContent>
-          </div>
-        </Tabs>
-      </ContentPanel>
+        <TabsContent value="playbook" className="mt-0 space-y-3">
+          <ContentPanel className="p-4 sm:p-5">
+            <PlaybooksPanel {...playbooksPanel} />
+          </ContentPanel>
+        </TabsContent>
+      </Tabs>
 
       <ServerFormDialog
         editingServer={editingServer}

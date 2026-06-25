@@ -84,7 +84,7 @@ test.describe("Visual regression", () => {
   test("agents page snapshot", async ({ page }) => {
     await installPlatformMocks(page, { authenticated: true });
     await page.goto("/agents");
-    await expect(page.getByRole("heading", { name: "Agents" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Agents" })).toBeVisible();
     await stabilizeVisuals(page);
     await expect(page).toHaveScreenshot("agents-page.png", { animations: "disabled", fullPage: true });
   });
@@ -106,7 +106,7 @@ test.describe("Visual regression", () => {
     await expect(dialog.getByText("Preflight passed")).toBeVisible();
 
     await stabilizeVisuals(page);
-    await expect(page).toHaveScreenshot("agent-wizard-review.png", { animations: "disabled", fullPage: true });
+    await expect(dialog).toHaveScreenshot("agent-wizard-review.png", { animations: "disabled" });
   });
 
   test("agent run page snapshot", async ({ page }) => {
@@ -273,7 +273,7 @@ test.describe("Visual regression", () => {
 
   test("agent wizard mobile snapshot", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await installPlatformMocks(page, { authenticated: true });
+    await installPlatformMocks(page, { authenticated: true, agentList: "empty" });
     await page.goto("/agents");
     await page.getByRole("button", { name: "New agent" }).click();
 

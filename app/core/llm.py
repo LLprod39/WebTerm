@@ -68,7 +68,7 @@ class LLMProvider:
         with contextlib.suppress(Exception):
             model_manager.load_config()
         self.gemini_api_key = os.getenv("GEMINI_API_KEY")
-        self.grok_api_key = os.getenv("GROK_API_KEY")
+        self.grok_api_key = os.getenv("GROK_API_KEY") or os.getenv("XAI_API_KEY")
         self.anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
         self.openai_api_key = os.getenv("OPENAI_API_KEY") or os.getenv("CODEX_API_KEY")
         self.fair_api_key = os.getenv("FAIR_HYPERION_API_KEY") or os.getenv("FAIR_API_KEY")
@@ -278,7 +278,7 @@ class LLMProvider:
                 json_mode=json_mode,
                 temperature=0.7,
             )
-            reasoning_effort = _grok_reasoning_effort(grok_model)
+            reasoning_effort = _grok_reasoning_effort(grok_model, purpose=purpose)
             if reasoning_effort:
                 request.payload["reasoning_effort"] = reasoning_effort
 

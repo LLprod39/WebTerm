@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 from typing import Any
 
@@ -9,6 +10,19 @@ from django.utils import timezone
 
 from servers.models import AgentRun, AgentRunDispatch
 from servers.run_events import record_run_event
+
+logger = logging.getLogger(__name__)
+
+
+def _refresh_run_report_payload(run_id: int) -> None:
+    try:
+        from servers.agent_run_report import refresh_agent_run_report_payload
+
+        run = AgentRun.objects.select_related("agent", "server").filter(pk=run_id).first()
+        if run is not None:
+            refresh_agent_run_report_payload(run)
+    except Exception as exc:
+        logger.debug("Agent dispatch report refresh failed for run %s: %s", run_id, exc)
 
 
 def enqueue_agent_run_dispatch(
@@ -51,6 +65,7 @@ def enqueue_agent_run_dispatch(
             "message": f"Queued for {dispatch_kind.replace('_', ' ')} worker execution",
         },
     )
+    _refresh_run_report_payload(run.id)
     return dispatch
 
 
@@ -108,6 +123,7 @@ def claim_next_agent_dispatch(*, worker_name: str, lease_seconds: int = 180) -> 
                 "message": f"Dispatch claimed by worker {worker_name[:120]}",
             },
         )
+        _refresh_run_report_payload(dispatch.run_id)
         return dispatch
 
 
@@ -144,6 +160,7 @@ def complete_agent_dispatch(dispatch_id: int, *, summary: dict[str, Any] | None 
             "message": f"Worker completed {dispatch.dispatch_kind.replace('_', ' ')} dispatch",
         },
     )
+    _refresh_run_report_payload(dispatch.run_id)
     return dispatch
 
 
@@ -165,6 +182,7 @@ def fail_agent_dispatch(dispatch_id: int, *, error: str) -> AgentRunDispatch | N
             "message": f"Worker dispatch failed: {dispatch.error}",
         },
     )
+    _refresh_run_report_payload(dispatch.run_id)
     return dispatch
 
 
@@ -190,6 +208,7 @@ def cancel_agent_dispatches_for_run(run_id: int, *, reason: str = "run_stopped")
             "message": f"Canceled queued dispatches: {reason}",
         },
     )
+    _refresh_run_report_payload(run_id)
     return count
 
 

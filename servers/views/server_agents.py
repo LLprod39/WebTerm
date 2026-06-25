@@ -16,7 +16,10 @@ from core_ui.decorators import require_feature
 from servers.agent_inputs import normalize_input_artifacts, normalize_report_delivery
 from servers.agent_schedule import normalize_schedule_config, schedule_minutes_for_config
 from servers.agent_service import (
+    cleanup_stale_agent_runs_for_user,
     dispatch_scheduled_agents_for_user,
+    get_agent_runtime_overview,
+    get_agent_worker_states,
     list_agents_for_user,
     list_scheduled_agents_for_user,
     start_agent_run_for_user,
@@ -33,7 +36,14 @@ def agent_list(request):
     """List agents for the current user."""
     mode_filter = request.GET.get("mode")
     data = list_agents_for_user(request.user, mode_filter=mode_filter)
-    return JsonResponse({"success": True, "agents": data})
+    return JsonResponse(
+        {
+            "success": True,
+            "agents": data,
+            "worker_states": get_agent_worker_states(),
+            "runtime_overview": get_agent_runtime_overview(request.user),
+        }
+    )
 
 
 @login_required
@@ -47,7 +57,7 @@ def agent_schedule_overview(request):
         limit = 50
 
     payload = list_scheduled_agents_for_user(request.user, limit=limit)
-    return JsonResponse({"success": True, **payload})
+    return JsonResponse({"success": True, **payload, "runtime_overview": get_agent_runtime_overview(request.user)})
 
 
 @login_required
@@ -86,6 +96,41 @@ def agent_schedule_dispatch(request):
         entity_name=f"user:{request.user.username}",
     )
     return JsonResponse({"success": True, **payload})
+
+
+@login_required
+@require_feature("agents")
+@require_http_methods(["POST"])
+def agent_runtime_cleanup_stale(request):
+    """Mark stale active agent runs for the current user as failed and cancel dispatches."""
+    try:
+        data = json.loads(request.body) if request.body else {}
+    except Exception:
+        data = {}
+
+    try:
+        limit = max(1, min(int(data.get("limit", 100)), 200))
+    except (TypeError, ValueError):
+        limit = 100
+
+    cleanup = cleanup_stale_agent_runs_for_user(request.user, limit=limit)
+    log_user_activity(
+        user=request.user,
+        request=request,
+        category="agent",
+        action="runtime_cleanup_stale",
+        entity_type="agent_runtime",
+        entity_id=str(request.user.id),
+        entity_name=f"user:{request.user.username}",
+        metadata={"cleaned": cleanup.get("cleaned", 0), "canceled_dispatches": cleanup.get("canceled_dispatches", 0)},
+    )
+    return JsonResponse(
+        {
+            "success": True,
+            "cleanup": cleanup,
+            "runtime_overview": get_agent_runtime_overview(request.user),
+        }
+    )
 
 
 @login_required

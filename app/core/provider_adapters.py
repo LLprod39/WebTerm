@@ -163,8 +163,8 @@ PROVIDER_SPECS: dict[str, ProviderSpec] = {
         name="xAI Grok",
         enabled_by_default=True,
         enabled_field="grok_enabled",
-        requires_key="GROK_API_KEY",
-        key_env_names=("GROK_API_KEY",),
+        requires_key="GROK_API_KEY or XAI_API_KEY",
+        key_env_names=("GROK_API_KEY", "XAI_API_KEY"),
     ),
     "openai": ProviderSpec(
         id="openai",

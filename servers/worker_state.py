@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.worker_state import (
     claim_background_worker,
+    cleanup_stale_background_workers,
     heartbeat_background_worker,
     serialize_background_worker_state,
     stop_background_worker,
@@ -9,6 +10,7 @@ from app.worker_state import (
 
 __all__ = [
     "claim_background_worker",
+    "cleanup_stale_background_workers",
     "heartbeat_background_worker",
     "serialize_background_worker_state",
     "stop_background_worker",

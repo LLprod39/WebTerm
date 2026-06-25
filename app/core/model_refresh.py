@@ -68,9 +68,12 @@ async def fetch_available_gemini_models(manager: Any) -> list[str]:
 
 
 async def fetch_available_grok_models(manager: Any) -> list[str]:
-    key = await manager._aget_managed_llm_api_key("grok") or manager.grok_api_key or (
-        os.getenv("GROK_API_KEY") or ""
-    ).strip()
+    key = (
+        await manager._aget_managed_llm_api_key("grok")
+        or manager.grok_api_key
+        or (os.getenv("GROK_API_KEY") or "").strip()
+        or (os.getenv("XAI_API_KEY") or "").strip()
+    )
     if key:
         manager.grok_api_key = key
     if not key:
@@ -87,7 +90,12 @@ async def fetch_available_grok_models(manager: Any) -> list[str]:
                 )
 
                 if response.status_code != 200:
-                    logger.warning(f"Grok API returned status {response.status_code} for {endpoint}")
+                    logger.warning(
+                        "Grok API returned status {} for {}: {}",
+                        response.status_code,
+                        endpoint,
+                        redacted_log_text(response.text, limit=500),
+                    )
                     continue
 
                 data = response.json()

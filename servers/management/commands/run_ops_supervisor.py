@@ -6,7 +6,7 @@ import sys
 import time
 from dataclasses import dataclass
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 
 @dataclass
@@ -18,14 +18,17 @@ class _WorkerSpec:
 
 
 class Command(BaseCommand):
-    help = "Supervise long-running ops workers: memory dreams, execution plane, and optional watchers."
+    help = "Supervise long-running ops workers: memory dreams, execution plane, scheduled agents, and optional watchers."
 
     def add_arguments(self, parser):
         parser.add_argument("--with-watchers", action="store_true", help="Also supervise the watchers worker")
+        parser.add_argument("--with-scheduled-agents", action="store_true", help="Also supervise scheduled server agents")
         parser.add_argument("--restart-delay", type=int, default=5, help="Seconds to wait before restarting a dead worker")
         parser.add_argument("--lease-seconds", type=int, default=180, help="Lease heartbeat duration passed to child workers")
         parser.add_argument("--dream-interval", type=int, default=300, help="Poll interval for run_memory_dreams --daemon")
         parser.add_argument("--execution-interval", type=int, default=5, help="Poll interval for run_agent_execution_plane")
+        parser.add_argument("--scheduled-agents-interval", type=int, default=60, help="Poll interval for run_scheduled_agents")
+        parser.add_argument("--scheduled-agents-limit", type=int, default=100, help="Scheduled agents batch limit")
         parser.add_argument("--watchers-interval", type=int, default=120, help="Poll interval for run_watchers")
         parser.add_argument("--watchers-limit", type=int, default=100, help="Watcher batch limit")
         parser.add_argument("--once", action="store_true", help="Run each worker once and exit")
@@ -57,9 +60,15 @@ class Command(BaseCommand):
                 self._start_worker(spec)
 
             if once:
+                failed_workers: list[tuple[str, int]] = []
                 for spec in worker_specs:
                     code = spec.process.wait() if spec.process is not None else 0
                     self.stdout.write(f"[{spec.name}] exited with code {code}")
+                    if int(code or 0) != 0:
+                        failed_workers.append((spec.name, int(code or 0)))
+                if failed_workers:
+                    details = ", ".join(f"{name}={code}" for name, code in failed_workers)
+                    raise CommandError(f"Ops supervisor workers failed: {details}")
                 return
 
             while not stop_requested:
@@ -109,11 +118,30 @@ class Command(BaseCommand):
                 + [
                     "run_agent_execution_plane",
                     *(["--once"] if once else ["--interval", str(max(2, int(options["execution_interval"] or 5)))]),
+                    "--worker-key",
+                    "default",
                     "--lease-seconds",
                     str(lease_seconds),
                 ],
             ),
         ]
+        if bool(options.get("with_scheduled_agents")):
+            specs.append(
+                _WorkerSpec(
+                    name="scheduled_agents",
+                    args=base
+                    + [
+                        "run_scheduled_agents",
+                        *(["--once"] if once else ["--daemon", "--interval", str(max(15, int(options["scheduled_agents_interval"] or 60)))]),
+                        "--worker-key",
+                        "default",
+                        "--lease-seconds",
+                        str(lease_seconds),
+                        "--limit",
+                        str(max(1, min(int(options["scheduled_agents_limit"] or 100), 500))),
+                    ],
+                )
+            )
         if bool(options.get("with_watchers")):
             specs.append(
                 _WorkerSpec(

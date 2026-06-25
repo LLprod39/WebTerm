@@ -6,6 +6,7 @@ import pytest
 from asgiref.sync import sync_to_async
 from django.contrib.auth.models import User
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.utils import timezone
 
 from servers.agent_dispatch import enqueue_agent_run_dispatch
@@ -106,6 +107,7 @@ def test_dispatch_scheduled_agents_launches_due_full_agent(monkeypatch):
     run = AgentRun.objects.get(agent=agent)
     assert run.status == AgentRun.STATUS_PENDING
     assert AgentRunEvent.objects.filter(run=run, event_type="agent_scheduled_dispatch").exists()
+    assert any(item["event_type"] == "agent_scheduled_dispatch" for item in run.report_payload["events"])
     assert captured == {
         "run_id": run.id,
         "agent_id": agent.id,
@@ -153,6 +155,7 @@ def test_dispatch_scheduled_agents_runs_mini_agent_inline(monkeypatch):
     run = AgentRun.objects.get(agent=agent)
     assert run.status == AgentRun.STATUS_COMPLETED
     assert AgentRunEvent.objects.filter(run=run, event_type="agent_scheduled_dispatch").exists()
+    assert any(item["event_type"] == "agent_scheduled_dispatch" for item in run.report_payload["events"])
 
 
 @pytest.mark.django_db
@@ -184,6 +187,23 @@ def test_dispatch_scheduled_agents_skips_active_runs():
     assert summary["skip_reasons"]["active_run"] == 1
 
 
+@pytest.mark.django_db
+def test_scheduled_agents_worker_updates_background_state():
+    call_command("run_scheduled_agents", once=True, worker_key="pytest-scheduled-agents")
+
+    worker_state = BackgroundWorkerState.objects.get(
+        worker_kind=BackgroundWorkerState.KIND_SCHEDULED_AGENTS,
+        worker_key="pytest-scheduled-agents",
+    )
+    assert worker_state.status == BackgroundWorkerState.STATUS_IDLE
+    assert worker_state.last_started_at is not None
+    assert worker_state.last_stopped_at is not None
+    assert worker_state.last_cycle_started_at is not None
+    assert worker_state.last_cycle_finished_at is not None
+    assert worker_state.last_summary["scanned"] == 0
+    assert worker_state.last_summary["due"] == 0
+
+
 @pytest.mark.django_db(transaction=True)
 def test_execution_plane_worker_processes_queued_dispatch(monkeypatch):
     user = User.objects.create_user(username="exec-plane-user", password="x")
@@ -209,6 +229,8 @@ def test_execution_plane_worker_processes_queued_dispatch(monkeypatch):
         server_ids=[server.id],
         plan_only=False,
     )
+    run.refresh_from_db()
+    assert any(item["event_type"] == "agent_dispatch_enqueued" for item in run.report_payload["events"])
 
     async def fake_engine_run(self, *, run_record=None):
         target_run = run_record or run
@@ -226,10 +248,91 @@ def test_execution_plane_worker_processes_queued_dispatch(monkeypatch):
     assert run.status == AgentRun.STATUS_COMPLETED
     assert run.final_report == "worker completed run"
     assert AgentRunEvent.objects.filter(run=run, event_type="agent_worker_claimed").exists()
+    assert AgentRunEvent.objects.filter(run=run, event_type="agent_dispatch_completed").exists()
+    assert run.report_payload["report_state"]["report_ready"] is True
+    assert any(item["event_type"] == "agent_dispatch_claimed" for item in run.report_payload["events"])
+    assert any(item["event_type"] == "agent_dispatch_completed" for item in run.report_payload["events"])
     worker_state = BackgroundWorkerState.objects.get(
         worker_kind=BackgroundWorkerState.KIND_AGENT_EXECUTION,
         worker_key="pytest-exec-plane",
     )
     assert worker_state.status == BackgroundWorkerState.STATUS_IDLE
+    assert "run_agent_execution_plane --worker-key pytest-exec-plane" in worker_state.command
     assert worker_state.last_summary["processed"] >= 1
     assert worker_state.last_summary["completed"] >= 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_execution_plane_worker_failure_marks_run_failed_with_report_payload(monkeypatch):
+    user = User.objects.create_user(username="exec-plane-failure-user", password="x")
+    server = _create_server(user, name="exec-plane-failure-node")
+    agent = ServerAgent.objects.create(
+        user=user,
+        name="Execution Plane Failure Agent",
+        mode=ServerAgent.MODE_FULL,
+        goal="Fail during worker execution",
+        is_enabled=True,
+    )
+    agent.servers.set([server])
+    run = AgentRun.objects.create(
+        agent=agent,
+        server=server,
+        user=user,
+        status=AgentRun.STATUS_PENDING,
+    )
+    dispatch = enqueue_agent_run_dispatch(
+        run=run,
+        agent_id=agent.id,
+        user_id=user.id,
+        server_ids=[server.id],
+        plan_only=False,
+    )
+    run.refresh_from_db()
+    assert any(item["event_type"] == "agent_dispatch_enqueued" for item in run.report_payload["events"])
+
+    async def fake_engine_run(self, *, run_record=None):
+        raise RuntimeError("worker boom")
+
+    monkeypatch.setattr("servers.agent_background.AgentEngine.run", fake_engine_run)
+
+    with pytest.raises(CommandError, match="Execution plane dispatches failed: 1"):
+        call_command("run_agent_execution_plane", once=True, worker_key="pytest-exec-plane-failure")
+
+    dispatch.refresh_from_db()
+    run.refresh_from_db()
+    assert dispatch.status == AgentRunDispatch.STATUS_FAILED
+    assert "worker boom" in dispatch.error
+    assert run.status == AgentRun.STATUS_FAILED
+    assert "worker boom" in run.ai_analysis
+    assert run.report_payload["report_state"]["phase"] == "failed"
+    assert run.report_payload["report_state"]["report_ready"] is False
+    assert run.report_payload["artifacts"] == []
+    assert AgentRunEvent.objects.filter(run=run, event_type="agent_dispatch_failed").exists()
+    assert AgentRunEvent.objects.filter(run=run, event_type="agent_background_failed").exists()
+    assert any(item["event_type"] == "agent_dispatch_claimed" for item in run.report_payload["events"])
+    assert any(item["event_type"] == "agent_dispatch_failed" for item in run.report_payload["events"])
+    assert any(item["event_type"] == "agent_background_failed" for item in run.report_payload["events"])
+    worker_state = BackgroundWorkerState.objects.get(
+        worker_kind=BackgroundWorkerState.KIND_AGENT_EXECUTION,
+        worker_key="pytest-exec-plane-failure",
+    )
+    assert worker_state.status == BackgroundWorkerState.STATUS_IDLE
+    assert worker_state.last_summary["failed"] >= 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_execution_plane_worker_crash_records_worker_error(monkeypatch):
+    def boom():
+        raise RuntimeError("stale cleanup overflow")
+
+    monkeypatch.setattr("servers.management.commands.run_agent_execution_plane.cleanup_stale_agent_runs", boom)
+
+    with pytest.raises(RuntimeError, match="stale cleanup overflow"):
+        call_command("run_agent_execution_plane", once=True, worker_key="pytest-exec-plane-crash")
+
+    worker_state = BackgroundWorkerState.objects.get(
+        worker_kind=BackgroundWorkerState.KIND_AGENT_EXECUTION,
+        worker_key="pytest-exec-plane-crash",
+    )
+    assert worker_state.status == BackgroundWorkerState.STATUS_ERROR
+    assert "RuntimeError: stale cleanup overflow" in worker_state.last_error

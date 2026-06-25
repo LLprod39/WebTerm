@@ -201,7 +201,8 @@ async def synthesize_multi_agent_report(engine: Any, goal: str, plan_tasks: list
 ПРАВИЛА ФОРМАТИРОВАНИЯ:
 - В отчёте секция «Результаты по задачам» уже заполнена готовой таблицей — НЕ переписывай и НЕ меняй её.
 - Списки — через дефис (-), без лишних отступов.
-- Не повторяй одно и то же в разных секциях."""
+- Не повторяй одно и то же в разных секциях.
+- Если корневая причина не подтверждена фактами, так и напиши; не выдумывай её."""
 
     user_msg = f"""Создай финальный отчёт по результатам работы агентного пайплайна.
 
@@ -216,6 +217,10 @@ async def synthesize_multi_agent_report(engine: Any, goal: str, plan_tasks: list
 
 > [Одно предложение — главный итог пайплайна]
 
+## Что произошло
+
+[2–4 предложения: какая цель была у пайплайна, какие агенты/серверы участвовали, чем завершился запуск]
+
 ## Итог
 
 [3–4 предложения: общий результат, статус системы, ключевые выводы]
@@ -223,6 +228,11 @@ async def synthesize_multi_agent_report(engine: Any, goal: str, plan_tasks: list
 ## Результаты по задачам
 
 {tasks_table}
+
+## Доказательства
+
+- [Факт 1 — конкретный результат задачи, команда, статус сервиса, число, путь или версия]
+- [Факт 2]
 
 ## Ключевые находки
 
@@ -257,9 +267,74 @@ async def synthesize_multi_agent_report(engine: Any, goal: str, plan_tasks: list
                 chunks.append(chunk)
                 if chunks and len(chunks) % 20 == 0:
                     await engine._emit("agent_report", {"text": "".join(chunks), "interim": True})
-        result = "".join(chunks)
+        result = "".join(chunks).strip()
+        if not result:
+            return _fallback_multi_agent_report(goal, plan_tasks, tasks_table, error="LLM вернул пустой финальный отчёт")
         orchestrator_log.append({"role": "assistant", "content": result, "timestamp": timezone.now().isoformat()})
         return inject_tasks_table_into_report(result, tasks_table)
     except Exception as exc:
         logger.error("Synthesis failed: {}", exc)
-        return f"# Отчёт пайплайна\n\n## Результаты по задачам\n\n{tasks_table}\n\n*Ошибка генерации финального отчёта: {exc}*"
+        return _fallback_multi_agent_report(goal, plan_tasks, tasks_table, error=str(exc))
+
+
+def _fallback_multi_agent_report(goal: str, plan_tasks: list[dict], tasks_table: str, *, error: str = "") -> str:
+    done = [task for task in plan_tasks if task.get("status") == "done"]
+    failed = [task for task in plan_tasks if task.get("status") == "failed"]
+    skipped = [task for task in plan_tasks if task.get("status") == "skipped"]
+    evidence = []
+    for task in plan_tasks[:8]:
+        result_text = str(task.get("result") or task.get("error") or task.get("thought") or "").strip()
+        if result_text:
+            evidence.append(f"- {task.get('name', 'Задача')}: {result_text[:240]}")
+    if not evidence:
+        evidence = ["- Сохранённых результатов задач недостаточно для технического вывода."]
+
+    risk_lines = []
+    if failed:
+        risk_lines.extend(f"- Задача не выполнена: {task.get('name', 'Без названия')}" for task in failed[:5])
+    if skipped:
+        risk_lines.extend(f"- Задача пропущена: {task.get('name', 'Без названия')}" for task in skipped[:5])
+    if error:
+        risk_lines.append(f"- Генерация LLM-отчёта завершилась ошибкой: {error[:500]}")
+    if not risk_lines:
+        risk_lines = ["- Критических проблем не обнаружено по сохранённым задачам; полнота вывода требует ручной проверки."]
+
+    status = "❌ Ошибка" if failed else "⚠️ Частичный успех"
+    return f"""# Отчёт пайплайна
+
+> Финальный Markdown собран детерминированным fallback по сохранённым задачам пайплайна.
+
+## Что произошло
+
+Пайплайн выполнял цель: {goal}. Основной LLM-синтез финального отчёта не дал полноценный структурированный результат, поэтому backend сформировал безопасный fallback-отчёт из сохранённых задач.
+
+## Итог
+
+Выполнено задач: {len(done)} из {len(plan_tasks)}. Корневая причина не подтверждена фактами; вывод ниже основан только на сохранённых результатах задач.
+
+## Результаты по задачам
+
+{tasks_table}
+
+## Доказательства
+
+{chr(10).join(evidence)}
+
+## Ключевые находки
+
+- Доступно задач пайплайна: {len(plan_tasks)}.
+- Успешно завершено задач: {len(done)}.
+- Провалено задач: {len(failed)}.
+
+## Проблемы и риски
+
+{chr(10).join(risk_lines)}
+
+## Рекомендации
+
+1. Проверить вкладки «События», «Логи» и «Ход агента» для первичных данных.
+2. Повторить запуск или перепланировать оставшиеся задачи после устранения проблем.
+
+---
+
+**Статус пайплайна:** {status}"""

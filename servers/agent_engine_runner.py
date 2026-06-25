@@ -12,6 +12,7 @@ from loguru import logger
 from app.agent_kernel.mcp_runtime import load_mcp_bindings
 from app.agent_kernel.tools.registry import ToolRegistry
 from app.execution_policy import safe_payload_preview
+from servers.agent_run_report import build_agent_run_report_payload
 from servers.agent_runtime import (
     is_runtime_stop_requested,
     register_engine,
@@ -332,6 +333,7 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
         run.ai_analysis = final_report
         run.completed_at = timezone.now()
         run.duration_ms = int((time.monotonic() - t0) * 1000)
+        run.report_payload = await sync_to_async(build_agent_run_report_payload, thread_sensitive=True)(run)
         await sync_to_async(run.save)()
         await engine._persist_ops_summary(
             run=run,
@@ -363,6 +365,7 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
         run.total_iterations = len(iterations_log)
         run.completed_at = timezone.now()
         run.duration_ms = int((time.monotonic() - t0) * 1000)
+        run.report_payload = await sync_to_async(build_agent_run_report_payload, thread_sensitive=True)(run)
         await sync_to_async(run.save)()
         await engine._persist_ops_summary(
             run=run,

@@ -17,8 +17,14 @@ from core_ui.context_processors import user_can_feature
 from core_ui.managed_secrets import delete_llm_api_key, has_llm_api_key, set_llm_api_key
 from core_ui.models import UserActivityLog
 
-
 LLM_API_KEY_PROVIDERS = {"gemini", "grok", "openai", "claude", "fair", "ollama"}
+DOMAIN_AUTH_SETTINGS_KEYS = {
+    "domain_auth_enabled",
+    "domain_auth_header",
+    "domain_auth_auto_create",
+    "domain_auth_lowercase_usernames",
+    "domain_auth_default_profile",
+}
 
 
 def _has_api_key(provider: str, *env_names: str) -> bool:
@@ -88,7 +94,7 @@ def _save_api_keys_from_payload(data: dict) -> list[str]:
             if provider_key == "gemini":
                 fallback = (os.getenv("GEMINI_API_KEY") or "").strip()
             elif provider_key == "grok":
-                fallback = (os.getenv("GROK_API_KEY") or "").strip()
+                fallback = (os.getenv("GROK_API_KEY") or "").strip() or (os.getenv("XAI_API_KEY") or "").strip()
             elif provider_key == "openai":
                 fallback = (os.getenv("OPENAI_API_KEY") or "").strip() or (os.getenv("CODEX_API_KEY") or "").strip()
             elif provider_key == "fair":
@@ -123,7 +129,7 @@ def _load_delegate_ui_preference(user) -> str:
 def _api_key_status(config) -> dict:
     return {
         "gemini_set": _has_api_key("gemini", "GEMINI_API_KEY"),
-        "grok_set": _has_api_key("grok", "GROK_API_KEY"),
+        "grok_set": _has_api_key("grok", "GROK_API_KEY", "XAI_API_KEY"),
         "openai_set": _has_api_key("openai", "OPENAI_API_KEY", "CODEX_API_KEY"),
         "fair_set": _has_api_key("fair", "FAIR_HYPERION_API_KEY", "FAIR_API_KEY"),
         "anthropic_set": _has_api_key("claude", "ANTHROPIC_API_KEY"),
@@ -267,11 +273,7 @@ def _allowed_settings_keys() -> set[str]:
         "ollama_cloud_enabled",
         "ollama_cloud_base_url",
         "ollama_think_mode",
-        "domain_auth_enabled",
-        "domain_auth_header",
-        "domain_auth_auto_create",
-        "domain_auth_lowercase_usernames",
-        "domain_auth_default_profile",
+        *DOMAIN_AUTH_SETTINGS_KEYS,
         "chat_llm_provider",
         "chat_llm_model",
         "agent_llm_provider",
@@ -412,6 +414,12 @@ def api_settings(request):
                 {"success": False, "error": "Only admins can update API keys"},
                 status=403,
             )
+        requested_domain_auth_keys = sorted(key for key in data if key in DOMAIN_AUTH_SETTINGS_KEYS)
+        if requested_domain_auth_keys and not request.user.is_staff:
+            return JsonResponse(
+                {"success": False, "error": "Only admins can update domain authentication settings"},
+                status=403,
+            )
         validation_error = _normalize_settings_update(data)
         if validation_error is not None:
             return validation_error
@@ -463,7 +471,7 @@ def api_settings_check(request):
         return JsonResponse({"configured": False, "missing": ["gemini_key", "grok_key"]}, status=403)
     try:
         gemini_ok = _has_api_key("gemini", "GEMINI_API_KEY")
-        grok_ok = _has_api_key("grok", "GROK_API_KEY")
+        grok_ok = _has_api_key("grok", "GROK_API_KEY", "XAI_API_KEY")
         missing = []
         if not gemini_ok:
             missing.append("gemini_key")

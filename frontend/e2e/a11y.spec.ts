@@ -63,7 +63,7 @@ test.describe("Accessibility", () => {
     await installPlatformMocks(page, { authenticated: true });
 
     await page.goto("/agents");
-    await expect(page.getByRole("heading", { name: "Agents" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Agents", level: 1 })).toBeVisible();
     await page.getByRole("button", { name: "New agent" }).click();
     await expect(page.getByRole("dialog").getByRole("heading", { name: "Agent type" })).toBeVisible();
 
