@@ -26,6 +26,7 @@ admin.site.index_title = "Управление"
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('core_ui.urls')),
+    path('api/plugins/', include('plugin_marketplace.urls')),
     path('servers/', include('servers.urls')),
     path('api/studio/', include('studio.urls')),
     path('api/mars/', include('mars.urls')),

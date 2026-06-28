@@ -17,7 +17,7 @@ import {
   NODE_PALETTE,
   type NodeType,
 } from "@/components/pipeline/nodes";
-import { Bot, FileText, Play, Terminal, Zap } from "lucide-react";
+import { Bot, FileText, Play, Puzzle, Terminal, Zap } from "lucide-react";
 
 export const nodeTypes = {
   "trigger/manual": TriggerNode,
@@ -62,6 +62,7 @@ export const CATEGORY_ICONS = {
   Ops: Terminal,
   Logic: Zap,
   Output: FileText,
+  Plugin: Puzzle,
 } as const;
 
 export function localize(lang: string, ru: string, en: string) {

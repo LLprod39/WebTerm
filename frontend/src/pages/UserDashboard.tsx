@@ -4,6 +4,7 @@ import {
   fetchAgentDashboardRuns,
   fetchFrontendBootstrap,
   fetchMonitoringDashboard,
+  fetchPluginSurfaces,
 } from "@/lib/api";
 import { PageShell, PageHero, MetricGrid, MetricCard, SectionCard, StatusBadge, QueryStateBlock } from "@/components/ui/page-shell";
 import { 
@@ -23,6 +24,7 @@ import { CustomizableDashboard, type WidgetDefinition } from "@/components/dashb
 import { getWidgetNumberProp, getWidgetStringProp } from "@/components/dashboard/widgetProps";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { buildPluginDashboardWidgets } from "@/plugins/dashboardWidgets";
 
 const sectionToneStyles: Record<string, string> = {
   default: "",
@@ -61,6 +63,10 @@ export default function UserDashboard() {
     queryKey: ["monitoring-dashboard"],
     queryFn: fetchMonitoringDashboard,
   });
+  const { data: pluginSurfaces } = useQuery({
+    queryKey: ["plugins", "surfaces", "dashboard", "user"],
+    queryFn: fetchPluginSurfaces,
+  });
 
   const boot = bootstrapResponse;
   const runs = runsResponse;
@@ -71,7 +77,7 @@ export default function UserDashboard() {
   const availableWidgets = useMemo<WidgetDefinition[]>(() => {
     if (!boot && !runs && !mon) return [];
 
-    return [
+    const builtins: WidgetDefinition[] = [
       {
         id: "quick_stats",
         title: "Краткая сводка",
@@ -420,7 +426,8 @@ export default function UserDashboard() {
         }
       }
     ];
-  }, [boot, runs, mon]);
+    return [...builtins, ...buildPluginDashboardWidgets(pluginSurfaces?.surfaces.dashboard_widgets ?? [])];
+  }, [boot, runs, mon, pluginSurfaces?.surfaces.dashboard_widgets]);
 
   return (
     <PageShell width={isFullWidth ? "full" : "7xl"}>

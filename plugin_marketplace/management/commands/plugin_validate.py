@@ -1,0 +1,1 @@
+from plugin_marketplace.management.commands.validate_plugin_package import Command

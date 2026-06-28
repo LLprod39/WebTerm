@@ -3,14 +3,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from asgiref.sync import sync_to_async
+
 from app.agent_kernel.domain.specs import MCPRuntimeProvider, SkillProvider
 from app.agent_kernel.hooks.manager import HookManager
 from app.agent_kernel.mcp_runtime import execute_mcp_binding
 from app.agent_kernel.permissions.engine import PermissionEngine
 from app.agent_kernel.sandbox.manager import SandboxManager
 from app.agent_kernel.tools.registry import ToolRegistry
+from app.plugins.agent_tools import execute_plugin_agent_tool
 from app.sudo_policy import prepare_sudo_command_args
-from servers.agent_tools import AGENT_TOOLS
+from servers.agent_tools import get_all_agent_tools
 
 
 @dataclass(frozen=True)
@@ -130,11 +133,26 @@ async def _execute_builtin_tool(
     permission_engine: PermissionEngine,
     decision: Any,
 ) -> str:
-    tool_meta = AGENT_TOOLS.get(name)
+    tool_meta = get_all_agent_tools().get(name)
     if tool_meta is None:
         return f"Unknown tool: {name}"
     if name not in context.enabled_tools:
         return f"Tool '{name}' is disabled for this agent."
+    if tool_meta.get("plugin_id"):
+        result = await sync_to_async(execute_plugin_agent_tool, thread_sensitive=True)(
+            {
+                "tool": tool_meta,
+                "tool_name": name,
+                "args": args,
+                "user": getattr(context.session, "user", None),
+            }
+        )
+        result_text = str(result.get("result") or result.get("error") or "")
+        if spec and result.get("success"):
+            permission_engine.record_success(spec, args, result_text)
+        if decision and decision.notes:
+            result_text = "\n".join([*decision.notes, result_text])
+        return await context.hook_manager.post_tool_use(name, result_text)
 
     fn = tool_meta["fn"]
     try:

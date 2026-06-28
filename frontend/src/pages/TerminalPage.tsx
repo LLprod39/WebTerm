@@ -31,7 +31,6 @@ import {
 } from "./terminal-page/model";
 import { useTerminalAiActions } from "./terminal-page/useTerminalAiActions";
 import { handleTerminalPageWsEvent } from "./terminal-page/ws-events";
-
 export default function TerminalPage() {
   const { id } = useParams<{ id: string }>();
   const requestedId = useMemo(() => Number(id || 0), [id]);
@@ -39,16 +38,13 @@ export default function TerminalPage() {
   const sftpRefs = useRef<Record<string, SftpPanelHandle | null>>({});
   const tabCwdRefs = useRef<Record<string, MutableRefObject<string>>>({});
   const activeTabIdRef = useRef("");
-
   const { data, isLoading, error } = useQuery({
     queryKey: ["frontend", "bootstrap"],
     queryFn: fetchFrontendBootstrap,
     staleTime: 20_000,
   });
-
   const servers = useMemo(() => data?.servers ?? [], [data?.servers]);
   const defaultServer = findServer(servers, requestedId) || servers[0];
-
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabId] = useState("");
   const [tabAiState, setTabAiState] = useState<Record<string, TabAiState>>({});
@@ -62,7 +58,6 @@ export default function TerminalPage() {
   const [isCompactViewport, setIsCompactViewport] = useState(() =>
     typeof window === "undefined" ? false : window.matchMedia("(max-width: 640px)").matches,
   );
-
   const { t } = useI18n();
   const { editorState, closeEditor, openFileAtPath, handleWsEvent: handleEditorWsEvent } = useEditorInterceptor();
   const { prefs: termPrefs, update: updateTermPrefs } = useTerminalPreferences();
@@ -73,11 +68,9 @@ export default function TerminalPage() {
   const isDragging = useRef(false);
   const dragStartX = useRef(0);
   const dragStartWidth = useRef(0);
-
   useEffect(() => {
     activeTabIdRef.current = activeTabId;
   }, [activeTabId]);
-
   useEffect(() => {
     if (typeof window === "undefined") return;
     const media = window.matchMedia("(max-width: 640px)");
@@ -86,7 +79,6 @@ export default function TerminalPage() {
     media.addEventListener("change", syncViewport);
     return () => media.removeEventListener("change", syncViewport);
   }, []);
-
   const updateTabAiState = useCallback((tabId: string, updater: (state: TabAiState) => TabAiState) => {
     if (!tabId) return;
     setTabAiState((prev) => ({
@@ -94,13 +86,11 @@ export default function TerminalPage() {
       [tabId]: updater(prev[tabId] || createEmptyAiState()),
     }));
   }, []);
-
   const updateActiveTabAiState = useCallback((updater: (state: TabAiState) => TabAiState) => {
     const tabId = activeTabIdRef.current;
     if (!tabId) return;
     updateTabAiState(tabId, updater);
   }, [updateTabAiState]);
-
   const updateTabAiPreferences = useCallback((tabId: string, updater: (state: AiPreferences) => AiPreferences) => {
     if (!tabId) return;
     setTabAiPreferences((prev) => ({
@@ -108,20 +98,17 @@ export default function TerminalPage() {
       [tabId]: updater(prev[tabId] || cloneAiPreferences(globalAiPreferences)),
     }));
   }, [globalAiPreferences]);
-
   const updateActiveTabAiPreferences = useCallback((updater: (state: AiPreferences) => AiPreferences) => {
     const tabId = activeTabIdRef.current;
     if (!tabId) return;
     updateTabAiPreferences(tabId, updater);
   }, [updateTabAiPreferences]);
-
   const getTabCwdRef = useCallback((tabId: string): MutableRefObject<string> => {
     if (!tabCwdRefs.current[tabId]) {
       tabCwdRefs.current[tabId] = { current: "/" };
     }
     return tabCwdRefs.current[tabId];
   }, []);
-
   const handleTerminalFileClick = useCallback(
     (_tabId: string, serverId: number, absolutePath: string) => {
       openFileAtPath(serverId, absolutePath);
@@ -132,10 +119,8 @@ export default function TerminalPage() {
     },
     [openFileAtPath, t],
   );
-
   useEffect(() => {
     if (!defaultServer || tabs.length > 0) return;
-
     const firstId = nextId();
     setTabs([createTab(defaultServer, [], firstId)]);
     setActiveTabId(firstId);
@@ -148,20 +133,16 @@ export default function TerminalPage() {
       [firstId]: prev[firstId] || cloneAiPreferences(globalAiPreferences),
     }));
   }, [defaultServer, globalAiPreferences, tabs.length]);
-
   useEffect(() => {
     if (!tabs.length) return;
     if (activeTabId && tabs.some((tab) => tab.id === activeTabId)) return;
     setActiveTabId(tabs[0].id);
   }, [tabs, activeTabId]);
-
   useEffect(() => {
     const availableServerIds = new Set(servers.map((server) => server.id));
     if (!tabs.length) return;
-
     const removedTabIds = tabs.filter((tab) => !availableServerIds.has(tab.serverId)).map((tab) => tab.id);
     if (!removedTabIds.length) return;
-
     setTabs((prev) => prev.filter((tab) => availableServerIds.has(tab.serverId)));
     setTabAiState((prev) => {
       const next = { ...prev };
@@ -180,7 +161,6 @@ export default function TerminalPage() {
       return next;
     });
   }, [servers, tabs]);
-
   const activeTab = tabs.find((tab) => tab.id === activeTabId) || tabs[0];
   const inputBuf = useTerminalInputBuffer({
     serverId: activeTab?.serverId ?? null,
@@ -210,12 +190,10 @@ export default function TerminalPage() {
     }
     return counts;
   }, [tabs]);
-
   const addTab = useCallback(() => {
     if (!servers.length) return;
     setShowServerPicker(true);
   }, [servers.length]);
-
   const handleServerSelect = useCallback((server: FrontendServer) => {
     const tabId = nextId();
     setTabs((prev) => [...prev, createTab(server, prev, tabId)]);
@@ -229,7 +207,6 @@ export default function TerminalPage() {
       [tabId]: prev[tabId] || cloneAiPreferences(globalAiPreferences),
     }));
   }, [globalAiPreferences]);
-
   const closeTab = useCallback((tabId: string) => {
     setTabs((prev) => {
       if (prev.length <= 1) return prev;
@@ -239,7 +216,6 @@ export default function TerminalPage() {
     });
     delete terminalRefs.current[tabId];
     delete sftpRefs.current[tabId];
-
     setTabAiState((prev) => {
       const next = { ...prev };
       delete next[tabId];
@@ -251,43 +227,36 @@ export default function TerminalPage() {
       return next;
     });
   }, []);
-
   const requestCloseTab = useCallback((tabId: string) => {
     if (tabs.length <= 1) return;
     setPendingCloseTabId(tabId);
   }, [tabs.length]);
-
   const pendingCloseTab = useMemo(
     () => tabs.find((tab) => tab.id === pendingCloseTabId) || null,
     [pendingCloseTabId, tabs],
   );
-
   const updateTabStatus = useCallback((tabId: string, status: TerminalConnectionStatus) => {
     if (!tabId) return;
     setTabs((prev) => prev.map((tab) => (tab.id === tabId ? { ...tab, status: mapStatus(status) } : tab)));
   }, []);
-
   const handleModeChange = useCallback((mode: AiExecutionMode) => {
     updateActiveTabAiPreferences((state) => ({
       ...state,
       executionMode: mode,
     }));
   }, [updateActiveTabAiPreferences]);
-
   const handleChatModeChange = useCallback((chatMode: AiChatMode) => {
     updateActiveTabAiPreferences((state) => ({
       ...state,
       chatMode,
     }));
   }, [updateActiveTabAiPreferences]);
-
   const handleSettingsChange = useCallback((settings: AiAssistantSettings) => {
     updateActiveTabAiPreferences((state) => ({
       ...state,
       settings: cloneAiSettings(settings),
     }));
   }, [updateActiveTabAiPreferences]);
-
   const {
     handleSendAi,
     handleStopAi,
@@ -310,44 +279,36 @@ export default function TerminalPage() {
     updateTabAiPreferences,
     setGlobalAiPreferences,
   });
-
   const handleSaveAiDefaults = useCallback(() => {
     saveAiDefaults(activeAiPreferences);
   }, [activeAiPreferences, saveAiDefaults]);
-
   const revealAiPanel = useCallback(() => {
     setSidePanelMode("ai");
   }, []);
-
   const revealUiPanel = useCallback(() => {
     setPanelWidth((current) => Math.max(current, 520));
     setSidePanelMode("ui");
   }, []);
-
   const revealAiPanelForTab = useCallback((tabId: string) => {
     if (activeTabIdRef.current === tabId) {
       revealAiPanel();
     }
   }, [revealAiPanel]);
-
   const startDrag = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
     isDragging.current = true;
     dragStartX.current = event.clientX;
     dragStartWidth.current = panelWidth;
     event.preventDefault();
   }, [panelWidth]);
-
   useEffect(() => {
     const onMove = (event: MouseEvent) => {
       if (!isDragging.current) return;
       const diff = dragStartX.current - event.clientX;
       setPanelWidth(Math.max(260, Math.min(720, dragStartWidth.current + diff)));
     };
-
     const onUp = () => {
       isDragging.current = false;
     };
-
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
     return () => {
@@ -355,7 +316,6 @@ export default function TerminalPage() {
       window.removeEventListener("mouseup", onUp);
     };
   }, []);
-
   const handleTabWsEvent = useCallback((tabId: string, serverId: number, payload: Record<string, unknown>) => {
     handleTerminalPageWsEvent({
       tabId,
@@ -367,7 +327,6 @@ export default function TerminalPage() {
       updateTabAiState,
     });
   }, [revealAiPanelForTab, updateTabAiState, handleEditorWsEvent, getTabCwdRef]);
-
   useEffect(() => {
     if (!activeTabId) return;
     const timer = window.setTimeout(() => {
@@ -375,19 +334,16 @@ export default function TerminalPage() {
     }, 0);
     return () => window.clearTimeout(timer);
   }, [activeTabId]);
-
   const handleTabFileDrop = useCallback((tabId: string, files: File[]) => {
     if (!files.length) return;
     sftpRefs.current[tabId]?.enqueueUploads(files);
     setSidePanelMode("files");
   }, []);
-
   useEffect(() => {
     if (sidePanelMode === "ui" && activeServer?.server_type !== "ssh") {
       setSidePanelMode("none");
     }
   }, [activeServer?.server_type, sidePanelMode]);
-
   // Sync intercept_editors pref → SSH consumer
   useEffect(() => {
     for (const tab of tabs) {
@@ -397,7 +353,6 @@ export default function TerminalPage() {
       });
     }
   }, [termPrefs.intercept_editors, tabs]);
-
   if (isLoading || error || !data || !activeTab || !activeServer) {
     return (
       <TerminalQueryState
@@ -408,7 +363,6 @@ export default function TerminalPage() {
       />
     );
   }
-
   return (
     <div className="flex h-[100dvh] flex-col bg-background">
       <TerminalHeader
@@ -425,7 +379,6 @@ export default function TerminalPage() {
         setSettingsOpen={setSettingsOpen}
         setSidePanelMode={setSidePanelMode}
       />
-
       <TerminalWorkspace
         tabs={tabs}
         servers={servers}

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 class AssistantActionError(Exception):
@@ -22,6 +25,7 @@ class AssistantActionContext:
 
 
 AssistantActionHandler = Callable[[AssistantActionContext], dict[str, Any]]
+AssistantRuntimeContextProvider = Callable[[Any], dict[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -48,6 +52,7 @@ class AssistantActionSpec:
 
 
 _registry: dict[str, AssistantActionSpec] = {}
+_runtime_context_providers: dict[str, AssistantRuntimeContextProvider] = {}
 
 
 def register_action(spec: AssistantActionSpec) -> None:
@@ -69,3 +74,36 @@ def list_action_specs() -> list[AssistantActionSpec]:
 
 def reset_action_registry() -> None:
     _registry.clear()
+
+
+def register_runtime_context_provider(name: str, provider: AssistantRuntimeContextProvider) -> None:
+    key = str(name or "").strip()
+    if not key:
+        raise ValueError("Assistant runtime context provider name is required")
+    _runtime_context_providers[key] = provider
+
+
+def build_runtime_context(user: Any) -> dict[str, Any]:
+    context: dict[str, Any] = {
+        "agents": [],
+        "servers": [],
+        "pipelines": [],
+        "selection_rules": [
+            "Use ids from this snapshot when the name match is exact or unique.",
+            "Ask a clarification when several objects match the same operator phrase.",
+            "Never infer secrets or credentials from names.",
+        ],
+    }
+    for name, provider in sorted(_runtime_context_providers.items()):
+        try:
+            payload = provider(user)
+        except Exception as exc:  # noqa: BLE001 - context is best-effort for chat planning.
+            logger.debug("assistant runtime context provider %s skipped: %s", name, exc)
+            continue
+        if isinstance(payload, dict):
+            context.update(payload)
+    return context
+
+
+def reset_runtime_context_providers() -> None:
+    _runtime_context_providers.clear()

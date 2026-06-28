@@ -35,15 +35,12 @@ import { useToast } from "@/hooks/use-toast";
 import { StudioHero, HeroStatChip, HeroActionButton } from "@/components/studio/StudioHero";
 import { fetchAuthSession, studioMCP, studioShareUsers, type MCPServer, type MCPTemplate } from "@/lib/api";
 import { localize, useI18n } from "@/lib/i18n";
-
 function previewConnection(server: Pick<MCPServer, "transport" | "command" | "args" | "url">) {
   if (server.transport === "stdio") {
     return [server.command, ...(server.args || [])].filter(Boolean).join(" ");
   }
-
   return server.url || "https://...";
 }
-
 export default function MCPHubPage() {
   const { lang } = useI18n();
   const queryClient = useQueryClient();
@@ -52,7 +49,6 @@ export default function MCPHubPage() {
   const [editMcp, setEditMcp] = useState<Partial<MCPServer> | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<MCPServer | null>(null);
   const [testingId, setTestingId] = useState<number | null>(null);
-
   const { data: session } = useQuery({
     queryKey: ["auth", "session"],
     queryFn: fetchAuthSession,
@@ -60,23 +56,19 @@ export default function MCPHubPage() {
     retry: false,
   });
   const isAdmin = Boolean(session?.user?.is_staff);
-
   const { data: mcpList = [], isLoading } = useQuery({
     queryKey: ["studio", "mcp"],
     queryFn: studioMCP.list,
   });
-
   const { data: shareUsers = [] } = useQuery({
     queryKey: ["studio", "share-users"],
     queryFn: studioShareUsers.list,
     enabled: isAdmin,
   });
-
   const { data: templates = [] } = useQuery({
     queryKey: ["studio", "mcp", "templates"],
     queryFn: studioMCP.templates,
   });
-
   const createMutation = useMutation({
     mutationFn: (payload: Partial<MCPServer>) => studioMCP.create(payload),
     onSuccess: () => {
@@ -89,7 +81,6 @@ export default function MCPHubPage() {
       toast({ variant: "destructive", description: error.message });
     },
   });
-
   const updateMutation = useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: Partial<MCPServer> }) =>
       studioMCP.update(id, payload),
@@ -103,7 +94,6 @@ export default function MCPHubPage() {
       toast({ variant: "destructive", description: error.message });
     },
   });
-
   const deleteMutation = useMutation({
     mutationFn: (id: number) => studioMCP.delete(id),
     onSuccess: () => {
@@ -115,7 +105,6 @@ export default function MCPHubPage() {
       toast({ variant: "destructive", description: error.message });
     },
   });
-
   const testMutation = useMutation({
     mutationFn: (id: number) => studioMCP.test(id),
     onSuccess: (result) => {
@@ -135,7 +124,6 @@ export default function MCPHubPage() {
       toast({ variant: "destructive", description: error.message });
     },
   });
-
   const handleSave = (payload: Partial<MCPServer>) => {
     const editingMcp = editMcp as MCPServer | null;
     if (editingMcp?.id) {
@@ -146,25 +134,20 @@ export default function MCPHubPage() {
       });
       return;
     }
-
     createMutation.mutate(payload);
   };
-
   const openCreateDialog = () => {
     setEditMcp({});
     setEditorOpen(true);
   };
-
   const openEditDialog = (mcp: Partial<MCPServer>) => {
     setEditMcp(mcp);
     setEditorOpen(true);
   };
-
   const closeEditorDialog = () => {
     setEditorOpen(false);
     setEditMcp(null);
   };
-
   const handleUseTemplate = (template: MCPTemplate) => {
     openEditDialog({
       name: template.name,
@@ -176,7 +159,6 @@ export default function MCPHubPage() {
       url: template.url || "",
     });
   };
-
   const editorMcp = editMcp as MCPServer | null;
   const editorTitle = editorMcp?.id
     ? editorMcp.can_edit === false
@@ -186,7 +168,6 @@ export default function MCPHubPage() {
   const healthyCount = mcpList.filter((mcp) => mcp.last_test_ok === true).length;
   const failedCount = mcpList.filter((mcp) => mcp.last_test_ok === false).length;
   const unknownCount = Math.max(0, mcpList.length - healthyCount - failedCount);
-
   return (
     <div className="flex flex-col h-full">
       <StudioNav />
@@ -221,7 +202,6 @@ export default function MCPHubPage() {
             <TabsTrigger value="mine">{localize(lang, "Подключения", "My servers")} ({mcpList.length})</TabsTrigger>
             <TabsTrigger value="templates">{localize(lang, "Шаблоны", "Templates")} ({templates.length})</TabsTrigger>
           </TabsList>
-
           <TabsContent value="mine" className="space-y-4">
             {!isLoading && mcpList.length > 0 ? (
               <div className="grid gap-3 md:grid-cols-3">
@@ -239,7 +219,6 @@ export default function MCPHubPage() {
                 </div>
               </div>
             ) : null}
-
             {isLoading ? (
               <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -266,7 +245,6 @@ export default function MCPHubPage() {
                       : mcp.last_test_ok === false
                         ? "danger"
                         : "neutral";
-
                   return (
                     <div key={mcp.id} className="group overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-all duration-150 hover:border-border/80 hover:shadow-md">
                       <div className="space-y-3 p-4">
@@ -291,15 +269,12 @@ export default function MCPHubPage() {
                               {mcp.can_edit === false ? <Badge variant="outline" className="text-xs">{localize(lang, "Только чтение", "Read only")}</Badge> : null}
                             </div>
                           </div>
-
                         </div>
                       </div>
-
                       <div className="border-t border-border/50 bg-secondary/10 px-4 py-3 space-y-2.5">
                         <div className="rounded-lg border border-border/50 bg-background/40 px-3 py-2 font-mono text-xs text-muted-foreground">
                           {previewConnection(mcp) || localize(lang, "Команда или URL не указаны", "No connection data")}
                         </div>
-
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex flex-wrap items-center gap-1.5">
                             <StatusBadge
@@ -319,7 +294,6 @@ export default function MCPHubPage() {
                             )}
                           </div>
                         </div>
-
                         <div className="flex flex-wrap gap-2">
                           {mcp.can_edit !== false ? (
                             <Button
@@ -364,7 +338,6 @@ export default function MCPHubPage() {
                             </Button>
                           ) : null}
                         </div>
-
                         {mcp.last_test_error && (
                           <p className="text-xs leading-5 text-red-400/80">{mcp.last_test_error}</p>
                         )}
@@ -375,7 +348,6 @@ export default function MCPHubPage() {
               </div>
             )}
           </TabsContent>
-
           <TabsContent value="templates" className="space-y-4">
             {templates.length === 0 ? (
               <EmptyState
@@ -409,14 +381,12 @@ export default function MCPHubPage() {
                         </Badge>
                       </div>
                     </CardHeader>
-
                     <CardContent className="space-y-4 pt-0">
                       <div className="rounded-2xl border border-border/70 bg-background/30 px-3 py-2 font-mono text-xs text-muted-foreground">
                         {template.transport === "stdio"
                           ? [template.command, ...(template.args || [])].filter(Boolean).join(" ")
                           : template.url || template.slug}
                       </div>
-
                       <Button
                         variant="outline"
                         className="w-full gap-1.5"
@@ -435,7 +405,6 @@ export default function MCPHubPage() {
             )}
           </TabsContent>
         </Tabs>
-
       <Dialog open={editorOpen && Boolean(editMcp)} onOpenChange={(nextOpen) => !nextOpen && closeEditorDialog()}>
         <DialogContent
           closeLabel={localize(lang, "Закрыть", "Close")}
@@ -474,7 +443,6 @@ export default function MCPHubPage() {
           </DialogBody>
         </DialogContent>
       </Dialog>
-
       <Dialog open={deleteTarget !== null} onOpenChange={(nextOpen) => !nextOpen && setDeleteTarget(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>

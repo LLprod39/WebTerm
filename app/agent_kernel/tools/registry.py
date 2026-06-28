@@ -102,6 +102,9 @@ class ToolRegistry:
             if declared is not None:
                 specs[name] = declared
                 continue
+            if meta.get("plugin_id"):
+                logger.warning("Plugin agent tool %s is missing explicit tool_spec metadata; skipping.", name)
+                continue
             logger.warning("Agent tool %s is missing explicit tool_spec metadata; using compatibility inference.", name)
             specs[name] = _infer_tool_spec(name, meta.get("description") or "", meta.get("params") or {}, runner="agent")
         for name, binding in (mcp_tools or {}).items():

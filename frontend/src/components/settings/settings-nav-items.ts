@@ -6,6 +6,7 @@ import {
   ScrollText,
   Activity,
   Globe,
+  Puzzle,
   type LucideIcon,
 } from "lucide-react";
 
@@ -99,6 +100,14 @@ export const settingsNavGroups: SettingsNavGroup[] = [
         description: "Логирование и история действий",
         icon: Activity,
         path: "/settings/audit",
+        adminOnly: true,
+      },
+      {
+        id: "plugins",
+        label: "Плагины",
+        description: "Локальные расширения и разрешения",
+        icon: Puzzle,
+        path: "/settings/plugins",
         adminOnly: true,
       },
     ],

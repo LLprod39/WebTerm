@@ -25,6 +25,8 @@ const SettingsAccessPage = lazy(() => import("./pages/settings/SettingsAccessPag
 const SettingsMemoryPage = lazy(() => import("./pages/settings/SettingsMemoryPage"));
 const SettingsAuditPage = lazy(() => import("./pages/settings/SettingsAuditPage"));
 const SettingsSSOPage = lazy(() => import("./pages/settings/SettingsSSOPage"));
+const SettingsPluginsPage = lazy(() => import("./pages/plugin-marketplace/InstalledPluginsPage"));
+const PluginPageHost = lazy(() => import("./plugins/PluginPageHost"));
 const AgentsPage = lazy(() => import("./pages/AgentsPage"));
 const AgentRunPage = lazy(() => import("./pages/AgentRunPage"));
 const ChatPage = lazy(() => import("./pages/ChatPage"));
@@ -308,7 +310,20 @@ const App = () => (
                   <Route path="sso" element={<SettingsSSOPage />} />
                   <Route path="memory" element={<SettingsMemoryPage />} />
                   <Route path="audit" element={<SettingsAuditPage />} />
+                  <Route path="plugins" element={<SettingsPluginsPage />} />
                 </Route>
+                <Route
+                  path="/plugins/:pluginId/:pageId"
+                  element={(
+                    <FeatureGate feature="settings">
+                      <PluginPageHost />
+                    </FeatureGate>
+                  )}
+                />
+                <Route
+                  path="/marketplace"
+                  element={<Navigate to="/settings/plugins" replace />}
+                />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>

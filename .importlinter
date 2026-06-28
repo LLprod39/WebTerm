@@ -5,6 +5,7 @@
 root_packages =
     app
     core_ui
+    plugin_marketplace
     servers
     studio
     web_ui
@@ -95,3 +96,32 @@ source_modules =
     studio
 forbidden_modules =
     servers
+
+
+# ─── Contract 8: plugin runtime must remain framework-free ───────────────────
+# Goal: app/plugins exposes pure contracts for safe extensions. It must not
+# import Django or feature apps that would pull runtime side effects.
+[importlinter:contract:plugin-runtime-no-django-or-feature-apps]
+name = app/plugins must not import Django or feature apps
+type = forbidden
+source_modules =
+    app.plugins
+forbidden_modules =
+    django
+    core_ui
+    plugin_marketplace
+    servers
+    studio
+
+
+# ─── Contract 9: plugin marketplace must not couple to feature apps ──────────
+# Goal: marketplace storage and policy may use core_ui access/audit, but cannot
+# reach directly into servers or studio feature implementations.
+[importlinter:contract:plugin-marketplace-no-feature-apps]
+name = plugin_marketplace must not import servers or studio
+type = forbidden
+source_modules =
+    plugin_marketplace
+forbidden_modules =
+    servers
+    studio

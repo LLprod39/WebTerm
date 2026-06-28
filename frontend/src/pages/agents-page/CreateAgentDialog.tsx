@@ -50,14 +50,12 @@ import {
   sudoAgentOption,
   validateAgentWizardSchema,
 } from "./agentPageUtils";
-
 type CreateAgentDialogProps = {
   open: boolean;
   onClose: () => void;
   initialAgent?: AgentItem | null;
   onSaved: (saved: { id: number; mode: "mini" | "full" | "multi"; action: "create" | "update" }) => Promise<void> | void;
 };
-
 export function CreateAgentDialog({
   open,
   onClose,
@@ -93,11 +91,9 @@ export function CreateAgentDialog({
   const [toolsExpanded, setToolsExpanded] = useState(false);
   const [skillsExpanded, setSkillsExpanded] = useState(false);
   const [saving, setSaving] = useState(false);
-
   const { data: tplData } = useQuery({ queryKey: ["agents", "templates"], queryFn: fetchAgentTemplates, enabled: open });
   const { data: bootstrapData } = useQuery({ queryKey: ["frontend", "bootstrap"], queryFn: fetchFrontendBootstrap, staleTime: 30_000 });
   const { data: availableSkillsData } = useQuery<unknown>({ queryKey: ["studio", "skills", "agent-picker"], queryFn: studioSkills.list, enabled: open });
-
   const templates = (tplData?.templates || [])
     .filter((template) => !HIDDEN_AGENT_TEMPLATE_TYPES.has(template.type))
     .filter((template) => template.mode === mode || (mode === "multi" && template.mode === "full"));
@@ -173,7 +169,6 @@ export function CreateAgentDialog({
     telegramEnabled,
   ]);
   const canSave = readiness === 100 && schemaValidation.isValid;
-
   const resetForm = () => {
     setStep("template");
     setMode("mini");
@@ -202,7 +197,6 @@ export function CreateAgentDialog({
     setToolsExpanded(false);
     setSkillsExpanded(false);
   };
-
   useEffect(() => {
     if (!open) return;
     if (!initialAgent) {
@@ -237,7 +231,6 @@ export function CreateAgentDialog({
     setToolsExpanded(false);
     setSkillsExpanded(false);
   }, [open, initialAgent]);
-
   const onSelectTemplate = (tpl: AgentTemplate) => {
     setSelectedType(tpl.type);
     setName(tpl.name);
@@ -248,13 +241,11 @@ export function CreateAgentDialog({
     setStopConditionsText((tpl.stop_conditions || []).join("\n"));
     setStep("basics");
   };
-
   const onSave = async () => {
     if (!schemaValidation.isValid) {
       setStep(schemaValidation.issues[0]?.step || "basics");
       return;
     }
-
     setSaving(true);
     try {
       const normalizedSchedule = finalizeScheduleConfig(scheduleConfig, schedule);
@@ -292,7 +283,6 @@ export function CreateAgentDialog({
       setSaving(false);
     }
   };
-
   const canVisitStep = (targetStep: AgentWizardStep) => {
     const targetIndex = AGENT_WIZARD_STEPS.findIndex((item) => item.key === targetStep);
     if (targetIndex <= currentStepIndex) return true;
@@ -361,7 +351,6 @@ export function CreateAgentDialog({
     setInputArtifacts(next);
     if (added.length) setActiveArtifactIndex(Math.min(inputArtifacts.length, next.length - 1));
   };
-
   const summaryRows = [
     { icon: Tag, label: localize(lang, "Название", "Name"), value: name || localize(lang, "Новый агент", "New agent") },
     { icon: Layers, label: localize(lang, "Тип", "Type"), value: agentModeLabel(mode, lang) },
@@ -370,7 +359,6 @@ export function CreateAgentDialog({
   ];
   const enabledToolCount = Object.values(toolsConfig).filter(Boolean).length;
   const visibleSkills = skillsExpanded ? availableSkills : availableSkills.slice(0, 4);
-
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
       <DialogContent className="flex max-h-[calc(100dvh-24px)] max-w-[min(1180px,calc(100vw-24px))] flex-col rounded-xl border-primary/10 bg-card/95 p-0 shadow-[0_24px_90px_hsl(var(--background)_/_0.72)]">
@@ -385,7 +373,6 @@ export function CreateAgentDialog({
             </div>
           </div>
         </DialogHeader>
-
         <AgentWizardProgress
           step={step}
           currentStepIndex={currentStepIndex}
@@ -393,7 +380,6 @@ export function CreateAgentDialog({
           onStepChange={setStep}
           canVisitStep={canVisitStep}
         />
-
         <DialogBody className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
           <AgentWizardStepContent
             step={step}
@@ -474,7 +460,6 @@ export function CreateAgentDialog({
             readinessChecks={readinessChecks}
           />
         </DialogBody>
-
         <DialogFooter className="shrink-0 items-stretch justify-between gap-3 px-4 py-4 sm:flex-row sm:items-center sm:px-6">
           <Button variant="outline" className="min-w-28 gap-2" onClick={currentStepIndex === 0 ? onClose : goBack}>
             <ArrowLeft className="h-4 w-4" /> {currentStepIndex === 0 ? localize(lang, "Отмена", "Cancel") : t("agent.back")}

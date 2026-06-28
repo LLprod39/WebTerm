@@ -5,6 +5,7 @@ Studio capability registry endpoint.
 from django.views.decorators.http import require_GET
 
 from core_ui.decorators import require_feature
+from plugin_marketplace.services.install_service import enabled_plugin_ids_for_user
 from studio.capability_registry import build_studio_capability_registry
 from studio.node_manifest import node_manifest_payload
 from studio.readiness import build_studio_readiness_report
@@ -36,7 +37,7 @@ def api_capabilities(request):
 @require_GET
 @require_feature(STUDIO_FEATURE_PIPELINES)
 def api_node_manifests(request):
-    nodes = node_manifest_payload()
+    nodes = node_manifest_payload(enabled_plugin_ids_for_user(request.user))
     return _ok({"version": 1, "count": len(nodes), "nodes": nodes})
 
 

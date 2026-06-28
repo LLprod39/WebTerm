@@ -3,9 +3,10 @@ import type {
   PipelineEdge,
   PipelineNode,
   PipelineTrigger,
+  StudioCapabilityNode,
 } from "@/lib/api";
 import { getNodeTypeInfo } from "@/components/pipeline/nodes/nodeMeta";
-import type { NodeType } from "@/components/pipeline/nodes";
+import { buildSchemaDefaultData, isPluginStudioNode } from "@/plugins/studioNodes";
 
 import { parseJsonObjectText, toJsonEditorText } from "./jsonSchemaUtils";
 import { localize } from "./presentation";
@@ -237,7 +238,7 @@ export function getModelsForProvider(models: ModelsResponse | undefined, provide
   return models[provider];
 }
 
-export function buildDefaultNodeData(type: NodeType): Record<string, unknown> {
+export function buildDefaultNodeData(type: string, manifest?: StudioCapabilityNode): Record<string, unknown> {
   switch (type) {
     case "trigger/manual":
       return { is_active: true };
@@ -302,6 +303,7 @@ export function buildDefaultNodeData(type: NodeType): Record<string, unknown> {
     case "output/email":
       return { subject: "Pipeline Report: {pipeline_name}" };
     default:
+      if (isPluginStudioNode(manifest)) return buildSchemaDefaultData(manifest);
       return {};
   }
 }

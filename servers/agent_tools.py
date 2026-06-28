@@ -12,6 +12,7 @@ import json
 import re
 from typing import TYPE_CHECKING, Any
 
+from app.plugins.agent_tools import plugin_agent_tool_specs
 from app.tools.safety import is_dangerous_command
 
 if TYPE_CHECKING:
@@ -351,10 +352,14 @@ AGENT_TOOLS: dict[str, dict[str, Any]] = {
 }
 
 
+def get_all_agent_tools() -> dict[str, dict[str, Any]]:
+    return {**AGENT_TOOLS, **plugin_agent_tool_specs()}
+
+
 def get_tools_description(enabled_tools: list[str] | None = None) -> str:
     """Build a human-readable tool description for the LLM system prompt."""
     lines = []
-    for name, meta in AGENT_TOOLS.items():
+    for name, meta in get_all_agent_tools().items():
         if enabled_tools is not None and name not in enabled_tools:
             continue
         params_parts = []
@@ -368,9 +373,10 @@ def get_tools_description(enabled_tools: list[str] | None = None) -> str:
 
 def get_enabled_tools(tools_config: dict) -> list[str]:
     """Return list of enabled tool names based on agent config."""
+    all_tools = get_all_agent_tools()
     if not tools_config:
-        return list(AGENT_TOOLS.keys())
-    return [name for name in AGENT_TOOLS if tools_config.get(name, False)]
+        return list(all_tools.keys())
+    return [name for name in all_tools if tools_config.get(name, False)]
 
 
 # ---------------------------------------------------------------------------

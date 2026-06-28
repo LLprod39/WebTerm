@@ -16,6 +16,7 @@ from pathlib import Path
 from .auth import build_auth_settings
 from .celery_settings import build_celery_settings
 from .database import build_channel_settings, build_database_settings
+from .plugin_marketplace import build_plugin_marketplace_settings
 from .runtime_services import build_runtime_service_settings
 from .security import build_security_settings
 
@@ -48,6 +49,7 @@ INSTALLED_APPS = [
     'channels',
     'corsheaders',
     'core_ui',
+    'plugin_marketplace.apps.PluginMarketplaceConfig',
     'servers',
     'studio',
     'mars',
@@ -135,6 +137,7 @@ USE_TZ = True
 
 
 globals().update(build_auth_settings(debug=DEBUG))
+globals().update(build_plugin_marketplace_settings(debug=DEBUG))
 
 # =============================================================================
 # Email Configuration

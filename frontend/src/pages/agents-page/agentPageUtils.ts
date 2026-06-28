@@ -1,29 +1,7 @@
-import {
-  Activity,
-  BookOpen,
-  Brain,
-  CheckCircle2,
-  FileCode2,
-  FileText,
-  Layers,
-  ListChecks,
-  Server,
-  Settings2,
-  Shield,
-  Tag,
-  Zap,
-  type LucideIcon,
-} from "lucide-react";
+import { Activity, BookOpen, Brain, CheckCircle2, FileCode2, FileText, Layers, ListChecks, Server, Settings2, Shield, Tag, Zap, type LucideIcon } from "lucide-react";
 import { z } from "zod";
-
-import type {
-  AgentInputArtifact,
-  AgentItem,
-  AgentScheduleConfig,
-  AgentScheduleMode,
-} from "@/lib/api";
+import type { AgentInputArtifact, AgentItem, AgentScheduleConfig, AgentScheduleMode } from "@/lib/api";
 import { localize } from "@/lib/i18n";
-
 export function formatDuration(ms: number): string {
   if (!ms) return "—";
   if (ms < 1000) return `${ms}ms`;
@@ -32,9 +10,7 @@ export function formatDuration(ms: number): string {
   const mins = Math.floor(secs / 60);
   return `${mins}m ${secs % 60}s`;
 }
-
 export const MODE_ICONS: Record<string, typeof Layers> = { mini: Zap, full: Brain, multi: Layers };
-
 export function agentModeLabel(mode: "all" | "mini" | "full" | "multi" | string, lang: string) {
   if (mode === "all") return localize(lang, "Все", "All");
   if (mode === "mini") return localize(lang, "Мини", "Mini");
@@ -42,7 +18,6 @@ export function agentModeLabel(mode: "all" | "mini" | "full" | "multi" | string,
   if (mode === "multi") return localize(lang, "Пайплайн", "Pipeline");
   return mode;
 }
-
 export const AGENT_ICONS: Record<string, LucideIcon> = {
   security_audit: Shield,
   security_patrol: Shield,
@@ -57,9 +32,7 @@ export const AGENT_ICONS: Record<string, LucideIcon> = {
   multi_health: Activity,
   custom: Settings2,
 };
-
 export const HIDDEN_AGENT_TEMPLATE_TYPES = new Set(["docker_status"]);
-
 export const FULL_AGENT_TOOL_OPTIONS = [
   { key: "open_connection", label: "Open connection" },
   { key: "close_connection", label: "Close connection" },
@@ -72,9 +45,7 @@ export const FULL_AGENT_TOOL_OPTIONS = [
   { key: "list_skills", label: "List skills" },
   { key: "read_skill", label: "Read skill" },
 ] as const;
-
 export type AgentSudoPolicy = "disabled" | "ask" | "approved";
-
 export const SUDO_AGENT_OPTIONS: Array<{
   value: AgentSudoPolicy;
   labelRu: string;
@@ -104,11 +75,9 @@ export const SUDO_AGENT_OPTIONS: Array<{
     hintEn: "Sudo is approved for this agent's runs; backend enforces sudo -n.",
   },
 ];
-
 export function sudoAgentOption(value: string | undefined) {
   return SUDO_AGENT_OPTIONS.find((item) => item.value === value) || SUDO_AGENT_OPTIONS[0];
 }
-
 export const SCHEDULE_PRESETS = [
   { minutes: 0, labelRu: "Вручную", labelEn: "Manual", hintRu: "Только кнопкой запуска", hintEn: "Run only from button" },
   { minutes: 15, labelRu: "15 минут", labelEn: "15 minutes", hintRu: "Частый мониторинг", hintEn: "Frequent checks" },
@@ -119,7 +88,6 @@ export const SCHEDULE_PRESETS = [
   { minutes: 720, labelRu: "12 часов", labelEn: "12 hours", hintRu: "Утро и вечер", hintEn: "Morning and evening" },
   { minutes: 1440, labelRu: "1 день", labelEn: "1 day", hintRu: "Ежедневная проверка", hintEn: "Daily check" },
 ] as const;
-
 export const SCHEDULE_MODES: Array<{ mode: AgentScheduleMode; labelRu: string; labelEn: string; hintRu: string; hintEn: string }> = [
   { mode: "manual", labelRu: "Вручную", labelEn: "Manual", hintRu: "Только кнопкой", hintEn: "Button only" },
   { mode: "interval", labelRu: "Интервал", labelEn: "Interval", hintRu: "Каждые N минут", hintEn: "Every N minutes" },
@@ -128,7 +96,6 @@ export const SCHEDULE_MODES: Array<{ mode: AgentScheduleMode; labelRu: string; l
   { mode: "monthly", labelRu: "Месяц", labelEn: "Monthly", hintRu: "День месяца", hintEn: "Day of month" },
   { mode: "once", labelRu: "Разово", labelEn: "Once", hintRu: "Дата и время", hintEn: "Date and time" },
 ];
-
 export const WEEKDAYS = [
   { value: 0, ru: "Пн", en: "Mon" },
   { value: 1, ru: "Вт", en: "Tue" },
@@ -138,26 +105,20 @@ export const WEEKDAYS = [
   { value: 5, ru: "Сб", en: "Sat" },
   { value: 6, ru: "Вс", en: "Sun" },
 ] as const;
-
 export const QUICK_TIMES = ["08:00", "09:00", "10:00", "18:00"] as const;
-
 export const ARTIFACT_KINDS: Array<{ kind: AgentInputArtifact["kind"]; labelRu: string; labelEn: string; icon: LucideIcon }> = [
   { kind: "document", labelRu: "Документ", labelEn: "Document", icon: FileText },
   { kind: "task_list", labelRu: "Список задач", labelEn: "Task list", icon: CheckCircle2 },
   { kind: "script", labelRu: "Скрипт", labelEn: "Script", icon: FileCode2 },
 ];
-
 export type AgentTaskDraft = NonNullable<AgentInputArtifact["tasks"]>[number];
-
 export function artifactKindLabel(kind: AgentInputArtifact["kind"], lang: string) {
   const match = ARTIFACT_KINDS.find((item) => item.kind === kind);
   return match ? localize(lang, match.labelRu, match.labelEn) : kind;
 }
-
 export function artifactKindIcon(kind: AgentInputArtifact["kind"]) {
   return ARTIFACT_KINDS.find((item) => item.kind === kind)?.icon || FileText;
 }
-
 export function parseTasksFromContent(content: string): AgentTaskDraft[] {
   return String(content || "")
     .split("\n")
@@ -174,7 +135,6 @@ export function parseTasksFromContent(content: string): AgentTaskDraft[] {
     })
     .filter((task) => task.title);
 }
-
 export function tasksToContent(tasks: AgentTaskDraft[] | undefined): string {
   return (tasks || [])
     .filter((task) => task.title.trim() || (task.details || "").trim())
@@ -184,13 +144,11 @@ export function tasksToContent(tasks: AgentTaskDraft[] | undefined): string {
     })
     .join("\n");
 }
-
 export function normalizeArtifactDraft(item: AgentInputArtifact): AgentInputArtifact {
   if (item.kind !== "task_list") return item;
   const tasks = item.tasks?.length ? item.tasks : parseTasksFromContent(item.content || "");
   return { ...item, tasks };
 }
-
 export function prepareArtifactForSave(item: AgentInputArtifact): AgentInputArtifact {
   const name = item.name.trim();
   const run_hint = (item.run_hint || "").trim();
@@ -206,7 +164,6 @@ export function prepareArtifactForSave(item: AgentInputArtifact): AgentInputArti
   }
   return { ...item, name, run_hint, content: item.content.trim() };
 }
-
 export function artifactSummary(item: AgentInputArtifact, lang: string) {
   if (item.kind === "task_list") {
     const total = item.tasks?.length || parseTasksFromContent(item.content || "").length;
@@ -219,11 +176,9 @@ export function artifactSummary(item: AgentInputArtifact, lang: string) {
   }
   return `${chars} chars`;
 }
-
 export function buildDefaultToolsConfig() {
   return Object.fromEntries(FULL_AGENT_TOOL_OPTIONS.map((tool) => [tool.key, true]));
 }
-
 export function relativeTime(iso: string | null): string {
   if (!iso) return "—";
   const diff = Date.now() - new Date(iso).getTime();
@@ -234,7 +189,6 @@ export function relativeTime(iso: string | null): string {
   if (hours < 24) return `${hours}h`;
   return `${Math.floor(hours / 24)}d`;
 }
-
 export function formatRoleLabel(role: string): string {
   return role
     .split("_")
@@ -242,7 +196,6 @@ export function formatRoleLabel(role: string): string {
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 }
-
 export function formatScheduleLabel(minutes: number, lang: string): string {
   if (!minutes) return localize(lang, "Только ручной запуск", "Manual only");
   if (minutes < 60) return localize(lang, `Каждые ${minutes} мин`, `Every ${minutes} min`);
@@ -256,11 +209,9 @@ export function formatScheduleLabel(minutes: number, lang: string): string {
   }
   return localize(lang, `Каждые ${minutes} мин`, `Every ${minutes} min`);
 }
-
 function browserTimezone() {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 }
-
 export function defaultScheduleConfig(): AgentScheduleConfig {
   return {
     mode: "manual",
@@ -272,13 +223,11 @@ export function defaultScheduleConfig(): AgentScheduleConfig {
     run_at: "",
   };
 }
-
 export function scheduleConfigFromMinutes(minutes: number): AgentScheduleConfig {
   const base = defaultScheduleConfig();
   if (!minutes) return base;
   return { ...base, mode: "interval", interval_minutes: minutes };
 }
-
 export function deriveScheduleMinutes(config: AgentScheduleConfig): number {
   if (config.mode === "manual") return 0;
   if (config.mode === "interval") return Math.max(0, Number(config.interval_minutes || 0));
@@ -287,7 +236,6 @@ export function deriveScheduleMinutes(config: AgentScheduleConfig): number {
   if (config.mode === "once") return 1;
   return 0;
 }
-
 export function finalizeScheduleConfig(config: AgentScheduleConfig, intervalMinutes: number): AgentScheduleConfig {
   const base = defaultScheduleConfig();
   const next: AgentScheduleConfig = {
@@ -303,7 +251,6 @@ export function finalizeScheduleConfig(config: AgentScheduleConfig, intervalMinu
   if (next.mode === "interval") next.interval_minutes = Math.max(0, Number(intervalMinutes || next.interval_minutes || 0));
   return next;
 }
-
 export function formatScheduleConfigLabel(config: AgentScheduleConfig | undefined, minutes: number, lang: string): string {
   const current = config || scheduleConfigFromMinutes(minutes);
   if (current.mode === "manual") return localize(lang, "Только ручной запуск", "Manual only");
@@ -314,14 +261,11 @@ export function formatScheduleConfigLabel(config: AgentScheduleConfig | undefine
   if (current.mode === "once") return localize(lang, "Разовый запуск", "One-time run");
   return formatScheduleLabel(minutes, lang);
 }
-
 export function isAgentScheduled(agent: AgentItem): boolean {
   const mode = agent.schedule_config?.mode || (agent.schedule_minutes > 0 ? "interval" : "manual");
   return mode !== "manual";
 }
-
 export type AgentWizardStep = "template" | "basics" | "servers" | "capabilities" | "review";
-
 export type AgentWizardCheckKey =
   | "scenario"
   | "behavior"
@@ -330,7 +274,6 @@ export type AgentWizardCheckKey =
   | "sudo"
   | "schedule"
   | "telegram";
-
 export type AgentWizardCheck = {
   key: AgentWizardCheckKey;
   step: AgentWizardStep;
@@ -341,7 +284,6 @@ export type AgentWizardCheck = {
   detailEn: string;
   risk?: "warning" | "danger";
 };
-
 export type AgentWizardReadinessInput = {
   selectedType: string;
   mode: "mini" | "full" | "multi";
@@ -356,31 +298,26 @@ export type AgentWizardReadinessInput = {
   telegramEnabled: boolean;
   telegramChatId: string;
 };
-
 export type AgentWizardValidationIssue = {
   step: AgentWizardStep;
   messageRu: string;
   messageEn: string;
 };
-
 export type AgentWizardValidationResult = {
   isValid: boolean;
   issues: AgentWizardValidationIssue[];
 };
-
 function commandLines(commands: string): string[] {
   return commands
     .split("\n")
     .map((command) => command.trim())
     .filter(Boolean);
 }
-
 function hasUnsafeCommand(commands: string): boolean {
   return commandLines(commands).some((command) =>
     /\b(rm\s+-rf|mkfs|dd\s+if=|shutdown|reboot|poweroff|systemctl\s+(restart|stop)|docker\s+(rm|stop|restart)|kubectl\s+delete)\b/i.test(command),
   );
 }
-
 export function validateAgentWizardSchema(input: AgentWizardReadinessInput): AgentWizardValidationResult {
   const schema = z
     .object({
@@ -415,10 +352,8 @@ export function validateAgentWizardSchema(input: AgentWizardReadinessInput): Age
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["telegram"], message: "telegram_missing" });
       }
     });
-
   const result = schema.safeParse(input);
   if (result.success) return { isValid: true, issues: [] };
-
   const issues = result.error.issues.map<AgentWizardValidationIssue>((issue) => {
     const field = String(issue.path[0] || "");
     if (field === "selectedType") return { step: "template", messageRu: "Выберите сценарий агента.", messageEn: "Choose an agent scenario." };
@@ -430,10 +365,8 @@ export function validateAgentWizardSchema(input: AgentWizardReadinessInput): Age
     if (field === "telegram") return { step: "capabilities", messageRu: "Укажите Telegram Chat ID или выключите доставку.", messageEn: "Enter Telegram Chat ID or disable delivery." };
     return { step: "basics", messageRu: "Исправьте конфигурацию агента.", messageEn: "Fix the agent configuration." };
   });
-
   return { isValid: false, issues };
 }
-
 export function isScheduleConfigValid(config: AgentScheduleConfig, intervalMinutes: number): boolean {
   if (config.mode === "manual") return true;
   if (config.mode === "interval") return Number(intervalMinutes || config.interval_minutes || 0) > 0;
@@ -443,7 +376,6 @@ export function isScheduleConfigValid(config: AgentScheduleConfig, intervalMinut
   if (config.mode === "once") return Boolean(config.run_at);
   return false;
 }
-
 export function buildAgentWizardReadiness(input: AgentWizardReadinessInput): AgentWizardCheck[] {
   const hasScenario = Boolean(input.selectedType.trim());
   const hasName = Boolean(input.name.trim());
@@ -456,7 +388,6 @@ export function buildAgentWizardReadiness(input: AgentWizardReadinessInput): Age
   const sudoPassed = !sudoRisk || input.sudoRiskAcknowledged;
   const schedulePassed = isScheduleConfigValid(input.scheduleConfig, input.schedule);
   const telegramPassed = !input.telegramEnabled || Boolean(input.telegramChatId.trim());
-
   return [
     {
       key: "scenario",
@@ -525,20 +456,16 @@ export function buildAgentWizardReadiness(input: AgentWizardReadinessInput): Age
     },
   ];
 }
-
 export function readinessPercent(checks: AgentWizardCheck[]): number {
   if (!checks.length) return 0;
   return Math.round((checks.filter((check) => check.passed).length / checks.length) * 100);
 }
-
 export function firstFailedCheckForStep(checks: AgentWizardCheck[], step: AgentWizardStep): AgentWizardCheck | undefined {
   return checks.find((check) => check.step === step && !check.passed);
 }
-
 export function stepHasBlockingFailure(checks: AgentWizardCheck[], step: AgentWizardStep): boolean {
   return checks.some((check) => check.step === step && !check.passed);
 }
-
 export const AGENT_WIZARD_STEPS: Array<{
   key: AgentWizardStep;
   labelRu: string;

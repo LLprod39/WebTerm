@@ -14,6 +14,7 @@ export * from "@/api/servers";
 export * from "@/api/server-files";
 export * from "@/api/server-memory";
 export * from "@/api/settings";
+export * from "@/api/plugins";
 export * from "@/api/studio";
 export * from "@/api/studio-notifications";
 
@@ -76,6 +77,10 @@ function isMutationRequest(method?: string): boolean {
 
 function isMarsApiPath(path: string): boolean {
   return path.startsWith("/api/mars/");
+}
+
+function isFormDataBody(body: unknown): body is FormData {
+  return typeof FormData !== "undefined" && body instanceof FormData;
 }
 
 function isDemoBlackholeApiBase(value: string): boolean {
@@ -163,11 +168,12 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   const { timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS, ...requestOptions } = options;
   try {
     const csrfToken = isMutationRequest(requestOptions.method) ? await ensureCsrfToken(forceBackend) : getCookie("csrftoken");
+    const jsonHeaders = isFormDataBody(requestOptions.body) ? {} : { "Content-Type": "application/json" };
     response = await fetchWithTimeout(`${apiBaseForPath(path)}${path}`, {
       credentials: "include",
       ...requestOptions,
       headers: {
-        "Content-Type": "application/json",
+        ...jsonHeaders,
         ...(csrfToken ? { "X-CSRFToken": csrfToken } : {}),
         ...((requestOptions.headers as Record<string, string>) || {}),
       },

@@ -7,9 +7,10 @@ from asgiref.sync import sync_to_async as _s2a
 from loguru import logger
 
 from app.agent_kernel.mcp_runtime import execute_mcp_binding
+from app.plugins.agent_tools import execute_plugin_agent_tool
 from app.execution_policy import safe_payload_preview
 from app.sudo_policy import prepare_sudo_command_args
-from servers.agent_tools import AGENT_TOOLS
+from servers.agent_tools import get_all_agent_tools
 
 
 def sync_to_async(func, thread_sensitive=False):
@@ -89,11 +90,27 @@ async def execute_agent_tool(engine: Any, name: str, args: dict) -> str:
     if name in engine.disabled_mcp_tools:
         return f"Tool '{name}' is disabled for this agent."
 
-    tool_meta = AGENT_TOOLS.get(name)
+    tool_meta = get_all_agent_tools().get(name)
     if tool_meta is None:
         return f"Unknown tool: {name}"
     if name not in engine.enabled_tools:
         return f"Tool '{name}' is disabled for this agent."
+    if tool_meta.get("plugin_id"):
+        result = await sync_to_async(execute_plugin_agent_tool, thread_sensitive=True)(
+            {
+                "tool": tool_meta,
+                "tool_name": name,
+                "args": args,
+                "user": engine.user,
+                "agent_run_id": engine.run_record.pk if engine.run_record else None,
+            }
+        )
+        result_text = str(result.get("result") or result.get("error") or "")
+        if spec and result.get("success"):
+            engine.permission_engine.record_success(spec, args, result_text)
+        if decision and decision.notes:
+            result_text = "\n".join([*decision.notes, result_text])
+        return await engine.hook_manager.post_tool_use(name, result_text)
 
     fn = tool_meta["fn"]
     try:

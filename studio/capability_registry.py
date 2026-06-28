@@ -6,6 +6,7 @@ from typing import Any
 from django.db.models import Q
 
 from core_ui.access import feature_allowed_for_user
+from plugin_marketplace.services.install_service import enabled_plugin_ids_for_user
 from studio.models import MCPServerPool, StudioSkillAccess
 from studio.node_manifest import node_manifest_payload
 from studio.pilot_capability_packs import list_pilot_capability_packs
@@ -196,7 +197,7 @@ def _family_readiness(
 def build_studio_capability_registry(user, *, server_count: int | None = None) -> dict[str, Any]:
     mcp_servers = _visible_mcp_payloads(user)
     skills = _visible_skill_payloads(user)
-    node_manifests = node_manifest_payload()
+    node_manifests = node_manifest_payload(enabled_plugin_ids_for_user(user))
     capability_packs = list_pilot_capability_packs()
     mcp_blobs = [
         (mcp, _search_blob(mcp, ("name", "description", "transport", "url", "command", "args")))

@@ -1,12 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import {
-  useNodesState,
-  useEdgesState,
-  useReactFlow,
-  ReactFlowProvider,
-} from "@xyflow/react";
+import { ReactFlowProvider, useEdgesState, useNodesState, useReactFlow } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -27,16 +22,13 @@ import { PipelineFlowSummaryBar } from "./pipeline-editor/PipelineFlowSummaryBar
 import { usePipelineRunGraphOverlay } from "./pipeline-editor/usePipelineRunGraphOverlay";
 import { usePipelineRunDialogState } from "./pipeline-editor/usePipelineRunDialogState";
 import { localize } from "./pipeline-editor/presentation";
-import {
-  buildPipelineSavePayload,
-  normalisePipelineGraph,
-} from "./pipeline-editor/pipelineGraphUtils";
+import { buildPipelineSavePayload, normalisePipelineGraph } from "./pipeline-editor/pipelineGraphUtils";
+import { buildPluginNodePalette, buildPluginNodeTypes } from "@/plugins/studioNodes";
 import { usePipelineAssistantDraft } from "./pipeline-editor/usePipelineAssistantDraft";
 import { usePipelineEditorGraphActions } from "./pipeline-editor/usePipelineEditorGraphActions";
 import { usePipelineEditorMutations } from "./pipeline-editor/usePipelineEditorMutations";
 import { usePipelineEditorTriggers } from "./pipeline-editor/usePipelineEditorTriggers";
 import { usePipelineGraphDisplayState } from "./pipeline-editor/usePipelineGraphDisplayState";
-
 function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -45,7 +37,6 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     typeof document !== "undefined" && document.documentElement.lang.toLowerCase().startsWith("ru")
       ? "ru"
       : "en";
-
   const { data: pipeline, isLoading, isFetchedAfterMount } = useQuery({
     queryKey: ["studio", "pipeline", pipelineId],
     queryFn: () => (pipelineId ? studioPipelines.get(pipelineId) : null),
@@ -98,6 +89,8 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     [resolvedLastRun, pipeline?.graph_version, pipeline?.triggers],
   );
   const nodeManifests = useMemo(() => ((nodeManifestRegistry?.nodes || []) as StudioCapabilityNode[]), [nodeManifestRegistry?.nodes]);
+  const pluginPalette = useMemo(() => buildPluginNodePalette(nodeManifests), [nodeManifests]);
+  const pluginNodeTypes = useMemo(() => buildPluginNodeTypes(nodeManifests), [nodeManifests]);
   const { clearGraphOverlay, graphRunLive, setGraphRunLive } = usePipelineRunGraphOverlay({
     graphRunId,
     hasLocalChanges,
@@ -106,7 +99,6 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     setGraphRunId,
     setLastRun,
   });
-
   useEffect(() => {
     setHasHydratedPipeline(!pipelineId);
     setHasLocalChanges(false);
@@ -117,7 +109,6 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       setActiveRunId(null);
     }
   }, [pipelineId, clearGraphOverlay]);
-
   // Load pipeline data only after the editor has fetched the latest server copy
   useEffect(() => {
     if (!pipeline) {
@@ -141,17 +132,14 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         return Math.max(max, num);
       }, 0);
       nodeIdCounter.current = maxId + 1;
-      // Fit view after nodes load
       setTimeout(() => fitView({ padding: 0.22, duration: 300 }), 100);
     }
   }, [pipeline, pipelineId, isFetchedAfterMount, setNodes, setEdges, fitView]);
-
   const showClientValidationError = useCallback(() => {
     const pipelineNodes = nodes as unknown as PipelineNode[];
     const validationErrors = getPipelineClientValidationErrors(pipelineNodes, nodeManifests);
     const firstError = validationErrors[0];
     if (!firstError) return false;
-
     const problemNode = pipelineNodes.find((item) => item.id === firstError.nodeId);
     if (problemNode) setSelectedNode(problemNode);
     toast({
@@ -160,7 +148,6 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     });
     return true;
   }, [lang, nodeManifests, nodes, toast]);
-
   const runDialog = usePipelineRunDialogState({
     hasHydratedPipeline,
     lang,
@@ -168,7 +155,6 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     nodes: nodes as unknown as PipelineNode[],
     showClientValidationError,
   });
-
   const { runMutation, saveMutation, validateRunMutation } = usePipelineEditorMutations({
     lang,
     navigate,
@@ -218,7 +204,6 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     setSelectedNode,
     toast,
   });
-
   const handleSave = () => {
     if (pipelineId && !hasHydratedPipeline) {
       toast({
@@ -243,7 +228,6 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       }),
     );
   };
-
   const handleValidateGraph = () => {
     if (pipelineId && !hasHydratedPipeline) {
       toast({
@@ -265,7 +249,6 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       ),
     });
   };
-
   const handleNodesChange = useCallback(
     (changes: Parameters<typeof onNodesChangeRaw>[0]) => {
       if (changes?.length) {
@@ -287,7 +270,6 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     },
     [clearGraphOverlay, onNodesChangeRaw],
   );
-
   const handleEdgesChange = useCallback(
     (changes: Parameters<typeof onEdgesChangeRaw>[0]) => {
       if (changes?.length) {
@@ -298,11 +280,9 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     },
     [clearGraphOverlay, onEdgesChangeRaw],
   );
-
   const handleRunSubmit = async () => {
     const manualRunRequest = runDialog.prepareManualRunRequest();
     if (!manualRunRequest) return;
-
     try {
       const saved = await saveMutation.mutateAsync({
         name: pipelineName || "Untitled",
@@ -318,11 +298,9 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       // Error notifications are handled in mutation callbacks.
     }
   };
-
   const handleValidateRun = async () => {
     const manualRunRequest = runDialog.prepareManualRunRequest();
     if (!manualRunRequest) return;
-
     try {
       const saved = await saveMutation.mutateAsync({
         name: pipelineName || "Untitled",
@@ -338,7 +316,6 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       // Error notifications are handled in mutation callbacks.
     }
   };
-
   const {
     handleAddNode,
     handleDeleteNode,
@@ -354,6 +331,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     lang,
     nodeIdCounter,
     nodes: pipelineNodes,
+    nodeManifests,
     pipelineName,
     screenToFlowPosition,
     selectedNode,
@@ -376,7 +354,6 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     lang,
     nodes: pipelineNodes,
   });
-
   if (pipelineId && isLoading) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -392,7 +369,6 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     pipelineActivityState.icon === "running" ||
     pipelineActivityState.icon === "pending" ||
     pipelineActivityState.icon === "warning";
-
   return (
     <div className="flex flex-col h-full">
       <PipelineEditorToolbar
@@ -425,7 +401,6 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         onSave={handleSave}
         onValidateGraph={handleValidateGraph}
       />
-
       {showPipelineActivityBar ? (
         <PipelineActivityBar
           activityState={pipelineActivityState}
@@ -451,7 +426,6 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
           setActiveRunId(null);
         }}
       />
-
       <PipelineEditorMainArea
         activeRunId={activeRunId}
         assistantHistory={assistantHistory}
@@ -462,7 +436,10 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         displayEdges={displayEdges}
         displayNodes={displayNodes}
         lang={lang}
+        nodeManifests={nodeManifests}
         paletteOpen={paletteOpen}
+        pluginPalette={pluginPalette}
+        pluginNodeTypes={pluginNodeTypes}
         pipelineId={pipelineId}
         selectedNode={selectedNode}
         showMiniMap={showMiniMap}
@@ -510,11 +487,9 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     </div>
   );
 }
-
 export default function PipelineEditorPage() {
   const { id } = useParams<{ id?: string }>();
   const pipelineId = id ? parseInt(id) : null;
-
   return (
     <ReactFlowProvider>
       <div className="h-full min-h-0">

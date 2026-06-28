@@ -1,4 +1,4 @@
-import type { PipelineNode, PipelineTrigger } from "@/lib/api";
+import type { PipelineNode, PipelineTrigger, StudioCapabilityNode } from "@/lib/api";
 import type { StudioPipelineAssistantResponse } from "@/lib/studioPipelineDraftsApi";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +14,7 @@ export function PipelineEditorSidePanel({
   assistantPending,
   assistantProposal,
   lang,
+  nodeManifests,
   pipelineId,
   selectedNode,
   trigger,
@@ -36,6 +37,7 @@ export function PipelineEditorSidePanel({
   assistantPending: boolean;
   assistantProposal: StudioPipelineAssistantResponse | null;
   lang: "en" | "ru";
+  nodeManifests: StudioCapabilityNode[];
   pipelineId: number | null;
   selectedNode: PipelineNode | null;
   trigger: PipelineTrigger | null;
@@ -82,6 +84,7 @@ export function PipelineEditorSidePanel({
         <NodeConfigPanel
           key={selectedNode.id}
           node={selectedNode}
+          nodeManifests={nodeManifests}
           pipelineId={pipelineId}
           trigger={trigger}
           lang={lang}

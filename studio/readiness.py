@@ -5,6 +5,7 @@ from typing import Any
 
 from app.background_workers import STUDIO_WORKER_SPECS
 from app.worker_state import serialize_background_worker_state
+from plugin_marketplace.services.install_service import enabled_plugin_ids_for_user
 from studio import readiness_issues as ri
 from studio.models import Pipeline, PipelineTrigger
 from studio.node_manifest import node_manifest_payload
@@ -222,7 +223,7 @@ def build_studio_readiness_report(
         if item["severity"] == "warning"
     )
     overall = "not_ready" if error_count or worker_not_ready_count or missing_pipeline_ids else "warning" if warning_count else "ready"
-    nodes = node_manifest_payload()
+    nodes = node_manifest_payload(enabled_plugin_ids_for_user(user))
     scope = {"active_only": active_only, "pipeline_ids": requested_pipeline_ids}
     if entry:
         scope["entry_node_id"] = entry

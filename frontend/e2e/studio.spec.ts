@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
 import { installApiHarness, json } from "./support/apiHarness";
-
 const fullFeatures = {
   servers: true,
   dashboard: true,
@@ -15,13 +14,11 @@ const fullFeatures = {
   settings: true,
   orchestrator: true,
 };
-
 function makeStudioHandler() {
   let nextPipelineId = 102;
   let nextSkillSlug = 1;
   let nextMcpId = 502;
   let nextAgentId = 301;
-
   const pipelines: any[] = [
     {
       id: 101,
@@ -44,7 +41,6 @@ function makeStudioHandler() {
       triggers: [],
     },
   ];
-
   const templates = [
     {
       slug: "starter-ops",
@@ -54,7 +50,6 @@ function makeStudioHandler() {
       category: "operations",
     },
   ];
-
   const skills: any[] = [
     {
       slug: "incident-triage",
@@ -76,7 +71,6 @@ function makeStudioHandler() {
       path: "studio/skills/incident-triage/SKILL.md",
     },
   ];
-
   const skillDetails: Record<string, any> = {
     "incident-triage": {
       ...skills[0],
@@ -85,7 +79,6 @@ function makeStudioHandler() {
       content: "# Incident Triage\n\n- Verify scope\n- Gather logs",
     },
   };
-
   const skillWorkspaceFiles: Record<string, Record<string, any>> = {
     "incident-triage": {
       "SKILL.md": {
@@ -106,7 +99,6 @@ function makeStudioHandler() {
       },
     },
   };
-
   const skillValidation = (slug: string) => ({
     slug,
     path: skillDetails[slug]?.path || `studio/skills/${slug}/SKILL.md`,
@@ -114,7 +106,6 @@ function makeStudioHandler() {
     warnings: [],
     is_valid: true,
   });
-
   const workspaceFileSummary = (file: any) => ({
     path: file.path,
     name: file.name,
@@ -123,7 +114,6 @@ function makeStudioHandler() {
     editable: file.editable,
     size: file.content.length,
   });
-
   const mcpServers: any[] = [
     {
       id: 501,
@@ -140,7 +130,6 @@ function makeStudioHandler() {
       last_test_error: "",
     },
   ];
-
   const mcpTemplates = [
     {
       slug: "github",
@@ -153,9 +142,7 @@ function makeStudioHandler() {
       icon: "🐙",
     },
   ];
-
   const agentConfigs: any[] = [];
-
   const notifications = {
     telegram_bot_token: "",
     telegram_chat_id: "",
@@ -167,7 +154,6 @@ function makeStudioHandler() {
     from_email: "",
     site_url: "http://127.0.0.1:9000",
   };
-
   return (req: any) => {
     if (req.path === "/api/auth/session/" && req.method === "GET") {
       return json({
@@ -181,7 +167,6 @@ function makeStudioHandler() {
         },
       });
     }
-
     if (req.path === "/api/studio/pipelines/" && req.method === "GET") {
       const q = (req.query.q || "").trim().toLowerCase();
       const filtered = pipelines.filter((pipeline) => {
@@ -190,16 +175,13 @@ function makeStudioHandler() {
       });
       return json(filtered);
     }
-
     if (req.path.match(/^\/api\/studio\/pipelines\/\d+\/$/) && req.method === "GET") {
       const id = Number(req.path.split("/")[4]);
       return json(pipelines.find((pipeline) => pipeline.id === id) || pipelines[0]);
     }
-
     if (req.path === "/api/studio/runs/" && req.method === "GET") {
       return json([]);
     }
-
     if (req.path.match(/^\/api\/studio\/pipelines\/\d+\/run\/$/) && req.method === "POST") {
       return json({
         id: Date.now(),
@@ -223,7 +205,6 @@ function makeStudioHandler() {
         trigger_node_id: String(req.body?.entry_node_id || ""),
       });
     }
-
     if (req.path.match(/^\/api\/studio\/pipelines\/\d+\/clone\/$/) && req.method === "POST") {
       const sourceId = Number(req.path.split("/")[4]);
       const source = pipelines.find((pipeline) => pipeline.id === sourceId);
@@ -237,14 +218,12 @@ function makeStudioHandler() {
       pipelines.push(clone);
       return json(clone);
     }
-
     if (req.path.match(/^\/api\/studio\/pipelines\/\d+\/$/) && req.method === "DELETE") {
       const id = Number(req.path.split("/")[4]);
       const idx = pipelines.findIndex((pipeline) => pipeline.id === id);
       if (idx >= 0) pipelines.splice(idx, 1);
       return json({ ok: true });
     }
-
     if (req.path === "/api/studio/templates/" && req.method === "GET") return json(templates);
     if (req.path.match(/^\/api\/studio\/templates\/[^/]+\/use\/$/) && req.method === "POST") {
       const created = {
@@ -265,7 +244,6 @@ function makeStudioHandler() {
       pipelines.push(created);
       return json(created);
     }
-
     if (req.path === "/api/studio/notifications/" && req.method === "GET") return json(notifications);
     if (req.path === "/api/studio/notifications/" && req.method === "POST") {
       Object.assign(notifications, req.body || {});
@@ -273,7 +251,6 @@ function makeStudioHandler() {
     }
     if (req.path === "/api/studio/notifications/test-telegram/" && req.method === "POST") return json({ ok: true, message: "Telegram test sent" });
     if (req.path === "/api/studio/notifications/test-email/" && req.method === "POST") return json({ ok: true, message: "Email test sent" });
-
     if (req.path === "/api/studio/skills/" && req.method === "GET") return json(skills);
     if (req.path === "/api/studio/skills/templates/" && req.method === "GET") {
       return json([
@@ -373,7 +350,6 @@ function makeStudioHandler() {
         validation: skillValidation(slug),
       });
     }
-
     if (req.path === "/api/studio/mcp/" && req.method === "GET") return json(mcpServers);
     if (req.path === "/api/studio/mcp/" && req.method === "POST") {
       const created = {
@@ -409,7 +385,6 @@ function makeStudioHandler() {
       return json({ ok: true });
     }
     if (req.path === "/api/studio/mcp/templates/" && req.method === "GET") return json(mcpTemplates);
-
     if (req.path === "/api/studio/servers/" && req.method === "GET") return json([{ id: 1, name: "Web-01", host: "10.0.0.11" }]);
     if (req.path === "/api/studio/share-users/" && req.method === "GET") {
       return json([{ id: 2, username: "operator", email: "operator@example.com" }]);
@@ -444,83 +419,63 @@ function makeStudioHandler() {
     }
   };
 }
-
 test("works with pipeline actions from Studio", async ({ page }) => {
   const handler = makeStudioHandler();
   const harness = await installApiHarness(page, handler);
-
   await page.goto("/studio");
   await expect(page.getByRole("heading", { name: "Pipelines", exact: true })).toBeVisible();
-
   await page.getByRole("button", { name: /^Run$/ }).first().click();
   await expect.poll(() => harness.getCalls("/api/studio/pipelines/101/run/", "POST").length).toBe(1);
-
   const pipelineCard = page.locator("article").filter({ hasText: "Nightly Patch" }).first();
   await pipelineCard.locator("button").first().click();
   await page.getByRole("menuitem", { name: /Clone/ }).click();
   await expect(page.getByRole("heading", { name: "Nightly Patch Copy" })).toBeVisible();
-
   const cloneCard = page.locator("article").filter({ hasText: "Nightly Patch Copy" }).first();
   await cloneCard.locator("button").first().click();
   await page.getByRole("menuitem", { name: /Delete/ }).click();
   await page.getByRole("button", { name: /^Delete$/ }).click();
   await expect(page.getByText("Nightly Patch Copy")).toHaveCount(0);
 });
-
 test("creates execution profile from Studio profiles", async ({ page }) => {
   const handler = makeStudioHandler();
   const harness = await installApiHarness(page, handler);
-
   await page.goto("/studio/agents");
   await expect(page.getByRole("heading", { name: "Execution Profiles" })).toBeVisible();
-
   await page.getByRole("button", { name: "New profile" }).first().click();
   const sheet = page.getByRole("dialog");
   await expect(sheet.getByRole("heading", { name: "New profile" })).toBeVisible();
   await expect(sheet.getByText("Risk summary")).toBeVisible();
-
   await sheet.getByPlaceholder("Ops triage profile").fill("Rollback guard");
   await expect(sheet.getByText("You have unsaved changes.")).toBeVisible();
   await sheet.getByRole("button", { name: "Tools" }).click();
   await expect(sheet.getByText("Allowed tools")).toBeVisible();
   await sheet.getByRole("button", { name: "Save profile" }).click();
-
   await expect.poll(() => harness.getCalls("/api/studio/agents/", "POST").length).toBe(1);
   await expect(page.getByText("Rollback guard")).toBeVisible();
 });
-
 test("guards unsaved skill workspace edits before switching files", async ({ page }) => {
   await installApiHarness(page, makeStudioHandler());
-
   await page.goto("/studio/skills");
   await expect(page.getByRole("heading", { name: "Skill Catalog" })).toBeVisible();
-
   await page.getByRole("button", { name: /Incident Triage/ }).click();
   await expect(page.getByRole("heading", { name: "Incident Triage" })).toBeVisible();
   await page.getByRole("tab", { name: "Workspace" }).click();
-
   const editor = page.locator("textarea").first();
   await expect(editor).toHaveValue(/Verify scope/);
   await editor.fill("# Incident Triage\n\n- Edited but not saved");
   await expect(page.getByText("unsaved")).toBeVisible();
-
   await page.getByRole("button", { name: /checklist\.md/ }).click();
   await expect(page.getByRole("alertdialog")).toContainText("Unsaved file changes");
-
   await page.getByRole("button", { name: "Stay" }).click();
   await expect(editor).toHaveValue(/Edited but not saved/);
-
   await page.getByRole("button", { name: /checklist\.md/ }).click();
   await page.getByRole("button", { name: "Discard and continue" }).click();
   await expect(editor).toHaveValue(/Capture timeline/);
 });
-
 test("manages MCP registry and notification test actions", async ({ page }) => {
   const harness = await installApiHarness(page, makeStudioHandler());
-
   await page.goto("/studio/mcp");
   await expect(page.getByRole("heading", { name: "MCP Registry" })).toBeVisible();
-
   await page.getByRole("button", { name: "Add server" }).first().click();
   await page.getByPlaceholder("For example, GitHub MCP").fill("PagerDuty MCP");
   await page.getByPlaceholder("What tools this server exposes").fill("Incident escalation tools");
@@ -528,22 +483,18 @@ test("manages MCP registry and notification test actions", async ({ page }) => {
   await page.getByRole("button", { name: /^Save$/ }).click();
   await expect(page.getByText("PagerDuty MCP")).toBeVisible();
   await expect.poll(() => harness.getCalls("/api/studio/mcp/", "POST").length).toBe(1);
-
   await page.goto("/studio/notifications");
   await expect(page.getByRole("heading", { name: "Notification Settings" })).toBeVisible();
-
   await page.locator('input[type="password"]').first().fill("tg-token");
   await page.locator('input[placeholder="123456789"]').fill("123456789");
   await expect(page.getByText("You have unsaved changes")).toBeVisible();
   await page.getByRole("button", { name: "Send test Telegram message" }).click();
   await expect(page.getByText("Telegram test sent")).toBeVisible();
   await expect(page.getByText(/Tested/)).toBeVisible();
-
   await page.getByPlaceholder("smtp.gmail.com").fill("smtp.gmail.com");
   await page.getByPlaceholder("email@example.com", { exact: true }).fill("smtp-user");
   await page.getByRole("button", { name: "Send test email" }).click();
   await expect(page.getByText("Email test sent")).toBeVisible();
-
   await page.getByRole("button", { name: "Save settings" }).click();
   await expect(page.getByRole("button", { name: "Saved" })).toBeVisible();
 });

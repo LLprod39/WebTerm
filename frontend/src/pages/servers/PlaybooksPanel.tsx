@@ -28,7 +28,6 @@ export function usePlaybooksPanel({ servers, t, tr, lang }: UsePlaybooksPanelPar
   const [playbookView, setPlaybookView] = useState<"list" | "edit" | "run">("list");
   const [deletePlaybookTarget, setDeletePlaybookTarget] = useState<Playbook | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
   const addPlaybookTask = () => {
     setPlaybookTasks((prev) => [...prev, { id: newTaskId(), command: "", description: "", continueOnError: false }]);
   };
@@ -59,7 +58,6 @@ export function usePlaybooksPanel({ servers, t, tr, lang }: UsePlaybooksPanelPar
     setPlaybookTargets(new Set(servers.filter((server) => server.status === "online").map((server) => server.id)));
   };
   const clearTargets = () => setPlaybookTargets(new Set());
-
   const openNewPlaybook = () => {
     setActivePlaybook(null);
     setPlaybookName("");
@@ -69,7 +67,6 @@ export function usePlaybooksPanel({ servers, t, tr, lang }: UsePlaybooksPanelPar
     setPlaybookResults([]);
     setPlaybookView("edit");
   };
-
   const openEditPlaybook = (playbook: Playbook) => {
     setActivePlaybook(playbook);
     setPlaybookName(playbook.name);
@@ -79,7 +76,6 @@ export function usePlaybooksPanel({ servers, t, tr, lang }: UsePlaybooksPanelPar
     setPlaybookResults([]);
     setPlaybookView("edit");
   };
-
   const onSavePlaybook = () => {
     if (!playbookName.trim() || playbookTasks.length === 0) return;
     const playbook: Playbook = {
@@ -96,11 +92,9 @@ export function usePlaybooksPanel({ servers, t, tr, lang }: UsePlaybooksPanelPar
     savePlaybooks(updated);
     setActivePlaybook(playbook);
   };
-
   const onDeletePlaybook = (playbook: Playbook) => {
     setDeletePlaybookTarget(playbook);
   };
-
   const onConfirmDeletePlaybook = () => {
     if (!deletePlaybookTarget) return;
     const updated = playbooks.filter((playbook) => playbook.id !== deletePlaybookTarget.id);
@@ -109,7 +103,6 @@ export function usePlaybooksPanel({ servers, t, tr, lang }: UsePlaybooksPanelPar
     if (activePlaybook?.id === deletePlaybookTarget.id) setPlaybookView("list");
     setDeletePlaybookTarget(null);
   };
-
   const onDuplicatePlaybook = (playbook: Playbook) => {
     const duplicate: Playbook = {
       ...playbook,
@@ -122,7 +115,6 @@ export function usePlaybooksPanel({ servers, t, tr, lang }: UsePlaybooksPanelPar
     setPlaybooks(updated);
     savePlaybooks(updated);
   };
-
   const onImportFile = async (file: File) => {
     try {
       const text = await file.text();
@@ -141,27 +133,22 @@ export function usePlaybooksPanel({ servers, t, tr, lang }: UsePlaybooksPanelPar
       notify.error({ title: tr("pb.parse_failed", { error: err instanceof Error ? err.message : String(err) }) });
     }
   };
-
   const onFileInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) void onImportFile(file);
     event.target.value = "";
   };
-
   const onDropPlaybook = (event: DragEvent) => {
     event.preventDefault();
     const file = event.dataTransfer.files[0];
     if (file) void onImportFile(file);
   };
-
   const onRunPlaybook = async () => {
     const validTasks = playbookTasks.filter((task) => task.command.trim());
     const targetIds = Array.from(playbookTargets);
     if (!validTasks.length || !targetIds.length) return;
-
     setPlaybookRunning(true);
     setPlaybookView("run");
-
     const results: PlaybookRunResult[] = targetIds.map((serverId) => {
       const server = servers.find((item) => item.id === serverId);
       return {
@@ -176,7 +163,6 @@ export function usePlaybooksPanel({ servers, t, tr, lang }: UsePlaybooksPanelPar
       };
     });
     setPlaybookResults([...results]);
-
     for (let serverIndex = 0; serverIndex < results.length; serverIndex += 1) {
       const serverResult = results[serverIndex];
       let shouldSkip = false;
@@ -188,10 +174,8 @@ export function usePlaybooksPanel({ servers, t, tr, lang }: UsePlaybooksPanelPar
           setPlaybookResults([...results]);
           continue;
         }
-
         serverResult.taskResults[taskIndex].status = "running";
         setPlaybookResults([...results]);
-
         try {
           const response = await executeServerCommand(serverResult.serverId, task.command, "");
           if (response.success) {
@@ -213,10 +197,8 @@ export function usePlaybooksPanel({ servers, t, tr, lang }: UsePlaybooksPanelPar
         setPlaybookResults([...results]);
       }
     }
-
     setPlaybookRunning(false);
   };
-
   return {
     activePlaybook, addPlaybookTask, clearTargets, deletePlaybookTarget, fileInputRef, lang, moveTask, onConfirmDeletePlaybook, onDeletePlaybook, onDropPlaybook,
     onDuplicatePlaybook, onFileInputChange, onRunPlaybook, onSavePlaybook, openEditPlaybook, openNewPlaybook,
@@ -225,9 +207,7 @@ export function usePlaybooksPanel({ servers, t, tr, lang }: UsePlaybooksPanelPar
     setDeletePlaybookTarget, t, toggleTarget, tr, updatePlaybookTask,
   };
 }
-
 type PlaybooksPanelProps = ReturnType<typeof usePlaybooksPanel>;
-
 export function PlaybooksPanel({
   activePlaybook, addPlaybookTask, clearTargets, deletePlaybookTarget, fileInputRef, lang, moveTask, onConfirmDeletePlaybook, onDeletePlaybook, onDropPlaybook,
   onDuplicatePlaybook, onFileInputChange, onRunPlaybook, onSavePlaybook, openEditPlaybook, openNewPlaybook,
@@ -238,7 +218,6 @@ export function PlaybooksPanel({
   return (
     <>
       <input ref={fileInputRef} type="file" accept=".yml,.yaml,.json" className="hidden" onChange={onFileInputChange} />
-
       {playbookView === "list" && (
         <section className="bg-card border border-border rounded-lg p-5 space-y-4">
           <div className="flex items-center justify-between">
@@ -255,7 +234,6 @@ export function PlaybooksPanel({
               </Button>
             </div>
           </div>
-
           <div
             onDragOver={(event) => event.preventDefault()}
             onDrop={onDropPlaybook}
@@ -268,7 +246,6 @@ export function PlaybooksPanel({
             </p>
             <p className="text-xs text-muted-foreground/60 mt-1">{t("pb.supports")}</p>
           </div>
-
           {playbooks.length === 0 ? (
             <div className="text-center py-6 text-muted-foreground">
               <p className="text-sm">{t("pb.empty_title")}</p>
@@ -306,7 +283,6 @@ export function PlaybooksPanel({
           )}
         </section>
       )}
-
       {playbookView === "edit" && (
         <section className="space-y-4">
           <div className="flex items-center gap-2">
@@ -317,7 +293,6 @@ export function PlaybooksPanel({
               {activePlaybook ? t("pb.edit_title") : t("pb.new_title")}
             </h2>
           </div>
-
           <div className="bg-card border border-border rounded-lg p-4 space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -330,7 +305,6 @@ export function PlaybooksPanel({
               </div>
             </div>
           </div>
-
           <div className="bg-card border border-border rounded-lg p-4 space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tr("pb.tasks_title", { count: playbookTasks.length })}</h3>
@@ -338,7 +312,6 @@ export function PlaybooksPanel({
                 <Plus className="h-3 w-3" /> {t("pb.add_task")}
               </Button>
             </div>
-
             <div className="space-y-2">
               {playbookTasks.map((task, idx) => (
                 <div key={task.id} className="flex items-start gap-2 p-3 rounded-lg border border-border bg-secondary/10">
@@ -384,7 +357,6 @@ export function PlaybooksPanel({
               ))}
             </div>
           </div>
-
           <div className="bg-card border border-border rounded-lg p-4 space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
@@ -395,7 +367,6 @@ export function PlaybooksPanel({
                 <Button size="xs" variant="outline" className="h-8" onClick={clearTargets}>{t("pb.clear")}</Button>
               </div>
             </div>
-
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
               {servers.map((server) => (
                 <button
@@ -415,7 +386,6 @@ export function PlaybooksPanel({
               ))}
             </div>
           </div>
-
           <div className="flex items-center gap-2 justify-end">
             <Button size="sm" variant="outline" className="h-9 gap-1.5" onClick={onSavePlaybook} disabled={!playbookName.trim() || playbookTasks.length === 0}>
               <Save className="h-3.5 w-3.5" /> {t("pb.save")}
@@ -431,7 +401,6 @@ export function PlaybooksPanel({
           </div>
         </section>
       )}
-
       {playbookView === "run" && (
         <section className="space-y-4">
           <div className="flex items-center gap-2">
@@ -445,7 +414,6 @@ export function PlaybooksPanel({
               {tr(playbookResults.length === 1 ? "pb.server_count_one" : "pb.server_count_other", { count: playbookResults.length })}
             </span>
           </div>
-
           {playbookResults.map((serverResult) => {
             const allDone = serverResult.taskResults.every((taskResult) => taskResult.status !== "pending" && taskResult.status !== "running");
             const allOk = serverResult.taskResults.every((taskResult) => taskResult.status === "success");

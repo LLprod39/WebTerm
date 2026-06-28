@@ -1,4 +1,4 @@
-import { useCallback, type Dispatch, type DragEvent, type SetStateAction } from "react";
+import { useCallback, useMemo, type Dispatch, type DragEvent, type SetStateAction } from "react";
 import {
   addEdge,
   type Connection,
@@ -6,8 +6,8 @@ import {
   type Node,
   type NodeMouseHandler,
 } from "@xyflow/react";
-import type { NodeType } from "@/components/pipeline/nodes";
-import type { PipelineNode } from "@/lib/api";
+import type { PipelineNode, StudioCapabilityNode } from "@/lib/api";
+import { isPluginStudioNode } from "@/plugins/studioNodes";
 import { isNodeType, localize } from "./presentation";
 import {
   buildConnectionAutofillPatch,
@@ -22,6 +22,7 @@ export function usePipelineEditorGraphActions({
   lang,
   nodeIdCounter,
   nodes,
+  nodeManifests,
   pipelineName,
   screenToFlowPosition,
   selectedNode,
@@ -36,6 +37,7 @@ export function usePipelineEditorGraphActions({
   lang: "en" | "ru";
   nodeIdCounter: { current: number };
   nodes: PipelineNode[];
+  nodeManifests: StudioCapabilityNode[];
   pipelineName: string;
   screenToFlowPosition: (position: FlowPosition) => FlowPosition;
   selectedNode: PipelineNode | null;
@@ -46,6 +48,11 @@ export function usePipelineEditorGraphActions({
   setSelectedNode: Dispatch<SetStateAction<PipelineNode | null>>;
   toast: (options: { description: string }) => void;
 }) {
+  const manifestByType = useMemo(
+    () => new Map(nodeManifests.map((manifest) => [manifest.type, manifest])),
+    [nodeManifests],
+  );
+
   const onConnect = useCallback(
     (connection: Connection) => {
       if (!connection.source || !connection.target) return;
@@ -95,16 +102,17 @@ export function usePipelineEditorGraphActions({
   );
 
   const handleAddNode = useCallback(
-    (type: NodeType) => {
+    (type: string) => {
       const id = `node_${nodeIdCounter.current++}`;
       const selected = selectedNode ? nodes.find((item) => item.id === selectedNode.id) : null;
+      const manifest = manifestByType.get(type);
       const newNode = {
         id,
         type,
         position: selected
           ? { x: selected.position.x + 260, y: selected.position.y + 24 }
           : screenToFlowPosition({ x: 300, y: 200 + nodeIdCounter.current * 80 }),
-        data: buildDefaultNodeData(type),
+        data: buildDefaultNodeData(type, manifest),
       };
       setHasLocalChanges(true);
       setNodes((nds) => [...nds, newNode as unknown as Node]);
@@ -112,7 +120,7 @@ export function usePipelineEditorGraphActions({
       setActiveRunId(null);
       setSelectedNode(newNode as PipelineNode);
     },
-    [clearGraphOverlay, nodeIdCounter, nodes, screenToFlowPosition, selectedNode, setActiveRunId, setHasLocalChanges, setNodes, setSelectedNode],
+    [clearGraphOverlay, manifestByType, nodeIdCounter, nodes, screenToFlowPosition, selectedNode, setActiveRunId, setHasLocalChanges, setNodes, setSelectedNode],
   );
 
   const handleDuplicateNode = useCallback(
@@ -151,17 +159,18 @@ export function usePipelineEditorGraphActions({
     (event: DragEvent) => {
       event.preventDefault();
       const type = event.dataTransfer.getData("application/pipeline-node-type");
-      if (!type || !isNodeType(type)) return;
+      const manifest = manifestByType.get(type);
+      if (!type || (!isNodeType(type) && !isPluginStudioNode(manifest))) return;
       const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
       const id = `node_${nodeIdCounter.current++}`;
-      const newNode = { id, type, position, data: buildDefaultNodeData(type as NodeType) };
+      const newNode = { id, type, position, data: buildDefaultNodeData(type, manifest) };
       setHasLocalChanges(true);
       setNodes((nds) => [...nds, newNode as unknown as Node]);
       clearGraphOverlay();
       setActiveRunId(null);
       setSelectedNode(newNode as PipelineNode);
     },
-    [clearGraphOverlay, nodeIdCounter, screenToFlowPosition, setActiveRunId, setHasLocalChanges, setNodes, setSelectedNode],
+    [clearGraphOverlay, manifestByType, nodeIdCounter, screenToFlowPosition, setActiveRunId, setHasLocalChanges, setNodes, setSelectedNode],
   );
 
   const handleUpdateNodeData = useCallback(

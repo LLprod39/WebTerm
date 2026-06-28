@@ -19,7 +19,7 @@ from servers.agent_runtime import (
     unregister_engine,
 )
 from servers.agent_sessions import AgentSessionManager
-from servers.agent_tools import AGENT_TOOLS
+from servers.agent_tools import get_all_agent_tools
 from servers.models import AgentRun
 from servers.multi_agent_plan_executor import execute_plan_tasks
 from servers.report_delivery import deliver_agent_report_async
@@ -127,7 +127,7 @@ async def run_multi_agent_engine(
         engine.tool_registry = ToolRegistry.from_sources(
             engine.enabled_tools,
             engine.mcp_tools,
-            agent_tools=AGENT_TOOLS,
+            agent_tools=get_all_agent_tools(),
         )
         engine.ops_prompt_context = await engine._build_ops_prompt_context()
 
@@ -250,7 +250,7 @@ async def execute_existing_multi_agent_plan(engine: Any, run: AgentRun) -> Agent
         engine.tool_registry = ToolRegistry.from_sources(
             engine.enabled_tools,
             engine.mcp_tools,
-            agent_tools=AGENT_TOOLS,
+            agent_tools=get_all_agent_tools(),
         )
         engine.ops_prompt_context = await engine._build_ops_prompt_context()
         await sync_to_async(engine._update_run)(run, status=AgentRun.STATUS_RUNNING)

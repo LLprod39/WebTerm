@@ -1,4 +1,5 @@
 from app.agent_kernel.tools.registry import ToolRegistry
+from app.plugins.agent_tools import plugin_agent_tool_specs
 from servers import agent_tools
 
 
@@ -41,3 +42,27 @@ def test_tool_registry_uses_declared_metadata_before_name_inference(monkeypatch)
     assert readonly_spec.category == "general"
     assert readonly_spec.risk == "read"
     assert readonly_spec.mutates_state is False
+
+
+def test_plugin_agent_tools_require_explicit_tool_spec():
+    registry = ToolRegistry.from_sources(
+        ["plugin_missing_spec"],
+        agent_tools={
+            "plugin_missing_spec": {
+                "plugin_id": "webtrerm.demo-dashboard",
+                "description": "No explicit metadata.",
+                "params": {},
+            }
+        },
+    )
+
+    assert registry.get("plugin_missing_spec") is None
+
+
+def test_plugin_agent_tool_specs_project_declared_metadata():
+    specs = plugin_agent_tool_specs({"webtrerm.demo-dashboard"})
+    spec = specs["plugin_webtrerm_demo_dashboard_ping"]
+
+    assert spec["plugin_id"] == "webtrerm.demo-dashboard"
+    assert spec["tool_spec"]["runner"] == "plugin"
+    assert spec["tool_spec"]["risk"] == "network"

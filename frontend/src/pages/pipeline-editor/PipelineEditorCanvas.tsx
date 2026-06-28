@@ -10,7 +10,7 @@ import {
   type NodeChange,
   type NodeMouseHandler,
 } from "@xyflow/react";
-import type { DragEvent } from "react";
+import { useMemo, type ComponentType, type DragEvent } from "react";
 import { Zap } from "lucide-react";
 
 import type { PipelineEdge, PipelineNode } from "@/lib/api";
@@ -29,6 +29,7 @@ export function PipelineEditorCanvas({
   onNodeClick,
   onNodesChange,
   onPaneClick,
+  pluginNodeTypes,
   showMiniMap,
 }: {
   displayEdges: PipelineEdge[];
@@ -41,8 +42,14 @@ export function PipelineEditorCanvas({
   onNodeClick: NodeMouseHandler;
   onNodesChange: (changes: NodeChange[]) => void;
   onPaneClick: () => void;
+  pluginNodeTypes?: Record<string, ComponentType<any>>;
   showMiniMap: boolean;
 }) {
+  const resolvedNodeTypes = useMemo(
+    () => ({ ...nodeTypes, ...(pluginNodeTypes || {}) }),
+    [pluginNodeTypes],
+  );
+
   return (
     <ReactFlow
       nodes={displayNodes}
@@ -54,7 +61,7 @@ export function PipelineEditorCanvas({
       onPaneClick={onPaneClick}
       onDragOver={onDragOver}
       onDrop={onDrop}
-      nodeTypes={nodeTypes}
+      nodeTypes={resolvedNodeTypes}
       fitView
       proOptions={{ hideAttribution: true }}
       defaultEdgeOptions={{

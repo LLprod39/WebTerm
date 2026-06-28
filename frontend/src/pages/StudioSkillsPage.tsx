@@ -1,38 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-
 import { StudioNav } from "@/components/StudioNav";
 import { DeleteDialog, UnsavedChangesDialog } from "@/components/system/ConfirmDialog";
 import { useToast } from "@/hooks/use-toast";
-import {
-  fetchAuthSession,
-  studioShareUsers,
-  studioSkills,
-  type StudioSkillDetail,
-  type StudioSkillScaffoldPayload,
-  type StudioSkillTemplate,
-  type StudioSkillValidationResponse,
-} from "@/lib/api";
+import { fetchAuthSession, studioShareUsers, studioSkills, type StudioSkillDetail, type StudioSkillScaffoldPayload, type StudioSkillTemplate, type StudioSkillValidationResponse } from "@/lib/api";
 import { hasFeatureAccess } from "@/lib/featureAccess";
 import { useI18n } from "@/lib/i18n";
-
 import { SkillCatalogView } from "./studio-skills/SkillCatalogView";
 import { ValidationSummaryCard } from "./studio-skills/SkillCards";
 import { SkillDetailView } from "./studio-skills/SkillDetailView";
 import { CreateFileDialog, CreateSkillDialog, SkillValidationDialog } from "./studio-skills/SkillDialogs";
 import type { SkillAccessDraft } from "./studio-skills/SkillSettingsTab";
-import {
-  buildSkillScaffoldPayload,
-  buildSkillSettingsPayload,
-  createSkillSettingsDraft,
-  createWizardState,
-  runtimePolicyErrorMessage,
-  starterFilesFromWizard,
-  type SkillSettingsDraft,
-  type SkillWizardState,
-} from "./studio-skills/skillScaffold";
-
+import { buildSkillScaffoldPayload, buildSkillSettingsPayload, createSkillSettingsDraft, createWizardState, runtimePolicyErrorMessage, starterFilesFromWizard, type SkillSettingsDraft, type SkillWizardState } from "./studio-skills/skillScaffold";
 async function upsertSkillWorkspaceFile(slug: string, file: { path: string; content: string }) {
   try {
     return await studioSkills.createFile(slug, file);
@@ -44,19 +24,13 @@ async function upsertSkillWorkspaceFile(slug: string, file: { path: string; cont
     throw error;
   }
 }
-
-type PendingWorkspaceNavigation =
-  | { type: "skill"; slug: string }
-  | { type: "file"; path: string }
-  | { type: "back" };
-
+type PendingWorkspaceNavigation = { type: "skill"; slug: string } | { type: "file"; path: string } | { type: "back" };
 export default function StudioSkillsPage() {
   const { lang } = useI18n();
   const tr = (ru: string, en: string) => (lang === "ru" ? ru : en);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-
   const [search, setSearch] = useState("");
   const [serviceFilter, setServiceFilter] = useState("__all__");
   const [selectedSlug, setSelectedSlug] = useState("");
@@ -79,7 +53,6 @@ export default function StudioSkillsPage() {
     is_shared: false,
     shared_user_ids: [],
   });
-
   const { data: session } = useQuery({
     queryKey: ["auth", "session"],
     queryFn: fetchAuthSession,
@@ -90,7 +63,6 @@ export default function StudioSkillsPage() {
   const isAdmin = Boolean(user?.is_staff);
   const canOpenAgents = hasFeatureAccess(user, "studio_agents");
   const canOpenMcp = hasFeatureAccess(user, "studio_mcp");
-
   const { data: skills = [], isLoading } = useQuery({
     queryKey: ["studio", "skills"],
     queryFn: studioSkills.list,
@@ -104,7 +76,6 @@ export default function StudioSkillsPage() {
     queryKey: ["studio", "skill-templates"],
     queryFn: studioSkills.templates,
   });
-
   const services = useMemo(
     () => Array.from(new Set(skills.map((skill) => skill.service).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
     [skills],
@@ -125,13 +96,11 @@ export default function StudioSkillsPage() {
     () => templates.find((item) => item.slug === selectedTemplateSlug) || null,
     [templates, selectedTemplateSlug],
   );
-
   const skillsSignature = skills.map((skill) => skill.slug).join("|");
   const runtimeEnforcedCount = skills.filter((skill) => skill.runtime_enforced).length;
   const serviceCount = services.length;
   const starterFiles = starterFilesFromWizard(wizard);
   const canSubmitWizard = Boolean(wizard.name.trim()) && Boolean(wizard.description.trim());
-
   const invalidateSkillQueries = async (slug?: string) => {
     await queryClient.invalidateQueries({ queryKey: ["studio", "skills"] });
     if (!slug) return;
@@ -141,7 +110,6 @@ export default function StudioSkillsPage() {
       queryClient.invalidateQueries({ queryKey: ["studio", "skills", "workspace", "file", slug] }),
     ]);
   };
-
   const scaffoldMutation = useMutation({
     mutationFn: (payload: StudioSkillScaffoldPayload) => studioSkills.scaffold(payload),
     onSuccess: async (response) => {
@@ -168,7 +136,6 @@ export default function StudioSkillsPage() {
       toast({ variant: "destructive", description: error.message });
     },
   });
-
   const validateMutation = useMutation({
     mutationFn: () => studioSkills.validate(undefined, strictValidation),
     onSuccess: (response) => {
@@ -187,19 +154,16 @@ export default function StudioSkillsPage() {
       toast({ variant: "destructive", description: error.message });
     },
   });
-
   useEffect(() => {
     if (selectedSlug && skills.length > 0 && !skills.some((skill) => skill.slug === selectedSlug)) {
       setSelectedSlug("");
     }
   }, [skills, skillsSignature, selectedSlug]);
-
   const { data: selectedSkill, isFetching: isFetchingSkill } = useQuery({
     queryKey: ["studio", "skills", selectedSlug],
     queryFn: () => studioSkills.get(selectedSlug),
     enabled: !!selectedSlug,
   });
-
   useEffect(() => {
     if (!selectedSkill) return;
     setSkillSettingsDraft(createSkillSettingsDraft(selectedSkill));
@@ -208,15 +172,12 @@ export default function StudioSkillsPage() {
       shared_user_ids: selectedSkill.shared_user_ids || [],
     });
   }, [selectedSkill]);
-
   const { data: workspace, isFetching: isFetchingWorkspace } = useQuery({
     queryKey: ["studio", "skills", "workspace", selectedSlug],
     queryFn: () => studioSkills.workspace(selectedSlug),
     enabled: !!selectedSlug,
   });
-
   const workspaceSignature = (workspace?.files || []).map((file) => file.path).join("|");
-
   useEffect(() => {
     if (!workspace?.files.length) {
       if (selectedFilePath) setSelectedFilePath("");
@@ -227,24 +188,20 @@ export default function StudioSkillsPage() {
       setSelectedFilePath(preferred);
     }
   }, [workspace, workspaceSignature, selectedFilePath]);
-
   const selectedWorkspaceFile = useMemo(
     () => workspace?.files.find((file) => file.path === selectedFilePath) || null,
     [selectedFilePath, workspace],
   );
-
   const { data: selectedFileDetail, isFetching: isFetchingFile } = useQuery({
     queryKey: ["studio", "skills", "workspace", "file", selectedSlug, selectedFilePath],
     queryFn: () => studioSkills.readFile(selectedSlug, selectedFilePath),
     enabled: !!selectedSlug && !!selectedFilePath,
   });
-
   useEffect(() => {
     if (selectedFileDetail) {
       setEditorValue(selectedFileDetail.content);
     }
   }, [selectedFileDetail]);
-
   const createFileMutation = useMutation({
     mutationFn: (payload: { path: string; content: string }) => {
       if (!selectedSlug) throw new Error(tr("Скилл не выбран", "Skill is not selected"));
@@ -262,7 +219,6 @@ export default function StudioSkillsPage() {
       toast({ variant: "destructive", description: error.message });
     },
   });
-
   const updateFileMutation = useMutation({
     mutationFn: (payload: { path: string; content: string }) => {
       if (!selectedSlug) throw new Error(tr("Скилл не выбран", "Skill is not selected"));
@@ -276,7 +232,6 @@ export default function StudioSkillsPage() {
       toast({ variant: "destructive", description: error.message });
     },
   });
-
   const deleteFileMutation = useMutation({
     mutationFn: (path: string) => {
       if (!selectedSlug) throw new Error(tr("Скилл не выбран", "Skill is not selected"));
@@ -291,7 +246,6 @@ export default function StudioSkillsPage() {
       toast({ variant: "destructive", description: error.message });
     },
   });
-
   const updateSkillAccessMutation = useMutation({
     mutationFn: () => {
       if (!selectedSkill) throw new Error(tr("Скилл не выбран", "Skill is not selected"));
@@ -308,7 +262,6 @@ export default function StudioSkillsPage() {
       toast({ variant: "destructive", description: error.message });
     },
   });
-
   const updateSkillSettingsMutation = useMutation({
     mutationFn: (payload: Partial<StudioSkillDetail>) => {
       if (!selectedSkill) throw new Error(tr("Скилл не выбран", "Skill is not selected"));
@@ -322,14 +275,12 @@ export default function StudioSkillsPage() {
       toast({ variant: "destructive", description: error.message });
     },
   });
-
   const isEditorDirty = Boolean(selectedFileDetail && editorValue !== selectedFileDetail.content);
   const workspaceErrors = workspace?.validation.errors || [];
   const workspaceWarnings = workspace?.validation.warnings || [];
   const canEditSkill = Boolean(selectedSkill?.can_edit);
   const canShareSkill = Boolean(selectedSkill?.can_share && isAdmin);
   const canEditSelectedFile = Boolean(selectedWorkspaceFile?.editable && canEditSkill);
-
   const applyWorkspaceNavigation = (target: PendingWorkspaceNavigation) => {
     if (target.type === "skill") {
       setSelectedSlug(target.slug);
@@ -343,7 +294,6 @@ export default function StudioSkillsPage() {
     setSelectedSlug("");
     setSelectedFilePath("");
   };
-
   const requestWorkspaceNavigation = (target: PendingWorkspaceNavigation) => {
     if (isEditorDirty) {
       setPendingNavigation(target);
@@ -351,7 +301,6 @@ export default function StudioSkillsPage() {
     }
     applyWorkspaceNavigation(target);
   };
-
   const saveSkillSettings = () => {
     if (!selectedSkill || !canEditSkill) return;
     const name = skillSettingsDraft.name.trim();
@@ -364,7 +313,6 @@ export default function StudioSkillsPage() {
       toast({ variant: "destructive", description: tr("Описание скилла обязательно.", "Skill description is required.") });
       return;
     }
-
     let payload: Partial<StudioSkillDetail>;
     try {
       payload = buildSkillSettingsPayload(skillSettingsDraft);
@@ -372,17 +320,14 @@ export default function StudioSkillsPage() {
       toast({ variant: "destructive", description: runtimePolicyErrorMessage(error, tr) });
       return;
     }
-
     updateSkillSettingsMutation.mutate(payload);
   };
-
   const openCreateDialog = (template?: StudioSkillTemplate | null) => {
     setSelectedTemplateSlug(template?.slug || "__none__");
     setWizard(createWizardState(template || null, lang));
     setSlugTouched(false);
     setCreateOpen(true);
   };
-
   const submitWizard = () => {
     let payload: StudioSkillScaffoldPayload;
     try {
@@ -391,26 +336,21 @@ export default function StudioSkillsPage() {
       toast({ variant: "destructive", description: runtimePolicyErrorMessage(error, tr) });
       return;
     }
-
     scaffoldMutation.mutate(payload);
   };
-
   const saveCurrentFile = () => {
     if (!selectedFilePath || !canEditSelectedFile) return;
     updateFileMutation.mutate({ path: selectedFilePath, content: editorValue });
   };
-
   const removeCurrentFile = () => {
     if (!selectedFilePath || selectedFilePath === "SKILL.md" || !canEditSelectedFile) return;
     setDeleteFileTarget(selectedFilePath);
   };
-
   const confirmRemoveFile = () => {
     if (!deleteFileTarget) return;
     deleteFileMutation.mutate(deleteFileTarget);
     setDeleteFileTarget(null);
   };
-
   return (
     <div className="flex h-full flex-col">
       <StudioNav />
@@ -419,7 +359,6 @@ export default function StudioSkillsPage() {
           <ValidationSummaryCard report={validationReport} />
         </div>
       )}
-
       {!selectedSlug ? (
         <SkillCatalogView
           tr={tr}
@@ -481,7 +420,6 @@ export default function StudioSkillsPage() {
           onSaveAccess={() => updateSkillAccessMutation.mutate()}
         />
       )}
-
       <CreateSkillDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
@@ -500,7 +438,6 @@ export default function StudioSkillsPage() {
         setSlugTouched={setSlugTouched}
         onSubmit={submitWizard}
       />
-
       <CreateFileDialog
         open={createFileOpen}
         onOpenChange={setCreateFileOpen}
@@ -513,7 +450,6 @@ export default function StudioSkillsPage() {
         onContentChange={setCreateFileContent}
         onCreate={(path, content) => createFileMutation.mutate({ path, content })}
       />
-
       <SkillValidationDialog
         open={validateOpen}
         onOpenChange={setValidateOpen}
@@ -524,7 +460,6 @@ export default function StudioSkillsPage() {
         onStrictValidationChange={setStrictValidation}
         onValidate={() => validateMutation.mutate()}
       />
-
       <UnsavedChangesDialog
         open={Boolean(pendingNavigation)}
         onOpenChange={(open) => {
@@ -544,7 +479,6 @@ export default function StudioSkillsPage() {
         }}
         contentClassName="max-w-sm"
       />
-
       <DeleteDialog
         open={Boolean(deleteFileTarget)}
         onOpenChange={(open) => {

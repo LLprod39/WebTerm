@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Copy, Info, Trash2, X } from "lucide-react";
+import { CheckCircle2, Copy, Info, Puzzle, Trash2, X } from "lucide-react";
 
 import { AgentNodePanel } from "@/components/pipeline/node-panel/AgentNodePanel";
 import { type NodeType } from "@/components/pipeline/nodes";
@@ -20,8 +20,10 @@ import {
   type MCPServerTool,
   type ModelsResponse,
   type PipelineNode,
+  type StudioCapabilityNode,
   type PipelineTrigger,
 } from "@/lib/api";
+import { isPluginStudioNode, pluginNodeDescription, pluginNodeLabel } from "@/plugins/studioNodes";
 
 import { NodeFormSection } from "./PanelPrimitives";
 import { TriggerBasicFields, TriggerSpecificConfigSections } from "./TriggerConfigSections";
@@ -44,9 +46,11 @@ import { LogicConfigSections } from "./node-config/LogicConfigSections";
 import { McpCallConfigSection } from "./node-config/McpCallConfigSection";
 import { OpsConfigSections } from "./node-config/OpsConfigSections";
 import { OutputConfigSections } from "./node-config/OutputConfigSections";
+import { PluginSchemaConfigSection } from "./node-config/PluginSchemaConfigSection";
 
 export function NodeConfigPanel({
   node,
+  nodeManifests,
   pipelineId,
   trigger,
   lang,
@@ -56,6 +60,7 @@ export function NodeConfigPanel({
   onDuplicate,
 }: {
   node: PipelineNode;
+  nodeManifests: StudioCapabilityNode[];
   pipelineId: number | null;
   trigger?: PipelineTrigger | null;
   lang?: "en" | "ru";
@@ -78,6 +83,12 @@ export function NodeConfigPanel({
     () => (typeof node.data?.arguments_text === "string" ? String(node.data.arguments_text) : toJsonEditorText(node.data?.arguments || {})),
   );
   const uiLang: "en" | "ru" = lang === "ru" ? "ru" : "en";
+  const activeManifest = useMemo(
+    () => nodeManifests.find((manifest) => manifest.type === node.type),
+    [node.type, nodeManifests],
+  );
+  const isPluginNode = isPluginStudioNode(activeManifest);
+  const pluginManifest = isPluginNode ? activeManifest : undefined;
 
   const set = useCallback((key: string, val: unknown) => {
     setD((prev) => {
@@ -223,12 +234,21 @@ export function NodeConfigPanel({
       .finally(() => setLoadingModelsFor(null));
   }, [loadingModelsFor, modelProvider, modelsData, node.id, onUpdate, queryClient, type]);
 
-  const typeInfo = getNodeTypeInfo(type, uiLang);
-  const TypeIcon = NODE_TYPE_LOOKUP[type as NodeType]?.icon;
-  const typeIconClassName = NODE_TYPE_LOOKUP[type as NodeType]?.iconClassName || "text-foreground";
-  const nodeGuidance = getNodeTypeGuidance(type, uiLang);
+  const typeInfo = isPluginNode
+    ? { label: pluginNodeLabel(pluginManifest as StudioCapabilityNode) }
+    : getNodeTypeInfo(type, uiLang);
+  const TypeIcon = NODE_TYPE_LOOKUP[type as NodeType]?.icon || (isPluginNode ? Puzzle : undefined);
+  const typeIconClassName = NODE_TYPE_LOOKUP[type as NodeType]?.iconClassName || (isPluginNode ? "text-teal-400" : "text-foreground");
+  const nodeGuidance = isPluginNode
+    ? {
+        category: localize(uiLang, "Плагин", "Plugin"),
+        summary: pluginNodeDescription(pluginManifest as StudioCapabilityNode),
+        checklist: [
+          localize(uiLang, "Проверьте grants и secret bindings плагина перед запуском.", "Review plugin grants and secret bindings before running."),
+        ],
+      }
+    : getNodeTypeGuidance(type, uiLang);
   const triggerWebhookUrl = trigger?.webhook_url ? new URL(trigger.webhook_url, window.location.origin).toString() : "";
-
   const handleAgentProviderChange = useCallback((nextProvider: string) => {
     if (nextProvider === "auto") {
       setMany({ provider: "auto", model: "" });
@@ -385,6 +405,15 @@ export function NodeConfigPanel({
           </div>
           <TriggerBasicFields type={type} data={d} lang={uiLang} onSet={set} />
         </NodeFormSection>
+
+        {isPluginNode ? (
+          <PluginSchemaConfigSection
+            data={d}
+            inputSchema={activeManifest?.input_schema}
+            lang={uiLang}
+            onSet={set}
+          />
+        ) : null}
 
         <TriggerSpecificConfigSections
           type={type}

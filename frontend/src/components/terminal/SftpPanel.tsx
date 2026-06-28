@@ -8,7 +8,6 @@ import {
   useState,
   type DragEvent as ReactDragEvent,
 } from "react";
-
 import {
   chmodServerFile,
   chownServerFile,
@@ -35,76 +34,16 @@ import {
 } from "./sftp-panel/sftpPanelModel";
 import { useSftpTransfers } from "./sftp-panel/useSftpTransfers";
 import { useSftpTextEditor } from "./sftp-panel/useSftpTextEditor";
-
 export interface SftpPanelHandle {
   enqueueUploads: (files: FileList | File[]) => void;
   refresh: () => void;
 }
-
 interface SftpPanelProps {
   server: FrontendServer;
   active?: boolean;
   onOpenInEditor?: (path: string) => void;
 }
-
-type SftpFormAction =
-  | { type: "create-folder"; value: string; error?: string }
-  | { type: "create-file"; value: string; error?: string }
-  | { type: "rename"; value: string; entry: SftpEntry; error?: string }
-  | { type: "chmod"; value: string; entry: SftpEntry; error?: string }
-  | { type: "chown"; value: string; entry: SftpEntry; error?: string };
-
-type PendingEditorAction =
-  | { type: "open"; entry: SftpEntry }
-  | { type: "reload" }
-  | { type: "close" };
-
-function formActionCopy(action: SftpFormAction | null) {
-  if (!action) return null;
-  switch (action.type) {
-    case "create-folder":
-      return {
-        title: "Новая папка",
-        description: "Папка будет создана в текущем каталоге.",
-        label: "Имя папки",
-        placeholder: "logs",
-        confirmLabel: "Создать папку",
-      };
-    case "create-file":
-      return {
-        title: "Новый файл",
-        description: "Пустой файл будет создан и открыт в редакторе.",
-        label: "Имя файла",
-        placeholder: "new-file.conf",
-        confirmLabel: "Создать файл",
-      };
-    case "rename":
-      return {
-        title: "Переименовать объект",
-        description: `Текущее имя: ${action.entry.name}`,
-        label: "Новое имя",
-        placeholder: action.entry.name,
-        confirmLabel: "Переименовать",
-      };
-    case "chmod":
-      return {
-        title: "Изменить права доступа",
-        description: `Права будут применены к ${action.entry.name}. Используйте формат 644, 755 или 0644.`,
-        label: "Права",
-        placeholder: defaultPermissionMode(action.entry),
-        confirmLabel: "Обновить права",
-      };
-    case "chown":
-      return {
-        title: "Изменить владельца",
-        description: `Владелец будет обновлён для ${action.entry.name}. Можно указать owner или owner:group.`,
-        label: "Владелец",
-        placeholder: "deploy:www-data",
-        confirmLabel: "Обновить владельца",
-      };
-  }
-}
-
+import { formActionCopy, type PendingEditorAction, type SftpFormAction } from "./sftp-panel/sftpPanelActions";
 export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function SftpPanel(
   { server, active = true, onOpenInEditor }: SftpPanelProps,
   ref,
@@ -112,7 +51,6 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
   const { toast } = useToast();
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const loadSeqRef = useRef(0);
-
   const [currentPath, setCurrentPath] = useState(".");
   const [searchQuery, setSearchQuery] = useState("");
   const [homePath, setHomePath] = useState(".");
@@ -126,26 +64,21 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
   const [deleteTarget, setDeleteTarget] = useState<SftpEntry | null>(null);
   const [pendingEditorAction, setPendingEditorAction] = useState<PendingEditorAction | null>(null);
   const [isActionSubmitting, setIsActionSubmitting] = useState(false);
-
   const selectedEntry = useMemo(
     () => entries.find((entry) => entry.path === selectedPath) || null,
     [entries, selectedPath],
   );
-
   const visibleEntries = useMemo(() => {
     return getVisibleSftpEntries({ entries, searchQuery, showHidden: true });
   }, [entries, searchQuery]);
-
   const breadcrumbSegments = useMemo(() => {
     return getSftpBreadcrumbSegments(currentPath);
   }, [currentPath]);
-
   const loadDirectory = useCallback(async (path: string) => {
     const seq = loadSeqRef.current + 1;
     loadSeqRef.current = seq;
     setIsLoading(true);
     setError("");
-
     try {
       const result = await listServerFiles(server.id, path);
       if (loadSeqRef.current !== seq) return;
@@ -164,11 +97,9 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
       }
     }
   }, [server.id]);
-
   const refreshDirectory = useCallback(() => {
     void loadDirectory(currentPath);
   }, [currentPath, loadDirectory]);
-
   const {
     closeEditor,
     editorContent,
@@ -194,7 +125,6 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
     serverId: server.id,
     toast,
   });
-
   const {
     clearCompletedTransfers,
     enqueueUploadFiles,
@@ -211,7 +141,6 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
     serverId: server.id,
     toast,
   });
-
   useEffect(() => {
     setCurrentPath(".");
     setHomePath(".");
@@ -225,14 +154,12 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
       void loadDirectory(".");
     }
   }, [active, loadDirectory, resetEditor, resetTransfers, server.id]);
-
   useEffect(() => {
     if (!active) return;
     if (!entries.length && !isLoading && !error) {
       void loadDirectory(currentPath);
     }
   }, [active, currentPath, entries.length, error, isLoading, loadDirectory]);
-
   useImperativeHandle(ref, () => ({
     enqueueUploads: (files) => {
       enqueueUploadFiles(files);
@@ -241,7 +168,6 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
       void loadDirectory(currentPath);
     },
   }), [currentPath, enqueueUploadFiles, loadDirectory]);
-
   const runEditorAction = useCallback((action: PendingEditorAction) => {
     if (action.type === "open") {
       void openTextEditor(action.entry);
@@ -253,7 +179,6 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
     }
     closeEditor();
   }, [closeEditor, openTextEditor, reloadEditor]);
-
   const requestEditorAction = useCallback((action: PendingEditorAction) => {
     if (isEditorDirty) {
       setPendingEditorAction(action);
@@ -261,7 +186,6 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
     }
     runEditorAction(action);
   }, [isEditorDirty, runEditorAction]);
-
   const handleOpenEditor = useCallback(() => {
     if (!selectedEntry || selectedEntry.is_dir) {
       toast({ variant: "destructive", description: "Выберите текстовый файл." });
@@ -273,49 +197,40 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
     }
     requestEditorAction({ type: "open", entry: selectedEntry });
   }, [onOpenInEditor, requestEditorAction, selectedEntry, toast]);
-
   const requireSelectedEntry = useCallback(() => {
     if (selectedEntry) return selectedEntry;
     toast({ variant: "destructive", description: "Выберите файл или папку." });
     return null;
   }, [selectedEntry, toast]);
-
   const handleCreateFolder = useCallback(() => {
     setFormAction({ type: "create-folder", value: "" });
   }, []);
-
   const handleCreateFile = useCallback(() => {
     setFormAction({ type: "create-file", value: "new-file.conf" });
   }, []);
-
   const handleRename = useCallback(() => {
     const entry = requireSelectedEntry();
     if (!entry) return;
     setFormAction({ type: "rename", value: entry.name, entry });
   }, [requireSelectedEntry]);
-
   const handleDelete = useCallback(() => {
     const entry = requireSelectedEntry();
     if (!entry) return;
     setDeleteTarget(entry);
   }, [requireSelectedEntry]);
-
   const handleChmod = useCallback(() => {
     const entry = requireSelectedEntry();
     if (!entry) return;
     setFormAction({ type: "chmod", value: defaultPermissionMode(entry), entry });
   }, [requireSelectedEntry]);
-
   const handleChown = useCallback(() => {
     const entry = requireSelectedEntry();
     if (!entry) return;
     setFormAction({ type: "chown", value: "", entry });
   }, [requireSelectedEntry]);
-
   const updateFormActionError = useCallback((message: string) => {
     setFormAction((current) => current ? { ...current, error: message } : current);
   }, []);
-
   const handleSubmitFormAction = useCallback(async () => {
     if (!formAction) return;
     const normalizedValue = formAction.value.trim();
@@ -331,7 +246,6 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
       setFormAction(null);
       return;
     }
-
     setIsActionSubmitting(true);
     try {
       if (formAction.type === "create-folder") {
@@ -379,7 +293,6 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
     toast,
     updateFormActionError,
   ]);
-
   const confirmDelete = useCallback(async () => {
     if (!deleteTarget) return;
     setIsActionSubmitting(true);
@@ -398,7 +311,6 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
       setIsActionSubmitting(false);
     }
   }, [currentPath, deleteTarget, editorPath, loadDirectory, resetEditor, server.id, toast]);
-
   const handleDrop = useCallback((event: ReactDragEvent<HTMLDivElement>) => {
     if (!event.dataTransfer?.files?.length) return;
     event.preventDefault();
@@ -406,7 +318,6 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
     setIsDragging(false);
     enqueueUploadFiles(event.dataTransfer.files);
   }, [enqueueUploadFiles]);
-
   const openEntryInEditor = useCallback((entry: SftpEntry) => {
     setSelectedPath(entry.path);
     if (onOpenInEditor) {
@@ -415,9 +326,7 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
     }
     requestEditorAction({ type: "open", entry });
   }, [onOpenInEditor, requestEditorAction]);
-
   const actionCopy = formActionCopy(formAction);
-
   return (
     <div
       className={cn(
@@ -469,7 +378,6 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
         onOpenEntryInEditor={openEntryInEditor}
         onDownload={queueDownload}
       />
-
       {editorPath && !onOpenInEditor ? (
         <SftpTextEditorSection
           editorContent={editorContent}
@@ -487,7 +395,6 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
           onSave={saveEditor}
         />
       ) : null}
-
       <SftpTransferQueue
         transfers={transfers}
         expanded={transfersExpanded}
@@ -496,7 +403,6 @@ export const SftpPanel = forwardRef<SftpPanelHandle, SftpPanelProps>(function Sf
         onRetry={retryTransfer}
         onCancelOrRemove={handleCancelOrRemoveTransfer}
       />
-
       <input
         ref={uploadInputRef}
         type="file"

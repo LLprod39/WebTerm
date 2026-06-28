@@ -1,6 +1,6 @@
 # Architecture Notes
 
-Last reviewed: 2026-06-20
+Last reviewed: 2026-06-28
 
 This folder is the public architecture entry point. The detailed working contract currently lives in the local-only file `docs/local/ARCHITECTURE_CONTRACT.md` because it came from internal root docs and is ignored by git.
 
@@ -33,7 +33,7 @@ python scripts/check_architecture_sizes.py --strict-new
 
 ## Active Refactor Status
 
-- Current architecture command status: rechecked on 2026-06-25; `python scripts/check_architecture_sizes.py --strict-new` currently fails in the dirty worktree because `core_ui.services.assistant_chat` imports `servers`/`studio` directly and several new or changed files exceed the size guard. See `PLUGIN_MARKETPLACE_IMPLEMENTATION_PLAN.md`, section "Current Architecture Cleanup Gate Before Marketplace", before starting marketplace implementation.
+- Current architecture command status: rechecked on 2026-06-29; `PATH=.venv/bin:$PATH .venv/bin/python scripts/check_architecture_sizes.py --strict-new` passes in the current dirty worktree. The plugin work now targets self-hosted extensions, not a public paid marketplace. Implemented foundations include pure `app.plugins` contracts, the internal `plugin_marketplace` store/API, permission grants, scaffold/validate/pack/install-disabled/audit commands, `.wtp` static no-code scan with SBOM/dependency metadata, private catalog sync/install-disabled, HTTPS federated catalog source sync, settings/secret refs, access-group scoped visibility, active surfaces, plugin pages/dashboard widgets with sandbox gates, reviewed/signed package state, connector health/action contracts, Studio node bridge, agent tool/terminal action bridges, hook bridge, lifecycle impact/update/soft-uninstall/rollback APIs, admin quarantine, package retention/cleanup, attestations, remote package staging with HTTPS+sha256 provenance replay, compatibility jobs, sandbox policy/enable gates, admin egress deny policy, backend sandbox provider boundary, local review/signing gates, optional external signing/scanner/sandbox/frontend-bundle boundaries, and production deploy checks for the private extension trust settings.
 - Backend view endpoint groups have mostly been split into focused modules.
 - `core_ui/views/_views_all.py`, `servers/views/_views_all.py`, and `studio/views/_views_all.py` remain compatibility shims.
 - `studio/pipeline_executor.py` remains the production pipeline executor.
@@ -49,10 +49,13 @@ python scripts/check_architecture_sizes.py --strict-new
 - Settings/env parsing, model-local helpers, pipeline validation schema helpers, and node-manifest schema builders now live outside the large compatibility modules.
 - Frontend legacy-growth pages have been split into focused feature modules for agent configs, agent wizard state/UI, server groups, server CRUD, server list/share/knowledge/rules/security/execute workflow state, Studio skills, and shared AI provider constants.
 - Frontend API calls are moving by domain under `frontend/src/api/`; auth/session, settings/access, server management, Studio pipelines/runs/skills/MCP/triggers/templates, Linux UI, files, memory, monitoring, agents, MARS, and Studio notifications now live outside the compatibility facade in `frontend/src/lib/api.ts`.
+- `app.plugins` is pure Python and guarded from Django/feature-app imports; `plugin_marketplace` may use `core_ui` access/audit but is guarded from direct `servers` and `studio` imports.
 
 ## Current Architecture Plans
 
 - `STUDIO_OPS_AUTOMATION_PLATFORM_PLAN.md` describes the target shape for turning Studio into a broad admin/DevOps automation platform using pipeline nodes, MCP connectors, skills, policy, approvals, and domain capability packs.
 - `PLUGIN_PLATFORM_ARCHITECTURE_PLAN.md` describes the next plugin-platform layer: manifests, registries, hooks, connector contracts, dashboard widgets, plugin pages, Studio nodes, agent tools, terminal actions, permissions, and rollout phases.
-- `PLUGIN_MARKETPLACE_IMPLEMENTATION_PLAN.md` describes the implementation roadmap for turning the plugin layer into a marketplace: package format, local install store, permissions, signing, review flow, private catalog, public publishing, updates, uninstall safety, and ecosystem phases.
+- `PLUGIN_MARKETPLACE_IMPLEMENTATION_PLAN.md` describes the roadmap for the self-hosted plugin extension system: package format, local install store, permissions, private catalogs, safe code gates, health, rollback, and quarantine.
+- `PLUGIN_MARKETPLACE_OPERATIONS.md` describes production checks for hardened private extension operation.
+- `PLUGIN_AUTHOR_GUIDE.md` is the safe metadata-first guide for plugin authors using scaffold, validate, pack, audit, review, signing, and private extension install gates.
 - `PLATFORM_DEVELOPMENT_RULES.md` is the short working contract for changing the platform safely: ownership, boundaries, permissions, frontend/backend patterns, Studio, terminal, dashboards, integrations, checks, and stop conditions.

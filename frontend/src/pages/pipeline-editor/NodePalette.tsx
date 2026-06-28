@@ -1,16 +1,57 @@
-import { useState } from "react";
-import { ChevronDown, ChevronUp, FileText, Plus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronDown, ChevronUp, FileText, Plus, type LucideIcon } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { NODE_PALETTE, type NodeType } from "@/components/pipeline/nodes";
+import { NODE_PALETTE } from "@/components/pipeline/nodes";
 import { getNodeCategoryLabel, getNodePaletteText, getNodeTypeGuidance } from "@/components/pipeline/nodes/nodeMeta";
 
 import { CATEGORY_ICONS, localize } from "./presentation";
 
-export function NodePalette({ onAddNode, lang }: { onAddNode: (type: NodeType) => void; lang: "en" | "ru" }) {
+type PaletteNode = {
+  type: string;
+  label: string;
+  icon: LucideIcon;
+  iconClassName?: string;
+  description: string;
+};
+
+type PaletteCategory = {
+  category: string;
+  nodes: PaletteNode[];
+};
+
+function paletteText(node: PaletteNode, lang: "en" | "ru") {
+  const nodeText = getNodePaletteText(node.type, lang);
+  if (nodeText.label === node.type) {
+    return { label: node.label, description: node.description };
+  }
+  return nodeText;
+}
+
+export function NodePalette({
+  onAddNode,
+  lang,
+  pluginPalette = [],
+}: {
+  onAddNode: (type: string) => void;
+  lang: "en" | "ru";
+  pluginPalette?: PaletteCategory[];
+}) {
   const [search, setSearch] = useState("");
-  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set(NODE_PALETTE.map((c) => c.category)));
+  const palette = useMemo(
+    () => [...(NODE_PALETTE as PaletteCategory[]), ...pluginPalette],
+    [pluginPalette],
+  );
+  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set(palette.map((c) => c.category)));
+
+  useEffect(() => {
+    setExpandedCats((prev) => {
+      const next = new Set(prev);
+      palette.forEach((category) => next.add(category.category));
+      return next;
+    });
+  }, [palette]);
 
   const toggleCat = (cat: string) => {
     setExpandedCats((prev) => {
@@ -21,10 +62,10 @@ export function NodePalette({ onAddNode, lang }: { onAddNode: (type: NodeType) =
     });
   };
 
-  const filtered = NODE_PALETTE.map((cat) => ({
+  const filtered = palette.map((cat) => ({
     ...cat,
     nodes: cat.nodes.filter((n) => {
-      const nodeText = getNodePaletteText(n.type, lang);
+      const nodeText = paletteText(n, lang);
       const query = search.trim().toLowerCase();
       return !query || nodeText.label.toLowerCase().includes(query) || nodeText.description.toLowerCase().includes(query);
     }),
@@ -66,7 +107,7 @@ export function NodePalette({ onAddNode, lang }: { onAddNode: (type: NodeType) =
                   cat.nodes.map((node) => {
                     const Icon = node.icon;
                     const guidance = getNodeTypeGuidance(node.type, lang);
-                    const nodeText = getNodePaletteText(node.type, lang);
+                    const nodeText = paletteText(node, lang);
                     return (
                       <Tooltip key={node.type}>
                         <TooltipTrigger asChild>

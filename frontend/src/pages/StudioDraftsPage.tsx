@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, Circle } from "lucide-react";
-
 import { StudioNav } from "@/components/StudioNav";
 import { Badge } from "@/components/ui/badge";
 import { buildDraftCanvasModel } from "@/components/studio/draftGraphModel";
@@ -18,7 +17,6 @@ import {
   studioPipelineDrafts,
   type StudioPipelineAssistantPayload,
 } from "@/lib/studioPipelineDraftsApi";
-
 import { StudioDraftComposerPanel } from "./studio-drafts/StudioDraftComposerPanel";
 import { StudioDraftGraphPanel } from "./studio-drafts/StudioDraftGraphPanel";
 import { StudioDraftQueuePanel } from "./studio-drafts/StudioDraftQueuePanel";
@@ -34,9 +32,7 @@ import {
   getVisibleDrafts,
   type StudioDraftMobilePane,
 } from "./studio-drafts/studioDraftsModel";
-
 type StudioDraftInspectorTab = "request" | "check" | "changes";
-
 function DraftProgressStrip({
   lang,
   hasDraft,
@@ -82,7 +78,6 @@ function DraftProgressStrip({
       blocked: false,
     },
   ];
-
   return (
     <div className="border-b border-border/70 bg-card/35 px-4 py-2">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -109,7 +104,6 @@ function DraftProgressStrip({
     </div>
   );
 }
-
 export default function StudioDraftsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -125,29 +119,24 @@ export default function StudioDraftsPage() {
   const [mobilePane, setMobilePane] = useState<StudioDraftMobilePane>("queue");
   const [queueCollapsed, setQueueCollapsed] = useState(false);
   const [inspectorTab, setInspectorTab] = useState<StudioDraftInspectorTab>("request");
-
   const defaultDraftName = useMemo(() => getDefaultDraftName(lang), [lang]);
   const promptPresets = useMemo(() => getPromptPresets(lang), [lang]);
   const activeDraftId = Number(searchParams.get("draft") || 0) || null;
-
   const { data: draftSessions = [], isLoading: draftsLoading } = useQuery({
     queryKey: ["studio", "pipeline-drafts"],
     queryFn: studioPipelineDrafts.list,
     staleTime: 30_000,
   });
-
   const draftFromList = useMemo(
     () => draftSessions.find((session) => session.id === activeDraftId) || null,
     [activeDraftId, draftSessions],
   );
-
   const { data: activeDraft = draftFromList, isFetching: activeDraftFetching } = useQuery({
     queryKey: ["studio", "pipeline-draft", activeDraftId],
     queryFn: () => studioPipelineDrafts.get(activeDraftId as number),
     enabled: Boolean(activeDraftId),
     initialData: draftFromList || undefined,
   });
-
   const activeResponse = getDraftResponse(activeDraft);
   const openQuestions = useMemo(() => (activeResponse?.questions || []).filter(Boolean), [activeResponse]);
   const openQuestionsKey = useMemo(() => openQuestions.join("\n"), [openQuestions]);
@@ -174,23 +163,19 @@ export default function StudioDraftsPage() {
   const validationFailed = activeResponse?.validation?.ok === false || activeResponse?.risk?.level === "dangerous";
   const validationOk = Boolean(activeResponse && activeResponse.validation?.ok !== false && !hasOpenQuestions && activeResponse.risk?.level !== "dangerous");
   const draftApplied = activeDraft?.status === "applied";
-
   const filterCounts = useMemo(() => getDraftFilterCounts(draftSessions), [draftSessions]);
   const visibleDrafts = useMemo(
     () => getVisibleDrafts({ draftSessions, filter, search }),
     [draftSessions, filter, search],
   );
-
   useEffect(() => {
     if (!activeDraft) return;
     setDraftName(activeDraft.title || defaultDraftName);
     setPrompt(hasOpenQuestions ? "" : activeDraft.user_goal || "");
   }, [activeDraft, defaultDraftName, hasOpenQuestions]);
-
   useEffect(() => {
     setQuestionAnswers({});
   }, [activeDraft?.id, openQuestionsKey]);
-
   useEffect(() => {
     if (activeDraftId) return;
     const promptParam = searchParams.get("prompt") || "";
@@ -198,12 +183,10 @@ export default function StudioDraftsPage() {
     if (promptParam) setPrompt(promptParam);
     if (titleParam) setDraftName(titleParam);
   }, [activeDraftId, searchParams]);
-
   useEffect(() => {
     const preferred = activeResponse?.selected_template?.slug || activeTemplateRecommendations[0]?.slug || "";
     setSelectedSkeletonSlug(preferred);
   }, [activeDraft?.id, activeResponse?.selected_template?.slug, activeTemplateRecommendations]);
-
   useEffect(() => {
     if (hasOpenQuestions) {
       setInspectorTab("request");
@@ -215,7 +198,6 @@ export default function StudioDraftsPage() {
       setMobilePane((current) => (current === "compose" ? "review" : current));
     }
   }, [activeDraft?.id, activeResponse, hasOpenQuestions]);
-
   const setActiveDraft = (id: number | null) => {
     const next = new URLSearchParams(searchParams);
     if (id) {
@@ -225,7 +207,6 @@ export default function StudioDraftsPage() {
     }
     setSearchParams(next, { replace: true });
   };
-
   const createOrReviseMutation = useMutation({
     mutationFn: ({ message, compilerMode }: { message: string; compilerMode?: StudioPipelineAssistantPayload["compiler_mode"] }) => {
       const payload = buildAssistantPayload({
@@ -252,7 +233,6 @@ export default function StudioDraftsPage() {
       toast({ variant: "destructive", description: error.message });
     },
   });
-
   const applyMutation = useMutation({
     mutationFn: async ({ openEditor }: { openEditor: boolean }) => {
       if (!activeDraft?.id) {
@@ -281,7 +261,6 @@ export default function StudioDraftsPage() {
       toast({ variant: "destructive", description: error.message });
     },
   });
-
   const validateMutation = useMutation({
     mutationFn: async () => {
       if (!activeDraft?.id) {
@@ -305,7 +284,6 @@ export default function StudioDraftsPage() {
       toast({ variant: "destructive", description: error.message });
     },
   });
-
   const useTemplateMutation = useMutation({
     mutationFn: async () => {
       if (!activeDraft?.id) {
@@ -325,7 +303,6 @@ export default function StudioDraftsPage() {
       toast({ variant: "destructive", description: error.message });
     },
   });
-
   const discardMutation = useMutation({
     mutationFn: (draftId: number) => studioPipelineDrafts.discard(draftId),
     onSuccess: (session) => {
@@ -342,21 +319,17 @@ export default function StudioDraftsPage() {
       toast({ variant: "destructive", description: error.message });
     },
   });
-
   function handleNewDraft() {
     setActiveDraft(null);
     setPrompt("");
     setQuestionAnswers({});
     setDraftName(defaultDraftName);
   }
-
   const questionAnswerMessage = useMemo(
     () => buildDraftQuestionAnswerMessage({ hasOpenQuestions, openQuestions, prompt, questionAnswers }),
     [hasOpenQuestions, openQuestions, prompt, questionAnswers],
   );
-
   const canSubmitComposer = hasOpenQuestions ? Boolean(questionAnswerMessage) : Boolean(prompt.trim());
-
   function handleSubmit(messageOverride?: string, compilerMode?: StudioPipelineAssistantPayload["compiler_mode"]) {
     const message = (messageOverride || questionAnswerMessage || prompt).trim();
     if (!message) {
@@ -365,7 +338,6 @@ export default function StudioDraftsPage() {
     }
     createOrReviseMutation.mutate({ message, compilerMode });
   }
-
   function handleApply(openEditor: boolean) {
     if (!activeCanApply) {
       toast({
@@ -376,7 +348,6 @@ export default function StudioDraftsPage() {
     }
     applyMutation.mutate({ openEditor });
   }
-
   return (
     <div className="flex h-full flex-col">
       <StudioNav />
@@ -400,7 +371,6 @@ export default function StudioDraftsPage() {
           applied={draftApplied}
         />
         <StudioDraftsMobileTabs lang={lang} mobilePane={mobilePane} onMobilePaneChange={setMobilePane} />
-
         <div
           className={cn(
             "grid min-h-0 flex-1 grid-cols-1",
@@ -465,7 +435,6 @@ export default function StudioDraftsPage() {
                 ))}
               </div>
             </div>
-
             {inspectorTab === "request" ? (
               <StudioDraftComposerPanel
                 lang={lang}

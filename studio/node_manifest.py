@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.plugins.studio_nodes import plugin_studio_node_manifests
+
 from .node_manifest_common import (
     COMMON_SUCCESS_OUTPUT,
     ON_FAILURE_SCHEMA,
@@ -328,8 +330,39 @@ TRIGGER_NODE_TYPES = frozenset(
 OPS_NODE_TYPES = frozenset(node_type for node_type, manifest in NODE_MANIFESTS.items() if manifest.category == "Ops")
 
 
+def _plugin_node_manifest_from_payload(payload: dict[str, Any]) -> NodeManifest:
+    return NodeManifest(
+        node_type=str(payload.get("type") or ""),
+        category=str(payload.get("category") or "Plugin"),
+        purpose=str(payload.get("purpose") or ""),
+        source_handles=tuple(str(item) for item in payload.get("source_handles") or ("out",)),
+        risk_level=str(payload.get("risk_level") or "read_only"),
+        mutates_state=bool(payload.get("mutates_state")),
+        supports_dry_run=bool(payload.get("supports_dry_run")),
+        requires_approval_by_default=bool(payload.get("requires_approval_by_default")),
+        recommended_verification=tuple(str(item) for item in payload.get("recommended_verification") or ()),
+        tags=tuple(str(item) for item in payload.get("tags") or ()),
+        input_schema=dict(payload.get("input_schema") or {}),
+        output_schema=dict(payload.get("output_schema") or {}),
+        metadata=dict(payload.get("metadata") or {}),
+    )
+
+
+def runtime_node_manifests(enabled_plugin_ids: set[str] | None = None) -> dict[str, NodeManifest]:
+    manifests = dict(NODE_MANIFESTS)
+    for payload in plugin_studio_node_manifests(enabled_plugin_ids):
+        manifest = _plugin_node_manifest_from_payload(payload)
+        if manifest.node_type:
+            manifests[manifest.node_type] = manifest
+    return manifests
+
+
+def runtime_known_node_types(enabled_plugin_ids: set[str] | None = None) -> frozenset[str]:
+    return frozenset(runtime_node_manifests(enabled_plugin_ids))
+
+
 def get_node_manifest(node_type: str) -> NodeManifest | None:
-    return NODE_MANIFESTS.get(str(node_type or "").strip())
+    return runtime_node_manifests().get(str(node_type or "").strip())
 
 
 def allowed_source_handles(node_type: str) -> frozenset[str]:
@@ -343,5 +376,5 @@ def assistant_node_catalog() -> dict[str, dict[str, Any]]:
     return {node_type: manifest.to_assistant_catalog_item() for node_type, manifest in NODE_MANIFESTS.items()}
 
 
-def node_manifest_payload() -> list[dict[str, Any]]:
-    return [manifest.to_api_payload() for manifest in NODE_MANIFESTS.values()]
+def node_manifest_payload(enabled_plugin_ids: set[str] | None = None) -> list[dict[str, Any]]:
+    return [manifest.to_api_payload() for manifest in runtime_node_manifests(enabled_plugin_ids).values()]

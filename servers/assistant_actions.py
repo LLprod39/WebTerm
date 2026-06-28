@@ -3,8 +3,16 @@ from __future__ import annotations
 from asgiref.sync import async_to_sync
 
 from app.agent_kernel import skill_provider_registry
-from app.assistant_actions import AssistantActionContext, AssistantActionError, AssistantActionSpec, register_action
+from app.assistant_actions import (
+    AssistantActionContext,
+    AssistantActionError,
+    AssistantActionSpec,
+    register_action,
+    register_runtime_context_provider,
+)
+from app.runtime_limits import ACTIVE_AGENT_RUN_STATUSES
 from app.sudo_policy import normalize_sudo_policy
+from core_ui.access import feature_allowed_for_user
 from servers.agent_inputs import normalize_input_artifacts, normalize_report_delivery
 from servers.agent_run_report import build_agent_run_report_response
 from servers.agent_schedule import normalize_schedule_config, schedule_minutes_for_config
@@ -206,7 +214,51 @@ def server_overview(ctx: AssistantActionContext) -> dict:
     }
 
 
+def build_assistant_runtime_context(user) -> dict:
+    context: dict = {"agents": [], "servers": []}
+    if feature_allowed_for_user(user, "agents"):
+        agents = list(ServerAgent.objects.filter(user=user).prefetch_related("servers").order_by("-updated_at", "-id")[:30])
+        active_runs = {}
+        for run in (
+            AgentRun.objects.filter(agent__in=agents, status__in=ACTIVE_AGENT_RUN_STATUSES)
+            .order_by("agent_id", "-started_at", "-id")
+        ):
+            active_runs.setdefault(run.agent_id, run)
+        context["agents"] = [
+            {
+                "id": agent.id,
+                "name": agent.name,
+                "mode": agent.mode,
+                "agent_type": agent.agent_type,
+                "goal": (agent.goal or agent.ai_prompt or "")[:500],
+                "server_ids": list(agent.servers.values_list("id", flat=True)[:8]),
+                "server_names": list(agent.servers.values_list("name", flat=True)[:8]),
+                "is_enabled": bool(agent.is_enabled),
+                "active_run_id": active_runs[agent.id].id if agent.id in active_runs else None,
+                "active_run_status": active_runs[agent.id].status if agent.id in active_runs else "",
+            }
+            for agent in agents
+        ]
+
+    if feature_allowed_for_user(user, "servers"):
+        servers = list(_accessible_servers_queryset(user).order_by("-updated_at", "-id")[:30])
+        context["servers"] = [
+            {
+                "id": server.id,
+                "name": server.name,
+                "host": server.host,
+                "username": server.username,
+                "server_type": server.server_type,
+                "is_active": bool(server.is_active),
+                "detected_os": server.detected_os,
+            }
+            for server in servers
+        ]
+    return context
+
+
 def register_assistant_actions() -> None:
+    register_runtime_context_provider("servers", build_assistant_runtime_context)
     specs = [
         AssistantActionSpec(
             action_type="agents.list",

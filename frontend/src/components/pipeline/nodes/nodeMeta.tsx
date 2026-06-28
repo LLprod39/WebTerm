@@ -136,6 +136,7 @@ export const NODE_CATEGORY_LABELS: Record<string, LocalizedText> = {
   Ops: { ru: "OPS", en: "Ops" },
   Logic: { ru: "Логика", en: "Logic" },
   Output: { ru: "Выходы", en: "Output" },
+  Plugin: { ru: "Плагины", en: "Plugins" },
   All: { ru: "Все", en: "All" },
 };
 

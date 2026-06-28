@@ -5,7 +5,11 @@ from typing import Any
 
 from django.utils import timezone
 
-from app.assistant_actions import AssistantActionContext, AssistantActionError, AssistantActionSpec, register_action
+from app.assistant_actions import (
+    AssistantActionContext,
+    AssistantActionError,
+)
+from core_ui.access import feature_allowed_for_user
 from studio.capability_registry import build_studio_capability_registry
 from studio.models import CURRENT_PIPELINE_GRAPH_VERSION, Pipeline, PipelineDraftSession, PipelineRun, PipelineTrigger
 from studio.pipeline_preflight import pipeline_integration_diagnostics
@@ -437,125 +441,20 @@ def approve_pipeline_node(ctx: AssistantActionContext) -> dict[str, Any]:
     return {"ok": True, "decision": decision, "node_id": node_id, "target_url": f"/studio/runs?run={run.pk}"}
 
 
-def register_assistant_actions() -> None:
-    specs = [
-        AssistantActionSpec(
-            action_type="studio.pipelines.list",
-            label="List Studio pipelines",
-            description="List available Studio pipelines.",
-            required_feature="studio_pipelines",
-            risk="read",
-            handler=list_pipelines,
-        ),
-        AssistantActionSpec(
-            action_type="studio.runs.list",
-            label="List Studio runs",
-            description="List recent Studio pipeline runs.",
-            required_feature="studio_runs",
-            risk="read",
-            handler=list_runs,
-        ),
-        AssistantActionSpec(
-            action_type="studio.capabilities.registry",
-            label="Show Studio capabilities",
-            description="Read the Studio capability registry with matching MCP servers, skills, and task families.",
-            required_feature="studio",
-            risk="read",
-            handler=capability_registry,
-        ),
-        AssistantActionSpec(
-            action_type="studio.mcp.list",
-            label="List Studio MCP servers",
-            description="List accessible MCP servers without invoking tools.",
-            required_feature="studio_mcp",
-            risk="read",
-            handler=list_mcp_servers,
-        ),
-        AssistantActionSpec(
-            action_type="studio.skills.list",
-            label="List Studio skills",
-            description="List accessible Studio skills and their safety metadata.",
-            required_feature="studio_skills",
-            risk="read",
-            handler=list_studio_skills,
-        ),
-        AssistantActionSpec(
-            action_type="studio.skills.validate",
-            label="Validate Studio skills",
-            description="Validate accessible Studio skills without changing skill files.",
-            required_feature="studio_skills",
-            risk="read",
-            input_schema={"optional": ["slugs", "strict"]},
-            handler=validate_studio_skills,
-        ),
-        AssistantActionSpec(
-            action_type="studio.pipeline_draft.create",
-            label="Create pipeline draft",
-            description="Create a Studio pipeline AI draft from a chat request.",
-            required_feature="studio_pipelines",
-            risk="internal_write",
-            requires_confirmation=True,
-            input_schema={"required": ["pipeline_name", "user_message"]},
-            handler=create_pipeline_draft,
-        ),
-        AssistantActionSpec(
-            action_type="studio.pipeline_draft.validate",
-            label="Validate pipeline draft",
-            description="Dry-run validate a Studio pipeline draft without runtime actions.",
-            required_feature="studio_pipelines",
-            risk="read",
-            input_schema={"required": ["draft_id"]},
-            handler=validate_pipeline_draft,
-        ),
-        AssistantActionSpec(
-            action_type="studio.pipeline_draft.apply",
-            label="Apply pipeline draft",
-            description="Apply a validated Studio draft to create/update a pipeline.",
-            required_feature="studio_pipelines",
-            risk="internal_write",
-            requires_confirmation=True,
-            input_schema={"required": ["draft_id"]},
-            handler=apply_pipeline_draft,
-        ),
-        AssistantActionSpec(
-            action_type="studio.pipeline.run_validate",
-            label="Validate pipeline run",
-            description="Validate/dry-run a manual pipeline launch without execution.",
-            required_feature="studio_pipelines",
-            risk="read",
-            input_schema={"required": ["pipeline_id"]},
-            handler=validate_pipeline_run,
-        ),
-        AssistantActionSpec(
-            action_type="studio.pipeline.run",
-            label="Run pipeline",
-            description="Launch a pipeline manual trigger after validation.",
-            required_feature="studio_pipelines",
-            risk="mutating",
-            requires_confirmation=True,
-            input_schema={"required": ["pipeline_id"]},
-            handler=run_pipeline,
-        ),
-        AssistantActionSpec(
-            action_type="studio.run.stop",
-            label="Stop pipeline run",
-            description="Request stop for an active Studio pipeline run.",
-            required_feature="studio_runs",
-            risk="mutating",
-            requires_confirmation=True,
-            input_schema={"required": ["run_id"]},
-            handler=stop_pipeline_run,
-        ),
-        AssistantActionSpec(
-            action_type="studio.run.approve_node",
-            label="Approve pipeline node",
-            description="Record an approval/rejection for a waiting pipeline approval node owned by the user.",
-            required_feature="studio_runs",
-            risk="mutating",
-            requires_confirmation=True,
-            input_schema={"required": ["run_id", "node_id", "decision"]},
-            handler=approve_pipeline_node,
-        ),
+def build_assistant_runtime_context(user) -> dict[str, Any]:
+    context: dict[str, Any] = {"pipelines": []}
+    if not feature_allowed_for_user(user, "studio_pipelines"):
+        return context
+    pipelines = list(_pipeline_queryset_for_user(user).order_by("-updated_at", "-id")[:25])
+    context["pipelines"] = [
+        {
+            "id": pipeline.id,
+            "name": pipeline.name,
+            "description": (pipeline.description or "")[:400],
+            "node_count": len(pipeline.nodes or []),
+            "tag_count": len(pipeline.tags or []),
+            "is_template": bool(pipeline.is_template),
+        }
+        for pipeline in pipelines
     ]
-    for spec in specs:
-        register_action(spec)
+    return context

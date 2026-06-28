@@ -26,6 +26,7 @@ from typing import Any
 
 from studio.executor.context import ExecutionContext
 from studio.executor.nodes.base import NodeResult
+from studio.executor.plugin_nodes import clear_plugin_node_registry_async, sync_plugin_node_registry_async
 from studio.executor.registry import registry
 
 logger = logging.getLogger(__name__)
@@ -110,6 +111,7 @@ class PipelineEngine:
             node_type: str = node_def.get("type", "")
             node_data: dict = node_def.get("data", {})
 
+            await sync_plugin_node_registry_async()
             if node_type not in registry:
                 error = f"Node type is not registered: {node_type}"
                 logger.error("Pipeline %s: node %s failed: %s", self.run_id, node_id, error)
@@ -128,6 +130,8 @@ class PipelineEngine:
             except Exception as exc:
                 logger.exception("Pipeline %s: node %s raised %s", self.run_id, node_id, exc)
                 result = NodeResult(error=str(exc), stop_pipeline=True)
+            finally:
+                await clear_plugin_node_registry_async()
 
             results[node_id] = {
                 "ok": result.ok,

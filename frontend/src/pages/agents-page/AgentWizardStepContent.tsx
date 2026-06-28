@@ -1,56 +1,17 @@
 import type { Dispatch, SetStateAction } from "react";
-import {
-  BookOpen,
-  Brain,
-  CalendarDays,
-  CheckCircle2,
-  Layers,
-  Server,
-  Settings2,
-  Shield,
-  Search,
-  Zap,
-  type LucideIcon,
-} from "lucide-react";
-
+import { BookOpen, Brain, CalendarDays, CheckCircle2, Layers, Server, Settings2, Shield, Search, Zap, type LucideIcon } from "lucide-react";
 import { InlineAlert } from "@/components/system/InlineAlert";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import type {
-  AgentInputArtifact,
-  AgentScheduleConfig,
-  AgentScheduleMode,
-  AgentTemplate,
-  FrontendServer,
-  StudioSkill,
-} from "@/lib/api";
+import type { AgentInputArtifact, AgentScheduleConfig, AgentScheduleMode, AgentTemplate, FrontendServer, StudioSkill } from "@/lib/api";
 import { localize } from "@/lib/i18n";
-
-import {
-  AGENT_ICONS,
-  type AgentSudoPolicy,
-  type AgentTaskDraft,
-  type AgentWizardCheck,
-  type AgentWizardStep,
-  FULL_AGENT_TOOL_OPTIONS,
-  QUICK_TIMES,
-  SCHEDULE_MODES,
-  SCHEDULE_PRESETS,
-  SUDO_AGENT_OPTIONS,
-  WEEKDAYS,
-  agentModeLabel,
-  buildDefaultToolsConfig,
-  finalizeScheduleConfig,
-  formatScheduleConfigLabel,
-  sudoAgentOption,
-} from "./agentPageUtils";
+import { AGENT_ICONS, type AgentSudoPolicy, type AgentTaskDraft, type AgentWizardCheck, type AgentWizardStep, FULL_AGENT_TOOL_OPTIONS, QUICK_TIMES, SCHEDULE_MODES, SCHEDULE_PRESETS, SUDO_AGENT_OPTIONS, WEEKDAYS, agentModeLabel, buildDefaultToolsConfig, finalizeScheduleConfig, formatScheduleConfigLabel, sudoAgentOption } from "./agentPageUtils";
 import { AgentMaterialsSection } from "./AgentMaterialsSection";
 import { AgentWizardQuickSummary } from "./AgentWizardQuickSummary";
-
+import { AgentWizardReviewStep } from "./AgentWizardReviewStep";
 type SummaryRow = { icon: LucideIcon; label: string; value: string };
 type AgentMode = "mini" | "full" | "multi";
 type StateSetter<T> = Dispatch<SetStateAction<T>>;
-
 type AgentWizardStepContentProps = {
   step: AgentWizardStep;
   lang: string;
@@ -129,7 +90,6 @@ type AgentWizardStepContentProps = {
   readiness: number;
   readinessChecks: AgentWizardCheck[];
 };
-
 export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
   const {
     step,
@@ -209,7 +169,6 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
     readiness,
     readinessChecks,
   } = props;
-
   return (
     <div className={step === "template" ? "space-y-4" : "grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]"}>
       <div className="space-y-4">
@@ -271,7 +230,6 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
             </section>
           </>
         )}
-
         {step === "basics" && (
           <section className="space-y-4 rounded-lg border border-border/70 bg-secondary/15 p-4">
             <h3 className="text-lg font-semibold text-foreground">{localize(lang, "Основные настройки", "Basics")}</h3>
@@ -339,7 +297,6 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
             ) : null}
           </section>
         )}
-
         {step === "servers" && (
           <section className="space-y-4 rounded-lg border border-border/70 bg-secondary/15 p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -432,7 +389,6 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
             </div>
           </section>
         )}
-
         {step === "capabilities" && (
           <section className="space-y-4 rounded-lg border border-border/70 bg-secondary/15 p-4">
             <h3 className="text-lg font-semibold text-foreground">{localize(lang, "Возможности", "Capabilities")}</h3>
@@ -515,52 +471,19 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
             />
           </section>
         )}
-
         {step === "review" && (
-          <section className="space-y-4 rounded-lg border border-border/70 bg-secondary/15 p-4">
-            <h3 className="text-lg font-semibold text-foreground">{localize(lang, "Обзор", "Review")}</h3>
-            <div className="grid gap-3 md:grid-cols-2">
-              {summaryRows.map((row) => {
-                const Icon = row.icon;
-                return (
-                  <div key={row.label} className="rounded-lg border border-border/70 bg-background/30 p-4">
-                    <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg border border-border/70 bg-secondary/50 text-primary"><Icon className="h-4 w-4" /></div>
-                    <div className="text-xs text-muted-foreground">{row.label}</div>
-                    <div className="mt-1 text-sm font-semibold text-foreground">{row.value}</div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="rounded-lg border border-border/70 bg-background/30 p-4">
-              <div className="grid gap-3 text-sm md:grid-cols-4">
-                <div><span className="block text-xs leading-4 text-muted-foreground">{localize(lang, "Команды", "Commands")}</span><strong>{commandCount}</strong></div>
-                <div><span className="block text-xs leading-4 text-muted-foreground">{localize(lang, "Скиллы", "Skills")}</span><strong>{selectedSkillSlugs.length}</strong></div>
-                <div><span className="block text-xs leading-4 text-muted-foreground">{localize(lang, "Материалы", "Materials")}</span><strong>{inputArtifacts.length}</strong></div>
-                <div><span className="block text-xs leading-4 text-muted-foreground">Telegram</span><strong>{telegramEnabled ? localize(lang, "Да", "Yes") : localize(lang, "Нет", "No")}</strong></div>
-                <div><span className="block text-xs leading-4 text-muted-foreground">{localize(lang, "Готовность", "Readiness")}</span><strong>{readiness}%</strong></div>
-              </div>
-            </div>
-            {readiness < 100 ? (
-              <InlineAlert
-                tone="warning"
-                title={localize(lang, "Preflight ещё не пройден", "Preflight is not complete")}
-                description={localize(
-                  lang,
-                  readinessChecks.filter((check) => !check.passed).map((check) => check.labelRu).join(" · "),
-                  readinessChecks.filter((check) => !check.passed).map((check) => check.labelEn).join(" · "),
-                )}
-              />
-            ) : (
-              <InlineAlert
-                tone="success"
-                title={localize(lang, "Preflight пройден", "Preflight passed")}
-                description={localize(lang, "Конфигурация готова к созданию агента.", "Configuration is ready to create the agent.")}
-              />
-            )}
-          </section>
+          <AgentWizardReviewStep
+            lang={lang}
+            summaryRows={summaryRows}
+            commandCount={commandCount}
+            selectedSkillSlugs={selectedSkillSlugs}
+            inputArtifacts={inputArtifacts}
+            telegramEnabled={telegramEnabled}
+            readiness={readiness}
+            readinessChecks={readinessChecks}
+          />
         )}
       </div>
-
       {step !== "template" && (
         <AgentWizardQuickSummary lang={lang} summaryRows={summaryRows} readiness={readiness} checks={readinessChecks} />
       )}

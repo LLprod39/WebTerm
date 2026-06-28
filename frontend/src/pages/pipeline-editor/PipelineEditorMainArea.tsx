@@ -1,9 +1,8 @@
-import type { Dispatch, DragEvent, SetStateAction } from "react";
+import type { ComponentType, Dispatch, DragEvent, SetStateAction } from "react";
 import type { Connection, EdgeChange, NodeChange, NodeMouseHandler } from "@xyflow/react";
 
-import type { NodeType } from "@/components/pipeline/nodes";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import type { PipelineEdge, PipelineNode, PipelineTrigger } from "@/lib/api";
+import type { PipelineEdge, PipelineNode, PipelineTrigger, StudioCapabilityNode } from "@/lib/api";
 import type { StudioPipelineAssistantResponse } from "@/lib/studioPipelineDraftsApi";
 
 import { localize } from "./presentation";
@@ -21,7 +20,10 @@ export function PipelineEditorMainArea({
   displayEdges,
   displayNodes,
   lang,
+  nodeManifests,
   paletteOpen,
+  pluginPalette,
+  pluginNodeTypes,
   pipelineId,
   selectedNode,
   showMiniMap,
@@ -56,12 +58,15 @@ export function PipelineEditorMainArea({
   displayEdges: PipelineEdge[];
   displayNodes: PipelineNode[];
   lang: "en" | "ru";
+  nodeManifests: StudioCapabilityNode[];
   paletteOpen: boolean;
+  pluginPalette: Array<{ category: string; nodes: Array<{ type: string; label: string; icon: ComponentType<{ className?: string }>; iconClassName?: string; description: string }> }>;
+  pluginNodeTypes: Record<string, ComponentType<any>>;
   pipelineId: number | null;
   selectedNode: PipelineNode | null;
   showMiniMap: boolean;
   trigger: PipelineTrigger | null;
-  onAddNode: (type: NodeType) => void;
+  onAddNode: (type: string) => void;
   onApplyAssistantProposal: () => void;
   onApplyAndSaveAssistantProposal: () => void;
   onAssistantInputChange: (value: string) => void;
@@ -85,7 +90,7 @@ export function PipelineEditorMainArea({
   return (
     <div className="flex min-h-0 flex-1 overflow-hidden">
       <div className="hidden h-full min-h-0 w-64 shrink-0 lg:block">
-        <NodePalette onAddNode={onAddNode} lang={lang} />
+        <NodePalette onAddNode={onAddNode} lang={lang} pluginPalette={pluginPalette} />
       </div>
       <Sheet open={paletteOpen} onOpenChange={setPaletteOpen}>
         <SheetContent side="left" className="flex w-[88vw] max-w-sm flex-col overflow-hidden border-border bg-card p-0 lg:hidden">
@@ -98,6 +103,7 @@ export function PipelineEditorMainArea({
           <div className="min-h-0 flex-1">
             <NodePalette
               lang={lang}
+              pluginPalette={pluginPalette}
               onAddNode={(type) => {
                 onAddNode(type);
                 setPaletteOpen(false);
@@ -120,6 +126,7 @@ export function PipelineEditorMainArea({
             onNodeClick={onNodeClick}
             onNodesChange={onNodesChange}
             onPaneClick={onPaneClick}
+            pluginNodeTypes={pluginNodeTypes}
             showMiniMap={showMiniMap}
           />
         </div>
@@ -133,6 +140,7 @@ export function PipelineEditorMainArea({
         assistantPending={assistantPending}
         assistantProposal={assistantProposal}
         lang={lang}
+        nodeManifests={nodeManifests}
         pipelineId={pipelineId}
         selectedNode={selectedNode}
         trigger={trigger}

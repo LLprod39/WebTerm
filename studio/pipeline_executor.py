@@ -31,6 +31,7 @@ from django.utils import timezone
 from core_ui.audit import audit_context
 from studio.executor import nodes as _registered_executor_nodes  # noqa: F401
 from studio.executor.context import ExecutionContext
+from studio.executor.plugin_nodes import clear_plugin_node_registry_async, sync_plugin_node_registry_async
 from studio.executor.registry import registry
 
 from .models import PipelineRun
@@ -306,6 +307,7 @@ class PipelineExecutor:
 
     async def _execute_node(self, node: dict, context: dict, node_outputs: dict[str, dict]) -> dict:
         node_type = node.get("type", "")
+        await sync_plugin_node_registry_async()
 
         enriched = _build_enriched_node_context(
             run=self.run,
@@ -314,14 +316,17 @@ class PipelineExecutor:
         )
 
         if str(node_type) in registry:
-            return await _execute_registry_node(
-                node,
-                enriched,
-                node_outputs,
-                self.run,
-                self._stop_event,
-                self._executed_mcp_tools,
-            )
+            try:
+                return await _execute_registry_node(
+                    node,
+                    enriched,
+                    node_outputs,
+                    self.run,
+                    self._stop_event,
+                    self._executed_mcp_tools,
+                )
+            finally:
+                await clear_plugin_node_registry_async()
 
         logger.error("Unknown node type: %s (node id=%s)", node_type, node.get("id"))
         return {"status": "failed", "error": f"Node type is not registered: {node_type}"}

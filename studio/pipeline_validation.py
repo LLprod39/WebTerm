@@ -3,9 +3,11 @@ from __future__ import annotations
 from collections import defaultdict, deque
 from typing import Any
 
+from plugin_marketplace.services.install_service import enabled_plugin_ids_for_user
+
 from .execution_policy import validate_execution_policy_guardrails
 from .models import CURRENT_PIPELINE_GRAPH_VERSION
-from .node_manifest import KNOWN_NODE_TYPES, TRIGGER_NODE_TYPES, allowed_source_handles
+from .node_manifest import KNOWN_NODE_TYPES, TRIGGER_NODE_TYPES, allowed_source_handles, runtime_known_node_types
 from .pipeline_validation_references import validate_node_references
 
 
@@ -30,6 +32,7 @@ def _is_active_manual_trigger(node: dict[str, Any]) -> bool:
 def _validate_graph_structure(
     nodes: list[dict[str, Any]],
     edges: list[dict[str, Any]],
+    known_node_types: frozenset[str],
 ) -> tuple[list[str], dict[str, dict[str, Any]], dict[str, list[dict[str, Any]]], dict[str, list[dict[str, Any]]]]:
     errors: list[str] = []
     node_ids: list[str] = []
@@ -48,7 +51,7 @@ def _validate_graph_structure(
         if node_id in id_to_node:
             errors.append(f"Duplicate node id '{node_id}'.")
             continue
-        if node_type not in KNOWN_NODE_TYPES:
+        if node_type not in known_node_types:
             errors.append(f"Node '{node_id}' uses an unknown type '{node_type}'.")
 
         position = node.get("position")
@@ -182,6 +185,15 @@ def _validate_graph_contract(
     return errors
 
 
+def _runtime_known_node_types_for_owner(owner) -> frozenset[str]:
+    if not getattr(owner, "pk", None):
+        return runtime_known_node_types(set())
+    try:
+        return runtime_known_node_types(enabled_plugin_ids_for_user(owner))
+    except Exception:
+        return runtime_known_node_types(set())
+
+
 def validate_pipeline_definition(
     *,
     nodes: Any,
@@ -208,7 +220,8 @@ def validate_pipeline_definition(
             )
         ]
 
-    structure_errors, id_to_node, outgoing_edges, incoming_edges = _validate_graph_structure(nodes, edges)
+    known_node_types = _runtime_known_node_types_for_owner(owner)
+    structure_errors, id_to_node, outgoing_edges, incoming_edges = _validate_graph_structure(nodes, edges, known_node_types)
     errors.extend(structure_errors)
     if errors:
         return errors
