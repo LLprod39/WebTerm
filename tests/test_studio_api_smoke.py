@@ -5,6 +5,7 @@ import pytest
 from django.contrib.auth.models import User
 from django.test import Client, override_settings
 
+from core_ui.managed_secrets import get_notification_secret
 from servers.models import Server
 from studio.models import MCPServerPool, Pipeline, PipelineRun, PipelineTemplate
 from tests.studio_api_smoke_harness import grant_feature, json_payload, llm_node
@@ -314,6 +315,11 @@ def test_studio_notification_endpoints_with_mocked_transports(monkeypatch, setti
     assert get_saved.status_code == 200
     assert get_saved.json()["notify_email"] == "ops@example.com"
     assert "••••" in get_saved.json()["smtp_password"]
+    assert get_notification_secret("smtp_password") == "secret"
+    assert get_notification_secret("telegram_bot_token") == "123456789:TESTTOKEN"
+    saved_config_text = temp_config.read_text(encoding="utf-8")
+    assert "secret" not in saved_config_text
+    assert "123456789:TESTTOKEN" not in saved_config_text
 
     class FakeTelegramResponse:
         status_code = 200

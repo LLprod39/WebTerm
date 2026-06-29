@@ -19,12 +19,15 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
+from web_ui.views import settings_readiness_views
+
 admin.site.site_header = "WEU AI Admin"
 admin.site.site_title = "WEU AI — Админка"
 admin.site.index_title = "Управление"
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('api/settings/readiness/', settings_readiness_views.api_settings_readiness, name='api_settings_readiness'),
     path('', include('core_ui.urls')),
     path('api/plugins/', include('plugin_marketplace.urls')),
     path('servers/', include('servers.urls')),

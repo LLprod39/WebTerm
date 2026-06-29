@@ -215,7 +215,7 @@ is_placeholder_value() {
     return 0
   fi
   case "$value" in
-    replace-*|changeme|ChangeMe*|example|example.com|*example.com*)
+    replace-*|change-me*|change_me*|changeme|ChangeMe*|example|example.com|*example.com*)
       return 0
       ;;
   esac
@@ -245,13 +245,45 @@ generate_secret_if_needed() {
   echo "[ok] generated $key in $(basename "$ENV_FILE")"
 }
 
+ensure_nginx_ssl_files() {
+  local ssl_dir="$ROOT_DIR/docker/nginx/ssl"
+  local cert_file="$ssl_dir/mini-prod-selfsigned.crt"
+  local key_file="$ssl_dir/mini-prod-selfsigned.key"
+
+  if [[ -f "$cert_file" && -f "$key_file" ]]; then
+    return 0
+  fi
+
+  require_cmd openssl
+  mkdir -p "$ssl_dir"
+
+  local common_name
+  common_name="$(read_env_value "ALLOWED_HOSTS" | cut -d',' -f1 | xargs)"
+  if [[ -z "$common_name" ]]; then
+    common_name="localhost"
+  fi
+
+  openssl req \
+    -x509 \
+    -nodes \
+    -newkey rsa:2048 \
+    -days 365 \
+    -keyout "$key_file" \
+    -out "$cert_file" \
+    -subj "/CN=$common_name" >/dev/null 2>&1
+  chmod 600 "$key_file" 2>/dev/null || true
+  echo "[ok] generated self-signed nginx certificate: $cert_file"
+}
+
 validate_required_env() {
   local required_keys=(
     DJANGO_SECRET_KEY
+    MANAGED_SECRET_KEY
     SITE_URL
     FRONTEND_APP_URL
     ALLOWED_HOSTS
     CSRF_TRUSTED_ORIGINS
+    MASTER_PASSWORD
     POSTGRES_DB
     POSTGRES_USER
     POSTGRES_PASSWORD
@@ -388,6 +420,8 @@ main() {
 
   if [[ "$GENERATE_SECRETS" -eq 1 ]]; then
     generate_secret_if_needed "DJANGO_SECRET_KEY" 64
+    generate_secret_if_needed "MANAGED_SECRET_KEY" 64
+    generate_secret_if_needed "MASTER_PASSWORD" 48
     generate_secret_if_needed "POSTGRES_PASSWORD" 32
   fi
 
@@ -400,6 +434,8 @@ main() {
     echo "[done] Validation successful: $COMPOSE_FILE with $ENV_FILE"
     exit 0
   fi
+
+  ensure_nginx_ssl_files
 
   if [[ "$DO_PULL" -eq 1 ]]; then
     echo "==> Pulling images"

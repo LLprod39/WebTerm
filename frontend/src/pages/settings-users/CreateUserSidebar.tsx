@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { InlineAlert } from "@/components/system/InlineAlert";
-import { ACCESS_UI_TEXT, getAccessProfileLabel } from "@/lib/accessUiText";
+import { ACCESS_PROFILE_OPTIONS, ACCESS_UI_TEXT, getAccessProfileLabel } from "@/lib/accessUiText";
 import { toggleId } from "./accessUserPermissions";
 import { FieldLabel, GroupPicker, SELECT_CLASS } from "./SettingsUsersShared";
 import type { AccessGroupOption, UserCreateForm } from "./settingsUsersTypes";
@@ -102,10 +102,9 @@ export function CreateUserSidebar({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="server_only">{getAccessProfileLabel(lang, "server_only")}</SelectItem>
-              <SelectItem value="admin_full">{getAccessProfileLabel(lang, "admin_full")}</SelectItem>
-              <SelectItem value="custom">{getAccessProfileLabel(lang, "custom")}</SelectItem>
-              <SelectItem value="reset_defaults">{getAccessProfileLabel(lang, "reset_defaults")}</SelectItem>
+              {ACCESS_PROFILE_OPTIONS.map((profile) => (
+                <SelectItem key={profile} value={profile}>{getAccessProfileLabel(lang, profile)}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -120,6 +119,14 @@ export function CreateUserSidebar({
             {common.active}
           </label>
         </div>
+        {createForm.is_staff ? (
+          <InlineAlert
+            tone="warning"
+            description={lang === "ru"
+              ? "Staff получает широкие права по умолчанию. Для пилота безопаснее выбрать профиль без доступа к секретам или задать явные запреты."
+              : "Staff receives broad default access. For a pilot, prefer a no-secrets profile or explicit denies."}
+          />
+        ) : null}
 
         <div>
           <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{common.groups}</div>

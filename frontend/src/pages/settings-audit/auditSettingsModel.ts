@@ -33,6 +33,53 @@ export type LoggingConfigKey = keyof LoggingConfig;
 
 export const LOGGING_KEYS = Object.keys(DEFAULT_LOGGING_CONFIG) as LoggingConfigKey[];
 
+export const AUDIT_LOGGING_PRESETS = {
+  pilot: {
+    log_terminal_commands: true,
+    log_ai_assistant: true,
+    log_agent_runs: true,
+    log_pipeline_runs: true,
+    log_auth_events: true,
+    log_server_changes: true,
+    log_settings_changes: true,
+    log_file_operations: false,
+    log_mcp_calls: true,
+    log_http_requests: false,
+    retention_days: 90,
+    export_format: "json",
+  },
+  strict: {
+    log_terminal_commands: true,
+    log_ai_assistant: true,
+    log_agent_runs: true,
+    log_pipeline_runs: true,
+    log_auth_events: true,
+    log_server_changes: true,
+    log_settings_changes: true,
+    log_file_operations: true,
+    log_mcp_calls: true,
+    log_http_requests: false,
+    retention_days: 180,
+    export_format: "json",
+  },
+  debug: {
+    log_terminal_commands: true,
+    log_ai_assistant: true,
+    log_agent_runs: true,
+    log_pipeline_runs: true,
+    log_auth_events: true,
+    log_server_changes: true,
+    log_settings_changes: true,
+    log_file_operations: true,
+    log_mcp_calls: true,
+    log_http_requests: true,
+    retention_days: 30,
+    export_format: "json",
+  },
+} satisfies Record<string, LoggingConfig>;
+
+export type AuditLoggingPresetKey = keyof typeof AUDIT_LOGGING_PRESETS;
+
 export const LOGGING_ITEM_KEYS: Array<{
   key: LoggingConfigKey;
   labelKey: string;

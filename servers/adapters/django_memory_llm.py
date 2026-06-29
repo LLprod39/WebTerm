@@ -130,15 +130,20 @@ def llm_enhance_patterns(
             "display_command": pattern.display_command,
             "commands": list(pattern.commands),
             "occurrences": pattern.occurrences,
-            "success_rate": round(pattern.success_rate, 3),
+            "success_rate": round(pattern.success_rate, 3) if pattern.success_rate is not None else None,
             "verification_rate": round(pattern.verification_rate, 3),
             "has_verification_step": bool(pattern.has_verification_step),
             "common_cwds": list(pattern.common_cwds),
             "sample_outputs": list(pattern.sample_outputs),
         }
         for pattern in patterns
-        if (pattern.pattern_kind == "sequence" and pattern.occurrences >= 2)
-        or (pattern.pattern_kind == "command" and pattern.occurrences >= 3 and pattern.success_rate >= 0.8)
+        if (
+            pattern.success_rate is not None
+            and (
+                (pattern.pattern_kind == "sequence" and pattern.occurrences >= 2)
+                or (pattern.pattern_kind == "command" and pattern.occurrences >= 3 and pattern.success_rate >= 0.8)
+            )
+        )
     ][:6]
     if not candidates:
         return {}

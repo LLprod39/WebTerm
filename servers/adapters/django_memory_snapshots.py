@@ -9,6 +9,12 @@ from django.utils import timezone
 from app.agent_kernel.memory.compaction import compact_text
 from app.agent_kernel.memory.snapshot_utils import content_delta
 from app.agent_kernel.memory.types import AUTOMATION_CANDIDATE_PREFIX, PATTERN_CANDIDATE_PREFIX, SKILL_DRAFT_PREFIX
+from app.agent_kernel.memory.trust import (
+    TRUST_LLM_DISTILLED,
+    VERIFICATION_NEEDS_REVALIDATION,
+    enrich_metadata_with_trust,
+    metadata_can_promote_to_canonical,
+)
 from servers.adapters.django_memory_serializers import describe_snapshot_rewrite
 
 
@@ -28,11 +34,28 @@ def upsert_snapshot(
     created_by_id: int | None = None,
     version_group_id: str | None = None,
     force_version: bool = False,
+    layer: str | None = None,
+    enforce_trust_gate: bool = True,
 ):
     from servers.models import ServerMemorySnapshot
 
     clean_content = compact_text(content, limit=3200)
-    metadata = metadata or {}
+    metadata = dict(metadata or {})
+    if memory_key.startswith((PATTERN_CANDIDATE_PREFIX, AUTOMATION_CANDIDATE_PREFIX, SKILL_DRAFT_PREFIX)):
+        layer = layer or ServerMemorySnapshot.LAYER_CANDIDATE
+        metadata.setdefault("candidate_requires_review", True)
+        metadata.setdefault("trust_level", TRUST_LLM_DISTILLED)
+        metadata.setdefault("verification_status", VERIFICATION_NEEDS_REVALIDATION)
+    else:
+        layer = layer or ServerMemorySnapshot.LAYER_CANONICAL
+    metadata = enrich_metadata_with_trust(
+        metadata,
+        source_kind=source_kind,
+        actor_kind=str(metadata.get("source_actor_kind") or ""),
+        source_ref=source_ref,
+        fallback_trust_level=str(metadata.get("trust_level") or ""),
+        fallback_verification_status=str(metadata.get("verification_status") or ""),
+    )
 
     with transaction.atomic():
         existing = (
@@ -41,6 +64,26 @@ def upsert_snapshot(
             .order_by("-version", "-updated_at")
             .first()
         )
+        if enforce_trust_gate and layer == ServerMemorySnapshot.LAYER_CANONICAL and not metadata_can_promote_to_canonical(metadata):
+            ensure_revalidation(
+                server_id,
+                memory_key=memory_key,
+                title=title,
+                reason=(
+                    "Snapshot candidate was not promoted to canonical memory because its "
+                    "source trust requires verification."
+                ),
+                payload={
+                    "memory_key": memory_key,
+                    "source_kind": source_kind,
+                    "source_ref": source_ref,
+                    "trust_level": metadata.get("trust_level"),
+                    "verification_status": metadata.get("verification_status"),
+                    "candidate_content": clean_content,
+                },
+                source_snapshot=existing,
+            )
+            return existing, False
         if existing:
             delta = content_delta(existing.content, clean_content)
             confidence_shift = float(confidence or 0.0) - float(existing.confidence or 0.0)
@@ -74,6 +117,9 @@ def upsert_snapshot(
                 if source_ref and source_ref != existing.source_ref:
                     existing.source_ref = source_ref[:255]
                     dirty_fields.append("source_ref")
+                if layer and layer != existing.layer:
+                    existing.layer = layer
+                    dirty_fields.append("layer")
                 if dirty_fields:
                     dirty_fields.append("updated_at")
                     existing.save(update_fields=dirty_fields)
@@ -100,11 +146,19 @@ def upsert_snapshot(
             )
             if abs(confidence_shift) >= 0.01:
                 next_metadata["confidence_shift"] = round(confidence_shift, 3)
+            existing_metadata = dict(existing.metadata or {})
+            if rewrite_reason:
+                existing_metadata["superseded_reason"] = rewrite_reason
+            existing.is_active = False
+            existing.layer = ServerMemorySnapshot.LAYER_ARCHIVE
+            existing.archived_at = timezone.now()
+            existing.metadata = existing_metadata
+            existing.save(update_fields=["is_active", "layer", "archived_at", "metadata", "updated_at"])
         snapshot = ServerMemorySnapshot.objects.create(
             server_id=server_id,
             created_by_id=created_by_id,
             memory_key=memory_key,
-            layer=ServerMemorySnapshot.LAYER_CANONICAL,
+            layer=layer,
             title=title[:200],
             content=clean_content,
             source_kind=source_kind[:30],
@@ -119,15 +173,8 @@ def upsert_snapshot(
             metadata=next_metadata,
         )
         if existing:
-            existing_metadata = dict(existing.metadata or {})
-            if rewrite_reason:
-                existing_metadata["superseded_reason"] = rewrite_reason
-            existing.is_active = False
-            existing.layer = ServerMemorySnapshot.LAYER_ARCHIVE
-            existing.archived_at = timezone.now()
             existing.superseded_by = snapshot
-            existing.metadata = existing_metadata
-            existing.save(update_fields=["is_active", "layer", "archived_at", "superseded_by", "metadata", "updated_at"])
+            existing.save(update_fields=["superseded_by", "updated_at"])
     return snapshot, True
 
 

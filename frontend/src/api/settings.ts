@@ -92,6 +92,24 @@ export interface SettingsConfig {
   domain_auth_auto_create?: boolean;
   domain_auth_lowercase_usernames?: boolean;
   domain_auth_default_profile?: string;
+  agent_active_runs_per_user_limit?: number;
+  agent_active_runs_global_limit?: number;
+  agent_run_stale_seconds?: number;
+  pipeline_active_runs_per_user_limit?: number;
+  pipeline_active_runs_global_limit?: number;
+  pipeline_run_stale_seconds?: number;
+  ssh_terminal_sessions_per_user_limit?: number;
+  ssh_terminal_sessions_global_limit?: number;
+  ssh_terminal_session_stale_seconds?: number;
+  llm_daily_token_limit_per_user?: number;
+  mcp_stdio_initialize_timeout_seconds?: number;
+  mcp_stdio_request_timeout_seconds?: number;
+  mcp_stdio_tool_call_timeout_seconds?: number;
+  mcp_process_terminate_timeout_seconds?: number;
+  mcp_http_connect_timeout_seconds?: number;
+  mcp_http_request_timeout_seconds?: number;
+  mcp_http_tool_call_timeout_seconds?: number;
+  mcp_http_retry_attempts?: number;
   [key: string]: string | number | boolean | null | undefined;
 }
 
@@ -100,6 +118,21 @@ export interface SettingsConfigResponse {
   config: SettingsConfig;
   api_keys?: Record<string, boolean>;
   providers?: Record<string, unknown>;
+  ldap_status?: {
+    enabled: boolean;
+    status: "disabled" | "enabled" | "misconfigured";
+    severity: "ready" | "warning" | "error";
+    backend_loaded: boolean;
+    server_configured: boolean;
+    search_base_configured: boolean;
+    bind_dn_configured: boolean;
+    bind_password_configured: boolean;
+    start_tls: boolean;
+    ignore_cert: boolean;
+    ca_cert_configured: boolean;
+    missing: string[];
+    config_source: "env_startup";
+  };
 }
 
 export interface ModelsResponse {
@@ -157,6 +190,31 @@ export interface ActivityLogsResponse {
   };
 }
 
+export type SettingsReadinessSeverity = "ready" | "warning" | "error";
+
+export interface SettingsReadinessCheck {
+  key: string;
+  title: string;
+  status: string;
+  severity: SettingsReadinessSeverity;
+  message: string;
+  action_path?: string;
+  action_label?: string;
+  details?: Record<string, unknown>;
+}
+
+export interface SettingsReadinessResponse {
+  success: boolean;
+  status: SettingsReadinessSeverity;
+  summary: {
+    ready: number;
+    warning: number;
+    error: number;
+    total: number;
+  };
+  checks: SettingsReadinessCheck[];
+}
+
 export type RefreshableProvider = "gemini" | "grok" | "openai" | "fair" | "claude" | "ollama";
 
 export async function fetchSettings() {
@@ -183,6 +241,10 @@ export async function refreshModels(provider: RefreshableProvider) {
 
 export async function fetchSettingsActivity(limit = 30, days = 14) {
   return apiFetch<ActivityLogsResponse>(`/api/settings/activity/?limit=${limit}&days=${days}`);
+}
+
+export async function fetchSettingsReadiness() {
+  return apiFetch<SettingsReadinessResponse>("/api/settings/readiness/");
 }
 
 export async function fetchAccessUsers() {

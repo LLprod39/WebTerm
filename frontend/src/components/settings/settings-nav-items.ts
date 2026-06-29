@@ -5,8 +5,11 @@ import {
   FolderOpen,
   ScrollText,
   Activity,
+  Bell,
+  Gauge,
   Globe,
   Puzzle,
+  SlidersHorizontal,
   type LucideIcon,
 } from "lucide-react";
 
@@ -32,11 +35,27 @@ export const settingsNavGroups: SettingsNavGroup[] = [
     label: "Core",
     items: [
       {
+        id: "readiness",
+        label: "Готовность",
+        description: "Проверка первого запуска",
+        icon: Gauge,
+        path: "/settings/readiness",
+        adminOnly: true,
+      },
+      {
         id: "ai",
         label: "Модели",
         description: "Провайдеры, роли, маршруты",
         icon: Bot,
         path: "/settings/ai",
+      },
+      {
+        id: "limits",
+        label: "Лимиты",
+        description: "Runs, sessions, budgets",
+        icon: SlidersHorizontal,
+        path: "/settings/limits",
+        adminOnly: true,
       },
     ],
   },
@@ -100,6 +119,14 @@ export const settingsNavGroups: SettingsNavGroup[] = [
         description: "Логирование и история действий",
         icon: Activity,
         path: "/settings/audit",
+        adminOnly: true,
+      },
+      {
+        id: "notifications",
+        label: "Оповещения",
+        description: "Telegram, Email и публичный URL",
+        icon: Bell,
+        path: "/settings/notifications",
         adminOnly: true,
       },
       {

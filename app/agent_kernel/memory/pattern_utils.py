@@ -125,7 +125,8 @@ def pattern_metadata(pattern: OperationalPattern) -> dict[str, Any]:
         "occurrences": pattern.occurrences,
         "successful_runs": pattern.successful_runs,
         "measured_runs": pattern.measured_runs,
-        "success_rate": round(pattern.success_rate, 3),
+        "success_rate": round(pattern.success_rate, 3) if pattern.success_rate is not None else None,
+        "requires_manual_review": pattern.measured_runs == 0,
         "verification_rate": round(pattern.verification_rate, 3),
         "has_verification_step": pattern.has_verification_step,
         "actor_kinds": list(pattern.actor_kinds),
@@ -165,7 +166,8 @@ def pattern_enhancement_metadata(enhancement: dict[str, Any] | None) -> dict[str
 
 def pattern_success_summary(pattern: OperationalPattern, *, noun: str = "запусков") -> str:
     if pattern.measured_runs:
-        return f"{pattern.successful_runs}/{pattern.measured_runs} измеренных {noun} ({pattern.success_rate:.0%})"
+        rate = float(pattern.success_rate or 0.0)
+        return f"{pattern.successful_runs}/{pattern.measured_runs} измеренных {noun} ({rate:.0%})"
     return f"exit code не сохранён; {pattern.occurrences} наблюдений"
 
 
@@ -337,7 +339,7 @@ def skill_draft_lines(pattern: OperationalPattern, *, enhancement: dict[str, Any
         f"# Skill Draft: {pattern.intent_label}",
         f"- Trigger: задачи, где нужен {'workflow' if pattern.pattern_kind == 'sequence' else 'шаг'} "
         f"`{pattern.display_command}`.",
-        f"- Reuse signal: {pattern.occurrences} повторений, успех {pattern.success_rate:.0%}.",
+        f"- Reuse signal: {pattern.occurrences} повторений, {pattern_success_summary(pattern)}.",
     ]
     if enhancement.get("skill_summary"):
         lines.append(f"- Summary: {compact_text(str(enhancement['skill_summary']), limit=180)}")
@@ -373,7 +375,9 @@ def is_automation_candidate(pattern: OperationalPattern) -> bool:
     success_threshold = 0.75 if pattern.pattern_kind == "sequence" else 0.8
     if pattern.occurrences < minimum_occurrences:
         return False
-    if pattern.measured_runs and pattern.success_rate < success_threshold:
+    if not pattern.measured_runs:
+        return False
+    if float(pattern.success_rate or 0.0) < success_threshold:
         return False
     if pattern_has_destructive_step(pattern):
         return pattern.pattern_kind == "sequence" and (pattern.has_verification_step or pattern.verification_rate >= 0.5)
@@ -389,7 +393,9 @@ def is_skill_draft_candidate(pattern: OperationalPattern) -> bool:
     success_threshold = 0.85 if pattern.pattern_kind == "sequence" else 0.9
     if pattern.occurrences < minimum_occurrences:
         return False
-    if pattern.measured_runs and pattern.success_rate < success_threshold:
+    if not pattern.measured_runs:
+        return False
+    if float(pattern.success_rate or 0.0) < success_threshold:
         return False
     if pattern_has_destructive_step(pattern):
         return False
@@ -420,7 +426,9 @@ def derive_human_habits(patterns: list[OperationalPattern]) -> list[str]:
             continue
         if pattern.distinct_sessions < 3:
             continue
-        if pattern.measured_runs and pattern.success_rate < 0.8:
+        if not pattern.measured_runs:
+            continue
+        if float(pattern.success_rate or 0.0) < 0.8:
             continue
         if pattern_has_mutating_step(pattern) or pattern_has_destructive_step(pattern) or pattern_has_setup_step(pattern):
             continue
@@ -443,7 +451,9 @@ def derive_runbook_patterns(patterns: list[OperationalPattern]) -> list[str]:
     for pattern in patterns:
         if pattern.occurrences < 2:
             continue
-        if pattern.measured_runs and pattern.success_rate < 0.6:
+        if not pattern.measured_runs:
+            continue
+        if float(pattern.success_rate or 0.0) < 0.6:
             continue
         verified_sequence = pattern.pattern_kind == "sequence" and (
             pattern.has_verification_step or pattern.verification_rate >= 0.5

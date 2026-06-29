@@ -14,11 +14,12 @@ from loguru import logger
 from core_ui.access import access_feature_labels
 from core_ui.decorators import require_feature
 from core_ui.models import GroupAppPermission, UserAppPermission
-from core_ui.views.access_views import _access_feature_slugs, _apply_group_explicit_permissions
+from core_ui.views.access_views import _access_feature_slugs, _apply_group_explicit_permissions, require_access_admin
 
 
 @login_required
 @require_feature("settings")
+@require_access_admin
 @require_http_methods(["GET", "POST"])
 def api_access_groups(request):
     """
@@ -83,6 +84,7 @@ def api_access_groups(request):
 
 @login_required
 @require_feature("settings")
+@require_access_admin
 @require_http_methods(["GET", "PUT", "DELETE"])
 def api_access_group_detail(request, group_id):
     """
@@ -155,6 +157,7 @@ def api_access_group_detail(request, group_id):
 
 @login_required
 @require_feature("settings")
+@require_access_admin
 @require_http_methods(["POST", "DELETE"])
 def api_access_group_members(request, group_id):
     """
@@ -194,6 +197,7 @@ def api_access_group_members(request, group_id):
 
 @login_required
 @require_feature("settings")
+@require_access_admin
 @require_http_methods(["GET", "POST"])
 def api_access_permissions(request):
     """
@@ -280,6 +284,7 @@ def api_access_permissions(request):
 
 @login_required
 @require_feature("settings")
+@require_access_admin
 @require_http_methods(["GET", "POST"])
 def api_access_group_permissions(request):
     """Group-level feature permissions."""
@@ -344,6 +349,7 @@ def api_access_group_permissions(request):
 
 @login_required
 @require_feature("settings")
+@require_access_admin
 @require_http_methods(["PUT", "DELETE"])
 def api_access_permission_detail(request, perm_id):
     """
@@ -389,6 +395,7 @@ def api_access_permission_detail(request, perm_id):
 
 @login_required
 @require_feature("settings")
+@require_access_admin
 @require_http_methods(["PUT", "DELETE"])
 def api_access_group_permission_detail(request, perm_id):
     """Update or delete a group-level permission."""

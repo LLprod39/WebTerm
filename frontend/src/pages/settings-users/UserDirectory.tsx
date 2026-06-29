@@ -17,7 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState, StatusBadge } from "@/components/ui/page-shell";
 import { InlineAlert } from "@/components/system/InlineAlert";
-import { ACCESS_UI_TEXT, getAccessProfileLabel } from "@/lib/accessUiText";
+import { ACCESS_PROFILE_OPTIONS, ACCESS_UI_TEXT, getAccessProfileLabel } from "@/lib/accessUiText";
 import { toggleId } from "./accessUserPermissions";
 import {
   FieldLabel,
@@ -138,10 +138,9 @@ function UserEditSheet({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="server_only">{getAccessProfileLabel(lang, "server_only")}</SelectItem>
-                  <SelectItem value="admin_full">{getAccessProfileLabel(lang, "admin_full")}</SelectItem>
-                  <SelectItem value="custom">{getAccessProfileLabel(lang, "custom")}</SelectItem>
-                  <SelectItem value="reset_defaults">{getAccessProfileLabel(lang, "reset_defaults")}</SelectItem>
+                  {ACCESS_PROFILE_OPTIONS.map((profile) => (
+                    <SelectItem key={profile} value={profile}>{getAccessProfileLabel(lang, profile)}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -155,6 +154,16 @@ function UserEditSheet({
                 {common.active}
               </label>
             </div>
+            {draft.is_staff ? (
+              <div className="sm:col-span-2">
+                <InlineAlert
+                  tone="warning"
+                  description={lang === "ru"
+                    ? "Staff получает широкие права по умолчанию. Для пилота безопаснее выбрать профиль без доступа к секретам или задать явные запреты."
+                    : "Staff receives broad default access. For a pilot, prefer a no-secrets profile or explicit denies."}
+                />
+              </div>
+            ) : null}
           </div>
 
           <section>

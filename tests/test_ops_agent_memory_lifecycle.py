@@ -31,6 +31,7 @@ def test_memory_overview_exposes_worker_states_and_richer_history():
         source_ref="episode:123",
         confidence=0.86,
         created_by_id=owner.id,
+        metadata={"trust_level": "system_measured", "verification_status": "measured"},
     )
     store._upsert_snapshot_sync(
         server_id=server.id,
@@ -41,7 +42,11 @@ def test_memory_overview_exposes_worker_states_and_richer_history():
         source_ref="episode:456",
         confidence=0.9,
         created_by_id=owner.id,
-        metadata={"rewrite_reason": "Profile expanded after nightly dream"},
+        metadata={
+            "rewrite_reason": "Profile expanded after nightly dream",
+            "trust_level": "system_measured",
+            "verification_status": "measured",
+        },
     )
     BackgroundWorkerState.objects.update_or_create(
         worker_kind=BackgroundWorkerState.KIND_AGENT_EXECUTION,

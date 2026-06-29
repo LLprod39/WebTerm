@@ -188,7 +188,7 @@ function TestButton({
   );
 }
 
-export default function NotificationsSettingsPage() {
+export default function NotificationsSettingsPage({ showStudioNav = true }: { showStudioNav?: boolean }) {
   const { toast } = useToast();
   const { lang } = useI18n();
   const queryClient = useQueryClient();
@@ -247,7 +247,7 @@ export default function NotificationsSettingsPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <StudioNav />
+      {showStudioNav ? <StudioNav /> : null}
       <div className="flex-1 overflow-auto">
         <PageShell width="6xl">
           <SectionCard

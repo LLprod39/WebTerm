@@ -9,6 +9,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { useI18n } from "@/lib/i18n";
 import { getAccessProfileLabel } from "@/lib/accessUiText";
+import { LdapStatusPanel } from "./LdapStatusPanel";
+
+const DOMAIN_PROFILE_OPTIONS = [
+  "operator_server_only",
+  "operator_studio_runner",
+  "team_admin_no_secrets",
+  "platform_admin",
+  "server_only",
+  "admin_full",
+  "custom",
+] as const;
 
 function FieldLabel({ htmlFor, children }: { htmlFor?: string; children: React.ReactNode }) {
   return (
@@ -89,6 +100,7 @@ export default function SettingsSSOPage() {
   });
 
   const config = data?.config;
+  const ldapStatus = data?.ldap_status;
 
   const [form, setForm] = useState<{
     domain_auth_enabled: boolean;
@@ -176,6 +188,8 @@ export default function SettingsSSOPage() {
       </div>
 
       <SsoReadinessBanner enabled={currentForm.domain_auth_enabled} headerReady={headerReady} />
+
+      <LdapStatusPanel ldapStatus={ldapStatus} />
 
       {/* ── How it works ── */}
       <div className="rounded-xl border border-primary/10 bg-primary/4 px-5 py-4">
@@ -295,9 +309,9 @@ export default function SettingsSSOPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="server_only">{getAccessProfileLabel(lang, "server_only")}</SelectItem>
-                <SelectItem value="admin_full">{getAccessProfileLabel(lang, "admin_full")}</SelectItem>
-                <SelectItem value="custom">{getAccessProfileLabel(lang, "custom")}</SelectItem>
+                {DOMAIN_PROFILE_OPTIONS.map((profile) => (
+                  <SelectItem key={profile} value={profile}>{getAccessProfileLabel(lang, profile)}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <FieldHint>

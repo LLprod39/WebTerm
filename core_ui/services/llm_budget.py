@@ -21,6 +21,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 from app.core.llm_budget import BudgetExceededError, BudgetStatus, disabled_budget_status
+from app.runtime_limit_config import get_runtime_limit_setting
 
 __all__ = [
     "BudgetExceededError",
@@ -51,13 +52,12 @@ def get_user_daily_budget_status(user_id: int | None) -> BudgetStatus:
     - ``user_id`` is falsy (anonymous / system call), or
     - ``LLM_DAILY_TOKEN_LIMIT_PER_USER`` is ``0`` (feature disabled).
     """
-    from django.conf import settings
     from django.db.models import Sum
     from django.utils import timezone
 
     from core_ui.models import LLMUsageLog
 
-    limit = int(getattr(settings, "LLM_DAILY_TOKEN_LIMIT_PER_USER", 0) or 0)
+    limit = get_runtime_limit_setting("LLM_DAILY_TOKEN_LIMIT_PER_USER")
     if limit <= 0 or not user_id:
         return _disabled_status()
 

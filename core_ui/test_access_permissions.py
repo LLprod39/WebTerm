@@ -67,17 +67,20 @@ class AccessPermissionsTests(TestCase):
         self.assertTrue(features["mars"])
         self.assertTrue(features["kubernetes"])
 
-    def test_group_settings_permission_grants_access_management(self):
+    def test_group_settings_permission_does_not_grant_access_management_without_staff(self):
         user = self.create_user("manager")
         group = Group.objects.create(name="Managers")
         user.groups.add(group)
         GroupAppPermission.objects.create(group=group, feature="settings", allowed=True)
 
+        features = self.auth_features(user)
+        self.assertTrue(features["settings"])
+
         self.client.force_login(user)
         response = self.client.get(reverse("api_access_users"))
 
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("users", response.json())
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["error"], "Only admins can manage access")
 
     def test_group_deny_wins_until_user_override_is_applied(self):
         user = self.create_user("mixed")

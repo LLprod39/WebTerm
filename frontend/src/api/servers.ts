@@ -7,6 +7,7 @@ export type { SftpEntry, SftpListResponse } from "@/api/server-files";
 export * from "@/api/linux-ui";
 
 export type ServerStatus = "online" | "offline" | "unknown";
+export type ServerSecretStorageMode = "managed" | "legacy_master_password" | "none";
 
 export interface FrontendServer {
   id: number;
@@ -52,6 +53,8 @@ export interface ServerDetailsResponse {
   network_config?: Record<string, unknown>;
   has_saved_password?: boolean;
   can_view_password?: boolean;
+  password_storage_mode?: ServerSecretStorageMode;
+  sudo_password_storage_mode?: ServerSecretStorageMode;
   can_edit?: boolean;
   is_shared_server?: boolean;
   share_context_enabled?: boolean;

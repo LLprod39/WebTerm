@@ -8,6 +8,13 @@ from app.agent_kernel.memory.line_filters import filter_memory_lines, is_runbook
 from app.agent_kernel.memory.pattern_utils import derive_human_habits, derive_runbook_patterns
 from app.agent_kernel.memory.snapshot_utils import derive_recent_event_points, render_snapshot_lines
 from app.agent_kernel.memory.types import CANONICAL_MEMORY_KEYS, SNAPSHOT_TITLES, OperationalPattern, SnapshotCandidate
+from app.agent_kernel.memory.trust import (
+    TRUST_HUMAN_OBSERVED,
+    TRUST_SYSTEM_MEASURED,
+    VERIFICATION_MEASURED,
+    aggregate_trust_metadata,
+    metadata_can_promote_to_canonical,
+)
 
 
 def build_snapshot_candidates(
@@ -41,7 +48,9 @@ def build_snapshot_candidates(
         access_points.append(network_summary)
     access_points.append(f"Host: {server.host}:{server.port} user={server.username}")
     profile_points.append(f"Server type: {server.server_type}")
-    recent_signal_points = derive_recent_event_points(recent_events)
+    trusted_recent_events = [event for event in recent_events if _item_can_feed_canonical(event)]
+    trusted_episodes = [episode for episode in episodes if _item_can_feed_canonical(episode)]
+    recent_signal_points = derive_recent_event_points(trusted_recent_events)
     access_points.extend(recent_signal_points["access"][:4])
     change_points.extend(recent_signal_points["recent_changes"][:4])
 
@@ -77,7 +86,7 @@ def build_snapshot_candidates(
     for item in revalidation_items:
         risk_points.append(f"Требует перепроверки: {item.title} — {compact_text(item.reason, limit=180)}")
 
-    for item in episodes:
+    for item in trusted_episodes:
         lines = filter_memory_lines(str(item.summary or ""), limit=4)
         if not lines:
             continue
@@ -97,10 +106,11 @@ def build_snapshot_candidates(
 
     if patterns is None:
         patterns = derive_patterns(server.id) if derive_patterns is not None else []
-    runbook_pattern_points = derive_runbook_patterns(patterns)
+    trusted_patterns = [pattern for pattern in patterns if _pattern_can_feed_canonical(pattern)]
+    runbook_pattern_points = derive_runbook_patterns(trusted_patterns)
     if runbook_pattern_points:
         runbook_points.extend(runbook_pattern_points[:4])
-    human_habits_points = derive_human_habits(patterns) if allow_human_habits else []
+    human_habits_points = derive_human_habits(trusted_patterns) if allow_human_habits else []
 
     return [
         SnapshotCandidate(
@@ -112,7 +122,12 @@ def build_snapshot_candidates(
             confidence=0.84,
             source_kind="dream",
             verified_at=getattr(latest_health, "checked_at", None),
-            metadata={"source_snapshot_id": getattr(snapshot_map.get("profile"), "id", None)},
+            metadata=_candidate_metadata(
+                "profile",
+                snapshot_map.get("profile"),
+                trusted_recent_events + trusted_episodes,
+                trust_level=TRUST_SYSTEM_MEASURED,
+            ),
         ),
         SnapshotCandidate(
             memory_key="access",
@@ -122,7 +137,12 @@ def build_snapshot_candidates(
             stability_score=0.8,
             confidence=0.8,
             source_kind="dream",
-            metadata={"source_snapshot_id": getattr(snapshot_map.get("access"), "id", None)},
+            metadata=_candidate_metadata(
+                "access",
+                snapshot_map.get("access"),
+                trusted_recent_events + trusted_episodes,
+                trust_level=TRUST_SYSTEM_MEASURED,
+            ),
         ),
         SnapshotCandidate(
             memory_key="risks",
@@ -133,7 +153,12 @@ def build_snapshot_candidates(
             confidence=0.78 if risk_points else 0.7,
             source_kind="dream",
             verified_at=getattr(latest_health, "checked_at", None),
-            metadata={"source_snapshot_id": getattr(snapshot_map.get("risks"), "id", None)},
+            metadata=_candidate_metadata(
+                "risks",
+                snapshot_map.get("risks"),
+                trusted_recent_events + trusted_episodes,
+                trust_level=TRUST_SYSTEM_MEASURED,
+            ),
         ),
         SnapshotCandidate(
             memory_key="runbook",
@@ -143,7 +168,12 @@ def build_snapshot_candidates(
             stability_score=0.74,
             confidence=0.79,
             source_kind="dream",
-            metadata={"source_snapshot_id": getattr(snapshot_map.get("runbook"), "id", None)},
+            metadata=_candidate_metadata(
+                "runbook",
+                snapshot_map.get("runbook"),
+                trusted_episodes,
+                trust_level=TRUST_HUMAN_OBSERVED if runbook_points else TRUST_SYSTEM_MEASURED,
+            ),
         ),
         SnapshotCandidate(
             memory_key="recent_changes",
@@ -153,7 +183,12 @@ def build_snapshot_candidates(
             stability_score=0.38,
             confidence=0.74,
             source_kind="dream",
-            metadata={"source_snapshot_id": getattr(snapshot_map.get("recent_changes"), "id", None)},
+            metadata=_candidate_metadata(
+                "recent_changes",
+                snapshot_map.get("recent_changes"),
+                trusted_recent_events + trusted_episodes,
+                trust_level=TRUST_HUMAN_OBSERVED if change_points else TRUST_SYSTEM_MEASURED,
+            ),
         ),
         SnapshotCandidate(
             memory_key="human_habits",
@@ -163,6 +198,48 @@ def build_snapshot_candidates(
             stability_score=0.62,
             confidence=0.7 if human_habits_points else 0.55,
             source_kind="dream",
-            metadata={"source_snapshot_id": getattr(snapshot_map.get("human_habits"), "id", None)},
+            metadata=_candidate_metadata(
+                "human_habits",
+                snapshot_map.get("human_habits"),
+                trusted_episodes,
+                trust_level=TRUST_HUMAN_OBSERVED if human_habits_points else TRUST_SYSTEM_MEASURED,
+            ),
         ),
     ]
+
+
+def _item_can_feed_canonical(item: Any) -> bool:
+    metadata = dict(getattr(item, "metadata", None) or {})
+    if not metadata:
+        metadata = aggregate_trust_metadata([item])
+    return metadata_can_promote_to_canonical(metadata)
+
+
+def _pattern_can_feed_canonical(pattern: OperationalPattern) -> bool:
+    if not pattern.measured_runs or pattern.success_rate is None:
+        return False
+    if "agent" in pattern.actor_kinds and "human" not in pattern.actor_kinds:
+        return False
+    return True
+
+
+def _candidate_metadata(
+    memory_key: str,
+    previous_snapshot: Any | None,
+    source_items: list[Any],
+    *,
+    trust_level: str,
+) -> dict[str, Any]:
+    metadata = aggregate_trust_metadata(source_items) if source_items else {}
+    if not metadata_can_promote_to_canonical(metadata):
+        metadata.update(
+            {
+                "trust_level": trust_level,
+                "verification_status": VERIFICATION_MEASURED,
+                "source_actor_kind": "system" if trust_level == TRUST_SYSTEM_MEASURED else "human",
+                "source_confidence": 0.78 if trust_level == TRUST_SYSTEM_MEASURED else 0.74,
+            }
+        )
+    metadata["source_snapshot_id"] = getattr(previous_snapshot, "id", None)
+    metadata["memory_key"] = memory_key
+    return metadata

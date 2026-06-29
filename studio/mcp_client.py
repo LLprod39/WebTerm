@@ -14,6 +14,7 @@ from loguru import logger
 
 from app.egress_redaction import redact_egress_text
 from app.execution_policy import safe_payload_preview
+from app.runtime_limit_config import get_runtime_limit_setting
 from core_ui.managed_secrets import get_mcp_secret_env
 from studio.mcp_security import validate_mcp_runtime_policy
 
@@ -24,7 +25,10 @@ RETRY_BACKOFF_SECONDS = (1.0, 2.0, 4.0)
 
 
 def _setting_int(name: str, default: int) -> int:
-    return max(int(getattr(django_settings, name, default) or default), 0)
+    try:
+        return max(get_runtime_limit_setting(name), 0)
+    except KeyError:
+        return max(int(getattr(django_settings, name, default) or default), 0)
 
 
 def _mcp_http_retry_count() -> int:
@@ -33,7 +37,7 @@ def _mcp_http_retry_count() -> int:
 
 def _mcp_http_timeout(total_seconds: float) -> httpx.Timeout:
     total = max(float(total_seconds), 1.0)
-    connect = max(float(getattr(django_settings, "MCP_HTTP_CONNECT_TIMEOUT_SECONDS", 10) or 10), 1.0)
+    connect = max(float(_setting_int("MCP_HTTP_CONNECT_TIMEOUT_SECONDS", 10)), 1.0)
     return httpx.Timeout(total, connect=connect)
 
 
@@ -150,7 +154,7 @@ class _StdioMCPClient:
             try:
                 await asyncio.wait_for(
                     self.proc.wait(),
-                    timeout=max(float(getattr(django_settings, "MCP_PROCESS_TERMINATE_TIMEOUT_SECONDS", 2) or 2), 1.0),
+                    timeout=max(float(_setting_int("MCP_PROCESS_TERMINATE_TIMEOUT_SECONDS", 2)), 1.0),
                 )
             except asyncio.TimeoutError:
                 self.proc.kill()
@@ -169,7 +173,7 @@ class _StdioMCPClient:
         )
         result = await self.request(
             payload,
-            timeout=max(float(getattr(django_settings, "MCP_STDIO_INITIALIZE_TIMEOUT_SECONDS", 20) or 20), 1.0),
+            timeout=max(float(_setting_int("MCP_STDIO_INITIALIZE_TIMEOUT_SECONDS", 20)), 1.0),
         )
         await self.notify("notifications/initialized")
         return MCPServerInfo(
@@ -185,7 +189,7 @@ class _StdioMCPClient:
             float(
                 timeout
                 if timeout is not None
-                else getattr(django_settings, "MCP_STDIO_REQUEST_TIMEOUT_SECONDS", 30) or 30
+                else _setting_int("MCP_STDIO_REQUEST_TIMEOUT_SECONDS", 30)
             ),
             1.0,
         )
@@ -253,7 +257,7 @@ class _HttpMCPClient:
         result = await self._request(
             payload,
             include_protocol_header=False,
-            timeout=float(getattr(django_settings, "MCP_HTTP_REQUEST_TIMEOUT_SECONDS", 30) or 30),
+            timeout=float(_setting_int("MCP_HTTP_REQUEST_TIMEOUT_SECONDS", 30)),
             retries=_mcp_http_retry_count(),
         )
         self.protocol_version = str(result.get("protocolVersion") or self.protocol_version)
@@ -283,7 +287,7 @@ class _HttpMCPClient:
 
         request_id = str(payload.get("id") or "")
         effective_timeout = float(
-            timeout if timeout is not None else getattr(django_settings, "MCP_HTTP_REQUEST_TIMEOUT_SECONDS", 30) or 30
+            timeout if timeout is not None else _setting_int("MCP_HTTP_REQUEST_TIMEOUT_SECONDS", 30)
         )
         for attempt in range(max(int(retries), 0) + 1):
             try:
@@ -349,7 +353,7 @@ class _HttpMCPClient:
                 self._sse_url,
                 json=_json_rpc_payload(method, params),
                 headers=headers,
-                timeout=_mcp_http_timeout(float(getattr(django_settings, "MCP_HTTP_REQUEST_TIMEOUT_SECONDS", 30) or 30)),
+                timeout=_mcp_http_timeout(float(_setting_int("MCP_HTTP_REQUEST_TIMEOUT_SECONDS", 30))),
             )
         except Exception:
             # Notifications are best-effort for direct tool calls.
@@ -391,7 +395,7 @@ async def _list_tools(client) -> list[dict[str, Any]]:
             result = await client.request(
                 "tools/list",
                 params,
-                timeout=float(getattr(django_settings, "MCP_HTTP_REQUEST_TIMEOUT_SECONDS", 30) or 30),
+                timeout=float(_setting_int("MCP_HTTP_REQUEST_TIMEOUT_SECONDS", 30)),
                 retries=_mcp_http_retry_count(),
             )
 
@@ -432,13 +436,13 @@ async def call_mcp_tool(server: MCPServerPool, tool_name: str, arguments: dict[s
             )
             result = await client.request(
                 payload,
-                timeout=max(float(getattr(django_settings, "MCP_STDIO_TOOL_CALL_TIMEOUT_SECONDS", 120) or 120), 1.0),
+                timeout=max(float(_setting_int("MCP_STDIO_TOOL_CALL_TIMEOUT_SECONDS", 120)), 1.0),
             )
         else:
             result = await client.request(
                 "tools/call",
                 {"name": tool_name, "arguments": arguments},
-                timeout=float(getattr(django_settings, "MCP_HTTP_TOOL_CALL_TIMEOUT_SECONDS", 120) or 120),
+                timeout=float(_setting_int("MCP_HTTP_TOOL_CALL_TIMEOUT_SECONDS", 120)),
                 retries=0,
             )
     logger.info(

@@ -18,8 +18,11 @@ from servers.models import Server, ServerGroup
 from servers.secret_utils import (
     clear_server_sudo_secret,
     get_server_auth_secret,
+    has_managed_server_secret,
     has_saved_server_secret,
     has_saved_server_sudo_secret,
+    server_secret_storage_mode,
+    server_sudo_secret_storage_mode,
     store_server_auth_secret,
     store_server_sudo_secret,
 )
@@ -359,6 +362,8 @@ def server_get(request, server_id):
             "network_config": server.network_config if can_access_context else {},
             "has_saved_password": bool(is_owner and has_saved_server_secret(server)),
             "has_saved_sudo_password": bool(is_owner and has_saved_server_sudo_secret(server)),
+            "password_storage_mode": server_secret_storage_mode(server) if is_owner else "none",
+            "sudo_password_storage_mode": server_sudo_secret_storage_mode(server) if is_owner else "none",
             "can_view_password": bool(
                 is_owner and server.auth_method in ["password", "key_password"] and has_saved_server_secret(server)
             ),
@@ -393,9 +398,10 @@ def server_reveal_password(request, server_id):
 
         data = json.loads(request.body or "{}")
         master_password = str(data.get("master_password") or "").strip()
-        if not master_password:
+        requires_master_password = not has_managed_server_secret(server)
+        if requires_master_password and not master_password:
             master_password = str(request.session.get("_mp") or "").strip()
-        if not master_password:
+        if requires_master_password and not master_password:
             return JsonResponse(
                 {
                     "success": False,

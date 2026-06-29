@@ -1,7 +1,3 @@
-"""
-Settings configuration API endpoints.
-"""
-
 import json
 import os
 
@@ -12,10 +8,13 @@ from django.views.decorators.http import require_GET, require_http_methods
 from loguru import logger
 
 from app.core.model_config import model_manager
+from app.runtime_limit_config import normalize_runtime_limit, runtime_limit_fields, runtime_limits_payload
+from core_ui.access import VALID_ACCESS_PROFILES
 from core_ui.activity import log_user_activity
 from core_ui.context_processors import user_can_feature
 from core_ui.managed_secrets import delete_llm_api_key, has_llm_api_key, set_llm_api_key
 from core_ui.models import UserActivityLog
+from core_ui.services.settings_status import ldap_status_payload, selected_provider_readiness
 
 LLM_API_KEY_PROVIDERS = {"gemini", "grok", "openai", "claude", "fair", "ollama"}
 DOMAIN_AUTH_SETTINGS_KEYS = {
@@ -148,6 +147,7 @@ def _api_key_status(config) -> dict:
 
 
 def _settings_config_payload(config, delegate_ui: str) -> dict:
+    runtime_payload = runtime_limits_payload()
     return {
         "default_provider": config.default_provider,
         "internal_llm_provider": getattr(config, "internal_llm_provider", "fair") or "fair",
@@ -235,6 +235,7 @@ def _settings_config_payload(config, delegate_ui: str) -> dict:
         "log_http_requests": getattr(config, "log_http_requests", True),
         "retention_days": getattr(config, "retention_days", 90) or 90,
         "export_format": getattr(config, "export_format", "json") or "json",
+        **runtime_payload["values"],
     }
 
 
@@ -294,6 +295,7 @@ def _allowed_settings_keys() -> set[str]:
         "log_http_requests",
         "retention_days",
         "export_format",
+        *runtime_limit_fields(),
     }
 
 
@@ -319,7 +321,7 @@ def _normalize_settings_update(data: dict) -> JsonResponse | None:
         data["domain_auth_header"] = str(data["domain_auth_header"]).strip() or "REMOTE_USER"
     if "domain_auth_default_profile" in data and data["domain_auth_default_profile"] is not None:
         profile = str(data["domain_auth_default_profile"]).strip().lower()
-        if profile not in {"server_only", "admin_full", "reset_defaults", "custom"}:
+        if profile not in VALID_ACCESS_PROFILES:
             return JsonResponse({"success": False, "error": "Invalid domain_auth_default_profile"}, status=400)
         data["domain_auth_default_profile"] = profile
     if "retention_days" in data and data["retention_days"] is not None:
@@ -332,6 +334,13 @@ def _normalize_settings_update(data: dict) -> JsonResponse | None:
         if export_format not in {"json", "csv", "syslog"}:
             return JsonResponse({"success": False, "error": "Invalid export_format"}, status=400)
         data["export_format"] = export_format
+    for field in runtime_limit_fields():
+        if field not in data:
+            continue
+        try:
+            data[field] = normalize_runtime_limit(field, data[field])
+        except ValueError:
+            return JsonResponse({"success": False, "error": f"Invalid {field}"}, status=400)
     if "ollama_base_url" in data and data["ollama_base_url"] is not None:
         data["ollama_base_url"] = str(data["ollama_base_url"]).strip().rstrip("/") or "http://127.0.0.1:11434"
     if "fair_base_url" in data and data["fair_base_url"] is not None:
@@ -378,7 +387,6 @@ def _save_delegate_ui_preference(user, delegate_ui: str) -> None:
 @login_required
 @require_http_methods(["GET", "POST"])
 def api_settings(request):
-    """GET full settings config or POST settings updates."""
     if not user_can_feature(request.user, "settings"):
         return JsonResponse({"error": "Forbidden"}, status=403)
     if request.method == "GET":
@@ -394,6 +402,7 @@ def api_settings(request):
                     "config": _settings_config_payload(config, _load_delegate_ui_preference(request.user)),
                     "api_keys": _api_key_status(config),
                     "providers": registry.get_all_providers(),
+                    "ldap_status": ldap_status_payload(),
                 }
             )
         except Exception as exc:
@@ -418,6 +427,12 @@ def api_settings(request):
         if requested_domain_auth_keys and not request.user.is_staff:
             return JsonResponse(
                 {"success": False, "error": "Only admins can update domain authentication settings"},
+                status=403,
+            )
+        requested_runtime_limit_keys = sorted(key for key in data if key in runtime_limit_fields())
+        if requested_runtime_limit_keys and not request.user.is_staff:
+            return JsonResponse(
+                {"success": False, "error": "Only admins can update runtime limits"},
                 status=403,
             )
         validation_error = _normalize_settings_update(data)
@@ -468,21 +483,18 @@ def api_settings(request):
 def api_settings_check(request):
     """Return whether required API keys are configured."""
     if not user_can_feature(request.user, "settings"):
-        return JsonResponse({"configured": False, "missing": ["gemini_key", "grok_key"]}, status=403)
+        return JsonResponse({"configured": False, "missing": ["settings_access"]}, status=403)
     try:
-        gemini_ok = _has_api_key("gemini", "GEMINI_API_KEY")
-        grok_ok = _has_api_key("grok", "GROK_API_KEY", "XAI_API_KEY")
-        missing = []
-        if not gemini_ok:
-            missing.append("gemini_key")
-        if not grok_ok:
-            missing.append("grok_key")
+        model_manager.load_config()
+        providers = selected_provider_readiness(model_manager.config)
+        missing = [f"{item['role']}:{item['provider']}" for item in providers if not item["ready"]]
         return JsonResponse(
             {
                 "configured": len(missing) == 0,
                 "missing": missing,
+                "providers": providers,
             }
         )
     except Exception as exc:
         logger.exception("api_settings_check error: %s", exc)
-        return JsonResponse({"configured": False, "missing": ["gemini_key", "grok_key"]}, status=500)
+        return JsonResponse({"configured": False, "missing": ["provider_readiness"], "error": str(exc)}, status=500)

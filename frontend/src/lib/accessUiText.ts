@@ -40,17 +40,36 @@ const FEATURE_LABELS: Record<AccessUiLang, Record<string, string>> = {
 const PROFILE_LABELS: Record<AccessUiLang, Record<string, string>> = {
   en: {
     server_only: "Server only",
+    operator_server_only: "Operator: servers",
+    operator_studio_runner: "Operator: Studio runner",
+    team_admin_no_secrets: "Team admin, no secrets",
     admin_full: "Admin full",
+    platform_admin: "Platform admin",
     custom: "Custom",
     reset_defaults: "Reset defaults",
   },
   ru: {
     server_only: "Только серверы",
+    operator_server_only: "Оператор: серверы",
+    operator_studio_runner: "Оператор: Studio запуск",
+    team_admin_no_secrets: "Админ команды без секретов",
     admin_full: "Полный админ",
+    platform_admin: "Админ платформы",
     custom: "Кастомный",
     reset_defaults: "Сбросить по умолчанию",
   },
 };
+
+export const ACCESS_PROFILE_OPTIONS = [
+  "operator_server_only",
+  "operator_studio_runner",
+  "team_admin_no_secrets",
+  "platform_admin",
+  "server_only",
+  "admin_full",
+  "custom",
+  "reset_defaults",
+] as const;
 
 const SOURCE_LABELS: Record<AccessUiLang, Record<string, string>> = {
   en: {

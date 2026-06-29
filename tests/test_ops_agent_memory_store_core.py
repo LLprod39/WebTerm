@@ -5,7 +5,9 @@ from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
 from django.utils import timezone
 
+from app.agent_kernel.memory.server_cards import build_server_memory_card
 from servers.adapters.memory_store import DjangoServerMemoryStore
+from servers.adapters.django_memory_repair import auto_resolve_stale_revalidations
 from servers.models import (
     AgentRun,
     Server,
@@ -86,6 +88,12 @@ def test_django_server_memory_store_builds_card_and_saves_run_summary():
     assert ServerMemoryEvent.objects.filter(server=server, source_kind="agent_run").exists()
     assert ServerMemorySnapshot.objects.filter(server=server, memory_key="profile", is_active=True).exists()
     assert ServerMemorySnapshot.objects.filter(server=server, memory_key="runbook", is_active=True).exists()
+    assert ServerMemoryRevalidation.objects.filter(server=server, memory_key="profile").exists()
+    assert not ServerMemorySnapshot.objects.filter(
+        server=server,
+        is_active=True,
+        content__icontains="Docker присутствует",
+    ).exists()
 
 
 @pytest.mark.django_db(transaction=True)
@@ -221,6 +229,7 @@ def test_django_server_memory_store_repair_decays_stale_records():
         confidence=0.96,
         importance_score=0.9,
         stability_score=0.9,
+        metadata={"trust_level": "system_measured", "verification_status": "measured"},
     )
     ServerMemorySnapshot.objects.filter(pk=stale.pk).update(updated_at=timezone.now() - timedelta(days=120))
 
@@ -233,6 +242,47 @@ def test_django_server_memory_store_repair_decays_stale_records():
         server=server,
         memory_key="profile",
     ).exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_stale_revalidation_expires_unverified_without_resolution():
+    owner = User.objects.create_user(username="ops-memory-revalidation-expiry-user", password="x")
+    server = Server.objects.create(user=owner, name="revalidation-expiry-node", host="10.0.0.16", port=22, username="root")
+    item = ServerMemoryRevalidation.objects.create(
+        server=server,
+        memory_key="profile",
+        title="Review stale profile",
+        reason="Stale without evidence",
+    )
+    ServerMemoryRevalidation.objects.filter(pk=item.pk).update(created_at=timezone.now() - timedelta(days=90))
+
+    resolved = auto_resolve_stale_revalidations(server.id, max_age_days=60)
+
+    item.refresh_from_db()
+    assert resolved == 1
+    assert item.status == ServerMemoryRevalidation.STATUS_EXPIRED_UNVERIFIED
+
+
+@pytest.mark.django_db(transaction=True)
+def test_agent_reported_snapshot_candidate_is_not_promoted_to_canonical():
+    owner = User.objects.create_user(username="ops-memory-trust-gate-user", password="x")
+    server = Server.objects.create(user=owner, name="trust-gate-node", host="10.0.0.17", port=22, username="root")
+    store = DjangoServerMemoryStore()
+
+    snapshot, created = store._upsert_snapshot_sync(
+        server_id=server.id,
+        memory_key="profile",
+        title="Agent reported profile",
+        content="- nginx definitely fixed",
+        source_kind="agent_run",
+        source_ref="agent-run:1",
+        confidence=0.9,
+    )
+
+    assert snapshot is None
+    assert created is False
+    assert not ServerMemorySnapshot.objects.filter(server=server, memory_key="profile", is_active=True).exists()
+    assert ServerMemoryRevalidation.objects.filter(server=server, memory_key="profile").exists()
 
 
 @pytest.mark.django_db(transaction=True)
@@ -263,3 +313,68 @@ def test_memory_ingest_redacts_sensitive_values_and_creates_episode():
     assert "super-secret-token" not in event.raw_text_redacted
     assert event.redaction_report
     assert "[FILTERED:instructional_content]" in event.raw_text_redacted
+    assert event.metadata["trust_level"] == "human_observed"
+    assert event.compacted_episode_id is not None
+
+
+@pytest.mark.django_db(transaction=True)
+def test_memory_ingest_is_idempotent_for_repeated_delivery():
+    owner = User.objects.create_user(username="ops-memory-idempotent-user", password="x")
+    server = Server.objects.create(user=owner, name="idempotent-node", host="10.0.0.34", port=22, username="root")
+    store = DjangoServerMemoryStore()
+
+    first_event_id = store._ingest_event_sync(
+        server.id,
+        source_kind="terminal",
+        actor_kind="human",
+        source_ref="term-idempotent",
+        session_id="term-idempotent",
+        event_type="command_executed",
+        raw_text="$ uptime\nload average: 0.01",
+        structured_payload={"command": "uptime", "exit_code": 0},
+        importance_hint=0.6,
+        actor_user_id=owner.id,
+    )
+    second_event_id = store._ingest_event_sync(
+        server.id,
+        source_kind="terminal",
+        actor_kind="human",
+        source_ref="term-idempotent",
+        session_id="term-idempotent",
+        event_type="command_executed",
+        raw_text="$ uptime\nload average: 0.01",
+        structured_payload={"command": "uptime", "exit_code": 0},
+        importance_hint=0.6,
+        actor_user_id=owner.id,
+    )
+
+    assert first_event_id == second_event_id
+    assert ServerMemoryEvent.objects.filter(server=server, event_type="command_executed").count() == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_server_memory_card_excludes_candidate_layer_snapshots_without_prefix():
+    owner = User.objects.create_user(username="ops-memory-card-candidate-user", password="x")
+    server = Server.objects.create(user=owner, name="card-candidate-node", host="10.0.0.35", port=22, username="root")
+    snapshot = ServerMemorySnapshot.objects.create(
+        server=server,
+        memory_key="draft_runbook",
+        layer=ServerMemorySnapshot.LAYER_CANDIDATE,
+        title="Unreviewed restart recipe",
+        content="- systemctl restart nginx without approval",
+        source_kind="agent_run",
+        source_ref="agent-run:unreviewed",
+        version_group_id="candidate-card-test",
+        confidence=0.99,
+        metadata={
+            "candidate_requires_review": True,
+            "trust_level": "agent_reported",
+            "verification_status": "needs_revalidation",
+        },
+    )
+
+    card = build_server_memory_card(server, snapshots=[snapshot])
+    prompt = card.as_prompt_block()
+
+    assert "Unreviewed restart recipe" not in prompt
+    assert "systemctl restart nginx without approval" not in prompt

@@ -22,12 +22,16 @@ def build_memory_overview_payload(server_id: int, policy: Any) -> dict[str, Any]
         .select_related("created_by", "superseded_by")
         .order_by("memory_key", "-version", "-updated_at")[:80]
     )
-    active = [item for item in snapshots if item.is_active and item.layer == ServerMemorySnapshot.LAYER_CANONICAL]
+    active = [item for item in snapshots if item.is_active]
     archived = [item for item in snapshots if not item.is_active or item.layer == ServerMemorySnapshot.LAYER_ARCHIVE]
     episodes = list(ServerMemoryEpisode.objects.filter(server_id=server_id).order_by("-last_event_at", "-updated_at")[:20])
     revalidations = list(ServerMemoryRevalidation.objects.filter(server_id=server_id).order_by("status", "-updated_at")[:20])
-    canonical = [item for item in active if item.memory_key in CANONICAL_MEMORY_KEYS]
-    manual = [item for item in active if item.memory_key.startswith(("manual_note:", "knowledge_note:"))]
+    canonical = [item for item in active if item.layer == ServerMemorySnapshot.LAYER_CANONICAL and item.memory_key in CANONICAL_MEMORY_KEYS]
+    manual = [
+        item
+        for item in active
+        if item.layer == ServerMemorySnapshot.LAYER_CANONICAL and item.memory_key.startswith(("manual_note:", "knowledge_note:"))
+    ]
     patterns = [item for item in active if item.memory_key.startswith(PATTERN_CANDIDATE_PREFIX)]
     automation_candidates = [item for item in active if item.memory_key.startswith(AUTOMATION_CANDIDATE_PREFIX)]
     skill_drafts = [item for item in active if item.memory_key.startswith(SKILL_DRAFT_PREFIX)]

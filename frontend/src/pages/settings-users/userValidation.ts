@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { ACCESS_PROFILE_OPTIONS } from "@/lib/accessUiText";
 import type { UserCreateForm, UserEditDraft } from "./settingsUsersTypes";
 
 type Lang = "en" | "ru";
@@ -14,7 +15,7 @@ export type UserValidationResult = {
   summary: string;
 };
 
-const accessProfiles = ["server_only", "admin_full", "custom", "reset_defaults"] as const;
+const accessProfiles = ACCESS_PROFILE_OPTIONS;
 
 const userNamePattern = /^[A-Za-z0-9_.@+-]+$/;
 

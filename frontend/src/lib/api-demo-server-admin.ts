@@ -99,6 +99,57 @@ export function demoServerAdminFallback<T>(path: string, _options: RequestInit =
 
   // Settings page
   if (path.includes("/api/settings/activity")) return DEMO_ACTIVITY_LOGS as T;
+  if (path.includes("/api/settings/readiness")) return {
+    success: true,
+    status: "warning",
+    summary: { ready: 3, warning: 2, error: 0, total: 5 },
+    checks: [
+      {
+        key: "deployment_mode",
+        title: "Режим Django",
+        status: "warning",
+        severity: "warning",
+        message: "Demo mode использует dev-настройки. Для PROD запуска включите DJANGO_DEBUG=false.",
+        details: { debug: true },
+      },
+      {
+        key: "ai_providers",
+        title: "AI providers",
+        status: "ready",
+        severity: "ready",
+        message: "Demo provider готов для интерфейсной проверки.",
+        action_path: "/settings/ai",
+        action_label: "Открыть модели",
+      },
+      {
+        key: "notifications",
+        title: "Уведомления",
+        status: "warning",
+        severity: "warning",
+        message: "В demo mode внешняя отправка уведомлений не выполняется.",
+        action_path: "/settings/notifications",
+        action_label: "Открыть уведомления",
+      },
+      {
+        key: "ldap_login",
+        title: "LDAP Login",
+        status: "ready",
+        severity: "ready",
+        message: "LDAP login выключен в demo mode и показывается как env/startup настройка.",
+        action_path: "/settings/sso",
+        action_label: "Открыть SSO",
+      },
+      {
+        key: "runtime_limits",
+        title: "Runtime limits",
+        status: "ready",
+        severity: "ready",
+        message: "Demo soft limits и LLM budget заданы.",
+        action_path: "/settings/limits",
+        action_label: "Открыть лимиты",
+      },
+    ],
+  } as T;
   if (path.includes("/api/settings")) return DEMO_SETTINGS as T;
   if (path.includes("/api/models/refresh")) {
     const requestedProvider = (() => {

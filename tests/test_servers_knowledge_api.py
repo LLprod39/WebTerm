@@ -93,20 +93,29 @@ def test_share_master_password_and_knowledge_endpoints(monkeypatch):
     assert manual_snapshot["version_group_id"]
     assert "created_by_username" in manual_snapshot
 
-    user_snapshot = ServerMemorySnapshot.objects.create(
-        server=server,
-        created_by=owner,
-        memory_key="profile",
-        layer=ServerMemorySnapshot.LAYER_CANONICAL,
-        title="Server profile",
-        content="Ubuntu host with nginx",
-        source_kind="manual",
-        source_ref="test",
-        version_group_id="profile-test",
-        version=1,
-        is_active=True,
-        metadata={"rewrite_reason": "Merged duplicate profile notes"},
-    )
+    user_snapshot = ServerMemorySnapshot.objects.filter(server=server, memory_key="profile", is_active=True).first()
+    if user_snapshot is None:
+        user_snapshot = ServerMemorySnapshot.objects.create(
+            server=server,
+            created_by=owner,
+            memory_key="profile",
+            layer=ServerMemorySnapshot.LAYER_CANONICAL,
+            title="Server profile",
+            content="Ubuntu host with nginx",
+            source_kind="manual",
+            source_ref="test",
+            version_group_id="profile-test",
+            version=1,
+            is_active=True,
+            metadata={"rewrite_reason": "Merged duplicate profile notes"},
+        )
+    else:
+        user_snapshot.title = "Server profile"
+        user_snapshot.content = "Ubuntu host with nginx"
+        user_snapshot.source_kind = "manual"
+        user_snapshot.source_ref = "test"
+        user_snapshot.metadata = {"rewrite_reason": "Merged duplicate profile notes"}
+        user_snapshot.save(update_fields=["title", "content", "source_kind", "source_ref", "metadata", "updated_at"])
 
     list_snapshots = client.get(f"/servers/api/{server.id}/memory/snapshots/")
     assert list_snapshots.status_code == 200
@@ -154,7 +163,7 @@ def test_share_master_password_and_knowledge_endpoints(monkeypatch):
         server=server,
         created_by=owner,
         memory_key="automation_candidate:test-delete-one",
-        layer=ServerMemorySnapshot.LAYER_CANONICAL,
+        layer=ServerMemorySnapshot.LAYER_CANDIDATE,
         title="Delete one snapshot",
         content="Temporary AI memory",
         source_kind="dream",
@@ -175,7 +184,7 @@ def test_share_master_password_and_knowledge_endpoints(monkeypatch):
         server=server,
         created_by=owner,
         memory_key="pattern_candidate:test-bulk-one",
-        layer=ServerMemorySnapshot.LAYER_CANONICAL,
+        layer=ServerMemorySnapshot.LAYER_CANDIDATE,
         title="Bulk delete one",
         content="Temporary AI memory one",
         source_kind="dream",
@@ -188,7 +197,7 @@ def test_share_master_password_and_knowledge_endpoints(monkeypatch):
         server=server,
         created_by=owner,
         memory_key="pattern_candidate:test-bulk-two",
-        layer=ServerMemorySnapshot.LAYER_CANONICAL,
+        layer=ServerMemorySnapshot.LAYER_CANDIDATE,
         title="Bulk delete two",
         content="Temporary AI memory two",
         source_kind="dream",

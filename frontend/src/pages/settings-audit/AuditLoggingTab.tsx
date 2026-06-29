@@ -8,12 +8,19 @@ import { Switch } from "@/components/ui/switch";
 import { SettingsSectionCard as SectionCard } from "@/components/settings/SettingsSectionCard";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { LOGGING_ITEM_KEYS, type LoggingConfig, type LoggingConfigKey } from "./auditSettingsModel";
+import {
+  AUDIT_LOGGING_PRESETS,
+  LOGGING_ITEM_KEYS,
+  type AuditLoggingPresetKey,
+  type LoggingConfig,
+  type LoggingConfigKey,
+} from "./auditSettingsModel";
 
 type AuditLoggingTabProps = {
   loggingConfig: LoggingConfig;
   saving: boolean;
   loggingSaved: boolean;
+  onApplyPreset: (preset: AuditLoggingPresetKey) => void;
   onUpdateLogging: (key: LoggingConfigKey, value: unknown) => void;
   onSaveLogging: () => void | Promise<void>;
 };
@@ -22,12 +29,27 @@ export function AuditLoggingTab({
   loggingConfig,
   saving,
   loggingSaved,
+  onApplyPreset,
   onUpdateLogging,
   onSaveLogging,
 }: AuditLoggingTabProps) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const loggingItems = LOGGING_ITEM_KEYS.map((item) => ({ ...item, label: t(item.labelKey), desc: t(item.descKey) }));
   const activeItems = loggingItems.filter((item) => loggingConfig[item.key]);
+  const presetLabels: Record<AuditLoggingPresetKey, { title: string; description: string }> = {
+    pilot: {
+      title: lang === "ru" ? "Пилот" : "Pilot",
+      description: lang === "ru" ? "Основные события без шумного HTTP." : "Core events without noisy HTTP.",
+    },
+    strict: {
+      title: lang === "ru" ? "Строгий" : "Strict",
+      description: lang === "ru" ? "Больше категорий и длиннее хранение." : "More categories and longer retention.",
+    },
+    debug: {
+      title: lang === "ru" ? "Отладка" : "Debug",
+      description: lang === "ru" ? "HTTP и файловые операции на короткий срок." : "HTTP and file events for short investigations.",
+    },
+  };
 
   return (
     <>
@@ -42,6 +64,19 @@ export function AuditLoggingTab({
           </Button>
         }
       >
+        <div className="mb-4 grid gap-2 md:grid-cols-3">
+          {(Object.keys(AUDIT_LOGGING_PRESETS) as AuditLoggingPresetKey[]).map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              onClick={() => onApplyPreset(preset)}
+              className="rounded-lg border border-border/60 bg-secondary/20 px-3 py-3 text-left transition-colors hover:bg-secondary/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <div className="text-sm font-semibold text-foreground">{presetLabels[preset].title}</div>
+              <div className="mt-1 text-xs leading-5 text-muted-foreground">{presetLabels[preset].description}</div>
+            </button>
+          ))}
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {loggingItems.map((item) => {
             const Icon = item.icon;

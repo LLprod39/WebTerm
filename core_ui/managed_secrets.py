@@ -16,6 +16,8 @@ SERVER_SUDO_NAMESPACE = "server_sudo_secret"
 MCP_ENV_NAMESPACE = "mcp_secret_env"
 LLM_API_KEY_NAMESPACE = "llm_api_key"
 LLM_API_KEY_OBJECT_ID = 1
+NOTIFICATION_SECRET_NAMESPACE = "notification_secret"
+NOTIFICATION_SECRET_OBJECT_ID = 1
 LLM_API_KEY_PROVIDERS = {
     "gemini": "GEMINI_API_KEY",
     "grok": "GROK_API_KEY",
@@ -55,6 +57,19 @@ def _decrypt_payload(ciphertext: str) -> Any:
         return json.loads(raw.decode("utf-8"))
     except json.JSONDecodeError as exc:
         raise ManagedSecretError("Managed secret payload is corrupted") from exc
+
+
+def managed_secret_key_source() -> str:
+    if (os.getenv("MANAGED_SECRET_KEY") or "").strip():
+        return "MANAGED_SECRET_KEY"
+    if (os.getenv("APP_SECRET_ENCRYPTION_KEY") or "").strip():
+        return "APP_SECRET_ENCRYPTION_KEY"
+    return "SECRET_KEY"
+
+
+def verify_managed_secret_roundtrip() -> bool:
+    probe = {"kind": "managed_secret_probe", "version": 1}
+    return _decrypt_payload(_encrypt_payload(probe)) == probe
 
 
 def _upsert(namespace: str, object_id: int, payload: Any, *, key: str = "default", metadata: dict | None = None) -> ManagedSecret:
@@ -165,6 +180,45 @@ def get_mcp_secret_env_keys(mcp_id: int) -> list[str]:
 
 def has_mcp_secret_env(mcp_id: int) -> bool:
     return _has(MCP_ENV_NAMESPACE, mcp_id)
+
+
+def set_notification_secret(key: str, secret_value: str) -> None:
+    secret_key = (key or "").strip()
+    value = (secret_value or "").strip()
+    if not secret_key:
+        raise ManagedSecretError("Notification secret key is required")
+    if not value:
+        _delete(NOTIFICATION_SECRET_NAMESPACE, NOTIFICATION_SECRET_OBJECT_ID, key=secret_key)
+        return
+    _upsert(
+        NOTIFICATION_SECRET_NAMESPACE,
+        NOTIFICATION_SECRET_OBJECT_ID,
+        {"secret": value},
+        key=secret_key,
+        metadata={"kind": "notification_secret", "key": secret_key},
+    )
+
+
+def get_notification_secret(key: str) -> str:
+    secret_key = (key or "").strip()
+    if not secret_key:
+        return ""
+    payload = _get(
+        NOTIFICATION_SECRET_NAMESPACE,
+        NOTIFICATION_SECRET_OBJECT_ID,
+        key=secret_key,
+        default={},
+    )
+    if isinstance(payload, dict):
+        return str(payload.get("secret") or "")
+    return ""
+
+
+def has_notification_secret(key: str) -> bool:
+    secret_key = (key or "").strip()
+    if not secret_key:
+        return False
+    return _has(NOTIFICATION_SECRET_NAMESPACE, NOTIFICATION_SECRET_OBJECT_ID, key=secret_key)
 
 
 def _normalize_llm_provider(provider: str) -> str:

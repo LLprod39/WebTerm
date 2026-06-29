@@ -9,7 +9,10 @@ from typing import Any
 
 from django.conf import settings as django_settings
 
+from core_ui.managed_secrets import get_notification_secret, set_notification_secret
+
 _NOTIF_CONFIG_PATH = Path(getattr(django_settings, "BASE_DIR", ".")) / ".notification_config.json"
+_NOTIF_SECRET_KEYS = {"telegram_bot_token", "smtp_password"}
 
 _NOTIF_DEFAULTS = {
     "telegram_bot_token": "",
@@ -26,11 +29,17 @@ _NOTIF_DEFAULTS = {
 
 def notif_config_path() -> Path:
     package = sys.modules.get("studio.views")
-    return Path(getattr(package, "_NOTIF_CONFIG_PATH", _NOTIF_CONFIG_PATH))
+    override = getattr(package, "_NOTIF_CONFIG_PATH", None)
+    if override:
+        return Path(override)
+    env_path = (os.getenv("NOTIFICATION_CONFIG_PATH") or "").strip()
+    if env_path:
+        return Path(env_path)
+    return _NOTIF_CONFIG_PATH
 
 
-def load_notification_config() -> dict[str, Any]:
-    base: dict[str, Any] = {
+def _base_notification_config() -> dict[str, Any]:
+    return {
         "telegram_bot_token": os.getenv("TELEGRAM_BOT_TOKEN", "")
         or getattr(django_settings, "TELEGRAM_BOT_TOKEN", "")
         or "",
@@ -51,23 +60,53 @@ def load_notification_config() -> dict[str, Any]:
         "from_email": getattr(django_settings, "DEFAULT_FROM_EMAIL", "") or "",
         "site_url": getattr(django_settings, "SITE_URL", "http://localhost:8000") or "http://localhost:8000",
     }
+
+
+def _read_saved_notification_config() -> dict[str, Any]:
     config_path = notif_config_path()
     if config_path.exists():
         with contextlib.suppress(Exception):
             saved = json.loads(config_path.read_text(encoding="utf-8"))
-            for key, value in saved.items():
-                if key in base and value:
-                    base[key] = value
+            if isinstance(saved, dict):
+                return saved
+    return {}
+
+
+def _managed_notification_secret(key: str) -> str:
+    with contextlib.suppress(Exception):
+        return get_notification_secret(key)
+    return ""
+
+
+def load_notification_config() -> dict[str, Any]:
+    base = _base_notification_config()
+    saved = _read_saved_notification_config()
+    for key, value in saved.items():
+        if key in base and key not in _NOTIF_SECRET_KEYS and value:
+            base[key] = value
+    for key in _NOTIF_SECRET_KEYS:
+        managed_value = _managed_notification_secret(key)
+        if managed_value:
+            base[key] = managed_value
+        elif saved.get(key):
+            # Legacy fallback: older installs stored notification secrets in
+            # .notification_config.json. New writes move them into ManagedSecret.
+            base[key] = str(saved.get(key) or "")
     return base
 
 
 def save_notification_config(data: dict[str, Any]) -> None:
-    existing: dict[str, Any] = {}
-    config_path = notif_config_path()
-    if config_path.exists():
-        with contextlib.suppress(Exception):
-            existing = json.loads(config_path.read_text(encoding="utf-8"))
+    existing = {
+        key: value
+        for key, value in _read_saved_notification_config().items()
+        if key in _NOTIF_DEFAULTS and key not in _NOTIF_SECRET_KEYS
+    }
     for key in _NOTIF_DEFAULTS:
         if key in data:
-            existing[key] = data[key]
+            if key in _NOTIF_SECRET_KEYS:
+                set_notification_secret(key, str(data.get(key) or ""))
+            else:
+                existing[key] = data[key]
+    config_path = notif_config_path()
+    config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(json.dumps(existing, indent=2, ensure_ascii=False), encoding="utf-8")

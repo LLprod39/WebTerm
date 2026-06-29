@@ -16,10 +16,10 @@ from django.db import IntegrityError, transaction
 from loguru import logger
 
 from app.core.model_config import model_manager
-from core_ui.models import FEATURE_CHOICES, UserAppPermission
+from core_ui.access import PROFILE_STAFF_FLAGS, VALID_ACCESS_PROFILES, access_profile_permissions
+from core_ui.models import UserAppPermission
 
 _USERNAME_SANITIZER = re.compile(r"[^A-Za-z0-9@.+_-]")
-_VALID_ACCESS_PROFILES = {"server_only", "admin_full", "reset_defaults", "custom"}
 _MODEL_CONFIG_LOADED = False
 _MODEL_CONFIG_MTIME: float | None = None
 
@@ -27,11 +27,12 @@ _MODEL_CONFIG_MTIME: float | None = None
 def _ensure_model_config_loaded() -> None:
     """
     Load persisted model config once.
-    UI saves domain settings into .model_config.json via model_manager.
+    UI saves domain settings through model_manager; honor MODEL_CONFIG_PATH in
+    production so middleware reads the same config file that Settings writes.
     """
     global _MODEL_CONFIG_LOADED, _MODEL_CONFIG_MTIME
 
-    filepath = ".model_config.json"
+    filepath = model_manager._config_path()
     try:
         current_mtime = os.path.getmtime(filepath)
     except OSError:
@@ -42,7 +43,7 @@ def _ensure_model_config_loaded() -> None:
         return
 
     try:
-        model_manager.load_config(filepath)
+        model_manager.load_config()
     except Exception as exc:
         logger.debug("Failed to load model config for domain auth: {}", exc)
 
@@ -143,20 +144,19 @@ def _normalize_principal(principal: str) -> tuple[str, str]:
     return candidate[:150], email[:254]
 
 
-def _feature_slugs() -> list[str]:
-    return [slug for slug, _ in FEATURE_CHOICES]
-
-
 def _apply_access_profile(user: User, profile: str) -> None:
     """
     Apply access profile to user (same semantics as settings access UI):
     - server_only
     - admin_full
+    - operator_studio_runner
+    - team_admin_no_secrets
+    - platform_admin
     - reset_defaults
     - custom (no-op)
     """
     profile = (profile or "").strip().lower()
-    if profile not in _VALID_ACCESS_PROFILES:
+    if profile not in VALID_ACCESS_PROFILES:
         raise ValueError("Invalid access profile")
 
     if profile == "custom":
@@ -166,17 +166,11 @@ def _apply_access_profile(user: User, profile: str) -> None:
         UserAppPermission.objects.filter(user=user).delete()
         return
 
-    if profile == "server_only":
-        target = {feature: feature == "servers" for feature in _feature_slugs()}
-        if user.is_staff:
-            user.is_staff = False
-            user.save(update_fields=["is_staff"])
-    else:
-        # admin_full
-        target = dict.fromkeys(_feature_slugs(), True)
-        if not user.is_staff:
-            user.is_staff = True
-            user.save(update_fields=["is_staff"])
+    target = access_profile_permissions(profile)
+    staff_target = PROFILE_STAFF_FLAGS.get(profile, False)
+    if user.is_staff != staff_target:
+        user.is_staff = staff_target
+        user.save(update_fields=["is_staff"])
 
     with transaction.atomic():
         for feature, allowed in target.items():
@@ -191,7 +185,7 @@ def _domain_access_profile() -> str:
     fallback = str(getattr(settings, "DOMAIN_AUTH_DEFAULT_PROFILE", "server_only") or "server_only")
     configured = str(_cfg_value("domain_auth_default_profile", fallback) or "server_only")
     profile = configured.strip().lower()
-    if profile in _VALID_ACCESS_PROFILES:
+    if profile in VALID_ACCESS_PROFILES:
         return profile
     logger.warning("DOMAIN_AUTH_DEFAULT_PROFILE={} is invalid, fallback to server_only", configured)
     return "server_only"

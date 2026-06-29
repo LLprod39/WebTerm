@@ -93,6 +93,7 @@ def api_models_list(request):
 
 
 @login_required
+@require_feature("settings")
 @require_http_methods(["POST"])
 def api_models_refresh(request):
     """
@@ -100,6 +101,9 @@ def api_models_refresh(request):
 
     Body: { "provider": "gemini|grok|openai|fair|claude|ollama" }
     """
+    if not request.user.is_staff:
+        return JsonResponse({"error": "Only admins can refresh provider models"}, status=403)
+
     try:
         data = json.loads(request.body or "{}")
     except json.JSONDecodeError:

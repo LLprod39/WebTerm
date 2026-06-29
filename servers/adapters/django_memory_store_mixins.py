@@ -169,6 +169,8 @@ class DjangoMemoryStoreSnapshotMixin:
         created_by_id: int | None = None,
         version_group_id: str | None = None,
         force_version: bool = False,
+        layer: str | None = None,
+        enforce_trust_gate: bool = True,
     ):
         return perform_upsert_snapshot(
             server_id=server_id,
@@ -185,6 +187,8 @@ class DjangoMemoryStoreSnapshotMixin:
             created_by_id=created_by_id,
             version_group_id=version_group_id,
             force_version=force_version,
+            layer=layer,
+            enforce_trust_gate=enforce_trust_gate,
         )
 
     def _ensure_revalidation_sync(

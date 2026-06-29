@@ -1,5 +1,5 @@
 import type { ComponentType, Dispatch, DragEvent, SetStateAction } from "react";
-import type { Connection, EdgeChange, NodeChange, NodeMouseHandler } from "@xyflow/react";
+import type { Connection, EdgeChange, NodeChange, NodeMouseHandler, NodeTypes } from "@xyflow/react";
 
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import type { PipelineEdge, PipelineNode, PipelineTrigger, StudioCapabilityNode } from "@/lib/api";
@@ -61,7 +61,7 @@ export function PipelineEditorMainArea({
   nodeManifests: StudioCapabilityNode[];
   paletteOpen: boolean;
   pluginPalette: Array<{ category: string; nodes: Array<{ type: string; label: string; icon: ComponentType<{ className?: string }>; iconClassName?: string; description: string }> }>;
-  pluginNodeTypes: Record<string, ComponentType<any>>;
+  pluginNodeTypes: NodeTypes;
   pipelineId: number | null;
   selectedNode: PipelineNode | null;
   showMiniMap: boolean;

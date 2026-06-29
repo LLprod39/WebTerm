@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol, runtime_checkable
 
+from app.agent_kernel.memory.trust import prompt_provenance_label
+
 ToolCategory = Literal["ssh", "file", "docker", "service", "nginx", "keycloak", "monitoring", "mcp", "general"]
 ToolRisk = Literal["read", "write", "exec", "network", "admin"]
 PermissionMode = Literal["PLAN", "SAFE", "ASSISTED", "AUTONOMOUS", "AUTO_GUARDED"]
@@ -91,7 +93,8 @@ class ServerMemoryCard:
             parts.append(
                 "Релевантная память:\n"
                 + "\n".join(
-                    f"- [{record.domain}] {record.title}: {record.content}"
+                    f"- {prompt_provenance_label(metadata=record.metadata, confidence=record.confidence, last_verified_at=record.last_verified_at)} "
+                    f"[{record.domain}] {record.title}: {record.content}"
                     for record in self.records[:max_records]
                 )
             )

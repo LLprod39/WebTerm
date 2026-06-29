@@ -65,7 +65,7 @@ def auto_resolve_stale_revalidations(server_id: int, *, max_age_days: int = 60) 
     Close stale open revalidation records at the end of a dream cycle.
 
     Rules:
-    - Records older than ``max_age_days`` become resolved.
+    - Records older than ``max_age_days`` expire as unverified.
     - Records whose source snapshot was superseded become superseded when a
       newer active snapshot exists for the same memory key.
     """
@@ -84,7 +84,7 @@ def auto_resolve_stale_revalidations(server_id: int, *, max_age_days: int = 60) 
 
     for item in open_items:
         if item.created_at < cutoff:
-            item.status = ServerMemoryRevalidation.STATUS_RESOLVED
+            item.status = ServerMemoryRevalidation.STATUS_EXPIRED_UNVERIFIED
             item.resolved_at = now
             item.save(update_fields=["status", "resolved_at", "updated_at"])
             resolved += 1

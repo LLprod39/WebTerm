@@ -4,6 +4,7 @@ Access management views for users, groups, and feature permissions.
 
 import json
 from collections import defaultdict
+from functools import wraps
 
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import Group, User
@@ -15,6 +16,9 @@ from django.views.decorators.http import require_http_methods
 from loguru import logger
 
 from core_ui.access import (
+    PROFILE_STAFF_FLAGS,
+    VALID_ACCESS_PROFILES,
+    access_profile_permissions,
     access_feature_labels,
     access_feature_slugs,
     build_user_access_payload,
@@ -25,6 +29,16 @@ from core_ui.access import (
 from core_ui.context_processors import user_can_feature
 from core_ui.decorators import require_feature
 from core_ui.models import GroupAppPermission, UserAppPermission
+
+
+def require_access_admin(view_func):
+    @wraps(view_func)
+    def _wrapped(request, *args, **kwargs):
+        if not request.user.is_staff:
+            return JsonResponse({"error": "Only admins can manage access"}, status=403)
+        return view_func(request, *args, **kwargs)
+
+    return _wrapped
 
 
 def _access_feature_slugs():
@@ -43,9 +57,8 @@ def _build_user_access_payload(user, explicit_permissions: dict, group_permissio
 
 def _apply_access_profile(user, profile: str) -> None:
     """Apply one of predefined access profiles to user permissions."""
-    features = _access_feature_slugs()
     profile = (profile or "").strip()
-    if profile not in {"server_only", "admin_full", "reset_defaults", "custom"}:
+    if profile not in VALID_ACCESS_PROFILES:
         raise ValueError("Invalid access profile")
 
     if profile == "custom":
@@ -58,16 +71,11 @@ def _apply_access_profile(user, profile: str) -> None:
     if profile == "server_only" and user.is_superuser:
         raise ValueError("Cannot apply server-only profile to superuser")
 
-    if profile == "server_only":
-        target = {feature: (feature == "servers") for feature in features}
-        if user.is_staff:
-            user.is_staff = False
-            user.save(update_fields=["is_staff"])
-    else:
-        target = dict.fromkeys(features, True)
-        if not user.is_staff:
-            user.is_staff = True
-            user.save(update_fields=["is_staff"])
+    target = access_profile_permissions(profile)
+    staff_target = PROFILE_STAFF_FLAGS.get(profile, False)
+    if user.is_staff != staff_target:
+        user.is_staff = staff_target
+        user.save(update_fields=["is_staff"])
 
     with transaction.atomic():
         for feature, allowed in target.items():
@@ -186,6 +194,7 @@ def settings_permissions_view(request):
 
 @login_required
 @require_feature("settings")
+@require_access_admin
 @require_http_methods(["GET", "POST"])
 def api_access_users(request):
     """
@@ -287,6 +296,7 @@ def api_access_users(request):
 
 @login_required
 @require_feature("settings")
+@require_access_admin
 @require_http_methods(["GET", "PUT", "DELETE"])
 def api_access_user_detail(request, user_id):
     """
@@ -397,6 +407,7 @@ def api_access_user_detail(request, user_id):
 
 @login_required
 @require_feature("settings")
+@require_access_admin
 @require_http_methods(["POST"])
 def api_access_user_password(request, user_id):
     """Change a user's password."""
@@ -428,6 +439,7 @@ def api_access_user_password(request, user_id):
 
 @login_required
 @require_feature("settings")
+@require_access_admin
 @require_http_methods(["POST"])
 def api_access_user_profile(request, user_id):
     """Apply an access profile to a user."""

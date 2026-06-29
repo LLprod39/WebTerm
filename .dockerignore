@@ -27,8 +27,14 @@ frontend/dist-ssr
 
 # Environment and secrets (do not send to build context)
 .env
+.env.*
 .env.local
 .env.*.local
+.model_config.json
+.notification_config.json
+!.env.example
+!.env.production.example
+!.notification_config.example.json
 
 # IDE / local / cache
 .vscode

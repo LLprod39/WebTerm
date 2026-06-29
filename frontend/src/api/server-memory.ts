@@ -7,6 +7,7 @@ export interface ServerMemorySnapshotHistoryRecord {
   is_active: boolean;
   source_kind?: string;
   source_ref?: string;
+  layer?: "canonical" | "candidate" | "archive";
   updated_at: string | null;
   archived_at: string | null;
   rewrite_reason?: string | null;
@@ -22,6 +23,7 @@ export interface ServerMemorySnapshotRecord {
   content: string;
   source_kind: string;
   source_ref?: string;
+  layer?: "canonical" | "candidate" | "archive";
   version: number;
   is_active: boolean;
   version_group_id: string;

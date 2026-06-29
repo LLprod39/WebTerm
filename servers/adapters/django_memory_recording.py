@@ -7,6 +7,7 @@ from django.utils import timezone
 from app.agent_kernel.memory.compaction import compact_text
 from app.agent_kernel.memory.repair import detect_fact_conflicts, resolve_winning_fact
 from app.agent_kernel.memory.snapshot_utils import guess_memory_key
+from app.agent_kernel.memory.trust import TRUST_AGENT_REPORTED, VERIFICATION_NEEDS_REVALIDATION
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,7 @@ def append_run_summary(store, run_id: int, summary: dict) -> str:
             "facts": summary.get("facts") or [],
             "changes": summary.get("changes") or [],
             "incidents": summary.get("incidents") or [],
+            "canonical_notes": summary.get("canonical_notes") or [],
             "tool_calls": summary.get("tool_calls") or [],
             "verification_summary": summary.get("verification_summary") or "",
         },
@@ -55,6 +57,8 @@ def append_run_summary(store, run_id: int, summary: dict) -> str:
         actor_user_id=run.user_id,
         force_compact=True,
     )
+    for note in summary.get("canonical_notes") or []:
+        record_canonical_note_candidate(store, run, note, source_ref=source_ref)
     for fact in summary.get("facts") or []:
         store._upsert_server_fact_sync(run.server_id, fact, source_ref=source_ref, session_id=source_ref)
     for change in summary.get("changes") or []:
@@ -63,6 +67,54 @@ def append_run_summary(store, run_id: int, summary: dict) -> str:
         store._record_incident_sync(run.server_id, incident, source_ref=source_ref, session_id=source_ref)
     run_dream_cycle_task.delay(run.server_id, job_kind="nearline")
     return event_id
+
+
+def record_canonical_note_candidate(store, run, note: dict, *, source_ref: str) -> None:
+    if not isinstance(note, dict):
+        return
+    title = compact_text(str(note.get("title") or "Agent memory candidate"), limit=200)
+    content = compact_text(str(note.get("content") or ""), limit=2400)
+    if not content:
+        return
+    category = str(note.get("category") or "other")
+    memory_key = store._preferred_memory_key_for_note(title=title, category=category, content=content) or guess_memory_key(
+        title=title,
+        category=category,
+        content=content,
+    )
+    payload = {
+        "title": title,
+        "category": category,
+        "memory_key": memory_key,
+        "source": note.get("source") or "agent_summary",
+        "verified": bool(note.get("verified")),
+        "trust_level": TRUST_AGENT_REPORTED,
+        "verification_status": VERIFICATION_NEEDS_REVALIDATION,
+    }
+    event_id = store._ingest_event_sync(
+        run.server_id,
+        source_kind="agent_run",
+        actor_kind="agent",
+        source_ref=source_ref,
+        session_id=source_ref,
+        event_type="canonical_note_candidate",
+        raw_text=f"{title}\n{content}",
+        structured_payload=payload,
+        importance_hint=float(note.get("confidence") or 0.62),
+        actor_user_id=run.user_id,
+        force_compact=True,
+    )
+    store._ensure_revalidation_sync(
+        run.server_id,
+        memory_key=memory_key,
+        title=title,
+        reason="Agent-generated canonical note candidate requires independent verification before promotion.",
+        payload={
+            **payload,
+            "event_id": event_id,
+            "content": content,
+        },
+    )
 
 
 def upsert_server_fact(

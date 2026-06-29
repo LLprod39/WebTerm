@@ -9,8 +9,9 @@ import {
   type EdgeChange,
   type NodeChange,
   type NodeMouseHandler,
+  type NodeTypes,
 } from "@xyflow/react";
-import { useMemo, type ComponentType, type DragEvent } from "react";
+import { useMemo, type DragEvent } from "react";
 import { Zap } from "lucide-react";
 
 import type { PipelineEdge, PipelineNode } from "@/lib/api";
@@ -42,10 +43,10 @@ export function PipelineEditorCanvas({
   onNodeClick: NodeMouseHandler;
   onNodesChange: (changes: NodeChange[]) => void;
   onPaneClick: () => void;
-  pluginNodeTypes?: Record<string, ComponentType<any>>;
+  pluginNodeTypes?: NodeTypes;
   showMiniMap: boolean;
 }) {
-  const resolvedNodeTypes = useMemo(
+  const resolvedNodeTypes = useMemo<NodeTypes>(
     () => ({ ...nodeTypes, ...(pluginNodeTypes || {}) }),
     [pluginNodeTypes],
   );

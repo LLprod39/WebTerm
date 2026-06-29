@@ -18,6 +18,7 @@ def test_snapshot_versions_capture_rewrite_reason_and_history():
         content="- CPU saturation detected",
         source_kind="dream",
         confidence=0.72,
+        metadata={"trust_level": "system_measured", "verification_status": "measured"},
     )
     second_snapshot, created = store._upsert_snapshot_sync(
         server_id=server.id,
@@ -26,6 +27,7 @@ def test_snapshot_versions_capture_rewrite_reason_and_history():
         content="- CPU saturation detected\n- Disk pressure detected",
         source_kind="dream",
         confidence=0.84,
+        metadata={"trust_level": "system_measured", "verification_status": "measured"},
     )
 
     assert created is True
@@ -59,13 +61,14 @@ def test_django_server_memory_store_promotes_command_patterns_to_habits_and_runb
             importance_hint=0.7,
             actor_user_id=owner.id,
         )
-    for _ in range(2):
+    for index in range(2):
+        pipeline_session = f"pipeline-check-{index}"
         store._ingest_event_sync(
             server.id,
             source_kind="pipeline",
             actor_kind="agent",
-            source_ref="pipeline-check",
-            session_id="pipeline-check",
+            source_ref=pipeline_session,
+            session_id=pipeline_session,
             event_type="command_executed",
             raw_text="$ docker ps --format table\nCONTAINER ID   IMAGE",
             structured_payload={"command": "docker ps --format table", "exit_code": 0},
@@ -86,7 +89,8 @@ def test_django_server_memory_store_promotes_command_patterns_to_habits_and_runb
     )
     skill_drafts = ServerMemorySnapshot.objects.filter(server=server, memory_key__startswith="skill_draft:", is_active=True)
     assert "systemctl status nginx" in habits.content
-    assert "docker ps --format table" in runbook.content
+    assert "docker ps --format table" not in runbook.content
+    assert any("docker ps --format table" in item.content for item in pattern_candidates)
     assert "4 запусков в 4 сессиях" in habits.content
     assert pattern_candidates.exists()
     assert automation_candidates.exists()
@@ -101,6 +105,7 @@ def test_django_server_memory_store_promotes_command_patterns_to_habits_and_runb
     assert "Learned Pattern:" not in prompt_text
     assert "Automation Candidate:" not in prompt_text
     assert "Skill Draft:" not in prompt_text
+    assert "[human_observed][measured]" in prompt_text or "[system_measured][measured]" in prompt_text
 
 
 @pytest.mark.django_db(transaction=True)
@@ -265,6 +270,78 @@ def test_django_server_memory_store_does_not_promote_destructive_docker_rm_patte
         is_active=True,
         memory_key__startswith="skill_draft:",
     ).exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_unknown_pattern_success_requires_review_and_does_not_become_recipe():
+    owner = User.objects.create_user(username="ops-memory-unknown-pattern-user", password="x")
+    server = Server.objects.create(user=owner, name="unknown-pattern-node", host="10.0.0.74", port=22, username="root")
+    store = DjangoServerMemoryStore()
+
+    for index in range(3):
+        session_id = f"unknown-pattern-{index}"
+        store._ingest_event_sync(
+            server.id,
+            source_kind="terminal",
+            actor_kind="human",
+            source_ref=session_id,
+            session_id=session_id,
+            event_type="command_executed",
+            raw_text="$ custom-check\noutput without exit code",
+            structured_payload={"command": "custom-check"},
+            importance_hint=0.55,
+            actor_user_id=owner.id,
+        )
+
+    result = store._run_dream_cycle_sync(server.id, job_kind="nearline")
+
+    assert result["skipped"] is False
+    pattern = ServerMemorySnapshot.objects.get(
+        server=server,
+        memory_key__startswith="pattern_candidate:",
+        is_active=True,
+    )
+    assert pattern.layer == ServerMemorySnapshot.LAYER_CANDIDATE
+    assert pattern.metadata["success_rate"] is None
+    assert pattern.metadata["requires_manual_review"] is True
+    assert pattern.confidence <= 0.55
+    assert not ServerMemorySnapshot.objects.filter(
+        server=server,
+        memory_key__startswith="automation_candidate:",
+        is_active=True,
+    ).exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_operational_recipes_exclude_unreviewed_candidates():
+    owner = User.objects.create_user(username="ops-memory-candidate-recipe-user", password="x")
+    server = Server.objects.create(user=owner, name="candidate-recipe-node", host="10.0.0.75", port=22, username="root")
+    ServerMemorySnapshot.objects.create(
+        server=server,
+        memory_key="automation_candidate:unsafe",
+        layer=ServerMemorySnapshot.LAYER_CANDIDATE,
+        title="Automation Candidate: restart service",
+        content="- systemctl restart nginx\n- systemctl is-active nginx",
+        source_kind="dream",
+        version_group_id="candidate-unsafe",
+        version=1,
+        is_active=True,
+        metadata={
+            "trust_level": "llm_distilled",
+            "verification_status": "needs_revalidation",
+            "candidate_requires_review": True,
+        },
+    )
+    store = DjangoServerMemoryStore()
+
+    prompt = store._build_operational_recipes_prompt_sync(
+        "restart nginx service",
+        server_ids=[server.id],
+        limit=4,
+    )
+
+    assert "Automation Candidate" not in prompt
+    assert "systemctl restart nginx" not in prompt
 
 
 @pytest.mark.django_db(transaction=True)

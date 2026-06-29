@@ -31,6 +31,30 @@ def has_saved_server_sudo_secret(server) -> bool:
     return bool(has_server_sudo_secret(server.id) or getattr(server, "encrypted_sudo_password", ""))
 
 
+def has_managed_server_secret(server) -> bool:
+    return bool(has_server_auth_secret(server.id))
+
+
+def has_managed_server_sudo_secret(server) -> bool:
+    return bool(has_server_sudo_secret(server.id))
+
+
+def server_secret_storage_mode(server) -> str:
+    if has_managed_server_secret(server):
+        return "managed"
+    if server.encrypted_password:
+        return "legacy_master_password"
+    return "none"
+
+
+def server_sudo_secret_storage_mode(server) -> str:
+    if has_managed_server_sudo_secret(server):
+        return "managed"
+    if getattr(server, "encrypted_sudo_password", ""):
+        return "legacy_master_password"
+    return "none"
+
+
 def get_server_auth_secret(server, *, master_password: str = "", fallback_plain: str = "") -> str:
     managed_secret = get_managed_server_auth_secret(server.id)
     if managed_secret:

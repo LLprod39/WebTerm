@@ -86,9 +86,21 @@ class ServerMemoryEvent(models.Model):
     event_type = models.CharField(max_length=80)
     raw_text_redacted = models.TextField(blank=True)
     structured_payload = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    idempotency_key = models.CharField(max_length=180, blank=True, db_index=True)
+    payload_hash = models.CharField(max_length=64, blank=True, db_index=True)
     importance_hint = models.FloatField(default=0.5)
     redaction_report = models.JSONField(default=dict, blank=True)
     redaction_hashes = models.JSONField(default=list, blank=True)
+    compacted_episode = models.ForeignKey(
+        "ServerMemoryEpisode",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="compacted_events",
+    )
+    compacted_at = models.DateTimeField(null=True, blank=True)
+    compaction_version = models.PositiveIntegerField(default=1)
     is_archived = models.BooleanField(default=False)
     archived_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -100,6 +112,13 @@ class ServerMemoryEvent(models.Model):
             models.Index(fields=["server", "source_kind", "-created_at"]),
             models.Index(fields=["server", "session_id", "-created_at"]),
             models.Index(fields=["server", "source_ref", "-created_at"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["server", "idempotency_key"],
+                condition=~models.Q(idempotency_key=""),
+                name="uniq_server_memory_event_idempotency_key",
+            ),
         ]
 
     def __str__(self):
@@ -161,9 +180,11 @@ class ServerMemorySnapshot(models.Model):
     """L2 canonical or archived memory snapshot used by prompts."""
 
     LAYER_CANONICAL = "canonical"
+    LAYER_CANDIDATE = "candidate"
     LAYER_ARCHIVE = "archive"
     LAYER_CHOICES = [
         (LAYER_CANONICAL, "Canonical"),
+        (LAYER_CANDIDATE, "Candidate"),
         (LAYER_ARCHIVE, "Archive"),
     ]
 
@@ -207,6 +228,13 @@ class ServerMemorySnapshot(models.Model):
             models.Index(fields=["server", "layer", "-updated_at"]),
             models.Index(fields=["server", "version_group_id", "-version"]),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["server", "memory_key"],
+                condition=models.Q(is_active=True),
+                name="uniq_active_server_memory_snapshot",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.server.name}: {self.memory_key} v{self.version}"
@@ -216,12 +244,22 @@ class ServerMemoryRevalidation(models.Model):
     """Queue of memory items that need validation after staleness or conflicts."""
 
     STATUS_OPEN = "open"
+    STATUS_SCHEDULED = "scheduled"
+    STATUS_VERIFIED_TRUE = "verified_true"
+    STATUS_VERIFIED_FALSE = "verified_false"
     STATUS_RESOLVED = "resolved"
     STATUS_SUPERSEDED = "superseded"
+    STATUS_EXPIRED_UNVERIFIED = "expired_unverified"
+    STATUS_IGNORED_BY_HUMAN = "ignored_by_human"
     STATUS_CHOICES = [
         (STATUS_OPEN, "Open"),
-        (STATUS_RESOLVED, "Resolved"),
+        (STATUS_SCHEDULED, "Scheduled"),
+        (STATUS_VERIFIED_TRUE, "Verified True"),
+        (STATUS_VERIFIED_FALSE, "Verified False"),
+        (STATUS_RESOLVED, "Resolved (legacy)"),
         (STATUS_SUPERSEDED, "Superseded"),
+        (STATUS_EXPIRED_UNVERIFIED, "Expired Unverified"),
+        (STATUS_IGNORED_BY_HUMAN, "Ignored by Human"),
     ]
 
     server = models.ForeignKey(Server, on_delete=models.CASCADE, related_name="memory_revalidations")

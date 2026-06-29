@@ -127,6 +127,26 @@ class ModelConfig(BaseModel):
     retention_days: int = 90
     export_format: str = "json"
 
+    # Web-managed soft runtime limits (None => use Django settings/env fallback)
+    agent_active_runs_per_user_limit: int | None = None
+    agent_active_runs_global_limit: int | None = None
+    agent_run_stale_seconds: int | None = None
+    pipeline_active_runs_per_user_limit: int | None = None
+    pipeline_active_runs_global_limit: int | None = None
+    pipeline_run_stale_seconds: int | None = None
+    ssh_terminal_sessions_per_user_limit: int | None = None
+    ssh_terminal_sessions_global_limit: int | None = None
+    ssh_terminal_session_stale_seconds: int | None = None
+    llm_daily_token_limit_per_user: int | None = None
+    mcp_stdio_initialize_timeout_seconds: int | None = None
+    mcp_stdio_request_timeout_seconds: int | None = None
+    mcp_stdio_tool_call_timeout_seconds: int | None = None
+    mcp_process_terminate_timeout_seconds: int | None = None
+    mcp_http_connect_timeout_seconds: int | None = None
+    mcp_http_request_timeout_seconds: int | None = None
+    mcp_http_tool_call_timeout_seconds: int | None = None
+    mcp_http_retry_attempts: int | None = None
+
 
 
 class ModelManager:
@@ -405,23 +425,29 @@ class ModelManager:
                 setattr(self.config, key, value)
                 logger.info("Updated {} to {}", key, redacted_config_value(key, value))
 
-    def save_config(self, filepath: str = ".model_config.json"):
+    @staticmethod
+    def _config_path(filepath: str | None = None) -> str:
+        return filepath or os.getenv("MODEL_CONFIG_PATH") or ".model_config.json"
+
+    def save_config(self, filepath: str | None = None):
         """Save configuration to file"""
+        config_path = self._config_path(filepath)
         try:
-            with open(filepath, 'w') as f:
+            with open(config_path, 'w') as f:
                 json.dump(self.config.model_dump(), f, indent=2)
-            logger.success(f"Model configuration saved to {filepath}")
+            logger.success(f"Model configuration saved to {config_path}")
         except Exception as e:
             logger.error(f"Failed to save config: {e}")
 
-    def load_config(self, filepath: str = ".model_config.json"):
+    def load_config(self, filepath: str | None = None):
         """Load configuration from file"""
+        config_path = self._config_path(filepath)
         try:
-            if os.path.exists(filepath):
-                with open(filepath) as f:
+            if os.path.exists(config_path):
+                with open(config_path) as f:
                     data = json.load(f)
                 self.config = ModelConfig(**data)
-                logger.success(f"Model configuration loaded from {filepath}")
+                logger.success(f"Model configuration loaded from {config_path}")
                 return True
         except Exception as e:
             logger.error(f"Failed to load config: {e}")

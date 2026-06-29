@@ -98,7 +98,7 @@ def derive_operational_patterns(server_id: int) -> list[OperationalPattern]:
         weighted_occurrences = float(bucket.get("weighted_occurrences", occurrences))
         measured_runs = int(bucket["measured_runs"])
         successful_runs = int(bucket["successful_runs"])
-        success_rate = (successful_runs / measured_runs) if measured_runs else 1.0
+        success_rate = (successful_runs / measured_runs) if measured_runs else None
         if weighted_occurrences < 1.2 and occurrences < 2 and successful_runs < 2:
             continue
         patterns.append(
@@ -132,7 +132,7 @@ def derive_operational_patterns(server_id: int) -> list[OperationalPattern]:
         key=lambda item: (
             1 if item.pattern_kind == "sequence" else 0,
             item.occurrences,
-            item.success_rate,
+            item.success_rate if item.success_rate is not None else -1.0,
             item.verification_rate,
             1 if "human" in item.actor_kinds else 0,
             item.last_seen or timezone.now(),
@@ -222,7 +222,7 @@ def derive_sequence_patterns(session_events: dict[str, list[Any]]) -> list[Opera
             continue
         measured_runs = int(bucket["measured_runs"])
         successful_runs = int(bucket["successful_runs"])
-        success_rate = (successful_runs / measured_runs) if measured_runs else 1.0
+        success_rate = (successful_runs / measured_runs) if measured_runs else None
         verification_rate = float(bucket["verification_hits"] or 0) / max(occurrences, 1)
         patterns.append(
             OperationalPattern(
@@ -281,7 +281,7 @@ def promote_pattern_candidates(
             source_kind="dream",
             importance_score=0.68 if pattern.pattern_kind == "sequence" else 0.64,
             stability_score=min(0.9, 0.45 + min(pattern.occurrences, 6) * 0.06 + (0.05 if pattern.pattern_kind == "sequence" else 0.0)),
-            confidence=min(0.97, max(0.58, pattern.success_rate + (0.04 if pattern.has_verification_step else 0.0))),
+            confidence=pattern_candidate_confidence(pattern, fallback=0.55, cap=0.97),
             metadata=pattern_metadata(pattern) | pattern_enhancement_metadata(enhancement),
         )
         pattern_candidates += 1
@@ -300,7 +300,7 @@ def promote_pattern_candidates(
                 source_kind="dream",
                 importance_score=0.78 if pattern.pattern_kind == "sequence" else 0.72,
                 stability_score=min(0.92, 0.5 + min(pattern.occurrences, 6) * 0.05 + (0.06 if pattern.pattern_kind == "sequence" else 0.0)),
-                confidence=min(0.98, max(0.64, pattern.success_rate + (0.04 if pattern.has_verification_step else 0.0))),
+                confidence=pattern_candidate_confidence(pattern, fallback=0.55, cap=0.98),
                 metadata=pattern_metadata(pattern) | {"candidate_kind": "automation"} | pattern_enhancement_metadata(enhancement),
             )
             automation_candidates += 1
@@ -315,7 +315,7 @@ def promote_pattern_candidates(
                     source_kind="dream",
                     importance_score=0.84 if pattern.pattern_kind == "sequence" else 0.76,
                     stability_score=min(0.94, 0.56 + min(pattern.occurrences, 7) * 0.04 + (0.08 if pattern.pattern_kind == "sequence" else 0.0)),
-                    confidence=min(0.99, max(0.68, pattern.success_rate + (0.05 if pattern.has_verification_step else 0.0))),
+                    confidence=pattern_candidate_confidence(pattern, fallback=0.55, cap=0.99),
                     metadata=pattern_metadata(pattern) | {"candidate_kind": "skill_draft"} | pattern_enhancement_metadata(enhancement),
                 )
                 skill_drafts += 1
@@ -326,3 +326,10 @@ def promote_pattern_candidates(
         "automation_candidates": automation_candidates,
         "skill_drafts": skill_drafts,
     }
+
+
+def pattern_candidate_confidence(pattern: OperationalPattern, *, fallback: float, cap: float) -> float:
+    if pattern.success_rate is None:
+        return min(float(fallback), 0.55)
+    bonus = 0.05 if pattern.has_verification_step else 0.0
+    return min(float(cap), max(0.58, float(pattern.success_rate) + bonus))

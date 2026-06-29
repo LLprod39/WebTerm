@@ -57,7 +57,7 @@ class OperationalPattern:
     occurrences: int
     successful_runs: int
     measured_runs: int
-    success_rate: float
+    success_rate: float | None
     actor_kinds: tuple[str, ...]
     source_kinds: tuple[str, ...]
     verification_rate: float = 0.0

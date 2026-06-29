@@ -5,6 +5,7 @@ from typing import Any
 from django.utils import timezone
 
 from app.agent_kernel.memory.snapshot_utils import guess_memory_key
+from app.agent_kernel.memory.trust import TRUST_MANUAL_VERIFIED, VERIFICATION_VERIFIED
 
 
 def preferred_memory_key_for_note(*, title: str, category: str | None, content: str) -> str | None:
@@ -98,7 +99,15 @@ def sync_manual_knowledge_snapshot(store: Any, knowledge_id: int) -> str:
         stability_score=0.75,
         confidence=float(knowledge.confidence or 1.0),
         verified_at=knowledge.verified_at,
-        metadata={"category": knowledge.category, "knowledge_id": knowledge.id},
+        metadata={
+            "category": knowledge.category,
+            "knowledge_id": knowledge.id,
+            "trust_level": TRUST_MANUAL_VERIFIED,
+            "verification_status": VERIFICATION_VERIFIED,
+            "source_actor_kind": "human",
+            "source_confidence": float(knowledge.confidence or 1.0),
+            "evidence_refs": [f"knowledge:{knowledge.id}"],
+        },
         version_group_id=f"{prefix.replace('_', '-')}-{knowledge.id}",
         force_version=True,
     )

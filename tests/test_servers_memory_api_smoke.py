@@ -56,19 +56,22 @@ def test_server_memory_purge_user_clears_ai_memory_everywhere():
     )
     store._sync_manual_knowledge_snapshot_sync(ai_knowledge.id)
 
-    canonical_snapshot = ServerMemorySnapshot.objects.create(
-        server=server,
-        created_by=owner,
-        memory_key="profile",
-        layer=ServerMemorySnapshot.LAYER_CANONICAL,
-        title="Canonical profile",
-        content="Ephemeral AI memory",
-        source_kind="dream",
-        source_ref="dream:test",
-        version_group_id="purge-profile",
-        version=1,
-        is_active=True,
-    )
+    canonical_snapshot = ServerMemorySnapshot.objects.filter(server=server, memory_key="profile", is_active=True).first()
+    if canonical_snapshot is None:
+        canonical_snapshot = ServerMemorySnapshot.objects.create(
+            server=server,
+            created_by=owner,
+            memory_key="profile",
+            layer=ServerMemorySnapshot.LAYER_CANONICAL,
+            title="Canonical profile",
+            content="Ephemeral AI memory",
+            source_kind="dream",
+            source_ref="dream:test",
+            version_group_id="purge-profile",
+            version=1,
+            is_active=True,
+            metadata={"trust_level": "system_measured", "verification_status": "measured"},
+        )
     ServerMemoryRevalidation.objects.create(
         server=server,
         source_snapshot=canonical_snapshot,
@@ -142,7 +145,7 @@ def test_server_memory_snapshot_actions_promote_archive_and_skill_scaffold(tmp_p
         server=server,
         created_by=owner,
         memory_key="pattern_candidate:demo1234",
-        layer=ServerMemorySnapshot.LAYER_CANONICAL,
+        layer=ServerMemorySnapshot.LAYER_CANDIDATE,
         title="Learned Pattern: diagnostics :: uptime && free -h",
         content="- Команда: uptime && free -h\n- Intent: diagnostics\n- Повторяемость: 4 запусков\n- Успех: 4/4 (100%)",
         source_kind="dream",
@@ -168,7 +171,7 @@ def test_server_memory_snapshot_actions_promote_archive_and_skill_scaffold(tmp_p
         server=server,
         created_by=owner,
         memory_key="automation_candidate:demo5678",
-        layer=ServerMemorySnapshot.LAYER_CANONICAL,
+        layer=ServerMemorySnapshot.LAYER_CANDIDATE,
         title="Automation Candidate: service :: systemctl restart nginx",
         content="- Базовая команда: systemctl restart nginx\n- Intent: service\n- Шаг 2: проверить `systemctl is-active nginx`.",
         source_kind="dream",
@@ -194,7 +197,7 @@ def test_server_memory_snapshot_actions_promote_archive_and_skill_scaffold(tmp_p
         server=server,
         created_by=owner,
         memory_key="skill_draft:demo9012",
-        layer=ServerMemorySnapshot.LAYER_CANONICAL,
+        layer=ServerMemorySnapshot.LAYER_CANDIDATE,
         title="Skill Draft: service :: systemctl restart nginx -> systemctl is-active nginx",
         content=(
             "# Skill Draft: service\n"

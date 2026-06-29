@@ -9,6 +9,12 @@ from django.utils import timezone
 from app.agent_kernel.memory.compaction import compact_text, extract_signal_lines, unique_preserving_order
 from app.agent_kernel.memory.line_filters import filter_memory_lines
 from app.agent_kernel.memory.redaction import payload_preview, redact_for_storage
+from app.agent_kernel.memory.trust import (
+    aggregate_trust_metadata,
+    build_idempotency_key,
+    enrich_metadata_with_trust,
+    stable_payload_hash,
+)
 
 
 def ingest_event(
@@ -41,22 +47,45 @@ def ingest_event(
         payload=structured_payload,
     )
     redacted_text = compact_text(redacted_text, limit=8000 if policy.allow_sensitive_raw else 4000)
-
-    event = ServerMemoryEvent.objects.create(
-        server_id=server_id,
-        actor_user_id=actor_user_id,
+    event_metadata = enrich_metadata_with_trust(
+        {},
         source_kind=source_kind,
         actor_kind=actor_kind,
-        source_ref=source_ref[:255],
-        session_id=session_id[:120],
-        event_type=event_type[:80],
-        raw_text_redacted=redacted_text,
-        structured_payload=redacted_payload,
-        importance_hint=max(0.0, min(float(importance_hint or 0.5), 1.0)),
-        redaction_report=redaction_report,
-        redaction_hashes=redaction_hashes,
+        event_type=event_type,
+        payload=redacted_payload,
+        source_ref=source_ref,
     )
-    maybe_compact_event_group(event, threshold=max(int(policy.nearline_event_threshold or 6), 2), force=force_compact)
+    payload_hash = stable_payload_hash(raw_text=redacted_text, payload=redacted_payload)
+    idempotency_key = build_idempotency_key(
+        server_id=server_id,
+        source_kind=source_kind,
+        source_ref=source_ref,
+        session_id=session_id,
+        event_type=event_type,
+        payload_hash=payload_hash,
+    )
+
+    event, created = ServerMemoryEvent.objects.get_or_create(
+        server_id=server_id,
+        idempotency_key=idempotency_key,
+        defaults={
+            "actor_user_id": actor_user_id,
+            "source_kind": source_kind,
+            "actor_kind": actor_kind,
+            "source_ref": source_ref[:255],
+            "session_id": session_id[:120],
+            "event_type": event_type[:80],
+            "raw_text_redacted": redacted_text,
+            "structured_payload": redacted_payload,
+            "metadata": event_metadata,
+            "payload_hash": payload_hash,
+            "importance_hint": max(0.0, min(float(importance_hint or 0.5), 1.0)),
+            "redaction_report": redaction_report,
+            "redaction_hashes": redaction_hashes,
+        },
+    )
+    if created:
+        maybe_compact_event_group(event, threshold=max(int(policy.nearline_event_threshold or 6), 2), force=force_compact)
     return str(event.pk)
 
 
@@ -64,7 +93,7 @@ def maybe_compact_event_group(event, *, threshold: int, force: bool) -> None:
     from servers.models import ServerMemoryEvent
 
     filters = event_group_filters(event)
-    count = ServerMemoryEvent.objects.filter(**filters, is_archived=False).count()
+    count = ServerMemoryEvent.objects.filter(**filters, is_archived=False, compacted_episode__isnull=True).count()
     if force or count >= threshold or event.event_type in {
         "session_closed",
         "run_completed",
@@ -76,6 +105,7 @@ def maybe_compact_event_group(event, *, threshold: int, force: bool) -> None:
             source_kind=event.source_kind,
             source_ref=(event.source_ref or ""),
             session_id=(event.session_id or ""),
+            force=force,
         )
 
 
@@ -94,7 +124,11 @@ def compact_open_groups(server_id: int, *, force: bool = False) -> int:
     from servers.models import ServerMemoryEvent
 
     groups: set[tuple[str, str, str]] = set()
-    for event in ServerMemoryEvent.objects.filter(server_id=server_id, is_archived=False).order_by("-created_at")[:80]:
+    for event in ServerMemoryEvent.objects.filter(
+        server_id=server_id,
+        is_archived=False,
+        compacted_episode__isnull=True,
+    ).order_by("-created_at")[:80]:
         groups.add((event.source_kind, event.source_ref or "", event.session_id or ""))
     compacted = 0
     for source_kind, source_ref, session_id in groups:
@@ -118,7 +152,12 @@ def compact_group(
 ) -> int:
     from servers.models import ServerMemoryEpisode, ServerMemoryEvent
 
-    filters = {"server_id": server_id, "source_kind": source_kind, "is_archived": False}
+    filters = {
+        "server_id": server_id,
+        "source_kind": source_kind,
+        "is_archived": False,
+        "compacted_episode__isnull": True,
+    }
     if session_id:
         filters["session_id"] = session_id
     elif source_ref:
@@ -144,64 +183,30 @@ def compact_group(
             return 0
         title = episode_title(source_kind, episode_kind, events)
         summary = build_episode_summary(events, summary_lines=summary_lines)
-        metadata = {
+        metadata = aggregate_trust_metadata(events) | {
             "source_kind": source_kind,
             "event_types": list(dict.fromkeys(event.event_type for event in events))[:12],
             "commands": commands,
         }
-        episode = (
-            ServerMemoryEpisode.objects.select_for_update()
-            .filter(
-                server_id=server_id,
-                source_kind=source_kind,
-                source_ref=source_ref,
-                session_id=session_id,
-                episode_kind=episode_kind,
-                is_active=True,
-            )
-            .order_by("-updated_at")
-            .first()
+        episode = ServerMemoryEpisode.objects.create(
+            server_id=server_id,
+            episode_kind=episode_kind,
+            source_kind=source_kind,
+            source_ref=source_ref,
+            session_id=session_id,
+            title=title,
+            summary=summary,
+            event_count=len(events),
+            importance_score=max(float(event.importance_hint or 0.5) for event in events),
+            confidence=min(0.95, 0.55 + min(len(events), 12) * 0.03),
+            metadata=metadata,
+            first_event_at=events[0].created_at,
+            last_event_at=events[-1].created_at,
         )
-        if episode is None:
-            ServerMemoryEpisode.objects.create(
-                server_id=server_id,
-                episode_kind=episode_kind,
-                source_kind=source_kind,
-                source_ref=source_ref,
-                session_id=session_id,
-                title=title,
-                summary=summary,
-                event_count=len(events),
-                importance_score=max(float(event.importance_hint or 0.5) for event in events),
-                confidence=min(0.95, 0.55 + min(len(events), 12) * 0.03),
-                metadata=metadata,
-                first_event_at=events[0].created_at,
-                last_event_at=events[-1].created_at,
-            )
-        else:
-            episode.title = title
-            episode.summary = summary
-            episode.event_count = len(events)
-            episode.importance_score = max(float(event.importance_hint or 0.5) for event in events)
-            episode.confidence = min(0.95, 0.55 + min(len(events), 12) * 0.03)
-            episode.metadata = metadata
-            episode.first_event_at = events[0].created_at
-            episode.last_event_at = events[-1].created_at
-            episode.is_active = True
-            episode.save(
-                update_fields=[
-                    "title",
-                    "summary",
-                    "event_count",
-                    "importance_score",
-                    "confidence",
-                    "metadata",
-                    "first_event_at",
-                    "last_event_at",
-                    "is_active",
-                    "updated_at",
-                ]
-            )
+        ServerMemoryEvent.objects.filter(pk__in=[event.pk for event in events]).update(
+            compacted_episode=episode,
+            compacted_at=timezone.now(),
+        )
     return 1
 
 

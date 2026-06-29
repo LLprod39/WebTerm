@@ -16,6 +16,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DEFAULT_LOGGING_CONFIG,
   LOGGING_KEYS,
+  AUDIT_LOGGING_PRESETS,
+  type AuditLoggingPresetKey,
   type LoggingConfig,
   type LoggingConfigKey,
 } from "../settings-audit/auditSettingsModel";
@@ -73,6 +75,11 @@ export default function SettingsAuditPage() {
 
   const updateLogging = useCallback((key: LoggingConfigKey, value: unknown) => {
     setLoggingConfig((prev) => ({ ...prev, [key]: value } as LoggingConfig));
+    setLoggingSaved(false);
+  }, []);
+
+  const applyLoggingPreset = useCallback((preset: AuditLoggingPresetKey) => {
+    setLoggingConfig({ ...AUDIT_LOGGING_PRESETS[preset] });
     setLoggingSaved(false);
   }, []);
 
@@ -153,6 +160,7 @@ export default function SettingsAuditPage() {
             loggingConfig={loggingConfig}
             saving={saving}
             loggingSaved={loggingSaved}
+            onApplyPreset={applyLoggingPreset}
             onUpdateLogging={updateLogging}
             onSaveLogging={handleSaveLogging}
           />

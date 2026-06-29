@@ -20,6 +20,8 @@ const SettingsGroupsPage = lazy(() => import("./pages/SettingsGroupsPage"));
 const SettingsPermissionsPage = lazy(() => import("./pages/SettingsPermissionsPage"));
 // New Settings Pages with Layout
 const SettingsLayout = lazy(() => import("./components/settings/SettingsLayout"));
+const SettingsReadinessPage = lazy(() => import("./pages/settings/SettingsReadinessPage"));
+const SettingsLimitsPage = lazy(() => import("./pages/settings/SettingsLimitsPage"));
 const SettingsAIPage = lazy(() => import("./pages/settings/SettingsAIPage"));
 const SettingsAccessPage = lazy(() => import("./pages/settings/SettingsAccessPage"));
 const SettingsMemoryPage = lazy(() => import("./pages/settings/SettingsMemoryPage"));
@@ -169,9 +171,30 @@ const App = () => (
                 />
                 <Route path="/admin" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/dashboard/admin" element={<Navigate to="/dashboard" replace />} />
-                <Route path="/servers" element={<Servers />} />
-                <Route path="/servers/hub" element={<TerminalPage />} />
-                <Route path="/servers/:id/terminal" element={<TerminalPage />} />
+                <Route
+                  path="/servers"
+                  element={(
+                    <FeatureGate feature="servers">
+                      <Servers />
+                    </FeatureGate>
+                  )}
+                />
+                <Route
+                  path="/servers/hub"
+                  element={(
+                    <FeatureGate feature="servers">
+                      <TerminalPage />
+                    </FeatureGate>
+                  )}
+                />
+                <Route
+                  path="/servers/:id/terminal"
+                  element={(
+                    <FeatureGate feature="servers">
+                      <TerminalPage />
+                    </FeatureGate>
+                  )}
+                />
                 <Route
                   path="/agents"
                   element={(
@@ -301,7 +324,9 @@ const App = () => (
                     </FeatureGate>
                   )}
                 >
-                  <Route index element={<Navigate to="/settings/ai" replace />} />
+                  <Route index element={<Navigate to="/settings/readiness" replace />} />
+                  <Route path="readiness" element={<SettingsReadinessPage />} />
+                  <Route path="limits" element={<SettingsLimitsPage />} />
                   <Route path="ai" element={<SettingsAIPage />} />
                   <Route path="access" element={<SettingsAccessPage />} />
                   <Route path="users" element={<SettingsUsersPage />} />
@@ -310,6 +335,7 @@ const App = () => (
                   <Route path="sso" element={<SettingsSSOPage />} />
                   <Route path="memory" element={<SettingsMemoryPage />} />
                   <Route path="audit" element={<SettingsAuditPage />} />
+                  <Route path="notifications" element={<NotificationsSettingsPage showStudioNav={false} />} />
                   <Route path="plugins" element={<SettingsPluginsPage />} />
                 </Route>
                 <Route

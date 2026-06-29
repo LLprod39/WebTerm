@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from app.agent_kernel.memory.compaction import compact_text, unique_preserving_order
 from app.agent_kernel.memory.types import AUTOMATION_CANDIDATE_PREFIX, PATTERN_CANDIDATE_PREFIX, SKILL_DRAFT_PREFIX
+from app.agent_kernel.memory.trust import prompt_provenance_label
 
 
 def search_runbooks(query: str, *, server_id: int | None = None, group_id: int | None = None) -> list[dict]:
@@ -21,7 +22,12 @@ def search_runbooks(query: str, *, server_id: int | None = None, group_id: int |
     filters = Q(content__icontains=query) | Q(title__icontains=query)
     if server_id is not None:
         for item in (
-            ServerMemorySnapshot.objects.filter(filters, server_id=server_id, is_active=True)
+            ServerMemorySnapshot.objects.filter(
+                filters,
+                server_id=server_id,
+                is_active=True,
+                layer=ServerMemorySnapshot.LAYER_CANONICAL,
+            )
             .order_by("-updated_at")[:12]
         ):
             memory_key = str(item.memory_key or "")
@@ -37,9 +43,10 @@ def search_runbooks(query: str, *, server_id: int | None = None, group_id: int |
             )
             if (
                 memory_key not in {"runbook", "human_habits"}
-                and not memory_key.startswith((PATTERN_CANDIDATE_PREFIX, AUTOMATION_CANDIDATE_PREFIX, SKILL_DRAFT_PREFIX))
                 and not include_manual_operational
             ):
+                continue
+            if memory_key.startswith((PATTERN_CANDIDATE_PREFIX, AUTOMATION_CANDIDATE_PREFIX, SKILL_DRAFT_PREFIX)):
                 continue
             items.append(
                 {
@@ -52,6 +59,7 @@ def search_runbooks(query: str, *, server_id: int | None = None, group_id: int |
                     "confidence": float(item.confidence or 0.0),
                     "source_kind": item.source_kind,
                     "source_ref": item.source_ref,
+                    "last_verified_at": item.last_verified_at,
                     "_score": runbook_match_score(
                         query_lower,
                         title=str(item.title or ""),
@@ -70,10 +78,16 @@ def search_runbooks(query: str, *, server_id: int | None = None, group_id: int |
                         "content": compact_text(item.content, limit=240),
                         "category": item.category,
                         "memory_key": f"knowledge:{item.id}",
-                        "metadata": {"category": item.category},
+                        "metadata": {
+                            "category": item.category,
+                            "trust_level": "manual_verified" if item.source == "manual" else "human_observed",
+                            "verification_status": "verified" if item.source == "manual" else "unverified",
+                            "source_actor_kind": "human",
+                        },
                         "confidence": float(item.confidence or 0.0),
                         "source_kind": "manual_knowledge",
                         "source_ref": f"knowledge:{item.id}",
+                        "last_verified_at": item.verified_at,
                         "_score": runbook_match_score(
                             query_lower,
                             title=str(item.title or ""),
@@ -176,7 +190,14 @@ def format_operational_recipe_prompt_item(item: dict[str, Any]) -> str:
     title = compact_text(str(item.get("title") or ""), limit=120)
     content = compact_text(str(item.get("content") or ""), limit=220)
     metadata = dict(item.get("metadata") or {})
-    detail_parts: list[str] = [f"[{scope}/{category}] {title}: {content}"]
+    provenance = prompt_provenance_label(
+        metadata=metadata,
+        confidence=float(item.get("confidence") or 0.0),
+        last_verified_at=item.get("last_verified_at"),
+        source_kind=str(item.get("source_kind") or ""),
+        source_ref=str(item.get("source_ref") or ""),
+    )
+    detail_parts: list[str] = [f"{provenance} [{scope}/{category}] {title}: {content}"]
     for label, key, limit in (
         ("Use", "when_to_use", 140),
         ("Recipe", "playbook_summary", 160),

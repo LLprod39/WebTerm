@@ -5,6 +5,8 @@ from typing import Any, Protocol
 from django.conf import settings
 from django.contrib.auth.models import User
 
+from app.runtime_limit_config import get_runtime_limit_setting
+
 ACTIVE_AGENT_RUN_STATUSES = [
     "pending",
     "running",
@@ -88,7 +90,10 @@ def _require_terminal_session_limit_provider() -> TerminalSessionLimitProvider:
 
 
 def _limit_value(name: str) -> int:
-    raw = int(getattr(settings, name, 0) or 0)
+    try:
+        raw = get_runtime_limit_setting(name)
+    except KeyError:
+        raw = int(getattr(settings, name, 0) or 0)
     return max(raw, 0)
 
 

@@ -21,6 +21,51 @@ STUDIO_SECTION_FEATURES = {
     "studio_notifications",
 }
 
+VALID_ACCESS_PROFILES = {
+    "server_only",
+    "operator_server_only",
+    "operator_studio_runner",
+    "team_admin_no_secrets",
+    "admin_full",
+    "platform_admin",
+    "reset_defaults",
+    "custom",
+}
+
+_PROFILE_TRUE_FEATURES = {
+    "server_only": {"servers"},
+    "operator_server_only": {"servers"},
+    "operator_studio_runner": {
+        "servers",
+        "dashboard",
+        "studio",
+        "studio_pipelines",
+        "studio_runs",
+        "studio_notifications",
+    },
+    "team_admin_no_secrets": {
+        "servers",
+        "dashboard",
+        "agents",
+        "studio",
+        "studio_pipelines",
+        "studio_runs",
+        "studio_agents",
+        "studio_skills",
+        "orchestrator",
+        "knowledge_base",
+    },
+}
+
+PROFILE_STAFF_FLAGS = {
+    "server_only": False,
+    "operator_server_only": False,
+    "operator_studio_runner": False,
+    "team_admin_no_secrets": True,
+    "admin_full": True,
+    "platform_admin": True,
+}
+
 LEGACY_FEATURE_FALLBACKS: dict[str, tuple[str, ...]] = {
     # Keep older Studio/Agents profiles working for the core pipeline flows.
     "studio_pipelines": ("studio", "agents"),
@@ -28,6 +73,15 @@ LEGACY_FEATURE_FALLBACKS: dict[str, tuple[str, ...]] = {
     # Agent configs lived under the broader agents capability historically.
     "studio_agents": ("agents",),
 }
+
+
+def access_profile_permissions(profile: str) -> dict[str, bool]:
+    profile_key = (profile or "").strip().lower()
+    features = access_feature_slugs()
+    if profile_key in {"admin_full", "platform_admin"}:
+        return dict.fromkeys(features, True)
+    allowed = _PROFILE_TRUE_FEATURES.get(profile_key, set())
+    return {feature: feature in allowed for feature in features}
 
 
 def access_feature_choices() -> list[tuple[str, str]]:
@@ -181,12 +235,23 @@ def build_user_access_payload(
             effective[feature] = feature in DEFAULT_ALLOWED_FEATURES
             sources[feature] = "default_allow" if effective[feature] else "default_deny"
 
-    if effective.get("servers") and all(not allowed for name, allowed in effective.items() if name != "servers"):
+    profile = "custom"
+    for profile_name in (
+        "operator_server_only",
+        "operator_studio_runner",
+        "team_admin_no_secrets",
+        "platform_admin",
+    ):
+        if user.is_staff == PROFILE_STAFF_FLAGS[profile_name] and effective == access_profile_permissions(profile_name):
+            profile = profile_name
+            break
+
+    if profile != "custom":
+        pass
+    elif effective.get("servers") and all(not allowed for name, allowed in effective.items() if name != "servers"):
         profile = "server_only"
     elif user.is_staff and all(effective.values()):
         profile = "admin_full"
-    else:
-        profile = "custom"
 
     return {
         "effective_permissions": effective,
