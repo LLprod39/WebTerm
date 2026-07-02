@@ -9,6 +9,11 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+try:
+    from studio.demo_mcp_kubernetes_tools import KUBERNETES_TOOLS, kubernetes_describe_workload
+except ModuleNotFoundError:  # pragma: no cover - supports `python studio/demo_mcp_server.py`.
+    from demo_mcp_kubernetes_tools import KUBERNETES_TOOLS, kubernetes_describe_workload
+
 ROOT_DIR = Path(__file__).resolve().parents[1]
 SKIP_DIRS = {
     ".git",
@@ -135,6 +140,7 @@ TOOLS = [
             "additionalProperties": False,
         },
     },
+    *KUBERNETES_TOOLS,
 ]
 
 
@@ -426,6 +432,13 @@ def _read_artifact(arguments: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _kubernetes_describe_workload(arguments: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return kubernetes_describe_workload(arguments)
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
+
+
 ToolHandler = Callable[[dict[str, Any]], dict[str, Any]]
 TOOL_HANDLERS: dict[str, ToolHandler] = {
     "workspace_snapshot": _workspace_snapshot,
@@ -435,4 +448,5 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "write_artifact": _write_artifact,
     "artifact_status": _artifact_status,
     "read_artifact": _read_artifact,
+    "kubernetes_describe_workload": _kubernetes_describe_workload,
 }

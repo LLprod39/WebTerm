@@ -1,0 +1,380 @@
+{
+  "schema_version": "kubernetes_ops.interactive_live_smoke.v1",
+  "status": "ready",
+  "success": true,
+  "checked_at": "2026-07-02T14:28:20.941009+00:00",
+  "evidence_mode": "simulated_provider_streams_plus_external_live_ref",
+  "dangerous_live_action_started": false,
+  "live_provider_stream_opened": false,
+  "simulated_provider_stream_opened": true,
+  "production_live_provider_evidence": false,
+  "production_live_provider_evidence_ref_present": false,
+  "production_live_provider_evidence_setting": "KUBERNETES_ADMIN_INTERACTIVE_LIVE_SMOKE_EVIDENCE_REF",
+  "live_smoke_required": false,
+  "admin_interactive_transport": {
+    "status": "ready",
+    "target_environment": "local",
+    "production_environment": false,
+    "evidence_setting": "KUBERNETES_ADMIN_RESTRICTED_CREDENTIAL_EVIDENCE_REF",
+    "port_forward_network_policy_evidence_setting": "KUBERNETES_ADMIN_PORT_FORWARD_NETWORK_POLICY_EVIDENCE_REF",
+    "restricted_credential_evidence_present": false,
+    "enabled_transport_count": 0,
+    "transports": [
+      {
+        "id": "exec_stream",
+        "enabled": false,
+        "enabled_settings": [
+          "KUBERNETES_ADMIN_NATIVE_EXEC_ENABLED",
+          "KUBERNETES_ADMIN_EXEC_STREAMING_ENABLED"
+        ],
+        "recording_enabled": false,
+        "recording_setting": "KUBERNETES_ADMIN_EXEC_RECORDING_ENABLED",
+        "restricted_credential_evidence_required": false,
+        "restricted_credential_evidence_ready": true,
+        "blockers": []
+      },
+      {
+        "id": "port_forward_tunnel",
+        "enabled": false,
+        "enabled_settings": [
+          "KUBERNETES_ADMIN_NATIVE_PORT_FORWARD_ENABLED",
+          "KUBERNETES_ADMIN_PORT_FORWARD_TUNNEL_ENABLED"
+        ],
+        "recording_enabled": false,
+        "recording_setting": "KUBERNETES_ADMIN_PORT_FORWARD_RECORDING_ENABLED",
+        "restricted_credential_evidence_required": false,
+        "restricted_credential_evidence_ready": true,
+        "blockers": [],
+        "network_policy": {
+          "enabled": false,
+          "allowed_targets_setting": "KUBERNETES_ADMIN_PORT_FORWARD_ALLOWED_TARGETS",
+          "allowed_target_count": 0,
+          "wildcard_targets_present": false,
+          "protected_namespaces_setting": "KUBERNETES_ADMIN_PORT_FORWARD_PROTECTED_NAMESPACES",
+          "protected_namespace_count": 13,
+          "default_protected_namespaces_covered": true,
+          "network_policy_evidence_setting": "KUBERNETES_ADMIN_PORT_FORWARD_NETWORK_POLICY_EVIDENCE_REF",
+          "network_policy_evidence_required": false,
+          "network_policy_evidence_present": false,
+          "max_duration_seconds": 900,
+          "production_max_duration_seconds": 900,
+          "blockers": []
+        }
+      },
+      {
+        "id": "cluster_terminal",
+        "enabled": false,
+        "enabled_settings": [
+          "KUBERNETES_ADMIN_CLUSTER_TERMINAL_ENABLED"
+        ],
+        "recording_enabled": false,
+        "recording_setting": "KUBERNETES_ADMIN_CLUSTER_TERMINAL_RECORDING_ENABLED",
+        "restricted_credential_evidence_required": false,
+        "restricted_credential_evidence_ready": true,
+        "blockers": [],
+        "provider_contract": {
+          "operation": "cluster_terminal",
+          "required": false,
+          "label": "cluster_terminal_path_template",
+          "required_placeholders": [
+            "cluster_id",
+            "namespace"
+          ],
+          "enabled_rancher_provider_count": 1,
+          "checked_provider_count": 1,
+          "missing_provider_count": 1,
+          "invalid_provider_count": 0,
+          "providers": [
+            {
+              "operation": "cluster_terminal",
+              "status": "missing",
+              "provider_id": 3,
+              "provider_name": "local-rancher-real",
+              "label": "cluster_terminal_path_template",
+              "required_placeholders": [
+                "cluster_id",
+                "namespace"
+              ],
+              "missing_placeholders": [],
+              "blockers": [
+                "provider_contract_required"
+              ]
+            }
+          ],
+          "blockers": []
+        }
+      },
+      {
+        "id": "node_debug",
+        "enabled": false,
+        "enabled_settings": [
+          "KUBERNETES_ADMIN_NODE_DEBUG_ENABLED"
+        ],
+        "recording_enabled": false,
+        "recording_setting": "KUBERNETES_ADMIN_NODE_DEBUG_RECORDING_ENABLED",
+        "restricted_credential_evidence_required": false,
+        "restricted_credential_evidence_ready": true,
+        "blockers": [],
+        "provider_contract": {
+          "operation": "node_debug",
+          "required": false,
+          "label": "node_debug_path_template",
+          "required_placeholders": [
+            "cluster_id",
+            "node_name"
+          ],
+          "enabled_rancher_provider_count": 1,
+          "checked_provider_count": 1,
+          "missing_provider_count": 1,
+          "invalid_provider_count": 0,
+          "providers": [
+            {
+              "operation": "node_debug",
+              "status": "missing",
+              "provider_id": 3,
+              "provider_name": "local-rancher-real",
+              "label": "node_debug_path_template",
+              "required_placeholders": [
+                "cluster_id",
+                "node_name"
+              ],
+              "missing_placeholders": [],
+              "blockers": [
+                "provider_contract_required"
+              ]
+            }
+          ],
+          "blockers": []
+        }
+      }
+    ],
+    "blockers": [],
+    "detail": "Interactive production transports are disabled."
+  },
+  "simulated_provider_streams": {
+    "success": true,
+    "status": "ready",
+    "mode": "transaction_rollback",
+    "checked_count": 4,
+    "checks": [
+      {
+        "id": "provider_exec_stream_opener",
+        "success": true,
+        "method": "POST",
+        "body_keys": [
+          "command",
+          "container",
+          "stdin",
+          "tty"
+        ],
+        "stdin_supported": true,
+        "event_stream_ok": true
+      },
+      {
+        "id": "provider_port_forward_tunnel_opener",
+        "success": true,
+        "method": "POST",
+        "body_keys": [
+          "duration_seconds",
+          "target"
+        ],
+        "client_data_supported": true,
+        "event_stream_ok": true
+      },
+      {
+        "id": "provider_cluster_terminal_opener",
+        "success": true,
+        "method": "POST",
+        "operation": "cluster_terminal",
+        "target_keys": [
+          "namespace"
+        ],
+        "stdin_supported": true,
+        "event_stream_ok": true
+      },
+      {
+        "id": "provider_node_debug_opener",
+        "success": true,
+        "method": "POST",
+        "operation": "node_debug",
+        "target_keys": [
+          "kind",
+          "name"
+        ],
+        "stdin_supported": true,
+        "event_stream_ok": true
+      }
+    ],
+    "provider_request_count": 4,
+    "provider_requests": [
+      {
+        "operation": "exec_stream",
+        "method": "POST",
+        "body_keys": [
+          "command",
+          "container",
+          "stdin",
+          "tty"
+        ],
+        "target_keys": [],
+        "stdin": true,
+        "tty": true,
+        "duration_seconds": 0
+      },
+      {
+        "operation": "port_forward_tunnel",
+        "method": "POST",
+        "body_keys": [
+          "duration_seconds",
+          "target"
+        ],
+        "target_keys": [
+          "kind",
+          "name",
+          "namespace",
+          "remote_port"
+        ],
+        "stdin": false,
+        "tty": false,
+        "duration_seconds": 60
+      },
+      {
+        "operation": "cluster_terminal",
+        "method": "POST",
+        "body_keys": [
+          "operation",
+          "stdin",
+          "target",
+          "tty"
+        ],
+        "target_keys": [
+          "namespace"
+        ],
+        "stdin": true,
+        "tty": true,
+        "duration_seconds": 0
+      },
+      {
+        "operation": "node_debug",
+        "method": "POST",
+        "body_keys": [
+          "operation",
+          "stdin",
+          "target",
+          "tty"
+        ],
+        "target_keys": [
+          "kind",
+          "name"
+        ],
+        "stdin": true,
+        "tty": true,
+        "duration_seconds": 0
+      }
+    ],
+    "provider_requests_safe": true,
+    "provider_stream_opened": true,
+    "persistent_provider_rows": 0
+  },
+  "live_transport_contracts": [
+    {
+      "transport": "exec_stream",
+      "enabled": false,
+      "simulated_check_id": "provider_exec_stream_opener",
+      "simulated_check_ready": true,
+      "production_evidence_required": false,
+      "production_evidence_ref_present": false,
+      "production_evidence_required_items": [
+        "restricted_credential_ref",
+        "recording_enabled",
+        "break_glass_session_ttl",
+        "command_policy",
+        "provider_exec_opener"
+      ],
+      "payload_stored": false,
+      "sensitive_values_stored": false
+    },
+    {
+      "transport": "port_forward_tunnel",
+      "enabled": false,
+      "simulated_check_id": "provider_port_forward_tunnel_opener",
+      "simulated_check_ready": true,
+      "production_evidence_required": false,
+      "production_evidence_ref_present": false,
+      "production_evidence_required_items": [
+        "restricted_credential_ref",
+        "network_policy_ref",
+        "exact_target_allowlist",
+        "ttl_cap",
+        "provider_tunnel_opener"
+      ],
+      "payload_stored": false,
+      "sensitive_values_stored": false
+    },
+    {
+      "transport": "cluster_terminal",
+      "enabled": false,
+      "simulated_check_id": "provider_cluster_terminal_opener",
+      "simulated_check_ready": true,
+      "production_evidence_required": false,
+      "production_evidence_ref_present": false,
+      "production_evidence_required_items": [
+        "restricted_credential_ref",
+        "recording_enabled",
+        "provider_path_template",
+        "break_glass_session_ttl",
+        "provider_shell_opener"
+      ],
+      "payload_stored": false,
+      "sensitive_values_stored": false
+    },
+    {
+      "transport": "node_debug",
+      "enabled": false,
+      "simulated_check_id": "provider_node_debug_opener",
+      "simulated_check_ready": true,
+      "production_evidence_required": false,
+      "production_evidence_ref_present": false,
+      "production_evidence_required_items": [
+        "restricted_credential_ref",
+        "recording_enabled",
+        "provider_path_template",
+        "node_scope",
+        "provider_shell_opener"
+      ],
+      "payload_stored": false,
+      "sensitive_values_stored": false
+    }
+  ],
+  "coverage": {
+    "simulated_opener_contract_complete": true,
+    "production_evidence_contract_complete": true,
+    "covered_transports": [
+      "exec_stream",
+      "port_forward_tunnel",
+      "cluster_terminal",
+      "node_debug"
+    ],
+    "covered_simulated_check_ids": [
+      "provider_exec_stream_opener",
+      "provider_port_forward_tunnel_opener",
+      "provider_cluster_terminal_opener",
+      "provider_node_debug_opener"
+    ],
+    "expected_transport_count": 4,
+    "expected_simulated_check_count": 4
+  },
+  "summary": {
+    "target_environment": "local",
+    "production_environment": false,
+    "enabled_transport_count": 0,
+    "live_smoke_required": false,
+    "production_live_provider_evidence": false,
+    "simulated_check_count": 4,
+    "live_transport_contract_count": 4,
+    "live_transport_opener_check_count": 4,
+    "simulated_provider_requests_safe": true,
+    "blocker_count": 0
+  },
+  "errors": []
+}

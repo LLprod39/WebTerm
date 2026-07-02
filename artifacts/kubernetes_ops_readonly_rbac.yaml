@@ -1,0 +1,61 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: webterm-system
+  labels:
+    app.kubernetes.io/part-of: webterm-kubernetes-ops
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: webterm-kubernetes-readonly
+  namespace: webterm-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: webterm-kubernetes-readonly-clusterrole
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+      - pods
+      - services
+      - events
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - networking.k8s.io
+    resources:
+      - ingresses
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+      - statefulsets
+      - daemonsets
+      - replicasets
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: webterm-kubernetes-readonly-binding
+subjects:
+  - kind: ServiceAccount
+    name: webterm-kubernetes-readonly
+    namespace: webterm-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: webterm-kubernetes-readonly-clusterrole

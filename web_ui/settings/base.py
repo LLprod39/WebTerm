@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     'servers',
     'studio',
     'mars',
+    'kubernetes_ops',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',

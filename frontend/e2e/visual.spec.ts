@@ -245,12 +245,40 @@ test.describe("Visual regression", () => {
     await expect(page).toHaveScreenshot("settings-audit-page.png", { animations: "disabled", fullPage: true });
   });
 
-  test("kubernetes beta onboarding snapshot", async ({ page }) => {
-    await installPlatformMocks(page, { authenticated: true, features: { kubernetes: true } });
-    await page.goto("/kubernetes");
-    await expect(page.getByRole("heading", { name: "Kubernetes beta" })).toBeVisible();
+  test("settings kubernetes page snapshot", async ({ page }) => {
+    await installPlatformMocks(page, { authenticated: true, isStaff: true, lang: "ru", features: { kubernetes: true }, kubernetesState: "healthy" });
+    await page.goto("/settings/kubernetes");
+    await expect(page.getByRole("heading", { name: "Kubernetes Ops" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Настройка провайдеров" })).toBeVisible();
     await stabilizeVisuals(page);
-    await expect(page).toHaveScreenshot("kubernetes-beta-onboarding.png", { animations: "disabled", fullPage: true });
+    await expect(page).toHaveScreenshot("settings-kubernetes-page.png", { animations: "disabled", fullPage: true });
+  });
+
+  test("kubernetes empty state snapshot", async ({ page }) => {
+    await installPlatformMocks(page, { authenticated: true, lang: "ru", features: { kubernetes: true }, kubernetesState: "empty" });
+    await page.goto("/kubernetes");
+    await expect(page.getByRole("heading", { name: "Kubernetes Ops" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "Кластеры" })).toBeVisible();
+    await stabilizeVisuals(page);
+    await expect(page).toHaveScreenshot("kubernetes-empty-state.png", { animations: "disabled", fullPage: true });
+  });
+
+  test("kubernetes healthy inventory snapshot", async ({ page }) => {
+    await installPlatformMocks(page, { authenticated: true, lang: "ru", features: { kubernetes: true }, kubernetesState: "healthy" });
+    await page.goto("/kubernetes");
+    await expect(page.getByRole("heading", { name: "Kubernetes Ops" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "prod-kz-1" })).toBeVisible();
+    await stabilizeVisuals(page);
+    await expect(page).toHaveScreenshot("kubernetes-healthy-inventory.png", { animations: "disabled", fullPage: true });
+  });
+
+  test("kubernetes degraded inventory snapshot", async ({ page }) => {
+    await installPlatformMocks(page, { authenticated: true, lang: "ru", features: { kubernetes: true }, kubernetesState: "degraded" });
+    await page.goto("/kubernetes");
+    await expect(page.getByRole("heading", { name: "Kubernetes Ops" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "prod-eu-1" })).toBeVisible();
+    await stabilizeVisuals(page);
+    await expect(page).toHaveScreenshot("kubernetes-degraded-inventory.png", { animations: "disabled", fullPage: true });
   });
 
   test("mars beta page snapshot", async ({ page }) => {

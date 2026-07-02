@@ -153,7 +153,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name='pluginpermissiongrant',
-            index=models.Index(fields=['scope', 'granted'], name='pm_permission_scope_granted_idx'),
+            index=models.Index(fields=['scope', 'granted'], name='pm_perm_scope_grant_idx'),
         ),
         migrations.AddConstraint(
             model_name='pluginpermissiongrant',

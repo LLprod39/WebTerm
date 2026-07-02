@@ -227,6 +227,16 @@ services:
         "python manage.py run_ops_supervisor --with-watchers --dream-interval ${MEMORY_DREAM_INTERVAL:-300} --execution-interval ${AGENT_EXECUTION_INTERVAL:-5} --watchers-interval ${WATCHERS_INTERVAL:-120} --watchers-limit ${WATCHERS_LIMIT:-100}",
       ]
 
+  kubernetes-ops-sync:
+    <<: *backend-worker
+    container_name: mini-prod-kubernetes-ops-sync
+    command:
+      [
+        "sh",
+        "-lc",
+        "python manage.py run_kubernetes_ops_sync_worker --daemon --interval ${KUBERNETES_OPS_SYNC_INTERVAL_SECONDS:-300} --worker-key compose",
+      ]
+
   celery-worker:
     <<: *backend-worker
     container_name: mini-prod-celery-worker

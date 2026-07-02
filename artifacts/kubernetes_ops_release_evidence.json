@@ -1,0 +1,3318 @@
+{
+  "success": true,
+  "schema_version": "kubernetes_ops.release_evidence.v2",
+  "generated_at": "2026-07-02T14:57:54.416529+00:00",
+  "operator": {
+    "id": 2,
+    "username": "admin",
+    "is_staff": true
+  },
+  "production_ready": false,
+  "ready_for_sidebar": false,
+  "enablement": {
+    "env_flag": "KUBERNETES_OPS_READY_FOR_SIDEBAR",
+    "env_flag_required": true,
+    "note": "Set KUBERNETES_OPS_READY_FOR_SIDEBAR=true only after production evidence is green."
+  },
+  "readiness": {
+    "status": "not_configured",
+    "summary": {
+      "ready": 17,
+      "missing": 1,
+      "manual": 0,
+      "total": 18
+    },
+    "checks": [
+      {
+        "id": "architecture_guard",
+        "status": "ready",
+        "detail": "Repository guard is checked by scripts/check_architecture_sizes.py --strict-new outside request path.",
+        "required": true
+      },
+      {
+        "id": "permission_matrix",
+        "status": "ready",
+        "detail": "Explicit Kubernetes feature is required for reads and action approval requests; provider write/sync/probe are staff-only; low-level Admin Mode uses separate explicit grants; exec/debug/mutations are disabled. Studio diagnosis draft creation is available.",
+        "required": true
+      },
+      {
+        "id": "access_model",
+        "status": "ready",
+        "detail": "OIDC/RBAC role mapping and read-only service account contract are documented and fail-closed.",
+        "required": true
+      },
+      {
+        "id": "identity_runtime",
+        "status": "ready",
+        "detail": "WebTerm login gateway is local/dev-ready; production enforcement waits for KUBERNETES_OPS_RELEASE_ENVIRONMENT=production.",
+        "required": true
+      },
+      {
+        "id": "rancher_provider",
+        "status": "ready",
+        "detail": "Rancher provider configured: 1",
+        "required": true
+      },
+      {
+        "id": "devtron_provider",
+        "status": "ready",
+        "detail": "Devtron provider configured: 1",
+        "required": true
+      },
+      {
+        "id": "provider_health",
+        "status": "ready",
+        "detail": "Enabled providers have fresh sync metadata: 2.",
+        "required": true
+      },
+      {
+        "id": "read_only_sync",
+        "status": "ready",
+        "detail": "Normalized inventory rows: clusters=1, namespaces=31, workloads=21, pods=37, network_refs=27, events=5, apps=8, fleet_bundles=1",
+        "required": true
+      },
+      {
+        "id": "sync_worker",
+        "status": "ready",
+        "detail": "Kubernetes sync worker is running. Last heartbeat/cycle: 2026-07-02T14:54:12.598900+00:00.",
+        "required": true
+      },
+      {
+        "id": "studio_automation",
+        "status": "ready",
+        "detail": "Studio diagnosis draft can bind owned Kubernetes MCP `Kubernetes MCP` with kubernetes-safety.",
+        "required": false
+      },
+      {
+        "id": "security_review",
+        "status": "ready",
+        "detail": "CSP/CORS/CSRF posture reviewed for Kubernetes Ops: CSRF middleware, bounded CORS credentials, clickjacking middleware, secure-cookie posture, and no-iframe MVP mode are in place.",
+        "required": false
+      },
+      {
+        "id": "terminal_exec_threat_model",
+        "status": "ready",
+        "detail": "Kubernetes terminal/exec/debug threat model is explicit: native exec, attach, port-forward, cluster terminal, and node debug are disabled by policy until approval, TTL, recording, restricted context, audit, and break-glass controls exist.",
+        "required": false
+      },
+      {
+        "id": "admin_action_post_review",
+        "status": "ready",
+        "detail": "No pending Admin action post-review items.",
+        "required": false
+      },
+      {
+        "id": "admin_interactive_transport",
+        "status": "ready",
+        "detail": "Interactive production transports are disabled.",
+        "required": false
+      },
+      {
+        "id": "admin_recording_retention",
+        "status": "ready",
+        "detail": "Admin recording retention cleanup is available: metadata_expired=0, transcript_expired=0, transcript_event_expired=0.",
+        "required": false
+      },
+      {
+        "id": "operator_docs",
+        "status": "ready",
+        "detail": "Kubernetes Ops operator and DR runbook is present: docs/architecture/KUBERNETES_OPS_OPERATIONS.md.",
+        "required": false
+      },
+      {
+        "id": "frontend_e2e",
+        "status": "ready",
+        "detail": "Frontend visual e2e evidence is present for 4 Kubernetes states.",
+        "required": false
+      },
+      {
+        "id": "sidebar_release_scope",
+        "status": "missing",
+        "detail": "Sidebar is locked because KUBERNETES_OPS_RELEASE_ENVIRONMENT=local is not production.",
+        "required": true
+      }
+    ],
+    "worker_state": {
+      "worker_kind": "kubernetes_ops_sync",
+      "worker_key": "compose",
+      "status": "running",
+      "is_stale": false,
+      "hostname": "1d751bcc48ca",
+      "pid": 10,
+      "command": "python manage.py run_kubernetes_ops_sync_worker --daemon --interval 300 --worker-key compose",
+      "heartbeat_at": "2026-07-02T14:54:12.603096+00:00",
+      "lease_expires_at": "2026-07-02T15:24:42.603096+00:00",
+      "last_started_at": "2026-06-30T20:18:21.569593+00:00",
+      "last_stopped_at": null,
+      "last_cycle_started_at": "2026-07-02T14:54:11.763339+00:00",
+      "last_cycle_finished_at": "2026-07-02T14:54:12.598900+00:00",
+      "last_summary": {
+        "ok": 2,
+        "apps": 8,
+        "kind": "",
+        "pods": 37,
+        "errors": 0,
+        "events": 5,
+        "failed": 0,
+        "dry_run": false,
+        "matched": 2,
+        "clusters": 2,
+        "services": 24,
+        "ingresses": 3,
+        "workloads": 21,
+        "last_error": "",
+        "namespaces": 31,
+        "provider_id": null,
+        "fleet_bundles": 1,
+        "next_delay_seconds": 300,
+        "consecutive_failures": 0
+      },
+      "last_error": ""
+    },
+    "access_model": {
+      "status": "ready",
+      "identity_provider": "Keycloak/OIDC",
+      "source_of_truth": {
+        "webterm": "feature flag and staff status for WebTerm UI/API capabilities",
+        "rancher": "cluster/project RBAC and Fleet platform ownership",
+        "devtron": "application/environment permissions and deployment history"
+      },
+      "docs": {
+        "report": {
+          "path": "docs/WebTerm_Kubernetes_Ops_Rancher_Fleet_Devtron_Report.md",
+          "required_markers": [
+            "# 7. SSO, RBAC и модель доступа",
+            "## 7.3. Проверяемый MVP access model",
+            "Keycloak group -> WebTerm feature -> Rancher/Devtron role",
+            "render_kubernetes_ops_readonly_rbac"
+          ]
+        },
+        "runbook": {
+          "path": "docs/architecture/KUBERNETES_OPS_OPERATIONS.md",
+          "required_markers": [
+            "### OIDC/RBAC Access Model",
+            "webterm-kubernetes-readers",
+            "webterm-kubernetes-admins",
+            "webterm-studio-kubernetes-operators",
+            "render_kubernetes_ops_readonly_rbac"
+          ]
+        }
+      },
+      "missing_markers": [],
+      "role_mapping_errors": [],
+      "service_account_errors": [],
+      "rbac_manifest_errors": [],
+      "role_mappings": [
+        {
+          "keycloak_group": "webterm-kubernetes-readers",
+          "webterm_feature": "kubernetes",
+          "webterm_role": "Kubernetes reader",
+          "rancher_role": "project/cluster read-only",
+          "devtron_role": "application view + logs",
+          "allowed_webterm_capabilities": [
+            "overview",
+            "inventory.read",
+            "events.read",
+            "pod.logs.snapshot",
+            "actions.request_approval"
+          ],
+          "denied_webterm_capabilities": [
+            "providers.write",
+            "rollout_restart.native",
+            "pod.exec",
+            "apply_yaml",
+            "delete"
+          ]
+        },
+        {
+          "keycloak_group": "webterm-kubernetes-admins",
+          "webterm_feature": "kubernetes + staff",
+          "webterm_role": "Kubernetes provider admin",
+          "rancher_role": "cluster/project admin outside WebTerm",
+          "devtron_role": "environment admin outside WebTerm",
+          "allowed_webterm_capabilities": [
+            "providers.write",
+            "providers.sync",
+            "providers.probe",
+            "actions.verify_external"
+          ],
+          "denied_webterm_capabilities": [
+            "rollout_restart.native",
+            "pod.exec",
+            "cluster_terminal",
+            "node_debug"
+          ]
+        },
+        {
+          "keycloak_group": "webterm-studio-kubernetes-operators",
+          "webterm_feature": "kubernetes + studio_pipelines + studio_mcp",
+          "webterm_role": "Read-only Studio diagnosis operator",
+          "rancher_role": "read-only evidence source",
+          "devtron_role": "read-only app evidence source",
+          "allowed_webterm_capabilities": [
+            "actions.diagnose",
+            "mcp.kubernetes_describe_workload.read_only"
+          ],
+          "denied_webterm_capabilities": [
+            "mcp.rollout_restart",
+            "mcp.apply_yaml",
+            "mcp.exec"
+          ]
+        }
+      ],
+      "read_only_service_account": {
+        "name": "webterm-kubernetes-readonly",
+        "namespace": "webterm-system",
+        "scope": "namespace/project scoped per pilot cluster",
+        "allowed_verbs": [
+          "get",
+          "list",
+          "watch"
+        ],
+        "allowed_resources": [
+          "namespaces",
+          "pods",
+          "services",
+          "ingresses",
+          "events",
+          "deployments",
+          "statefulsets",
+          "daemonsets",
+          "replicasets"
+        ],
+        "denied_verbs": [
+          "create",
+          "update",
+          "patch",
+          "delete",
+          "deletecollection",
+          "escalate",
+          "bind",
+          "impersonate"
+        ],
+        "denied_subresources": [
+          "pods/exec",
+          "pods/attach",
+          "pods/portforward"
+        ]
+      },
+      "read_only_rbac_manifest": {
+        "status": "ready",
+        "namespace": "webterm-system",
+        "service_account_name": "webterm-kubernetes-readonly",
+        "role_name": "webterm-kubernetes-readonly-clusterrole",
+        "binding_name": "webterm-kubernetes-readonly-binding",
+        "object_count": 4,
+        "allowed_verbs": [
+          "get",
+          "list",
+          "watch"
+        ],
+        "denied_verbs": [
+          "bind",
+          "create",
+          "delete",
+          "deletecollection",
+          "escalate",
+          "impersonate",
+          "patch",
+          "update"
+        ],
+        "denied_subresources": [
+          "pods/attach",
+          "pods/exec",
+          "pods/portforward"
+        ],
+        "rules": [
+          {
+            "apiGroups": [
+              ""
+            ],
+            "resources": [
+              "namespaces",
+              "pods",
+              "services",
+              "events"
+            ],
+            "verbs": [
+              "get",
+              "list",
+              "watch"
+            ]
+          },
+          {
+            "apiGroups": [
+              "networking.k8s.io"
+            ],
+            "resources": [
+              "ingresses"
+            ],
+            "verbs": [
+              "get",
+              "list",
+              "watch"
+            ]
+          },
+          {
+            "apiGroups": [
+              "apps"
+            ],
+            "resources": [
+              "deployments",
+              "statefulsets",
+              "daemonsets",
+              "replicasets"
+            ],
+            "verbs": [
+              "get",
+              "list",
+              "watch"
+            ]
+          }
+        ],
+        "validation": {
+          "status": "ready",
+          "errors": []
+        },
+        "apply_command": "kubectl apply -f kubernetes-ops-readonly-rbac.yaml"
+      },
+      "native_mutations_enabled": false,
+      "exec_enabled": false,
+      "production_gate": "OIDC/RBAC mapping must be documented before multi-user pilot; native mutations remain disabled."
+    },
+    "identity_runtime": {
+      "status": "ready",
+      "target_environment": "local",
+      "enforced": false,
+      "identity_provider": "WebTerm local users",
+      "webterm_login_gateway": {
+        "mode": "local",
+        "identity_provider": "WebTerm local users",
+        "login_source": "django_model_backend",
+        "webterm_is_primary_login": true,
+        "normal_user_external_platform_login": false,
+        "browser_receives_provider_credentials": false,
+        "provider_access_strategy": "backend_held_service_credentials",
+        "platform_ui_policy": "webterm_native_for_users_staff_fallback_only",
+        "access_control_source": "webterm_feature_permissions_and_admin_sessions",
+        "supports_local_login": true,
+        "supports_ldap_login": false,
+        "supports_domain_sso": false,
+        "status": "ready",
+        "production_enforced": false
+      },
+      "domain_auth": {
+        "enabled": false,
+        "header": "REMOTE_USER",
+        "auto_create": true,
+        "default_profile": "custom",
+        "default_profile_valid": true,
+        "default_profile_staff": false,
+        "auto_create_profile_safe": true
+      },
+      "ldap": {
+        "enabled": false,
+        "status": "disabled",
+        "severity": "ready",
+        "backend_loaded": false,
+        "server_configured": false,
+        "search_base_configured": false,
+        "bind_dn_configured": false,
+        "bind_password_configured": false,
+        "start_tls": false,
+        "ignore_cert": false,
+        "ca_cert_configured": false,
+        "missing": [],
+        "config_source": "env_startup",
+        "scheme": "",
+        "is_local": false,
+        "tls_ready": false
+      },
+      "keycloak": {
+        "url": "https://iam.erg.kz",
+        "realm_configured": true,
+        "scheme": "https",
+        "verify_ssl": true,
+        "is_local": false
+      },
+      "errors": [],
+      "production_gate": "Production Kubernetes sidebar requires WebTerm to be the login gateway through trusted Domain SSO/OIDC or LDAP; Rancher, Fleet and Devtron stay backend-only provider integrations."
+    },
+    "production_gate": {
+      "target_environment": "local",
+      "production_target": false,
+      "approval_ref_present": false,
+      "approval_ref": "",
+      "core_evidence_ready": true,
+      "missing_reference_count": 0,
+      "missing_required_references": [],
+      "required_references": [
+        {
+          "id": "production_approval",
+          "setting": "KUBERNETES_OPS_PRODUCTION_APPROVAL_REF",
+          "expected": "<change-or-approval-id>",
+          "required": false,
+          "present": false
+        },
+        {
+          "id": "production_evidence",
+          "setting": "KUBERNETES_OPS_PRODUCTION_EVIDENCE_REF",
+          "expected": "<operator-reviewed production evidence bundle ref>",
+          "required": false,
+          "present": false
+        },
+        {
+          "id": "identity_runtime",
+          "setting": "KUBERNETES_OPS_IDENTITY_RUNTIME_EVIDENCE_REF",
+          "expected": "<production SSO/Keycloak runtime evidence ref>",
+          "required": false,
+          "present": false
+        },
+        {
+          "id": "live_provider",
+          "setting": "KUBERNETES_OPS_LIVE_PROVIDER_EVIDENCE_REF",
+          "expected": "<production Rancher/Fleet/Devtron live provider evidence ref>",
+          "required": false,
+          "present": false
+        },
+        {
+          "id": "readonly_rbac",
+          "setting": "KUBERNETES_OPS_READONLY_RBAC_EVIDENCE_REF",
+          "expected": "<production read-only RBAC can-i evidence ref>",
+          "required": false,
+          "present": false
+        },
+        {
+          "id": "kubernetes_mcp",
+          "setting": "KUBERNETES_OPS_KUBERNETES_MCP_EVIDENCE_REF",
+          "expected": "<production Kubernetes MCP READ_ONLY smoke evidence ref>",
+          "required": false,
+          "present": false
+        },
+        {
+          "id": "production_rollback",
+          "setting": "KUBERNETES_OPS_PRODUCTION_ROLLBACK_EVIDENCE_REF",
+          "expected": "<production rollback drill evidence ref>",
+          "required": false,
+          "present": false
+        },
+        {
+          "id": "native_verification",
+          "setting": "KUBERNETES_OPS_PRODUCTION_NATIVE_VERIFICATION_EVIDENCE_REF",
+          "expected": "<production native verification evidence ref>",
+          "required": false,
+          "present": false
+        }
+      ],
+      "local_indicator_count": 5,
+      "local_indicators": [
+        {
+          "source": "provider.name",
+          "value": "local-devtron-real"
+        },
+        {
+          "source": "provider.base_url",
+          "value": "[local-url]"
+        },
+        {
+          "source": "provider.name",
+          "value": "local-rancher-real"
+        },
+        {
+          "source": "provider.base_url",
+          "value": "[local-url]"
+        },
+        {
+          "source": "studio_mcp.url",
+          "value": "[local-url]"
+        }
+      ],
+      "ready": false
+    }
+  },
+  "provider_probes": [
+    {
+      "provider_id": 4,
+      "provider_name": "local-devtron-real",
+      "provider_kind": "devtron",
+      "success": true,
+      "status": "ready",
+      "path": "/orchestrator/devtron/auth/verify/v2",
+      "item_count": 0,
+      "payload_keys": [
+        "code",
+        "result",
+        "status"
+      ],
+      "duration_ms": 99,
+      "checked_at": "2026-07-02T14:57:50.864485+00:00",
+      "error": "",
+      "provider_base_url": "http://host.docker.internal:18091"
+    },
+    {
+      "provider_id": 3,
+      "provider_name": "local-rancher-real",
+      "provider_kind": "rancher",
+      "success": true,
+      "status": "ready",
+      "path": "/v3/clusters",
+      "item_count": 1,
+      "payload_keys": [
+        "actions",
+        "createTypes",
+        "data",
+        "filters",
+        "links",
+        "pagination",
+        "resourceType",
+        "sort",
+        "type"
+      ],
+      "duration_ms": 31,
+      "checked_at": "2026-07-02T14:57:50.896168+00:00",
+      "error": "",
+      "provider_base_url": "https://host.docker.internal:8443"
+    }
+  ],
+  "sync_dry_run": [
+    {
+      "provider_id": 4,
+      "provider_name": "local-devtron-real",
+      "provider_kind": "devtron",
+      "success": true,
+      "dry_run": true,
+      "clusters": 1,
+      "namespaces": 0,
+      "workloads": 0,
+      "pods": 0,
+      "services": 0,
+      "ingresses": 0,
+      "events": 0,
+      "apps": 8,
+      "fleet_bundles": 0,
+      "error": ""
+    },
+    {
+      "provider_id": 3,
+      "provider_name": "local-rancher-real",
+      "provider_kind": "rancher",
+      "success": true,
+      "dry_run": true,
+      "clusters": 1,
+      "namespaces": 31,
+      "workloads": 21,
+      "pods": 37,
+      "services": 24,
+      "ingresses": 3,
+      "events": 5,
+      "apps": 0,
+      "fleet_bundles": 1,
+      "error": ""
+    }
+  ],
+  "studio_mcp": {
+    "success": true,
+    "status": "ready",
+    "mcp_server": {
+      "id": 3,
+      "name": "Kubernetes MCP",
+      "transport": "sse",
+      "url": "http://mcp-demo:8765",
+      "last_test_ok": true
+    },
+    "target": {
+      "source": "app",
+      "name": "rancher-turtles",
+      "namespace": "cattle-turtles-system",
+      "cluster": "local",
+      "arguments": {
+        "cluster": "local",
+        "namespace": "cattle-turtles-system",
+        "kind": "deployment",
+        "name": "rancher-turtles"
+      }
+    },
+    "content_items": 1,
+    "policy": {
+      "permission_mode": "READ_ONLY",
+      "mutates_state": false,
+      "streaming": false,
+      "blocked_actions": [
+        "exec",
+        "attach",
+        "port_forward",
+        "restart",
+        "scale",
+        "delete",
+        "apply_yaml"
+      ]
+    },
+    "policy_errors": [],
+    "content_preview": "KUBERNETES_READ_ONLY_DIAGNOSIS\nTARGET: local/cattle-turtles-system/deployment/rancher-turtles\nHEALTH: healthy\nREADY: 1/1\nMUTATES_STATE: false\nBLOCKED_ACTIONS: exec, attach, port_forward, restart, scale, delete, apply_yaml\nEVENTS:\n- info ReadOnlyFixture: Studio demo MCP returned a bounded read-only workload snapshot."
+  },
+  "studio_diagnosis_draft": {
+    "success": true,
+    "status": "ready",
+    "mode": "transaction_rollback",
+    "draft_status": "ready",
+    "draft_rows_created": 1,
+    "pipeline_rows_created": 0,
+    "pipeline_run_rows_created": 0,
+    "inspect_tool": "kubernetes_describe_workload",
+    "permission_mode": "READ_ONLY",
+    "mutates_state": false,
+    "operation_kind": "kubernetes.workload.describe",
+    "skill_slugs": [
+      "kubernetes-safety"
+    ],
+    "forbidden_tools": [],
+    "validation_ok": true,
+    "persistent_rows": false,
+    "errors": []
+  },
+  "action_controls": {
+    "success": true,
+    "status": "ready",
+    "mode": "transaction_rollback",
+    "created_request_status": "pending_approval",
+    "approval_status": "approved_external",
+    "approval_recorded": true,
+    "preview_blast_radius": "single_workload",
+    "scale_request_status": "pending_approval",
+    "scale_preview_blast_radius": "single_workload",
+    "scale_preview_replicas": 2,
+    "scale_target_redacted": true,
+    "apply_request_status": "pending_approval",
+    "apply_preview_blast_radius": "single_resource_apply",
+    "apply_manifest_not_stored": true,
+    "apply_dry_run_proof_linked": true,
+    "patch_request_status": "pending_approval",
+    "patch_preview_blast_radius": "single_resource_patch",
+    "patch_preview_shape": "object",
+    "delete_request_status": "pending_approval",
+    "delete_preview_blast_radius": "single_resource_delete",
+    "delete_confirmation_stored": true,
+    "rollback_plan_status": "required",
+    "production_restart_template_status": "ready",
+    "production_restart_template_approval_required": true,
+    "production_restart_template_verification_required": true,
+    "production_restart_template_report_required": true,
+    "production_restart_template_safe": true,
+    "rollback_scale_previous_replicas": 2,
+    "rollback_apply_requires_dry_run": true,
+    "rollback_delete_requires_restore_source": true,
+    "rollback_plan_payload_safe": true,
+    "native_execution_enabled": false,
+    "external_verification_status": "verified_external",
+    "external_verification_redacted": true,
+    "terminal_execute_rejected": true,
+    "blocked_execution_status": "execution_blocked",
+    "blocked_execution_verified": false,
+    "terminal_verify_rejected": true,
+    "native_verification_plan_status": "pending",
+    "native_verification_plan_check_ids": [
+      "rollout_status_observed",
+      "pod_readiness_observed",
+      "recent_warning_events_checked"
+    ],
+    "apply_verification_plan_check_ids": [
+      "apply_action_completed",
+      "resource_generation_observed",
+      "recent_warning_events_checked"
+    ],
+    "native_verification_auto_status": "verified",
+    "native_verification_auto_request_status": "verified_native",
+    "native_verification_auto_recorded": true,
+    "native_verification_auto_check_statuses": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "restricted_write_gate_required": true,
+    "restricted_write_gate_blocks_without_ref": true,
+    "restricted_write_gate_allows_with_ref": true,
+    "restricted_write_gate_setting": "KUBERNETES_ADMIN_RESTRICTED_CREDENTIAL_EVIDENCE_REF",
+    "restricted_write_gate_target_environment": "production",
+    "native_verification_plan_payload_safe": true,
+    "gitops_request_status": "pending_approval",
+    "gitops_preview_blast_radius": "gitops_merge_request",
+    "gitops_native_execution_mode": "external_gitops",
+    "gitops_repository_sanitized": true,
+    "gitops_merge_request_template": true,
+    "gitops_provider": "gitlab",
+    "gitops_write_performed": false,
+    "gitops_cluster_mutation_performed": false,
+    "gitops_gitlab_payload_ready": true,
+    "gitops_merge_request_draft": true,
+    "gitops_merge_request_removes_source_branch": true,
+    "gitops_verification_plan_check_ids": [
+      "merge_request_reviewed",
+      "ci_pipeline_passed",
+      "fleet_bundle_reconciled",
+      "webterm_inventory_healthy"
+    ],
+    "fleet_pause_request_status": "pending_approval",
+    "fleet_pause_preview_blast_radius": "fleet_bundle",
+    "fleet_pause_target_redacted": true,
+    "fleet_resume_request_status": "pending_approval",
+    "fleet_resume_preview_blast_radius": "fleet_bundle",
+    "devtron_rollback_request_status": "pending_approval",
+    "devtron_rollback_preview_blast_radius": "single_devtron_app",
+    "devtron_rollback_execution_mode": "external_devtron",
+    "devtron_rollback_links_sanitized": true,
+    "persistent_rows": false
+  },
+  "admin_mode_safety": {
+    "success": true,
+    "status": "ready",
+    "mode": "transaction_rollback",
+    "checks": [
+      {
+        "id": "dry_run_apply_unapproved",
+        "success": true,
+        "expected_code": "admin_session_approval_required",
+        "actual_code": "admin_session_approval_required",
+        "status": "blocked"
+      },
+      {
+        "id": "apply_unapproved",
+        "success": true,
+        "expected_code": "admin_session_approval_required",
+        "actual_code": "admin_session_approval_required",
+        "status": "blocked"
+      },
+      {
+        "id": "patch_unapproved",
+        "success": true,
+        "expected_code": "admin_session_approval_required",
+        "actual_code": "admin_session_approval_required",
+        "status": "blocked"
+      },
+      {
+        "id": "scale_unapproved",
+        "success": true,
+        "expected_code": "admin_session_approval_required",
+        "actual_code": "admin_session_approval_required",
+        "status": "blocked"
+      },
+      {
+        "id": "restart_unapproved",
+        "success": true,
+        "expected_code": "admin_session_approval_required",
+        "actual_code": "admin_session_approval_required",
+        "status": "blocked"
+      },
+      {
+        "id": "delete_unapproved",
+        "success": true,
+        "expected_code": "admin_session_approval_required",
+        "actual_code": "admin_session_approval_required",
+        "status": "blocked"
+      },
+      {
+        "id": "node_cordon_unapproved",
+        "success": true,
+        "expected_code": "admin_session_approval_required",
+        "actual_code": "admin_session_approval_required",
+        "status": "blocked"
+      },
+      {
+        "id": "exec_unapproved",
+        "success": true,
+        "expected_code": "admin_session_approval_required",
+        "actual_code": "admin_session_approval_required",
+        "status": "blocked"
+      },
+      {
+        "id": "port_forward_unapproved",
+        "success": true,
+        "expected_code": "admin_session_approval_required",
+        "actual_code": "admin_session_approval_required",
+        "status": "blocked"
+      },
+      {
+        "id": "prod_write_unapproved",
+        "success": true,
+        "expected_code": "production_approval_required",
+        "actual_code": "production_approval_required",
+        "status": "blocked"
+      }
+    ],
+    "checked_count": 10,
+    "provider_called": false,
+    "admin_actions_created": 0,
+    "persistent_rows": false
+  },
+  "post_review_retention": {
+    "success": true,
+    "status": "ready",
+    "mode": "transaction_rollback",
+    "checks": {
+      "pending_post_review_detected": true,
+      "post_review_redacted": true,
+      "recording_event_redacted": true,
+      "retention_dry_run_detected_events": 1,
+      "retention_apply_deleted_events": 1,
+      "retention_apply_updated_recordings": 1
+    },
+    "created": {
+      "sessions": 1,
+      "actions": 1,
+      "recordings": 1,
+      "events": 0,
+      "providers": 1,
+      "clusters": 1
+    },
+    "pending_summary": {
+      "pending": 1,
+      "completed": 0,
+      "not_ready": 0,
+      "none": 40,
+      "scanned": 41
+    },
+    "completed_summary": {
+      "pending": 0,
+      "completed": 1,
+      "not_ready": 0,
+      "none": 40,
+      "scanned": 41
+    },
+    "retention_summary": {
+      "metadata_expired_count": 0,
+      "transcript_expired_count": 1,
+      "transcript_event_expired_count": 1,
+      "active_recording_count": 1,
+      "total_recording_count": 1,
+      "total_event_count": 1
+    },
+    "persistent_rows": false
+  },
+  "external_evidence_bundle": {
+    "success": true,
+    "status": "ready",
+    "path": "/workspace/artifacts/kubernetes_ops_external_evidence_bundle.json",
+    "schema_version": "kubernetes_ops.external_evidence_bundle.v1",
+    "checked_at": "2026-07-02T14:28:50.295696+00:00",
+    "age_seconds": 1741,
+    "max_age_seconds": 86400,
+    "summary": {
+      "required_ref_count": 0,
+      "missing_required_ref_count": 0,
+      "artifact_check_count": 6,
+      "artifact_ready_count": 6,
+      "local_indicator_count": 18,
+      "production_environment": false
+    },
+    "references": [
+      {
+        "id": "production_approval",
+        "setting": "KUBERNETES_OPS_PRODUCTION_APPROVAL_REF",
+        "required": false,
+        "present": false
+      },
+      {
+        "id": "production_evidence",
+        "setting": "KUBERNETES_OPS_PRODUCTION_EVIDENCE_REF",
+        "required": false,
+        "present": false
+      },
+      {
+        "id": "identity_runtime",
+        "setting": "KUBERNETES_OPS_IDENTITY_RUNTIME_EVIDENCE_REF",
+        "required": false,
+        "present": false
+      },
+      {
+        "id": "live_provider",
+        "setting": "KUBERNETES_OPS_LIVE_PROVIDER_EVIDENCE_REF",
+        "required": false,
+        "present": false
+      },
+      {
+        "id": "readonly_rbac",
+        "setting": "KUBERNETES_OPS_READONLY_RBAC_EVIDENCE_REF",
+        "required": false,
+        "present": false
+      },
+      {
+        "id": "kubernetes_mcp",
+        "setting": "KUBERNETES_OPS_KUBERNETES_MCP_EVIDENCE_REF",
+        "required": false,
+        "present": false
+      },
+      {
+        "id": "production_rollback",
+        "setting": "KUBERNETES_OPS_PRODUCTION_ROLLBACK_EVIDENCE_REF",
+        "required": false,
+        "present": false
+      },
+      {
+        "id": "native_verification",
+        "setting": "KUBERNETES_OPS_PRODUCTION_NATIVE_VERIFICATION_EVIDENCE_REF",
+        "required": false,
+        "present": false
+      },
+      {
+        "id": "restricted_credentials",
+        "setting": "KUBERNETES_ADMIN_RESTRICTED_CREDENTIAL_EVIDENCE_REF",
+        "required": false,
+        "present": false
+      },
+      {
+        "id": "port_forward_network_policy",
+        "setting": "KUBERNETES_ADMIN_PORT_FORWARD_NETWORK_POLICY_EVIDENCE_REF",
+        "required": false,
+        "present": false
+      },
+      {
+        "id": "interactive_live_smoke",
+        "setting": "KUBERNETES_ADMIN_INTERACTIVE_LIVE_SMOKE_EVIDENCE_REF",
+        "required": false,
+        "present": false
+      }
+    ],
+    "artifact_checks": [
+      {
+        "id": "live_provider_smoke",
+        "path": "/workspace/artifacts/kubernetes_ops_live_provider_smoke.json",
+        "success": true,
+        "status": "ready",
+        "checked_at": "2026-07-01T18:09:51.974125+00:00",
+        "schema_version": "kubernetes_ops.live_provider_smoke.v3",
+        "summary": {
+          "enabled_providers": 2,
+          "rancher_providers": 1,
+          "devtron_providers": 1,
+          "provider_probes_ok": 2,
+          "provider_probes_total": 2,
+          "sync_dry_run_ok": 2,
+          "sync_dry_run_total": 2,
+          "clusters": 1,
+          "namespaces": 31,
+          "workloads": 21,
+          "pods": 35,
+          "fleet_bundles": 1,
+          "apps": 8,
+          "backend_paths_status": "ready",
+          "backend_path_checks_ok": 4,
+          "backend_path_checks_total": 4
+        },
+        "local_indicators": [
+          {
+            "source": "live_provider_smoke",
+            "value": "local-devtron-real",
+            "classification": "local"
+          },
+          {
+            "source": "live_provider_smoke",
+            "value": "http://host.docker.internal:18091",
+            "classification": "local"
+          },
+          {
+            "source": "live_provider_smoke",
+            "value": "local-rancher-real",
+            "classification": "local"
+          },
+          {
+            "source": "live_provider_smoke",
+            "value": "https://host.docker.internal:8443",
+            "classification": "local"
+          },
+          {
+            "source": "live_provider_smoke",
+            "value": "local-devtron-real",
+            "classification": "local"
+          },
+          {
+            "source": "live_provider_smoke",
+            "value": "http://host.docker.internal:18091",
+            "classification": "local"
+          },
+          {
+            "source": "live_provider_smoke",
+            "value": "local-rancher-real",
+            "classification": "local"
+          },
+          {
+            "source": "live_provider_smoke",
+            "value": "https://host.docker.internal:8443",
+            "classification": "local"
+          },
+          {
+            "source": "live_provider_smoke",
+            "value": "local-devtron-real",
+            "classification": "local"
+          },
+          {
+            "source": "live_provider_smoke",
+            "value": "local-rancher-real",
+            "classification": "local"
+          },
+          {
+            "source": "live_provider_smoke",
+            "value": "local-rancher-real",
+            "classification": "local"
+          }
+        ],
+        "errors": []
+      },
+      {
+        "id": "readonly_rbac_live",
+        "path": "/workspace/artifacts/kubernetes_ops_readonly_rbac_live_evidence.json",
+        "success": true,
+        "status": "ready",
+        "checked_at": "2026-06-30T13:12:25.407000+00:00",
+        "schema_version": "",
+        "summary": {},
+        "local_indicators": [
+          {
+            "source": "readonly_rbac_live",
+            "value": "kind-webterm-k8s",
+            "classification": "local"
+          }
+        ],
+        "errors": []
+      },
+      {
+        "id": "interactive_transport_evidence",
+        "path": "/workspace/artifacts/kubernetes_ops_interactive_transport_evidence.json",
+        "success": true,
+        "status": "ready",
+        "checked_at": "2026-07-02T14:28:11.019461+00:00",
+        "schema_version": "kubernetes_ops.interactive_transport_evidence.v1",
+        "summary": {
+          "target_environment": "local",
+          "production_environment": false,
+          "enabled_transport_count": 0,
+          "restricted_credential_evidence_present": false,
+          "port_forward_network_policy_evidence_present": false,
+          "transport_status": "ready",
+          "blocker_count": 0
+        },
+        "local_indicators": [
+          {
+            "source": "interactive_transport_evidence",
+            "value": "local-rancher-real",
+            "classification": "local"
+          },
+          {
+            "source": "interactive_transport_evidence",
+            "value": "local-rancher-real",
+            "classification": "local"
+          }
+        ],
+        "errors": []
+      },
+      {
+        "id": "interactive_live_smoke",
+        "path": "/workspace/artifacts/kubernetes_ops_interactive_live_smoke.json",
+        "success": true,
+        "status": "ready",
+        "checked_at": "2026-07-02T14:28:20.941009+00:00",
+        "schema_version": "kubernetes_ops.interactive_live_smoke.v1",
+        "summary": {
+          "target_environment": "local",
+          "production_environment": false,
+          "enabled_transport_count": 0,
+          "live_smoke_required": false,
+          "production_live_provider_evidence": false,
+          "simulated_check_count": 4,
+          "live_transport_contract_count": 4,
+          "live_transport_opener_check_count": 4,
+          "simulated_provider_requests_safe": true,
+          "blocker_count": 0
+        },
+        "local_indicators": [
+          {
+            "source": "interactive_live_smoke",
+            "value": "local-rancher-real",
+            "classification": "local"
+          },
+          {
+            "source": "interactive_live_smoke",
+            "value": "local-rancher-real",
+            "classification": "local"
+          }
+        ],
+        "errors": []
+      },
+      {
+        "id": "interactive_production_controls",
+        "path": "/workspace/artifacts/kubernetes_ops_interactive_production_controls.json",
+        "success": true,
+        "status": "ready",
+        "checked_at": "2026-07-02T14:28:30.650085+00:00",
+        "schema_version": "kubernetes_ops.interactive_production_controls.v1",
+        "summary": {
+          "production_environment": false,
+          "enabled_transport_count": 0,
+          "control_contract_count": 4,
+          "required_ref_count": 0,
+          "missing_required_ref_count": 0,
+          "recording_required_transport_count": 0,
+          "provider_contract_required_transport_count": 0,
+          "port_forward_network_policy_required": false,
+          "blocker_count": 0
+        },
+        "local_indicators": [
+          {
+            "source": "interactive_production_controls",
+            "value": "local-rancher-real",
+            "classification": "local"
+          },
+          {
+            "source": "interactive_production_controls",
+            "value": "local-rancher-real",
+            "classification": "local"
+          }
+        ],
+        "errors": []
+      },
+      {
+        "id": "production_action_evidence",
+        "path": "/workspace/artifacts/kubernetes_ops_production_action_evidence.json",
+        "success": true,
+        "status": "ready",
+        "checked_at": "2026-07-02T14:28:40.479795+00:00",
+        "schema_version": "kubernetes_ops.production_action_evidence.v1",
+        "summary": {
+          "production_environment": false,
+          "required_ref_count": 0,
+          "missing_required_ref_count": 0,
+          "rollback_action_class_count": 5,
+          "native_verification_check_count": 10,
+          "action_class_contract_count": 5,
+          "blocked_action_class_count": 11
+        },
+        "local_indicators": [],
+        "errors": []
+      }
+    ],
+    "errors": []
+  },
+  "interactive_transport_evidence": {
+    "success": true,
+    "status": "ready",
+    "path": "/workspace/artifacts/kubernetes_ops_interactive_transport_evidence.json",
+    "schema_version": "kubernetes_ops.interactive_transport_evidence.v1",
+    "checked_at": "2026-07-02T14:28:11.019461+00:00",
+    "age_seconds": 1781,
+    "max_age_seconds": 86400,
+    "summary": {
+      "target_environment": "local",
+      "production_environment": false,
+      "enabled_transport_count": 0,
+      "restricted_credential_evidence_present": false,
+      "port_forward_network_policy_evidence_present": false,
+      "transport_status": "ready",
+      "blocker_count": 0
+    },
+    "admin_interactive_transport": {
+      "status": "ready",
+      "target_environment": "local",
+      "production_environment": false,
+      "evidence_setting": "KUBERNETES_ADMIN_RESTRICTED_CREDENTIAL_EVIDENCE_REF",
+      "port_forward_network_policy_evidence_setting": "KUBERNETES_ADMIN_PORT_FORWARD_NETWORK_POLICY_EVIDENCE_REF",
+      "restricted_credential_evidence_present": false,
+      "enabled_transport_count": 0,
+      "transports": [
+        {
+          "id": "exec_stream",
+          "enabled": false,
+          "enabled_settings": [
+            "KUBERNETES_ADMIN_NATIVE_EXEC_ENABLED",
+            "KUBERNETES_ADMIN_EXEC_STREAMING_ENABLED"
+          ],
+          "recording_enabled": false,
+          "recording_setting": "KUBERNETES_ADMIN_EXEC_RECORDING_ENABLED",
+          "restricted_credential_evidence_required": false,
+          "restricted_credential_evidence_ready": true,
+          "blockers": []
+        },
+        {
+          "id": "port_forward_tunnel",
+          "enabled": false,
+          "enabled_settings": [
+            "KUBERNETES_ADMIN_NATIVE_PORT_FORWARD_ENABLED",
+            "KUBERNETES_ADMIN_PORT_FORWARD_TUNNEL_ENABLED"
+          ],
+          "recording_enabled": false,
+          "recording_setting": "KUBERNETES_ADMIN_PORT_FORWARD_RECORDING_ENABLED",
+          "restricted_credential_evidence_required": false,
+          "restricted_credential_evidence_ready": true,
+          "blockers": [],
+          "network_policy": {
+            "enabled": false,
+            "allowed_targets_setting": "KUBERNETES_ADMIN_PORT_FORWARD_ALLOWED_TARGETS",
+            "allowed_target_count": 0,
+            "wildcard_targets_present": false,
+            "protected_namespaces_setting": "KUBERNETES_ADMIN_PORT_FORWARD_PROTECTED_NAMESPACES",
+            "protected_namespace_count": 13,
+            "default_protected_namespaces_covered": true,
+            "network_policy_evidence_setting": "KUBERNETES_ADMIN_PORT_FORWARD_NETWORK_POLICY_EVIDENCE_REF",
+            "network_policy_evidence_required": false,
+            "network_policy_evidence_present": false,
+            "max_duration_seconds": 900,
+            "production_max_duration_seconds": 900,
+            "blockers": []
+          }
+        },
+        {
+          "id": "cluster_terminal",
+          "enabled": false,
+          "enabled_settings": [
+            "KUBERNETES_ADMIN_CLUSTER_TERMINAL_ENABLED"
+          ],
+          "recording_enabled": false,
+          "recording_setting": "KUBERNETES_ADMIN_CLUSTER_TERMINAL_RECORDING_ENABLED",
+          "restricted_credential_evidence_required": false,
+          "restricted_credential_evidence_ready": true,
+          "blockers": [],
+          "provider_contract": {
+            "operation": "cluster_terminal",
+            "required": false,
+            "label": "cluster_terminal_path_template",
+            "required_placeholders": [
+              "cluster_id",
+              "namespace"
+            ],
+            "enabled_rancher_provider_count": 1,
+            "checked_provider_count": 1,
+            "missing_provider_count": 1,
+            "invalid_provider_count": 0,
+            "providers": [
+              {
+                "operation": "cluster_terminal",
+                "status": "missing",
+                "provider_id": 3,
+                "provider_name": "local-rancher-real",
+                "label": "cluster_terminal_path_template",
+                "required_placeholders": [
+                  "cluster_id",
+                  "namespace"
+                ],
+                "missing_placeholders": [],
+                "blockers": [
+                  "provider_contract_required"
+                ]
+              }
+            ],
+            "blockers": []
+          }
+        },
+        {
+          "id": "node_debug",
+          "enabled": false,
+          "enabled_settings": [
+            "KUBERNETES_ADMIN_NODE_DEBUG_ENABLED"
+          ],
+          "recording_enabled": false,
+          "recording_setting": "KUBERNETES_ADMIN_NODE_DEBUG_RECORDING_ENABLED",
+          "restricted_credential_evidence_required": false,
+          "restricted_credential_evidence_ready": true,
+          "blockers": [],
+          "provider_contract": {
+            "operation": "node_debug",
+            "required": false,
+            "label": "node_debug_path_template",
+            "required_placeholders": [
+              "cluster_id",
+              "node_name"
+            ],
+            "enabled_rancher_provider_count": 1,
+            "checked_provider_count": 1,
+            "missing_provider_count": 1,
+            "invalid_provider_count": 0,
+            "providers": [
+              {
+                "operation": "node_debug",
+                "status": "missing",
+                "provider_id": 3,
+                "provider_name": "local-rancher-real",
+                "label": "node_debug_path_template",
+                "required_placeholders": [
+                  "cluster_id",
+                  "node_name"
+                ],
+                "missing_placeholders": [],
+                "blockers": [
+                  "provider_contract_required"
+                ]
+              }
+            ],
+            "blockers": []
+          }
+        }
+      ],
+      "blockers": [],
+      "detail": "Interactive production transports are disabled."
+    },
+    "errors": []
+  },
+  "interactive_live_smoke": {
+    "success": true,
+    "status": "ready",
+    "path": "/workspace/artifacts/kubernetes_ops_interactive_live_smoke.json",
+    "schema_version": "kubernetes_ops.interactive_live_smoke.v1",
+    "checked_at": "2026-07-02T14:28:20.941009+00:00",
+    "age_seconds": 1771,
+    "max_age_seconds": 86400,
+    "summary": {
+      "target_environment": "local",
+      "production_environment": false,
+      "enabled_transport_count": 0,
+      "live_smoke_required": false,
+      "production_live_provider_evidence": false,
+      "simulated_check_count": 4,
+      "live_transport_contract_count": 4,
+      "live_transport_opener_check_count": 4,
+      "simulated_provider_requests_safe": true,
+      "blocker_count": 0
+    },
+    "simulated_provider_streams": {
+      "success": true,
+      "status": "ready",
+      "mode": "transaction_rollback",
+      "checked_count": 4,
+      "checks": [
+        {
+          "id": "provider_exec_stream_opener",
+          "success": true,
+          "method": "POST",
+          "body_keys": [
+            "command",
+            "container",
+            "stdin",
+            "tty"
+          ],
+          "stdin_supported": true,
+          "event_stream_ok": true
+        },
+        {
+          "id": "provider_port_forward_tunnel_opener",
+          "success": true,
+          "method": "POST",
+          "body_keys": [
+            "duration_seconds",
+            "target"
+          ],
+          "client_data_supported": true,
+          "event_stream_ok": true
+        },
+        {
+          "id": "provider_cluster_terminal_opener",
+          "success": true,
+          "method": "POST",
+          "operation": "cluster_terminal",
+          "target_keys": [
+            "namespace"
+          ],
+          "stdin_supported": true,
+          "event_stream_ok": true
+        },
+        {
+          "id": "provider_node_debug_opener",
+          "success": true,
+          "method": "POST",
+          "operation": "node_debug",
+          "target_keys": [
+            "kind",
+            "name"
+          ],
+          "stdin_supported": true,
+          "event_stream_ok": true
+        }
+      ],
+      "provider_request_count": 4,
+      "provider_requests": [
+        {
+          "operation": "exec_stream",
+          "method": "POST",
+          "body_keys": [
+            "command",
+            "container",
+            "stdin",
+            "tty"
+          ],
+          "target_keys": [],
+          "stdin": true,
+          "tty": true,
+          "duration_seconds": 0
+        },
+        {
+          "operation": "port_forward_tunnel",
+          "method": "POST",
+          "body_keys": [
+            "duration_seconds",
+            "target"
+          ],
+          "target_keys": [
+            "kind",
+            "name",
+            "namespace",
+            "remote_port"
+          ],
+          "stdin": false,
+          "tty": false,
+          "duration_seconds": 60
+        },
+        {
+          "operation": "cluster_terminal",
+          "method": "POST",
+          "body_keys": [
+            "operation",
+            "stdin",
+            "target",
+            "tty"
+          ],
+          "target_keys": [
+            "namespace"
+          ],
+          "stdin": true,
+          "tty": true,
+          "duration_seconds": 0
+        },
+        {
+          "operation": "node_debug",
+          "method": "POST",
+          "body_keys": [
+            "operation",
+            "stdin",
+            "target",
+            "tty"
+          ],
+          "target_keys": [
+            "kind",
+            "name"
+          ],
+          "stdin": true,
+          "tty": true,
+          "duration_seconds": 0
+        }
+      ],
+      "provider_requests_safe": true,
+      "provider_stream_opened": true,
+      "persistent_provider_rows": 0
+    },
+    "admin_interactive_transport": {
+      "status": "ready",
+      "target_environment": "local",
+      "production_environment": false,
+      "evidence_setting": "KUBERNETES_ADMIN_RESTRICTED_CREDENTIAL_EVIDENCE_REF",
+      "port_forward_network_policy_evidence_setting": "KUBERNETES_ADMIN_PORT_FORWARD_NETWORK_POLICY_EVIDENCE_REF",
+      "restricted_credential_evidence_present": false,
+      "enabled_transport_count": 0,
+      "transports": [
+        {
+          "id": "exec_stream",
+          "enabled": false,
+          "enabled_settings": [
+            "KUBERNETES_ADMIN_NATIVE_EXEC_ENABLED",
+            "KUBERNETES_ADMIN_EXEC_STREAMING_ENABLED"
+          ],
+          "recording_enabled": false,
+          "recording_setting": "KUBERNETES_ADMIN_EXEC_RECORDING_ENABLED",
+          "restricted_credential_evidence_required": false,
+          "restricted_credential_evidence_ready": true,
+          "blockers": []
+        },
+        {
+          "id": "port_forward_tunnel",
+          "enabled": false,
+          "enabled_settings": [
+            "KUBERNETES_ADMIN_NATIVE_PORT_FORWARD_ENABLED",
+            "KUBERNETES_ADMIN_PORT_FORWARD_TUNNEL_ENABLED"
+          ],
+          "recording_enabled": false,
+          "recording_setting": "KUBERNETES_ADMIN_PORT_FORWARD_RECORDING_ENABLED",
+          "restricted_credential_evidence_required": false,
+          "restricted_credential_evidence_ready": true,
+          "blockers": [],
+          "network_policy": {
+            "enabled": false,
+            "allowed_targets_setting": "KUBERNETES_ADMIN_PORT_FORWARD_ALLOWED_TARGETS",
+            "allowed_target_count": 0,
+            "wildcard_targets_present": false,
+            "protected_namespaces_setting": "KUBERNETES_ADMIN_PORT_FORWARD_PROTECTED_NAMESPACES",
+            "protected_namespace_count": 13,
+            "default_protected_namespaces_covered": true,
+            "network_policy_evidence_setting": "KUBERNETES_ADMIN_PORT_FORWARD_NETWORK_POLICY_EVIDENCE_REF",
+            "network_policy_evidence_required": false,
+            "network_policy_evidence_present": false,
+            "max_duration_seconds": 900,
+            "production_max_duration_seconds": 900,
+            "blockers": []
+          }
+        },
+        {
+          "id": "cluster_terminal",
+          "enabled": false,
+          "enabled_settings": [
+            "KUBERNETES_ADMIN_CLUSTER_TERMINAL_ENABLED"
+          ],
+          "recording_enabled": false,
+          "recording_setting": "KUBERNETES_ADMIN_CLUSTER_TERMINAL_RECORDING_ENABLED",
+          "restricted_credential_evidence_required": false,
+          "restricted_credential_evidence_ready": true,
+          "blockers": [],
+          "provider_contract": {
+            "operation": "cluster_terminal",
+            "required": false,
+            "label": "cluster_terminal_path_template",
+            "required_placeholders": [
+              "cluster_id",
+              "namespace"
+            ],
+            "enabled_rancher_provider_count": 1,
+            "checked_provider_count": 1,
+            "missing_provider_count": 1,
+            "invalid_provider_count": 0,
+            "providers": [
+              {
+                "operation": "cluster_terminal",
+                "status": "missing",
+                "provider_id": 3,
+                "provider_name": "local-rancher-real",
+                "label": "cluster_terminal_path_template",
+                "required_placeholders": [
+                  "cluster_id",
+                  "namespace"
+                ],
+                "missing_placeholders": [],
+                "blockers": [
+                  "provider_contract_required"
+                ]
+              }
+            ],
+            "blockers": []
+          }
+        },
+        {
+          "id": "node_debug",
+          "enabled": false,
+          "enabled_settings": [
+            "KUBERNETES_ADMIN_NODE_DEBUG_ENABLED"
+          ],
+          "recording_enabled": false,
+          "recording_setting": "KUBERNETES_ADMIN_NODE_DEBUG_RECORDING_ENABLED",
+          "restricted_credential_evidence_required": false,
+          "restricted_credential_evidence_ready": true,
+          "blockers": [],
+          "provider_contract": {
+            "operation": "node_debug",
+            "required": false,
+            "label": "node_debug_path_template",
+            "required_placeholders": [
+              "cluster_id",
+              "node_name"
+            ],
+            "enabled_rancher_provider_count": 1,
+            "checked_provider_count": 1,
+            "missing_provider_count": 1,
+            "invalid_provider_count": 0,
+            "providers": [
+              {
+                "operation": "node_debug",
+                "status": "missing",
+                "provider_id": 3,
+                "provider_name": "local-rancher-real",
+                "label": "node_debug_path_template",
+                "required_placeholders": [
+                  "cluster_id",
+                  "node_name"
+                ],
+                "missing_placeholders": [],
+                "blockers": [
+                  "provider_contract_required"
+                ]
+              }
+            ],
+            "blockers": []
+          }
+        }
+      ],
+      "blockers": [],
+      "detail": "Interactive production transports are disabled."
+    },
+    "live_transport_contracts": [
+      {
+        "transport": "exec_stream",
+        "enabled": false,
+        "simulated_check_id": "provider_exec_stream_opener",
+        "simulated_check_ready": true,
+        "production_evidence_required": false,
+        "production_evidence_ref_present": false,
+        "production_evidence_required_items": [
+          "restricted_credential_ref",
+          "recording_enabled",
+          "break_glass_session_ttl",
+          "command_policy",
+          "provider_exec_opener"
+        ],
+        "payload_stored": false,
+        "sensitive_values_stored": false
+      },
+      {
+        "transport": "port_forward_tunnel",
+        "enabled": false,
+        "simulated_check_id": "provider_port_forward_tunnel_opener",
+        "simulated_check_ready": true,
+        "production_evidence_required": false,
+        "production_evidence_ref_present": false,
+        "production_evidence_required_items": [
+          "restricted_credential_ref",
+          "network_policy_ref",
+          "exact_target_allowlist",
+          "ttl_cap",
+          "provider_tunnel_opener"
+        ],
+        "payload_stored": false,
+        "sensitive_values_stored": false
+      },
+      {
+        "transport": "cluster_terminal",
+        "enabled": false,
+        "simulated_check_id": "provider_cluster_terminal_opener",
+        "simulated_check_ready": true,
+        "production_evidence_required": false,
+        "production_evidence_ref_present": false,
+        "production_evidence_required_items": [
+          "restricted_credential_ref",
+          "recording_enabled",
+          "provider_path_template",
+          "break_glass_session_ttl",
+          "provider_shell_opener"
+        ],
+        "payload_stored": false,
+        "sensitive_values_stored": false
+      },
+      {
+        "transport": "node_debug",
+        "enabled": false,
+        "simulated_check_id": "provider_node_debug_opener",
+        "simulated_check_ready": true,
+        "production_evidence_required": false,
+        "production_evidence_ref_present": false,
+        "production_evidence_required_items": [
+          "restricted_credential_ref",
+          "recording_enabled",
+          "provider_path_template",
+          "node_scope",
+          "provider_shell_opener"
+        ],
+        "payload_stored": false,
+        "sensitive_values_stored": false
+      }
+    ],
+    "coverage": {
+      "simulated_opener_contract_complete": true,
+      "production_evidence_contract_complete": true,
+      "covered_transports": [
+        "exec_stream",
+        "port_forward_tunnel",
+        "cluster_terminal",
+        "node_debug"
+      ],
+      "covered_simulated_check_ids": [
+        "provider_exec_stream_opener",
+        "provider_port_forward_tunnel_opener",
+        "provider_cluster_terminal_opener",
+        "provider_node_debug_opener"
+      ],
+      "expected_transport_count": 4,
+      "expected_simulated_check_count": 4
+    },
+    "production_live_provider_evidence": false,
+    "live_smoke_required": false,
+    "errors": []
+  },
+  "interactive_shell_streams": {
+    "success": true,
+    "status": "ready",
+    "mode": "transaction_rollback",
+    "checks": [
+      {
+        "id": "cluster_terminal_stream",
+        "success": true,
+        "status": "completed",
+        "recording_status": "completed",
+        "event_count": 2,
+        "transcript_stored": true,
+        "redaction_ok": true,
+        "provider_operation": "cluster_terminal",
+        "provider_target_keys": [
+          "namespace"
+        ]
+      },
+      {
+        "id": "node_debug_stream",
+        "success": true,
+        "status": "completed",
+        "recording_status": "completed",
+        "event_count": 2,
+        "transcript_stored": true,
+        "redaction_ok": true,
+        "provider_operation": "node_debug",
+        "provider_target_keys": [
+          "kind",
+          "name"
+        ]
+      },
+      {
+        "id": "provider_interactive_shell_stream_opener",
+        "success": true,
+        "method": "POST",
+        "stdin": true,
+        "tty": true,
+        "event_stream_ok": true
+      }
+    ],
+    "checked_count": 3,
+    "actions_created": 2,
+    "recordings_created": 2,
+    "recording_events_created": 4,
+    "provider_requests": [
+      {
+        "operation": "cluster_terminal",
+        "target_keys": [
+          "namespace"
+        ],
+        "stdin": true,
+        "tty": true,
+        "method": "POST",
+        "event_stream_ok": true
+      },
+      {
+        "operation": "node_debug",
+        "target_keys": [
+          "kind",
+          "name"
+        ],
+        "stdin": true,
+        "tty": true,
+        "method": "POST",
+        "event_stream_ok": true
+      },
+      {
+        "operation": "cluster_terminal",
+        "target_keys": [
+          "namespace"
+        ],
+        "stdin": true,
+        "tty": true,
+        "method": "POST",
+        "event_stream_ok": true
+      }
+    ],
+    "provider_requests_safe": true,
+    "persistent_rows": false,
+    "production_live_provider_evidence": false
+  },
+  "normal_user_surface": {
+    "success": true,
+    "status": "ready",
+    "mode": "transaction_rollback",
+    "checks": [
+      {
+        "id": "reader_can_read",
+        "success": true
+      },
+      {
+        "id": "reader_cannot_audit_deeplinks",
+        "success": true
+      },
+      {
+        "id": "reader_provider_base_url_hidden",
+        "success": true
+      },
+      {
+        "id": "reader_provider_connection_hidden",
+        "success": true
+      },
+      {
+        "id": "reader_provider_secret_reference_hidden",
+        "success": true
+      },
+      {
+        "id": "reader_external_links_hidden",
+        "success": true
+      },
+      {
+        "id": "reader_link_policy_webterm_only",
+        "success": true
+      },
+      {
+        "id": "reader_payload_has_no_external_hosts_or_tokens",
+        "success": true
+      },
+      {
+        "id": "reader_network_detail_external_links_hidden",
+        "success": true
+      },
+      {
+        "id": "reader_network_detail_link_policy_webterm_only",
+        "success": true
+      },
+      {
+        "id": "reader_network_detail_has_no_external_hosts_or_tokens",
+        "success": true
+      },
+      {
+        "id": "reader_helm_releases_external_links_hidden",
+        "success": true
+      },
+      {
+        "id": "reader_helm_releases_has_no_external_hosts_or_tokens",
+        "success": true
+      },
+      {
+        "id": "reader_devtron_detail_external_links_hidden",
+        "success": true
+      },
+      {
+        "id": "reader_devtron_detail_has_no_external_hosts_or_tokens",
+        "success": true
+      },
+      {
+        "id": "reader_diagnostics_summary_read_only",
+        "success": true
+      },
+      {
+        "id": "reader_diagnostics_summary_has_no_external_hosts_or_tokens",
+        "success": true
+      },
+      {
+        "id": "reader_action_summary_read_only",
+        "success": true
+      },
+      {
+        "id": "reader_action_summary_has_no_external_hosts_or_tokens",
+        "success": true
+      },
+      {
+        "id": "reader_capabilities_read_only",
+        "success": true
+      },
+      {
+        "id": "reader_capabilities_has_no_external_hosts_or_tokens",
+        "success": true
+      },
+      {
+        "id": "reader_frontend_response_credentials_absent",
+        "success": true
+      },
+      {
+        "id": "staff_can_audit_deeplinks",
+        "success": true
+      },
+      {
+        "id": "staff_provider_connection_visible",
+        "success": true
+      },
+      {
+        "id": "staff_provider_secret_reference_hidden",
+        "success": true
+      },
+      {
+        "id": "staff_external_links_visible",
+        "success": true
+      },
+      {
+        "id": "staff_external_links_sanitized",
+        "success": true
+      },
+      {
+        "id": "staff_network_detail_fallback_links_visible",
+        "success": true
+      },
+      {
+        "id": "staff_network_detail_fallback_links_sanitized",
+        "success": true
+      },
+      {
+        "id": "staff_helm_releases_fallback_links_sanitized",
+        "success": true
+      },
+      {
+        "id": "staff_devtron_detail_fallback_links_sanitized",
+        "success": true
+      },
+      {
+        "id": "staff_diagnostics_summary_read_only",
+        "success": true
+      },
+      {
+        "id": "staff_diagnostics_summary_has_no_external_hosts_or_tokens",
+        "success": true
+      },
+      {
+        "id": "staff_action_summary_read_only",
+        "success": true
+      },
+      {
+        "id": "staff_action_summary_has_no_external_hosts_or_tokens",
+        "success": true
+      },
+      {
+        "id": "staff_capabilities_read_only",
+        "success": true
+      },
+      {
+        "id": "staff_capabilities_has_no_external_hosts_or_tokens",
+        "success": true
+      },
+      {
+        "id": "staff_release_summary_read_only",
+        "success": true
+      },
+      {
+        "id": "staff_release_summary_has_no_external_hosts_or_tokens",
+        "success": true
+      },
+      {
+        "id": "staff_sensitive_link_key_redacted",
+        "success": true
+      },
+      {
+        "id": "staff_frontend_response_credentials_absent",
+        "success": true
+      }
+    ],
+    "checked_count": 41,
+    "reader": {
+      "can_read": true,
+      "can_audit_deeplinks": false
+    },
+    "staff": {
+      "can_read": true,
+      "can_audit_deeplinks": true
+    },
+    "reader_external_link_policy": {
+      "visible": false,
+      "mode": "webterm_native_only",
+      "reason": "External Rancher/Fleet/Devtron UI links are staff/admin fallback only."
+    },
+    "staff_external_link_policy": {
+      "visible": true,
+      "mode": "staff_admin_fallback",
+      "reason": ""
+    },
+    "frontend_response_credential_scan": {
+      "status": "ready",
+      "surfaces_checked": 31,
+      "provider_secret_reference_serialized": false,
+      "forbidden_values_found": false
+    },
+    "persistent_rows": false
+  },
+  "secret_read_controls": {
+    "success": true,
+    "status": "ready",
+    "mode": "transaction_rollback",
+    "default_redacted": true,
+    "raw_secret_absent_from_default_response": true,
+    "raw_secret_absent_from_action_summary": true,
+    "secret_read_rejected_without_grant": true,
+    "secret_read_rejected_without_runtime_flag": true,
+    "provider_not_called_for_denied_reveal": true,
+    "secret_read_capability_disabled_by_default": true,
+    "secret_list_metadata_only": true,
+    "secret_list_raw_secret_absent": true,
+    "secret_list_action_summary_raw_secret_absent": true,
+    "secret_list_action_summary_flags_boolean": true,
+    "secret_read_allowed_with_all_gates": true,
+    "allowed_action_summary_raw_secret_absent": true,
+    "default_provider_calls": 1,
+    "list_provider_calls": 1,
+    "visible_provider_calls": 1,
+    "actions_created": 3,
+    "persistent_rows": false
+  },
+  "provider_secret_lifecycle": {
+    "success": true,
+    "status": "ready",
+    "mode": "rollback",
+    "storage_mode": "managed",
+    "rotation_supported": true,
+    "persistent_rows": false,
+    "checks": {
+      "managed_storage_created": true,
+      "managed_ref_bound_to_provider": true,
+      "initial_value_resolved": true,
+      "initial_plaintext_not_in_ciphertext": true,
+      "rotation_value_resolved": true,
+      "rotation_reencrypted_payload": true,
+      "rotated_plaintext_not_in_ciphertext": true,
+      "rollback_removed_provider": true,
+      "rollback_removed_managed_storage": true,
+      "plaintext_not_serialized": true
+    }
+  },
+  "audit_redaction": {
+    "success": true,
+    "status": "ready",
+    "mode": "rollback",
+    "serializers_checked": [
+      "serialize_audit_event",
+      "serialize_cluster_event"
+    ],
+    "checks": {
+      "audit_event_created": true,
+      "api_serializer_raw_values_absent": true,
+      "cluster_event_raw_values_absent": true,
+      "sensitive_key_redacted": true,
+      "credentialed_url_sanitized": true,
+      "connection_string_redacted": true,
+      "bearer_redacted": true,
+      "rollback_removed_audit_event": true,
+      "rollback_removed_cluster": true,
+      "proof_payload_raw_values_absent": true
+    }
+  },
+  "production_action_evidence": {
+    "success": true,
+    "status": "ready",
+    "path": "/workspace/artifacts/kubernetes_ops_production_action_evidence.json",
+    "schema_version": "kubernetes_ops.production_action_evidence.v1",
+    "checked_at": "2026-07-02T14:28:40.479795+00:00",
+    "age_seconds": 1753,
+    "max_age_seconds": 86400,
+    "summary": {
+      "production_environment": false,
+      "required_ref_count": 0,
+      "missing_required_ref_count": 0,
+      "rollback_action_class_count": 5,
+      "native_verification_check_count": 10,
+      "action_class_contract_count": 5,
+      "blocked_action_class_count": 11
+    },
+    "references": [
+      {
+        "id": "production_rollback",
+        "setting": "KUBERNETES_OPS_PRODUCTION_ROLLBACK_EVIDENCE_REF",
+        "required": false,
+        "present": false
+      },
+      {
+        "id": "native_verification",
+        "setting": "KUBERNETES_OPS_PRODUCTION_NATIVE_VERIFICATION_EVIDENCE_REF",
+        "required": false,
+        "present": false
+      }
+    ],
+    "coverage": {
+      "rollback_contract_complete": true,
+      "native_verification_contract_complete": true,
+      "blocked_action_contract_complete": true,
+      "covered_action_classes": [
+        "k8s.rollout.restart",
+        "k8s.workload.scale",
+        "k8s.resource.apply",
+        "k8s.resource.patch",
+        "k8s.resource.delete"
+      ],
+      "covered_blocked_action_classes": [
+        "delete_namespace",
+        "delete_helm_release",
+        "helm.delete",
+        "helm_release.delete",
+        "kubectl.apply",
+        "apply_yaml",
+        "node_debug",
+        "port_forward",
+        "cluster_admin_shell",
+        "rbac.edit",
+        "edit_rbac"
+      ],
+      "covered_native_verification_check_ids": [
+        "rollout_status_observed",
+        "pod_readiness_observed",
+        "recent_warning_events_checked",
+        "desired_replicas_observed",
+        "workload_readiness_observed",
+        "apply_action_completed",
+        "resource_generation_observed",
+        "patch_action_completed",
+        "resource_absence_observed",
+        "dependent_health_checked"
+      ],
+      "expected_action_class_count": 5,
+      "expected_blocked_action_class_count": 11,
+      "expected_native_verification_check_count": 10
+    },
+    "action_class_contracts": [
+      {
+        "action": "k8s.rollout.restart",
+        "rollback_evidence_required": [
+          "rollout_status",
+          "gitops_or_devtron_rollback_ref_if_used",
+          "pod_readiness"
+        ],
+        "native_verification_check_ids": [
+          "rollout_status_observed",
+          "pod_readiness_observed",
+          "recent_warning_events_checked"
+        ],
+        "rollback_contract_ready": true,
+        "native_verification_contract_ready": true,
+        "payload_stored": false,
+        "sensitive_values_stored": false
+      },
+      {
+        "action": "k8s.workload.scale",
+        "rollback_evidence_required": [
+          "previous_replicas",
+          "post_rollback_workload_readiness",
+          "recent_warning_events"
+        ],
+        "native_verification_check_ids": [
+          "desired_replicas_observed",
+          "workload_readiness_observed",
+          "recent_warning_events_checked"
+        ],
+        "rollback_contract_ready": true,
+        "native_verification_contract_ready": true,
+        "payload_stored": false,
+        "sensitive_values_stored": false
+      },
+      {
+        "action": "k8s.resource.apply",
+        "rollback_evidence_required": [
+          "rollback_source_ref",
+          "rollback_dry_run_action_id",
+          "post_rollback_resource_generation"
+        ],
+        "native_verification_check_ids": [
+          "apply_action_completed",
+          "resource_generation_observed",
+          "recent_warning_events_checked"
+        ],
+        "rollback_contract_ready": true,
+        "native_verification_contract_ready": true,
+        "payload_stored": false,
+        "sensitive_values_stored": false
+      },
+      {
+        "action": "k8s.resource.patch",
+        "rollback_evidence_required": [
+          "previous_resource_snapshot_ref",
+          "reverse_patch_dry_run_ref",
+          "post_rollback_resource_generation"
+        ],
+        "native_verification_check_ids": [
+          "patch_action_completed",
+          "resource_generation_observed",
+          "recent_warning_events_checked"
+        ],
+        "rollback_contract_ready": true,
+        "native_verification_contract_ready": true,
+        "payload_stored": false,
+        "sensitive_values_stored": false
+      },
+      {
+        "action": "k8s.resource.delete",
+        "rollback_evidence_required": [
+          "restore_source_ref",
+          "rollback_dry_run_action_id",
+          "dependent_health"
+        ],
+        "native_verification_check_ids": [
+          "resource_absence_observed",
+          "dependent_health_checked",
+          "recent_warning_events_checked"
+        ],
+        "rollback_contract_ready": true,
+        "native_verification_contract_ready": true,
+        "payload_stored": false,
+        "sensitive_values_stored": false
+      }
+    ],
+    "blocked_action_contracts": [
+      {
+        "action": "delete_namespace",
+        "reason": "Deleting namespaces through WebTerm is blocked.",
+        "request_rejected": true,
+        "native_execution_blocked": true,
+        "provider_write_started": false,
+        "native_mutation_started": false,
+        "payload_stored": false,
+        "sensitive_values_stored": false
+      },
+      {
+        "action": "delete_helm_release",
+        "reason": "Deleting Helm releases through WebTerm is blocked.",
+        "request_rejected": true,
+        "native_execution_blocked": true,
+        "provider_write_started": false,
+        "native_mutation_started": false,
+        "payload_stored": false,
+        "sensitive_values_stored": false
+      },
+      {
+        "action": "helm.delete",
+        "reason": "Deleting Helm releases through WebTerm is blocked.",
+        "request_rejected": true,
+        "native_execution_blocked": true,
+        "provider_write_started": false,
+        "native_mutation_started": false,
+        "payload_stored": false,
+        "sensitive_values_stored": false
+      },
+      {
+        "action": "helm_release.delete",
+        "reason": "Deleting Helm releases through WebTerm is blocked.",
+        "request_rejected": true,
+        "native_execution_blocked": true,
+        "provider_write_started": false,
+        "native_mutation_started": false,
+        "payload_stored": false,
+        "sensitive_values_stored": false
+      },
+      {
+        "action": "kubectl.apply",
+        "reason": "Unrestricted kubectl apply through WebTerm is blocked.",
+        "request_rejected": true,
+        "native_execution_blocked": true,
+        "provider_write_started": false,
+        "native_mutation_started": false,
+        "payload_stored": false,
+        "sensitive_values_stored": false
+      },
+      {
+        "action": "apply_yaml",
+        "reason": "Unrestricted YAML apply through WebTerm is blocked.",
+        "request_rejected": true,
+        "native_execution_blocked": true,
+        "provider_write_started": false,
+        "native_mutation_started": false,
+        "payload_stored": false,
+        "sensitive_values_stored": false
+      },
+      {
+        "action": "node_debug",
+        "reason": "Node debug through WebTerm is blocked.",
+        "request_rejected": true,
+        "native_execution_blocked": true,
+        "provider_write_started": false,
+        "native_mutation_started": false,
+        "payload_stored": false,
+        "sensitive_values_stored": false
+      },
+      {
+        "action": "port_forward",
+        "reason": "Port-forward through WebTerm is blocked.",
+        "request_rejected": true,
+        "native_execution_blocked": true,
+        "provider_write_started": false,
+        "native_mutation_started": false,
+        "payload_stored": false,
+        "sensitive_values_stored": false
+      },
+      {
+        "action": "cluster_admin_shell",
+        "reason": "Cluster-admin shell through WebTerm is blocked.",
+        "request_rejected": true,
+        "native_execution_blocked": true,
+        "provider_write_started": false,
+        "native_mutation_started": false,
+        "payload_stored": false,
+        "sensitive_values_stored": false
+      },
+      {
+        "action": "rbac.edit",
+        "reason": "Editing Kubernetes RBAC through WebTerm is blocked.",
+        "request_rejected": true,
+        "native_execution_blocked": true,
+        "provider_write_started": false,
+        "native_mutation_started": false,
+        "payload_stored": false,
+        "sensitive_values_stored": false
+      },
+      {
+        "action": "edit_rbac",
+        "reason": "Editing Kubernetes RBAC through WebTerm is blocked.",
+        "request_rejected": true,
+        "native_execution_blocked": true,
+        "provider_write_started": false,
+        "native_mutation_started": false,
+        "payload_stored": false,
+        "sensitive_values_stored": false
+      }
+    ],
+    "errors": []
+  },
+  "readonly_rbac_live": {
+    "success": true,
+    "status": "ready",
+    "path": "/workspace/artifacts/kubernetes_ops_readonly_rbac_live_evidence.json",
+    "context": "kind-webterm-k8s",
+    "applied": true,
+    "service_account": "system:serviceaccount:webterm-system:webterm-kubernetes-readonly",
+    "allowed_count": 7,
+    "denied_count": 7,
+    "errors": [],
+    "checked_at": "2026-06-30T13:12:25.407000+00:00"
+  },
+  "preflight": {
+    "success": true,
+    "status": "ready",
+    "path": "/workspace/artifacts/kubernetes_ops_preflight_evidence.json",
+    "generated_at": "2026-07-02T14:28:50.824431+00:00",
+    "age_seconds": 1743,
+    "max_age_seconds": 86400,
+    "schema_version": "kubernetes_ops.release_preflight.v1",
+    "release_evidence_schema_version": "kubernetes_ops.release_evidence.v2",
+    "results": [
+      {
+        "id": "django_check",
+        "command": "python manage.py check",
+        "mode": "subprocess",
+        "timeout_seconds": 600,
+        "env_keys": [],
+        "success": true,
+        "returncode": 0,
+        "duration_ms": 9348,
+        "stdout_tail": "System check identified no issues (0 silenced).\n",
+        "stderr_tail": ""
+      },
+      {
+        "id": "architecture_guard",
+        "command": "python scripts/check_architecture_sizes.py --strict-new",
+        "mode": "subprocess",
+        "timeout_seconds": 600,
+        "env_keys": [],
+        "success": true,
+        "returncode": 0,
+        "duration_ms": 11388,
+        "stdout_tail": "\n=== Checking Import Boundaries (import-linter) ===\nSUCCESS: Import boundaries respected.\n\n=== Architecture Fitness Check: God-File Prevention ===\nTotal files scanned: 1777\nSUCCESS: All architecture contracts satisfied.\n",
+        "stderr_tail": ""
+      },
+      {
+        "id": "migrations_dry_run",
+        "command": "python manage.py makemigrations kubernetes_ops --check --dry-run",
+        "mode": "subprocess",
+        "timeout_seconds": 600,
+        "env_keys": [],
+        "success": true,
+        "returncode": 0,
+        "duration_ms": 10450,
+        "stdout_tail": "No changes detected in app 'kubernetes_ops'\n",
+        "stderr_tail": ""
+      },
+      {
+        "id": "kubernetes_backend_tests",
+        "command": "python -m pytest tests/test_kubernetes_ops_*.py",
+        "mode": "subprocess",
+        "timeout_seconds": 1200,
+        "env_keys": [
+          "POSTGRES_STATEMENT_TIMEOUT_MS"
+        ],
+        "success": true,
+        "returncode": 0,
+        "duration_ms": 475977,
+        "stdout_tail": "94%]\ntests/test_kubernetes_ops_release_interactive_shell_streams.py::test_release_blockers_include_failed_interactive_shell_stream_proof PASSED [ 94%]\ntests/test_kubernetes_ops_release_normal_user_surface.py::test_release_normal_user_surface_proof_can_be_skipped PASSED [ 95%]\ntests/test_kubernetes_ops_release_preflight.py::test_kubernetes_release_preflight_collects_required_command_results PASSED [ 95%]\ntests/test_kubernetes_ops_release_preflight.py::test_kubernetes_release_preflight_fails_when_command_fails PASSED [ 95%]\ntests/test_kubernetes_ops_release_preflight.py::test_kubernetes_release_preflight_fails_when_live_provider_smoke_artifact_is_missing PASSED [ 95%]\ntests/test_kubernetes_ops_release_preflight.py::test_kubernetes_release_preflight_loads_ready_artifact PASSED [ 95%]\ntests/test_kubernetes_ops_release_preflight.py::test_kubernetes_release_preflight_blocks_stale_artifact PASSED [ 95%]\ntests/test_kubernetes_ops_release_preflight.py::test_kubernetes_release_preflight_blocks_missing_or_wrong_schema PASSED [ 96%]\ntests/test_kubernetes_ops_release_production_action_evidence.py::test_production_action_evidence_ready_for_local_without_refs PASSED [ 96%]\ntests/test_kubernetes_ops_release_production_action_evidence.py::test_production_action_evidence_blocks_production_without_refs PASSED [ 96%]\ntests/test_kubernetes_ops_release_production_action_evidence.py::test_production_action_evidence_accepts_production_refs PASSED [ 96%]\ntests/test_kubernetes_ops_release_production_action_evidence.py::test_production_action_evidence_loader_validates_schema_status_and_age PASSED [ 96%]\ntests/test_kubernetes_ops_release_production_action_evidence.py::test_production_action_evidence_loader_rejects_incomplete_contract PASSED [ 97%]\ntests/test_kubernetes_ops_release_production_action_evidence.py::test_production_action_evidence_loader_rejects_incomplete_blocked_action_contract PASSED [ 97%]\ntests/test_kubernetes_ops_release_production_action_evidence.py::test_production_action_evidence_loader_rejects_unsafe_blocked_action_contract PASSED [ 97%]\ntests/test_kubernetes_ops_release_production_action_evidence.py::test_verify_production_action_evidence_command_writes_local_artifact PASSED [ 97%]\ntests/test_kubernetes_ops_release_readiness_summary.py::test_release_readiness_progress_prefers_production_blocked_when_core_backend_is_ready PASSED [ 97%]\ntests/test_kubernetes_ops_release_readiness_summary.py::test_release_readiness_summary_returns_safe_production_evidence_checklist PASSED [ 97%]\ntests/test_kubernetes_ops_release_readiness_summary.py::test_production_evidence_checklist_gap_summary_prioritizes_external_missing_refs PASSED [ 98%]\ntests/test_kubernetes_ops_release_scope.py::test_release_scope_blocks_local_kind_evidence_for_production PASSED [ 98%]\ntests/test_kubernetes_ops_release_scope.py::test_release_scope_requires_production_approval_ref PASSED [ 98%]\ntests/test_kubernetes_ops_release_scope.py::test_release_scope_allows_approved_nonlocal_production_evidence PASSED [ 98%]\ntests/test_kubernetes_ops_release_scope.py::test_release_scope_requires_core_evidence_refs_for_nonlocal_production PASSED [ 98%]\ntests/test_kubernetes_ops_release_scope.py::test_release_scope_blocks_local_kubernetes_mcp_endpoint_for_production PASSED [ 99%]\ntests/test_kubernetes_ops_release_secret_read_controls.py::test_kubernetes_release_secret_read_controls_blocker_names_failed_gate PASSED [ 99%]\ntests/test_kubernetes_ops_security_review.py::test_kubernetes_security_review_detects_missing_csrf_and_clickjacking_middleware PASSED [ 99%]\ntests/test_kubernetes_ops_security_review.py::test_kubernetes_security_review_rejects_wildcard_trusted_origins_with_credentials PASSED [ 99%]\ntests/test_kubernetes_ops_studio_bootstrap.py::test_demo_mcp_exposes_read_only_kubernetes_describe_tool PASSED [ 99%]\ntests/test_kubernetes_ops_sync.py::test_sync_kubernetes_ops_command_prints_summary PASSED [100%]\n\n============= 546 passed, 10 subtests passed in 467.02s (0:07:47) ==============\n",
+        "stderr_tail": ""
+      },
+      {
+        "id": "readonly_rbac_validate",
+        "command": "python manage.py render_kubernetes_ops_readonly_rbac --validate-only",
+        "mode": "subprocess",
+        "timeout_seconds": 600,
+        "env_keys": [],
+        "success": true,
+        "returncode": 0,
+        "duration_ms": 9317,
+        "stdout_tail": "Kubernetes Ops read-only RBAC manifest is valid.\n",
+        "stderr_tail": ""
+      },
+      {
+        "id": "sync_prune_safety",
+        "command": "python manage.py verify_kubernetes_ops_sync_prune_safety",
+        "mode": "subprocess",
+        "timeout_seconds": 600,
+        "env_keys": [],
+        "success": true,
+        "returncode": 0,
+        "duration_ms": 9394,
+        "stdout_tail": "Kubernetes Ops sync prune safety: status=ready success_pruned=True failure_preserved=True\n",
+        "stderr_tail": ""
+      },
+      {
+        "id": "readonly_rbac_live",
+        "command": "python scripts/verify_kubernetes_ops_readonly_rbac_live.py --apply",
+        "mode": "existing_artifact",
+        "success": true,
+        "path": "/workspace/artifacts/kubernetes_ops_readonly_rbac_live_evidence.json",
+        "status": "ready",
+        "checked_at": "2026-06-30T13:12:25.407000+00:00",
+        "context": "kind-webterm-k8s",
+        "errors": []
+      },
+      {
+        "id": "local_platform_evidence",
+        "command": "python scripts/verify_kubernetes_ops_local_platform.py --output artifacts/kubernetes_ops_local_platform_evidence.json",
+        "mode": "existing_artifact",
+        "success": true,
+        "path": "/workspace/artifacts/kubernetes_ops_local_platform_evidence.json",
+        "status": "ready",
+        "checked_at": "2026-07-02T10:21:27.903518+00:00",
+        "context": "kind-webterm-k8s",
+        "summary": {
+          "ready": 3,
+          "missing": 0,
+          "total": 3
+        },
+        "errors": []
+      },
+      {
+        "id": "live_provider_smoke",
+        "command": "python manage.py verify_kubernetes_ops_live_provider_smoke --output artifacts/kubernetes_ops_live_provider_smoke.json",
+        "mode": "existing_artifact",
+        "success": true,
+        "path": "/workspace/artifacts/kubernetes_ops_live_provider_smoke.json",
+        "status": "ready",
+        "checked_at": "2026-07-01T18:09:51.974125+00:00",
+        "schema_version": "kubernetes_ops.live_provider_smoke.v3",
+        "summary": {
+          "enabled_providers": 2,
+          "rancher_providers": 1,
+          "devtron_providers": 1,
+          "provider_probes_ok": 2,
+          "provider_probes_total": 2,
+          "sync_dry_run_ok": 2,
+          "sync_dry_run_total": 2,
+          "clusters": 1,
+          "namespaces": 31,
+          "workloads": 21,
+          "pods": 35,
+          "fleet_bundles": 1,
+          "apps": 8,
+          "backend_paths_status": "ready",
+          "backend_path_checks_ok": 4,
+          "backend_path_checks_total": 4
+        },
+        "errors": []
+      },
+      {
+        "id": "interactive_transport_evidence",
+        "command": "python manage.py verify_kubernetes_ops_interactive_transport_evidence --output artifacts/kubernetes_ops_interactive_transport_evidence.json",
+        "mode": "subprocess",
+        "timeout_seconds": 600,
+        "env_keys": [],
+        "success": true,
+        "returncode": 0,
+        "duration_ms": 9428,
+        "stdout_tail": "Wrote Kubernetes Ops interactive transport evidence: /workspace/artifacts/kubernetes_ops_interactive_transport_evidence.json\n{\"status\": \"ready\", \"summary\": {\"target_environment\": \"local\", \"production_environment\": false, \"enabled_transport_count\": 0, \"restricted_credential_evidence_present\": false, \"port_forward_network_policy_evidence_present\": false, \"transport_status\": \"ready\", \"blocker_count\": 0}, \"errors\": []}\n",
+        "stderr_tail": ""
+      },
+      {
+        "id": "interactive_live_smoke",
+        "command": "python manage.py verify_kubernetes_ops_interactive_live_smoke --output artifacts/kubernetes_ops_interactive_live_smoke.json",
+        "mode": "subprocess",
+        "timeout_seconds": 600,
+        "env_keys": [],
+        "success": true,
+        "returncode": 0,
+        "duration_ms": 9915,
+        "stdout_tail": "Wrote Kubernetes Ops interactive live-smoke evidence: /workspace/artifacts/kubernetes_ops_interactive_live_smoke.json\n{\"status\": \"ready\", \"summary\": {\"target_environment\": \"local\", \"production_environment\": false, \"enabled_transport_count\": 0, \"live_smoke_required\": false, \"production_live_provider_evidence\": false, \"simulated_check_count\": 4, \"live_transport_contract_count\": 4, \"live_transport_opener_check_count\": 4, \"simulated_provider_requests_safe\": true, \"blocker_count\": 0}, \"errors\": []}\n",
+        "stderr_tail": ""
+      },
+      {
+        "id": "interactive_production_controls",
+        "command": "python manage.py verify_kubernetes_ops_interactive_production_controls --output artifacts/kubernetes_ops_interactive_production_controls.json",
+        "mode": "subprocess",
+        "timeout_seconds": 600,
+        "env_keys": [],
+        "success": true,
+        "returncode": 0,
+        "duration_ms": 9803,
+        "stdout_tail": "Wrote Kubernetes Ops interactive production controls evidence: /workspace/artifacts/kubernetes_ops_interactive_production_controls.json\n{\"status\": \"ready\", \"summary\": {\"production_environment\": false, \"enabled_transport_count\": 0, \"control_contract_count\": 4, \"required_ref_count\": 0, \"missing_required_ref_count\": 0, \"recording_required_transport_count\": 0, \"provider_contract_required_transport_count\": 0, \"port_forward_network_policy_required\": false, \"blocker_count\": 0}, \"errors\": []}\n",
+        "stderr_tail": ""
+      },
+      {
+        "id": "production_action_evidence",
+        "command": "python manage.py verify_kubernetes_ops_production_action_evidence --output artifacts/kubernetes_ops_production_action_evidence.json",
+        "mode": "subprocess",
+        "timeout_seconds": 600,
+        "env_keys": [],
+        "success": true,
+        "returncode": 0,
+        "duration_ms": 9698,
+        "stdout_tail": "Wrote Kubernetes Ops production action evidence: /workspace/artifacts/kubernetes_ops_production_action_evidence.json\n{\"status\": \"ready\", \"summary\": {\"production_environment\": false, \"required_ref_count\": 0, \"missing_required_ref_count\": 0, \"rollback_action_class_count\": 5, \"native_verification_check_count\": 10, \"action_class_contract_count\": 5, \"blocked_action_class_count\": 11}, \"errors\": []}\n",
+        "stderr_tail": ""
+      },
+      {
+        "id": "external_evidence_bundle",
+        "command": "python manage.py verify_kubernetes_ops_external_evidence_bundle --output artifacts/kubernetes_ops_external_evidence_bundle.json",
+        "mode": "subprocess",
+        "timeout_seconds": 600,
+        "env_keys": [],
+        "success": true,
+        "returncode": 0,
+        "duration_ms": 9857,
+        "stdout_tail": "Wrote Kubernetes Ops external evidence bundle: /workspace/artifacts/kubernetes_ops_external_evidence_bundle.json\n{\"status\": \"ready\", \"summary\": {\"required_ref_count\": 0, \"missing_required_ref_count\": 0, \"artifact_check_count\": 6, \"artifact_ready_count\": 6, \"local_indicator_count\": 18, \"production_environment\": false}, \"errors\": []}\n",
+        "stderr_tail": "2026-07-02 14:28:50.239 | SUCCESS  | app.core.model_config:load_config:450 - Model configuration loaded from .model_config.json\n2026-07-02 14:28:50.241 | SUCCESS  | app.core.model_config:load_config:450 - Model configuration loaded from .model_config.json\n2026-07-02 14:28:50.244 | SUCCESS  | app.core.model_config:load_config:450 - Model configuration loaded from .model_config.json\n2026-07-02 14:28:50.246 | SUCCESS  | app.core.model_config:load_config:450 - Model configuration loaded from .model_config.json\n"
+      }
+    ],
+    "failed": [],
+    "errors": []
+  },
+  "release_scope": {
+    "success": false,
+    "status": "local",
+    "target_environment": "local",
+    "production_target": false,
+    "approval_ref_present": false,
+    "approval_ref": "",
+    "core_evidence_ready": true,
+    "missing_reference_count": 0,
+    "missing_required_references": [],
+    "required_references": [
+      {
+        "id": "production_approval",
+        "setting": "KUBERNETES_OPS_PRODUCTION_APPROVAL_REF",
+        "expected": "<change-or-approval-id>",
+        "required": false,
+        "present": false
+      },
+      {
+        "id": "production_evidence",
+        "setting": "KUBERNETES_OPS_PRODUCTION_EVIDENCE_REF",
+        "expected": "<operator-reviewed production evidence bundle ref>",
+        "required": false,
+        "present": false
+      },
+      {
+        "id": "identity_runtime",
+        "setting": "KUBERNETES_OPS_IDENTITY_RUNTIME_EVIDENCE_REF",
+        "expected": "<production SSO/Keycloak runtime evidence ref>",
+        "required": false,
+        "present": false
+      },
+      {
+        "id": "live_provider",
+        "setting": "KUBERNETES_OPS_LIVE_PROVIDER_EVIDENCE_REF",
+        "expected": "<production Rancher/Fleet/Devtron live provider evidence ref>",
+        "required": false,
+        "present": false
+      },
+      {
+        "id": "readonly_rbac",
+        "setting": "KUBERNETES_OPS_READONLY_RBAC_EVIDENCE_REF",
+        "expected": "<production read-only RBAC can-i evidence ref>",
+        "required": false,
+        "present": false
+      },
+      {
+        "id": "kubernetes_mcp",
+        "setting": "KUBERNETES_OPS_KUBERNETES_MCP_EVIDENCE_REF",
+        "expected": "<production Kubernetes MCP READ_ONLY smoke evidence ref>",
+        "required": false,
+        "present": false
+      },
+      {
+        "id": "production_rollback",
+        "setting": "KUBERNETES_OPS_PRODUCTION_ROLLBACK_EVIDENCE_REF",
+        "expected": "<production rollback drill evidence ref>",
+        "required": false,
+        "present": false
+      },
+      {
+        "id": "native_verification",
+        "setting": "KUBERNETES_OPS_PRODUCTION_NATIVE_VERIFICATION_EVIDENCE_REF",
+        "expected": "<production native verification evidence ref>",
+        "required": false,
+        "present": false
+      }
+    ],
+    "local_indicator_count": 8,
+    "local_indicators": [
+      {
+        "source": "readonly_rbac_live.context",
+        "value": "kind-webterm-k8s",
+        "classification": "local"
+      },
+      {
+        "source": "studio_mcp.url",
+        "value": "http://mcp-demo:8765",
+        "classification": "local"
+      },
+      {
+        "source": "provider_probe.provider_name",
+        "value": "local-devtron-real",
+        "classification": "local"
+      },
+      {
+        "source": "provider_probe.provider_base_url",
+        "value": "http://host.docker.internal:18091",
+        "classification": "local"
+      },
+      {
+        "source": "provider_probe.provider_name",
+        "value": "local-rancher-real",
+        "classification": "local"
+      },
+      {
+        "source": "provider_probe.provider_base_url",
+        "value": "https://host.docker.internal:8443",
+        "classification": "local"
+      },
+      {
+        "source": "sync_dry_run.provider_name",
+        "value": "local-devtron-real",
+        "classification": "local"
+      },
+      {
+        "source": "sync_dry_run.provider_name",
+        "value": "local-rancher-real",
+        "classification": "local"
+      }
+    ],
+    "indicators": [
+      {
+        "source": "readonly_rbac_live.context",
+        "value": "kind-webterm-k8s",
+        "classification": "local"
+      },
+      {
+        "source": "readonly_rbac_live.service_account",
+        "value": "system:serviceaccount:webterm-system:webterm-kubernetes-readonly",
+        "classification": "external"
+      },
+      {
+        "source": "studio_mcp.name",
+        "value": "Kubernetes MCP",
+        "classification": "external"
+      },
+      {
+        "source": "studio_mcp.url",
+        "value": "http://mcp-demo:8765",
+        "classification": "local"
+      },
+      {
+        "source": "studio_mcp.transport",
+        "value": "sse",
+        "classification": "external"
+      },
+      {
+        "source": "provider_probe.provider_name",
+        "value": "local-devtron-real",
+        "classification": "local"
+      },
+      {
+        "source": "provider_probe.provider_base_url",
+        "value": "http://host.docker.internal:18091",
+        "classification": "local"
+      },
+      {
+        "source": "provider_probe.path",
+        "value": "/orchestrator/devtron/auth/verify/v2",
+        "classification": "external"
+      },
+      {
+        "source": "provider_probe.provider_name",
+        "value": "local-rancher-real",
+        "classification": "local"
+      },
+      {
+        "source": "provider_probe.provider_base_url",
+        "value": "https://host.docker.internal:8443",
+        "classification": "local"
+      },
+      {
+        "source": "provider_probe.path",
+        "value": "/v3/clusters",
+        "classification": "external"
+      },
+      {
+        "source": "sync_dry_run.provider_name",
+        "value": "local-devtron-real",
+        "classification": "local"
+      },
+      {
+        "source": "sync_dry_run.provider_kind",
+        "value": "devtron",
+        "classification": "external"
+      },
+      {
+        "source": "sync_dry_run.provider_name",
+        "value": "local-rancher-real",
+        "classification": "local"
+      },
+      {
+        "source": "sync_dry_run.provider_kind",
+        "value": "rancher",
+        "classification": "external"
+      }
+    ],
+    "reason": "production target environment is not selected"
+  },
+  "definition_of_done": {
+    "success": true,
+    "status": "ready",
+    "ready": 13,
+    "missing": 0,
+    "total": 13,
+    "checks": [
+      {
+        "id": "explicit_admin_access",
+        "title": "Admin Mode requires explicit admin feature access.",
+        "status": "ready",
+        "evidence": [
+          "admin_mode_safety",
+          "readiness.access_model"
+        ]
+      },
+      {
+        "id": "rancher_cluster_namespace",
+        "title": "Rancher-backed cluster and namespace selection is proven.",
+        "status": "ready",
+        "evidence": [
+          "provider_probes",
+          "sync_dry_run",
+          "preflight.live_provider_smoke"
+        ]
+      },
+      {
+        "id": "resources_and_crds",
+        "title": "Common resources and CRDs are browsable.",
+        "status": "ready",
+        "evidence": [
+          "preflight.kubernetes_backend_tests",
+          "preflight.live_provider_smoke"
+        ]
+      },
+      {
+        "id": "redacted_yaml",
+        "title": "Full resource YAML is available with redaction.",
+        "status": "ready",
+        "evidence": [
+          "preflight.live_provider_smoke",
+          "secret_read_controls"
+        ]
+      },
+      {
+        "id": "log_streaming",
+        "title": "Logs can be streamed or followed through WebTerm controls.",
+        "status": "ready",
+        "evidence": [
+          "preflight.interactive_live_smoke",
+          "preflight.live_provider_smoke"
+        ]
+      },
+      {
+        "id": "dry_run_apply_diff",
+        "title": "Dry-run apply returns a diff/preview before mutation.",
+        "status": "ready",
+        "evidence": [
+          "action_controls.rollback_apply_requires_dry_run",
+          "preflight.kubernetes_backend_tests"
+        ]
+      },
+      {
+        "id": "approved_write_action",
+        "title": "Approved write action execution has audit evidence.",
+        "status": "ready",
+        "evidence": [
+          "action_controls.native_verification_auto_status",
+          "action_controls.approval_recorded",
+          "action_controls.production_restart_template_status"
+        ]
+      },
+      {
+        "id": "pod_exec_session",
+        "title": "Pod exec uses an active time-limited session.",
+        "status": "ready",
+        "evidence": [
+          "interactive_shell_streams",
+          "preflight.interactive_transport_evidence"
+        ]
+      },
+      {
+        "id": "port_forward_session",
+        "title": "Port-forward uses a short-lived audited session.",
+        "status": "ready",
+        "evidence": [
+          "preflight.interactive_transport_evidence",
+          "preflight.interactive_live_smoke"
+        ]
+      },
+      {
+        "id": "action_audit_metadata",
+        "title": "Privileged actions have metadata-only audit trails.",
+        "status": "ready",
+        "evidence": [
+          "action_controls",
+          "admin_mode_safety",
+          "post_review_retention",
+          "audit_redaction"
+        ]
+      },
+      {
+        "id": "webterm_login_gateway",
+        "title": "WebTerm is the login gateway for Kubernetes platform access.",
+        "status": "ready",
+        "evidence": [
+          "readiness.identity_runtime.webterm_login_gateway"
+        ]
+      },
+      {
+        "id": "regular_user_safe_cockpit",
+        "title": "Regular Kubernetes users only receive safe cockpit payloads.",
+        "status": "ready",
+        "evidence": [
+          "normal_user_surface",
+          "normal_user_surface.frontend_response_credential_scan"
+        ]
+      },
+      {
+        "id": "admin_mode_disablement",
+        "title": "Admin Mode can be disabled without deleting stored data.",
+        "status": "ready",
+        "evidence": [
+          "admin_mode_safety",
+          "preflight.kubernetes_backend_tests"
+        ]
+      }
+    ],
+    "missing_ids": []
+  },
+  "release_contract": {
+    "schema_version": "kubernetes_ops.release_evidence.v2",
+    "generated_by": "python manage.py verify_kubernetes_ops_release",
+    "required_preflight_commands": [
+      {
+        "id": "django_check",
+        "command": "python manage.py check",
+        "purpose": "Django configuration and system checks pass before release evidence is trusted."
+      },
+      {
+        "id": "architecture_guard",
+        "command": "python scripts/check_architecture_sizes.py --strict-new",
+        "purpose": "Repository architecture guard stays green for new Kubernetes Ops code."
+      },
+      {
+        "id": "migrations_dry_run",
+        "command": "python manage.py makemigrations kubernetes_ops --check --dry-run",
+        "purpose": "Kubernetes Ops models have no uncommitted migration drift."
+      },
+      {
+        "id": "kubernetes_backend_tests",
+        "command": "python -m pytest tests/test_kubernetes_ops_*.py",
+        "timeout_seconds": 1200,
+        "env": {
+          "POSTGRES_STATEMENT_TIMEOUT_MS": "0"
+        },
+        "purpose": "Kubernetes Ops backend, safety, release and readiness tests pass together."
+      },
+      {
+        "id": "readonly_rbac_validate",
+        "command": "python manage.py render_kubernetes_ops_readonly_rbac --validate-only",
+        "purpose": "Generated read-only RBAC contract stays deny-by-default for write/exec paths."
+      },
+      {
+        "id": "sync_prune_safety",
+        "command": "python manage.py verify_kubernetes_ops_sync_prune_safety",
+        "purpose": "Local inventory pruning only deletes stale rows after a successful provider sync."
+      },
+      {
+        "id": "readonly_rbac_live",
+        "command": "python scripts/verify_kubernetes_ops_readonly_rbac_live.py --apply",
+        "purpose": "Live kubectl auth can-i proof confirms read allow and write/exec deny matrix."
+      },
+      {
+        "id": "local_platform_evidence",
+        "command": "python scripts/verify_kubernetes_ops_local_platform.py --output artifacts/kubernetes_ops_local_platform_evidence.json",
+        "purpose": "Local kind platform evidence proves Rancher, Fleet and Devtron namespaces/services/workloads are installed and ready for WebTerm provider integration tests."
+      },
+      {
+        "id": "live_provider_smoke",
+        "command": "python manage.py verify_kubernetes_ops_live_provider_smoke --output artifacts/kubernetes_ops_live_provider_smoke.json",
+        "purpose": "Live WebTerm provider evidence proves enabled Rancher/Fleet/Devtron providers answer probes and read-only dry-run sync returns clusters, Fleet bundles and Devtron apps."
+      },
+      {
+        "id": "interactive_transport_evidence",
+        "command": "python manage.py verify_kubernetes_ops_interactive_transport_evidence --output artifacts/kubernetes_ops_interactive_transport_evidence.json",
+        "purpose": "Interactive exec, port-forward, cluster terminal and node-debug production prerequisites are captured without opening a live stream."
+      },
+      {
+        "id": "interactive_live_smoke",
+        "command": "python manage.py verify_kubernetes_ops_interactive_live_smoke --output artifacts/kubernetes_ops_interactive_live_smoke.json",
+        "purpose": "Interactive exec, port-forward, cluster terminal and node-debug provider openers are smoke-tested with simulated streams, while production live-stream proof stays an external evidence reference."
+      },
+      {
+        "id": "interactive_production_controls",
+        "command": "python manage.py verify_kubernetes_ops_interactive_production_controls --output artifacts/kubernetes_ops_interactive_production_controls.json",
+        "purpose": "Restricted credential, recording, provider-contract and port-forward network-policy production controls are captured without opening live streams."
+      },
+      {
+        "id": "production_action_evidence",
+        "command": "python manage.py verify_kubernetes_ops_production_action_evidence --output artifacts/kubernetes_ops_production_action_evidence.json",
+        "purpose": "Production rollback drill and native verification evidence refs are captured without mutating the cluster."
+      },
+      {
+        "id": "external_evidence_bundle",
+        "command": "python manage.py verify_kubernetes_ops_external_evidence_bundle --output artifacts/kubernetes_ops_external_evidence_bundle.json",
+        "purpose": "Production promotion evidence refs and prerequisite artifacts are captured in one fail-closed external evidence bundle."
+      },
+      {
+        "id": "release_evidence",
+        "command": "python manage.py verify_kubernetes_ops_release --username <staff-user> --output artifacts/kubernetes_ops_release_evidence.json",
+        "purpose": "Collect bounded promotion artifact for provider, sync, MCP, action-control, Admin Mode safety and release-scope evidence."
+      },
+      {
+        "id": "preflight_evidence",
+        "command": "python manage.py verify_kubernetes_ops_preflight --output artifacts/kubernetes_ops_preflight_evidence.json",
+        "purpose": "Write bounded evidence that required release preflight commands passed before promotion."
+      },
+      {
+        "id": "release_handoff",
+        "command": "python manage.py render_kubernetes_ops_release_handoff --output artifacts/kubernetes_ops_release_handoff.md",
+        "purpose": "Render the operator-facing production handoff checklist from release evidence without approving production by itself."
+      }
+    ]
+  },
+  "blockers": [
+    "readiness:sidebar_release_scope=missing",
+    "release_scope:local"
+  ],
+  "artifact_safety": {
+    "success": true,
+    "status": "ready",
+    "checked_fields": 2782,
+    "issue_count": 0,
+    "issue_limit": 12,
+    "truncated": false,
+    "issues": []
+  },
+  "release_summary": {
+    "status": "blocked",
+    "production_ready": false,
+    "ready_for_sidebar": false,
+    "blocker_count": 2,
+    "top_blockers": [
+      "readiness:sidebar_release_scope=missing",
+      "release_scope:local"
+    ],
+    "next_steps": [
+      "Run release evidence in production with non-local Rancher/Devtron/MCP endpoints, approval ref and core evidence refs."
+    ],
+    "release_scope_status": "local",
+    "release_scope_approval_ref": "",
+    "preflight_status": "ready",
+    "preflight_age_seconds": 1743,
+    "preflight_max_age_seconds": 86400,
+    "artifact_safety_status": "ready",
+    "artifact_safety_issue_count": 0,
+    "normal_user_surface_status": "ready",
+    "definition_of_done_status": "ready",
+    "definition_of_done_ready": 13,
+    "definition_of_done_total": 13,
+    "frontend_payload_scan_status": "ready",
+    "sensitive_value_controls_status": "ready",
+    "provider_lifecycle_status": "ready",
+    "audit_redaction_status": "ready",
+    "production_action_evidence_status": "ready",
+    "production_action_blocked_action_class_count": 11,
+    "readiness_summary": {
+      "ready": 17,
+      "missing": 1,
+      "manual": 0,
+      "total": 18
+    },
+    "completion_audit": {
+      "status": "incomplete",
+      "core_backend_complete": true,
+      "runtime_readiness_complete": true,
+      "production_evidence_complete": false,
+      "sidebar_enablement_complete": false,
+      "core_backend_proofs": [
+        {
+          "id": "definition_of_done",
+          "status": "ready",
+          "complete": true
+        },
+        {
+          "id": "normal_user_surface",
+          "status": "ready",
+          "complete": true
+        },
+        {
+          "id": "frontend_payload_scan",
+          "status": "ready",
+          "complete": true
+        },
+        {
+          "id": "secret_read_controls",
+          "status": "ready",
+          "complete": true
+        },
+        {
+          "id": "provider_secret_lifecycle",
+          "status": "ready",
+          "complete": true
+        },
+        {
+          "id": "audit_redaction",
+          "status": "ready",
+          "complete": true
+        },
+        {
+          "id": "production_action_evidence",
+          "status": "ready",
+          "complete": true
+        }
+      ],
+      "runtime_missing_required_checks": [],
+      "production_scope_readiness_checks": [
+        "sidebar_release_scope"
+      ],
+      "production_evidence_checks": [
+        {
+          "id": "target_environment",
+          "complete": false,
+          "detail": "local"
+        },
+        {
+          "id": "required_references",
+          "complete": true,
+          "detail": "0"
+        },
+        {
+          "id": "no_local_indicators",
+          "complete": false,
+          "detail": "8"
+        },
+        {
+          "id": "release_artifact",
+          "complete": false,
+          "detail": "ready"
+        }
+      ],
+      "remaining": [
+        "production_evidence",
+        "sidebar_enablement"
+      ]
+    }
+  },
+  "completion_audit": {
+    "status": "incomplete",
+    "core_backend_complete": true,
+    "runtime_readiness_complete": true,
+    "production_evidence_complete": false,
+    "sidebar_enablement_complete": false,
+    "core_backend_proofs": [
+      {
+        "id": "definition_of_done",
+        "status": "ready",
+        "complete": true
+      },
+      {
+        "id": "normal_user_surface",
+        "status": "ready",
+        "complete": true
+      },
+      {
+        "id": "frontend_payload_scan",
+        "status": "ready",
+        "complete": true
+      },
+      {
+        "id": "secret_read_controls",
+        "status": "ready",
+        "complete": true
+      },
+      {
+        "id": "provider_secret_lifecycle",
+        "status": "ready",
+        "complete": true
+      },
+      {
+        "id": "audit_redaction",
+        "status": "ready",
+        "complete": true
+      },
+      {
+        "id": "production_action_evidence",
+        "status": "ready",
+        "complete": true
+      }
+    ],
+    "runtime_missing_required_checks": [],
+    "production_scope_readiness_checks": [
+      "sidebar_release_scope"
+    ],
+    "production_evidence_checks": [
+      {
+        "id": "target_environment",
+        "complete": false,
+        "detail": "local"
+      },
+      {
+        "id": "required_references",
+        "complete": true,
+        "detail": "0"
+      },
+      {
+        "id": "no_local_indicators",
+        "complete": false,
+        "detail": "8"
+      },
+      {
+        "id": "release_artifact",
+        "complete": false,
+        "detail": "ready"
+      }
+    ],
+    "remaining": [
+      "production_evidence",
+      "sidebar_enablement"
+    ]
+  },
+  "production_execution_plan": {
+    "status": "blocked",
+    "can_enable_sidebar": false,
+    "recommended_next": {
+      "type": "manual",
+      "id": "select_production_environment",
+      "label": "Select the production release environment."
+    },
+    "blocked_until": [
+      {
+        "id": "target_environment",
+        "detail": "target environment must be production"
+      },
+      {
+        "id": "production_approval_ref",
+        "detail": "production approval reference must be present"
+      },
+      {
+        "id": "local_indicators",
+        "detail": "local/test markers must be removed from evidence (8)"
+      },
+      {
+        "id": "production_ready",
+        "detail": "release evidence must report production_ready=true"
+      },
+      {
+        "id": "ready_for_sidebar",
+        "detail": "release evidence must report ready_for_sidebar=true"
+      },
+      {
+        "id": "production_evidence_complete",
+        "detail": "completion audit must mark production evidence complete"
+      },
+      {
+        "id": "sidebar_enablement_complete",
+        "detail": "completion audit must mark sidebar enablement complete"
+      }
+    ],
+    "blocked_until_count": 7,
+    "phases": [
+      {
+        "id": "configure_production_scope",
+        "title": "Configure production scope",
+        "type": "manual",
+        "manual_steps": [
+          "Set KUBERNETES_OPS_RELEASE_ENVIRONMENT=production only for the real target.",
+          "Set approval and evidence reference env vars; do not paste provider tokens."
+        ],
+        "settings": [
+          "KUBERNETES_OPS_RELEASE_ENVIRONMENT",
+          "KUBERNETES_OPS_PRODUCTION_APPROVAL_REF",
+          "KUBERNETES_OPS_PRODUCTION_EVIDENCE_REF",
+          "KUBERNETES_OPS_IDENTITY_RUNTIME_EVIDENCE_REF",
+          "KUBERNETES_OPS_LIVE_PROVIDER_EVIDENCE_REF",
+          "KUBERNETES_OPS_READONLY_RBAC_EVIDENCE_REF",
+          "KUBERNETES_OPS_KUBERNETES_MCP_EVIDENCE_REF",
+          "KUBERNETES_OPS_PRODUCTION_ROLLBACK_EVIDENCE_REF",
+          "KUBERNETES_OPS_PRODUCTION_NATIVE_VERIFICATION_EVIDENCE_REF",
+          "KUBERNETES_OPS_READY_FOR_SIDEBAR",
+          "KUBERNETES_OPS_RELEASE_EVIDENCE_MAX_AGE_SECONDS",
+          "KUBERNETES_ADMIN_RESTRICTED_CREDENTIAL_EVIDENCE_REF",
+          "KUBERNETES_ADMIN_PORT_FORWARD_NETWORK_POLICY_EVIDENCE_REF",
+          "KUBERNETES_ADMIN_INTERACTIVE_LIVE_SMOKE_EVIDENCE_REF"
+        ]
+      },
+      {
+        "id": "collect_production_evidence",
+        "title": "Collect production prerequisite evidence",
+        "type": "command",
+        "commands": [
+          {
+            "id": "live_provider_smoke",
+            "command": "python manage.py verify_kubernetes_ops_live_provider_smoke --output artifacts/kubernetes_ops_live_provider_smoke.json",
+            "purpose": "Live WebTerm provider evidence proves enabled Rancher/Fleet/Devtron providers answer probes and read-only dry-run sync returns clusters, Fleet bundles and Devtron apps."
+          },
+          {
+            "id": "readonly_rbac_live",
+            "command": "python scripts/verify_kubernetes_ops_readonly_rbac_live.py --apply",
+            "purpose": "Live kubectl auth can-i proof confirms read allow and write/exec deny matrix."
+          },
+          {
+            "id": "interactive_transport_evidence",
+            "command": "python manage.py verify_kubernetes_ops_interactive_transport_evidence --output artifacts/kubernetes_ops_interactive_transport_evidence.json",
+            "purpose": "Interactive exec, port-forward, cluster terminal and node-debug production prerequisites are captured without opening a live stream."
+          },
+          {
+            "id": "interactive_live_smoke",
+            "command": "python manage.py verify_kubernetes_ops_interactive_live_smoke --output artifacts/kubernetes_ops_interactive_live_smoke.json",
+            "purpose": "Interactive exec, port-forward, cluster terminal and node-debug provider openers are smoke-tested with simulated streams, while production live-stream proof stays an external evidence reference."
+          },
+          {
+            "id": "interactive_production_controls",
+            "command": "python manage.py verify_kubernetes_ops_interactive_production_controls --output artifacts/kubernetes_ops_interactive_production_controls.json",
+            "purpose": "Restricted credential, recording, provider-contract and port-forward network-policy production controls are captured without opening live streams."
+          },
+          {
+            "id": "production_action_evidence",
+            "command": "python manage.py verify_kubernetes_ops_production_action_evidence --output artifacts/kubernetes_ops_production_action_evidence.json",
+            "purpose": "Production rollback drill and native verification evidence refs are captured without mutating the cluster."
+          },
+          {
+            "id": "external_evidence_bundle",
+            "command": "python manage.py verify_kubernetes_ops_external_evidence_bundle --output artifacts/kubernetes_ops_external_evidence_bundle.json",
+            "purpose": "Production promotion evidence refs and prerequisite artifacts are captured in one fail-closed external evidence bundle."
+          }
+        ],
+        "command_count": 7
+      },
+      {
+        "id": "generate_release_artifacts",
+        "title": "Generate release artifacts",
+        "type": "command",
+        "commands": [
+          {
+            "id": "preflight_evidence",
+            "command": "python manage.py verify_kubernetes_ops_preflight --output artifacts/kubernetes_ops_preflight_evidence.json",
+            "purpose": "Write bounded evidence that required release preflight commands passed before promotion."
+          },
+          {
+            "id": "release_evidence",
+            "command": "python manage.py verify_kubernetes_ops_release --username <staff-user> --output artifacts/kubernetes_ops_release_evidence.json",
+            "purpose": "Collect bounded promotion artifact for provider, sync, MCP, action-control, Admin Mode safety and release-scope evidence."
+          },
+          {
+            "id": "release_handoff",
+            "command": "python manage.py render_kubernetes_ops_release_handoff --output artifacts/kubernetes_ops_release_handoff.md",
+            "purpose": "Render the operator-facing production handoff checklist from release evidence without approving production by itself."
+          }
+        ],
+        "command_count": 3
+      },
+      {
+        "id": "enable_sidebar_after_green",
+        "title": "Enable sidebar after green handoff",
+        "type": "manual",
+        "manual_steps": [
+          "Set KUBERNETES_OPS_READY_FOR_SIDEBAR=true only after production_ready=true and approved operator change."
+        ],
+        "settings": [
+          "KUBERNETES_OPS_READY_FOR_SIDEBAR"
+        ]
+      }
+    ],
+    "phase_count": 4,
+    "command_count": 10
+  }
+}

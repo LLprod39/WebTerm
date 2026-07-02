@@ -30,7 +30,7 @@ class Migration(migrations.Migration):
             ],
             options={
                 'ordering': ['-created_at', '-id'],
-                'indexes': [models.Index(fields=['plugin_id', '-created_at'], name='pm_compat_job_plugin_created_idx'), models.Index(fields=['status', '-created_at'], name='pm_compat_job_status_created_idx')],
+                'indexes': [models.Index(fields=['plugin_id', '-created_at'], name='pm_compat_plugin_created_idx'), models.Index(fields=['status', '-created_at'], name='pm_compat_status_created_idx')],
             },
         ),
     ]

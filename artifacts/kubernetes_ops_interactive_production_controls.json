@@ -1,0 +1,239 @@
+{
+  "schema_version": "kubernetes_ops.interactive_production_controls.v1",
+  "status": "ready",
+  "success": true,
+  "checked_at": "2026-07-02T14:28:30.650085+00:00",
+  "target_environment": "local",
+  "production_environment": false,
+  "evidence_mode": "interactive_production_controls_snapshot",
+  "dangerous_live_action_started": false,
+  "provider_stream_opened": false,
+  "enabled_transport_count": 0,
+  "admin_interactive_transport": {
+    "status": "ready",
+    "target_environment": "local",
+    "production_environment": false,
+    "evidence_setting": "KUBERNETES_ADMIN_RESTRICTED_CREDENTIAL_EVIDENCE_REF",
+    "port_forward_network_policy_evidence_setting": "KUBERNETES_ADMIN_PORT_FORWARD_NETWORK_POLICY_EVIDENCE_REF",
+    "restricted_credential_evidence_present": false,
+    "enabled_transport_count": 0,
+    "transports": [
+      {
+        "id": "exec_stream",
+        "enabled": false,
+        "enabled_settings": [
+          "KUBERNETES_ADMIN_NATIVE_EXEC_ENABLED",
+          "KUBERNETES_ADMIN_EXEC_STREAMING_ENABLED"
+        ],
+        "recording_enabled": false,
+        "recording_setting": "KUBERNETES_ADMIN_EXEC_RECORDING_ENABLED",
+        "restricted_credential_evidence_required": false,
+        "restricted_credential_evidence_ready": true,
+        "blockers": []
+      },
+      {
+        "id": "port_forward_tunnel",
+        "enabled": false,
+        "enabled_settings": [
+          "KUBERNETES_ADMIN_NATIVE_PORT_FORWARD_ENABLED",
+          "KUBERNETES_ADMIN_PORT_FORWARD_TUNNEL_ENABLED"
+        ],
+        "recording_enabled": false,
+        "recording_setting": "KUBERNETES_ADMIN_PORT_FORWARD_RECORDING_ENABLED",
+        "restricted_credential_evidence_required": false,
+        "restricted_credential_evidence_ready": true,
+        "blockers": [],
+        "network_policy": {
+          "enabled": false,
+          "allowed_targets_setting": "KUBERNETES_ADMIN_PORT_FORWARD_ALLOWED_TARGETS",
+          "allowed_target_count": 0,
+          "wildcard_targets_present": false,
+          "protected_namespaces_setting": "KUBERNETES_ADMIN_PORT_FORWARD_PROTECTED_NAMESPACES",
+          "protected_namespace_count": 13,
+          "default_protected_namespaces_covered": true,
+          "network_policy_evidence_setting": "KUBERNETES_ADMIN_PORT_FORWARD_NETWORK_POLICY_EVIDENCE_REF",
+          "network_policy_evidence_required": false,
+          "network_policy_evidence_present": false,
+          "max_duration_seconds": 900,
+          "production_max_duration_seconds": 900,
+          "blockers": []
+        }
+      },
+      {
+        "id": "cluster_terminal",
+        "enabled": false,
+        "enabled_settings": [
+          "KUBERNETES_ADMIN_CLUSTER_TERMINAL_ENABLED"
+        ],
+        "recording_enabled": false,
+        "recording_setting": "KUBERNETES_ADMIN_CLUSTER_TERMINAL_RECORDING_ENABLED",
+        "restricted_credential_evidence_required": false,
+        "restricted_credential_evidence_ready": true,
+        "blockers": [],
+        "provider_contract": {
+          "operation": "cluster_terminal",
+          "required": false,
+          "label": "cluster_terminal_path_template",
+          "required_placeholders": [
+            "cluster_id",
+            "namespace"
+          ],
+          "enabled_rancher_provider_count": 1,
+          "checked_provider_count": 1,
+          "missing_provider_count": 1,
+          "invalid_provider_count": 0,
+          "providers": [
+            {
+              "operation": "cluster_terminal",
+              "status": "missing",
+              "provider_id": 3,
+              "provider_name": "local-rancher-real",
+              "label": "cluster_terminal_path_template",
+              "required_placeholders": [
+                "cluster_id",
+                "namespace"
+              ],
+              "missing_placeholders": [],
+              "blockers": [
+                "provider_contract_required"
+              ]
+            }
+          ],
+          "blockers": []
+        }
+      },
+      {
+        "id": "node_debug",
+        "enabled": false,
+        "enabled_settings": [
+          "KUBERNETES_ADMIN_NODE_DEBUG_ENABLED"
+        ],
+        "recording_enabled": false,
+        "recording_setting": "KUBERNETES_ADMIN_NODE_DEBUG_RECORDING_ENABLED",
+        "restricted_credential_evidence_required": false,
+        "restricted_credential_evidence_ready": true,
+        "blockers": [],
+        "provider_contract": {
+          "operation": "node_debug",
+          "required": false,
+          "label": "node_debug_path_template",
+          "required_placeholders": [
+            "cluster_id",
+            "node_name"
+          ],
+          "enabled_rancher_provider_count": 1,
+          "checked_provider_count": 1,
+          "missing_provider_count": 1,
+          "invalid_provider_count": 0,
+          "providers": [
+            {
+              "operation": "node_debug",
+              "status": "missing",
+              "provider_id": 3,
+              "provider_name": "local-rancher-real",
+              "label": "node_debug_path_template",
+              "required_placeholders": [
+                "cluster_id",
+                "node_name"
+              ],
+              "missing_placeholders": [],
+              "blockers": [
+                "provider_contract_required"
+              ]
+            }
+          ],
+          "blockers": []
+        }
+      }
+    ],
+    "blockers": [],
+    "detail": "Interactive production transports are disabled."
+  },
+  "controls": [
+    {
+      "id": "restricted_credentials",
+      "setting": "KUBERNETES_ADMIN_RESTRICTED_CREDENTIAL_EVIDENCE_REF",
+      "required": false,
+      "present": false,
+      "required_items": [
+        "reviewed_restricted_service_account",
+        "no_cluster_admin",
+        "namespace_and_verb_scope",
+        "credential_rotation_or_expiry",
+        "break_glass_approval_link"
+      ],
+      "ready": true,
+      "payload_stored": false,
+      "sensitive_values_stored": false
+    },
+    {
+      "id": "recording_policy",
+      "setting": "",
+      "required": false,
+      "present": false,
+      "required_items": [
+        "metadata_retention",
+        "transcript_retention",
+        "bounded_redacted_events",
+        "post_review_queue"
+      ],
+      "ready": true,
+      "payload_stored": false,
+      "sensitive_values_stored": false
+    },
+    {
+      "id": "port_forward_network_policy",
+      "setting": "KUBERNETES_ADMIN_PORT_FORWARD_NETWORK_POLICY_EVIDENCE_REF",
+      "required": false,
+      "present": false,
+      "required_items": [
+        "reviewed_network_policy",
+        "exact_target_allowlist",
+        "protected_namespace_coverage",
+        "ttl_cap_900_seconds_or_less",
+        "no_wildcard_targets"
+      ],
+      "ready": true,
+      "payload_stored": false,
+      "sensitive_values_stored": false
+    },
+    {
+      "id": "provider_path_contracts",
+      "setting": "",
+      "required": false,
+      "present": false,
+      "required_items": [
+        "cluster_terminal_path_template",
+        "node_debug_path_template",
+        "relative_paths_only",
+        "required_placeholders"
+      ],
+      "ready": true,
+      "payload_stored": false,
+      "sensitive_values_stored": false
+    }
+  ],
+  "coverage": {
+    "control_contract_complete": true,
+    "covered_control_ids": [
+      "restricted_credentials",
+      "recording_policy",
+      "port_forward_network_policy",
+      "provider_path_contracts"
+    ],
+    "expected_control_count": 4,
+    "ready_control_count": 4
+  },
+  "summary": {
+    "production_environment": false,
+    "enabled_transport_count": 0,
+    "control_contract_count": 4,
+    "required_ref_count": 0,
+    "missing_required_ref_count": 0,
+    "recording_required_transport_count": 0,
+    "provider_contract_required_transport_count": 0,
+    "port_forward_network_policy_required": false,
+    "blocker_count": 0
+  },
+  "errors": []
+}

@@ -1,0 +1,248 @@
+from django.urls import path
+
+from kubernetes_ops import action_views, admin_action_views, admin_apply_views, admin_delete_views, admin_dry_run_views, admin_log_views, admin_node_debug_views, admin_node_maintenance_views, admin_patch_views, admin_recording_views, admin_resource_views, admin_session_views, admin_terminal_views, admin_watch_views, admin_workload_views, audit_views, capability_views, describe_views, devtron_views, diagnostic_views, fleet_views, helm_views, log_views, namespace_views, network_views, pod_views, probe_views, release_views, workload_views
+from kubernetes_ops import views
+
+urlpatterns = [
+    path("readiness/", views.api_kubernetes_readiness, name="api_kubernetes_readiness"),
+    path("capabilities/", capability_views.api_kubernetes_capabilities, name="api_kubernetes_capabilities"),
+    path("release/summary/", release_views.api_kubernetes_release_summary, name="api_kubernetes_release_summary"),
+    path("overview/", views.api_kubernetes_overview, name="api_kubernetes_overview"),
+    path("diagnostics/summary/", diagnostic_views.api_kubernetes_diagnostics_summary, name="api_kubernetes_diagnostics_summary"),
+    path("actions/diagnose/", action_views.api_kubernetes_diagnose_action, name="api_kubernetes_diagnose_action"),
+    path("actions/summary/", action_views.api_kubernetes_action_summary, name="api_kubernetes_action_summary"),
+    path("actions/", action_views.api_kubernetes_action_requests, name="api_kubernetes_action_requests"),
+    path("admin/sessions/", admin_session_views.api_kubernetes_admin_sessions, name="api_kubernetes_admin_sessions"),
+    path(
+        "admin/sessions/<uuid:session_id>/",
+        admin_session_views.api_kubernetes_admin_session_detail,
+        name="api_kubernetes_admin_session_detail",
+    ),
+    path(
+        "admin/sessions/<uuid:session_id>/approve/",
+        admin_session_views.api_kubernetes_admin_session_approve,
+        name="api_kubernetes_admin_session_approve",
+    ),
+    path(
+        "admin/sessions/<uuid:session_id>/revoke/",
+        admin_session_views.api_kubernetes_admin_session_revoke,
+        name="api_kubernetes_admin_session_revoke",
+    ),
+    path(
+        "admin/sessions/<uuid:session_id>/close/",
+        admin_session_views.api_kubernetes_admin_session_close,
+        name="api_kubernetes_admin_session_close",
+    ),
+    path(
+        "admin/sessions/<uuid:session_id>/review/",
+        admin_session_views.api_kubernetes_admin_session_review,
+        name="api_kubernetes_admin_session_review",
+    ),
+    path(
+        "admin/sessions/<uuid:session_id>/restricted-context/",
+        admin_session_views.api_kubernetes_admin_session_restricted_context,
+        name="api_kubernetes_admin_session_restricted_context",
+    ),
+    path(
+        "admin/sessions/<uuid:session_id>/terminal/start/",
+        admin_terminal_views.api_kubernetes_admin_terminal_start,
+        name="api_kubernetes_admin_terminal_start",
+    ),
+    path(
+        "admin/sessions/<uuid:session_id>/terminal/stop/",
+        admin_terminal_views.api_kubernetes_admin_terminal_stop,
+        name="api_kubernetes_admin_terminal_stop",
+    ),
+    path(
+        "admin/sessions/<uuid:session_id>/node-debug/start/",
+        admin_node_debug_views.api_kubernetes_admin_node_debug_start,
+        name="api_kubernetes_admin_node_debug_start",
+    ),
+    path(
+        "admin/sessions/<uuid:session_id>/node-debug/stop/",
+        admin_node_debug_views.api_kubernetes_admin_node_debug_stop,
+        name="api_kubernetes_admin_node_debug_stop",
+    ),
+    path("admin/actions/", admin_action_views.api_kubernetes_admin_actions, name="api_kubernetes_admin_actions"),
+    path(
+        "admin/actions/<uuid:action_id>/",
+        admin_action_views.api_kubernetes_admin_action_detail,
+        name="api_kubernetes_admin_action_detail",
+    ),
+    path(
+        "admin/actions/<uuid:action_id>/report/",
+        admin_action_views.api_kubernetes_admin_action_report,
+        name="api_kubernetes_admin_action_report",
+    ),
+    path(
+        "admin/actions/<uuid:action_id>/review/",
+        admin_action_views.api_kubernetes_admin_action_review,
+        name="api_kubernetes_admin_action_review",
+    ),
+    path("admin/recordings/", admin_recording_views.api_kubernetes_admin_recordings, name="api_kubernetes_admin_recordings"),
+    path(
+        "admin/recordings/<uuid:recording_id>/",
+        admin_recording_views.api_kubernetes_admin_recording_detail,
+        name="api_kubernetes_admin_recording_detail",
+    ),
+    path(
+        "admin/clusters/<str:cluster_id>/discovery/",
+        admin_resource_views.api_kubernetes_admin_resource_discovery,
+        name="api_kubernetes_admin_resource_discovery",
+    ),
+    path(
+        "admin/clusters/<str:cluster_id>/resources/",
+        admin_resource_views.api_kubernetes_admin_resource_list,
+        name="api_kubernetes_admin_resource_list",
+    ),
+    path(
+        "admin/clusters/<str:cluster_id>/yaml/",
+        admin_resource_views.api_kubernetes_admin_resource_yaml,
+        name="api_kubernetes_admin_resource_yaml",
+    ),
+    path(
+        "admin/clusters/<str:cluster_id>/resources/detail/",
+        admin_resource_views.api_kubernetes_admin_resource_detail,
+        name="api_kubernetes_admin_resource_detail",
+    ),
+    path(
+        "admin/clusters/<str:cluster_id>/resources/describe/",
+        admin_resource_views.api_kubernetes_admin_resource_describe,
+        name="api_kubernetes_admin_resource_describe",
+    ),
+    path(
+        "admin/clusters/<str:cluster_id>/crds/",
+        admin_resource_views.api_kubernetes_admin_crds,
+        name="api_kubernetes_admin_crds",
+    ),
+    path(
+        "admin/clusters/<str:cluster_id>/nodes/",
+        admin_resource_views.api_kubernetes_admin_nodes,
+        name="api_kubernetes_admin_nodes",
+    ),
+    path(
+        "admin/clusters/<str:cluster_id>/metrics/",
+        admin_resource_views.api_kubernetes_admin_metrics,
+        name="api_kubernetes_admin_metrics",
+    ),
+    path(
+        "admin/clusters/<str:cluster_id>/nodes/cordon/",
+        admin_node_maintenance_views.api_kubernetes_admin_node_cordon,
+        name="api_kubernetes_admin_node_cordon",
+    ),
+    path(
+        "admin/clusters/<str:cluster_id>/nodes/uncordon/",
+        admin_node_maintenance_views.api_kubernetes_admin_node_uncordon,
+        name="api_kubernetes_admin_node_uncordon",
+    ),
+    path(
+        "admin/clusters/<str:cluster_id>/nodes/drain/",
+        admin_node_maintenance_views.api_kubernetes_admin_node_drain,
+        name="api_kubernetes_admin_node_drain",
+    ),
+    path(
+        "admin/clusters/<str:cluster_id>/resources/events/",
+        admin_resource_views.api_kubernetes_admin_resource_events,
+        name="api_kubernetes_admin_resource_events",
+    ),
+    path(
+        "admin/clusters/<str:cluster_id>/logs/",
+        admin_log_views.api_kubernetes_admin_pod_logs,
+        name="api_kubernetes_admin_pod_logs",
+    ),
+    path(
+        "admin/clusters/<str:cluster_id>/watch/",
+        admin_watch_views.api_kubernetes_admin_resource_watch,
+        name="api_kubernetes_admin_resource_watch",
+    ),
+    path(
+        "admin/clusters/<str:cluster_id>/resources/dry-run-apply/",
+        admin_dry_run_views.api_kubernetes_admin_dry_run_apply,
+        name="api_kubernetes_admin_dry_run_apply",
+    ),
+    path(
+        "admin/clusters/<str:cluster_id>/resources/schema-validate/",
+        admin_dry_run_views.api_kubernetes_admin_schema_validate,
+        name="api_kubernetes_admin_schema_validate",
+    ),
+    path(
+        "admin/clusters/<str:cluster_id>/resources/apply/",
+        admin_apply_views.api_kubernetes_admin_apply,
+        name="api_kubernetes_admin_apply",
+    ),
+    path(
+        "admin/clusters/<str:cluster_id>/resources/patch/",
+        admin_patch_views.api_kubernetes_admin_patch,
+        name="api_kubernetes_admin_patch",
+    ),
+    path(
+        "admin/clusters/<str:cluster_id>/resources/scale/",
+        admin_workload_views.api_kubernetes_admin_scale,
+        name="api_kubernetes_admin_scale",
+    ),
+    path(
+        "admin/clusters/<str:cluster_id>/resources/restart/",
+        admin_workload_views.api_kubernetes_admin_restart,
+        name="api_kubernetes_admin_restart",
+    ),
+    path(
+        "admin/clusters/<str:cluster_id>/resources/delete/",
+        admin_delete_views.api_kubernetes_admin_delete,
+        name="api_kubernetes_admin_delete",
+    ),
+    path(
+        "actions/request-approval/",
+        action_views.api_kubernetes_action_request_approval,
+        name="api_kubernetes_action_request_approval",
+    ),
+    path(
+        "actions/execute-approved/",
+        action_views.api_kubernetes_action_execute_approved,
+        name="api_kubernetes_action_execute_approved",
+    ),
+    path(
+        "actions/<uuid:request_id>/status/",
+        action_views.api_kubernetes_action_status,
+        name="api_kubernetes_action_status",
+    ),
+    path(
+        "actions/<uuid:request_id>/report/",
+        action_views.api_kubernetes_action_report,
+        name="api_kubernetes_action_report",
+    ),
+    path(
+        "actions/<uuid:request_id>/verify-external/",
+        action_views.api_kubernetes_action_verify_external,
+        name="api_kubernetes_action_verify_external",
+    ),
+    path(
+        "actions/<uuid:request_id>/approve-external/",
+        action_views.api_kubernetes_action_approve_external,
+        name="api_kubernetes_action_approve_external",
+    ),
+    path("sync/", views.api_kubernetes_sync, name="api_kubernetes_sync"),
+    path("providers/", views.api_kubernetes_providers, name="api_kubernetes_providers"),
+    path("providers/<int:provider_id>/", views.api_kubernetes_provider_detail, name="api_kubernetes_provider_detail"),
+    path("providers/<int:provider_id>/sync/", views.api_kubernetes_provider_sync, name="api_kubernetes_provider_sync"),
+    path("providers/<int:provider_id>/probe/", probe_views.api_kubernetes_provider_probe, name="api_kubernetes_provider_probe"),
+    path("clusters/", views.api_kubernetes_clusters, name="api_kubernetes_clusters"),
+    path("workloads/<str:workload_id>/describe/", describe_views.api_kubernetes_workload_describe, name="api_kubernetes_workload_describe"),
+    path("workloads/<str:workload_id>/", workload_views.api_kubernetes_workload_detail, name="api_kubernetes_workload_detail"),
+    path("pods/<str:pod_id>/logs/", log_views.api_kubernetes_pod_logs, name="api_kubernetes_pod_logs"),
+    path("pods/<str:pod_id>/", pod_views.api_kubernetes_pod_detail, name="api_kubernetes_pod_detail"),
+    path("network/<str:network_id>/", network_views.api_kubernetes_network_detail, name="api_kubernetes_network_detail"),
+    path("clusters/<str:cluster_id>/namespaces/", views.api_kubernetes_cluster_namespaces, name="api_kubernetes_cluster_namespaces"),
+    path("clusters/<str:cluster_id>/namespaces/<str:namespace_id>/", namespace_views.api_kubernetes_namespace_detail, name="api_kubernetes_namespace_detail"),
+    path("clusters/<str:cluster_id>/workloads/", views.api_kubernetes_cluster_workloads, name="api_kubernetes_cluster_workloads"),
+    path("clusters/<str:cluster_id>/pods/", pod_views.api_kubernetes_cluster_pods, name="api_kubernetes_cluster_pods"),
+    path("clusters/<str:cluster_id>/network/", network_views.api_kubernetes_cluster_network, name="api_kubernetes_cluster_network"),
+    path("clusters/<str:cluster_id>/events/", views.api_kubernetes_cluster_events, name="api_kubernetes_cluster_events"),
+    path("clusters/<str:cluster_id>/", views.api_kubernetes_cluster_detail, name="api_kubernetes_cluster_detail"),
+    path("helm/releases/", helm_views.api_kubernetes_helm_releases, name="api_kubernetes_helm_releases"),
+    path("fleet/bundles/", views.api_kubernetes_fleet_bundles, name="api_kubernetes_fleet_bundles"),
+    path("fleet/bundles/<str:bundle_id>/", fleet_views.api_kubernetes_fleet_bundle_detail, name="api_kubernetes_fleet_bundle_detail"),
+    path("devtron/apps/", views.api_kubernetes_devtron_apps, name="api_kubernetes_devtron_apps"),
+    path("devtron/apps/<str:app_id>/", devtron_views.api_kubernetes_devtron_app_detail, name="api_kubernetes_devtron_app_detail"),
+    path("audit/deeplink/", audit_views.api_kubernetes_deeplink_audit, name="api_kubernetes_deeplink_audit"),
+    path("audit/", audit_views.api_kubernetes_audit, name="api_kubernetes_audit"),
+]

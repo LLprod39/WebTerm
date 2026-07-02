@@ -18,6 +18,7 @@ LLM_API_KEY_NAMESPACE = "llm_api_key"
 LLM_API_KEY_OBJECT_ID = 1
 NOTIFICATION_SECRET_NAMESPACE = "notification_secret"
 NOTIFICATION_SECRET_OBJECT_ID = 1
+KUBERNETES_PROVIDER_TOKEN_NAMESPACE = "kubernetes_provider_token"
 LLM_API_KEY_PROVIDERS = {
     "gemini": "GEMINI_API_KEY",
     "grok": "GROK_API_KEY",
@@ -265,3 +266,31 @@ def get_llm_api_key(provider: str) -> str:
 def has_llm_api_key(provider: str) -> bool:
     provider_key = _normalize_llm_provider(provider)
     return _has(LLM_API_KEY_NAMESPACE, LLM_API_KEY_OBJECT_ID, key=provider_key)
+
+
+def set_kubernetes_provider_token(provider_id: int, token: str) -> None:
+    value = (token or "").strip()
+    if not value:
+        _delete(KUBERNETES_PROVIDER_TOKEN_NAMESPACE, provider_id)
+        return
+    _upsert(
+        KUBERNETES_PROVIDER_TOKEN_NAMESPACE,
+        provider_id,
+        {"token": value},
+        metadata={"kind": "kubernetes_provider_token"},
+    )
+
+
+def get_kubernetes_provider_token(provider_id: int) -> str:
+    payload = _get(KUBERNETES_PROVIDER_TOKEN_NAMESPACE, provider_id, default={})
+    if isinstance(payload, dict):
+        return str(payload.get("token") or "")
+    return ""
+
+
+def has_kubernetes_provider_token(provider_id: int) -> bool:
+    return _has(KUBERNETES_PROVIDER_TOKEN_NAMESPACE, provider_id)
+
+
+def delete_kubernetes_provider_token(provider_id: int) -> None:
+    _delete(KUBERNETES_PROVIDER_TOKEN_NAMESPACE, provider_id)

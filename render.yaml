@@ -10,6 +10,8 @@ services:
       - fromGroup: mini-prod-backend-common
       - key: DJANGO_SECRET_KEY
         generateValue: true
+      - key: MANAGED_SECRET_KEY
+        generateValue: true
       - key: SITE_URL
         value: https://mini-prod-backend.onrender.com
       - key: FRONTEND_APP_URL
@@ -423,6 +425,51 @@ services:
           type: web
           envVarKey: ANTHROPIC_API_KEY
 
+  - type: worker
+    name: mini-prod-kubernetes-ops-sync
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./docker/backend.Dockerfile
+    dockerContext: .
+    dockerCommand: python manage.py run_kubernetes_ops_sync_worker --daemon --interval 300 --worker-key render
+    envVars:
+      - fromGroup: mini-prod-backend-common
+      - key: DJANGO_SECRET_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: DJANGO_SECRET_KEY
+      - key: MANAGED_SECRET_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: MANAGED_SECRET_KEY
+      - key: CHANNEL_REDIS_URL
+        fromService:
+          name: mini-prod-redis
+          type: keyvalue
+          property: connectionString
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: mini-prod-postgres
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: mini-prod-postgres
+          property: port
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: mini-prod-postgres
+          property: database
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: mini-prod-postgres
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: mini-prod-postgres
+          property: password
+
   - type: keyvalue
     name: mini-prod-redis
     plan: free
@@ -497,3 +544,103 @@ envVarGroups:
         value: "120"
       - key: WATCHERS_LIMIT
         value: "100"
+      - key: KUBERNETES_OPS_SYNC_INTERVAL_SECONDS
+        value: "300"
+      - key: KUBERNETES_OPS_SYNC_MAX_BACKOFF_SECONDS
+        value: "1800"
+      - key: KUBERNETES_OPS_STALE_AFTER_SECONDS
+        value: "900"
+      - key: KUBERNETES_OPS_AUDIT_RETENTION_DAYS
+        value: "365"
+      - key: KUBERNETES_OPS_READY_FOR_SIDEBAR
+        value: "false"
+      - key: KUBERNETES_OPS_RELEASE_ENVIRONMENT
+        value: "local"
+      - key: KUBERNETES_OPS_PRODUCTION_APPROVAL_REF
+        value: ""
+      - key: KUBERNETES_OPS_PRODUCTION_EVIDENCE_REF
+        value: ""
+      - key: KUBERNETES_OPS_IDENTITY_RUNTIME_EVIDENCE_REF
+        value: ""
+      - key: KUBERNETES_OPS_LIVE_PROVIDER_EVIDENCE_REF
+        value: ""
+      - key: KUBERNETES_OPS_READONLY_RBAC_EVIDENCE_REF
+        value: ""
+      - key: KUBERNETES_OPS_KUBERNETES_MCP_EVIDENCE_REF
+        value: ""
+      - key: KUBERNETES_OPS_PRODUCTION_ROLLBACK_EVIDENCE_REF
+        value: ""
+      - key: KUBERNETES_OPS_PRODUCTION_NATIVE_VERIFICATION_EVIDENCE_REF
+        value: ""
+      - key: KUBERNETES_OPS_RELEASE_EVIDENCE_MAX_AGE_SECONDS
+        value: "86400"
+      - key: KUBERNETES_ADMIN_MODE_ENABLED
+        value: "false"
+      - key: KUBERNETES_ADMIN_NATIVE_APPLY_ENABLED
+        value: "false"
+      - key: KUBERNETES_ADMIN_BREAK_GLASS_APPLY_BYPASS_ENABLED
+        value: "false"
+      - key: KUBERNETES_ADMIN_DRY_RUN_PROOF_MAX_AGE_SECONDS
+        value: "1800"
+      - key: KUBERNETES_ADMIN_NATIVE_PATCH_ENABLED
+        value: "false"
+      - key: KUBERNETES_ADMIN_PATCH_MAX_BODY_BYTES
+        value: "65536"
+      - key: KUBERNETES_ADMIN_NATIVE_SCALE_ENABLED
+        value: "false"
+      - key: KUBERNETES_ADMIN_NATIVE_RESTART_ENABLED
+        value: "false"
+      - key: KUBERNETES_ADMIN_SCALE_MAX_REPLICAS
+        value: "100"
+      - key: KUBERNETES_ADMIN_NATIVE_DELETE_ENABLED
+        value: "false"
+      - key: KUBERNETES_ADMIN_DELETE_PROTECTED_NAMESPACES
+        value: "kube-system,kube-public,kube-node-lease,cattle-system,cattle-fleet-system,cattle-fleet-local-system,cert-manager,ingress-nginx,devtroncd,argocd,monitoring,logging,local"
+      - key: KUBERNETES_ADMIN_NATIVE_EXEC_ENABLED
+        value: "false"
+      - key: KUBERNETES_ADMIN_EXEC_STREAMING_ENABLED
+        value: "false"
+      - key: KUBERNETES_ADMIN_EXEC_RECORDING_ENABLED
+        value: "false"
+      - key: KUBERNETES_ADMIN_EXEC_PROTECTED_NAMESPACES
+        value: "kube-system,kube-public,kube-node-lease,cattle-system,cattle-fleet-system,cattle-fleet-local-system,cert-manager,ingress-nginx,devtroncd,argocd,monitoring,logging,local"
+      - key: KUBERNETES_ADMIN_EXEC_ALLOWED_COMMANDS
+        value: "/bin/sh,/bin/bash,sh,bash,env,printenv,ls,cat,curl,wget,tail,head,grep,sed,awk,ps,df,du,whoami,hostname,uname,stat"
+      - key: KUBERNETES_ADMIN_EXEC_DENIED_COMMANDS
+        value: "kubectl,helm,sudo,su,nsenter,mount,umount,chroot,iptables,ip6tables,nft,ssh,scp,nc,netcat,socat,docker,crictl,ctr,nerdctl,apk,apt,apt-get,yum,dnf,rpm,pip,pip3,python,python3,perl,ruby,node,npm,npx,yarn,pnpm,dd,mkfs,reboot,shutdown,kill,killall"
+      - key: KUBERNETES_ADMIN_NATIVE_PORT_FORWARD_ENABLED
+        value: "false"
+      - key: KUBERNETES_ADMIN_PORT_FORWARD_TUNNEL_ENABLED
+        value: "false"
+      - key: KUBERNETES_ADMIN_PORT_FORWARD_RECORDING_ENABLED
+        value: "false"
+      - key: KUBERNETES_ADMIN_PORT_FORWARD_PROTECTED_NAMESPACES
+        value: "kube-system,kube-public,kube-node-lease,cattle-system,cattle-fleet-system,cattle-fleet-local-system,cert-manager,ingress-nginx,devtroncd,argocd,monitoring,logging,local"
+      - key: KUBERNETES_ADMIN_PORT_FORWARD_ALLOWED_TARGETS
+        value: ""
+      - key: KUBERNETES_ADMIN_PORT_FORWARD_MAX_DURATION_SECONDS
+        value: "900"
+      - key: KUBERNETES_ADMIN_PORT_FORWARD_NETWORK_POLICY_EVIDENCE_REF
+        value: ""
+      - key: KUBERNETES_ADMIN_CLUSTER_TERMINAL_ENABLED
+        value: "false"
+      - key: KUBERNETES_ADMIN_CLUSTER_TERMINAL_RECORDING_ENABLED
+        value: "false"
+      - key: KUBERNETES_ADMIN_NODE_DEBUG_ENABLED
+        value: "false"
+      - key: KUBERNETES_ADMIN_NODE_DEBUG_RECORDING_ENABLED
+        value: "false"
+      - key: KUBERNETES_ADMIN_RESTRICTED_CREDENTIAL_EVIDENCE_REF
+        value: ""
+      - key: KUBERNETES_ADMIN_INTERACTIVE_LIVE_SMOKE_EVIDENCE_REF
+        value: ""
+      - key: KUBERNETES_ADMIN_INTERACTIVE_LIVE_SMOKE_REQUIRED
+        value: "false"
+      - key: KUBERNETES_ADMIN_INTERACTIVE_METADATA_RETENTION_DAYS
+        value: "365"
+      - key: KUBERNETES_ADMIN_INTERACTIVE_TRANSCRIPT_RETENTION_DAYS
+        value: "30"
+      - key: KUBERNETES_ADMIN_TRANSCRIPT_EVENT_MAX_CHARS
+        value: "2000"
+      - key: KUBERNETES_ADMIN_TRANSCRIPT_EVENT_MAX_COUNT
+        value: "2000"

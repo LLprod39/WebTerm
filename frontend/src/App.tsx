@@ -27,6 +27,7 @@ const SettingsAccessPage = lazy(() => import("./pages/settings/SettingsAccessPag
 const SettingsMemoryPage = lazy(() => import("./pages/settings/SettingsMemoryPage"));
 const SettingsAuditPage = lazy(() => import("./pages/settings/SettingsAuditPage"));
 const SettingsSSOPage = lazy(() => import("./pages/settings/SettingsSSOPage"));
+const SettingsKubernetesPage = lazy(() => import("./pages/settings/SettingsKubernetesPage"));
 const SettingsPluginsPage = lazy(() => import("./pages/plugin-marketplace/InstalledPluginsPage"));
 const PluginPageHost = lazy(() => import("./plugins/PluginPageHost"));
 const AgentsPage = lazy(() => import("./pages/AgentsPage"));
@@ -41,6 +42,10 @@ const StudioSkillsPage = lazy(() => import("./pages/StudioSkillsPage"));
 const NotificationsSettingsPage = lazy(() => import("./pages/NotificationsSettingsPage"));
 const MCPHubPage = lazy(() => import("./pages/MCPHubPage"));
 const KubernetesPage = lazy(() => import("./pages/KubernetesPage"));
+const KubernetesAdminPage = lazy(() => import("./pages/KubernetesAdminPage"));
+const KubernetesClusterDetailPage = lazy(() => import("./pages/KubernetesClusterDetailPage"));
+const KubernetesFleetPage = lazy(() => import("./pages/KubernetesFleetPage"));
+const KubernetesDevtronPage = lazy(() => import("./pages/KubernetesDevtronPage"));
 const MarsPage = lazy(() => import("./pages/MarsPage"));
 const MarsRunPage = lazy(() => import("./pages/MarsRunPage"));
 
@@ -300,6 +305,38 @@ const App = () => (
                   )}
                 />
                 <Route
+                  path="/kubernetes/admin"
+                  element={(
+                    <FeatureGate feature="kubernetes">
+                      <KubernetesAdminPage />
+                    </FeatureGate>
+                  )}
+                />
+                <Route
+                  path="/kubernetes/clusters/:clusterId"
+                  element={(
+                    <FeatureGate feature="kubernetes">
+                      <KubernetesClusterDetailPage />
+                    </FeatureGate>
+                  )}
+                />
+                <Route
+                  path="/kubernetes/fleet"
+                  element={(
+                    <FeatureGate feature="kubernetes">
+                      <KubernetesFleetPage />
+                    </FeatureGate>
+                  )}
+                />
+                <Route
+                  path="/kubernetes/devtron"
+                  element={(
+                    <FeatureGate feature="kubernetes">
+                      <KubernetesDevtronPage />
+                    </FeatureGate>
+                  )}
+                />
+                <Route
                   path="/mars"
                   element={(
                     <FeatureGate feature="mars">
@@ -336,6 +373,7 @@ const App = () => (
                   <Route path="memory" element={<SettingsMemoryPage />} />
                   <Route path="audit" element={<SettingsAuditPage />} />
                   <Route path="notifications" element={<NotificationsSettingsPage showStudioNav={false} />} />
+                  <Route path="kubernetes" element={<SettingsKubernetesPage />} />
                   <Route path="plugins" element={<SettingsPluginsPage />} />
                 </Route>
                 <Route

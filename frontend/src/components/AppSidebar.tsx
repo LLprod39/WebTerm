@@ -12,12 +12,11 @@ import {
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { authLogout, fetchAuthSession } from "@/lib/api";
+import { authLogout, fetchAuthSession, fetchKubernetesReadiness } from "@/lib/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { localize, useI18n } from "@/lib/i18n";
 import { canAccessStudio, hasFeatureAccess } from "@/lib/featureAccess";
 
-const KUBERNETES_NAV_READY = false;
 const CHAT_NAV_READY = false;
 
 export function AppSidebar() {
@@ -32,6 +31,15 @@ export function AppSidebar() {
     staleTime: 60_000,
     retry: false,
   });
+  const hasKubernetesFeature = hasFeatureAccess(data?.user, "kubernetes");
+  const { data: kubernetesReadiness } = useQuery({
+    queryKey: ["kubernetes", "readiness", "sidebar"],
+    queryFn: fetchKubernetesReadiness,
+    enabled: hasKubernetesFeature,
+    staleTime: 60_000,
+    retry: false,
+  });
+  const kubernetesNavReady = Boolean(kubernetesReadiness?.ready_for_sidebar);
 
   const navItems = [
     { titleKey: "nav.dashboard", url: "/dashboard", icon: LayoutDashboard, feature: "dashboard" },
@@ -39,7 +47,7 @@ export function AppSidebar() {
     { titleKey: "nav.agents", url: "/agents", icon: Bot, feature: "agents" },
     { titleKey: "nav.chat", url: "/chat", icon: MessageSquare, feature: "orchestrator", ready: CHAT_NAV_READY },
     { titleKey: "nav.studio", url: "/studio", icon: Workflow, feature: "studio" },
-    { titleKey: "nav.kubernetes", url: "/kubernetes", icon: Boxes, feature: "kubernetes", ready: KUBERNETES_NAV_READY },
+    { titleKey: "nav.kubernetes", url: "/kubernetes", icon: Boxes, feature: "kubernetes", ready: kubernetesNavReady },
     { titleKey: "nav.mars", url: "/mars", icon: BrainCircuit, feature: "mars" },
     { titleKey: "nav.settings", url: "/settings", icon: Settings, feature: "settings" },
   ];

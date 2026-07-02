@@ -1,0 +1,260 @@
+{
+  "schema_version": "kubernetes_ops.local_platform_evidence.v1",
+  "status": "ready",
+  "checked_at": "2026-07-02T10:21:27.903518+00:00",
+  "context": "kind-webterm-k8s",
+  "expected_context": "kind-webterm-k8s",
+  "kubectl": "kubectl",
+  "components": [
+    {
+      "id": "rancher",
+      "status": "ready",
+      "namespace": {
+        "kind": "namespace",
+        "name": "cattle-system",
+        "namespace": "",
+        "exists": true,
+        "resource_version_present": true,
+        "ports": [],
+        "error": ""
+      },
+      "services": [
+        {
+          "kind": "service",
+          "name": "rancher",
+          "namespace": "cattle-system",
+          "exists": true,
+          "resource_version_present": true,
+          "ports": [
+            {
+              "name": "http",
+              "port": 80,
+              "target_port": "80",
+              "node_port": 0
+            },
+            {
+              "name": "https",
+              "port": 443,
+              "target_port": "443",
+              "node_port": 0
+            }
+          ],
+          "error": ""
+        }
+      ],
+      "deployments": [
+        {
+          "kind": "deployment",
+          "name": "rancher",
+          "namespace": "cattle-system",
+          "exists": true,
+          "ready": true,
+          "ready_replicas": 1,
+          "desired_replicas": 1,
+          "error": ""
+        },
+        {
+          "kind": "deployment",
+          "name": "rancher-webhook",
+          "namespace": "cattle-system",
+          "exists": true,
+          "ready": true,
+          "ready_replicas": 1,
+          "desired_replicas": 1,
+          "error": ""
+        }
+      ],
+      "statefulsets": [],
+      "errors": []
+    },
+    {
+      "id": "fleet",
+      "status": "ready",
+      "namespace": {
+        "kind": "namespace",
+        "name": "cattle-fleet-system",
+        "namespace": "",
+        "exists": true,
+        "resource_version_present": true,
+        "ports": [],
+        "error": ""
+      },
+      "services": [
+        {
+          "kind": "service",
+          "name": "gitjob",
+          "namespace": "cattle-fleet-system",
+          "exists": true,
+          "resource_version_present": true,
+          "ports": [
+            {
+              "name": "http-80",
+              "port": 80,
+              "target_port": "8080",
+              "node_port": 0
+            }
+          ],
+          "error": ""
+        },
+        {
+          "kind": "service",
+          "name": "monitoring-fleet-controller",
+          "namespace": "cattle-fleet-system",
+          "exists": true,
+          "resource_version_present": true,
+          "ports": [
+            {
+              "name": "metrics",
+              "port": 8080,
+              "target_port": "8080",
+              "node_port": 0
+            }
+          ],
+          "error": ""
+        }
+      ],
+      "deployments": [
+        {
+          "kind": "deployment",
+          "name": "fleet-controller",
+          "namespace": "cattle-fleet-system",
+          "exists": true,
+          "ready": true,
+          "ready_replicas": 1,
+          "desired_replicas": 1,
+          "error": ""
+        },
+        {
+          "kind": "deployment",
+          "name": "gitjob",
+          "namespace": "cattle-fleet-system",
+          "exists": true,
+          "ready": true,
+          "ready_replicas": 1,
+          "desired_replicas": 1,
+          "error": ""
+        },
+        {
+          "kind": "deployment",
+          "name": "helmops",
+          "namespace": "cattle-fleet-system",
+          "exists": true,
+          "ready": true,
+          "ready_replicas": 1,
+          "desired_replicas": 1,
+          "error": ""
+        }
+      ],
+      "statefulsets": [],
+      "errors": []
+    },
+    {
+      "id": "devtron",
+      "status": "ready",
+      "namespace": {
+        "kind": "namespace",
+        "name": "devtroncd",
+        "namespace": "",
+        "exists": true,
+        "resource_version_present": true,
+        "ports": [],
+        "error": ""
+      },
+      "services": [
+        {
+          "kind": "service",
+          "name": "devtron-service",
+          "namespace": "devtroncd",
+          "exists": true,
+          "resource_version_present": true,
+          "ports": [
+            {
+              "name": "devtron",
+              "port": 80,
+              "target_port": "devtron",
+              "node_port": 30109
+            }
+          ],
+          "error": ""
+        },
+        {
+          "kind": "service",
+          "name": "dashboard-service",
+          "namespace": "devtroncd",
+          "exists": true,
+          "resource_version_present": true,
+          "ports": [
+            {
+              "name": "app",
+              "port": 80,
+              "target_port": "app",
+              "node_port": 0
+            }
+          ],
+          "error": ""
+        }
+      ],
+      "deployments": [
+        {
+          "kind": "deployment",
+          "name": "devtron",
+          "namespace": "devtroncd",
+          "exists": true,
+          "ready": true,
+          "ready_replicas": 1,
+          "desired_replicas": 1,
+          "error": ""
+        },
+        {
+          "kind": "deployment",
+          "name": "dashboard",
+          "namespace": "devtroncd",
+          "exists": true,
+          "ready": true,
+          "ready_replicas": 1,
+          "desired_replicas": 1,
+          "error": ""
+        },
+        {
+          "kind": "deployment",
+          "name": "kubelink",
+          "namespace": "devtroncd",
+          "exists": true,
+          "ready": true,
+          "ready_replicas": 1,
+          "desired_replicas": 1,
+          "error": ""
+        },
+        {
+          "kind": "deployment",
+          "name": "argocd-dex-server",
+          "namespace": "devtroncd",
+          "exists": true,
+          "ready": true,
+          "ready_replicas": 1,
+          "desired_replicas": 1,
+          "error": ""
+        }
+      ],
+      "statefulsets": [
+        {
+          "kind": "statefulset",
+          "name": "postgresql-postgresql",
+          "namespace": "devtroncd",
+          "exists": true,
+          "ready": true,
+          "ready_replicas": 1,
+          "desired_replicas": 1,
+          "error": ""
+        }
+      ],
+      "errors": []
+    }
+  ],
+  "summary": {
+    "ready": 3,
+    "missing": 0,
+    "total": 3
+  },
+  "errors": []
+}

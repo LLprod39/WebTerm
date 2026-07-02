@@ -8,6 +8,10 @@ export * from "@/api/auth";
 export * from "@/api/agents";
 export * from "@/api/assistant-chat";
 export * from "@/api/linux-ui";
+export * from "@/api/kubernetes";
+export * from "@/api/kubernetes-admin";
+export * from "@/api/kubernetes-admin-actions";
+export * from "@/api/kubernetes-actions";
 export * from "@/api/mars";
 export * from "@/api/monitoring";
 export * from "@/api/servers";
@@ -230,6 +234,85 @@ export function getStudioPipelineRunWsUrl(runId: number | string): string {
 
 export function getMarsRunWsUrl(runId: number | string): string {
   return `${buildWsBase()}/ws/mars/runs/${runId}/live/`;
+}
+
+export function getKubernetesAdminLogStreamWsUrl(
+  sessionId: string,
+  query: { cluster_id: string; namespace: string; pod: string; tail?: number; container?: string; follow?: boolean; max_batches?: number; poll_interval_seconds?: number; idle_timeout_seconds?: number },
+): string {
+  const params = new URLSearchParams({
+    cluster_id: query.cluster_id,
+    namespace: query.namespace,
+    pod: query.pod,
+    tail: String(query.tail || 120),
+  });
+  if (query.container) params.set("container", query.container);
+  appendKubernetesStreamParams(params, query);
+  return `${buildWsBase()}/ws/kubernetes/admin/logs/${encodeURIComponent(sessionId)}/?${params.toString()}`;
+}
+
+export function getKubernetesAdminWatchStreamWsUrl(
+  sessionId: string,
+  query: { cluster_id: string; api_version?: string; kind: string; namespace?: string; name?: string; resource_version?: string; limit?: number; timeout_seconds?: number; follow?: boolean; max_batches?: number; poll_interval_seconds?: number; idle_timeout_seconds?: number },
+): string {
+  const params = new URLSearchParams({
+    cluster_id: query.cluster_id,
+    api_version: query.api_version || "v1",
+    kind: query.kind,
+    limit: String(query.limit || 20),
+    timeout_seconds: String(query.timeout_seconds || 10),
+  });
+  if (query.namespace) params.set("namespace", query.namespace);
+  if (query.name) params.set("name", query.name);
+  if (query.resource_version) params.set("resource_version", query.resource_version);
+  appendKubernetesStreamParams(params, query);
+  return `${buildWsBase()}/ws/kubernetes/admin/watch/${encodeURIComponent(sessionId)}/?${params.toString()}`;
+}
+
+export function getKubernetesAdminExecStreamWsUrl(
+  sessionId: string,
+  query: { cluster_id: string; namespace: string; pod: string; command: string; reason: string; container?: string; tty?: boolean; stdin?: boolean },
+): string {
+  const params = new URLSearchParams({
+    cluster_id: query.cluster_id,
+    namespace: query.namespace,
+    pod: query.pod,
+    command: query.command,
+    reason: query.reason,
+  });
+  if (query.container) params.set("container", query.container);
+  if (query.tty) params.set("tty", "1");
+  if (query.stdin) params.set("stdin", "1");
+  return `${buildWsBase()}/ws/kubernetes/admin/exec/${encodeURIComponent(sessionId)}/?${params.toString()}`;
+}
+
+export function getKubernetesAdminPortForwardWsUrl(
+  sessionId: string,
+  query: { cluster_id: string; namespace: string; kind: string; name: string; remote_port: number; reason: string; api_version?: string; resource?: string; local_port?: number; duration_seconds?: number },
+): string {
+  const params = new URLSearchParams({
+    cluster_id: query.cluster_id,
+    api_version: query.api_version || "v1",
+    namespace: query.namespace,
+    kind: query.kind,
+    name: query.name,
+    remote_port: String(query.remote_port),
+    reason: query.reason,
+  });
+  if (query.resource) params.set("resource", query.resource);
+  if (query.local_port) params.set("local_port", String(query.local_port));
+  if (query.duration_seconds) params.set("duration_seconds", String(query.duration_seconds));
+  return `${buildWsBase()}/ws/kubernetes/admin/port-forward/${encodeURIComponent(sessionId)}/?${params.toString()}`;
+}
+
+function appendKubernetesStreamParams(
+  params: URLSearchParams,
+  query: { follow?: boolean; max_batches?: number; poll_interval_seconds?: number; idle_timeout_seconds?: number },
+) {
+  if (query.follow) params.set("follow", "1");
+  if (query.max_batches) params.set("max_batches", String(query.max_batches));
+  if (query.poll_interval_seconds) params.set("poll_interval_seconds", String(query.poll_interval_seconds));
+  if (query.idle_timeout_seconds) params.set("idle_timeout_seconds", String(query.idle_timeout_seconds));
 }
 
 export function backendPath(path: string): string {

@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from .env_helpers import cli_command, env_int, parse_cursor_cli_extra_env, parse_path_list_env
+from .env_helpers import cli_command, env_bool, env_int, env_list, parse_cursor_cli_extra_env, parse_path_list_env
 
 CURSOR_AVAILABLE_MODELS = [
     {"id": "auto", "name": "Auto", "description": "РђРІС‚РѕРјР°С‚РёС‡РµСЃРєРёР№ РІС‹Р±РѕСЂ Р»СѓС‡С€РµР№ РјРѕРґРµР»Рё"},
@@ -111,6 +111,77 @@ def build_runtime_service_settings(*, base_dir: Path, agent_projects_dir: Path) 
         "LLM_OPENAI_RESPONSES_TIMEOUT_SECONDS": env_int("LLM_OPENAI_RESPONSES_TIMEOUT_SECONDS", 300),
         "LLM_DAILY_TOKEN_LIMIT_PER_USER": env_int("LLM_DAILY_TOKEN_LIMIT_PER_USER", 0),
         "ANALYZE_TASK_BEFORE_RUN": os.getenv("ANALYZE_TASK_BEFORE_RUN", "1").strip().lower() in ("1", "true", "yes", "on"),
+        "KUBERNETES_OPS_SYNC_INTERVAL_SECONDS": env_int("KUBERNETES_OPS_SYNC_INTERVAL_SECONDS", 300),
+        "KUBERNETES_OPS_SYNC_MAX_BACKOFF_SECONDS": env_int("KUBERNETES_OPS_SYNC_MAX_BACKOFF_SECONDS", 1800),
+        "KUBERNETES_OPS_STALE_AFTER_SECONDS": env_int("KUBERNETES_OPS_STALE_AFTER_SECONDS", 900),
+        "KUBERNETES_OPS_AUDIT_RETENTION_DAYS": env_int("KUBERNETES_OPS_AUDIT_RETENTION_DAYS", 365),
+        "KUBERNETES_OPS_READY_FOR_SIDEBAR": env_bool("KUBERNETES_OPS_READY_FOR_SIDEBAR", False),
+        "KUBERNETES_OPS_RELEASE_ENVIRONMENT": os.getenv("KUBERNETES_OPS_RELEASE_ENVIRONMENT", "local").strip().lower(),
+        "KUBERNETES_OPS_PRODUCTION_APPROVAL_REF": os.getenv("KUBERNETES_OPS_PRODUCTION_APPROVAL_REF", "").strip(),
+        "KUBERNETES_OPS_RELEASE_EVIDENCE_MAX_AGE_SECONDS": env_int("KUBERNETES_OPS_RELEASE_EVIDENCE_MAX_AGE_SECONDS", 86400),
+        "KUBERNETES_ADMIN_MODE_ENABLED": env_bool("KUBERNETES_ADMIN_MODE_ENABLED", True),
+        "KUBERNETES_ADMIN_NATIVE_APPLY_ENABLED": env_bool("KUBERNETES_ADMIN_NATIVE_APPLY_ENABLED", False),
+        "KUBERNETES_ADMIN_BREAK_GLASS_APPLY_BYPASS_ENABLED": env_bool("KUBERNETES_ADMIN_BREAK_GLASS_APPLY_BYPASS_ENABLED", False),
+        "KUBERNETES_ADMIN_DRY_RUN_PROOF_MAX_AGE_SECONDS": env_int("KUBERNETES_ADMIN_DRY_RUN_PROOF_MAX_AGE_SECONDS", 1800),
+        "KUBERNETES_ADMIN_SECRET_READ_ENABLED": env_bool("KUBERNETES_ADMIN_SECRET_READ_ENABLED", False),
+        "KUBERNETES_ADMIN_NATIVE_PATCH_ENABLED": env_bool("KUBERNETES_ADMIN_NATIVE_PATCH_ENABLED", False),
+        "KUBERNETES_ADMIN_PATCH_MAX_BODY_BYTES": env_int("KUBERNETES_ADMIN_PATCH_MAX_BODY_BYTES", 65536),
+        "KUBERNETES_ADMIN_NATIVE_SCALE_ENABLED": env_bool("KUBERNETES_ADMIN_NATIVE_SCALE_ENABLED", False),
+        "KUBERNETES_ADMIN_NATIVE_RESTART_ENABLED": env_bool("KUBERNETES_ADMIN_NATIVE_RESTART_ENABLED", False),
+        "KUBERNETES_ADMIN_SCALE_MAX_REPLICAS": env_int("KUBERNETES_ADMIN_SCALE_MAX_REPLICAS", 100),
+        "KUBERNETES_ADMIN_NATIVE_DELETE_ENABLED": env_bool("KUBERNETES_ADMIN_NATIVE_DELETE_ENABLED", False),
+        "KUBERNETES_ADMIN_DELETE_PROTECTED_NAMESPACES": [
+            item.strip()
+            for item in os.getenv(
+                "KUBERNETES_ADMIN_DELETE_PROTECTED_NAMESPACES",
+                "kube-system,kube-public,kube-node-lease,cattle-system,cattle-fleet-system,cattle-fleet-local-system,cert-manager,ingress-nginx,devtroncd,argocd,monitoring,logging,local",
+            ).split(",")
+            if item.strip()
+        ],
+        "KUBERNETES_ADMIN_NATIVE_NODE_MAINTENANCE_ENABLED": env_bool("KUBERNETES_ADMIN_NATIVE_NODE_MAINTENANCE_ENABLED", False),
+        "KUBERNETES_ADMIN_NODE_DRAIN_EXECUTION_ENABLED": env_bool("KUBERNETES_ADMIN_NODE_DRAIN_EXECUTION_ENABLED", False),
+        "KUBERNETES_ADMIN_NATIVE_EXEC_ENABLED": env_bool("KUBERNETES_ADMIN_NATIVE_EXEC_ENABLED", False),
+        "KUBERNETES_ADMIN_EXEC_STREAMING_ENABLED": env_bool("KUBERNETES_ADMIN_EXEC_STREAMING_ENABLED", False),
+        "KUBERNETES_ADMIN_EXEC_RECORDING_ENABLED": env_bool("KUBERNETES_ADMIN_EXEC_RECORDING_ENABLED", False),
+        "KUBERNETES_ADMIN_EXEC_PROTECTED_NAMESPACES": [
+            item.strip()
+            for item in os.getenv(
+                "KUBERNETES_ADMIN_EXEC_PROTECTED_NAMESPACES",
+                "kube-system,kube-public,kube-node-lease,cattle-system,cattle-fleet-system,cattle-fleet-local-system,cert-manager,ingress-nginx,devtroncd,argocd,monitoring,logging,local",
+            ).split(",")
+            if item.strip()
+        ],
+        "KUBERNETES_ADMIN_EXEC_ALLOWED_COMMANDS": env_list(
+            "KUBERNETES_ADMIN_EXEC_ALLOWED_COMMANDS",
+            ["/bin/sh", "/bin/bash", "sh", "bash", "env", "printenv", "ls", "cat", "curl", "wget", "tail", "head", "grep", "sed", "awk", "ps", "df", "du", "whoami", "hostname", "uname", "stat"],
+        ),
+        "KUBERNETES_ADMIN_EXEC_DENIED_COMMANDS": env_list(
+            "KUBERNETES_ADMIN_EXEC_DENIED_COMMANDS",
+            ["kubectl", "helm", "sudo", "su", "nsenter", "mount", "umount", "chroot", "iptables", "ip6tables", "nft", "ssh", "scp", "nc", "netcat", "socat", "docker", "crictl", "ctr", "nerdctl", "apk", "apt", "apt-get", "yum", "dnf", "rpm", "pip", "pip3", "python", "python3", "perl", "ruby", "node", "npm", "npx", "yarn", "pnpm", "dd", "mkfs", "reboot", "shutdown", "kill", "killall"],
+        ),
+        "KUBERNETES_ADMIN_NATIVE_PORT_FORWARD_ENABLED": env_bool("KUBERNETES_ADMIN_NATIVE_PORT_FORWARD_ENABLED", False),
+        "KUBERNETES_ADMIN_PORT_FORWARD_TUNNEL_ENABLED": env_bool("KUBERNETES_ADMIN_PORT_FORWARD_TUNNEL_ENABLED", False),
+        "KUBERNETES_ADMIN_PORT_FORWARD_RECORDING_ENABLED": env_bool("KUBERNETES_ADMIN_PORT_FORWARD_RECORDING_ENABLED", False),
+        "KUBERNETES_ADMIN_PORT_FORWARD_PROTECTED_NAMESPACES": [
+            item.strip()
+            for item in os.getenv(
+                "KUBERNETES_ADMIN_PORT_FORWARD_PROTECTED_NAMESPACES",
+                "kube-system,kube-public,kube-node-lease,cattle-system,cattle-fleet-system,cattle-fleet-local-system,cert-manager,ingress-nginx,devtroncd,argocd,monitoring,logging,local",
+            ).split(",")
+            if item.strip()
+        ],
+        "KUBERNETES_ADMIN_PORT_FORWARD_ALLOWED_TARGETS": env_list("KUBERNETES_ADMIN_PORT_FORWARD_ALLOWED_TARGETS", []),
+        "KUBERNETES_ADMIN_PORT_FORWARD_MAX_DURATION_SECONDS": env_int("KUBERNETES_ADMIN_PORT_FORWARD_MAX_DURATION_SECONDS", 900),
+        "KUBERNETES_ADMIN_PORT_FORWARD_NETWORK_POLICY_EVIDENCE_REF": os.getenv("KUBERNETES_ADMIN_PORT_FORWARD_NETWORK_POLICY_EVIDENCE_REF", "").strip(),
+        "KUBERNETES_ADMIN_CLUSTER_TERMINAL_ENABLED": env_bool("KUBERNETES_ADMIN_CLUSTER_TERMINAL_ENABLED", False),
+        "KUBERNETES_ADMIN_CLUSTER_TERMINAL_RECORDING_ENABLED": env_bool("KUBERNETES_ADMIN_CLUSTER_TERMINAL_RECORDING_ENABLED", False),
+        "KUBERNETES_ADMIN_NODE_DEBUG_ENABLED": env_bool("KUBERNETES_ADMIN_NODE_DEBUG_ENABLED", False),
+        "KUBERNETES_ADMIN_NODE_DEBUG_RECORDING_ENABLED": env_bool("KUBERNETES_ADMIN_NODE_DEBUG_RECORDING_ENABLED", False),
+        "KUBERNETES_ADMIN_RESTRICTED_CREDENTIAL_EVIDENCE_REF": os.getenv("KUBERNETES_ADMIN_RESTRICTED_CREDENTIAL_EVIDENCE_REF", "").strip(),
+        "KUBERNETES_ADMIN_INTERACTIVE_METADATA_RETENTION_DAYS": env_int("KUBERNETES_ADMIN_INTERACTIVE_METADATA_RETENTION_DAYS", 365),
+        "KUBERNETES_ADMIN_INTERACTIVE_TRANSCRIPT_RETENTION_DAYS": env_int("KUBERNETES_ADMIN_INTERACTIVE_TRANSCRIPT_RETENTION_DAYS", 30),
+        "KUBERNETES_ADMIN_TRANSCRIPT_EVENT_MAX_CHARS": env_int("KUBERNETES_ADMIN_TRANSCRIPT_EVENT_MAX_CHARS", 2000),
+        "KUBERNETES_ADMIN_TRANSCRIPT_EVENT_MAX_COUNT": env_int("KUBERNETES_ADMIN_TRANSCRIPT_EVENT_MAX_COUNT", 2000),
         "_raw_http1": raw_http1,
         "CURSOR_CLI_HTTP_1": cursor_cli_http1,
         "CURSOR_CLI_EXTRA_ENV": parse_cursor_cli_extra_env(cursor_cli_http1=cursor_cli_http1),

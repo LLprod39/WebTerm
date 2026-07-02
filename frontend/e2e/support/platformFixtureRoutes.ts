@@ -1,4 +1,5 @@
 import { json } from "./apiHarness";
+import { handleKubernetesMockRequest } from "./platformFixtureKubernetes";
 import { handlePluginMockRequest } from "./platformFixturePlugins";
 import { makeSessionUser, ServerItem, FIXED_DATE } from "./platformFixtureTypes";
 import { PlatformFixtureContext } from "./platformFixtureState";
@@ -34,6 +35,9 @@ export function handlePlatformMockRequest(req: any, ctx: PlatformFixtureContext)
       if (req.path === "/api/auth/ws-token/" && req.method === "GET") {
         return json({ token: "mock-ws-token" });
       }
+
+      const kubernetesResponse = handleKubernetesMockRequest(req, options);
+      if (kubernetesResponse) return kubernetesResponse;
 
       if (req.path === "/servers/api/frontend/bootstrap/" && req.method === "GET") {
         return json({

@@ -1,0 +1,188 @@
+{
+  "schema_version": "kubernetes_ops.live_provider_smoke.v3",
+  "status": "ready",
+  "success": true,
+  "checked_at": "2026-07-01T18:09:51.974125+00:00",
+  "summary": {
+    "enabled_providers": 2,
+    "rancher_providers": 1,
+    "devtron_providers": 1,
+    "provider_probes_ok": 2,
+    "provider_probes_total": 2,
+    "sync_dry_run_ok": 2,
+    "sync_dry_run_total": 2,
+    "clusters": 1,
+    "namespaces": 31,
+    "workloads": 21,
+    "pods": 35,
+    "fleet_bundles": 1,
+    "apps": 8,
+    "backend_paths_status": "ready",
+    "backend_path_checks_ok": 4,
+    "backend_path_checks_total": 4
+  },
+  "requirements": {
+    "require_rancher": true,
+    "require_devtron": true,
+    "require_fleet": true,
+    "require_backend_paths": true,
+    "run_provider_probe": true,
+    "run_sync_dry_run": true,
+    "run_backend_paths": true
+  },
+  "providers": [
+    {
+      "provider_id": 4,
+      "provider_name": "local-devtron-real",
+      "provider_kind": "devtron",
+      "enabled": true,
+      "auth_mode": "secret_ref",
+      "provider_base_url": "http://host.docker.internal:18091"
+    },
+    {
+      "provider_id": 3,
+      "provider_name": "local-rancher-real",
+      "provider_kind": "rancher",
+      "enabled": true,
+      "auth_mode": "secret_ref",
+      "provider_base_url": "https://host.docker.internal:8443"
+    }
+  ],
+  "provider_probes": [
+    {
+      "provider_id": 4,
+      "provider_name": "local-devtron-real",
+      "provider_kind": "devtron",
+      "success": true,
+      "status": "ready",
+      "path": "/orchestrator/devtron/auth/verify/v2",
+      "item_count": 0,
+      "payload_keys": [
+        "code",
+        "result",
+        "status"
+      ],
+      "duration_ms": 95,
+      "checked_at": "2026-07-01T18:09:50.971465+00:00",
+      "error": "",
+      "provider_base_url": "http://host.docker.internal:18091"
+    },
+    {
+      "provider_id": 3,
+      "provider_name": "local-rancher-real",
+      "provider_kind": "rancher",
+      "success": true,
+      "status": "ready",
+      "path": "/v3/clusters",
+      "item_count": 1,
+      "payload_keys": [
+        "actions",
+        "createTypes",
+        "data",
+        "filters",
+        "links",
+        "pagination",
+        "resourceType",
+        "sort",
+        "type"
+      ],
+      "duration_ms": 33,
+      "checked_at": "2026-07-01T18:09:51.005212+00:00",
+      "error": "",
+      "provider_base_url": "https://host.docker.internal:8443"
+    }
+  ],
+  "sync_dry_run": [
+    {
+      "provider_id": 4,
+      "provider_name": "local-devtron-real",
+      "provider_kind": "devtron",
+      "success": true,
+      "status": "ready",
+      "dry_run": true,
+      "clusters": 1,
+      "namespaces": 0,
+      "workloads": 0,
+      "pods": 0,
+      "services": 0,
+      "ingresses": 0,
+      "events": 0,
+      "apps": 8,
+      "fleet_bundles": 0,
+      "error": ""
+    },
+    {
+      "provider_id": 3,
+      "provider_name": "local-rancher-real",
+      "provider_kind": "rancher",
+      "success": true,
+      "status": "ready",
+      "dry_run": true,
+      "clusters": 1,
+      "namespaces": 31,
+      "workloads": 21,
+      "pods": 35,
+      "services": 24,
+      "ingresses": 3,
+      "events": 3,
+      "apps": 0,
+      "fleet_bundles": 1,
+      "error": ""
+    }
+  ],
+  "backend_paths": {
+    "status": "ready",
+    "success": true,
+    "mode": "transaction_rollback",
+    "target": {
+      "cluster": "local",
+      "namespace": "cattle-capi-system",
+      "pod": "capi-controller-manager-6dcd8c8498-rjq66",
+      "node": "webterm-k8s-control-plane",
+      "provider": "local-rancher-real"
+    },
+    "checks": [
+      {
+        "id": "rancher_pod_yaml",
+        "success": true,
+        "status": "ready",
+        "path": "/k8s/clusters/local/api/v1/namespaces/cattle-capi-system/pods/capi-controller-manager-6dcd8c8498-rjq66",
+        "source": "admin_resource_yaml",
+        "redacted": true
+      },
+      {
+        "id": "rancher_pod_logs",
+        "success": true,
+        "status": "ready",
+        "path": "/k8s/clusters/local/api/v1/namespaces/cattle-capi-system/pods/capi-controller-manager-6dcd8c8498-rjq66/log",
+        "source": "provider_snapshot",
+        "line_count": 5,
+        "message": ""
+      },
+      {
+        "id": "rancher_pod_live_describe",
+        "success": true,
+        "status": "ready",
+        "path": "/k8s/clusters/local/api/v1/namespaces/cattle-capi-system/pods/capi-controller-manager-6dcd8c8498-rjq66",
+        "source": "admin_resource_live_describe",
+        "event_count": 0,
+        "related_pod_count": 1,
+        "related_controller_count": 0,
+        "redacted": true
+      },
+      {
+        "id": "rancher_node_drain_preflight",
+        "success": true,
+        "status": "ready",
+        "path": "/k8s/clusters/local/api/v1/nodes/webterm-k8s-control-plane",
+        "source": "provider_node_drain_preflight",
+        "pods_considered": 35,
+        "blocked_reason": "emptydir_data_confirmation_required",
+        "drain_started": false,
+        "evictions_started": false
+      }
+    ],
+    "persistent_rows": false
+  },
+  "errors": []
+}

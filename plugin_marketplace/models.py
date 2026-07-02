@@ -132,7 +132,7 @@ class PluginPermissionGrant(models.Model):
             models.UniqueConstraint(fields=["installation", "scope"], name="pm_permission_install_scope_uniq"),
         ]
         indexes = [
-            models.Index(fields=["scope", "granted"], name="pm_permission_scope_granted_idx"),
+            models.Index(fields=["scope", "granted"], name="pm_perm_scope_grant_idx"),
         ]
 
     def __str__(self) -> str:
@@ -246,8 +246,8 @@ class PluginCompatibilityJob(models.Model):
     class Meta:
         ordering = ["-created_at", "-id"]
         indexes = [
-            models.Index(fields=["plugin_id", "-created_at"], name="pm_compat_job_plugin_created_idx"),
-            models.Index(fields=["status", "-created_at"], name="pm_compat_job_status_created_idx"),
+            models.Index(fields=["plugin_id", "-created_at"], name="pm_compat_plugin_created_idx"),
+            models.Index(fields=["status", "-created_at"], name="pm_compat_status_created_idx"),
         ]
 
     def __str__(self) -> str:

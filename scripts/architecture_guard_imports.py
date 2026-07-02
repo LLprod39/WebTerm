@@ -4,6 +4,8 @@ import glob
 import os
 import shutil
 import subprocess
+import sys
+from pathlib import Path
 from typing import Final
 
 from architecture_guard_config import ArchitectureConfig
@@ -55,7 +57,15 @@ class ImportBoundaryChecker:
 
     def _resolve_tool(self) -> str:
         tool = self._TOOL
-        if os.name != "nt" or shutil.which(tool):
+        resolved = shutil.which(tool)
+        if resolved:
+            return resolved
+        script_dirs = [Path(sys.executable).parent, Path(sys.prefix) / ("Scripts" if os.name == "nt" else "bin")]
+        for directory in script_dirs:
+            for candidate in (directory / tool, directory / f"{tool}.exe"):
+                if candidate.exists():
+                    return str(candidate)
+        if os.name != "nt":
             return tool
         appdata = os.environ.get("APPDATA")
         if not appdata:

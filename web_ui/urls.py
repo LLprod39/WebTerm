@@ -33,6 +33,7 @@ urlpatterns = [
     path('servers/', include('servers.urls')),
     path('api/studio/', include('studio.urls')),
     path('api/mars/', include('mars.urls')),
+    path('api/kubernetes/', include('kubernetes_ops.urls')),
 ]
 
 # Serve media files in development

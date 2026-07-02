@@ -1,0 +1,321 @@
+{
+  "schema_version": "kubernetes_ops.production_action_evidence.v1",
+  "status": "ready",
+  "success": true,
+  "checked_at": "2026-07-02T14:28:40.479795+00:00",
+  "target_environment": "local",
+  "production_environment": false,
+  "evidence_mode": "operator_attestation_snapshot",
+  "dangerous_live_action_started": false,
+  "provider_write_started": false,
+  "native_mutation_started": false,
+  "references": [
+    {
+      "id": "production_rollback",
+      "setting": "KUBERNETES_OPS_PRODUCTION_ROLLBACK_EVIDENCE_REF",
+      "required": false,
+      "present": false
+    },
+    {
+      "id": "native_verification",
+      "setting": "KUBERNETES_OPS_PRODUCTION_NATIVE_VERIFICATION_EVIDENCE_REF",
+      "required": false,
+      "present": false
+    }
+  ],
+  "rollback_drill": {
+    "required": false,
+    "action_classes": [
+      "k8s.rollout.restart",
+      "k8s.workload.scale",
+      "k8s.resource.apply",
+      "k8s.resource.patch",
+      "k8s.resource.delete"
+    ],
+    "evidence_ref_present": false
+  },
+  "native_verification": {
+    "required": false,
+    "check_ids": [
+      "rollout_status_observed",
+      "pod_readiness_observed",
+      "recent_warning_events_checked",
+      "desired_replicas_observed",
+      "workload_readiness_observed",
+      "apply_action_completed",
+      "resource_generation_observed",
+      "patch_action_completed",
+      "resource_absence_observed",
+      "dependent_health_checked"
+    ],
+    "evidence_ref_present": false
+  },
+  "blocked_actions": {
+    "required": true,
+    "action_classes": [
+      "delete_namespace",
+      "delete_helm_release",
+      "helm.delete",
+      "helm_release.delete",
+      "kubectl.apply",
+      "apply_yaml",
+      "node_debug",
+      "port_forward",
+      "cluster_admin_shell",
+      "rbac.edit",
+      "edit_rbac"
+    ],
+    "request_rejection_contract": true,
+    "native_execution_blocked": true,
+    "provider_write_started": false
+  },
+  "action_class_contracts": [
+    {
+      "action": "k8s.rollout.restart",
+      "rollback_evidence_required": [
+        "rollout_status",
+        "gitops_or_devtron_rollback_ref_if_used",
+        "pod_readiness"
+      ],
+      "native_verification_check_ids": [
+        "rollout_status_observed",
+        "pod_readiness_observed",
+        "recent_warning_events_checked"
+      ],
+      "rollback_contract_ready": true,
+      "native_verification_contract_ready": true,
+      "payload_stored": false,
+      "sensitive_values_stored": false
+    },
+    {
+      "action": "k8s.workload.scale",
+      "rollback_evidence_required": [
+        "previous_replicas",
+        "post_rollback_workload_readiness",
+        "recent_warning_events"
+      ],
+      "native_verification_check_ids": [
+        "desired_replicas_observed",
+        "workload_readiness_observed",
+        "recent_warning_events_checked"
+      ],
+      "rollback_contract_ready": true,
+      "native_verification_contract_ready": true,
+      "payload_stored": false,
+      "sensitive_values_stored": false
+    },
+    {
+      "action": "k8s.resource.apply",
+      "rollback_evidence_required": [
+        "rollback_source_ref",
+        "rollback_dry_run_action_id",
+        "post_rollback_resource_generation"
+      ],
+      "native_verification_check_ids": [
+        "apply_action_completed",
+        "resource_generation_observed",
+        "recent_warning_events_checked"
+      ],
+      "rollback_contract_ready": true,
+      "native_verification_contract_ready": true,
+      "payload_stored": false,
+      "sensitive_values_stored": false
+    },
+    {
+      "action": "k8s.resource.patch",
+      "rollback_evidence_required": [
+        "previous_resource_snapshot_ref",
+        "reverse_patch_dry_run_ref",
+        "post_rollback_resource_generation"
+      ],
+      "native_verification_check_ids": [
+        "patch_action_completed",
+        "resource_generation_observed",
+        "recent_warning_events_checked"
+      ],
+      "rollback_contract_ready": true,
+      "native_verification_contract_ready": true,
+      "payload_stored": false,
+      "sensitive_values_stored": false
+    },
+    {
+      "action": "k8s.resource.delete",
+      "rollback_evidence_required": [
+        "restore_source_ref",
+        "rollback_dry_run_action_id",
+        "dependent_health"
+      ],
+      "native_verification_check_ids": [
+        "resource_absence_observed",
+        "dependent_health_checked",
+        "recent_warning_events_checked"
+      ],
+      "rollback_contract_ready": true,
+      "native_verification_contract_ready": true,
+      "payload_stored": false,
+      "sensitive_values_stored": false
+    }
+  ],
+  "blocked_action_contracts": [
+    {
+      "action": "delete_namespace",
+      "reason": "Deleting namespaces through WebTerm is blocked.",
+      "request_rejected": true,
+      "native_execution_blocked": true,
+      "provider_write_started": false,
+      "native_mutation_started": false,
+      "payload_stored": false,
+      "sensitive_values_stored": false
+    },
+    {
+      "action": "delete_helm_release",
+      "reason": "Deleting Helm releases through WebTerm is blocked.",
+      "request_rejected": true,
+      "native_execution_blocked": true,
+      "provider_write_started": false,
+      "native_mutation_started": false,
+      "payload_stored": false,
+      "sensitive_values_stored": false
+    },
+    {
+      "action": "helm.delete",
+      "reason": "Deleting Helm releases through WebTerm is blocked.",
+      "request_rejected": true,
+      "native_execution_blocked": true,
+      "provider_write_started": false,
+      "native_mutation_started": false,
+      "payload_stored": false,
+      "sensitive_values_stored": false
+    },
+    {
+      "action": "helm_release.delete",
+      "reason": "Deleting Helm releases through WebTerm is blocked.",
+      "request_rejected": true,
+      "native_execution_blocked": true,
+      "provider_write_started": false,
+      "native_mutation_started": false,
+      "payload_stored": false,
+      "sensitive_values_stored": false
+    },
+    {
+      "action": "kubectl.apply",
+      "reason": "Unrestricted kubectl apply through WebTerm is blocked.",
+      "request_rejected": true,
+      "native_execution_blocked": true,
+      "provider_write_started": false,
+      "native_mutation_started": false,
+      "payload_stored": false,
+      "sensitive_values_stored": false
+    },
+    {
+      "action": "apply_yaml",
+      "reason": "Unrestricted YAML apply through WebTerm is blocked.",
+      "request_rejected": true,
+      "native_execution_blocked": true,
+      "provider_write_started": false,
+      "native_mutation_started": false,
+      "payload_stored": false,
+      "sensitive_values_stored": false
+    },
+    {
+      "action": "node_debug",
+      "reason": "Node debug through WebTerm is blocked.",
+      "request_rejected": true,
+      "native_execution_blocked": true,
+      "provider_write_started": false,
+      "native_mutation_started": false,
+      "payload_stored": false,
+      "sensitive_values_stored": false
+    },
+    {
+      "action": "port_forward",
+      "reason": "Port-forward through WebTerm is blocked.",
+      "request_rejected": true,
+      "native_execution_blocked": true,
+      "provider_write_started": false,
+      "native_mutation_started": false,
+      "payload_stored": false,
+      "sensitive_values_stored": false
+    },
+    {
+      "action": "cluster_admin_shell",
+      "reason": "Cluster-admin shell through WebTerm is blocked.",
+      "request_rejected": true,
+      "native_execution_blocked": true,
+      "provider_write_started": false,
+      "native_mutation_started": false,
+      "payload_stored": false,
+      "sensitive_values_stored": false
+    },
+    {
+      "action": "rbac.edit",
+      "reason": "Editing Kubernetes RBAC through WebTerm is blocked.",
+      "request_rejected": true,
+      "native_execution_blocked": true,
+      "provider_write_started": false,
+      "native_mutation_started": false,
+      "payload_stored": false,
+      "sensitive_values_stored": false
+    },
+    {
+      "action": "edit_rbac",
+      "reason": "Editing Kubernetes RBAC through WebTerm is blocked.",
+      "request_rejected": true,
+      "native_execution_blocked": true,
+      "provider_write_started": false,
+      "native_mutation_started": false,
+      "payload_stored": false,
+      "sensitive_values_stored": false
+    }
+  ],
+  "coverage": {
+    "rollback_contract_complete": true,
+    "native_verification_contract_complete": true,
+    "blocked_action_contract_complete": true,
+    "covered_action_classes": [
+      "k8s.rollout.restart",
+      "k8s.workload.scale",
+      "k8s.resource.apply",
+      "k8s.resource.patch",
+      "k8s.resource.delete"
+    ],
+    "covered_blocked_action_classes": [
+      "delete_namespace",
+      "delete_helm_release",
+      "helm.delete",
+      "helm_release.delete",
+      "kubectl.apply",
+      "apply_yaml",
+      "node_debug",
+      "port_forward",
+      "cluster_admin_shell",
+      "rbac.edit",
+      "edit_rbac"
+    ],
+    "covered_native_verification_check_ids": [
+      "rollout_status_observed",
+      "pod_readiness_observed",
+      "recent_warning_events_checked",
+      "desired_replicas_observed",
+      "workload_readiness_observed",
+      "apply_action_completed",
+      "resource_generation_observed",
+      "patch_action_completed",
+      "resource_absence_observed",
+      "dependent_health_checked"
+    ],
+    "expected_action_class_count": 5,
+    "expected_blocked_action_class_count": 11,
+    "expected_native_verification_check_count": 10
+  },
+  "summary": {
+    "production_environment": false,
+    "required_ref_count": 0,
+    "missing_required_ref_count": 0,
+    "rollback_action_class_count": 5,
+    "native_verification_check_count": 10,
+    "action_class_contract_count": 5,
+    "blocked_action_class_count": 11
+  },
+  "errors": []
+}

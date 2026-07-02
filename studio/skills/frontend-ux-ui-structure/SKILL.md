@@ -1,3 +1,14 @@
+---
+name: Frontend UX/UI Structure
+description: UX-first frontend implementation guidance for layout clarity, predictable actions, accessibility, scanability, forms, responsive behavior, and feedback states.
+service: frontend
+category: Product Design
+safety_level: standard
+ui_hint: Use when building or reviewing frontend screens so layout, CTA placement, states, and mobile behavior stay usable.
+guardrail_summary: ["Prioritize usability over decoration", "Keep primary and secondary actions visually distinct", "Check responsive and accessibility states before completion"]
+recommended_tools: ["report", "analyze_output"]
+tags: [frontend, ux, ui, accessibility, product-design]
+---
 # Frontend UX/UI Structure Skill
 
 You are a senior frontend UX-focused engineer.

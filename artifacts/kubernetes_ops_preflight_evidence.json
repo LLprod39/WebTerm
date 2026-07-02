@@ -1,0 +1,200 @@
+{
+  "schema_version": "kubernetes_ops.release_preflight.v1",
+  "release_evidence_schema_version": "kubernetes_ops.release_evidence.v2",
+  "generated_at": "2026-07-02T14:28:50.824431+00:00",
+  "success": true,
+  "status": "ready",
+  "results": [
+    {
+      "id": "django_check",
+      "command": "python manage.py check",
+      "mode": "subprocess",
+      "timeout_seconds": 600,
+      "env_keys": [],
+      "success": true,
+      "returncode": 0,
+      "duration_ms": 9348,
+      "stdout_tail": "System check identified no issues (0 silenced).\n",
+      "stderr_tail": ""
+    },
+    {
+      "id": "architecture_guard",
+      "command": "python scripts/check_architecture_sizes.py --strict-new",
+      "mode": "subprocess",
+      "timeout_seconds": 600,
+      "env_keys": [],
+      "success": true,
+      "returncode": 0,
+      "duration_ms": 11388,
+      "stdout_tail": "\n=== Checking Import Boundaries (import-linter) ===\nSUCCESS: Import boundaries respected.\n\n=== Architecture Fitness Check: God-File Prevention ===\nTotal files scanned: 1777\nSUCCESS: All architecture contracts satisfied.\n",
+      "stderr_tail": ""
+    },
+    {
+      "id": "migrations_dry_run",
+      "command": "python manage.py makemigrations kubernetes_ops --check --dry-run",
+      "mode": "subprocess",
+      "timeout_seconds": 600,
+      "env_keys": [],
+      "success": true,
+      "returncode": 0,
+      "duration_ms": 10450,
+      "stdout_tail": "No changes detected in app 'kubernetes_ops'\n",
+      "stderr_tail": ""
+    },
+    {
+      "id": "kubernetes_backend_tests",
+      "command": "python -m pytest tests/test_kubernetes_ops_*.py",
+      "mode": "subprocess",
+      "timeout_seconds": 1200,
+      "env_keys": [
+        "POSTGRES_STATEMENT_TIMEOUT_MS"
+      ],
+      "success": true,
+      "returncode": 0,
+      "duration_ms": 475977,
+      "stdout_tail": "94%]\ntests/test_kubernetes_ops_release_interactive_shell_streams.py::test_release_blockers_include_failed_interactive_shell_stream_proof PASSED [ 94%]\ntests/test_kubernetes_ops_release_normal_user_surface.py::test_release_normal_user_surface_proof_can_be_skipped PASSED [ 95%]\ntests/test_kubernetes_ops_release_preflight.py::test_kubernetes_release_preflight_collects_required_command_results PASSED [ 95%]\ntests/test_kubernetes_ops_release_preflight.py::test_kubernetes_release_preflight_fails_when_command_fails PASSED [ 95%]\ntests/test_kubernetes_ops_release_preflight.py::test_kubernetes_release_preflight_fails_when_live_provider_smoke_artifact_is_missing PASSED [ 95%]\ntests/test_kubernetes_ops_release_preflight.py::test_kubernetes_release_preflight_loads_ready_artifact PASSED [ 95%]\ntests/test_kubernetes_ops_release_preflight.py::test_kubernetes_release_preflight_blocks_stale_artifact PASSED [ 95%]\ntests/test_kubernetes_ops_release_preflight.py::test_kubernetes_release_preflight_blocks_missing_or_wrong_schema PASSED [ 96%]\ntests/test_kubernetes_ops_release_production_action_evidence.py::test_production_action_evidence_ready_for_local_without_refs PASSED [ 96%]\ntests/test_kubernetes_ops_release_production_action_evidence.py::test_production_action_evidence_blocks_production_without_refs PASSED [ 96%]\ntests/test_kubernetes_ops_release_production_action_evidence.py::test_production_action_evidence_accepts_production_refs PASSED [ 96%]\ntests/test_kubernetes_ops_release_production_action_evidence.py::test_production_action_evidence_loader_validates_schema_status_and_age PASSED [ 96%]\ntests/test_kubernetes_ops_release_production_action_evidence.py::test_production_action_evidence_loader_rejects_incomplete_contract PASSED [ 97%]\ntests/test_kubernetes_ops_release_production_action_evidence.py::test_production_action_evidence_loader_rejects_incomplete_blocked_action_contract PASSED [ 97%]\ntests/test_kubernetes_ops_release_production_action_evidence.py::test_production_action_evidence_loader_rejects_unsafe_blocked_action_contract PASSED [ 97%]\ntests/test_kubernetes_ops_release_production_action_evidence.py::test_verify_production_action_evidence_command_writes_local_artifact PASSED [ 97%]\ntests/test_kubernetes_ops_release_readiness_summary.py::test_release_readiness_progress_prefers_production_blocked_when_core_backend_is_ready PASSED [ 97%]\ntests/test_kubernetes_ops_release_readiness_summary.py::test_release_readiness_summary_returns_safe_production_evidence_checklist PASSED [ 97%]\ntests/test_kubernetes_ops_release_readiness_summary.py::test_production_evidence_checklist_gap_summary_prioritizes_external_missing_refs PASSED [ 98%]\ntests/test_kubernetes_ops_release_scope.py::test_release_scope_blocks_local_kind_evidence_for_production PASSED [ 98%]\ntests/test_kubernetes_ops_release_scope.py::test_release_scope_requires_production_approval_ref PASSED [ 98%]\ntests/test_kubernetes_ops_release_scope.py::test_release_scope_allows_approved_nonlocal_production_evidence PASSED [ 98%]\ntests/test_kubernetes_ops_release_scope.py::test_release_scope_requires_core_evidence_refs_for_nonlocal_production PASSED [ 98%]\ntests/test_kubernetes_ops_release_scope.py::test_release_scope_blocks_local_kubernetes_mcp_endpoint_for_production PASSED [ 99%]\ntests/test_kubernetes_ops_release_secret_read_controls.py::test_kubernetes_release_secret_read_controls_blocker_names_failed_gate PASSED [ 99%]\ntests/test_kubernetes_ops_security_review.py::test_kubernetes_security_review_detects_missing_csrf_and_clickjacking_middleware PASSED [ 99%]\ntests/test_kubernetes_ops_security_review.py::test_kubernetes_security_review_rejects_wildcard_trusted_origins_with_credentials PASSED [ 99%]\ntests/test_kubernetes_ops_studio_bootstrap.py::test_demo_mcp_exposes_read_only_kubernetes_describe_tool PASSED [ 99%]\ntests/test_kubernetes_ops_sync.py::test_sync_kubernetes_ops_command_prints_summary PASSED [100%]\n\n============= 546 passed, 10 subtests passed in 467.02s (0:07:47) ==============\n",
+      "stderr_tail": ""
+    },
+    {
+      "id": "readonly_rbac_validate",
+      "command": "python manage.py render_kubernetes_ops_readonly_rbac --validate-only",
+      "mode": "subprocess",
+      "timeout_seconds": 600,
+      "env_keys": [],
+      "success": true,
+      "returncode": 0,
+      "duration_ms": 9317,
+      "stdout_tail": "Kubernetes Ops read-only RBAC manifest is valid.\n",
+      "stderr_tail": ""
+    },
+    {
+      "id": "sync_prune_safety",
+      "command": "python manage.py verify_kubernetes_ops_sync_prune_safety",
+      "mode": "subprocess",
+      "timeout_seconds": 600,
+      "env_keys": [],
+      "success": true,
+      "returncode": 0,
+      "duration_ms": 9394,
+      "stdout_tail": "Kubernetes Ops sync prune safety: status=ready success_pruned=True failure_preserved=True\n",
+      "stderr_tail": ""
+    },
+    {
+      "id": "readonly_rbac_live",
+      "command": "python scripts/verify_kubernetes_ops_readonly_rbac_live.py --apply",
+      "mode": "existing_artifact",
+      "success": true,
+      "path": "/workspace/artifacts/kubernetes_ops_readonly_rbac_live_evidence.json",
+      "status": "ready",
+      "checked_at": "2026-06-30T13:12:25.407000+00:00",
+      "context": "kind-webterm-k8s",
+      "errors": []
+    },
+    {
+      "id": "local_platform_evidence",
+      "command": "python scripts/verify_kubernetes_ops_local_platform.py --output artifacts/kubernetes_ops_local_platform_evidence.json",
+      "mode": "existing_artifact",
+      "success": true,
+      "path": "/workspace/artifacts/kubernetes_ops_local_platform_evidence.json",
+      "status": "ready",
+      "checked_at": "2026-07-02T10:21:27.903518+00:00",
+      "context": "kind-webterm-k8s",
+      "summary": {
+        "ready": 3,
+        "missing": 0,
+        "total": 3
+      },
+      "errors": []
+    },
+    {
+      "id": "live_provider_smoke",
+      "command": "python manage.py verify_kubernetes_ops_live_provider_smoke --output artifacts/kubernetes_ops_live_provider_smoke.json",
+      "mode": "existing_artifact",
+      "success": true,
+      "path": "/workspace/artifacts/kubernetes_ops_live_provider_smoke.json",
+      "status": "ready",
+      "checked_at": "2026-07-01T18:09:51.974125+00:00",
+      "schema_version": "kubernetes_ops.live_provider_smoke.v3",
+      "summary": {
+        "enabled_providers": 2,
+        "rancher_providers": 1,
+        "devtron_providers": 1,
+        "provider_probes_ok": 2,
+        "provider_probes_total": 2,
+        "sync_dry_run_ok": 2,
+        "sync_dry_run_total": 2,
+        "clusters": 1,
+        "namespaces": 31,
+        "workloads": 21,
+        "pods": 35,
+        "fleet_bundles": 1,
+        "apps": 8,
+        "backend_paths_status": "ready",
+        "backend_path_checks_ok": 4,
+        "backend_path_checks_total": 4
+      },
+      "errors": []
+    },
+    {
+      "id": "interactive_transport_evidence",
+      "command": "python manage.py verify_kubernetes_ops_interactive_transport_evidence --output artifacts/kubernetes_ops_interactive_transport_evidence.json",
+      "mode": "subprocess",
+      "timeout_seconds": 600,
+      "env_keys": [],
+      "success": true,
+      "returncode": 0,
+      "duration_ms": 9428,
+      "stdout_tail": "Wrote Kubernetes Ops interactive transport evidence: /workspace/artifacts/kubernetes_ops_interactive_transport_evidence.json\n{\"status\": \"ready\", \"summary\": {\"target_environment\": \"local\", \"production_environment\": false, \"enabled_transport_count\": 0, \"restricted_credential_evidence_present\": false, \"port_forward_network_policy_evidence_present\": false, \"transport_status\": \"ready\", \"blocker_count\": 0}, \"errors\": []}\n",
+      "stderr_tail": ""
+    },
+    {
+      "id": "interactive_live_smoke",
+      "command": "python manage.py verify_kubernetes_ops_interactive_live_smoke --output artifacts/kubernetes_ops_interactive_live_smoke.json",
+      "mode": "subprocess",
+      "timeout_seconds": 600,
+      "env_keys": [],
+      "success": true,
+      "returncode": 0,
+      "duration_ms": 9915,
+      "stdout_tail": "Wrote Kubernetes Ops interactive live-smoke evidence: /workspace/artifacts/kubernetes_ops_interactive_live_smoke.json\n{\"status\": \"ready\", \"summary\": {\"target_environment\": \"local\", \"production_environment\": false, \"enabled_transport_count\": 0, \"live_smoke_required\": false, \"production_live_provider_evidence\": false, \"simulated_check_count\": 4, \"live_transport_contract_count\": 4, \"live_transport_opener_check_count\": 4, \"simulated_provider_requests_safe\": true, \"blocker_count\": 0}, \"errors\": []}\n",
+      "stderr_tail": ""
+    },
+    {
+      "id": "interactive_production_controls",
+      "command": "python manage.py verify_kubernetes_ops_interactive_production_controls --output artifacts/kubernetes_ops_interactive_production_controls.json",
+      "mode": "subprocess",
+      "timeout_seconds": 600,
+      "env_keys": [],
+      "success": true,
+      "returncode": 0,
+      "duration_ms": 9803,
+      "stdout_tail": "Wrote Kubernetes Ops interactive production controls evidence: /workspace/artifacts/kubernetes_ops_interactive_production_controls.json\n{\"status\": \"ready\", \"summary\": {\"production_environment\": false, \"enabled_transport_count\": 0, \"control_contract_count\": 4, \"required_ref_count\": 0, \"missing_required_ref_count\": 0, \"recording_required_transport_count\": 0, \"provider_contract_required_transport_count\": 0, \"port_forward_network_policy_required\": false, \"blocker_count\": 0}, \"errors\": []}\n",
+      "stderr_tail": ""
+    },
+    {
+      "id": "production_action_evidence",
+      "command": "python manage.py verify_kubernetes_ops_production_action_evidence --output artifacts/kubernetes_ops_production_action_evidence.json",
+      "mode": "subprocess",
+      "timeout_seconds": 600,
+      "env_keys": [],
+      "success": true,
+      "returncode": 0,
+      "duration_ms": 9698,
+      "stdout_tail": "Wrote Kubernetes Ops production action evidence: /workspace/artifacts/kubernetes_ops_production_action_evidence.json\n{\"status\": \"ready\", \"summary\": {\"production_environment\": false, \"required_ref_count\": 0, \"missing_required_ref_count\": 0, \"rollback_action_class_count\": 5, \"native_verification_check_count\": 10, \"action_class_contract_count\": 5, \"blocked_action_class_count\": 11}, \"errors\": []}\n",
+      "stderr_tail": ""
+    },
+    {
+      "id": "external_evidence_bundle",
+      "command": "python manage.py verify_kubernetes_ops_external_evidence_bundle --output artifacts/kubernetes_ops_external_evidence_bundle.json",
+      "mode": "subprocess",
+      "timeout_seconds": 600,
+      "env_keys": [],
+      "success": true,
+      "returncode": 0,
+      "duration_ms": 9857,
+      "stdout_tail": "Wrote Kubernetes Ops external evidence bundle: /workspace/artifacts/kubernetes_ops_external_evidence_bundle.json\n{\"status\": \"ready\", \"summary\": {\"required_ref_count\": 0, \"missing_required_ref_count\": 0, \"artifact_check_count\": 6, \"artifact_ready_count\": 6, \"local_indicator_count\": 18, \"production_environment\": false}, \"errors\": []}\n",
+      "stderr_tail": "2026-07-02 14:28:50.239 | SUCCESS  | app.core.model_config:load_config:450 - Model configuration loaded from .model_config.json\n2026-07-02 14:28:50.241 | SUCCESS  | app.core.model_config:load_config:450 - Model configuration loaded from .model_config.json\n2026-07-02 14:28:50.244 | SUCCESS  | app.core.model_config:load_config:450 - Model configuration loaded from .model_config.json\n2026-07-02 14:28:50.246 | SUCCESS  | app.core.model_config:load_config:450 - Model configuration loaded from .model_config.json\n"
+    }
+  ],
+  "failed": []
+}

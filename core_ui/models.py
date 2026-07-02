@@ -139,6 +139,10 @@ FEATURE_CHOICES = [
     ("studio_mcp", "Studio MCP"),
     ("studio_notifications", "Studio Notifications"),
     ("kubernetes", "Kubernetes"),
+    ("kubernetes_admin_read", "Kubernetes Admin Read"),
+    ("kubernetes_admin_write", "Kubernetes Admin Write"),
+    ("kubernetes_break_glass", "Kubernetes Break Glass"),
+    ("kubernetes_secret_read", "Kubernetes Secret Read"),
     ("mars", "MARS"),
     ("settings", "Settings"),
     ("orchestrator", "Orchestrator"),
@@ -149,7 +153,14 @@ FEATURE_CHOICES = [
 # Settings remain opt-in, and the admin dashboard stays staff-only.
 DEFAULT_ALLOWED_FEATURES = {"servers", "agents", "knowledge_base", "dashboard"}
 # Features that must be granted explicitly even for staff users.
-EXPLICIT_OPT_IN_FEATURES = {"kubernetes", "mars"}
+EXPLICIT_OPT_IN_FEATURES = {
+    "kubernetes",
+    "kubernetes_admin_read",
+    "kubernetes_admin_write",
+    "kubernetes_break_glass",
+    "kubernetes_secret_read",
+    "mars",
+}
 STAFF_ONLY_FEATURES = set()
 
 

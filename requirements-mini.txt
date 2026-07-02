@@ -20,6 +20,7 @@ cryptography>=42.0
 python-dotenv>=1.0
 loguru>=0.7
 pydantic>=2.8
+PyYAML>=6.0
 
 
 # LLM providers used by mini settings + terminal AI

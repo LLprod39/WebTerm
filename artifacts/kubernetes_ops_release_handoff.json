@@ -1,0 +1,504 @@
+{
+  "schema_version": "kubernetes_ops.release_handoff.v1",
+  "generated_at": "2026-07-02T14:57:47.947766+00:00",
+  "status": "blocked",
+  "can_enable_sidebar": false,
+  "evidence": {
+    "path": "/workspace/artifacts/kubernetes_ops_release_evidence.json",
+    "loaded": true,
+    "generated_at": "2026-07-02T14:35:16.150469+00:00",
+    "schema_version": "kubernetes_ops.release_evidence.v2",
+    "artifact_status": "ready",
+    "artifact_errors": [],
+    "production_ready": false,
+    "ready_for_sidebar": false
+  },
+  "release_scope": {
+    "status": "local",
+    "target_environment": "local",
+    "approval_ref_present": false,
+    "core_evidence_ready": true,
+    "missing_reference_count": 0,
+    "missing_required_references": [],
+    "local_indicator_count": 8,
+    "reason": "production target environment is not selected"
+  },
+  "blockers": [
+    "readiness:sidebar_release_scope=missing",
+    "release_scope:local"
+  ],
+  "completion_audit": {
+    "status": "incomplete",
+    "core_backend_complete": true,
+    "runtime_readiness_complete": true,
+    "production_evidence_complete": false,
+    "sidebar_enablement_complete": false,
+    "core_backend_proofs": [
+      {
+        "id": "definition_of_done",
+        "status": "ready",
+        "complete": true
+      },
+      {
+        "id": "normal_user_surface",
+        "status": "ready",
+        "complete": true
+      },
+      {
+        "id": "frontend_payload_scan",
+        "status": "ready",
+        "complete": true
+      },
+      {
+        "id": "secret_read_controls",
+        "status": "ready",
+        "complete": true
+      },
+      {
+        "id": "provider_secret_lifecycle",
+        "status": "ready",
+        "complete": true
+      },
+      {
+        "id": "audit_redaction",
+        "status": "ready",
+        "complete": true
+      },
+      {
+        "id": "production_action_evidence",
+        "status": "ready",
+        "complete": true
+      }
+    ],
+    "runtime_missing_required_checks": [],
+    "production_scope_readiness_checks": [
+      "sidebar_release_scope"
+    ],
+    "production_evidence_checks": [
+      {
+        "id": "target_environment",
+        "complete": false,
+        "detail": "local"
+      },
+      {
+        "id": "required_references",
+        "complete": true,
+        "detail": "0"
+      },
+      {
+        "id": "no_local_indicators",
+        "complete": false,
+        "detail": "8"
+      },
+      {
+        "id": "release_artifact",
+        "complete": false,
+        "detail": "ready"
+      }
+    ],
+    "remaining": [
+      "production_evidence",
+      "sidebar_enablement"
+    ]
+  },
+  "release_proofs": [
+    {
+      "id": "action_controls",
+      "status": "ready",
+      "success": "true",
+      "detail": "native_execution_enabled=False, approval_status=approved_external, rollback_plan=required, restart_template=ready, verification_plan=pending, auto_verification=verified, gitops=gitlab, git_write=False, cluster_mutation=False, restricted_write_gate=ready"
+    },
+    {
+      "id": "admin_mode_safety",
+      "status": "ready",
+      "success": "true",
+      "detail": "provider_called=False, admin_actions_created=0"
+    },
+    {
+      "id": "post_review_retention",
+      "status": "ready",
+      "success": "true",
+      "detail": "pending_review=True, deleted_events=1, post_review_redacted=True"
+    },
+    {
+      "id": "external_evidence_bundle",
+      "status": "ready",
+      "success": "true",
+      "detail": "refs_missing=0, artifacts=6/6, local_indicators=18"
+    },
+    {
+      "id": "production_action_evidence",
+      "status": "ready",
+      "success": "true",
+      "detail": "rollback_actions=5, native_checks=10, blocked_actions=11, blocked_contract=True"
+    },
+    {
+      "id": "interactive_transport_evidence",
+      "status": "ready",
+      "success": "true",
+      "detail": "enabled=0, blockers=0, dangerous_live_action_started=False"
+    },
+    {
+      "id": "interactive_live_smoke",
+      "status": "ready",
+      "success": "true",
+      "detail": "simulated_checks=4, live_contracts=4, required=False, production_live_provider_evidence=False"
+    },
+    {
+      "id": "interactive_shell_streams",
+      "status": "ready",
+      "success": "true",
+      "detail": "actions=2, recordings=2, events=4, provider_requests_safe=True"
+    },
+    {
+      "id": "definition_of_done",
+      "status": "ready",
+      "success": "true",
+      "detail": "ready=13/13, missing=0, missing_ids=none"
+    },
+    {
+      "id": "normal_user_surface",
+      "status": "ready",
+      "success": "true",
+      "detail": "reader_external_links_visible=False, credential_scan=ready, surfaces=31, secret_ref_serialized=False, forbidden_values=False"
+    },
+    {
+      "id": "secret_read_controls",
+      "status": "ready",
+      "success": "true",
+      "detail": "default_redacted=True, list_metadata_only=True, denied_without_grant=True, denied_without_runtime_flag=True, allowed_all_gates=True"
+    },
+    {
+      "id": "provider_secret_lifecycle",
+      "status": "ready",
+      "success": "true",
+      "detail": "storage=managed, rotation_supported=True, plaintext_serialized=False, persistent_rows=False"
+    },
+    {
+      "id": "audit_redaction",
+      "status": "ready",
+      "success": "true",
+      "detail": "api_serializer_redacted=True, cluster_event_redacted=True, credentialed_url_sanitized=True, persistent_rows=False"
+    }
+  ],
+  "next_steps": [
+    "Run release evidence in production with non-local Rancher/Devtron/MCP endpoints, approval ref and core evidence refs."
+  ],
+  "required_commands": [
+    {
+      "id": "django_check",
+      "command": "python manage.py check",
+      "purpose": "Django configuration and system checks pass before release evidence is trusted."
+    },
+    {
+      "id": "architecture_guard",
+      "command": "python scripts/check_architecture_sizes.py --strict-new",
+      "purpose": "Repository architecture guard stays green for new Kubernetes Ops code."
+    },
+    {
+      "id": "migrations_dry_run",
+      "command": "python manage.py makemigrations kubernetes_ops --check --dry-run",
+      "purpose": "Kubernetes Ops models have no uncommitted migration drift."
+    },
+    {
+      "id": "kubernetes_backend_tests",
+      "command": "python -m pytest tests/test_kubernetes_ops_*.py",
+      "timeout_seconds": 1200,
+      "env": {
+        "POSTGRES_STATEMENT_TIMEOUT_MS": "0"
+      },
+      "purpose": "Kubernetes Ops backend, safety, release and readiness tests pass together."
+    },
+    {
+      "id": "readonly_rbac_validate",
+      "command": "python manage.py render_kubernetes_ops_readonly_rbac --validate-only",
+      "purpose": "Generated read-only RBAC contract stays deny-by-default for write/exec paths."
+    },
+    {
+      "id": "sync_prune_safety",
+      "command": "python manage.py verify_kubernetes_ops_sync_prune_safety",
+      "purpose": "Local inventory pruning only deletes stale rows after a successful provider sync."
+    },
+    {
+      "id": "readonly_rbac_live",
+      "command": "python scripts/verify_kubernetes_ops_readonly_rbac_live.py --apply",
+      "purpose": "Live kubectl auth can-i proof confirms read allow and write/exec deny matrix."
+    },
+    {
+      "id": "local_platform_evidence",
+      "command": "python scripts/verify_kubernetes_ops_local_platform.py --output artifacts/kubernetes_ops_local_platform_evidence.json",
+      "purpose": "Local kind platform evidence proves Rancher, Fleet and Devtron namespaces/services/workloads are installed and ready for WebTerm provider integration tests."
+    },
+    {
+      "id": "live_provider_smoke",
+      "command": "python manage.py verify_kubernetes_ops_live_provider_smoke --output artifacts/kubernetes_ops_live_provider_smoke.json",
+      "purpose": "Live WebTerm provider evidence proves enabled Rancher/Fleet/Devtron providers answer probes and read-only dry-run sync returns clusters, Fleet bundles and Devtron apps."
+    },
+    {
+      "id": "interactive_transport_evidence",
+      "command": "python manage.py verify_kubernetes_ops_interactive_transport_evidence --output artifacts/kubernetes_ops_interactive_transport_evidence.json",
+      "purpose": "Interactive exec, port-forward, cluster terminal and node-debug production prerequisites are captured without opening a live stream."
+    },
+    {
+      "id": "interactive_live_smoke",
+      "command": "python manage.py verify_kubernetes_ops_interactive_live_smoke --output artifacts/kubernetes_ops_interactive_live_smoke.json",
+      "purpose": "Interactive exec, port-forward, cluster terminal and node-debug provider openers are smoke-tested with simulated streams, while production live-stream proof stays an external evidence reference."
+    },
+    {
+      "id": "interactive_production_controls",
+      "command": "python manage.py verify_kubernetes_ops_interactive_production_controls --output artifacts/kubernetes_ops_interactive_production_controls.json",
+      "purpose": "Restricted credential, recording, provider-contract and port-forward network-policy production controls are captured without opening live streams."
+    },
+    {
+      "id": "production_action_evidence",
+      "command": "python manage.py verify_kubernetes_ops_production_action_evidence --output artifacts/kubernetes_ops_production_action_evidence.json",
+      "purpose": "Production rollback drill and native verification evidence refs are captured without mutating the cluster."
+    },
+    {
+      "id": "external_evidence_bundle",
+      "command": "python manage.py verify_kubernetes_ops_external_evidence_bundle --output artifacts/kubernetes_ops_external_evidence_bundle.json",
+      "purpose": "Production promotion evidence refs and prerequisite artifacts are captured in one fail-closed external evidence bundle."
+    },
+    {
+      "id": "release_evidence",
+      "command": "python manage.py verify_kubernetes_ops_release --username <staff-user> --output artifacts/kubernetes_ops_release_evidence.json",
+      "purpose": "Collect bounded promotion artifact for provider, sync, MCP, action-control, Admin Mode safety and release-scope evidence."
+    },
+    {
+      "id": "preflight_evidence",
+      "command": "python manage.py verify_kubernetes_ops_preflight --output artifacts/kubernetes_ops_preflight_evidence.json",
+      "purpose": "Write bounded evidence that required release preflight commands passed before promotion."
+    },
+    {
+      "id": "release_handoff",
+      "command": "python manage.py render_kubernetes_ops_release_handoff --output artifacts/kubernetes_ops_release_handoff.md",
+      "purpose": "Render the operator-facing production handoff checklist from release evidence without approving production by itself."
+    }
+  ],
+  "production_env_flags": [
+    {
+      "name": "KUBERNETES_OPS_RELEASE_ENVIRONMENT",
+      "expected": "production"
+    },
+    {
+      "name": "KUBERNETES_OPS_PRODUCTION_APPROVAL_REF",
+      "expected": "<change-or-approval-id>"
+    },
+    {
+      "name": "KUBERNETES_OPS_PRODUCTION_EVIDENCE_REF",
+      "expected": "<operator-reviewed production evidence bundle ref>"
+    },
+    {
+      "name": "KUBERNETES_OPS_IDENTITY_RUNTIME_EVIDENCE_REF",
+      "expected": "<production SSO/Keycloak runtime evidence ref>"
+    },
+    {
+      "name": "KUBERNETES_OPS_LIVE_PROVIDER_EVIDENCE_REF",
+      "expected": "<production Rancher/Fleet/Devtron live provider evidence ref>"
+    },
+    {
+      "name": "KUBERNETES_OPS_READONLY_RBAC_EVIDENCE_REF",
+      "expected": "<production read-only RBAC can-i evidence ref>"
+    },
+    {
+      "name": "KUBERNETES_OPS_KUBERNETES_MCP_EVIDENCE_REF",
+      "expected": "<production Kubernetes MCP READ_ONLY smoke evidence ref>"
+    },
+    {
+      "name": "KUBERNETES_OPS_PRODUCTION_ROLLBACK_EVIDENCE_REF",
+      "expected": "<production rollback drill evidence ref>"
+    },
+    {
+      "name": "KUBERNETES_OPS_PRODUCTION_NATIVE_VERIFICATION_EVIDENCE_REF",
+      "expected": "<production native verification evidence ref>"
+    },
+    {
+      "name": "KUBERNETES_OPS_READY_FOR_SIDEBAR",
+      "expected": "true only after production_ready=true"
+    },
+    {
+      "name": "KUBERNETES_OPS_RELEASE_EVIDENCE_MAX_AGE_SECONDS",
+      "expected": "86400 or stricter"
+    },
+    {
+      "name": "KUBERNETES_ADMIN_RESTRICTED_CREDENTIAL_EVIDENCE_REF",
+      "expected": "<reviewed restricted credential/RBAC proof before any production interactive transport>"
+    },
+    {
+      "name": "KUBERNETES_ADMIN_PORT_FORWARD_NETWORK_POLICY_EVIDENCE_REF",
+      "expected": "<reviewed network policy/egress proof before production port-forward tunnel>"
+    },
+    {
+      "name": "KUBERNETES_ADMIN_INTERACTIVE_LIVE_SMOKE_EVIDENCE_REF",
+      "expected": "<reviewed production live-smoke proof before enabling production interactive streams>"
+    }
+  ],
+  "external_evidence_required": [
+    "Non-local Rancher/Fleet/Devtron provider endpoints and successful live probes.",
+    "Fresh successful provider sync dry-run and running sync worker.",
+    "Live read-only Kubernetes RBAC can-i proof on the target cluster.",
+    "External evidence bundle with reviewed production refs for approval, providers, RBAC, SSO, MCP, rollback, native verification and interactive gates.",
+    "Production rollback drill evidence for restart/scale/apply/patch/delete request classes before sidebar enablement.",
+    "Production native verification evidence proving post-action read-only checks close requests without weak or stale evidence.",
+    "Fresh interactive transport prerequisite artifact proving recording, restricted credential and provider-contract gates.",
+    "Fresh interactive live-smoke artifact proving provider opener contracts and external production live-stream evidence refs.",
+    "Fresh interactive production controls artifact proving restricted credential, recording, provider-contract and port-forward network-policy contracts.",
+    "Owned production Kubernetes MCP binding with READ_ONLY diagnosis smoke.",
+    "Production SSO/Keycloak runtime gate and explicit approval reference.",
+    "Reviewed restricted credential evidence before production exec, port-forward, cluster terminal, or node debug transport.",
+    "Reviewed port-forward network policy evidence, exact target allowlist, protected namespace denylist, and short TTL before production port-forward tunnel."
+  ],
+  "safety_guards": [
+    "Native exec/attach/port-forward/apply/delete/scale/restart remain disabled.",
+    "Provider-native interactive transports require recording gates plus restricted credential evidence in production.",
+    "Provider-native port-forward additionally requires network policy evidence and an exact target allowlist in production.",
+    "Provider secrets stay behind managed/external secret references.",
+    "Release evidence must pass artifact safety self-scan before sidebar enablement."
+  ],
+  "production_execution_plan": {
+    "status": "blocked",
+    "can_enable_sidebar": false,
+    "recommended_next": {
+      "type": "manual",
+      "id": "select_production_environment",
+      "label": "Select the production release environment."
+    },
+    "blocked_until": [
+      {
+        "id": "target_environment",
+        "detail": "target environment must be production"
+      },
+      {
+        "id": "production_approval_ref",
+        "detail": "production approval reference must be present"
+      },
+      {
+        "id": "local_indicators",
+        "detail": "local/test markers must be removed from evidence (8)"
+      },
+      {
+        "id": "production_ready",
+        "detail": "release evidence must report production_ready=true"
+      },
+      {
+        "id": "ready_for_sidebar",
+        "detail": "release evidence must report ready_for_sidebar=true"
+      },
+      {
+        "id": "production_evidence_complete",
+        "detail": "completion audit must mark production evidence complete"
+      },
+      {
+        "id": "sidebar_enablement_complete",
+        "detail": "completion audit must mark sidebar enablement complete"
+      }
+    ],
+    "blocked_until_count": 7,
+    "phases": [
+      {
+        "id": "configure_production_scope",
+        "title": "Configure production scope",
+        "type": "manual",
+        "manual_steps": [
+          "Set KUBERNETES_OPS_RELEASE_ENVIRONMENT=production only for the real target.",
+          "Set approval and evidence reference env vars; do not paste provider tokens."
+        ],
+        "settings": [
+          "KUBERNETES_OPS_RELEASE_ENVIRONMENT",
+          "KUBERNETES_OPS_PRODUCTION_APPROVAL_REF",
+          "KUBERNETES_OPS_PRODUCTION_EVIDENCE_REF",
+          "KUBERNETES_OPS_IDENTITY_RUNTIME_EVIDENCE_REF",
+          "KUBERNETES_OPS_LIVE_PROVIDER_EVIDENCE_REF",
+          "KUBERNETES_OPS_READONLY_RBAC_EVIDENCE_REF",
+          "KUBERNETES_OPS_KUBERNETES_MCP_EVIDENCE_REF",
+          "KUBERNETES_OPS_PRODUCTION_ROLLBACK_EVIDENCE_REF",
+          "KUBERNETES_OPS_PRODUCTION_NATIVE_VERIFICATION_EVIDENCE_REF",
+          "KUBERNETES_OPS_READY_FOR_SIDEBAR",
+          "KUBERNETES_OPS_RELEASE_EVIDENCE_MAX_AGE_SECONDS",
+          "KUBERNETES_ADMIN_RESTRICTED_CREDENTIAL_EVIDENCE_REF",
+          "KUBERNETES_ADMIN_PORT_FORWARD_NETWORK_POLICY_EVIDENCE_REF",
+          "KUBERNETES_ADMIN_INTERACTIVE_LIVE_SMOKE_EVIDENCE_REF"
+        ]
+      },
+      {
+        "id": "collect_production_evidence",
+        "title": "Collect production prerequisite evidence",
+        "type": "command",
+        "commands": [
+          {
+            "id": "live_provider_smoke",
+            "command": "python manage.py verify_kubernetes_ops_live_provider_smoke --output artifacts/kubernetes_ops_live_provider_smoke.json",
+            "purpose": "Live WebTerm provider evidence proves enabled Rancher/Fleet/Devtron providers answer probes and read-only dry-run sync returns clusters, Fleet bundles and Devtron apps."
+          },
+          {
+            "id": "readonly_rbac_live",
+            "command": "python scripts/verify_kubernetes_ops_readonly_rbac_live.py --apply",
+            "purpose": "Live kubectl auth can-i proof confirms read allow and write/exec deny matrix."
+          },
+          {
+            "id": "interactive_transport_evidence",
+            "command": "python manage.py verify_kubernetes_ops_interactive_transport_evidence --output artifacts/kubernetes_ops_interactive_transport_evidence.json",
+            "purpose": "Interactive exec, port-forward, cluster terminal and node-debug production prerequisites are captured without opening a live stream."
+          },
+          {
+            "id": "interactive_live_smoke",
+            "command": "python manage.py verify_kubernetes_ops_interactive_live_smoke --output artifacts/kubernetes_ops_interactive_live_smoke.json",
+            "purpose": "Interactive exec, port-forward, cluster terminal and node-debug provider openers are smoke-tested with simulated streams, while production live-stream proof stays an external evidence reference."
+          },
+          {
+            "id": "interactive_production_controls",
+            "command": "python manage.py verify_kubernetes_ops_interactive_production_controls --output artifacts/kubernetes_ops_interactive_production_controls.json",
+            "purpose": "Restricted credential, recording, provider-contract and port-forward network-policy production controls are captured without opening live streams."
+          },
+          {
+            "id": "production_action_evidence",
+            "command": "python manage.py verify_kubernetes_ops_production_action_evidence --output artifacts/kubernetes_ops_production_action_evidence.json",
+            "purpose": "Production rollback drill and native verification evidence refs are captured without mutating the cluster."
+          },
+          {
+            "id": "external_evidence_bundle",
+            "command": "python manage.py verify_kubernetes_ops_external_evidence_bundle --output artifacts/kubernetes_ops_external_evidence_bundle.json",
+            "purpose": "Production promotion evidence refs and prerequisite artifacts are captured in one fail-closed external evidence bundle."
+          }
+        ],
+        "command_count": 7
+      },
+      {
+        "id": "generate_release_artifacts",
+        "title": "Generate release artifacts",
+        "type": "command",
+        "commands": [
+          {
+            "id": "preflight_evidence",
+            "command": "python manage.py verify_kubernetes_ops_preflight --output artifacts/kubernetes_ops_preflight_evidence.json",
+            "purpose": "Write bounded evidence that required release preflight commands passed before promotion."
+          },
+          {
+            "id": "release_evidence",
+            "command": "python manage.py verify_kubernetes_ops_release --username <staff-user> --output artifacts/kubernetes_ops_release_evidence.json",
+            "purpose": "Collect bounded promotion artifact for provider, sync, MCP, action-control, Admin Mode safety and release-scope evidence."
+          },
+          {
+            "id": "release_handoff",
+            "command": "python manage.py render_kubernetes_ops_release_handoff --output artifacts/kubernetes_ops_release_handoff.md",
+            "purpose": "Render the operator-facing production handoff checklist from release evidence without approving production by itself."
+          }
+        ],
+        "command_count": 3
+      },
+      {
+        "id": "enable_sidebar_after_green",
+        "title": "Enable sidebar after green handoff",
+        "type": "manual",
+        "manual_steps": [
+          "Set KUBERNETES_OPS_READY_FOR_SIDEBAR=true only after production_ready=true and approved operator change."
+        ],
+        "settings": [
+          "KUBERNETES_OPS_READY_FOR_SIDEBAR"
+        ]
+      }
+    ],
+    "phase_count": 4,
+    "command_count": 10
+  }
+}

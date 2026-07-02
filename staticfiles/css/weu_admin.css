@@ -1,0 +1,616 @@
+/**
+ * WEU AI Admin — тема в стиле основного сайта (тёмная, Inter, aurora, glass)
+ * Переопределяет стили Django admin. Подключается последней, чтобы перебить responsive.css.
+ */
+
+/* Переменные дизайн-системы WEU для админки — опираются на style.css при его подключении */
+:root,
+html[data-theme="light"],
+html[data-theme="dark"] {
+  --primary: var(--color-primary, #6366f1);
+  --primary-fg: #fff;
+  --secondary: var(--color-primary-hover, #4f46e5);
+  --accent: var(--accent, #06b6d4);
+
+  --body-fg: var(--color-text-primary, #fafafa);
+  --body-bg: var(--color-bg-base, #09090b);
+  --body-quiet-color: var(--color-text-secondary, #a1a1aa);
+  --body-medium-color: #d4d4d8;
+  --body-loud-color: var(--color-text-primary, #fafafa);
+
+  --header-color: var(--color-bg-base, #09090b);
+  --header-branding-color: var(--color-text-primary, #fafafa);
+  --header-bg: var(--color-bg-surface, #111113);
+  --header-link-color: var(--color-text-secondary, #a1a1aa);
+
+  --breadcrumbs-fg: var(--color-text-tertiary, #71717a);
+  --breadcrumbs-link-fg: var(--color-text-secondary, #a1a1aa);
+  --breadcrumbs-bg: var(--color-bg-surface, #111113);
+
+  --link-fg: var(--primary-light, #818cf8);
+  --link-hover-color: #a5b4fc;
+  --link-selected-fg: var(--color-primary, #6366f1);
+
+  --hairline-color: var(--color-border-subtle, rgba(255, 255, 255, 0.06));
+  --border-color: var(--color-border-default, rgba(255, 255, 255, 0.1));
+
+  --error-fg: #ef4444;
+  --message-success-bg: #14532d;
+  --message-warning-bg: #422006;
+  --message-error-bg: #450a0a;
+
+  --darkened-bg: var(--color-bg-deep, #050507);
+  --selected-bg: var(--color-bg-elevated, #18181b);
+  --selected-row: var(--color-primary-muted, rgba(99, 102, 241, 0.2));
+
+  --button-fg: #fff;
+  --button-bg: var(--color-primary, #6366f1);
+  --button-hover-bg: var(--color-primary-hover, #4f46e5);
+  --default-button-bg: var(--color-primary-hover, #4f46e5);
+  --default-button-hover-bg: var(--color-primary-active, #4338ca);
+  --close-button-bg: #27272a;
+  --close-button-hover-bg: #3f3f46;
+  --delete-button-bg: var(--error, #dc2626);
+  --delete-button-hover-bg: var(--error-hover, #b91c1c);
+
+  --object-tools-fg: #fff;
+  --object-tools-bg: var(--color-primary, #6366f1);
+  --object-tools-hover-bg: var(--color-primary-hover, #4f46e5);
+
+  --font-family-primary: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-family-monospace: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+
+  color-scheme: dark;
+}
+
+/* Aurora и noise — фон как на основном сайте (style.css) */
+body {
+  position: relative;
+}
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 50% 50% at -10% -20%, rgba(99, 102, 241, 0.3) 0%, transparent 70%),
+    radial-gradient(ellipse 60% 60% at 110% 110%, rgba(139, 92, 246, 0.25) 0%, transparent 70%),
+    radial-gradient(ellipse 30% 30% at 80% 40%, rgba(6, 182, 212, 0.15) 0%, transparent 70%);
+  filter: blur(80px);
+  opacity: 0.9;
+}
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  opacity: 0.015;
+}
+#container {
+  position: relative;
+  z-index: 1;
+}
+
+html, body {
+  font-family: var(--font-family-primary) !important;
+  background: var(--body-bg) !important;
+  color: var(--body-fg) !important;
+}
+
+body.weu-admin-shell {
+  font-family: var(--font-family-primary) !important;
+  background: var(--body-bg) !important;
+  color: var(--body-fg) !important;
+}
+
+/* Header — glass как на основном сайте (style.css .glass-sm) */
+body.weu-admin-shell #header,
+#header {
+  background: rgba(17, 17, 19, 0.6) !important;
+  backdrop-filter: blur(var(--blur-sm, 10px)) !important;
+  -webkit-backdrop-filter: blur(var(--blur-sm, 10px)) !important;
+  border-bottom: 1px solid var(--border-subtle, var(--hairline-color)) !important;
+  padding: 0 1.5rem !important;
+  min-height: var(--header-height, 3.5rem) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex-wrap: wrap !important;
+  gap: 0.5rem !important;
+}
+
+#branding {
+  padding: 0;
+}
+
+#site-name a {
+  color: var(--header-branding-color) !important;
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+#site-name a:hover {
+  color: var(--link-hover-color) !important;
+}
+
+/* User tools в шапке */
+#user-tools {
+  color: var(--body-quiet-color);
+  font-size: 0.875rem;
+}
+
+#user-tools a {
+  color: var(--link-fg) !important;
+}
+
+#user-tools a:hover {
+  color: var(--link-hover-color) !important;
+}
+
+#user-tools .logout-form button {
+  background: transparent;
+  border: none;
+  color: var(--link-fg);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  padding: 0;
+}
+
+#user-tools .logout-form button:hover {
+  color: var(--link-hover-color);
+}
+
+/* Breadcrumbs */
+body.weu-admin-shell .breadcrumbs,
+.breadcrumbs {
+  background: var(--breadcrumbs-bg) !important;
+  border-bottom: 1px solid var(--hairline-color) !important;
+  padding: 0.5rem 1.5rem !important;
+  font-size: 0.8125rem !important;
+}
+
+.breadcrumbs a {
+  color: var(--breadcrumbs-link-fg) !important;
+}
+
+.breadcrumbs a:hover {
+  color: var(--link-hover-color) !important;
+}
+
+/* Основной контент */
+body.weu-admin-shell #content,
+#content {
+  background: var(--body-bg) !important;
+  padding: 1.5rem !important;
+}
+
+#content h1 {
+  color: var(--body-loud-color);
+  font-weight: 600;
+  font-size: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.main > .content {
+  background: var(--body-bg);
+}
+
+/* Модули на главной админки — glass-card как на сайте */
+#content-main .module {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+  backdrop-filter: blur(var(--blur-md, 20px));
+  -webkit-backdrop-filter: blur(var(--blur-md, 20px));
+  border: 1px solid var(--border-subtle, var(--hairline-color));
+  box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
+  border-radius: var(--radius-lg, 1rem);
+  margin-bottom: var(--spacing-lg, 1.5rem);
+  overflow: hidden;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+#content-main .module:hover {
+  border-color: var(--border-default, var(--border-color));
+  box-shadow: var(--shadow-lg, 0 10px 15px -3px rgba(0, 0, 0, 0.1));
+}
+
+#content-main .module h2,
+#content-main .module caption {
+  background: var(--header-bg);
+  border-bottom: 1px solid var(--hairline-color);
+  color: var(--body-loud-color);
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0.75rem 1rem;
+}
+
+#content-main .module table {
+  border: none;
+}
+
+#content-main .module td,
+#content-main .module th {
+  border-bottom: 1px solid var(--hairline-color);
+  padding: 0.625rem 1rem;
+  color: var(--body-fg);
+}
+
+#content-main .module tr:last-child td {
+  border-bottom: none;
+}
+
+#content-main .module a {
+  color: var(--link-fg);
+}
+
+#content-main .module a:hover {
+  color: var(--link-hover-color);
+}
+
+/* Формы и инпуты */
+input[type="text"],
+input[type="password"],
+input[type="url"],
+input[type="email"],
+input[type="number"],
+textarea,
+select {
+  background: var(--darkened-bg) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: var(--radius-sm, 0.5rem);
+  color: var(--body-fg) !important;
+  font-family: inherit;
+  padding: var(--spacing-sm, 0.5rem) var(--spacing-md, 0.75rem);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--primary) !important;
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-primary-muted, rgba(99, 102, 241, 0.2));
+}
+
+/* Кнопки */
+input[type="submit"],
+button[type="submit"],
+.button,
+.submit-row input,
+a.button {
+  background: var(--button-bg) !important;
+  border: none !important;
+  border-radius: var(--radius-sm, 0.5rem);
+  color: var(--button-fg) !important;
+  font-family: inherit;
+  font-weight: 500;
+  padding: var(--spacing-sm, 0.5rem) var(--spacing-lg, 1rem);
+  transition: background var(--motion-duration-normal, 0.2s);
+}
+
+input[type="submit"]:hover,
+button[type="submit"]:hover,
+.button:hover,
+.submit-row input:hover,
+a.button:hover {
+  background: var(--button-hover-bg) !important;
+}
+
+/* Кнопка удаления */
+.delete-link,
+.deletelink {
+  background: var(--delete-button-bg) !important;
+  border-radius: 0.5rem;
+  color: #fff !important;
+}
+
+.delete-link:hover,
+.deletelink:hover {
+  background: var(--delete-button-hover-bg) !important;
+}
+
+/* Object tools (Add ... рядом с заголовком) */
+.object-tools {
+  margin-bottom: 0.5rem;
+}
+
+.object-tools a,
+.object-tools li a {
+  background: var(--object-tools-bg) !important;
+  border-radius: 0.5rem;
+  color: #fff !important;
+  font-size: 0.8125rem;
+  padding: 0.375rem 0.75rem;
+}
+
+.object-tools a:hover,
+.object-tools li a:hover {
+  background: var(--object-tools-hover-bg) !important;
+}
+
+/* Таблицы changelist — карточка и строки в стиле сайта */
+#changelist {
+  background: transparent;
+}
+
+#changelist .results table {
+  border: 1px solid var(--border-default, var(--border-color));
+  border-radius: var(--radius-lg, 1rem);
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, transparent 100%);
+  box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
+}
+
+#changelist .results th,
+#changelist .results td {
+  border-bottom: 1px solid var(--hairline-color);
+  color: var(--body-fg);
+  padding: 0.625rem 0.75rem;
+}
+
+#changelist .results thead th {
+  background: var(--header-bg);
+  color: var(--body-medium-color);
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  border-color: var(--hairline-color);
+}
+
+#changelist .results tbody tr:hover {
+  background: var(--selected-bg);
+}
+
+#changelist .results tbody tr.selected {
+  background: var(--selected-row);
+}
+
+/* Фильтры в сайдбаре */
+#changelist-filter {
+  background: var(--darkened-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+}
+
+#changelist-filter h2 {
+  color: var(--body-loud-color);
+  font-size: 0.8125rem;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--hairline-color);
+}
+
+#changelist-filter h3 {
+  color: var(--body-quiet-color);
+  font-size: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+#changelist-filter ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+#changelist-filter li {
+  margin: 0.25rem 0;
+}
+
+#changelist-filter a {
+  color: var(--link-fg);
+  font-size: 0.8125rem;
+}
+
+#changelist-filter a:hover,
+#changelist-filter li.selected a {
+  color: var(--link-hover-color);
+}
+
+/* Сообщения */
+.messagelist li {
+  background: var(--message-success-bg);
+  border-radius: 0.5rem;
+  color: #fff;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.messagelist li.warning {
+  background: var(--message-warning-bg);
+}
+
+.messagelist li.error {
+  background: var(--message-error-bg);
+}
+
+/* Пагинация */
+.pagination a,
+.pagination span {
+  color: var(--link-fg);
+  padding: 0.25rem 0.5rem;
+}
+
+.pagination a:hover {
+  color: var(--link-hover-color);
+}
+
+.pagination .this-page {
+  color: var(--body-loud-color);
+  font-weight: 600;
+}
+
+/* Брендинг в шапке — как на основном сайте */
+#site-name .weu-admin-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--header-branding-color) !important;
+  font-weight: 600;
+  font-size: 1rem;
+  text-decoration: none;
+}
+
+#site-name .weu-admin-brand:hover {
+  color: var(--link-hover-color) !important;
+}
+
+#site-name .weu-admin-brand-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-md, 0.75rem);
+  background: linear-gradient(135deg, var(--primary) 0%, #8b5cf6 100%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px !important;
+  color: #fff !important;
+  box-shadow: var(--shadow-primary, 0 4px 15px rgba(99, 102, 241, 0.25));
+}
+
+/* Ссылка "View site" — чтобы вела на главную приложения */
+#user-tools a[href="/"] {
+  color: var(--link-fg);
+}
+
+/* Футер */
+#footer {
+  border-top: 1px solid var(--hairline-color);
+  color: var(--body-quiet-color);
+  font-size: 0.75rem;
+  padding: 0.5rem 1.5rem;
+}
+
+/* Логин-форма админки — glass-карточка как на сайте (aurora/noise берутся из body) */
+body.login {
+  background: var(--body-bg) !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+body.login #container {
+  width: 100%;
+  max-width: 24rem;
+  position: relative;
+  z-index: 1;
+}
+
+body.login #header {
+  border: none;
+  background: transparent !important;
+  padding: 0 0 1rem;
+}
+
+body.login #content {
+  padding: var(--spacing-xl, 2rem);
+  background: var(--glass-bg, rgba(17, 17, 19, 0.7));
+  backdrop-filter: blur(var(--blur-md, 20px));
+  -webkit-backdrop-filter: blur(var(--blur-md, 20px));
+  border: 1px solid var(--border-default, var(--border-color));
+  border-radius: var(--radius-lg, 1rem);
+  box-shadow: var(--shadow-lg, 0 10px 15px -3px rgba(0, 0, 0, 0.1)), 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
+body.login #content h1 {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  font-size: 1.25rem;
+}
+
+body.login form input[type="text"],
+body.login form input[type="password"] {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 0.75rem;
+}
+
+body.login .submit-row {
+  padding: 1rem 0 0;
+  border: none;
+  background: transparent;
+}
+
+body.login .submit-row input {
+  width: 100%;
+  padding: 0.625rem 1rem;
+  font-size: 1rem;
+}
+
+/* Nav sidebar (Django 4.1+) — glass и ссылки в стиле сайдбара сайта */
+body.weu-admin-shell #nav-sidebar,
+#nav-sidebar {
+  background: var(--glass-bg, rgba(17, 17, 19, 0.7)) !important;
+  backdrop-filter: blur(var(--blur-md, 20px)) !important;
+  -webkit-backdrop-filter: blur(var(--blur-md, 20px)) !important;
+  border-right: 1px solid var(--border-subtle, var(--hairline-color)) !important;
+  width: var(--sidebar-width, 16rem) !important;
+  padding: var(--spacing-md, 1rem) !important;
+}
+#nav-sidebar .module {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0;
+  margin-bottom: 0;
+}
+#nav-sidebar .module caption,
+#nav-sidebar .module th {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--body-quiet-color);
+  border: none;
+  background: transparent !important;
+}
+#nav-sidebar .module td {
+  border: none;
+  padding: 0.25rem 0.75rem;
+}
+#nav-sidebar a {
+  display: block;
+  padding: var(--spacing-sm, 0.5rem) var(--spacing-md, 1rem);
+  border-radius: var(--radius-md, 0.75rem);
+  font-size: var(--text-sm, 0.875rem);
+  font-weight: 500;
+  color: var(--body-quiet-color);
+  text-decoration: none;
+  transition: background 0.2s, color 0.2s, transform 0.2s;
+}
+#nav-sidebar a:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--body-fg);
+  transform: translateX(2px);
+}
+#nav-sidebar .current-model a,
+#nav-sidebar li.selected a {
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--body-fg);
+  border-left: 3px solid var(--primary);
+  padding-left: calc(var(--spacing-md, 1rem) - 3px);
+}
+.toggle-nav-sidebar {
+  color: var(--body-fg);
+  border: 1px solid var(--border-color);
+  background: var(--darkened-bg);
+  border-radius: var(--radius-sm, 0.5rem);
+}
+
+body.weu-admin-shell .main > .content,
+.main > .content {
+  border-left: 1px solid var(--hairline-color) !important;
+  background: var(--body-bg) !important;
+}
+
+/* Тёмная тема по умолчанию: скрыть переключатель или подставить свои цвета */
+@media (prefers-color-scheme: light) {
+  :root,
+  html[data-theme="light"] {
+    /* всё уже задано выше для :root */
+  }
+}

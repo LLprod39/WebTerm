@@ -6,6 +6,7 @@ import {
   ScrollText,
   Activity,
   Bell,
+  Boxes,
   Gauge,
   Globe,
   Puzzle,
@@ -127,6 +128,14 @@ export const settingsNavGroups: SettingsNavGroup[] = [
         description: "Telegram, Email и публичный URL",
         icon: Bell,
         path: "/settings/notifications",
+        adminOnly: true,
+      },
+      {
+        id: "kubernetes",
+        label: "Kubernetes",
+        description: "Rancher, Devtron и sync",
+        icon: Boxes,
+        path: "/settings/kubernetes",
         adminOnly: true,
       },
       {

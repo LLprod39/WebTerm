@@ -40,6 +40,7 @@ export type PlatformMockOptions = {
   lang?: "en" | "ru";
   features?: Partial<SessionUser["features"]>;
   agentList?: "default" | "empty";
+  kubernetesState?: "empty" | "healthy" | "degraded";
 };
 
 export type PlatformMockResult = {

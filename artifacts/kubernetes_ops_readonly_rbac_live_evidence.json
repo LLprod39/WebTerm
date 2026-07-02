@@ -1,0 +1,155 @@
+{
+  "status": "ready",
+  "checked_at": "2026-06-30T13:12:25.407000+00:00",
+  "context": "kind-webterm-k8s",
+  "kubectl": "kubectl",
+  "manifest_path": "C:\\WebTrerm\\artifacts\\kubernetes_ops_readonly_rbac.yaml",
+  "applied": true,
+  "service_account": "system:serviceaccount:webterm-system:webterm-kubernetes-readonly",
+  "probe_namespace": "default",
+  "allowed": [
+    {
+      "verb": "get",
+      "resource": "namespaces",
+      "namespaced": false,
+      "allowed": true,
+      "decision": "yes",
+      "returncode": 0,
+      "stdout": "yes",
+      "stderr": "Warning: resource 'namespaces' is not namespace scoped"
+    },
+    {
+      "verb": "list",
+      "resource": "pods",
+      "namespaced": true,
+      "allowed": true,
+      "decision": "yes",
+      "returncode": 0,
+      "stdout": "yes",
+      "stderr": ""
+    },
+    {
+      "verb": "watch",
+      "resource": "pods",
+      "namespaced": true,
+      "allowed": true,
+      "decision": "yes",
+      "returncode": 0,
+      "stdout": "yes",
+      "stderr": ""
+    },
+    {
+      "verb": "get",
+      "resource": "services",
+      "namespaced": true,
+      "allowed": true,
+      "decision": "yes",
+      "returncode": 0,
+      "stdout": "yes",
+      "stderr": ""
+    },
+    {
+      "verb": "list",
+      "resource": "deployments.apps",
+      "namespaced": true,
+      "allowed": true,
+      "decision": "yes",
+      "returncode": 0,
+      "stdout": "yes",
+      "stderr": ""
+    },
+    {
+      "verb": "get",
+      "resource": "ingresses.networking.k8s.io",
+      "namespaced": true,
+      "allowed": true,
+      "decision": "yes",
+      "returncode": 0,
+      "stdout": "yes",
+      "stderr": ""
+    },
+    {
+      "verb": "list",
+      "resource": "events",
+      "namespaced": true,
+      "allowed": true,
+      "decision": "yes",
+      "returncode": 0,
+      "stdout": "yes",
+      "stderr": ""
+    }
+  ],
+  "denied": [
+    {
+      "verb": "create",
+      "resource": "pods",
+      "namespaced": true,
+      "allowed": false,
+      "decision": "no",
+      "returncode": 1,
+      "stdout": "no",
+      "stderr": ""
+    },
+    {
+      "verb": "delete",
+      "resource": "pods",
+      "namespaced": true,
+      "allowed": false,
+      "decision": "no",
+      "returncode": 1,
+      "stdout": "no",
+      "stderr": ""
+    },
+    {
+      "verb": "patch",
+      "resource": "deployments.apps",
+      "namespaced": true,
+      "allowed": false,
+      "decision": "no",
+      "returncode": 1,
+      "stdout": "no",
+      "stderr": ""
+    },
+    {
+      "verb": "create",
+      "resource": "pods/exec",
+      "namespaced": true,
+      "allowed": false,
+      "decision": "no",
+      "returncode": 1,
+      "stdout": "no",
+      "stderr": ""
+    },
+    {
+      "verb": "create",
+      "resource": "pods/attach",
+      "namespaced": true,
+      "allowed": false,
+      "decision": "no",
+      "returncode": 1,
+      "stdout": "no",
+      "stderr": ""
+    },
+    {
+      "verb": "create",
+      "resource": "pods/portforward",
+      "namespaced": true,
+      "allowed": false,
+      "decision": "no",
+      "returncode": 1,
+      "stdout": "no",
+      "stderr": ""
+    },
+    {
+      "verb": "escalate",
+      "resource": "clusterroles.rbac.authorization.k8s.io",
+      "namespaced": false,
+      "allowed": false,
+      "decision": "no",
+      "returncode": 1,
+      "stdout": "no",
+      "stderr": "Warning: resource 'clusterroles' is not namespace scoped in group 'rbac.authorization.k8s.io'"
+    }
+  ],
+  "errors": []
+}
