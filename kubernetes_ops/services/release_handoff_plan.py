@@ -14,6 +14,7 @@ PREREQUISITE_COMMAND_IDS = (
 )
 
 RELEASE_COMMAND_IDS = ("preflight_evidence", "preflight", "release_evidence", "release_handoff")
+COMMAND_ID_ALIASES = {"preflight": "preflight_evidence", "preflight_evidence": "preflight_evidence"}
 
 DEFAULT_PRODUCTION_SETTINGS = (
     "KUBERNETES_OPS_RELEASE_ENVIRONMENT",
@@ -38,8 +39,9 @@ def build_kubernetes_handoff_execution_plan(handoff: dict[str, Any]) -> dict[str
     evidence = handoff.get("evidence") if isinstance(handoff.get("evidence"), dict) else {}
     completion = handoff.get("completion_audit") if isinstance(handoff.get("completion_audit"), dict) else {}
     commands = _command_map(handoff.get("required_commands"))
-    can_enable_sidebar = bool(handoff.get("can_enable_sidebar"))
+    requested_can_enable_sidebar = bool(handoff.get("can_enable_sidebar"))
     blocked_until = _blocked_until(release_scope=release_scope, evidence=evidence, completion=completion)
+    can_enable_sidebar = requested_can_enable_sidebar and not blocked_until
     recommended_next = _recommended_next(
         can_enable_sidebar=can_enable_sidebar,
         release_scope=release_scope,
@@ -212,8 +214,23 @@ def _command_map(commands: object) -> dict[str, dict[str, Any]]:
 
 
 def _command_phase(phase_id: str, title: str, commands: dict[str, dict[str, Any]], command_ids: tuple[str, ...]) -> dict[str, Any]:
-    selected = [commands[command_id] for command_id in command_ids if command_id in commands]
+    selected = _selected_phase_commands(commands, command_ids)
     return {"id": phase_id, "title": title, "type": "command", "commands": selected, "command_count": len(selected)}
+
+
+def _selected_phase_commands(commands: dict[str, dict[str, Any]], command_ids: tuple[str, ...]) -> list[dict[str, Any]]:
+    selected: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for command_id in command_ids:
+        command = commands.get(command_id)
+        if command is None:
+            continue
+        canonical_id = COMMAND_ID_ALIASES.get(command_id, command_id)
+        if canonical_id in seen:
+            continue
+        selected.append(command)
+        seen.add(canonical_id)
+    return selected
 
 
 def _manual_phase(phase_id: str, title: str, steps: list[str], settings: list[str]) -> dict[str, Any]:

@@ -36,8 +36,16 @@ class Command(BaseCommand):
         else:
             self.stdout.write(payload.rstrip())
 
+        backend_workstream = handoff.get("backend_workstream") if isinstance(handoff.get("backend_workstream"), dict) else {}
+        blocker_summary = (
+            backend_workstream.get("external_production_blocker_summary")
+            if isinstance(backend_workstream.get("external_production_blocker_summary"), dict)
+            else {}
+        )
         self.stdout.write(
             f"Kubernetes Ops release handoff: status={handoff.get('status')} "
             f"can_enable_sidebar={handoff.get('can_enable_sidebar')} "
-            f"blockers={len(handoff.get('blockers') or [])}"
+            f"blockers={len(handoff.get('blockers') or [])} "
+            f"backend_workstream={backend_workstream.get('status') or 'unknown'} "
+            f"external_primary={blocker_summary.get('primary_category') or 'none'}"
         )

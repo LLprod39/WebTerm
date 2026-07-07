@@ -47,6 +47,14 @@ def test_verify_kubernetes_ops_release_command_prints_operator_summary(monkeypat
             "ready_for_sidebar": False,
             "release_scope": {"status": "local"},
             "blockers": ["release_scope:local"],
+            "backend_workstream": {
+                "status": "backend_ready_production_blocked",
+                "backend_complete": True,
+                "core_backend_percent": 100,
+                "remaining_backend_gap_count": 0,
+                "external_production_blocker_count": 4,
+                "next_backend_step": {"id": "select_production_environment"},
+            },
             "release_summary": {
                 "artifact_safety_status": "ready",
                 "preflight_status": "ready",
@@ -60,6 +68,12 @@ def test_verify_kubernetes_ops_release_command_prints_operator_summary(monkeypat
     call_command("verify_kubernetes_ops_release", "--username", user.username, "--no-fail", stdout=stdout)
 
     output = stdout.getvalue()
+    assert "Backend workstream:" in output
+    assert "status=backend_ready_production_blocked" in output
+    assert "backend_complete=True" in output
+    assert "remaining_backend_gaps=0" in output
+    assert "external_production_blockers=4" in output
+    assert "next=select_production_environment" in output
     assert "Release summary:" in output
     assert "top_blockers=['release_scope:local']" in output
     assert "Next step 1: Run release evidence in production with non-local endpoints." in output

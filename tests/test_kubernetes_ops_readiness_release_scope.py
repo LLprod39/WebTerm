@@ -119,6 +119,37 @@ def test_readiness_blocks_approved_production_scope_when_providers_are_local(mon
 
 
 @pytest.mark.django_db
+def test_readiness_blocks_approved_production_scope_when_demo_markers_are_configured(monkeypatch):
+    user = User.objects.create_user(username="k8s-prod-demo-provider", password="password-123")
+    K8sCluster.objects.create(name="webterm-k8s-demo", labels={"kube_context": "webterm-k8s-demo"})
+    K8sProvider.objects.create(
+        name="demo-rancher",
+        kind=K8sProvider.KIND_RANCHER,
+        base_url="https://rancher.demo.webterm.local",
+        auth_mode=K8sProvider.AUTH_NONE,
+        enabled=True,
+    )
+    _patch_ready_dependencies(monkeypatch)
+
+    with override_settings(
+        KUBERNETES_OPS_READY_FOR_SIDEBAR=True,
+        KUBERNETES_OPS_RELEASE_ENVIRONMENT="production",
+        KUBERNETES_OPS_PRODUCTION_APPROVAL_REF="CHG-K8S-1",
+        **PRODUCTION_REFS,
+    ):
+        report = build_kubernetes_readiness_report(user=user)
+
+    checks = {item["id"]: item for item in report["checks"]}
+    assert report["ready_for_sidebar"] is False
+    assert report["status"] == "not_configured"
+    assert checks["sidebar_release_scope"]["status"] == "missing"
+    assert "provider.name=demo-rancher" in checks["sidebar_release_scope"]["detail"]
+    assert "provider.base_url=[local-url]" in checks["sidebar_release_scope"]["detail"]
+    assert "cluster.name=webterm-k8s-demo" in checks["sidebar_release_scope"]["detail"]
+    assert "https://rancher.demo.webterm.local" not in str(report["production_gate"])
+
+
+@pytest.mark.django_db
 def test_readiness_blocks_sidebar_when_release_evidence_artifact_is_not_ready(monkeypatch):
     user = User.objects.create_user(username="k8s-prod-stale-artifact", password="password-123")
     K8sCluster.objects.create(name="prod-kz")

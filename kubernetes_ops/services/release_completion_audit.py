@@ -112,7 +112,12 @@ def _production_evidence_checks(
         },
         {
             "id": "release_artifact",
-            "complete": artifact_report.get("status") == "ready" and bool(artifact_summary.get("production_ready")),
+            "complete": artifact_report.get("status") == "ready"
+            and bool(artifact_summary.get("production_ready"))
+            and (
+                "production_evidence_complete" not in artifact_report
+                or artifact_report.get("production_evidence_complete") is True
+            ),
             "detail": str(artifact_report.get("status") or ""),
         },
     ]

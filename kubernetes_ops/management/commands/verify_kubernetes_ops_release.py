@@ -58,11 +58,29 @@ class Command(BaseCommand):
         blockers = evidence.get("blockers") or []
         release_summary = evidence.get("release_summary") if isinstance(evidence.get("release_summary"), dict) else {}
         release_scope = evidence.get("release_scope") or {}
+        backend_workstream = evidence.get("backend_workstream") if isinstance(evidence.get("backend_workstream"), dict) else {}
         self.stdout.write(
             f"Kubernetes Ops release evidence: production_ready={evidence.get('production_ready')} "
             f"ready_for_sidebar={evidence.get('ready_for_sidebar')} "
             f"release_scope={release_scope.get('status') or 'unknown'} blockers={len(blockers)}"
         )
+        if backend_workstream:
+            next_step = backend_workstream.get("next_backend_step") if isinstance(backend_workstream.get("next_backend_step"), dict) else {}
+            blocker_summary = (
+                backend_workstream.get("external_production_blocker_summary")
+                if isinstance(backend_workstream.get("external_production_blocker_summary"), dict)
+                else {}
+            )
+            self.stdout.write(
+                "Backend workstream: "
+                f"status={backend_workstream.get('status') or 'unknown'} "
+                f"backend_complete={backend_workstream.get('backend_complete')} "
+                f"core_backend_percent={backend_workstream.get('core_backend_percent')} "
+                f"remaining_backend_gaps={backend_workstream.get('remaining_backend_gap_count') or 0} "
+                f"external_production_blockers={backend_workstream.get('external_production_blocker_count') or 0} "
+                f"external_primary={blocker_summary.get('primary_category') or 'none'} "
+                f"next={next_step.get('id') or 'unknown'}"
+            )
         if release_summary:
             self.stdout.write(
                 "Release summary: "

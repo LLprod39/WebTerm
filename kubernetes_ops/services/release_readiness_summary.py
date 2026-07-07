@@ -8,8 +8,12 @@ from django.conf import settings
 
 from kubernetes_ops.services.readiness import build_kubernetes_readiness_report
 from kubernetes_ops.services.release_artifact import build_kubernetes_release_evidence_artifact_report
+from kubernetes_ops.services.release_backend_workstream import (
+    build_kubernetes_release_backend_workstream,
+    can_enable_kubernetes_release_sidebar,
+)
 from kubernetes_ops.services.release_command_plan import COMMANDS, build_kubernetes_release_command_plan
-from kubernetes_ops.services.release_completion_audit import build_kubernetes_release_completion_audit
+from kubernetes_ops.services.release_completion_audit import PRODUCTION_SCOPE_READINESS_CHECK_IDS, build_kubernetes_release_completion_audit
 from kubernetes_ops.services.release_evidence_checklist import build_kubernetes_production_evidence_checklist
 from kubernetes_ops.services.release_handoff_plan import build_kubernetes_handoff_execution_plan
 from kubernetes_ops.services.release_summary import build_kubernetes_release_summary
@@ -37,19 +41,38 @@ def build_kubernetes_release_readiness_summary(*, user=None) -> dict[str, Any]:
             *[group["next_step"] for group in blocker_groups if group.get("next_step")],
         ]
     )
-    can_enable_sidebar = bool(readiness.get("ready_for_sidebar")) and bool(artifact_report.get("production_ready")) and artifact_report.get("status") == "ready"
-    production_evidence_checklist = build_kubernetes_production_evidence_checklist(production_gate=production_gate)
-    operator_command_plan = build_kubernetes_release_command_plan(
-        production_evidence_checklist=production_evidence_checklist,
-        blocker_groups=blocker_groups,
-        can_enable_sidebar=can_enable_sidebar,
+    release_gate_ready = (
+        bool(readiness.get("ready_for_sidebar"))
+        and bool(artifact_report.get("production_ready"))
+        and bool(artifact_report.get("ready_for_sidebar"))
+        and artifact_report.get("status") == "ready"
     )
+    production_evidence_checklist = build_kubernetes_production_evidence_checklist(production_gate=production_gate)
     artifact_payload = _artifact_payload(artifact_report)
     completion_audit = build_kubernetes_release_completion_audit(
         artifact_summary=artifact_summary,
         readiness_checks=readiness_checks,
         production_gate=production_gate,
         artifact_report=artifact_report,
+        can_enable_sidebar=release_gate_ready,
+    )
+    can_enable_sidebar = can_enable_kubernetes_release_sidebar(
+        production_ready=bool(artifact_report.get("production_ready")),
+        ready_for_sidebar=bool(readiness.get("ready_for_sidebar")) and bool(artifact_report.get("ready_for_sidebar")),
+        completion_audit=completion_audit,
+        artifact_ready=artifact_report.get("status") == "ready",
+    )
+    if can_enable_sidebar != release_gate_ready:
+        completion_audit = build_kubernetes_release_completion_audit(
+            artifact_summary=artifact_summary,
+            readiness_checks=readiness_checks,
+            production_gate=production_gate,
+            artifact_report=artifact_report,
+            can_enable_sidebar=can_enable_sidebar,
+        )
+    operator_command_plan = build_kubernetes_release_command_plan(
+        production_evidence_checklist=production_evidence_checklist,
+        blocker_groups=blocker_groups,
         can_enable_sidebar=can_enable_sidebar,
     )
     summary_payload = {
@@ -80,6 +103,12 @@ def build_kubernetes_release_readiness_summary(*, user=None) -> dict[str, Any]:
             blocker_groups=blocker_groups,
         ),
         "completion_audit": completion_audit,
+        "backend_workstream": build_kubernetes_release_backend_workstream(
+            completion_audit=completion_audit,
+            blocker_groups=blocker_groups,
+            production_evidence_checklist=production_evidence_checklist,
+            can_enable_sidebar=can_enable_sidebar,
+        ),
         "production_evidence_checklist": production_evidence_checklist,
         "operator_command_plan": operator_command_plan,
         "missing_required_references": _missing_refs(production_gate),
@@ -193,6 +222,9 @@ def _artifact_payload(report: dict[str, Any]) -> dict[str, Any]:
         "release_scope_status": str(report.get("release_scope_status") or ""),
         "artifact_safety_status": str(report.get("artifact_safety_status") or ""),
         "artifact_safety_issue_count": int(report.get("artifact_safety_issue_count") or 0),
+        "completion_audit_status": str(report.get("completion_audit_status") or ""),
+        "production_evidence_complete": bool(report.get("production_evidence_complete")),
+        "sidebar_enablement_complete": bool(report.get("sidebar_enablement_complete")),
         "error_count": len(report.get("errors") or []),
         "errors": [str(item) for item in list(report.get("errors") or [])[:8]],
         "blocker_count": len(report.get("blockers") or []),
@@ -234,12 +266,14 @@ def _progress_payload(
     dod_ready = int(artifact_summary.get("definition_of_done_ready") or 0)
     dod_total = int(artifact_summary.get("definition_of_done_total") or 0)
     remaining_categories = [str(group.get("id") or "") for group in blocker_groups if group.get("count")]
+    runtime_blocker_count = sum(int(group.get("count") or 0) for group in blocker_groups if group.get("id") == "runtime_readiness")
     stage = _progress_stage(
         can_enable_sidebar=can_enable_sidebar,
         dod_ready=dod_ready,
         dod_total=dod_total,
         readiness_ready=readiness_ready,
         readiness_total=readiness_total,
+        runtime_blocker_count=runtime_blocker_count,
         artifact_summary=artifact_summary,
     )
     return {
@@ -280,13 +314,14 @@ def _progress_stage(
     dod_total: int,
     readiness_ready: int,
     readiness_total: int,
+    runtime_blocker_count: int,
     artifact_summary: dict[str, Any],
 ) -> str:
     if can_enable_sidebar:
         return "production_sidebar_ready"
     if dod_total and dod_ready < dod_total:
         return "backend_definition_of_done_incomplete"
-    if readiness_total and readiness_ready < readiness_total:
+    if readiness_total and readiness_ready < readiness_total and runtime_blocker_count:
         return "runtime_readiness_incomplete"
     if str(artifact_summary.get("normal_user_surface_status") or "") != "ready":
         return "normal_user_surface_incomplete"
@@ -342,12 +377,15 @@ def _blocker_groups(
         for item in readiness_checks
         if item.get("required", True) and item.get("status") != "ready"
     ]
-    if readiness_blockers:
+    runtime_readiness_blockers = [
+        item for item in readiness_blockers if item["id"] not in PRODUCTION_SCOPE_READINESS_CHECK_IDS
+    ]
+    if runtime_readiness_blockers:
         groups.append(
             _group(
                 "runtime_readiness",
                 "Runtime readiness",
-                readiness_blockers,
+                runtime_readiness_blockers,
                 "Fix missing required readiness checks, then rerun release evidence.",
             )
         )
@@ -370,7 +408,7 @@ def _blocker_groups(
         )
 
     artifact_blockers = []
-    if artifact_report.get("status") != "ready" or not artifact_report.get("production_ready"):
+    if artifact_report.get("status") != "ready" or not artifact_report.get("production_ready") or not artifact_report.get("ready_for_sidebar"):
         artifact_blockers.append(
             {
                 "id": "release_artifact",

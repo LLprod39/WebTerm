@@ -2,61 +2,86 @@ from __future__ import annotations
 
 from typing import Any
 
+from kubernetes_ops.services.release_preflight import PREFLIGHT_ARTIFACT
+
 
 COMMANDS: dict[str, dict[str, str]] = {
+    "local_demo_fixture": {
+        "id": "local_demo_fixture",
+        "label": "Start local Kubernetes provider fixture",
+        "command": "python .tools/k8s-provider-fixture.py --host 127.0.0.1 --port 18090",
+        "scope": "local_demo",
+    },
+    "local_demo_seed": {
+        "id": "local_demo_seed",
+        "label": "Seed local Kubernetes Ops demo inventory",
+        "command": "python manage.py seed_kubernetes_ops_demo --username admin --admin-write",
+        "scope": "local_demo",
+    },
     "live_provider_smoke": {
         "id": "live_provider_smoke",
         "label": "Refresh live provider smoke evidence",
         "command": "docker compose exec -T backend python manage.py verify_kubernetes_ops_live_provider_smoke --output artifacts/kubernetes_ops_live_provider_smoke.json",
+        "scope": "production_evidence",
     },
     "readonly_rbac_live": {
         "id": "readonly_rbac_live",
         "label": "Refresh live read-only RBAC proof",
         "command": "docker compose exec -T backend python manage.py verify_kubernetes_ops_readonly_rbac_live --output artifacts/kubernetes_ops_readonly_rbac_live_evidence.json",
+        "scope": "production_evidence",
     },
     "interactive_transport_evidence": {
         "id": "interactive_transport_evidence",
         "label": "Refresh interactive transport prerequisites",
         "command": "docker compose exec -T backend python manage.py verify_kubernetes_ops_interactive_transport_evidence --output artifacts/kubernetes_ops_interactive_transport_evidence.json",
+        "scope": "production_evidence",
     },
     "interactive_live_smoke": {
         "id": "interactive_live_smoke",
         "label": "Refresh interactive live-smoke evidence",
         "command": "docker compose exec -T backend python manage.py verify_kubernetes_ops_interactive_live_smoke --output artifacts/kubernetes_ops_interactive_live_smoke.json --no-fail",
+        "scope": "production_evidence",
     },
     "interactive_production_controls": {
         "id": "interactive_production_controls",
         "label": "Refresh interactive production controls",
         "command": "docker compose exec -T backend python manage.py verify_kubernetes_ops_interactive_production_controls --output artifacts/kubernetes_ops_interactive_production_controls.json --no-fail",
+        "scope": "production_evidence",
     },
     "production_action_evidence": {
         "id": "production_action_evidence",
         "label": "Refresh rollback/native verification evidence",
         "command": "docker compose exec -T backend python manage.py verify_kubernetes_ops_production_action_evidence --output artifacts/kubernetes_ops_production_action_evidence.json",
+        "scope": "production_evidence",
     },
     "external_evidence_bundle": {
         "id": "external_evidence_bundle",
         "label": "Refresh external production evidence bundle",
         "command": "docker compose exec -T backend python manage.py verify_kubernetes_ops_external_evidence_bundle --output artifacts/kubernetes_ops_external_evidence_bundle.json --no-fail",
+        "scope": "production_evidence",
     },
     "preflight": {
         "id": "preflight",
         "label": "Refresh required preflight checks",
-        "command": "docker compose exec -T backend python manage.py verify_kubernetes_ops_preflight --output artifacts/kubernetes_ops_preflight.json",
+        "command": f"docker compose exec -T backend python manage.py verify_kubernetes_ops_preflight --output {PREFLIGHT_ARTIFACT}",
+        "scope": "release_artifact",
     },
     "release_evidence": {
         "id": "release_evidence",
         "label": "Refresh Kubernetes Ops release evidence",
         "command": "docker compose exec -T backend python manage.py verify_kubernetes_ops_release --output artifacts/kubernetes_ops_release_evidence.json --no-fail",
+        "scope": "release_artifact",
     },
     "release_handoff": {
         "id": "release_handoff",
         "label": "Render operator handoff",
         "command": "docker compose exec -T backend python manage.py render_kubernetes_ops_release_handoff --evidence artifacts/kubernetes_ops_release_evidence.json --format markdown --output artifacts/kubernetes_ops_release_handoff.md",
+        "scope": "release_artifact",
     },
 }
 
 PHASES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("local_demo_smoke", "Local demo smoke", ("local_demo_fixture", "local_demo_seed")),
     (
         "production_prerequisites",
         "Production prerequisite evidence",

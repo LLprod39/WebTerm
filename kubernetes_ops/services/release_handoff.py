@@ -12,6 +12,11 @@ from kubernetes_ops.services.admin_interactive_transport_readiness import (
     RESTRICTED_CREDENTIAL_EVIDENCE_SETTING,
 )
 from kubernetes_ops.services.release_artifact import build_kubernetes_release_evidence_artifact_report
+from kubernetes_ops.services.release_backend_workstream import (
+    build_kubernetes_release_backend_workstream,
+    build_kubernetes_release_backend_workstream_blocker_groups,
+    can_enable_kubernetes_release_sidebar,
+)
 from kubernetes_ops.services.release_contract import build_kubernetes_release_contract
 from kubernetes_ops.services.release_external_evidence_bundle import (
     IDENTITY_RUNTIME_EVIDENCE_SETTING,
@@ -26,6 +31,15 @@ from kubernetes_ops.services.release_interactive_live_smoke import INTERACTIVE_L
 from kubernetes_ops.services.release_handoff_plan import (
     build_kubernetes_handoff_execution_plan,
     render_kubernetes_handoff_execution_plan_markdown,
+)
+from kubernetes_ops.services.release_handoff_workstream import (
+    backend_workstream_primary_blocker_category,
+    safe_release_handoff_backend_workstream,
+)
+from kubernetes_ops.services.release_operator_command_plan import (
+    build_kubernetes_handoff_operator_command_plan,
+    build_kubernetes_handoff_production_checklist,
+    render_kubernetes_operator_command_plan_markdown,
 )
 from kubernetes_ops.services.release_summary import build_kubernetes_release_summary
 
@@ -46,7 +60,17 @@ def build_kubernetes_release_handoff(*, evidence_path: Path | None = None) -> di
     release_scope = evidence.get("release_scope") if isinstance(evidence.get("release_scope"), dict) else {}
     blockers = [str(item) for item in evidence.get("blockers") or release_summary.get("top_blockers") or []]
     production_ready = bool(evidence.get("production_ready"))
-    can_enable_sidebar = production_ready and artifact_report.get("status") == "ready" and release_scope.get("status") == "ready"
+    ready_for_sidebar = bool(evidence.get("ready_for_sidebar"))
+    completion_audit = _completion_audit(evidence, release_summary)
+    blocker_groups = build_kubernetes_release_backend_workstream_blocker_groups(evidence)
+    production_evidence_checklist = build_kubernetes_handoff_production_checklist(release_scope)
+    can_enable_sidebar = can_enable_kubernetes_release_sidebar(
+        production_ready=production_ready,
+        ready_for_sidebar=ready_for_sidebar,
+        completion_audit=completion_audit,
+        artifact_ready=artifact_report.get("status") == "ready",
+        release_scope_ready=release_scope.get("status") == "ready",
+    )
 
     handoff = {
         "schema_version": HANDOFF_SCHEMA_VERSION,
@@ -61,7 +85,7 @@ def build_kubernetes_release_handoff(*, evidence_path: Path | None = None) -> di
             "artifact_status": str(artifact_report.get("status") or ""),
             "artifact_errors": list(artifact_report.get("errors") or []),
             "production_ready": production_ready,
-            "ready_for_sidebar": bool(evidence.get("ready_for_sidebar")),
+            "ready_for_sidebar": ready_for_sidebar,
         },
         "release_scope": {
             "status": str(release_scope.get("status") or ""),
@@ -74,10 +98,21 @@ def build_kubernetes_release_handoff(*, evidence_path: Path | None = None) -> di
             "reason": str(release_scope.get("reason") or ""),
         },
         "blockers": blockers,
-        "completion_audit": _completion_audit(evidence, release_summary),
+        "completion_audit": completion_audit,
+        "backend_workstream": _backend_workstream(
+            completion_audit=completion_audit,
+            blocker_groups=blocker_groups,
+            production_evidence_checklist=production_evidence_checklist,
+            can_enable_sidebar=can_enable_sidebar,
+        ),
         "release_proofs": _release_proofs(evidence),
         "next_steps": list(release_summary.get("next_steps") or _default_next_steps(evidence)),
         "required_commands": build_kubernetes_release_contract()["required_preflight_commands"],
+        "operator_command_plan": build_kubernetes_handoff_operator_command_plan(
+            production_evidence_checklist=production_evidence_checklist,
+            blocker_groups=blocker_groups,
+            can_enable_sidebar=can_enable_sidebar,
+        ),
         "production_env_flags": [
             {"name": "KUBERNETES_OPS_RELEASE_ENVIRONMENT", "expected": "production"},
             {"name": "KUBERNETES_OPS_PRODUCTION_APPROVAL_REF", "expected": "<change-or-approval-id>"},
@@ -136,7 +171,9 @@ def render_kubernetes_release_handoff_markdown(handoff: dict[str, Any]) -> str:
     blockers = [str(item) for item in handoff.get("blockers") or []]
     next_steps = [str(item) for item in handoff.get("next_steps") or []]
     completion_audit = handoff.get("completion_audit") if isinstance(handoff.get("completion_audit"), dict) else {}
+    backend_workstream = handoff.get("backend_workstream") if isinstance(handoff.get("backend_workstream"), dict) else {}
     proofs = handoff.get("release_proofs") if isinstance(handoff.get("release_proofs"), list) else []
+    operator_command_plan = handoff.get("operator_command_plan") if isinstance(handoff.get("operator_command_plan"), dict) else {}
     commands = handoff.get("required_commands") if isinstance(handoff.get("required_commands"), list) else []
     env_flags = handoff.get("production_env_flags") if isinstance(handoff.get("production_env_flags"), list) else []
     external = [str(item) for item in handoff.get("external_evidence_required") or []]
@@ -165,6 +202,16 @@ def render_kubernetes_release_handoff_markdown(handoff: dict[str, Any]) -> str:
             f"- Sidebar enablement complete: {_yes_no(completion_audit.get('sidebar_enablement_complete'))}",
             f"- Remaining: {', '.join(str(item) for item in completion_audit.get('remaining') or []) or 'none'}",
             "",
+            "## Backend Workstream",
+            f"- Status: {backend_workstream.get('status') or 'unknown'}",
+            f"- Backend complete: {_yes_no(backend_workstream.get('backend_complete'))}",
+            f"- Core backend proofs: {int(backend_workstream.get('core_backend_proof_ready_count') or 0)}/{int(backend_workstream.get('core_backend_proof_count') or 0)} ({backend_workstream.get('core_backend_percent') if backend_workstream.get('core_backend_percent') is not None else 'n/a'}%)",
+            f"- Remaining backend gaps: {int(backend_workstream.get('remaining_backend_gap_count') or 0)}",
+            f"- External production blockers: {int(backend_workstream.get('external_production_blocker_count') or 0)}",
+            f"- External blocker primary category: {backend_workstream_primary_blocker_category(backend_workstream)}",
+            f"- Safe to continue frontend: {_yes_no(backend_workstream.get('safe_to_continue_frontend'))}",
+            f"- Next step: {((backend_workstream.get('next_backend_step') if isinstance(backend_workstream.get('next_backend_step'), dict) else {}) or {}).get('id') or 'unknown'}",
+            "",
             "## Release Proofs",
         ]
     )
@@ -178,6 +225,8 @@ def render_kubernetes_release_handoff_markdown(handoff: dict[str, Any]) -> str:
         lines.append("- none")
     lines.extend(["", "## Next Steps"])
     lines.extend([f"{index}. {item}" for index, item in enumerate(next_steps, start=1)] or ["1. Inspect release evidence and rerun release checks."])
+    lines.extend([""])
+    lines.extend(render_kubernetes_operator_command_plan_markdown(operator_command_plan))
     lines.extend([""])
     lines.extend(render_kubernetes_handoff_execution_plan_markdown(handoff.get("production_execution_plan") or {}))
     lines.extend(["", "## Required Commands"])
@@ -231,6 +280,23 @@ def _completion_audit(evidence: dict[str, Any], summary: dict[str, Any]) -> dict
     if root_audit:
         return root_audit
     return summary.get("completion_audit") if isinstance(summary.get("completion_audit"), dict) else {}
+
+
+def _backend_workstream(
+    *,
+    completion_audit: dict[str, Any],
+    blocker_groups: list[dict[str, Any]],
+    production_evidence_checklist: dict[str, Any],
+    can_enable_sidebar: bool,
+) -> dict[str, Any]:
+    return safe_release_handoff_backend_workstream(
+        build_kubernetes_release_backend_workstream(
+            completion_audit=completion_audit,
+            blocker_groups=blocker_groups,
+            production_evidence_checklist=production_evidence_checklist,
+            can_enable_sidebar=can_enable_sidebar,
+        )
+    )
 
 
 def _default_next_steps(evidence: dict[str, Any]) -> list[str]:

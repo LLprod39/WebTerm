@@ -17,9 +17,15 @@ from kubernetes_ops.services.release_audit_redaction import build_kubernetes_rel
 from kubernetes_ops.services.provider_probe import probe_kubernetes_provider, probe_result_payload
 from kubernetes_ops.services.readiness import build_kubernetes_readiness_report
 from kubernetes_ops.services.release_artifact_safety import build_kubernetes_release_evidence_artifact_safety_report
+from kubernetes_ops.services.release_backend_workstream import (
+    build_kubernetes_release_backend_workstream,
+    build_kubernetes_release_backend_workstream_blocker_groups,
+    can_enable_kubernetes_release_sidebar,
+)
 from kubernetes_ops.services.release_blockers import build_kubernetes_release_blockers
 from kubernetes_ops.services.release_contract import RELEASE_EVIDENCE_SCHEMA_VERSION, build_kubernetes_release_contract
 from kubernetes_ops.services.release_definition_of_done import build_kubernetes_release_definition_of_done
+from kubernetes_ops.services.release_evidence_checklist import build_kubernetes_production_evidence_checklist
 from kubernetes_ops.services.release_external_evidence_bundle import load_kubernetes_external_evidence_bundle_artifact
 from kubernetes_ops.services.release_interactive_transport_evidence import (
     load_kubernetes_interactive_transport_evidence_artifact,
@@ -187,6 +193,7 @@ def build_kubernetes_release_evidence(
     release_summary = build_kubernetes_release_summary(evidence)
     evidence["release_summary"] = release_summary
     evidence["completion_audit"] = release_summary.get("completion_audit") or {}
+    _attach_backend_workstream(evidence)
     artifact_safety = build_kubernetes_release_evidence_artifact_safety_report(evidence)
     if not artifact_safety.get("success") and not any(str(item).startswith("artifact_safety:") for item in blockers):
         blockers = [*blockers, f"artifact_safety:{artifact_safety.get('status') or 'failed'}"]
@@ -196,6 +203,7 @@ def build_kubernetes_release_evidence(
     release_summary = build_kubernetes_release_summary(evidence)
     evidence["release_summary"] = release_summary
     evidence["completion_audit"] = release_summary.get("completion_audit") or {}
+    _attach_backend_workstream(evidence)
     evidence["production_execution_plan"] = build_kubernetes_release_evidence_execution_plan(evidence)
     artifact_safety = build_kubernetes_release_evidence_artifact_safety_report(evidence)
     if not artifact_safety.get("success") and not any(str(item).startswith("artifact_safety:") for item in blockers):
@@ -206,8 +214,25 @@ def build_kubernetes_release_evidence(
     release_summary = build_kubernetes_release_summary(evidence)
     evidence["release_summary"] = release_summary
     evidence["completion_audit"] = release_summary.get("completion_audit") or {}
+    _attach_backend_workstream(evidence)
     evidence["production_execution_plan"] = build_kubernetes_release_evidence_execution_plan(evidence)
     return evidence
+
+
+def _attach_backend_workstream(evidence: dict[str, Any]) -> None:
+    readiness = evidence.get("readiness") if isinstance(evidence.get("readiness"), dict) else {}
+    production_gate = readiness.get("production_gate") if isinstance(readiness.get("production_gate"), dict) else {}
+    completion_audit = evidence.get("completion_audit") if isinstance(evidence.get("completion_audit"), dict) else {}
+    evidence["backend_workstream"] = build_kubernetes_release_backend_workstream(
+        completion_audit=completion_audit,
+        blocker_groups=build_kubernetes_release_backend_workstream_blocker_groups(evidence),
+        production_evidence_checklist=build_kubernetes_production_evidence_checklist(production_gate=production_gate),
+        can_enable_sidebar=can_enable_kubernetes_release_sidebar(
+            production_ready=bool(evidence.get("production_ready")),
+            ready_for_sidebar=bool(evidence.get("ready_for_sidebar")),
+            completion_audit=completion_audit,
+        ),
+    )
 
 
 def _provider_probe_evidence(enabled: bool) -> list[dict[str, Any]]:

@@ -92,6 +92,11 @@ class _FakeHeartbeatExecStream:
         self.closed = True
 
 
+def _expire_exec_session_when_stream_opens(session_id: str, stream):
+    K8sAdminSession.objects.filter(session_id=session_id).update(expires_at=timezone.now() - timedelta(seconds=1))
+    return stream
+
+
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
 @override_settings(KUBERNETES_ADMIN_NATIVE_EXEC_ENABLED=True, KUBERNETES_ADMIN_EXEC_STREAMING_ENABLED=True, KUBERNETES_ADMIN_EXEC_RECORDING_ENABLED=True)
@@ -161,6 +166,40 @@ async def test_exec_websocket_can_use_provider_stream_and_records_redacted_trans
     assert "raw-secret" not in str(events)
     audit_count = await database_sync_to_async(K8sAuditEvent.objects.filter(action="k8s.admin_stream.exec_stopped").count)()
     assert audit_count == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+@override_settings(KUBERNETES_ADMIN_NATIVE_EXEC_ENABLED=True, KUBERNETES_ADMIN_EXEC_STREAMING_ENABLED=True, KUBERNETES_ADMIN_EXEC_RECORDING_ENABLED=True)
+async def test_exec_websocket_provider_stream_stops_when_session_expires_after_start():
+    user, session_id, cluster_id = await database_sync_to_async(_create_exec_fixture)("k8s-ws-exec-expired-stream")
+    path = (
+        f"/ws/kubernetes/admin/exec/{session_id}/"
+        f"?provider_stream=1&cluster_id={cluster_id}&namespace=payments&pod=payments-api-abc123"
+        "&command=env&reason=inspect%20pod%20env&empty_read_sleep_seconds=0.05"
+    )
+    fake_stream = _FakeHeartbeatExecStream()
+
+    with patch(
+        "kubernetes_ops.continuous_exec_streams.open_provider_exec_stream",
+        side_effect=lambda *args, **kwargs: _expire_exec_session_when_stream_opens(session_id, fake_stream),
+    ):
+        communicator = await _connect(path, user)
+        started = await communicator.receive_json_from(timeout=1)
+        stopped = await communicator.receive_json_from(timeout=1)
+        await communicator.disconnect()
+
+    assert started["type"] == "exec_started"
+    assert stopped["type"] == "exec_stopped"
+    assert stopped["summary"]["close_reason"] == "admin_session_expired"
+    assert fake_stream.closed is True
+    action = await database_sync_to_async(K8sAdminAction.objects.get)(verb=K8sAdminAction.VERB_EXEC)
+    assert action.status == K8sAdminAction.STATUS_COMPLETED
+    assert action.response_summary["close_reason"] == "admin_session_expired"
+    recording = await database_sync_to_async(K8sAdminRecording.objects.get)(action=action)
+    assert recording.status == K8sAdminRecording.STATUS_COMPLETED
+    stopped_events = await database_sync_to_async(K8sAuditEvent.objects.filter(action="k8s.admin_stream.exec_stopped").count)()
+    assert stopped_events == 1
 
 
 @pytest.mark.asyncio

@@ -21,6 +21,306 @@ def data(items: list[dict]) -> dict:
     return {"data": items}
 
 
+def k8s_meta(name: str, namespace: str = "", labels: dict | None = None) -> dict:
+    payload = {
+        "name": name,
+        "labels": labels or {},
+        "creationTimestamp": NOW,
+        "resourceVersion": "fixture",
+    }
+    if namespace:
+        payload["namespace"] = namespace
+    return payload
+
+
+def k8s_list(api_version: str, kind: str, items: list[dict]) -> dict:
+    return {
+        "apiVersion": api_version,
+        "kind": f"{kind}List",
+        "metadata": {"resourceVersion": "fixture"},
+        "items": items,
+    }
+
+
+def k8s_api_resource(name: str, kind: str, namespaced: bool, verbs: list[str], short_names: list[str] | None = None) -> dict:
+    return {
+        "name": name,
+        "singularName": "",
+        "namespaced": namespaced,
+        "kind": kind,
+        "verbs": verbs,
+        "shortNames": short_names or [],
+    }
+
+
+K8S_CORE_RESOURCES = [
+    k8s_api_resource("namespaces", "Namespace", False, ["get", "list", "watch"], ["ns"]),
+    k8s_api_resource("nodes", "Node", False, ["get", "list", "watch"]),
+    k8s_api_resource("pods", "Pod", True, ["get", "list", "watch"], ["po"]),
+    k8s_api_resource("services", "Service", True, ["get", "list", "watch"], ["svc"]),
+    k8s_api_resource("configmaps", "ConfigMap", True, ["get", "list", "watch"], ["cm"]),
+    k8s_api_resource("secrets", "Secret", True, ["get", "list", "watch"]),
+    k8s_api_resource("serviceaccounts", "ServiceAccount", True, ["get", "list", "watch"], ["sa"]),
+]
+
+K8S_GROUP_RESOURCES = {
+    "apps/v1": [
+        k8s_api_resource("deployments", "Deployment", True, ["get", "list", "watch", "patch"], ["deploy"]),
+        k8s_api_resource("replicasets", "ReplicaSet", True, ["get", "list", "watch"], ["rs"]),
+        k8s_api_resource("daemonsets", "DaemonSet", True, ["get", "list", "watch"], ["ds"]),
+        k8s_api_resource("statefulsets", "StatefulSet", True, ["get", "list", "watch"], ["sts"]),
+    ],
+    "networking.k8s.io/v1": [
+        k8s_api_resource("ingresses", "Ingress", True, ["get", "list", "watch"], ["ing"]),
+        k8s_api_resource("networkpolicies", "NetworkPolicy", True, ["get", "list", "watch"], ["netpol"]),
+    ],
+    "apiextensions.k8s.io/v1": [
+        k8s_api_resource("customresourcedefinitions", "CustomResourceDefinition", False, ["get", "list", "watch"], ["crd"]),
+    ],
+}
+
+K8S_NAMESPACES = [
+    {
+        "apiVersion": "v1",
+        "kind": "Namespace",
+        "metadata": k8s_meta("payments", labels={"webterm.io/team": "payments"}),
+        "status": {"phase": "Active"},
+    },
+    {
+        "apiVersion": "v1",
+        "kind": "Namespace",
+        "metadata": k8s_meta("platform", labels={"webterm.io/team": "platform"}),
+        "status": {"phase": "Active"},
+    },
+    {
+        "apiVersion": "v1",
+        "kind": "Namespace",
+        "metadata": k8s_meta("observability", labels={"webterm.io/team": "sre"}),
+        "status": {"phase": "Active"},
+    },
+]
+
+K8S_NODES = [
+    {
+        "apiVersion": "v1",
+        "kind": "Node",
+        "metadata": k8s_meta("worker-1", labels={"node-role.kubernetes.io/worker": "true"}),
+        "status": {"phase": "Ready", "conditions": [{"type": "Ready", "status": "True"}]},
+    },
+    {
+        "apiVersion": "v1",
+        "kind": "Node",
+        "metadata": k8s_meta("worker-2", labels={"node-role.kubernetes.io/worker": "true"}),
+        "status": {"phase": "Ready", "conditions": [{"type": "Ready", "status": "True"}]},
+    },
+    {
+        "apiVersion": "v1",
+        "kind": "Node",
+        "metadata": k8s_meta("worker-3", labels={"node-role.kubernetes.io/worker": "true"}),
+        "status": {"phase": "Ready", "conditions": [{"type": "Ready", "status": "True"}]},
+    },
+]
+
+K8S_DEPLOYMENTS = [
+    {
+        "apiVersion": "apps/v1",
+        "kind": "Deployment",
+        "metadata": k8s_meta("payments-api", "payments", {"app.kubernetes.io/name": "payments-api", "webterm.io/team": "payments"}),
+        "spec": {"replicas": 3, "selector": {"matchLabels": {"app.kubernetes.io/name": "payments-api"}}},
+        "status": {"readyReplicas": 3, "replicas": 3, "availableReplicas": 3},
+    },
+    {
+        "apiVersion": "apps/v1",
+        "kind": "Deployment",
+        "metadata": k8s_meta("broken-worker", "payments", {"app.kubernetes.io/name": "broken-worker", "webterm.io/team": "payments"}),
+        "spec": {"replicas": 2, "selector": {"matchLabels": {"app.kubernetes.io/name": "broken-worker"}}},
+        "status": {"readyReplicas": 0, "replicas": 2, "unavailableReplicas": 2, "reason": "ErrImagePull"},
+    },
+    {
+        "apiVersion": "apps/v1",
+        "kind": "Deployment",
+        "metadata": k8s_meta("demo-api", "platform", {"app.kubernetes.io/name": "demo-api", "webterm.io/team": "platform"}),
+        "spec": {"replicas": 2, "selector": {"matchLabels": {"app.kubernetes.io/name": "demo-api"}}},
+        "status": {"readyReplicas": 2, "replicas": 2, "availableReplicas": 2},
+    },
+]
+
+K8S_PODS = [
+    {
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "metadata": k8s_meta("payments-api-7c76d8fdd9-4h2ks", "payments", {"app.kubernetes.io/name": "payments-api"}),
+        "spec": {"nodeName": "worker-1", "containers": [{"name": "payments-api", "image": "payments-api:1.18.0-demo"}]},
+        "status": {"phase": "Running", "podIP": "10.42.0.10", "containerStatuses": [{"name": "payments-api", "ready": True, "restartCount": 0}]},
+    },
+    {
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "metadata": k8s_meta("payments-api-7c76d8fdd9-9n8pp", "payments", {"app.kubernetes.io/name": "payments-api"}),
+        "spec": {"nodeName": "worker-2", "containers": [{"name": "payments-api", "image": "payments-api:1.18.0-demo"}]},
+        "status": {"phase": "Running", "podIP": "10.42.0.11", "containerStatuses": [{"name": "payments-api", "ready": True, "restartCount": 0}]},
+    },
+    {
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "metadata": k8s_meta("broken-worker-5dbb6df98c-jx2kf", "payments", {"app.kubernetes.io/name": "broken-worker"}),
+        "spec": {"nodeName": "worker-3", "containers": [{"name": "broken-worker", "image": "broken-worker:1.18.0-demo"}]},
+        "status": {"phase": "CrashLoopBackOff", "containerStatuses": [{"name": "broken-worker", "ready": False, "restartCount": 8}]},
+    },
+    {
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "metadata": k8s_meta("demo-api-67b6f5d48c-qc82l", "platform", {"app.kubernetes.io/name": "demo-api"}),
+        "spec": {"nodeName": "worker-1", "containers": [{"name": "demo-api", "image": "demo-api:0.9.4-demo"}]},
+        "status": {"phase": "Running", "podIP": "10.42.1.10", "containerStatuses": [{"name": "demo-api", "ready": True, "restartCount": 0}]},
+    },
+]
+
+K8S_SERVICES = [
+    {
+        "apiVersion": "v1",
+        "kind": "Service",
+        "metadata": k8s_meta("payments-api", "payments", {"app.kubernetes.io/name": "payments-api"}),
+        "spec": {"type": "ClusterIP", "ports": [{"port": 8080, "targetPort": 8080}], "clusterIP": "10.43.0.10"},
+        "status": {},
+    },
+    {
+        "apiVersion": "v1",
+        "kind": "Service",
+        "metadata": k8s_meta("demo-api", "platform", {"app.kubernetes.io/name": "demo-api"}),
+        "spec": {"type": "ClusterIP", "ports": [{"port": 9000, "targetPort": 9000}], "clusterIP": "10.43.1.10"},
+        "status": {},
+    },
+]
+
+K8S_INGRESSES = [
+    {
+        "apiVersion": "networking.k8s.io/v1",
+        "kind": "Ingress",
+        "metadata": k8s_meta("payments-api-ingress", "payments", {"app.kubernetes.io/name": "payments-api"}),
+        "spec": {"rules": [{"host": "payments.demo.local"}]},
+        "status": {"loadBalancer": {"ingress": [{"hostname": "localhost"}]}},
+    }
+]
+
+K8S_CRDS = [
+    {
+        "apiVersion": "apiextensions.k8s.io/v1",
+        "kind": "CustomResourceDefinition",
+        "metadata": k8s_meta("widgets.webterm.local"),
+        "spec": {
+            "group": "webterm.local",
+            "names": {"kind": "Widget", "plural": "widgets", "singular": "widget"},
+            "scope": "Namespaced",
+            "versions": [{"name": "v1", "served": True, "storage": True}],
+        },
+        "status": {"conditions": [{"type": "Established", "status": "True"}]},
+    }
+]
+
+K8S_OBJECTS = {
+    ("v1", "namespaces"): K8S_NAMESPACES,
+    ("v1", "nodes"): K8S_NODES,
+    ("v1", "pods"): K8S_PODS,
+    ("v1", "services"): K8S_SERVICES,
+    ("v1", "configmaps"): [],
+    ("v1", "secrets"): [],
+    ("v1", "serviceaccounts"): [],
+    ("apps/v1", "deployments"): K8S_DEPLOYMENTS,
+    ("apps/v1", "replicasets"): [],
+    ("apps/v1", "daemonsets"): [],
+    ("apps/v1", "statefulsets"): [],
+    ("networking.k8s.io/v1", "ingresses"): K8S_INGRESSES,
+    ("networking.k8s.io/v1", "networkpolicies"): [],
+    ("apiextensions.k8s.io/v1", "customresourcedefinitions"): K8S_CRDS,
+}
+
+K8S_KIND_BY_RESOURCE = {
+    resource["name"]: resource["kind"]
+    for resources in [K8S_CORE_RESOURCES, *K8S_GROUP_RESOURCES.values()]
+    for resource in resources
+}
+
+
+def k8s_payload_for_path(path: str) -> dict | None:
+    marker = "/k8s/clusters/"
+    if marker not in path:
+        return None
+    _, _, tail = path.partition(marker)
+    if "/" not in tail:
+        return None
+    suffix = tail.split("/", 1)[1].strip("/")
+    if suffix == "api/v1":
+        return {"apiVersion": "v1", "kind": "APIResourceList", "groupVersion": "v1", "resources": K8S_CORE_RESOURCES}
+    if suffix == "apis":
+        return {
+            "apiVersion": "v1",
+            "kind": "APIGroupList",
+            "groups": [
+                {
+                    "name": api_version.rsplit("/", 1)[0],
+                    "versions": [{"groupVersion": api_version, "version": api_version.rsplit("/", 1)[1]}],
+                    "preferredVersion": {"groupVersion": api_version, "version": api_version.rsplit("/", 1)[1]},
+                }
+                for api_version in K8S_GROUP_RESOURCES
+            ],
+        }
+    if suffix.startswith("apis/") and len(suffix.split("/")) == 3:
+        _, group, version = suffix.split("/")
+        api_version = f"{group}/{version}"
+        return {
+            "apiVersion": "v1",
+            "kind": "APIResourceList",
+            "groupVersion": api_version,
+            "resources": K8S_GROUP_RESOURCES.get(api_version, []),
+        }
+    parsed = _parse_k8s_resource_suffix(suffix)
+    if not parsed:
+        return None
+    api_version, namespace, resource, name, log_requested = parsed
+    if log_requested:
+        return {"lines": [f"{name}: demo log line 1", f"{name}: demo log line 2"], "message": ""}
+    items = _namespace_items(K8S_OBJECTS.get((api_version, resource), []), namespace)
+    kind = K8S_KIND_BY_RESOURCE.get(resource, resource.title())
+    if name:
+        for item in items:
+            if item.get("metadata", {}).get("name") == name:
+                return item
+        return {"kind": "Status", "status": "Failure", "reason": "NotFound", "message": f"{kind} {name} not found"}
+    return k8s_list(api_version, kind, items)
+
+
+def _parse_k8s_resource_suffix(suffix: str) -> tuple[str, str, str, str, bool] | None:
+    parts = suffix.split("/")
+    if parts[:2] == ["api", "v1"]:
+        api_version = "v1"
+        rest = parts[2:]
+    elif parts[:1] == ["apis"] and len(parts) >= 3:
+        api_version = f"{parts[1]}/{parts[2]}"
+        rest = parts[3:]
+    else:
+        return None
+    namespace = ""
+    if rest[:1] == ["namespaces"]:
+        if len(rest) == 1:
+            return api_version, namespace, "namespaces", "", False
+        namespace = rest[1]
+        rest = rest[2:]
+    if not rest:
+        return None
+    resource = rest[0]
+    name = rest[1] if len(rest) > 1 else ""
+    log_requested = len(rest) > 2 and rest[2] == "log"
+    return api_version, namespace, resource, name, log_requested
+
+
+def _namespace_items(items: list[dict], namespace: str) -> list[dict]:
+    if not namespace:
+        return items
+    effective_namespace = "platform" if namespace == "default" else namespace
+    return [item for item in items if item.get("metadata", {}).get("namespace") == effective_namespace]
+
+
 ROUTES = {
     "/v3/clusters": data(
         [
@@ -440,7 +740,7 @@ class FixtureHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = urlparse(self.path).path
-        payload = ROUTES.get(path)
+        payload = k8s_payload_for_path(path) or ROUTES.get(path)
         if payload is None:
             self._send_json(404, {"error": "not found", "path": path, "routes": sorted(ROUTES)})
             return

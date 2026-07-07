@@ -12,6 +12,7 @@ import {
 } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SectionCard, StatusBadge } from "@/components/ui/page-shell";
 import { Textarea } from "@/components/ui/textarea";
 import { localize } from "@/lib/i18n";
@@ -208,15 +209,15 @@ export function KubernetesActionRequestPanel({
                       verifyMutation.mutate();
                     }}
                   >
-                    <select
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      value={verificationOutcome}
-                      onChange={(event) => setVerificationOutcome(event.target.value)}
-                      aria-label={localize(lang, "Verification outcome", "Verification outcome")}
-                    >
-                      <option value="succeeded">{localize(lang, "Успешно", "Succeeded")}</option>
-                      <option value="failed">{localize(lang, "Неуспешно", "Failed")}</option>
-                    </select>
+                    <Select value={verificationOutcome} onValueChange={setVerificationOutcome}>
+                      <SelectTrigger aria-label={localize(lang, "Verification outcome", "Verification outcome")}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="succeeded">{localize(lang, "Успешно", "Succeeded")}</SelectItem>
+                        <SelectItem value="failed">{localize(lang, "Неуспешно", "Failed")}</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <Input
                       value={externalRef}
                       onChange={(event) => setExternalRef(event.target.value)}

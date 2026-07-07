@@ -34,6 +34,7 @@ def build_kubernetes_release_evidence_artifact_report(*, require_ready: bool) ->
     age_seconds = int((timezone.now() - generated_dt).total_seconds()) if generated_dt is not None else None
     release_scope = payload.get("release_scope") if isinstance(payload.get("release_scope"), dict) else {}
     artifact_safety = payload.get("artifact_safety") if isinstance(payload.get("artifact_safety"), dict) else {}
+    completion_audit = _completion_audit(payload)
     errors: list[str] = []
     schema_version = str(payload.get("schema_version") or "")
     if schema_version != RELEASE_EVIDENCE_SCHEMA_VERSION:
@@ -47,6 +48,12 @@ def build_kubernetes_release_evidence_artifact_report(*, require_ready: bool) ->
     if require_ready:
         if not payload.get("production_ready"):
             errors.append("production_ready is not true")
+        if not payload.get("ready_for_sidebar"):
+            errors.append("ready_for_sidebar is not true")
+        if completion_audit.get("production_evidence_complete") is not True:
+            errors.append("completion_audit.production_evidence_complete is not true")
+        if completion_audit.get("sidebar_enablement_complete") is not True:
+            errors.append("completion_audit.sidebar_enablement_complete is not true")
         if release_scope.get("status") != "ready":
             errors.append(f"release_scope is {release_scope.get('status') or 'missing'}")
         if approval_ref and str(release_scope.get("approval_ref") or "").strip() != approval_ref:
@@ -84,6 +91,7 @@ def _report(
 ) -> dict[str, Any]:
     release_scope = payload.get("release_scope") if isinstance((payload or {}).get("release_scope"), dict) else {}
     artifact_safety = payload.get("artifact_safety") if isinstance((payload or {}).get("artifact_safety"), dict) else {}
+    completion_audit = _completion_audit(payload or {})
     return {
         "status": status,
         "detail": detail,
@@ -99,6 +107,17 @@ def _report(
         "release_scope_approval_ref": str(release_scope.get("approval_ref") or ""),
         "artifact_safety_status": str(artifact_safety.get("status") or ""),
         "artifact_safety_issue_count": int(artifact_safety.get("issue_count") or 0),
+        "completion_audit_status": str(completion_audit.get("status") or ""),
+        "production_evidence_complete": completion_audit.get("production_evidence_complete") is True,
+        "sidebar_enablement_complete": completion_audit.get("sidebar_enablement_complete") is True,
         "blockers": list((payload or {}).get("blockers") or []),
         "errors": errors or [],
     }
+
+
+def _completion_audit(payload: dict[str, Any]) -> dict[str, Any]:
+    root_audit = payload.get("completion_audit") if isinstance(payload.get("completion_audit"), dict) else {}
+    if root_audit:
+        return root_audit
+    release_summary = payload.get("release_summary") if isinstance(payload.get("release_summary"), dict) else {}
+    return release_summary.get("completion_audit") if isinstance(release_summary.get("completion_audit"), dict) else {}
