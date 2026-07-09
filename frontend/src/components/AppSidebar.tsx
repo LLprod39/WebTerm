@@ -121,7 +121,7 @@ export function AppSidebar() {
                         to={item.url}
                         end={item.url === "/dashboard"}
                         className="group relative flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-sidebar-foreground/70 transition-all duration-150 hover:bg-sidebar-accent/80 hover:text-sidebar-foreground"
-                        activeClassName="bg-sidebar-accent/95 text-sidebar-accent-foreground font-semibold shadow-[inset_0_0_0_1px_hsl(var(--sidebar-border)),0_8px_24px_hsl(var(--background)_/_0.18)] before:absolute before:left-0 before:top-1/2 before:h-6 before:w-0.5 before:-translate-y-1/2 before:rounded-r before:bg-sidebar-primary"
+                        activeClassName="bg-sidebar-accent/90 text-sidebar-accent-foreground font-semibold before:absolute before:left-0 before:top-1/2 before:h-6 before:w-1 before:-translate-y-1/2 before:rounded-r before:content-[''] before:[background-image:linear-gradient(180deg,hsl(var(--primary)),hsl(var(--ai)))]"
                         title={collapsed ? t(item.titleKey) : undefined}
                       >
                         <item.icon className="h-4 w-4 shrink-0 transition-colors" />

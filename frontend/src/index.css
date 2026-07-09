@@ -1,5 +1,4 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
-@import "./design/tokens.css";
 
 @tailwind base;
 @tailwind components;
@@ -32,10 +31,33 @@
     --destructive-foreground: 0 0% 100%;
 
     --border: 207 34% 20%;
+    --border-strong: 207 30% 30%;
     --input: 207 34% 20%;
     --ring: 172 71% 46%;
 
     --radius: 0.5rem;
+
+    /* Primary accent steps (teal) */
+    --primary-hover: 172 71% 42%;
+    --primary-subtle: 172 71% 46%;
+
+    /* Secondary accent — AI / agents (violet #9b87f5) */
+    --ai: 250 84% 75%;
+    --ai-foreground: 250 40% 10%;
+
+    /* Elevation ramp — surfaces from base (0) to overlay (3) */
+    --surface-0: 209 56% 6%;
+    --surface-1: 207 45% 9%;
+    --surface-2: 207 40% 12%;
+    --surface-3: 207 43% 15%;
+
+    /* Shadow tokens (full box-shadow values) */
+    --shadow-1: 0 1px 2px hsl(209 56% 3% / 0.4);
+    --shadow-2: 0 8px 24px hsl(209 56% 3% / 0.35);
+    --shadow-3: 0 24px 60px hsl(209 56% 3% / 0.5);
+
+    /* Motion */
+    --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
 
     --success: 153 58% 50%;
     --warning: 40 87% 62%;
@@ -111,6 +133,30 @@
   .font-mono {
     font-family: 'JetBrains Mono', monospace;
   }
+
+  /* Typographic scale — adopt these instead of ad-hoc text sizes.
+     Floor is the Label tier (11px / text-2xs); nothing smaller. */
+  .type-display {
+    @apply text-[1.75rem] font-semibold leading-[2.125rem] tracking-tight;
+  }
+  .type-h1 {
+    @apply text-[1.375rem] font-semibold leading-7 tracking-tight;
+  }
+  .type-h2 {
+    @apply text-lg font-semibold leading-6;
+  }
+  .type-h3 {
+    @apply text-[0.9375rem] font-semibold leading-5;
+  }
+  .type-body {
+    @apply text-[0.8125rem] leading-5;
+  }
+  .type-body-sm {
+    @apply text-xs leading-5;
+  }
+  .type-label {
+    @apply text-2xs font-semibold uppercase tracking-wide text-muted-foreground;
+  }
 }
 
 @layer components {
@@ -123,11 +169,13 @@
 
   /* Panel styles */
   .enterprise-panel {
-    @apply rounded-lg border border-border/80 bg-card/95 shadow-[0_18px_60px_hsl(var(--background)_/_0.28)];
+    @apply rounded-xl border border-border/60 bg-card/95;
+    box-shadow: var(--shadow-2);
   }
 
   .workspace-panel {
-    @apply rounded-lg border border-border/80 bg-card/95 shadow-[0_18px_60px_hsl(var(--background)_/_0.28)];
+    @apply rounded-xl border border-border/60 bg-card/95;
+    box-shadow: var(--shadow-2);
   }
 
   .workspace-subtle {
@@ -144,7 +192,13 @@
 
   /* Card styles */
   .corp-card {
-    @apply rounded-lg border border-border/80 bg-card/95 shadow-[0_14px_42px_hsl(var(--background)_/_0.2)];
+    @apply rounded-xl border border-border/60 bg-card/95;
+    box-shadow: var(--shadow-1);
+  }
+
+  /* Accent gradient — teal → violet, for hero bars / active nav / primary CTAs */
+  .accent-gradient {
+    background-image: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--ai)));
   }
 
   .corp-surface {

@@ -21,13 +21,17 @@
 
 ## 2. Typography
 
-- **Font Stack:** System UI (`font-sans` from Tailwind)
-- **Scales:**
-  - Page title: `text-base font-semibold tracking-tight`
-  - Section title: `text-sm font-semibold`
-  - Body: `text-xs` / `text-[13px]`
-  - Labels: `text-[11px] font-semibold uppercase tracking-wider text-muted-foreground`
-  - Micro: `text-[10px]` / `text-[9px]`
+- **Font Stack:** `Inter` (`font-sans`), `JetBrains Mono` (`font-mono`)
+- **Scale utilities** (defined in `index.css @layer utilities`; adopt these instead of ad-hoc sizes):
+  - `.type-display` — 28/34, semibold, tracking-tight (hero numbers, marketing)
+  - `.type-h1` — 22/28, semibold, tracking-tight (page title)
+  - `.type-h2` — 18/24, semibold (section title)
+  - `.type-h3` — 15/20, semibold (card title)
+  - `.type-body` — 13/20 (default body)
+  - `.type-body-sm` — 12/20 (secondary body)
+  - `.type-label` — `text-2xs` (11px), semibold, uppercase, tracking-wide, muted (labels/kickers)
+- **Floor:** never go below `text-2xs` (11px). No `text-[10px]`/`text-[9px]`. The only exception is
+  non-textual preview glyphs inside scaled swatches (e.g. terminal font-size preview).
 - **Weights:** `font-medium` (body), `font-semibold` (headings), `font-bold` (emphasis)
 
 ## 3. Spacing & Grid
