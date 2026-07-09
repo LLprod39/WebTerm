@@ -363,6 +363,10 @@ create_superuser_if_requested() {
     -e DJANGO_SUPERUSER_PASSWORD="$SUPERUSER_PASSWORD" \
     backend python - <<'PY'
 import os
+import django
+
+django.setup()
+
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -384,22 +388,23 @@ if created:
     user.save()
     print(f"Created superuser: {username}")
 else:
-    changed = False
+    update_fields = []
     if email and user.email != email:
         user.email = email
-        changed = True
+        update_fields.append("email")
     if not user.is_staff:
         user.is_staff = True
-        changed = True
+        update_fields.append("is_staff")
     if not user.is_superuser:
         user.is_superuser = True
-        changed = True
+        update_fields.append("is_superuser")
     if not user.is_active:
         user.is_active = True
-        changed = True
-    if changed:
-        user.save(update_fields=["email", "is_staff", "is_superuser", "is_active"])
-    print(f"Superuser already exists: {username}")
+        update_fields.append("is_active")
+    user.set_password(password)
+    update_fields.append("password")
+    user.save(update_fields=update_fields)
+    print(f"Updated superuser: {username}")
 PY
 }
 
