@@ -107,6 +107,7 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
   const onEventRef = useRef(onEvent);
   const onInterceptRef = useRef(onInterceptInput);
   const cwdRefProp = useRef(cwdRef);
+  const homePathRef = useRef("");
   const onFileClickRef = useRef(onFileClick);
   const clickableFilesRef = useRef(clickableFiles);
   useEffect(() => { onStatusChangeRef.current = onStatusChange; });
@@ -172,6 +173,7 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
     const fileLinkDisposable = term.registerLinkProvider(
       createTerminalFileLinkProvider(term, {
         getCwd: () => cwdRefProp.current?.current || "/",
+        getHomePath: () => homePathRef.current,
         onOpen: (absolutePath, filename) => {
           onFileClickRef.current?.(absolutePath, filename);
         },
@@ -263,14 +265,25 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
             const cwdFromPrompt = parsePromptCwd(chunk);
             if (cwdFromPrompt && cwdRefProp.current) {
               cwdRefProp.current.current = cwdFromPrompt;
+              // Infer home once we see an absolute /home/<user> cwd later or keep prior home.
+              if (cwdFromPrompt.startsWith("/home/")) {
+                const parts = cwdFromPrompt.split("/").filter(Boolean);
+                if (parts.length >= 2) homePathRef.current = `/${parts[0]}/${parts[1]}`;
+              }
             }
             term.write(chunk);
             return;
           }
           if (type === "terminal_session") {
             const cwd = String(payload.cwd || "").trim();
+            const home = String(payload.home || payload.home_path || "").trim();
+            if (home) homePathRef.current = home.replace(/\/+$/, "");
             if (cwd && cwdRefProp.current) {
               cwdRefProp.current.current = cwd;
+              if (!homePathRef.current && cwd.startsWith("/home/")) {
+                const parts = cwd.split("/").filter(Boolean);
+                if (parts.length >= 2) homePathRef.current = `/${parts[0]}/${parts[1]}`;
+              }
             }
             return;
           }

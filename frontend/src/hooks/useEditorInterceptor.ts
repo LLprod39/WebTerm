@@ -11,6 +11,8 @@ export interface EditorInterceptorState {
   isOpen: boolean;
   serverId: number | null;
   filePath: string | null;
+  /** Prefer elevated (sudo) open when intercept detected `sudo nano …`. */
+  elevated: boolean;
 }
 
 export function useEditorInterceptor() {
@@ -18,27 +20,29 @@ export function useEditorInterceptor() {
     isOpen: false,
     serverId: null,
     filePath: null,
+    elevated: false,
   });
 
   /** Open the editor for a given server + file path (toolbar button). */
-  const openEditor = useCallback((serverId: number, filePath?: string) => {
+  const openEditor = useCallback((serverId: number, filePath?: string, elevated = false) => {
     setState({
       isOpen: true,
       serverId,
       filePath: filePath ?? null,
+      elevated,
     });
   }, []);
 
   /** Open editor for a remote absolute path (terminal file link click). */
-  const openFileAtPath = useCallback((serverId: number, filePath: string) => {
+  const openFileAtPath = useCallback((serverId: number, filePath: string, elevated = false) => {
     const path = String(filePath || "").trim();
     if (!path) return;
-    setState({ isOpen: true, serverId, filePath: path });
+    setState({ isOpen: true, serverId, filePath: path, elevated });
   }, []);
 
   /** Close the editor modal. */
   const closeEditor = useCallback(() => {
-    setState({ isOpen: false, serverId: null, filePath: null });
+    setState({ isOpen: false, serverId: null, filePath: null, elevated: false });
   }, []);
 
   /**
@@ -50,7 +54,8 @@ export function useEditorInterceptor() {
       if (String(payload.type || "") !== "editor_intercept") return false;
       const path = String(payload.path || "");
       if (!path) return false;
-      setState({ isOpen: true, serverId, filePath: path });
+      const elevated = Boolean(payload.sudo);
+      setState({ isOpen: true, serverId, filePath: path, elevated });
       return true;
     },
     [],
