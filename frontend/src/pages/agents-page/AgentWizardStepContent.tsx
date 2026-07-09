@@ -7,7 +7,6 @@ import type { AgentInputArtifact, AgentScheduleConfig, AgentScheduleMode, AgentT
 import { localize } from "@/lib/i18n";
 import { AGENT_ICONS, type AgentSudoPolicy, type AgentTaskDraft, type AgentWizardCheck, type AgentWizardStep, FULL_AGENT_TOOL_OPTIONS, QUICK_TIMES, SCHEDULE_MODES, SCHEDULE_PRESETS, SUDO_AGENT_OPTIONS, WEEKDAYS, agentModeLabel, buildDefaultToolsConfig, finalizeScheduleConfig, formatScheduleConfigLabel, sudoAgentOption } from "./agentPageUtils";
 import { AgentMaterialsSection } from "./AgentMaterialsSection";
-import { AgentWizardQuickSummary } from "./AgentWizardQuickSummary";
 import { AgentWizardReviewStep } from "./AgentWizardReviewStep";
 type SummaryRow = { icon: LucideIcon; label: string; value: string };
 type AgentMode = "mini" | "full" | "multi";
@@ -170,33 +169,59 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
     readinessChecks,
   } = props;
   return (
-    <div className={step === "template" ? "space-y-4" : "grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]"}>
-      <div className="space-y-4">
+    <div className="space-y-6">
+      <div className="space-y-6">
         {step === "template" && (
           <>
-            <section className="rounded-lg border border-border/70 bg-secondary/15 p-4">
-              <h3 className="mb-4 text-lg font-semibold text-foreground">{localize(lang, "Тип агента", "Agent type")}</h3>
+            <section className="space-y-4">
+              <h3 className="text-sm font-semibold text-foreground">{localize(lang, "Тип агента", "Agent type")}</h3>
+              <p className="mb-4 mt-0.5 text-xs leading-5 text-muted-foreground">
+                {localize(
+                  lang,
+                  "Выберите, как агент будет работать. От этого зависят доступные поля и поведение.",
+                  "Choose how the agent works. This determines the available fields and its behaviour.",
+                )}
+              </p>
               <div className="grid gap-3 md:grid-cols-3">
                 {[
-                  { key: "mini" as const, icon: Zap, label: localize(lang, "Mini-агент", "Mini Agent"), text: localize(lang, "Команды и краткий разбор", "Commands and short analysis") },
-                  { key: "full" as const, icon: Brain, label: localize(lang, "Полный агент", "Full Agent"), text: localize(lang, "Цель, инструменты и проверки", "Goal, tools, and checks") },
-                  { key: "multi" as const, icon: Layers, label: "Pipeline", text: localize(lang, "Несколько агентов и серверов", "Multiple agents and servers") },
+                  {
+                    key: "mini" as const,
+                    icon: Zap,
+                    label: localize(lang, "Mini-агент", "Mini Agent"),
+                    text: localize(lang, "Выполняет заданный список команд и делает краткий разбор результата.", "Runs a fixed list of commands and briefly analyses the result."),
+                    when: localize(lang, "Когда шаги известны заранее", "When the steps are known upfront"),
+                  },
+                  {
+                    key: "full" as const,
+                    icon: Brain,
+                    label: localize(lang, "Полный агент", "Full Agent"),
+                    text: localize(lang, "Сам решает шаги к цели, используя инструменты и проверки.", "Decides the steps toward a goal on its own, using tools and checks."),
+                    when: localize(lang, "Когда нужна автономность", "When autonomy is needed"),
+                  },
+                  {
+                    key: "multi" as const,
+                    icon: Layers,
+                    label: "Pipeline",
+                    text: localize(lang, "Координирует несколько агентов и серверов в одном сценарии.", "Coordinates several agents and servers in one scenario."),
+                    when: localize(lang, "Когда задача многошаговая", "When the task is multi-step"),
+                  },
                 ].map((item) => {
                   const Icon = item.icon;
                   const active = mode === item.key;
                   return (
-                    <button key={item.key} type="button" aria-pressed={active} onClick={() => setMode(item.key)} className={`min-h-[92px] rounded-lg border p-4 text-left transition-colors ${active ? "border-primary bg-primary/10 text-foreground" : "border-border/70 bg-background/30 text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>
-                      <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg border border-border/70 bg-secondary/50 text-primary"><Icon className="h-4 w-4" /></span>
-                      <span className="block text-sm font-semibold">{item.label}</span>
-                      <span className="mt-1 block text-xs leading-4 text-muted-foreground">{item.text}</span>
+                    <button key={item.key} type="button" aria-pressed={active} onClick={() => setMode(item.key)} className={`flex min-h-[120px] flex-col rounded-xl border p-4 text-left transition-colors ${active ? "border-primary bg-primary/10 text-foreground" : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>
+                      <span className={`mb-3 flex h-9 w-9 items-center justify-center rounded-lg border ${active ? "border-primary/30 bg-primary/15 text-primary" : "border-border/60 bg-surface-2 text-primary"}`}><Icon className="h-4 w-4" /></span>
+                      <span className="block text-sm font-semibold text-foreground">{item.label}</span>
+                      <span className="mt-1 block text-xs leading-5 text-muted-foreground">{item.text}</span>
+                      <span className="mt-auto pt-2 text-2xs font-medium uppercase tracking-wide text-primary/80">{item.when}</span>
                     </button>
                   );
                 })}
               </div>
             </section>
-            <section className="rounded-lg border border-border/70 bg-secondary/15 p-4">
+            <section className="space-y-4">
               <div className="mb-4">
-                <h3 className="text-lg font-semibold text-foreground">{localize(lang, "Шаблон", "Template")}</h3>
+                <h3 className="text-sm font-semibold text-foreground">{localize(lang, "Шаблон", "Template")}</h3>
               </div>
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 <button
@@ -217,7 +242,7 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
                 {templates.map((tpl) => {
                   const TemplateIcon = AGENT_ICONS[tpl.type] || Settings2;
                   return (
-                    <button key={tpl.type} type="button" onClick={() => onSelectTemplate(tpl)} className="min-h-[104px] rounded-lg border border-border/70 bg-background/30 p-4 text-left transition-colors hover:border-primary/50 hover:bg-primary/5">
+                    <button key={tpl.type} type="button" onClick={() => onSelectTemplate(tpl)} className="min-h-[104px] rounded-lg border border-border/60 bg-surface-2/40 p-4 text-left transition-colors hover:border-primary/50 hover:bg-primary/5">
                       <div className="mb-3 flex items-center gap-3">
                         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-secondary/50 text-primary"><TemplateIcon className="h-4 w-4" /></span>
                         <span className="min-w-0 truncate text-sm font-semibold text-foreground">{tpl.name}</span>
@@ -231,45 +256,66 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
           </>
         )}
         {step === "basics" && (
-          <section className="space-y-4 rounded-lg border border-border/70 bg-secondary/15 p-4">
-            <h3 className="text-lg font-semibold text-foreground">{localize(lang, "Основные настройки", "Basics")}</h3>
-            <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
+          <section className="space-y-4">
+            <h3 className="text-sm font-semibold text-foreground">{localize(lang, "Основные настройки", "Basics")}</h3>
+            <div className="space-y-2">
               <label className="pt-2 text-sm font-medium text-muted-foreground">{localize(lang, "Название агента", "Agent name")} <span className="text-primary">*</span></label>
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={localize(lang, "Анализ логов", "Log analysis")} className="h-10 bg-background/60" />
             </div>
             {mode === "mini" ? (
-              <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
-                <label className="pt-2 text-sm font-medium text-muted-foreground">{t("agent.commands_label")} <span className="text-primary">*</span></label>
+              <div className="space-y-2">
+                <div className="pt-2">
+                  <label className="text-sm font-medium text-foreground">{t("agent.commands_label")} <span className="text-primary">*</span></label>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">{localize(lang, "Каждая команда — с новой строки. Агент выполнит их по порядку.", "One command per line. The agent runs them in order.")}</p>
+                </div>
                 <Textarea value={commands} onChange={(e) => setCommands(e.target.value)} rows={7} className="bg-background/60 font-mono text-xs" placeholder={"hostname\nuptime\nfree -m"} />
               </div>
             ) : (
               <>
-                <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
-                  <label className="pt-2 text-sm font-medium text-muted-foreground">{localize(lang, "Цель", "Goal")}</label>
-                  <Textarea value={goal} onChange={(e) => setGoal(e.target.value)} rows={3} className="bg-background/60 text-sm" />
+                <div className="space-y-2">
+                  <div className="pt-2">
+                    <label className="text-sm font-medium text-foreground">{localize(lang, "Цель", "Goal")}</label>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">{localize(lang, "Что агент должен сделать — желаемый результат.", "What the agent should achieve — the desired outcome.")}</p>
+                  </div>
+                  <Textarea value={goal} onChange={(e) => setGoal(e.target.value)} rows={3} className="bg-background/60 text-sm" placeholder={localize(lang, "Например: найти причину высокой нагрузки на web-prod-01", "e.g. find the cause of high load on web-prod-01")} />
                 </div>
-                <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
-                  <label className="pt-2 text-sm font-medium text-muted-foreground">{localize(lang, "Системные инструкции", "System instructions")}</label>
-                  <Textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} rows={3} className="bg-background/60 text-sm" />
+                <div className="space-y-2">
+                  <div className="pt-2">
+                    <label className="text-sm font-medium text-foreground">{localize(lang, "Инструкции (поведение)", "Instructions (behaviour)")}</label>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">{localize(lang, "Как агенту себя вести: роль, стиль, ограничения.", "How the agent should behave: role, style, constraints.")}</p>
+                  </div>
+                  <Textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} rows={3} className="bg-background/60 text-sm" placeholder={localize(lang, "Например: действуй осторожно, ничего не меняй без подтверждения", "e.g. act carefully, do not change anything without confirmation")} />
                 </div>
-                <div className="grid gap-3 lg:grid-cols-3 lg:pl-[236px]">
-                  <Input type="number" min={1} max={100} value={maxIter} onChange={(e) => setMaxIter(Number(e.target.value))} className="h-10 bg-background/60" aria-label={localize(lang, "Максимум итераций", "Max iterations")} />
-                  <Input type="number" min={30} max={3600} value={sessionTimeoutSeconds} onChange={(e) => setSessionTimeoutSeconds(Number(e.target.value))} className="h-10 bg-background/60" aria-label={localize(lang, "Таймаут сессии", "Session timeout")} />
-                  <Input type="number" min={1} max={10} value={maxConnections} onChange={(e) => setMaxConnections(Number(e.target.value))} className="h-10 bg-background/60" aria-label={localize(lang, "Максимум подключений", "Max connections")} />
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    {localize(lang, "Максимум итераций", "Max iterations")}
+                    <Input type="number" min={1} max={100} value={maxIter} onChange={(e) => setMaxIter(Number(e.target.value))} className="mt-1 h-9 bg-background/60" />
+                  </label>
+                  <label className="text-xs font-medium text-muted-foreground">
+                    {localize(lang, "Таймаут сессии, сек", "Session timeout, sec")}
+                    <Input type="number" min={30} max={3600} value={sessionTimeoutSeconds} onChange={(e) => setSessionTimeoutSeconds(Number(e.target.value))} className="mt-1 h-9 bg-background/60" />
+                  </label>
+                  <label className="text-xs font-medium text-muted-foreground">
+                    {localize(lang, "Максимум подключений", "Max connections")}
+                    <Input type="number" min={1} max={10} value={maxConnections} onChange={(e) => setMaxConnections(Number(e.target.value))} className="mt-1 h-9 bg-background/60" />
+                  </label>
                 </div>
               </>
             )}
-            <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
-              <label className="pt-2 text-sm font-medium text-muted-foreground">{localize(lang, "Инструкции к анализу", "Analysis instructions")}</label>
+            <div className="space-y-2">
+              <div className="pt-2">
+                <label className="text-sm font-medium text-foreground">{localize(lang, "Инструкции к анализу", "Analysis instructions")}</label>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">{localize(lang, "Как разобрать и оформить результат выполнения.", "How to interpret and format the run's results.")}</p>
+              </div>
               <Textarea value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} rows={4} className="bg-background/60 text-sm" />
             </div>
-            <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
+            <div className="space-y-2">
               <label className="pt-2 text-sm font-medium text-muted-foreground">{localize(lang, "Права запуска", "Run access")}</label>
               <div className="grid gap-3 md:grid-cols-3">
                 {SUDO_AGENT_OPTIONS.map((option) => {
                   const active = sudoPolicy === option.value;
                   return (
-                    <button key={option.value} type="button" aria-pressed={active} onClick={() => setSudoPolicy(option.value)} className={`min-h-[76px] rounded-lg border p-3 text-left transition-colors ${active ? "border-primary bg-primary/10 text-foreground" : "border-border/70 bg-background/30 text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>
+                    <button key={option.value} type="button" aria-pressed={active} onClick={() => setSudoPolicy(option.value)} className={`min-h-[76px] rounded-lg border p-3 text-left transition-colors ${active ? "border-primary bg-primary/10 text-foreground" : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>
                       <Shield className="mb-2 h-4 w-4 text-primary" />
                       <span className="block text-sm font-semibold">{localize(lang, option.labelRu, option.labelEn)}</span>
                       <span className="mt-1 block text-xs leading-4 text-muted-foreground">{localize(lang, option.hintRu, option.hintEn)}</span>
@@ -298,10 +344,10 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
           </section>
         )}
         {step === "servers" && (
-          <section className="space-y-4 rounded-lg border border-border/70 bg-secondary/15 p-4">
+          <section className="space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-foreground">{localize(lang, "Выбор серверов", "Server selection")}</h3>
+                <h3 className="text-sm font-semibold text-foreground">{localize(lang, "Выбор серверов", "Server selection")}</h3>
                 <p className="mt-1 text-sm leading-5 text-muted-foreground">
                   {localize(lang, `${selectedServers.length} выбрано из ${totalServerCount}`, `${selectedServers.length} selected of ${totalServerCount}`)}
                 </p>
@@ -321,7 +367,7 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
               {servers.map((server) => {
                 const active = selectedServers.includes(server.id);
                 return (
-                  <button key={server.id} type="button" aria-pressed={active} onClick={() => toggleServer(server.id)} className={`flex min-h-[64px] items-center gap-3 rounded-lg border p-3 text-left transition-colors ${active ? "border-primary bg-primary/10 text-foreground" : "border-border/70 bg-background/30 text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>
+                  <button key={server.id} type="button" aria-pressed={active} onClick={() => toggleServer(server.id)} className={`flex min-h-[64px] items-center gap-3 rounded-lg border p-3 text-left transition-colors ${active ? "border-primary bg-primary/10 text-foreground" : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-secondary/50 text-muted-foreground"><Server className="h-4 w-4" /></span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-semibold">{server.name}</span>
@@ -338,7 +384,7 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
                 description={localize(lang, "Под текущий поиск серверы не найдены.", "No servers match the current search.")}
               />
             ) : null}
-            <div className="space-y-4 rounded-lg border border-border/70 bg-background/25 p-4">
+            <div className="space-y-4 border-t border-border/50 pt-4">
               <div className="flex items-center justify-between gap-3">
                 <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground"><CalendarDays className="h-4 w-4 text-primary" /> {t("agent.schedule")}</h4>
                 <span className="rounded-md border border-primary/25 bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">{formatScheduleConfigLabel(scheduleConfig, schedule, lang)}</span>
@@ -347,7 +393,7 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
                 {SCHEDULE_MODES.map((option) => {
                   const active = scheduleConfig.mode === option.mode;
                   return (
-                    <button key={option.mode} type="button" aria-pressed={active} onClick={() => setScheduleMode(option.mode)} className={`min-h-[76px] rounded-lg border p-3 text-left transition-colors ${active ? "border-primary bg-primary/10 text-foreground" : "border-border/70 bg-background/30 text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>
+                    <button key={option.mode} type="button" aria-pressed={active} onClick={() => setScheduleMode(option.mode)} className={`min-h-[76px] rounded-lg border p-3 text-left transition-colors ${active ? "border-primary bg-primary/10 text-foreground" : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>
                       <span className="block text-sm font-semibold">{localize(lang, option.labelRu, option.labelEn)}</span>
                       <span className="mt-1 block text-xs leading-4 text-muted-foreground">{localize(lang, option.hintRu, option.hintEn)}</span>
                     </button>
@@ -390,10 +436,10 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
           </section>
         )}
         {step === "capabilities" && (
-          <section className="space-y-4 rounded-lg border border-border/70 bg-secondary/15 p-4">
-            <h3 className="text-lg font-semibold text-foreground">{localize(lang, "Возможности", "Capabilities")}</h3>
+          <section className="space-y-4">
+            <h3 className="text-sm font-semibold text-foreground">{localize(lang, "Возможности", "Capabilities")}</h3>
             {(mode === "full" || mode === "multi") && (
-              <div className="space-y-3 rounded-lg border border-border/70 bg-background/25 p-4">
+              <div className="space-y-3 border-t border-border/50 pt-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <h4 className="text-sm font-semibold text-foreground">{localize(lang, "Доступ к инструментам", "Tool access")}</h4>
@@ -423,7 +469,7 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
                 )}
               </div>
             )}
-            <div className="space-y-3 rounded-lg border border-border/70 bg-background/25 p-4">
+            <div className="space-y-3 border-t border-border/50 pt-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground"><BookOpen className="h-4 w-4 text-primary" /> {localize(lang, "Скиллы агента", "Agent skills")}</h4>
@@ -442,7 +488,7 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
                   {visibleSkills.map((skill) => {
                     const active = selectedSkillSlugs.includes(skill.slug);
                     return (
-                      <button key={skill.slug} type="button" aria-pressed={active} onClick={() => toggleSkill(skill.slug)} className={`min-h-[58px] rounded-lg border px-3 py-2 text-left transition-colors ${active ? "border-primary bg-primary/10 text-foreground" : "border-border/70 bg-background/35 text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>
+                      <button key={skill.slug} type="button" aria-pressed={active} onClick={() => toggleSkill(skill.slug)} className={`min-h-[58px] rounded-lg border px-3 py-2 text-left transition-colors ${active ? "border-primary bg-primary/10 text-foreground" : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>
                         <span className="block truncate text-xs font-semibold">{skill.name}</span>
                         <span className="mt-0.5 block truncate text-xs leading-4 text-muted-foreground">{skill.service || skill.category || skill.slug}</span>
                       </button>
@@ -484,9 +530,6 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
           />
         )}
       </div>
-      {step !== "template" && (
-        <AgentWizardQuickSummary lang={lang} summaryRows={summaryRows} readiness={readiness} checks={readinessChecks} />
-      )}
     </div>
   );
 }

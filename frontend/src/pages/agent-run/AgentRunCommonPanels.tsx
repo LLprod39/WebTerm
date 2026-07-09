@@ -258,7 +258,7 @@ export function LiveRunBanner({
 export function LiveMetric({ label, value, tone = "info" }: { label: string; value: string; tone?: StatusTone }) {
   return (
     <div className={cn("min-w-0 rounded-lg border p-3", toneBoxFromStatusTone(tone))}>
-      <p className="text-[11px] font-semibold uppercase tracking-wide opacity-80">{label}</p>
+      <p className="text-2xs font-semibold uppercase tracking-wide opacity-80">{label}</p>
       <p className="mt-1 truncate font-mono text-sm font-semibold">{value || "—"}</p>
     </div>
   );

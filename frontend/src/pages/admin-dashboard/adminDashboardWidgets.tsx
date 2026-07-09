@@ -19,11 +19,15 @@ import { buildAdminUsageWidgets } from "./adminUsageWidgets";
 
 const sectionToneStyles: Record<string, string> = {
   default: "",
-  info: "border-primary/30 shadow-sm bg-card/65",
-  success: "border-emerald-500/25 bg-emerald-950/5 dark:bg-emerald-950/10 shadow-emerald-500/5",
-  warning: "border-amber-500/25 bg-amber-950/5 dark:bg-amber-950/10 shadow-amber-500/5",
-  danger: "border-red-500/25 bg-red-950/5 dark:bg-red-950/10 shadow-red-500/5",
+  info: "border-primary/30 bg-primary/5",
+  success: "border-success/25 bg-success/5",
+  warning: "border-warning/25 bg-warning/5",
+  danger: "border-destructive/25 bg-destructive/5",
 };
+
+function pctTone(value: number): "default" | "warning" | "danger" {
+  return value > 85 ? "danger" : value > 65 ? "warning" : "default";
+}
 
 type StatusTone = "neutral" | "success" | "warning" | "danger" | "info";
 
@@ -78,32 +82,57 @@ export function buildAdminDashboardWidgets(d: AdminDashboardData, lang: string):
         const tone = getWidgetStringProp(config, "tone", "default");
         const title = getWidgetStringProp(config, "customTitle", "Метрики инфраструктуры");
 
+        const cpu = d.fleet_health?.avg_cpu || 0;
+        const mem = d.fleet_health?.avg_memory || 0;
+        const disk = d.fleet_health?.avg_disk || 0;
+        const successRate = d.agents?.success_rate ?? 0;
+        const failed24h = d.agents?.failed_24h ?? 0;
+
         return (
           <SectionCard title={title} icon={<Server className="h-4 w-4" />} className={sectionToneStyles[tone]}>
             <MetricGrid>
               <MetricCard
-                label="Серверы"
+                label={localize(lang, "Серверы", "Servers")}
                 value={d.servers?.total || 0}
-                description={`${d.servers?.active || 0} активно`}
+                description={`${d.servers?.active || 0} ${localize(lang, "активно", "active")}`}
                 icon={<Server className="h-5 w-5" />}
               />
               <MetricCard
                 label={localize(lang, "CPU инфраструктуры", "Infrastructure CPU")}
-                value={`${d.fleet_health?.avg_cpu || 0}%`}
-                description="Средняя нагрузка"
+                value={`${cpu}%`}
+                description={localize(lang, "Средняя нагрузка", "Average load")}
                 icon={<Activity className="h-5 w-5" />}
-                tone={(d.fleet_health?.avg_cpu || 0) > 80 ? "danger" : (d.fleet_health?.avg_cpu || 0) > 60 ? "warning" : "default"}
+                tone={pctTone(cpu)}
               />
               <MetricCard
-                label="Агенты"
+                label={localize(lang, "Память", "Memory")}
+                value={`${mem}%`}
+                description={localize(lang, "Средняя по флоту", "Fleet average")}
+                icon={<Activity className="h-5 w-5" />}
+                tone={pctTone(mem)}
+              />
+              <MetricCard
+                label={localize(lang, "Диск", "Disk")}
+                value={`${disk}%`}
+                description={localize(lang, "Средняя по флоту", "Fleet average")}
+                icon={<Activity className="h-5 w-5" />}
+                tone={pctTone(disk)}
+              />
+              <MetricCard
+                label={localize(lang, "Агенты", "Agents")}
                 value={d.agents?.running || 0}
-                description={`${d.agents?.today || 0} запусков сегодня`}
+                description={`${d.agents?.today || 0} ${localize(lang, "сегодня", "today")} · ${successRate}% ${localize(lang, "успех", "success")}`}
                 icon={<Bot className="h-5 w-5" />}
+                tone={successRate > 0 && successRate < 60 ? "warning" : "default"}
               />
               <MetricCard
-                label="Алерты"
+                label={localize(lang, "Алерты", "Alerts")}
                 value={d.active_alerts_count || 0}
-                description="Требуют внимания"
+                description={
+                  failed24h > 0
+                    ? `${failed24h} ${localize(lang, "сбоев агентов за 24ч", "agent failures 24h")}`
+                    : localize(lang, "Требуют внимания", "Need attention")
+                }
                 icon={<AlertTriangle className="h-5 w-5" />}
                 tone={(d.active_alerts_count || 0) > 0 ? "danger" : "default"}
               />
@@ -171,7 +200,7 @@ export function buildAdminDashboardWidgets(d: AdminDashboardData, lang: string):
               {displayUsers.map((user, idx) => (
                 <div key={idx} className="flex items-center justify-between text-xs p-1.5 rounded-lg hover:bg-secondary/10 transition-colors">
                   <div className="flex items-center gap-2 min-w-0">
-                    <div className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+                    <div className="h-2 w-2 rounded-full bg-success shrink-0" />
                     <span className="font-semibold text-foreground/90 truncate">{user.username}</span>
                   </div>
                   <div className="flex items-center gap-3 shrink-0 ml-3">

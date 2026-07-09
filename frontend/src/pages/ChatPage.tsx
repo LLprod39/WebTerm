@@ -160,7 +160,7 @@ export default function ChatPage() {
                 <MessageSquare className="mt-0.5 h-4 w-4 shrink-0" />
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-medium">{chat.title}</span>
-                  <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                  <span className="mt-0.5 block truncate text-2xs text-muted-foreground">
                     {formatDateTime(chat.updated_at, lang)}
                   </span>
                 </span>

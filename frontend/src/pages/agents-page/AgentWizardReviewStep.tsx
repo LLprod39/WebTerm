@@ -27,47 +27,58 @@ export function AgentWizardReviewStep({
   readiness,
   readinessChecks,
 }: AgentWizardReviewStepProps) {
+  const extras: string[] = [];
+  if (commandCount) extras.push(localize(lang, `${commandCount} команд`, `${commandCount} commands`));
+  if (selectedSkillSlugs.length) extras.push(localize(lang, `${selectedSkillSlugs.length} скиллов`, `${selectedSkillSlugs.length} skills`));
+  if (inputArtifacts.length) extras.push(localize(lang, `${inputArtifacts.length} материалов`, `${inputArtifacts.length} materials`));
+  if (telegramEnabled) extras.push("Telegram");
+
   return (
-    <section className="space-y-4 rounded-lg border border-border/70 bg-secondary/15 p-4">
-            <h3 className="text-lg font-semibold text-foreground">{localize(lang, "Обзор", "Review")}</h3>
-            <div className="grid gap-3 md:grid-cols-2">
-              {summaryRows.map((row) => {
-                const Icon = row.icon;
-                return (
-                  <div key={row.label} className="rounded-lg border border-border/70 bg-background/30 p-4">
-                    <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg border border-border/70 bg-secondary/50 text-primary"><Icon className="h-4 w-4" /></div>
-                    <div className="text-xs text-muted-foreground">{row.label}</div>
-                    <div className="mt-1 text-sm font-semibold text-foreground">{row.value}</div>
-                  </div>
-                );
-              })}
+    <section className="space-y-5">
+      <div>
+        <h3 className="text-sm font-semibold text-foreground">{localize(lang, "Проверьте перед созданием", "Check before creating")}</h3>
+        <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+          {localize(lang, "Убедитесь, что агент настроен так, как вы ожидаете.", "Make sure the agent is set up as you expect.")}
+        </p>
+      </div>
+
+      <dl className="divide-y divide-border/40 rounded-xl border border-border/50">
+        {summaryRows.map((row) => {
+          const Icon = row.icon;
+          return (
+            <div key={row.label} className="flex items-center gap-3 px-4 py-3">
+              <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+              <dt className="w-36 shrink-0 text-sm text-muted-foreground">{row.label}</dt>
+              <dd className="min-w-0 truncate text-sm font-medium text-foreground">{row.value}</dd>
             </div>
-            <div className="rounded-lg border border-border/70 bg-background/30 p-4">
-              <div className="grid gap-3 text-sm md:grid-cols-4">
-                <div><span className="block text-xs leading-4 text-muted-foreground">{localize(lang, "Команды", "Commands")}</span><strong>{commandCount}</strong></div>
-                <div><span className="block text-xs leading-4 text-muted-foreground">{localize(lang, "Скиллы", "Skills")}</span><strong>{selectedSkillSlugs.length}</strong></div>
-                <div><span className="block text-xs leading-4 text-muted-foreground">{localize(lang, "Материалы", "Materials")}</span><strong>{inputArtifacts.length}</strong></div>
-                <div><span className="block text-xs leading-4 text-muted-foreground">Telegram</span><strong>{telegramEnabled ? localize(lang, "Да", "Yes") : localize(lang, "Нет", "No")}</strong></div>
-                <div><span className="block text-xs leading-4 text-muted-foreground">{localize(lang, "Готовность", "Readiness")}</span><strong>{readiness}%</strong></div>
-              </div>
-            </div>
-            {readiness < 100 ? (
-              <InlineAlert
-                tone="warning"
-                title={localize(lang, "Preflight ещё не пройден", "Preflight is not complete")}
-                description={localize(
-                  lang,
-                  readinessChecks.filter((check) => !check.passed).map((check) => check.labelRu).join(" · "),
-                  readinessChecks.filter((check) => !check.passed).map((check) => check.labelEn).join(" · "),
-                )}
-              />
-            ) : (
-              <InlineAlert
-                tone="success"
-                title={localize(lang, "Preflight пройден", "Preflight passed")}
-                description={localize(lang, "Конфигурация готова к созданию агента.", "Configuration is ready to create the agent.")}
-              />
-            )}
+          );
+        })}
+        {extras.length ? (
+          <div className="flex items-center gap-3 px-4 py-3">
+            <span className="h-4 w-4 shrink-0" aria-hidden />
+            <dt className="w-36 shrink-0 text-sm text-muted-foreground">{localize(lang, "Дополнительно", "Extras")}</dt>
+            <dd className="min-w-0 truncate text-sm text-foreground">{extras.join(" · ")}</dd>
+          </div>
+        ) : null}
+      </dl>
+
+      {readiness < 100 ? (
+        <InlineAlert
+          tone="warning"
+          title={localize(lang, "Ещё не всё готово", "Not everything is ready yet")}
+          description={localize(
+            lang,
+            readinessChecks.filter((check) => !check.passed).map((check) => check.labelRu).join(" · "),
+            readinessChecks.filter((check) => !check.passed).map((check) => check.labelEn).join(" · "),
+          )}
+        />
+      ) : (
+        <InlineAlert
+          tone="success"
+          title={localize(lang, "Всё готово", "All set")}
+          description={localize(lang, "Можно создавать агента.", "You can create the agent.")}
+        />
+      )}
     </section>
   );
 }

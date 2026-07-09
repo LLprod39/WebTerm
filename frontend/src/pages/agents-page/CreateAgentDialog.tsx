@@ -361,16 +361,11 @@ export function CreateAgentDialog({
   const visibleSkills = skillsExpanded ? availableSkills : availableSkills.slice(0, 4);
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
-      <DialogContent className="flex max-h-[calc(100dvh-24px)] max-w-[min(1180px,calc(100vw-24px))] flex-col rounded-xl border-primary/10 bg-card/95 p-0 shadow-[0_24px_90px_hsl(var(--background)_/_0.72)]">
-        <DialogHeader className="px-6 py-5">
-          <div className="flex items-start gap-4 pr-12">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/15 text-primary shadow-[0_0_28px_hsl(var(--primary)_/_0.16)]">
-              <Bot className="h-6 w-6" />
-            </span>
-            <div className="min-w-0">
-              <DialogTitle className="text-xl">{isEditing ? localize(lang, "Редактирование агента", "Edit agent") : localize(lang, "Создание агента", "Create agent")}</DialogTitle>
-              <DialogDescription>{localize(lang, "Настройте сценарий, поведение, окружение и проверки перед созданием.", "Configure scenario, behavior, targets, and checks before creation.")}</DialogDescription>
-            </div>
+      <DialogContent className="flex max-h-[calc(100dvh-24px)] max-w-[min(760px,calc(100vw-24px))] flex-col p-0">
+        <DialogHeader className="px-6 py-4">
+          <div className="min-w-0 pr-12">
+            <DialogTitle className="text-lg">{isEditing ? localize(lang, "Редактирование агента", "Edit agent") : localize(lang, "Создание агента", "Create agent")}</DialogTitle>
+            <DialogDescription>{localize(lang, "Несколько шагов — и агент готов к запуску.", "A few steps and the agent is ready to run.")}</DialogDescription>
           </div>
         </DialogHeader>
         <AgentWizardProgress
@@ -461,19 +456,15 @@ export function CreateAgentDialog({
           />
         </DialogBody>
         <DialogFooter className="shrink-0 items-stretch justify-between gap-3 px-4 py-4 sm:flex-row sm:items-center sm:px-6">
-          <Button variant="outline" className="min-w-28 gap-2" onClick={currentStepIndex === 0 ? onClose : goBack}>
+          <Button variant="ghost" className="gap-2" onClick={currentStepIndex === 0 ? onClose : goBack}>
             <ArrowLeft className="h-4 w-4" /> {currentStepIndex === 0 ? localize(lang, "Отмена", "Cancel") : t("agent.back")}
           </Button>
           {currentStepBlockingCheck ? (
-            <InlineAlert
-              tone={currentStepBlockingCheck.risk === "danger" ? "danger" : "warning"}
-              description={localize(lang, currentStepBlockingCheck.detailRu, currentStepBlockingCheck.detailEn)}
-              className="flex-1 px-3 py-2"
-            />
+            <p className="flex-1 self-center text-xs leading-5 text-warning sm:px-2">
+              {localize(lang, currentStepBlockingCheck.detailRu, currentStepBlockingCheck.detailEn)}
+            </p>
           ) : (
-            <div className="hidden flex-1 items-center text-sm text-muted-foreground sm:flex">
-              {localize(lang, `Готовность ${readiness}%`, `${readiness}% ready`)}
-            </div>
+            <div className="hidden flex-1 sm:block" />
           )}
           {step === "review" ? (
             <AsyncButton className="min-w-40 gap-2" onClick={onSave} loading={saving} loadingLabel={localize(lang, "Сохраняем...", "Saving...")} disabled={!canSave}>

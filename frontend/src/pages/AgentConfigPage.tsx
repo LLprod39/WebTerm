@@ -5,14 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { Bot, Loader2, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { DeleteDialog } from "@/components/system/ConfirmDialog";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
@@ -307,31 +300,19 @@ export default function AgentConfigPage() {
         </SheetContent>
       </Sheet>
 
-      <Dialog open={deleteTarget !== null} onOpenChange={(nextOpen) => !nextOpen && setDeleteTarget(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>{localize(lang, "Удалить профиль", "Delete profile")}</DialogTitle>
-            <DialogDescription>
-              {deleteTarget
-                ? localize(lang, `Удалить профиль "${deleteTarget.name}"? Действие нельзя отменить.`, `Delete profile "${deleteTarget.name}"? This cannot be undone.`)
-                : ""}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
-              {localize(lang, "Отмена", "Cancel")}
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
-              disabled={deleteMutation.isPending}
-            >
-              {deleteMutation.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
-              {localize(lang, "Удалить", "Delete")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DeleteDialog
+        open={deleteTarget !== null}
+        onOpenChange={(nextOpen) => !nextOpen && setDeleteTarget(null)}
+        title={localize(lang, "Удалить профиль", "Delete profile")}
+        description={
+          deleteTarget
+            ? localize(lang, `Удалить профиль "${deleteTarget.name}"? Действие нельзя отменить.`, `Delete profile "${deleteTarget.name}"? This cannot be undone.`)
+            : ""
+        }
+        confirmLabel={localize(lang, "Удалить", "Delete")}
+        cancelLabel={localize(lang, "Отмена", "Cancel")}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+      />
     </div>
     </div>
     </div>

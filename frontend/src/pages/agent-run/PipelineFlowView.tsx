@@ -150,13 +150,13 @@ export function PipelineFlowView({
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <p className="text-sm text-muted-foreground">{tr("run.plan_created", { count: planTasks.length })}</p>
                 {canEdit ? (
-                  <span className="rounded-md border border-[color:var(--wt-ai)] bg-[color:rgb(155_135_245_/_0.10)] px-2.5 py-1 text-xs font-medium text-[color:var(--wt-ai)]">
+                  <span className="rounded-md border border-ai/40 bg-ai/10 px-2.5 py-1 text-xs font-medium text-ai">
                     {t("run.pending_tasks_editable")}
                   </span>
                 ) : null}
               </div>
             ) : isActive ? (
-              <p className="mt-2 text-sm text-[color:var(--wt-ai)]">{t("run.plan_breakdown")}</p>
+              <p className="mt-2 text-sm text-ai">{t("run.plan_breakdown")}</p>
             ) : null}
           </FlowNode>
 

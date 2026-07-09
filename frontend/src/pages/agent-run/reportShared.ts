@@ -112,8 +112,18 @@ export function cleanInlineMarkdown(value: string) {
     .replace(/\*\*([^*]+)\*\*/g, "$1")
     .replace(/__([^_]+)__/g, "$1")
     .replace(/`([^`]+)`/g, "$1")
+    // orphaned bold/heading markers left by unbalanced markdown ("*Статус:**")
+    .replace(/\*{2,}/g, "")
+    .replace(/^[\s*_#>-]+(?=\S)/, "")
+    .replace(/[\s*_]+$/, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/** True when the text carries real content — filters out "--", "***" and similar parsing leftovers. */
+export function isMeaningfulReportText(value: string) {
+  const cleaned = cleanInlineMarkdown(value);
+  return cleaned.length > 1 && !/^[-—–_.:\s]+$/.test(cleaned);
 }
 
 export function primaryOutcomeSummary(report: AgentRunReportResponse) {
@@ -170,10 +180,10 @@ export function diagnosticImpact(report: AgentRunReportResponse) {
 export function diagnosticActions(report: AgentRunReportResponse) {
   const actions = report.report.recommendations
     .map((item) => cleanInlineMarkdown(item.description || item.title))
-    .filter(Boolean);
+    .filter((text) => isMeaningfulReportText(text));
   if (actions.length) return actions;
   const nextExpected = cleanInlineMarkdown(report.report_state?.next_expected || "");
-  return nextExpected ? [nextExpected] : [];
+  return isMeaningfulReportText(nextExpected) ? [nextExpected] : [];
 }
 
 export function diagnosticEvidenceItems(report: AgentRunReportResponse) {

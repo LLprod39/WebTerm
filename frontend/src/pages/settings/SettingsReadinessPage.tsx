@@ -74,8 +74,8 @@ function ReadinessCheckRow({ check }: { check: SettingsReadinessCheck }) {
           <div className="mt-3 grid gap-2 md:grid-cols-2">
             {details.map(([key, value]) => (
               <div key={key} className="min-w-0 rounded-md bg-background/50 px-2.5 py-2">
-                <div className="font-mono text-[11px] text-muted-foreground/75">{key}</div>
-                <div className="mt-1 break-words font-mono text-[11px] leading-4 text-foreground/75">
+                <div className="font-mono text-2xs text-muted-foreground/75">{key}</div>
+                <div className="mt-1 break-words font-mono text-2xs leading-4 text-foreground/75">
                   {formatDetailValue(value)}
                 </div>
               </div>

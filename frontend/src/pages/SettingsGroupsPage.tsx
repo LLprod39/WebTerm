@@ -6,7 +6,8 @@ import { createAccessGroup, deleteAccessGroup, fetchAccessGroups, fetchAccessUse
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { EmptyState, StatusBadge } from "@/components/ui/page-shell";
+import { EmptyState, StatusBadge, QueryStateBlock } from "@/components/ui/page-shell";
+import { SkeletonTable } from "@/components/ui/list-state";
 import { DeleteDialog } from "@/components/system/ConfirmDialog";
 import { useI18n } from "@/lib/i18n";
 import { notify } from "@/lib/notify";
@@ -34,7 +35,7 @@ export default function SettingsGroupsPage() {
   const [memberSearch, setMemberSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<AccessGroup | null>(null);
 
-  const { data: groupsData, isLoading, error } = useQuery({
+  const { data: groupsData, isLoading, error, refetch } = useQuery({
     queryKey: ["access", "groups"],
     queryFn: fetchAccessGroups,
   });
@@ -141,14 +142,16 @@ export default function SettingsGroupsPage() {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      </div>
-    );
+    return <div className="p-6"><SkeletonTable rows={6} cols={4} /></div>;
   }
   if (error) {
-    return <div className="p-6 text-sm text-destructive">{copy.error}</div>;
+    return (
+      <div className="p-6">
+        <QueryStateBlock error={error} errorText={copy.error} onRetry={() => void refetch()}>
+          {null}
+        </QueryStateBlock>
+      </div>
+    );
   }
 
   return (

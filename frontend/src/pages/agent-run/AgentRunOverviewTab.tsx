@@ -18,6 +18,7 @@ import {
   diagnosticImpact,
   diagnosticProblem,
   eventDot,
+  isMeaningfulReportText,
   severityLabel,
   severityTone,
   stripLeadingTitleHeading,
@@ -198,7 +199,8 @@ function EvidencePanel({ report }: { report: AgentRunReportResponse }) {
 }
 
 function ProblemsPanel({ report }: { report: AgentRunReportResponse }) {
-  const items = report.report.risks.length ? report.report.risks : report.report.findings.filter((item) => _severityRank(item.severity) >= _severityRank("warning"));
+  const source = report.report.risks.length ? report.report.risks : report.report.findings.filter((item) => _severityRank(item.severity) >= _severityRank("warning"));
+  const items = source.filter((item) => isMeaningfulReportText(item.description || item.title));
   return (
     <ReportSectionPanel icon={AlertTriangle} iconTone="warning" title="Проблемы и риски">
       {items.length ? (
@@ -220,7 +222,7 @@ function ProblemsPanel({ report }: { report: AgentRunReportResponse }) {
 }
 
 function ActionPlanPanel({ report }: { report: AgentRunReportResponse }) {
-  const actions = report.report.recommendations;
+  const actions = report.report.recommendations.filter((item) => isMeaningfulReportText(item.description || item.title));
   return (
     <ReportSectionPanel icon={CheckCircle2} iconTone="success" title="План действий">
       {actions.length ? (
@@ -279,7 +281,7 @@ function CompactFindingPanel({ title, empty, items }: { title: string; empty: st
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-medium leading-6 text-foreground">{cleanInlineMarkdown(item.title)}</span>
-                  <span className={cn("rounded border px-1.5 py-0.5 text-[11px] font-medium", toneBox(item.severity))}>
+                  <span className={cn("rounded border px-1.5 py-0.5 text-2xs font-medium", toneBox(item.severity))}>
                     {severityLabel[item.severity]}
                   </span>
                 </div>
@@ -387,7 +389,7 @@ function ExecutionStatePanel({ report }: { report: AgentRunReportResponse }) {
 function MetaMini({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 rounded-lg border border-border/70 bg-background/45 p-3">
-      <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</dt>
+      <dt className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</dt>
       <dd className="mt-1 truncate font-mono text-xs text-foreground">{value || "—"}</dd>
     </div>
   );

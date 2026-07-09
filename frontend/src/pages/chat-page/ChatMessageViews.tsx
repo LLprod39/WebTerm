@@ -44,7 +44,7 @@ function ActionCard({
             <div className="min-w-0">
               <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <h3 className="truncate text-sm font-semibold text-foreground">{action.title || action.action_type}</h3>
-                <span className="truncate rounded-md border border-border/60 bg-background/45 px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
+                <span className="truncate rounded-md border border-border/60 bg-background/45 px-2 py-0.5 font-mono text-2xs text-muted-foreground">
                   {action.action_type}
                 </span>
               </div>
@@ -130,7 +130,7 @@ export function MessageBubble({
           <div className="rounded-lg bg-primary px-4 py-3 text-sm font-medium leading-6 text-primary-foreground shadow-sm">
             <div className="whitespace-pre-wrap break-words">{message.content}</div>
           </div>
-          <div className="mt-1 text-right text-[11px] text-muted-foreground">{formatDateTime(message.created_at, lang)}</div>
+          <div className="mt-1 text-right text-2xs text-muted-foreground">{formatDateTime(message.created_at, lang)}</div>
         </div>
         <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/75 bg-card/80 text-muted-foreground">
           <Icon className="h-4 w-4" />
@@ -145,7 +145,7 @@ export function MessageBubble({
         <Icon className="h-4 w-4" />
       </div>
       <div className="min-w-0 space-y-2">
-        <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-2 text-2xs text-muted-foreground">
           <span className="font-semibold text-foreground">WebTermAI</span>
           <span>{formatDateTime(message.created_at, lang)}</span>
           {actions.length ? (

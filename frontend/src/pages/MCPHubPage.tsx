@@ -28,7 +28,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { EmptyState, StatusBadge } from "@/components/ui/page-shell";
+import { EmptyState, StatusBadge, QueryStateBlock } from "@/components/ui/page-shell";
+import { SkeletonCards } from "@/components/ui/list-state";
+import { DeleteDialog } from "@/components/system/ConfirmDialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MCPForm } from "@/components/studio/MCPForm";
 import { useToast } from "@/hooks/use-toast";
@@ -56,7 +58,7 @@ export default function MCPHubPage() {
     retry: false,
   });
   const isAdmin = Boolean(session?.user?.is_staff);
-  const { data: mcpList = [], isLoading } = useQuery({
+  const { data: mcpList = [], isLoading, error: mcpError, refetch: refetchMcp } = useQuery({
     queryKey: ["studio", "mcp"],
     queryFn: studioMCP.list,
   });
@@ -220,10 +222,11 @@ export default function MCPHubPage() {
               </div>
             ) : null}
             {isLoading ? (
-              <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {localize(lang, "Загружаем MCP-серверы...", "Loading MCP servers...")}
-              </div>
+              <SkeletonCards count={6} />
+            ) : mcpError ? (
+              <QueryStateBlock error={mcpError} onRetry={() => void refetchMcp()}>
+                {null}
+              </QueryStateBlock>
             ) : mcpList.length === 0 ? (
                 <EmptyState
                   icon={<Server className="h-5 w-5" />}
@@ -443,31 +446,19 @@ export default function MCPHubPage() {
           </DialogBody>
         </DialogContent>
       </Dialog>
-      <Dialog open={deleteTarget !== null} onOpenChange={(nextOpen) => !nextOpen && setDeleteTarget(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>{localize(lang, "Удалить MCP-сервер", "Delete MCP server")}</DialogTitle>
-            <DialogDescription>
-              {deleteTarget
-                ? localize(lang, `Удалить "${deleteTarget.name}"? Действие нельзя отменить.`, `Delete "${deleteTarget.name}"? This cannot be undone.`)
-                : ""}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
-              {localize(lang, "Отмена", "Cancel")}
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
-              disabled={deleteMutation.isPending}
-            >
-              {deleteMutation.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
-              {localize(lang, "Удалить", "Delete")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DeleteDialog
+        open={deleteTarget !== null}
+        onOpenChange={(nextOpen) => !nextOpen && setDeleteTarget(null)}
+        title={localize(lang, "Удалить MCP-сервер", "Delete MCP server")}
+        description={
+          deleteTarget
+            ? localize(lang, `Удалить "${deleteTarget.name}"? Действие нельзя отменить.`, `Delete "${deleteTarget.name}"? This cannot be undone.`)
+            : ""
+        }
+        confirmLabel={localize(lang, "Удалить", "Delete")}
+        cancelLabel={localize(lang, "Отмена", "Cancel")}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+      />
       </div>
       </div>
     </div>

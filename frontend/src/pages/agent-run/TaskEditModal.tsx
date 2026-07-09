@@ -137,8 +137,8 @@ export function TaskEditModal({
             </div>
           </div>
 
-          <div className="rounded-lg border border-[color:var(--wt-ai)] bg-[color:rgb(155_135_245_/_0.10)] p-4">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[color:var(--wt-ai)]">
+          <div className="rounded-lg border border-ai/40 bg-ai/10 p-4">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ai">
               <Sparkles className="h-3.5 w-3.5" />
               {t("run.ai_assistant")}
             </div>
@@ -154,7 +154,7 @@ export function TaskEditModal({
                 value={aiMsg}
                 onChange={(e) => setAiMsg(e.target.value)}
                 placeholder={t("run.ai_suggestion")}
-                className="h-11 border-[color:var(--wt-ai)] bg-background/70 text-sm"
+                className="h-11 border-ai/40 bg-background/70 text-sm"
                 onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleAiRefine()}
                 disabled={aiLoading}
               />

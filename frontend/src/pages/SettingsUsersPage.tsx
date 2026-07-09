@@ -12,6 +12,8 @@ import {
   type AccessUser,
 } from "@/lib/api";
 import { ACCESS_UI_TEXT, formatAccessText, localizeAccessFeatures } from "@/lib/accessUiText";
+import { QueryStateBlock } from "@/components/ui/page-shell";
+import { SkeletonTable } from "@/components/ui/list-state";
 import { DeleteDialog } from "@/components/system/ConfirmDialog";
 import { useI18n } from "@/lib/i18n";
 import { notify } from "@/lib/notify";
@@ -44,7 +46,7 @@ export default function SettingsUsersPage() {
   const [deleteTarget, setDeleteTarget] = useState<AccessUser | null>(null);
   const [passwordTarget, setPasswordTarget] = useState<AccessUser | null>(null);
 
-  const { data: usersData, isLoading, error } = useQuery({
+  const { data: usersData, isLoading, error, refetch } = useQuery({
     queryKey: ["access", "users"],
     queryFn: fetchAccessUsers,
   });
@@ -177,15 +179,17 @@ export default function SettingsUsersPage() {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      </div>
-    );
+    return <div className="p-6"><SkeletonTable rows={8} cols={4} /></div>;
   }
 
   if (error) {
-    return <div className="p-6 text-sm text-destructive">{copy.error}</div>;
+    return (
+      <div className="p-6">
+        <QueryStateBlock error={error} errorText={copy.error} onRetry={() => void refetch()}>
+          {null}
+        </QueryStateBlock>
+      </div>
+    );
   }
 
   return (
