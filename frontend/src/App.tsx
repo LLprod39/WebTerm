@@ -156,7 +156,7 @@ const App = () => (
     <I18nProvider>
       <TooltipProvider>
         <Toaster />
-        <BrowserRouter>
+        <BrowserRouter basename={(import.meta.env.BASE_URL || "/").replace(/\/$/, "") || "/"}>
           <Suspense fallback={<RouteLoader />}>
             <Routes>
               <Route path="/login" element={<Login />} />
