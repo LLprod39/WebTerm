@@ -142,12 +142,15 @@ export function useServerKnowledgeController(
 
   const loadForServer = useCallback(async (serverId: number) => {
     const [knowledgeResp, memoryResp] = await Promise.all([
-      listServerKnowledge(serverId),
-      listServerMemorySnapshots(serverId),
+      listServerKnowledge(serverId).catch(() => null),
+      listServerMemorySnapshots(serverId).catch(() => null),
     ]);
-    setKnowledge((knowledgeResp?.items ?? []) as KnowledgeItem[]);
-    setAiKnowledge((memoryResp?.items ?? []) as MemorySnapshotItem[]);
-    setKnowledgeCategories((knowledgeResp?.categories ?? []) as KnowledgeCategoryOption[]);
+    const knowledgeItems = Array.isArray(knowledgeResp?.items) ? knowledgeResp.items : [];
+    const memoryItems = Array.isArray(memoryResp?.items) ? memoryResp.items : [];
+    const categories = Array.isArray(knowledgeResp?.categories) ? knowledgeResp.categories : [];
+    setKnowledge(knowledgeItems as KnowledgeItem[]);
+    setAiKnowledge(memoryItems as MemorySnapshotItem[]);
+    setKnowledgeCategories(categories as KnowledgeCategoryOption[]);
   }, []);
 
   const refreshKnowledge = useCallback(async () => {

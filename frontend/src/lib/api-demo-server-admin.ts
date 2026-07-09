@@ -410,12 +410,16 @@ export function demoServerAdminFallback<T>(path: string, _options: RequestInit =
     return { success: true, password: "••••••••" } as T;
   }
 
-  // Knowledge + memory (must always include items arrays)
-  if (path.includes("/knowledge")) return { success: true, items: [], categories: [] } as T;
+  // Knowledge + memory (must always include items arrays — UI calls .filter on them)
+  if (path.includes("/knowledge")) {
+    return { success: true, items: [], categories: [] } as T;
+  }
   if (path.includes("/memory/snapshots") || path.includes("/memory/overview") || path.includes("/memory/")) {
     return { success: true, items: [], snapshots: [], episodes: [], revalidations: [], summary: {} } as T;
   }
-  if (path.includes("/shares")) return { success: true, shares: [] } as T;
+  if (path.includes("/shares") || path.includes("/share/")) {
+    return { success: true, shares: [] } as T;
+  }
 
   if (path.includes("/api/health")) return { status: "ok" } as T;
   if (path.includes("/api/access/users")) return {

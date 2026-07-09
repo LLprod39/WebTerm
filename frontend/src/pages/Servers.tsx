@@ -170,16 +170,16 @@ export default function Servers() {
   const serversList = useServersListController(servers);
   const { collapsed, filtered, grouped, onlineCount, search, setSearch, toggleGroup } = serversList;
   const playbooksPanel = usePlaybooksPanel({ servers, t, tr, lang });
-  const groups = useMemo(() => data?.groups ?? [], [data?.groups]);
+  const groups = useMemo(() => (Array.isArray(data?.groups) ? data.groups : []), [data?.groups]);
   const manageableGroups = useMemo(
     () =>
-      groups.filter(
+      (groups ?? []).filter(
         (group): group is FrontendGroup & { id: number; role: ServerGroupRole } =>
           group.id !== null && Boolean(group.role),
       ),
     [groups],
   );
-  const sharedCount = servers.filter((server) => server.is_shared).length;
+  const sharedCount = (servers ?? []).filter((server) => server.is_shared).length;
   const groupCount = manageableGroups.length;
   const offlineCount = Math.max(0, servers.length - onlineCount);
   const isAdmin = authData?.user?.is_staff ?? false;

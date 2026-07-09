@@ -7,11 +7,13 @@ export function useServersListController(servers: FrontendServer[]) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [selectedServerId, setSelectedServerId] = useState<number | null>(null);
 
+  const safeServers = servers ?? [];
+
   const filtered = useMemo(() => {
-    if (!search) return servers;
+    if (!search) return safeServers;
     const q = search.toLowerCase();
-    return servers.filter((server) => server.name.toLowerCase().includes(q) || server.host.includes(q));
-  }, [servers, search]);
+    return safeServers.filter((server) => server.name.toLowerCase().includes(q) || server.host.includes(q));
+  }, [safeServers, search]);
 
   const grouped = useMemo(() => {
     const map: Record<string, FrontendServer[]> = {};
@@ -22,8 +24,8 @@ export function useServersListController(servers: FrontendServer[]) {
   }, [filtered]);
 
   const onlineCount = useMemo(
-    () => servers.filter((server) => server.status === "online").length,
-    [servers],
+    () => safeServers.filter((server) => server.status === "online").length,
+    [safeServers],
   );
 
   const toggleGroup = (groupName: string) => {
