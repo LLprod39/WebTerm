@@ -447,8 +447,8 @@ export default function UserDashboard() {
         },
       },
     ];
-    return [...builtins, ...buildPluginDashboardWidgets(pluginSurfaces?.surfaces.dashboard_widgets ?? [])];
-  }, [boot, runs, mon, pluginSurfaces?.surfaces.dashboard_widgets, lang]);
+    return [...builtins, ...buildPluginDashboardWidgets(pluginSurfaces?.surfaces?.dashboard_widgets ?? [])];
+  }, [boot, runs, mon, pluginSurfaces?.surfaces?.dashboard_widgets, lang]);
 
   return (
     <PageShell width={isFullWidth ? "full" : "7xl"}>

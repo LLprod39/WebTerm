@@ -36,9 +36,9 @@ export default function AdminDashboard() {
   const d = dashResponse?.data;
   const availableWidgets = useMemo(() => {
     const builtins = d ? buildAdminDashboardWidgets(d, lang) : [];
-    const pluginWidgets = buildPluginDashboardWidgets(pluginSurfaces?.surfaces.dashboard_widgets ?? []);
+    const pluginWidgets = buildPluginDashboardWidgets(pluginSurfaces?.surfaces?.dashboard_widgets ?? []);
     return [...builtins, ...pluginWidgets];
-  }, [d, lang, pluginSurfaces?.surfaces.dashboard_widgets]);
+  }, [d, lang, pluginSurfaces?.surfaces?.dashboard_widgets]);
 
   return (
     <PageShell width={isFullWidth ? "full" : "7xl"}>

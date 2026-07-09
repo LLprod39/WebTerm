@@ -14,9 +14,9 @@ function itemKey(item: Record<string, unknown>) {
 export function PluginExtensionSurfacesPanel() {
   const { toast } = useToast();
   const surfacesQuery = useQuery({ queryKey: ["plugins", "surfaces", "extensions"], queryFn: fetchPluginSurfaces });
-  const agentTools = surfacesQuery.data?.surfaces.agent_tools ?? [];
-  const terminalActions = surfacesQuery.data?.surfaces.terminal_actions ?? [];
-  const hooks = surfacesQuery.data?.surfaces.hooks ?? [];
+  const agentTools = surfacesQuery.data?.surfaces?.agent_tools ?? [];
+  const terminalActions = surfacesQuery.data?.surfaces?.terminal_actions ?? [];
+  const hooks = surfacesQuery.data?.surfaces?.hooks ?? [];
   const executeMutation = useMutation({
     mutationFn: ({ pluginId, actionId }: { pluginId: string; actionId: string }) => executePluginTerminalAction(pluginId, actionId),
     onSuccess: (result) => toast({ description: result.message || "Terminal action executed." }),
