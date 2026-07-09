@@ -61,11 +61,11 @@ export function useServerKnowledgeController(
   const [aiMemoryPurging, setAiMemoryPurging] = useState(false);
 
   const manualKnowledge = useMemo(
-    () => knowledge.filter((item) => item.source === "manual"),
+    () => (knowledge ?? []).filter((item) => item.source === "manual"),
     [knowledge],
   );
   const autoKnowledge = useMemo(
-    () => aiKnowledge.filter((item) => item.kind !== "manual_note"),
+    () => (aiKnowledge ?? []).filter((item) => item.kind !== "manual_note"),
     [aiKnowledge],
   );
   const normalizedKnowledgeSearch = useMemo(
@@ -145,9 +145,9 @@ export function useServerKnowledgeController(
       listServerKnowledge(serverId),
       listServerMemorySnapshots(serverId),
     ]);
-    setKnowledge((knowledgeResp.items || []) as KnowledgeItem[]);
-    setAiKnowledge((memoryResp.success ? memoryResp.items : []) as MemorySnapshotItem[]);
-    setKnowledgeCategories((knowledgeResp.categories || []) as KnowledgeCategoryOption[]);
+    setKnowledge((knowledgeResp?.items ?? []) as KnowledgeItem[]);
+    setAiKnowledge((memoryResp?.items ?? []) as MemorySnapshotItem[]);
+    setKnowledgeCategories((knowledgeResp?.categories ?? []) as KnowledgeCategoryOption[]);
   }, []);
 
   const refreshKnowledge = useCallback(async () => {

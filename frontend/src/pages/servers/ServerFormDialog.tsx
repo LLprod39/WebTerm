@@ -127,7 +127,9 @@ export function ServerFormDialog({
   testingConnection,
 }: ServerFormDialogProps) {
   const disabledReason = formValidation.summary;
-  const groupsWithId = manageableGroups.filter((group): group is FrontendGroup & { id: number } => group.id !== null);
+  const groupsWithId = (manageableGroups ?? []).filter(
+    (group): group is FrontendGroup & { id: number } => group.id !== null,
+  );
   const showFieldErrors = Boolean(form.name || form.host || form.username || form.ssh_private_key || form.sudo_password);
 
   return (
