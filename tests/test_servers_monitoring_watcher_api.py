@@ -38,6 +38,13 @@ def test_monitoring_alerts_and_ai_analyze_endpoints(monkeypatch):
         memory_percent=72.0,
         disk_percent=66.0,
     )
+    # Newer lite TCP probe without metrics: status comes from it, metrics fall back.
+    ServerHealthCheck.objects.create(
+        server=server,
+        status=ServerHealthCheck.STATUS_HEALTHY,
+        response_time_ms=12,
+        raw_output={"lite": True, "probe": "tcp"},
+    )
     alert = ServerAlert.objects.create(
         server=server,
         alert_type=ServerAlert.TYPE_CPU,
@@ -56,7 +63,12 @@ def test_monitoring_alerts_and_ai_analyze_endpoints(monkeypatch):
     assert body["success"] is True
     assert len(body["servers"]) == 1
     assert body["servers"][0]["server_id"] == server.id
-    assert body["servers"][0]["status"] == ServerHealthCheck.STATUS_WARNING
+    assert body["servers"][0]["status"] == ServerHealthCheck.STATUS_HEALTHY
+    assert body["servers"][0]["is_lite"] is True
+    assert body["servers"][0]["cpu_percent"] == 81.0
+    assert body["servers"][0]["memory_percent"] == 72.0
+    assert body["servers"][0]["disk_percent"] == 66.0
+    assert body["servers"][0]["metrics_age_seconds"] is not None
 
     history = client.get(f"/servers/api/{server.id}/health/?hours=24")
     assert history.status_code == 200

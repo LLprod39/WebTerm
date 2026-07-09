@@ -1,8 +1,8 @@
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  ChevronDown,
   ChevronRight,
+  MoreHorizontal,
   Plus,
   Server,
   Settings,
@@ -13,11 +13,84 @@ import {
 import { FleetHealthIndicator, StatusIndicator } from "@/components/StatusIndicator";
 import { ServerOsBadge } from "@/components/servers/ServerOsBadge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/ui/page-shell";
 import type { FrontendServer, MonitoringStatusItem } from "@/lib/api";
+import { localize } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { resolveServerOs, serverOsLabelKey } from "@/lib/server-os";
 import { displayServerGroupName, formatServerCount } from "./formatters";
+
+function metricToneClass(value: number, warn: number, crit: number): string {
+  if (value >= crit) return "text-destructive font-semibold";
+  if (value >= warn) return "text-warning";
+  return "text-muted-foreground/70";
+}
+
+function formatMetricsAge(seconds: number, lang: string): string {
+  if (seconds < 90) return localize(lang, `${seconds} с назад`, `${seconds}s ago`);
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 90) return localize(lang, `${minutes} мин назад`, `${minutes}m ago`);
+  const hours = Math.round(minutes / 60);
+  return localize(lang, `${hours} ч назад`, `${hours}h ago`);
+}
+
+// Mirrors warn/crit thresholds in servers/monitor.py.
+const METRIC_THRESHOLDS = {
+  cpu: { warn: 80, crit: 95 },
+  memory: { warn: 85, crit: 95 },
+  disk: { warn: 80, crit: 90 },
+} as const;
+
+export function FleetMetricsLine({ health, lang }: { health: MonitoringStatusItem; lang: string }) {
+  const items = [
+    { label: "CPU", value: health.cpu_percent, ...METRIC_THRESHOLDS.cpu },
+    { label: localize(lang, "ОЗУ", "RAM"), value: health.memory_percent, ...METRIC_THRESHOLDS.memory },
+    { label: localize(lang, "Диск", "Disk"), value: health.disk_percent, ...METRIC_THRESHOLDS.disk },
+  ].filter((item) => typeof item.value === "number") as Array<{
+    label: string;
+    value: number;
+    warn: number;
+    crit: number;
+  }>;
+
+  if (!items.length) return null;
+
+  const age = health.metrics_age_seconds ?? null;
+  const outdated = age !== null && age > 600;
+  const titleParts = items.map((item) => `${item.label} ${Math.round(item.value)}%`);
+  if (typeof health.load_1m === "number") titleParts.push(`load ${health.load_1m.toFixed(2)}`);
+  if (age === 0) {
+    titleParts.push(localize(lang, "живые данные", "live"));
+  } else if (age !== null) {
+    titleParts.push(localize(lang, `обновлено ${formatMetricsAge(age, lang)}`, `updated ${formatMetricsAge(age, lang)}`));
+  }
+
+  return (
+    <span
+      className={cn(
+        "flex items-center gap-1 font-mono text-2xs tabular-nums leading-none",
+        outdated && "opacity-50",
+      )}
+      title={titleParts.join(" · ")}
+    >
+      {items.map((item, idx) => (
+        <span key={item.label} className="flex items-center gap-1">
+          {idx > 0 ? <span className="text-muted-foreground/40">·</span> : null}
+          <span className={metricToneClass(item.value, item.warn, item.crit)}>
+            {item.label} {Math.round(item.value)}%
+          </span>
+        </span>
+      ))}
+    </span>
+  );
+}
 
 interface ServersListTabProps {
   grouped: Record<string, FrontendServer[]>;
@@ -52,193 +125,153 @@ export function ServersListTab({
   onRequestDeleteServer,
   onClearSearch,
 }: ServersListTabProps) {
+  const groupEntries = Object.entries(grouped);
+
   return (
-    <>
-      {Object.entries(grouped).map(([group, inGroup]) => {
+    <div className="space-y-2.5">
+      {groupEntries.map(([group, inGroup]) => {
         const isCollapsed = collapsed[group];
         const groupLabel = displayServerGroupName(group, lang);
+        const onlineInGroup = inGroup.filter((server) => {
+          const health = fleetHealthByServerId.get(server.id);
+          return health ? health.status === "healthy" : server.status === "online";
+        }).length;
 
         return (
-          <section key={group} className="overflow-hidden rounded-lg border border-border/80 bg-card/75">
+          <section key={group} className="overflow-hidden rounded-xl border border-border/50 bg-surface-1/60 shadow-elev-1">
             <button
               onClick={() => onToggleGroup(group)}
               className={cn(
-                "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[color:var(--wt-hover)] sm:px-5",
-                !isCollapsed && "border-b border-border/70",
+                "flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-surface-2/50 sm:px-4",
+                !isCollapsed && "border-b border-border/50",
               )}
-              aria-label={tr(isCollapsed ? "srv.expand_group" : "srv.collapse_group", {
-                name: groupLabel,
-              })}
+              aria-expanded={!isCollapsed}
+              aria-label={tr(isCollapsed ? "srv.expand_group" : "srv.collapse_group", { name: groupLabel })}
             >
-              <span
+              <ChevronRight
                 className={cn(
-                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors",
-                  isCollapsed
-                    ? "border-border/70 bg-secondary/50 text-muted-foreground"
-                    : "border-primary/25 bg-primary/10 text-primary",
+                  "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200",
+                  !isCollapsed && "rotate-90",
                 )}
-              >
-                {isCollapsed ? (
-                  <ChevronRight className="h-4 w-4" />
-                ) : (
-                  <ChevronDown className="h-4 w-4" />
-                )}
-              </span>
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10">
-                <Server className="h-4 w-4 text-primary" />
-              </div>
-              <span className="min-w-0 truncate text-sm font-semibold tracking-normal text-foreground">
-                {groupLabel}
-              </span>
-              <span className="ml-auto rounded-md border border-border/60 bg-secondary/50 px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                aria-hidden
+              />
+              <span className="text-sm font-semibold text-foreground">{groupLabel}</span>
+              <span className="text-xs text-muted-foreground">
                 {formatServerCount(inGroup.length, lang)}
+                {onlineInGroup > 0 ? (
+                  <span className="text-success"> · {onlineInGroup} {localize(lang, "онлайн", "online")}</span>
+                ) : null}
               </span>
             </button>
 
             <AnimatePresence initial={false}>
               {!isCollapsed && (
                 <motion.div
-                  initial={{ height: 0 }}
-                  animate={{ height: "auto" }}
-                  exit={{ height: 0 }}
-                  transition={{ duration: 0.2 }}
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.18 }}
                   className="overflow-hidden"
                 >
-                  <div className="overflow-x-auto p-3 sm:p-4">
-                    <table className="w-full min-w-[980px] table-fixed overflow-hidden rounded-lg border border-border/70 bg-background/25">
-                      <colgroup>
-                        <col className="w-[28%]" />
-                        <col className="w-[22%]" />
-                        <col className="w-[14%]" />
-                        <col className="w-[16%]" />
-                        <col className="w-[20%]" />
-                      </colgroup>
-                      <thead>
-                        <tr className="bg-secondary/25 text-left text-xs font-medium text-muted-foreground">
-                          <th scope="col" className="border-b border-border/70 px-4 py-3">
-                            {t("srv.table.server")}
-                          </th>
-                          <th scope="col" className="border-b border-border/70 px-4 py-3">
-                            {t("srv.table.ip_address")}
-                          </th>
-                          <th scope="col" className="border-b border-border/70 px-4 py-3">
-                            {t("srv.table.os")}
-                          </th>
-                          <th scope="col" className="border-b border-border/70 px-4 py-3">
-                            {t("srv.table.status")}
-                          </th>
-                          <th scope="col" className="border-b border-border/70 px-4 py-3 text-right">
-                            {t("srv.table.actions")}
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {inGroup.map((server, i) => {
-                          const displayStatus = server.status;
-                          const fleetHealth = fleetHealthByServerId.get(server.id);
-                          const osKind = resolveServerOs(server);
-                          const connLabel = t("srv.conn.ssh");
-                          const divider = i < inGroup.length - 1 && "border-b border-border/40";
+                  {/* Column headers on wide screens */}
+                  <div className="hidden border-b border-border/40 bg-surface-2/30 px-4 py-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground/70 lg:grid lg:grid-cols-[minmax(0,1.4fr)_minmax(10rem,1fr)_minmax(7rem,0.7fr)_auto] lg:items-center lg:gap-3">
+                    <span>{localize(lang, "Сервер", "Server")}</span>
+                    <span>{localize(lang, "Адрес", "Address")}</span>
+                    <span>{localize(lang, "Статус", "Status")}</span>
+                    <span className="sr-only">{localize(lang, "Действия", "Actions")}</span>
+                  </div>
 
-                          return (
-                            <tr
-                              key={server.id}
-                              className="group transition-colors duration-150 hover:bg-secondary/25"
-                            >
-                              <td className={cn("px-4 py-3 align-middle", divider)}>
-                                <div className="flex min-w-0 items-center gap-3">
-                                  <ServerOsBadge kind={osKind} size="md" />
-                                  <div className="min-w-0">
-                                    <div className="flex min-w-0 items-center gap-2">
-                                      <span className="truncate text-sm font-semibold tracking-tight text-foreground">
-                                        {server.name}
-                                      </span>
-                                      {server.is_shared ? (
-                                        <span className="shrink-0 rounded-md border border-border/70 bg-secondary/50 px-2 py-0.5 text-xs text-muted-foreground">
-                                          {t("srv.shared_badge")}
-                                        </span>
-                                      ) : null}
-                                      <span className="shrink-0 rounded-md border border-border/60 bg-background/80 px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                                        {connLabel}
-                                      </span>
-                                    </div>
-                                  </div>
+                  <div className="divide-y divide-border/40">
+                    {inGroup.map((server) => {
+                      const fleetHealth = fleetHealthByServerId.get(server.id);
+                      const osKind = resolveServerOs(server);
+                      const address = `${server.host}:${server.port}`;
+
+                      return (
+                        <div
+                          key={server.id}
+                          className="group px-3 py-2.5 transition-colors hover:bg-surface-2/40 sm:px-4"
+                        >
+                          <div className="flex items-center gap-2.5 lg:grid lg:grid-cols-[minmax(0,1.4fr)_minmax(10rem,1fr)_minmax(7rem,0.7fr)_auto] lg:gap-3">
+                            <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                              <ServerOsBadge kind={osKind} size="sm" />
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                                  <span className="text-sm font-semibold leading-5 text-foreground">{server.name}</span>
+                                  {server.is_shared ? (
+                                    <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground/70">
+                                      {t("srv.shared_badge")}
+                                    </span>
+                                  ) : null}
                                 </div>
-                              </td>
-                              <td className={cn("px-4 py-3 align-middle", divider)}>
-                                <span className="block truncate font-mono text-xs text-muted-foreground">
-                                  {server.host}:{server.port}
-                                </span>
-                              </td>
-                              <td className={cn("px-4 py-3 align-middle", divider)}>
-                                <span className="block truncate text-sm text-muted-foreground">
-                                  {t(serverOsLabelKey(osKind))}
-                                </span>
-                              </td>
-                              <td className={cn("px-4 py-3 align-middle", divider)}>
-                                {fleetHealth ? (
-                                  <FleetHealthIndicator
-                                    status={fleetHealth.status}
-                                    stale={fleetHealth.is_stale}
-                                    showLabel
-                                  />
-                                ) : (
-                                  <StatusIndicator status={displayStatus} showLabel />
-                                )}
-                              </td>
-                              <td className={cn("px-4 py-2.5 align-middle", divider)}>
-                                <div className="flex items-center justify-end gap-2">
-                                  <Button
-                                    asChild
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-9 gap-2 rounded-md border-border bg-card/70 px-3 hover:border-primary hover:text-primary"
-                                  >
-                                    <Link to={`/servers/${server.id}/terminal`}>
-                                      <Terminal className="h-4 w-4" /> SSH
-                                    </Link>
-                                  </Button>
+                                <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground/80 lg:hidden">
+                                  {address}
+                                  <span className="ml-2 font-sans text-muted-foreground/60">{t(serverOsLabelKey(osKind))}</span>
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="hidden min-w-0 lg:block">
+                              <p className="truncate font-mono text-[13px] leading-4 text-muted-foreground">{address}</p>
+                              <p className="mt-0.5 truncate text-xs text-muted-foreground/60">{t(serverOsLabelKey(osKind))}</p>
+                            </div>
+
+                            <div className="hidden shrink-0 flex-col items-start gap-1 sm:flex">
+                              {fleetHealth ? (
+                                <FleetHealthIndicator status={fleetHealth.status} stale={fleetHealth.is_stale} showLabel />
+                              ) : (
+                                <StatusIndicator status={server.status} showLabel />
+                              )}
+                              {fleetHealth ? <FleetMetricsLine health={fleetHealth} lang={lang} /> : null}
+                            </div>
+
+                            <div className="flex shrink-0 items-center gap-0.5">
+                              <Button
+                                asChild
+                                size="sm"
+                                variant="outline"
+                                className="h-8 gap-1.5 hover:border-primary hover:text-primary"
+                              >
+                                <Link to={`/servers/${server.id}/terminal`}>
+                                  <Terminal className="h-3.5 w-3.5" /> SSH
+                                </Link>
+                              </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
                                   <Button
                                     size="icon"
-                                    variant="outline"
-                                    className="h-9 w-9 rounded-md border-border bg-card/70"
-                                    onClick={() => void onOpenAdvanced(server)}
+                                    variant="ghost"
+                                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
                                     aria-label={tr("srv.open_advanced_for", { name: server.name })}
-                                    title={t("srv.advanced")}
                                   >
-                                    <SlidersHorizontal className="h-4 w-4" />
+                                    <MoreHorizontal className="h-4 w-4" />
                                   </Button>
-                                  {server.can_edit && (
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-52">
+                                  <DropdownMenuItem onClick={() => void onOpenAdvanced(server)} className="gap-2">
+                                    <SlidersHorizontal className="h-3.5 w-3.5" /> {t("srv.advanced")}
+                                  </DropdownMenuItem>
+                                  {server.can_edit ? (
                                     <>
-                                      <Button
-                                        size="icon"
-                                        variant="outline"
-                                        className="h-9 w-9 rounded-md border-border bg-card/70"
-                                        onClick={() => void onOpenEdit(server)}
-                                        aria-label={tr("srv.edit_server_for", { name: server.name })}
-                                        title={t("srv.edit_server")}
-                                      >
-                                        <Settings className="h-4 w-4" />
-                                      </Button>
-                                      <Button
-                                        size="icon"
-                                        variant="outline"
-                                        className="h-9 w-9 rounded-md border-border bg-card/70 text-destructive hover:border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+                                      <DropdownMenuItem onClick={() => void onOpenEdit(server)} className="gap-2">
+                                        <Settings className="h-3.5 w-3.5" /> {t("srv.edit_server")}
+                                      </DropdownMenuItem>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem
                                         onClick={() => onRequestDeleteServer(server)}
-                                        aria-label={tr("srv.delete_server_for", { name: server.name })}
-                                        title={t("srv.delete")}
+                                        className="gap-2 text-destructive focus:text-destructive"
                                       >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
+                                        <Trash2 className="h-3.5 w-3.5" /> {t("srv.delete")}
+                                      </DropdownMenuItem>
                                     </>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                                  ) : null}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </motion.div>
               )}
@@ -255,17 +288,17 @@ export function ServersListTab({
           actions={
             <>
               {totalServers ? (
-                <Button size="sm" variant="outline" className="h-10" onClick={onClearSearch}>
+                <Button size="sm" variant="outline" onClick={onClearSearch}>
                   {t("srv.clear_search")}
                 </Button>
               ) : null}
-              <Button size="sm" className="h-10 gap-2" onClick={onOpenCreate}>
+              <Button size="sm" className="gap-1.5" onClick={onOpenCreate}>
                 <Plus className="h-4 w-4" /> {t("srv.add")}
               </Button>
             </>
           }
         />
       ) : null}
-    </>
+    </div>
   );
 }

@@ -2,7 +2,6 @@ import type { ChangeEvent, Dispatch, ReactNode, SetStateAction } from "react";
 import { KeyRound, Network, ShieldCheck, Server, Upload } from "lucide-react";
 
 import { AsyncButton } from "@/components/system/AsyncButton";
-import { InlineAlert } from "@/components/system/InlineAlert";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -49,26 +48,20 @@ interface ServerFormDialogProps {
 function DialogSection({
   title,
   description,
-  icon,
   children,
   className,
 }: {
   title: string;
   description?: string;
-  icon: ReactNode;
+  icon?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
   return (
-    <section className={cn("border-t border-border/70 py-5 first:border-t-0 first:pt-0 last:pb-0", className)}>
-      <div className="mb-4 flex items-start gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-secondary/70 text-primary">
-          {icon}
-        </div>
-        <div className="min-w-0 space-y-1">
-          <h3 className="text-base font-semibold leading-6 text-foreground">{title}</h3>
-          {description ? <p className="text-sm leading-5 text-muted-foreground">{description}</p> : null}
-        </div>
+    <section className={cn("border-t border-border/50 py-5 first:border-t-0 first:pt-0 last:pb-0", className)}>
+      <div className="mb-4 min-w-0">
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        {description ? <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{description}</p> : null}
       </div>
       {children}
     </section>
@@ -109,7 +102,7 @@ function ChoiceButton({
         "min-h-10 rounded-lg border px-3 py-2 text-left text-sm font-medium leading-5 transition-colors",
         active
           ? "border-primary bg-primary/12 text-primary"
-          : "border-border/80 bg-secondary/45 text-muted-foreground hover:border-[color:var(--wt-border-strong)] hover:text-foreground",
+          : "border-border/60 text-muted-foreground hover:border-border-strong hover:text-foreground",
       )}
     >
       {children}
@@ -253,7 +246,7 @@ export function ServerFormDialog({
                 <div className="space-y-2">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <FieldLabel required>{t("srv.private_key")}</FieldLabel>
-                    <label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-border/80 bg-secondary/55 px-3 text-sm font-medium text-foreground transition-colors hover:border-[color:var(--wt-border-strong)] hover:bg-secondary">
+                    <label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-border/80 bg-secondary/55 px-3 text-sm font-medium text-foreground transition-colors hover:border-border-strong hover:bg-secondary">
                       <Upload className="h-4 w-4" />
                       {t("srv.private_key_upload")}
                       <input
@@ -392,20 +385,17 @@ export function ServerFormDialog({
             </div>
           </DialogSection>
 
-          {disabledReason ? (
-            <InlineAlert
-              tone="warning"
-              title={t("srv.form_incomplete")}
-              description={disabledReason}
-              className="mb-5"
-            />
-          ) : null}
         </DialogBody>
 
-        <DialogFooter className="shrink-0 px-4 sm:px-6">
-          <Button variant="outline" onClick={() => setDialogOpen(false)}>
+        <DialogFooter className="shrink-0 items-center gap-3 px-4 sm:px-6">
+          <Button variant="ghost" onClick={() => setDialogOpen(false)}>
             {t("srv.cancel")}
           </Button>
+          {disabledReason ? (
+            <p className="min-w-0 flex-1 text-xs leading-5 text-warning sm:px-2">{disabledReason}</p>
+          ) : (
+            <div className="hidden flex-1 sm:block" />
+          )}
           {editingServer ? (
             <AsyncButton
               variant="secondary"

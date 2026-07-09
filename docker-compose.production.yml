@@ -265,7 +265,7 @@ services:
       [
         "sh",
         "-lc",
-        "python manage.py run_monitor --quick-interval ${MONITOR_QUICK_INTERVAL:-300} --deep-interval ${MONITOR_DEEP_INTERVAL:-600} --cleanup-interval ${MONITOR_CLEANUP_INTERVAL:-86400} --concurrency ${MONITOR_CONCURRENCY:-5}",
+        "python manage.py run_monitor --full-quick --quick-interval ${MONITOR_QUICK_INTERVAL:-60} --deep-interval ${MONITOR_DEEP_INTERVAL:-600} --cleanup-interval ${MONITOR_CLEANUP_INTERVAL:-86400} --concurrency ${MONITOR_CONCURRENCY:-5}",
       ]
 
   ops-supervisor:

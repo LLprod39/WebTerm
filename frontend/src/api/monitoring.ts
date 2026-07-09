@@ -83,6 +83,9 @@ export interface MonitoringStatusItem {
   cpu_percent: number | null;
   memory_percent: number | null;
   disk_percent: number | null;
+  load_1m?: number | null;
+  metrics_checked_at?: string | null;
+  metrics_age_seconds?: number | null;
   is_lite: boolean;
 }
 

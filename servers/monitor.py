@@ -402,14 +402,13 @@ async def check_all_servers(
 
     lite=True runs TCP reachability only (quick fleet sweep).
     deep=True runs full SSH metrics + optional deep diagnostics.
+    Non-SSH servers always get a TCP reachability probe.
     """
     normalized_ids = sorted({int(item) for item in (server_ids or []) if str(item).strip().isdigit()})
     use_lite = bool(lite and not deep)
 
     def _load_servers() -> list[Server]:
         qs = Server.objects.filter(is_active=True)
-        if not use_lite:
-            qs = qs.filter(server_type="ssh")
         if normalized_ids:
             qs = qs.filter(id__in=normalized_ids)
         return list(qs.order_by("id"))
@@ -417,8 +416,7 @@ async def check_all_servers(
     servers = await sync_to_async(_load_servers)()
 
     if not servers:
-        scope = "active servers" if use_lite else "active SSH servers"
-        logger.info("Monitor: no {} to check", scope)
+        logger.info("Monitor: no active servers to check")
         return []
 
     sem = asyncio.Semaphore(concurrency)
@@ -426,7 +424,7 @@ async def check_all_servers(
 
     async def _check(srv: Server):
         async with sem:
-            if use_lite:
+            if use_lite or srv.server_type != "ssh":
                 hc = await probe_server_lite(srv)
             else:
                 hc = await check_server(srv, deep=deep)

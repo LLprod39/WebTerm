@@ -30,12 +30,15 @@ def _monitoring_stale_seconds() -> int:
     return max(60, int(getattr(settings, "MONITORING_STATUS_STALE_SECONDS", 300) or 300))
 
 
-def _latest_health_checks_by_server_id(server_ids: list[int]) -> dict[int, ServerHealthCheck]:
+def _latest_health_checks_by_server_id(
+    server_ids: list[int], *, with_metrics: bool = False
+) -> dict[int, ServerHealthCheck]:
     if not server_ids:
         return {}
-    latest_rows = (
-        ServerHealthCheck.objects.filter(server_id__in=server_ids).values("server_id").annotate(last_id=Max("id"))
-    )
+    qs = ServerHealthCheck.objects.filter(server_id__in=server_ids)
+    if with_metrics:
+        qs = qs.filter(cpu_percent__isnull=False)
+    latest_rows = qs.values("server_id").annotate(last_id=Max("id"))
     latest_ids = [row["last_id"] for row in latest_rows if row.get("last_id")]
     if not latest_ids:
         return {}
@@ -43,11 +46,21 @@ def _latest_health_checks_by_server_id(server_ids: list[int]) -> dict[int, Serve
     return {hc.server_id: hc for hc in checks}
 
 
-def _serialize_monitoring_status_item(server: Server, hc: ServerHealthCheck | None, now) -> dict:
+def _serialize_monitoring_status_item(
+    server: Server,
+    hc: ServerHealthCheck | None,
+    metrics_hc: ServerHealthCheck | None,
+    now,
+) -> dict:
     stale_seconds = _monitoring_stale_seconds()
     checked_at = hc.checked_at if hc and hc.checked_at else None
     age_seconds = int((now - checked_at).total_seconds()) if checked_at else None
     raw_output = hc.raw_output if hc and isinstance(hc.raw_output, dict) else {}
+    # Latest check may be a lite TCP probe without metrics; fall back to the
+    # newest check that actually carries CPU/RAM/disk numbers.
+    source = hc if hc and hc.cpu_percent is not None else metrics_hc
+    metrics_checked_at = source.checked_at if source and source.checked_at else None
+    metrics_age_seconds = int((now - metrics_checked_at).total_seconds()) if metrics_checked_at else None
     return {
         "server_id": server.id,
         "server_name": server.name,
@@ -58,9 +71,12 @@ def _serialize_monitoring_status_item(server: Server, hc: ServerHealthCheck | No
         "age_seconds": age_seconds,
         "is_stale": age_seconds is None or age_seconds > stale_seconds,
         "response_time_ms": hc.response_time_ms if hc else None,
-        "cpu_percent": hc.cpu_percent if hc else None,
-        "memory_percent": hc.memory_percent if hc else None,
-        "disk_percent": hc.disk_percent if hc else None,
+        "cpu_percent": source.cpu_percent if source else None,
+        "memory_percent": source.memory_percent if source else None,
+        "disk_percent": source.disk_percent if source else None,
+        "load_1m": source.load_1m if source else None,
+        "metrics_checked_at": metrics_checked_at.isoformat() if metrics_checked_at else None,
+        "metrics_age_seconds": metrics_age_seconds,
         "is_lite": bool(raw_output.get("lite")),
     }
 
@@ -112,8 +128,12 @@ def _build_monitoring_status_payload(user) -> dict:
     servers = list(_accessible_servers_queryset(user))
     server_ids = [server.id for server in servers]
     latest_by_id = _latest_health_checks_by_server_id(server_ids)
+    metrics_by_id = _latest_health_checks_by_server_id(server_ids, with_metrics=True)
 
-    items = [_serialize_monitoring_status_item(server, latest_by_id.get(server.id), now) for server in servers]
+    items = [
+        _serialize_monitoring_status_item(server, latest_by_id.get(server.id), metrics_by_id.get(server.id), now)
+        for server in servers
+    ]
     checked_items = [item for item in items if item["checked_at"]]
     latest_checked_at = max((item["checked_at"] for item in checked_items), default=None)
     stale_count = sum(1 for item in items if item["is_stale"])

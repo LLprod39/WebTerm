@@ -9,23 +9,24 @@ import {
   type FrontendServer,
   type ServerGroupRole,
 } from "@/lib/api";
-import { useI18n } from "@/lib/i18n";
+import { localize, useI18n } from "@/lib/i18n";
 import {
   Plus,
+  Radio,
   Search,
   Server,
   Settings,
   Layers,
   BookOpen,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { DeleteDialog } from "@/components/system/ConfirmDialog";
-import { ContentPanel, MetaPill } from "@/components/system/ContentPanel";
-import { PageHeader } from "@/components/system/PageHeader";
+import { ContentPanel } from "@/components/system/ContentPanel";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { PageShell, QueryStateBlock } from "@/components/ui/page-shell";
+import { PageShell, QueryStateBlock, SoftHeader, StatStrip, StatStripItem } from "@/components/ui/page-shell";
 import { PlaybooksPanel, usePlaybooksPanel } from "./servers/PlaybooksPanel";
 import { ServerAdvancedDialog } from "./servers/ServerAdvancedDialog";
 import { ServerFormDialog } from "./servers/ServerFormDialog";
@@ -44,6 +45,7 @@ import { useServerGroupController } from "./servers/useServerGroupController";
 import { useServerKnowledgeController } from "./servers/useServerKnowledgeController";
 import { useServerRulesController } from "./servers/useServerRulesController";
 import { useServerSecurityController } from "./servers/useServerSecurityController";
+import { useMonitoringLive } from "./servers/useMonitoringLive";
 import { useServersListController } from "./servers/useServersListController";
 import { useServerSharesController } from "./servers/useServerSharesController";
 
@@ -133,18 +135,38 @@ export default function Servers() {
   const { data: monitoringStatus } = useQuery({
     queryKey: ["monitoring", "status"],
     queryFn: fetchMonitoringStatus,
-    staleTime: 60_000,
-    refetchInterval: 90_000,
-    refetchIntervalInBackground: true,
+    // Cheap DB-only read (no SSH): keep the list fresh while the page is visible.
+    staleTime: 25_000,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
   });
+  const servers = useMemo(() => data?.servers ?? [], [data?.servers]);
+  const [liveEnabled, setLiveEnabled] = useState(false);
+  const liveServerIds = useMemo(() => servers.map((server) => server.id), [servers]);
+  const { metricsByServerId: liveMetrics, connected: liveConnected } = useMonitoringLive(
+    liveServerIds,
+    liveEnabled && mainTab === "servers",
+  );
   const fleetHealthByServerId = useMemo(() => {
     const map = new Map<number, MonitoringStatusItem>();
     for (const item of monitoringStatus?.servers ?? []) {
       map.set(item.server_id, item);
     }
+    // Live WebSocket samples override the minute-cadence snapshot while live mode is on.
+    for (const [serverId, live] of liveMetrics) {
+      const base = map.get(serverId);
+      if (!base) continue;
+      map.set(serverId, {
+        ...base,
+        cpu_percent: live.cpu_percent ?? base.cpu_percent,
+        memory_percent: live.memory_percent ?? base.memory_percent,
+        disk_percent: live.disk_percent ?? base.disk_percent,
+        load_1m: live.load_1m ?? base.load_1m,
+        metrics_age_seconds: 0,
+      });
+    }
     return map;
-  }, [monitoringStatus]);
-  const servers = useMemo(() => data?.servers ?? [], [data?.servers]);
+  }, [monitoringStatus, liveMetrics]);
   const serversList = useServersListController(servers);
   const { collapsed, filtered, grouped, onlineCount, search, setSearch, toggleGroup } = serversList;
   const playbooksPanel = usePlaybooksPanel({ servers, t, tr, lang });
@@ -159,6 +181,7 @@ export default function Servers() {
   );
   const sharedCount = servers.filter((server) => server.is_shared).length;
   const groupCount = manageableGroups.length;
+  const offlineCount = Math.max(0, servers.length - onlineCount);
   const isAdmin = authData?.user?.is_staff ?? false;
 
   const fleetRefreshRequested = useRef(false);
@@ -229,18 +252,12 @@ export default function Servers() {
   }
 
   return (
-    <PageShell width="full" className="space-y-6">
-      <PageHeader
+    <PageShell width="7xl" className="space-y-4">
+      <SoftHeader
+        compact
         title={t("srv.title")}
-        description={t("srv.groups_description")}
-        meta={
-          <>
-            <MetaPill>{tr("srv.total_count", { count: servers.length })}</MetaPill>
-            <MetaPill className="border-success/30 text-success">{tr("srv.online_count", { count: onlineCount })}</MetaPill>
-            <MetaPill>{tr("srv.shared_count", { count: sharedCount })}</MetaPill>
-            <MetaPill>{tr("srv.groups_count", { count: groupCount })}</MetaPill>
-          </>
-        }
+        count={servers.length > 0 ? servers.length : undefined}
+        subtitle={localize(lang, "Серверы, группы и runbook", "Servers, groups, and runbooks")}
         actions={
           <>
             <div className="relative w-full sm:w-auto">
@@ -249,35 +266,90 @@ export default function Servers() {
                 placeholder={t("srv.search")}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="h-10 w-full border-border bg-card/70 pl-9 text-sm sm:w-72"
+                className="h-9 w-full pl-9 text-sm sm:w-72"
               />
             </div>
-            <Button className="h-10 gap-2 text-sm" onClick={openCreate}>
+            {servers.length > 0 ? (
+              <Button
+                variant="outline"
+                onClick={() => setLiveEnabled((value) => !value)}
+                aria-pressed={liveEnabled}
+                title={localize(
+                  lang,
+                  liveEnabled
+                    ? "Живой мониторинг включён: метрики обновляются каждые ~2 сек"
+                    : "Включить живой мониторинг (метрики каждые ~2 сек, пока открыта страница)",
+                  liveEnabled
+                    ? "Live monitoring on: metrics refresh every ~2s"
+                    : "Enable live monitoring (~2s metrics while this page is open)",
+                )}
+                className={cn(
+                  "gap-1.5",
+                  liveEnabled && "border-success/50 bg-success/10 text-success hover:bg-success/15 hover:text-success",
+                )}
+              >
+                <span className="relative flex h-3.5 w-3.5 items-center justify-center">
+                  {liveEnabled && liveConnected ? (
+                    <span className="absolute inline-flex h-2.5 w-2.5 animate-ping rounded-full bg-success opacity-60" />
+                  ) : null}
+                  <Radio className="relative h-3.5 w-3.5" />
+                </span>
+                Live
+              </Button>
+            ) : null}
+            <Button className="gap-1.5" onClick={openCreate}>
               <Plus className="h-4 w-4" /> {t("srv.add")}
             </Button>
           </>
         }
       />
 
-      <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as MainTab)} className="space-y-4">
-        <ContentPanel className="overflow-hidden">
-          <div className="px-4 pt-4">
-            <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto bg-transparent p-0">
-              <TabsTrigger value="servers" className="min-h-11 gap-2 rounded-b-none px-4">
-                <Server className="h-4 w-4" /> {t("srv.list")}
-              </TabsTrigger>
-              <TabsTrigger value="groups" className="min-h-11 gap-2 rounded-b-none px-4">
-                <Layers className="h-4 w-4" /> {t("srv.groups")}
-              </TabsTrigger>
-              <TabsTrigger value="rules" className="min-h-11 gap-2 rounded-b-none px-4">
-                <Settings className="h-4 w-4" /> {t("srv.rules_tab")}
-              </TabsTrigger>
-              <TabsTrigger value="playbook" className="min-h-11 gap-2 rounded-b-none px-4">
-                <BookOpen className="h-4 w-4" /> {t("pb.title")}
-              </TabsTrigger>
-            </TabsList>
-          </div>
-        </ContentPanel>
+      {servers.length > 0 ? (
+        <StatStrip>
+          <StatStripItem
+            label={localize(lang, "Всего", "Total")}
+            value={servers.length}
+            hint={localize(lang, "серверы", "servers")}
+          />
+          <StatStripItem
+            label={localize(lang, "Онлайн", "Online")}
+            value={onlineCount}
+            tone={onlineCount > 0 ? "success" : "default"}
+            hint={tr("srv.online_count", { count: onlineCount })}
+          />
+          <StatStripItem
+            label={localize(lang, "Офлайн", "Offline")}
+            value={offlineCount}
+            tone={offlineCount > 0 ? "warning" : "default"}
+            hint={localize(lang, "нет связи / unknown", "unreachable / unknown")}
+          />
+          <StatStripItem
+            label={localize(lang, "Группы", "Groups")}
+            value={groupCount}
+            hint={
+              sharedCount > 0
+                ? tr("srv.shared_count", { count: sharedCount })
+                : localize(lang, "управляемые", "manageable")
+            }
+          />
+        </StatStrip>
+      ) : null}
+
+      <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as MainTab)} className="space-y-3">
+        <TabsList className="h-auto justify-start gap-1 overflow-x-auto rounded-lg border border-border/50 bg-surface-2/40 p-0.5">
+          <TabsTrigger value="servers" className="min-h-9 gap-2 px-3 text-sm data-[state=active]:bg-surface-1 data-[state=active]:shadow-elev-1">
+            <Server className="h-4 w-4" /> {t("srv.list")}
+          </TabsTrigger>
+          <TabsTrigger value="groups" className="min-h-9 gap-2 px-3 text-sm data-[state=active]:bg-surface-1 data-[state=active]:shadow-elev-1">
+            <Layers className="h-4 w-4" /> {t("srv.groups")}
+          </TabsTrigger>
+          <TabsTrigger value="rules" className="min-h-9 gap-2 px-3 text-sm data-[state=active]:bg-surface-1 data-[state=active]:shadow-elev-1">
+            <Settings className="h-4 w-4" /> {t("srv.rules_tab")}
+          </TabsTrigger>
+          <TabsTrigger value="playbook" className="min-h-9 gap-2 px-3 text-sm data-[state=active]:bg-surface-1 data-[state=active]:shadow-elev-1">
+            <BookOpen className="h-4 w-4" /> {t("pb.title")}
+          </TabsTrigger>
+        </TabsList>
 
         <TabsContent value="servers" className="mt-0 space-y-3">
           <ServersListTab
