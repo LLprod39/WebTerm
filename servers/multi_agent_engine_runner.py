@@ -10,6 +10,13 @@ from django.utils import timezone
 from loguru import logger
 
 from app.agent_kernel.mcp_runtime import load_mcp_bindings
+from app.agent_kernel.runtime.outcomes import (
+    AgentOutcome,
+    OUTCOME_FAILED,
+    STATUS_FAILED,
+    merge_outcome_into_report_payload,
+    resolve_multi_agent_outcome,
+)
 from app.agent_kernel.tools.registry import ToolRegistry
 from servers.agent_run_report import build_agent_run_report_payload
 from servers.agent_runtime import (
@@ -102,6 +109,7 @@ async def run_multi_agent_engine(
             )
         await engine._emit("agent_status", {"status": "connecting"})
 
+        disconnected: list[str] = []
         if engine.servers:
             if engine.agent.allow_multi_server:
                 for srv in engine.servers:
@@ -109,8 +117,14 @@ async def run_multi_agent_engine(
                         await engine.session.open(srv)
                     except Exception as exc:
                         logger.warning("Failed to connect to {}: {}", srv.name, exc)
+                        disconnected.append(str(srv.name))
             else:
                 await engine.session.open(primary_server)
+        engine._disconnected_servers = disconnected
+        if disconnected and bool(getattr(engine, "require_all_servers", True)):
+            raise RuntimeError(
+                "require_all_servers: failed to connect to: " + ", ".join(disconnected)
+            )
 
         loaded_mcp_tools, engine.mcp_tool_errors = await load_mcp_bindings(
             engine._mcp_runtime_provider,
@@ -187,7 +201,19 @@ async def run_multi_agent_engine(
         run.orchestrator_log = orchestrator_log
         run.completed_at = timezone.now()
         run.duration_ms = int((time.monotonic() - t0) * 1000)
-        run.report_payload = await sync_to_async(build_agent_run_report_payload, thread_sensitive=True)(run)
+        failed_outcome = AgentOutcome(
+            outcome=OUTCOME_FAILED,
+            status=STATUS_FAILED,
+            reason=f"Pipeline failed: {exc}",
+            failed_task_count=sum(1 for t in plan_tasks if t.get("status") == "failed"),
+            plan_summary=resolve_multi_agent_outcome(
+                stop_requested=False,
+                plan_tasks=plan_tasks,
+            ).plan_summary,
+            exit_reason="exception",
+        )
+        report_payload = await sync_to_async(build_agent_run_report_payload, thread_sensitive=True)(run)
+        run.report_payload = merge_outcome_into_report_payload(report_payload, failed_outcome)
         await sync_to_async(run.save)()
         await engine._persist_ops_summary(
             run=run,
@@ -196,7 +222,7 @@ async def run_multi_agent_engine(
             plan_tasks=plan_tasks,
         )
         await deliver_agent_report_async(run)
-        await engine._emit("agent_status", {"status": "failed", "error": str(exc)})
+        await engine._emit("agent_status", {"status": "failed", "error": str(exc), "outcome": "failed"})
     finally:
         await _cleanup_multi_agent_run(engine, run)
 
@@ -287,7 +313,19 @@ async def execute_existing_multi_agent_plan(engine: Any, run: AgentRun) -> Agent
         run.orchestrator_log = orchestrator_log
         run.completed_at = timezone.now()
         run.duration_ms = int((run.duration_ms or 0) + (time.monotonic() - t0) * 1000)
-        run.report_payload = await sync_to_async(build_agent_run_report_payload, thread_sensitive=True)(run)
+        failed_outcome = AgentOutcome(
+            outcome=OUTCOME_FAILED,
+            status=STATUS_FAILED,
+            reason=f"Pipeline failed: {exc}",
+            failed_task_count=sum(1 for t in plan_tasks if t.get("status") == "failed"),
+            plan_summary=resolve_multi_agent_outcome(
+                stop_requested=False,
+                plan_tasks=plan_tasks,
+            ).plan_summary,
+            exit_reason="exception",
+        )
+        report_payload = await sync_to_async(build_agent_run_report_payload, thread_sensitive=True)(run)
+        run.report_payload = merge_outcome_into_report_payload(report_payload, failed_outcome)
         await sync_to_async(run.save)()
         await engine._persist_ops_summary(
             run=run,
@@ -296,7 +334,7 @@ async def execute_existing_multi_agent_plan(engine: Any, run: AgentRun) -> Agent
             plan_tasks=plan_tasks,
         )
         await deliver_agent_report_async(run)
-        await engine._emit("agent_status", {"status": "failed", "error": str(exc)})
+        await engine._emit("agent_status", {"status": "failed", "error": str(exc), "outcome": "failed"})
     finally:
         await _cleanup_multi_agent_run(engine, run)
 
@@ -314,28 +352,46 @@ async def _finalize_multi_agent_run(
     append_duration: bool = False,
 ) -> None:
     await engine._emit("agent_pipeline_phase", {"phase": "synthesizing", "message": "Generating final report…"})
+    verification_summary = engine.permission_engine.verification_summary()
     final_report = await engine._synthesize(goal, plan_tasks, orchestrator_log)
     final_report = await engine.hook_manager.run_finished(
         final_report,
-        engine.permission_engine.verification_summary(),
+        verification_summary,
     )
 
-    final_status = AgentRun.STATUS_COMPLETED
-    if engine._stop_requested:
-        final_status = AgentRun.STATUS_STOPPED
-    elif any(t["status"] == "failed" for t in plan_tasks):
-        final_status = AgentRun.STATUS_COMPLETED
+    outcome = resolve_multi_agent_outcome(
+        stop_requested=bool(engine._stop_requested),
+        plan_tasks=plan_tasks,
+        verification_summary=verification_summary,
+        pending_verifications=getattr(engine.permission_engine, "pending_verifications", set()),
+    )
+    final_status = outcome.status
+    if outcome.outcome != "success" and outcome.reason:
+        final_report = f"{final_report}\n\n---\nOutcome: {outcome.outcome} — {outcome.reason}".strip()
 
     run.status = final_status
     run.plan_tasks = plan_tasks
     run.orchestrator_log = orchestrator_log
     run.total_iterations = sum(len(t.get("iterations", [])) for t in plan_tasks)
     run.final_report = final_report
-    run.ai_analysis = final_report
+    if final_status == AgentRun.STATUS_COMPLETED:
+        run.ai_analysis = final_report
+    else:
+        run.ai_analysis = outcome.reason or final_report
     run.completed_at = timezone.now()
     elapsed_ms = int((time.monotonic() - t0) * 1000)
     run.duration_ms = int((run.duration_ms or 0) + elapsed_ms) if append_duration else elapsed_ms
-    run.report_payload = await sync_to_async(build_agent_run_report_payload, thread_sensitive=True)(run)
+    report_payload = await sync_to_async(build_agent_run_report_payload, thread_sensitive=True)(run)
+    report_payload = merge_outcome_into_report_payload(report_payload, outcome)
+    report_payload["policy_blocked_count"] = int(getattr(engine, "_policy_blocked_count", 0) or 0)
+    report_payload["disconnected_servers"] = list(getattr(engine, "_disconnected_servers", []) or [])
+    details = report_payload.get("outcome_details")
+    if isinstance(details, dict):
+        details = dict(details)
+        details["policy_blocked_count"] = report_payload["policy_blocked_count"]
+        details["disconnected_servers"] = report_payload["disconnected_servers"]
+        report_payload["outcome_details"] = details
+    run.report_payload = report_payload
     await sync_to_async(run.save)()
     await engine._persist_ops_summary(
         run=run,
@@ -346,8 +402,18 @@ async def _finalize_multi_agent_run(
     await deliver_agent_report_async(run)
 
     await sync_to_async(engine._touch_agent_last_run)()
-    await engine._emit("agent_status", {"status": final_status})
-    await engine._emit("agent_report", {"text": final_report, "interim": False})
+    await engine._emit("agent_status", {
+        "status": final_status,
+        "outcome": outcome.outcome,
+        "outcome_reason": outcome.reason,
+        "plan_summary": outcome.plan_summary,
+        "policy_blocked_count": report_payload["policy_blocked_count"],
+    })
+    await engine._emit("agent_report", {
+        "text": final_report,
+        "interim": False,
+        "outcome": outcome.outcome,
+    })
 
 
 async def _cleanup_multi_agent_run(engine: Any, run: AgentRun) -> None:

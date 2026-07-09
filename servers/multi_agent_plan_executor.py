@@ -20,6 +20,13 @@ from servers.multi_agent_run_state import (
 )
 
 
+UNATTENDED_ASK_USER_DENY = (
+    "Human input unavailable in unattended pipeline/agent run. "
+    "Use logic/human_approval or logic/telegram_input nodes, "
+    "or set interaction_mode=interactive on the agent node."
+)
+
+
 @dataclass(frozen=True)
 class PlanExecutionCallbacks:
     stop_requested: Callable[[], bool]
@@ -33,6 +40,8 @@ class PlanExecutionCallbacks:
     handle_failure: Callable[[dict[str, Any], str, list[dict[str, Any]], list[dict[str, Any]]], Awaitable[dict[str, Any]]]
     replan: Callable[[str, list[dict[str, Any]], list[dict[str, Any]]], Awaitable[list[dict[str, Any]]]]
     wait_for_user_reply: Callable[[], Awaitable[str]]
+    # When True, orchestrator recovery action "ask_user" must not block on wait_for_user_reply.
+    unattended: bool = False
 
 
 async def execute_plan_tasks(
@@ -103,12 +112,25 @@ async def execute_plan_tasks(
                     persist_after_iteration = False
                     break
                 if decision["action"] == "ask_user":
-                    question = decision.get("message", "Что делать с ошибкой задачи?")
-                    await callbacks.set_waiting(question, plan_tasks)
-                    await callbacks.emit("agent_status", {"status": "waiting"})
-                    answer = await callbacks.wait_for_user_reply()
-                    await callbacks.clear_waiting()
-                    context_summary = append_user_answer_context(context_summary, task, answer)
+                    if callbacks.unattended:
+                        # Fail-fast: never block scheduled/webhook multi runs on human reply.
+                        answer = UNATTENDED_ASK_USER_DENY
+                        await callbacks.emit(
+                            "agent_status",
+                            {
+                                "status": "running",
+                                "outcome_note": "ask_user_denied_unattended",
+                                "message": answer,
+                            },
+                        )
+                        context_summary = append_user_answer_context(context_summary, task, answer)
+                    else:
+                        question = decision.get("message", "Что делать с ошибкой задачи?")
+                        await callbacks.set_waiting(question, plan_tasks)
+                        await callbacks.emit("agent_status", {"status": "waiting"})
+                        answer = await callbacks.wait_for_user_reply()
+                        await callbacks.clear_waiting()
+                        context_summary = append_user_answer_context(context_summary, task, answer)
                 elif decision["action"] == "retry":
                     retry_deadline = retry_deadline_for_error(exc, deadline)
                     try:

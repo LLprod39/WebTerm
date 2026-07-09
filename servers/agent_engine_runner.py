@@ -10,6 +10,19 @@ from django.utils import timezone
 from loguru import logger
 
 from app.agent_kernel.mcp_runtime import load_mcp_bindings
+from app.agent_kernel.runtime.outcomes import (
+    EXIT_EMPTY_LLM,
+    EXIT_FINAL_ANSWER,
+    EXIT_LLM_ERROR,
+    EXIT_MAX_ITERATIONS,
+    EXIT_STOPPED,
+    EXIT_TIMEOUT,
+    OUTCOME_FAILED,
+    STATUS_FAILED,
+    AgentOutcome,
+    merge_outcome_into_report_payload,
+    resolve_react_outcome,
+)
 from app.agent_kernel.tools.registry import ToolRegistry
 from app.execution_policy import safe_payload_preview
 from servers.agent_run_report import build_agent_run_report_payload
@@ -107,6 +120,7 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
             )
         await engine._emit("agent_status", {"status": "connecting"})
 
+        disconnected: list[str] = []
         if engine.servers:
             if engine.agent.allow_multi_server:
                 for srv in engine.servers:
@@ -114,8 +128,18 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
                         await engine.session.open(srv)
                     except Exception as exc:
                         logger.warning("Failed to connect to {}: {}", srv.name, exc)
+                        disconnected.append(str(srv.name))
             else:
-                await engine.session.open(primary_server)
+                try:
+                    await engine.session.open(primary_server)
+                except Exception as exc:
+                    disconnected.append(str(primary_server.name if primary_server else "?"))
+                    raise
+        engine._disconnected_servers = disconnected
+        if disconnected and bool(getattr(engine, "require_all_servers", False)):
+            raise RuntimeError(
+                "require_all_servers: failed to connect to: " + ", ".join(disconnected)
+            )
 
         loaded_mcp_tools, engine.mcp_tool_errors = await load_mcp_bindings(engine._mcp_runtime_provider, engine.mcp_servers)
         if engine.allowed_tool_names is None:
@@ -167,15 +191,19 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
 
         iteration = 0
         deadline = time.monotonic() + engine.session_timeout
+        exit_reason = EXIT_MAX_ITERATIONS
+        tools_available = bool(engine.enabled_tools or engine.mcp_tools)
 
         while iteration < engine.max_iterations:
             if engine._stop_requested:
+                exit_reason = EXIT_STOPPED
                 await engine._emit("agent_status", {"status": "stopped"})
                 break
 
             await engine._pause_event.wait()
 
             if time.monotonic() > deadline:
+                exit_reason = EXIT_TIMEOUT
                 await engine._emit("agent_status", {"status": "timeout"})
                 break
 
@@ -186,10 +214,12 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
             try:
                 llm_response = await engine._call_llm(history)
             except Exception as llm_exc:
+                exit_reason = EXIT_LLM_ERROR
                 logger.error("agent_run {} iteration {} LLM call error: {}", run.pk, iteration, llm_exc)
                 await engine._emit("agent_status", {"status": "llm_error", "error": str(llm_exc)})
                 break
             if not llm_response:
+                exit_reason = EXIT_EMPTY_LLM
                 logger.warning("agent_run {} iteration {} got empty llm response", run.pk, iteration)
                 break
 
@@ -233,6 +263,7 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
                     })
                     continue
 
+                exit_reason = EXIT_FINAL_ANSWER
                 logger.info("agent_run {} iteration {} completed with final answer", run.pk, iteration)
                 iter_entry["observation"] = "(final answer)"
                 iterations_log.append(iter_entry)
@@ -307,33 +338,61 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
                 }
             )
 
-        final_status = AgentRun.STATUS_COMPLETED
         if engine._stop_requested:
-            final_status = AgentRun.STATUS_STOPPED
-        elif time.monotonic() > deadline:
-            final_status = AgentRun.STATUS_FAILED
+            exit_reason = EXIT_STOPPED
+        elif exit_reason == EXIT_MAX_ITERATIONS and time.monotonic() > deadline:
+            # Loop may end on max_iterations without explicit timeout branch if deadline
+            # elapsed between iterations; keep explicit timeout if deadline already passed.
+            exit_reason = EXIT_TIMEOUT
+
+        verification_summary = engine.permission_engine.verification_summary()
+        outcome = resolve_react_outcome(
+            exit_reason=exit_reason,
+            tool_calls=tool_calls_log,
+            tools_available=tools_available,
+            pending_verifications=getattr(engine.permission_engine, "pending_verifications", set()),
+            verification_summary=verification_summary,
+        )
+        final_status = outcome.status
 
         logger.info(
-            "agent_run {} generating final report: final_status={} iterations={}",
+            "agent_run {} generating final report: final_status={} outcome={} exit_reason={} iterations={}",
             run.pk,
             final_status,
+            outcome.outcome,
+            exit_reason,
             iteration,
         )
         final_report = await engine._generate_final_report(history, iterations_log)
         final_report = await engine.hook_manager.run_finished(
             final_report,
-            engine.permission_engine.verification_summary(),
+            verification_summary,
         )
+        if outcome.outcome != "success" and outcome.reason:
+            # Keep report readable while making partial/fail reason explicit.
+            final_report = f"{final_report}\n\n---\nOutcome: {outcome.outcome} — {outcome.reason}".strip()
 
         run.status = final_status
         run.iterations_log = iterations_log
         run.tool_calls = tool_calls_log
         run.total_iterations = iteration
         run.final_report = final_report
-        run.ai_analysis = final_report
+        run.ai_analysis = final_report if final_status == AgentRun.STATUS_COMPLETED else (
+            outcome.reason or final_report or f"Agent ended with status {final_status}"
+        )
         run.completed_at = timezone.now()
         run.duration_ms = int((time.monotonic() - t0) * 1000)
-        run.report_payload = await sync_to_async(build_agent_run_report_payload, thread_sensitive=True)(run)
+        report_payload = await sync_to_async(build_agent_run_report_payload, thread_sensitive=True)(run)
+        report_payload = merge_outcome_into_report_payload(report_payload, outcome)
+        report_payload["policy_blocked_count"] = int(getattr(engine, "_policy_blocked_count", 0) or 0)
+        report_payload["disconnected_servers"] = list(getattr(engine, "_disconnected_servers", []) or [])
+        details = report_payload.get("outcome_details")
+        if isinstance(details, dict):
+            details = dict(details)
+            details["policy_blocked_count"] = report_payload["policy_blocked_count"]
+            details["disconnected_servers"] = report_payload["disconnected_servers"]
+            report_payload["outcome_details"] = details
+        run.report_payload = report_payload
         await sync_to_async(run.save)()
         await engine._persist_ops_summary(
             run=run,
@@ -344,17 +403,27 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
         )
         await deliver_agent_report_async(run)
         logger.info(
-            "agent_run {} saved: status={} duration_ms={} report_chars={}",
+            "agent_run {} saved: status={} outcome={} duration_ms={} report_chars={}",
             run.pk,
             run.status,
+            outcome.outcome,
             run.duration_ms,
             len(final_report or ""),
         )
 
         await sync_to_async(engine._touch_agent_last_run)()
 
-        await engine._emit("agent_status", {"status": final_status})
-        await engine._emit("agent_report", {"text": final_report, "interim": False})
+        await engine._emit("agent_status", {
+            "status": final_status,
+            "outcome": outcome.outcome,
+            "outcome_reason": outcome.reason,
+            "policy_blocked_count": report_payload["policy_blocked_count"],
+        })
+        await engine._emit("agent_report", {
+            "text": final_report,
+            "interim": False,
+            "outcome": outcome.outcome,
+        })
 
     except Exception as exc:
         logger.error("Agent engine error: {}", exc)
@@ -365,7 +434,17 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
         run.total_iterations = len(iterations_log)
         run.completed_at = timezone.now()
         run.duration_ms = int((time.monotonic() - t0) * 1000)
-        run.report_payload = await sync_to_async(build_agent_run_report_payload, thread_sensitive=True)(run)
+        # Hard exception is always a failed run.
+        failed_outcome = AgentOutcome(
+            outcome=OUTCOME_FAILED,
+            status=STATUS_FAILED,
+            reason=f"Agent failed: {exc}",
+            tool_call_count=len(tool_calls_log),
+            verification_summary=str(exc),
+            exit_reason="exception",
+        )
+        report_payload = await sync_to_async(build_agent_run_report_payload, thread_sensitive=True)(run)
+        run.report_payload = merge_outcome_into_report_payload(report_payload, failed_outcome)
         await sync_to_async(run.save)()
         await engine._persist_ops_summary(
             run=run,
@@ -375,7 +454,7 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
             tool_calls_log=tool_calls_log,
         )
         await deliver_agent_report_async(run)
-        await engine._emit("agent_status", {"status": "failed", "error": str(exc)})
+        await engine._emit("agent_status", {"status": "failed", "error": str(exc), "outcome": "failed"})
     finally:
         unregister_engine(run.id, engine)
         if engine._control_task:

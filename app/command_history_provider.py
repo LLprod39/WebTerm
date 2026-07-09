@@ -12,6 +12,10 @@ class CommandHistoryProvider(Protocol):
         command: str,
         output: str = "",
         exit_code: int | None = None,
+        session_id: str = "",
+        cwd: str = "",
+        actor_kind: str = "human",
+        source_kind: str = "terminal",
     ) -> None: ...
 
 
@@ -30,6 +34,10 @@ def save_command_history_entry(
     command: str,
     output: str = "",
     exit_code: int | None = None,
+    session_id: str = "",
+    cwd: str = "",
+    actor_kind: str = "human",
+    source_kind: str = "terminal",
 ) -> None:
     if _command_history_provider is None:
         return
@@ -39,4 +47,8 @@ def save_command_history_entry(
         command=command,
         output=output,
         exit_code=exit_code,
+        session_id=session_id,
+        cwd=cwd,
+        actor_kind=actor_kind,
+        source_kind=source_kind,
     )

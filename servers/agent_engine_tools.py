@@ -19,6 +19,15 @@ def sync_to_async(func, thread_sensitive=False):
 
 async def execute_agent_tool(engine: Any, name: str, args: dict) -> str:
     logger.info("agent_run {} execute_tool start: tool={} args={}", engine.run_record.pk if engine.run_record else "?", name, safe_payload_preview(args))
+    if name == "ask_user" and bool(getattr(engine, "unattended", False)):
+        message = (
+            "Human input unavailable in unattended pipeline/agent run. "
+            "Use logic/human_approval or logic/telegram_input nodes, "
+            "or set interaction_mode=interactive on the agent node."
+        )
+        engine._policy_blocked_count = int(getattr(engine, "_policy_blocked_count", 0) or 0) + 1
+        return message
+
     spec = engine.tool_registry.get(name) if engine.tool_registry else None
     schema_error = engine._validate_tool_args(name, args, spec)
     if schema_error:
@@ -32,6 +41,7 @@ async def execute_agent_tool(engine: Any, name: str, args: dict) -> str:
 
     decision = engine.permission_engine.evaluate(spec, args) if spec else None
     if decision and not decision.allowed:
+        engine._policy_blocked_count = int(getattr(engine, "_policy_blocked_count", 0) or 0) + 1
         # GAP 8: audit trail persistence
         try:
             from core_ui.activity import log_user_activity
@@ -116,6 +126,8 @@ async def execute_agent_tool(engine: Any, name: str, args: dict) -> str:
     try:
         result = await fn(engine.session, **args)
         result_text = result.result
+        if name == "ssh_execute":
+            await _record_agent_ssh_history(engine, args=args, result=result)
         if spec and result.success:
             engine.permission_engine.record_success(spec, args, result_text)
         if decision and decision.notes:
@@ -135,6 +147,44 @@ async def execute_agent_tool(engine: Any, name: str, args: dict) -> str:
             name,
         )
         return await engine.hook_manager.post_tool_use(name, f"Tool error ({name}): {exc}")
+
+
+async def _record_agent_ssh_history(engine: Any, *, args: dict, result: Any) -> None:
+    """Attribute agent SSH commands to agent_run / pipeline_run / user."""
+    try:
+        from app.command_history_provider import save_command_history_entry
+        from servers.models import ServerCommandHistory
+
+        server_ref = str(args.get("server") or "")
+        command = str(args.get("command") or "")
+        if not command:
+            return
+        sid = None
+        if engine.session is not None:
+            sid = engine.session.resolve_server(server_ref)
+        if sid is None:
+            return
+        exit_code = None
+        if getattr(result, "data", None):
+            exit_code = result.data.get("exit_code")
+        agent_run_id = getattr(engine.run_record, "pk", None)
+        pipeline_run_id = getattr(engine, "pipeline_run_id", None)
+        session_id = f"agent_run:{agent_run_id or 0}"
+        if pipeline_run_id:
+            session_id = f"{session_id}|pipeline_run:{pipeline_run_id}"
+        await sync_to_async(save_command_history_entry, thread_sensitive=True)(
+            server_id=int(sid),
+            user_id=getattr(engine.user, "id", None),
+            command=command,
+            output=str(getattr(result, "result", "") or "")[:10000],
+            exit_code=exit_code,
+            session_id=session_id,
+            cwd="",
+            actor_kind=getattr(ServerCommandHistory, "ACTOR_AGENT", "agent"),
+            source_kind=getattr(ServerCommandHistory, "SOURCE_AGENT", "agent"),
+        )
+    except Exception as exc:
+        logger.warning("Failed to record agent SSH command history: {}", exc)
 
 
 def validate_agent_tool_args(name: str, args: dict, spec) -> str:

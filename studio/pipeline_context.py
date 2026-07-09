@@ -98,6 +98,73 @@ def compact_node_outputs_context(node_outputs: dict[str, dict], *, max_nodes: in
     return "\n\n".join(lines)
 
 
+def _coerce_bool(value: Any, *, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    text = str(value).strip().lower()
+    if text in {"1", "true", "yes", "on"}:
+        return True
+    if text in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
+def build_agent_upstream_context(
+    config: dict[str, Any] | None,
+    node_outputs: dict[str, dict] | None,
+    *,
+    default_include: bool = True,
+) -> str:
+    """Build compact upstream node outputs for agent/react and agent/multi goals.
+
+    Default is to include upstream outputs. Set include_upstream_outputs=false to opt out.
+    """
+    cfg = config if isinstance(config, dict) else {}
+    if not _coerce_bool(cfg.get("include_upstream_outputs"), default=default_include):
+        return ""
+    if not node_outputs:
+        return ""
+
+    try:
+        max_nodes = int(cfg.get("max_upstream_nodes", 6) or 6)
+    except (TypeError, ValueError):
+        max_nodes = 6
+    try:
+        max_chars = int(cfg.get("max_upstream_chars", 1200) or 1200)
+    except (TypeError, ValueError):
+        max_chars = 1200
+    max_nodes = max(1, min(max_nodes, 12))
+    max_chars = max(200, min(max_chars, 4000))
+    return compact_node_outputs_context(node_outputs, max_nodes=max_nodes, max_chars=max_chars)
+
+
+def inject_upstream_into_goal(goal: str, upstream_context: str) -> str:
+    goal_text = str(goal or "").strip()
+    upstream = str(upstream_context or "").strip()
+    if not upstream:
+        return goal_text
+    if not goal_text:
+        return f"## Context from previous pipeline steps\n{upstream}"
+    marker = "## Context from previous pipeline steps"
+    if marker in goal_text:
+        return goal_text
+    return f"{goal_text}\n\n{marker}\n{upstream}"
+
+
+def require_agent_goal(goal: Any) -> str | None:
+    """Return an error message if goal is empty after template rendering."""
+    if str(goal or "").strip():
+        return None
+    return (
+        "Goal is required for this agent node "
+        "(empty after template render). Set a non-empty goal."
+    )
+
+
 def build_pipeline_tool_spec(tool_name: str, *, command: str = "") -> ToolSpec:
     lowered_name = (tool_name or "").lower()
     lowered_command = (command or "").lower()

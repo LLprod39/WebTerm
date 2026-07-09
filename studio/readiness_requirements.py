@@ -199,8 +199,56 @@ def _mcp_requirement(requirements: dict[str, dict[str, Any]], node_id: str, mcp:
     )
 
 
+def _pipeline_has_unattended_triggers(pipeline: Pipeline) -> bool:
+    nodes = pipeline.nodes or []
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        ntype = str(node.get("type") or "")
+        if ntype in {"trigger/schedule", "trigger/webhook", "trigger/monitoring"}:
+            return True
+    try:
+        return pipeline.triggers.filter(
+            trigger_type__in=["schedule", "webhook", "monitoring"],
+            is_active=True,
+        ).exists()
+    except Exception:
+        return False
+
+
+def _agent_unattended_ask_user_requirement(
+    requirements: dict[str, dict[str, Any]],
+    *,
+    node_id: str,
+    data: dict[str, Any],
+    unattended_graph: bool,
+) -> None:
+    from studio.pipeline_agent_config import agent_node_allows_ask_user, resolve_interaction_mode
+
+    mode = resolve_interaction_mode(data, trigger_type="schedule" if unattended_graph else "manual")
+    if mode != "unattended":
+        return
+    if not agent_node_allows_ask_user(data):
+        return
+    _upsert_requirement(
+        requirements,
+        f"agent:unattended-ask-user:{node_id}",
+        kind="agent_safety",
+        name="Unattended ask_user risk",
+        node_id=node_id,
+        status="risky",
+        severity="warning",
+        message=(
+            "Agent node can call ask_user but runs unattended (schedule/webhook/monitoring or "
+            "interaction_mode=unattended). Runtime denies ask_user; prefer logic/human_approval "
+            "or logic/telegram_input for human input."
+        ),
+    )
+
+
 def integration_requirements(pipeline: Pipeline, *, node_ids: set[str] | None = None) -> list[dict[str, Any]]:
     requirements: dict[str, dict[str, Any]] = {}
+    unattended_graph = _pipeline_has_unattended_triggers(pipeline)
     for node in pipeline.nodes or []:
         if not isinstance(node, dict):
             continue
@@ -232,4 +280,25 @@ def integration_requirements(pipeline: Pipeline, *, node_ids: set[str] | None = 
             for raw_id in data.get("mcp_server_ids") or []:
                 mcp = MCPServerPool.objects.filter(owner=pipeline.owner, id=raw_id).first()
                 _mcp_requirement(requirements, node_id, mcp)
+            _agent_unattended_ask_user_requirement(
+                requirements,
+                node_id=node_id,
+                data=data,
+                unattended_graph=unattended_graph,
+            )
+            # tools_mode=allowlist empty
+            from studio.pipeline_agent_config import resolve_tools_config
+
+            _tools, tools_error = resolve_tools_config(data)
+            if tools_error:
+                _upsert_requirement(
+                    requirements,
+                    f"agent:tools-mode:{node_id}",
+                    kind="agent_config",
+                    name="Agent tools_mode",
+                    node_id=node_id,
+                    status="invalid",
+                    severity="error",
+                    message=tools_error,
+                )
     return sorted(requirements.values(), key=lambda item: (item["kind"], item["name"]))

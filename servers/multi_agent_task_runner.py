@@ -198,6 +198,13 @@ async def summarize_multi_agent_task(engine: Any, task: dict, iterations: list[d
 
 
 async def _ask_user_for_task(engine: Any, action_args: dict) -> str:
+    if bool(getattr(engine, "unattended", False)):
+        engine._policy_blocked_count = int(getattr(engine, "_policy_blocked_count", 0) or 0) + 1
+        return (
+            "Human input unavailable in unattended pipeline/agent run. "
+            "Use logic/human_approval or logic/telegram_input nodes, "
+            "or set interaction_mode=interactive on the agent node."
+        )
     question = action_args.get("question", "Нужна помощь пользователя")
     if engine.run_record:
         await sync_to_async(engine._update_run)(

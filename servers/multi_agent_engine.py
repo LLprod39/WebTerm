@@ -276,6 +276,7 @@ class MultiAgentEngine:
             handle_failure=self._handle_failure,
             replan=self._replan,
             wait_for_user_reply=self._wait_for_user_reply,
+            unattended=bool(getattr(self, "unattended", False)),
         )
 
     # ------------------------------------------------------------------
@@ -362,6 +363,7 @@ class MultiAgentEngine:
             permission_engine=permission_engine,
             tool_registry=tool_registry,
             allowed_tool_names=allowed_tool_names,
+            engine=self,
         )
 
     async def _build_ops_prompt_context(self) -> str:

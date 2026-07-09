@@ -22,6 +22,7 @@ async def plan_multi_agent_tasks(engine: Any, goal: str, orchestrator_log: list)
     connected = engine.session.get_connected_info()
     servers_desc = "\n".join(f"- {c['server_name']} (id: {c['server_id']})" for c in connected)
     custom_system = engine.agent.system_prompt or ""
+    instructions = str(getattr(engine.agent, "ai_prompt", "") or "").strip()
     materials_prompt = build_agent_materials_prompt(engine.agent.input_artifacts)
     skills_desc = engine._skill_provider.build_skill_catalog_description(engine.skills) if engine._skill_provider else ""
     role_options = "\n".join(
@@ -32,12 +33,14 @@ async def plan_multi_agent_tasks(engine: Any, goal: str, orchestrator_log: list)
     skill_errors = ""
     if engine.skill_errors:
         skill_errors = "\nSkills с ошибками:\n" + "\n".join(f"- {item}" for item in engine.skill_errors)
+    instructions_block = f"\nOperator instructions:\n{instructions}\n" if instructions else ""
 
     system_prompt = f"""Ты — мастер-оркестратор DevOps-агентов. Твоя задача — разбить цель на конкретные задачи для исполнительных агентов.
 Каждый агент умеет: выполнять SSH-команды, читать файлы, проверять сервисы, анализировать логи.
 Отвечай ТОЛЬКО валидным JSON-массивом. Без пояснений до или после JSON.
 {engine.ops_prompt_context}
 {custom_system}
+{instructions_block}
 {materials_prompt}
 
 Подключённые серверы:

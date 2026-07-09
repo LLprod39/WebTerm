@@ -33,9 +33,10 @@ def _resolve_llm_provider_and_model(config: dict) -> tuple[str, str]:
     provider, model = resolve_provider_and_model(
         config.get("provider"),
         config.get("model"),
-        default_provider="gemini",
+        default_provider="auto",
     )
-    return provider, model or "gemini-2.0-flash-exp"
+    # Empty model is valid: LLMProvider/model_manager pick purpose defaults.
+    return provider, model or ""
 
 
 async def _load_owned_servers(owner, server_ids: list[int]):

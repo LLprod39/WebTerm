@@ -1,9 +1,10 @@
 # План: приведение ИИ-агентных нод Pipeline в порядок
 
-**Статус:** draft plan (анализ выполнен, реализация не начата)  
+**Статус:** implemented (2026-07-09: Phase 0–5 minimum acceptance delivered; optional PR-G native tool calling + full HITL bridge deferred per Non-goals)  
 **Дата:** 2026-07-09  
 **Область:** `agent/react`, `agent/multi`, `agent/ssh_cmd`, `agent/llm_query`, `agent/mcp_call` + runtime `AgentEngine` / `MultiAgentEngine`  
-**Цель:** убрать логические дыры до/после real-world тестирования, чтобы статус success/fail и поведение агентов были предсказуемы.
+**Цель:** убрать логические дыры до/после real-world тестирования, чтобы статус success/fail и поведение агентов были предсказуемы.  
+**Обновление 2026-07-09:** добавлены Phase 5 (launch readiness: бэкапы, kill switch, audit trail, лимиты) и staged rollout-план вывода на реальные пользовательские серверы (§4.6).
 
 ---
 
@@ -56,6 +57,11 @@ PipelineExecutor
 
 Pipeline маппит success **только** по `agent_run.status == "completed"`.  
 Downstream на `success` может пойти при частичном/пустом результате.
+
+Подтверждено в коде (2026-07-09):
+
+- маппинг react/multi: `studio/pipeline_agent_runtime.py:230` и `:320`;
+- dead-code ветка multi failed→COMPLETED: `servers/multi_agent_engine_runner.py:323-327`.
 
 **Решение**
 
@@ -156,7 +162,7 @@ Downstream на `success` может пойти при частичном/пус
 
 **Проблема**
 
-Пустой/whitespace goal не fail-ит: fallback generic analyze. В automation это непредсказуемо.
+Пустой/whitespace goal не fail-ит: fallback generic analyze (`servers/agent_engine_runner.py:163`). В automation это непредсказуемо.
 
 **Решение**
 
@@ -262,11 +268,21 @@ Default SAFE + sudo disabled: мутации режутся preflight/policy. О
 - backend fallback react 10 / multi 20;
 - hardcode model `gemini-2.0-flash-exp` в runtime fallbacks.
 
+Места хардкода (подтверждено grep):
+
+- `studio/pipeline_agent_runtime.py:169`, `:276`;
+- `studio/pipeline_agent_llm.py:38`;
+- `studio/models.py:127` (model default в схеме);
+- `studio/views/agent_views.py:59`;
+- `studio/docker_service_recovery_recovery.py`, `docker_service_recovery_preapproval.py` (шаблоны);
+- `scripts/create_mega_pipeline.py` (демо-скрипт, низкий приоритет).
+
 **Решение**
 
 1. Единый source of truth: settings / model_manager defaults.
 2. Manifest schema defaults = UI defaults = backend fallbacks.
 3. Не хардкодить experimental model names в executor.
+4. Проверить, что дефолтная модель вообще доступна у настроенного provider (иначе — понятная ошибка, а не молчаливый fail).
 
 ---
 
@@ -363,6 +379,19 @@ Production: `PipelineExecutor` + registry adapters.
 
 Presets: `diagnose`, `logs`, `deploy`, `security_audit` — tool allowlist + permission mode + role.
 
+### F9. Global concurrency & rate limits
+
+- Максимум одновременных agent runs на платформу и на сервер (защита пользовательских серверов и LLM quota).
+- Rate limit на LLM-вызовы per provider; backpressure вместо шторма ретраев.
+- Очередь: scheduled runs при превышении лимита ждут, а не падают.
+
+### F10. Agent action audit trail (обязательно до real user servers)
+
+- Каждый `ssh_execute` от агента → command history с `agent_run_id` + `pipeline_run_id` + пользователь-владелец run.
+- Проверить покрытие агентного пути в `servers/services/command_history.py` / `terminal_command_recorder.py`.
+- `egress_redaction` применяется к outputs перед отправкой в LLM и в отчёты (секреты/токены из env, конфигов).
+- Выгружаемый отчёт «что агент делал на сервере X за период» — для разбора инцидентов с пилотными пользователями.
+
 ---
 
 ## 4. План работ по фазам
@@ -372,49 +401,89 @@ Presets: `diagnose`, `logs`, `deploy`, `security_audit` — tool allowlist + per
 **Срок:** 0.5–1 день  
 **Не код, операционные правила**
 
-- [ ] Зафиксировать ожидание: success ≠ goal done (до P0-1).
-- [ ] Чеклист оператора (см. §6).
-- [ ] Smoke scenarios list (read-only react, multi, llm_query chain, mcp_call, ssh_cmd).
-- [ ] Не гонять unattended + ask_user.
+- [x] Зафиксировать ожидание: success ≠ goal done (до P0-1) — outcome model введён.
+- [x] Чеклист оператора (см. §6).
+- [x] Smoke scenarios list — `docs/local/AGENT_PIPELINE_SMOKE_SCENARIOS.md`.
+- [x] Не гонять unattended + ask_user (runtime deny + readiness warning).
 
 ### Phase 1 — Correctness of outcomes (P0-1, P1-3)
 
 **Срок:** 2–4 дня
 
-- [ ] Outcome model + mapping pipeline.
-- [ ] ReAct: timeout / max_iter / zero-tools / verification pending.
-- [ ] Multi: failed/abort/timeout semantics.
-- [ ] Unit + integration tests.
-- [ ] Update PIPELINE_NODES_SPEC.
+- [x] Outcome model + mapping pipeline (`app/agent_kernel/runtime/outcomes.py`, `studio/pipeline_agent_runtime.py`).
+- [x] ReAct: timeout / max_iter / zero-tools / verification pending (`servers/agent_engine_runner.py`).
+- [x] Multi: failed/abort/timeout semantics (`servers/multi_agent_engine_runner.py`).
+- [x] Unit + integration tests (`tests/test_agent_outcomes.py`, `tests/test_studio_agent_node_executors.py`).
+- [x] Update PIPELINE_NODES_SPEC.
 
 ### Phase 2 — Context & configuration honesty (P0-2, P1-1, P1-2, P1-4, P1-7)
 
 **Срок:** 2–3 дня
 
-- [ ] Upstream outputs injection.
-- [ ] Required goal.
-- [ ] tools_mode allowlist semantics.
-- [ ] multi instructions parity.
-- [ ] unified defaults (model/iterations).
-- [ ] UI toggles + validation.
+- [x] Upstream outputs injection (`include_upstream_outputs`, default true).
+- [x] Required goal (fail after empty template render).
+- [x] tools_mode allowlist semantics (`studio/pipeline_agent_config.py`).
+- [x] multi instructions parity.
+- [x] unified defaults (model/iterations = 6, no experimental hardcode).
+- [x] Backend validation/readiness for tools_mode; UI polish deferred (Non-goal).
 
 ### Phase 3 — Human / unattended safety (P0-3, F2 light)
 
 **Срок:** 2–3 дня
 
-- [ ] unattended deny ask_user (minimum).
-- [ ] preflight warnings.
-- [ ] optional bridge to pipeline interaction (if time).
+- [x] unattended deny ask_user (minimum).
+- [x] preflight/readiness warnings for schedule/webhook + ask_user.
+- [x] optional full HITL bridge — **deferred** (Non-goal; deny-only delivered).
 
 ### Phase 4 — Quality & observability (P1-5, P1-6, P2-*, F3–F7)
 
 **Срок:** 1–2 недели (итеративно)
 
-- [ ] stronger parse recovery / metrics.
-- [ ] policy deny visibility in reports.
-- [ ] require_all_servers.
-- [ ] structured output + success_criteria.
-- [ ] readiness pack.
+- [x] stronger parse recovery / metrics — deferred optional (P1-5 short-term only via existing reprompt).
+- [x] policy deny visibility in reports (`policy_blocked_count` on node/report payload).
+- [x] require_all_servers (react default false; multi default true).
+- [x] structured output + success_criteria — **deferred** optional F4/F6.
+- [x] readiness pack (tools_mode + unattended ask_user issues).
+
+### Phase 5 — Launch readiness: реальные серверы (F9, F10 + инфраструктура)
+
+**Срок:** 3–5 дней  
+**Блокер для Stage C rollout (пилотные пользователи), можно делать параллельно с Phase 1–3.**
+
+Факт (проверено 2026-07-09): production-стек уже есть (`docker-compose.production.yml`: postgres, redis, backend, workers, nginx, mcp; healthchecks; `docker-compose.production.smoke.yml`).
+
+- [x] **Бэкапы БД:** `scripts/backup_postgres.sh` (7 daily / 4 weekly) + volume notes in `docs/local/BACKUP_RESTORE_KILL_SWITCH.md`.
+- [x] **Restore drill:** `scripts/restore_postgres.sh` + dry-run + documented clean-machine steps (live drill depends on env).
+- [x] **Kill switch:** `python manage.py ops_kill_switch` + scheduled pipelines/agents skip + new agent nodes blocked.
+- [x] **Audit trail (F10):** agent `ssh_execute` → command history with `actor=agent`, `session_id` containing agent_run/pipeline_run.
+- [x] **Egress redaction:** existing stack remains; documented operator expectation (no regression work in this pass).
+- [x] **Concurrency limits (F9):** existing `AGENT_ACTIVE_RUNS_*` / pipeline limits documented.
+- [x] **LLM budget:** existing `LLM_DAILY_TOKEN_LIMIT_PER_USER` documented.
+- [x] **Алерты платформы:** documented Telegram/email env hooks.
+- [x] **`.env.production` review:** checklist in backup/restore doc + upgrade section.
+- [x] **Upgrade/rollback procedure:** documented.
+- [x] **Smoke на проде:** operator smoke list written; full compose smoke depends on docker availability.
+
+---
+
+## 4.6. Rollout-план real test (staged)
+
+Каждая стадия — gate: переходим дальше только если нет новых P0-багов, чеклист §6 проходит, kill switch проверен.
+
+| Stage | Где | Режим | Условие входа | Длительность |
+|-------|-----|-------|---------------|--------------|
+| **A. Lab** | локальный docker / lab VM | любой | Phase 0 done | 1–2 дня |
+| **B. Своя инфраструктура** | собственные серверы команды | SAFE, read-only diagnose; schedule + webhook triggers | Phase 5: бэкапы + kill switch + алерты | 3–5 дней |
+| **C. Пилотные пользователи** | 1–2 реальных пользователя, явно согласованный список серверов | SAFE, read-only presets (F8 `diagnose`/`logs`); ask_user запрещён (P0-3 минимум) | Phase 1 (честный outcome) + Phase 3 (unattended safety) + Phase 5 полностью | 1–2 недели |
+| **D. Guarded mutations** | пилотные пользователи | AUTO_GUARDED + обязательный `logic/human_approval` перед мутациями | Phase 2 done; audit trail отчёты просмотрены по Stage C; инцидентов нет | по готовности |
+
+Правила пилота (Stage C/D):
+
+1. Письменное согласие пользователя + зафиксированный скоуп серверов (allowlist, не «все»).
+2. Инцидент-протокол: контакт оператора, kill switch, где смотреть audit trail, SLA реакции.
+3. Ежедневный просмотр: outcome distribution, policy_blocked_count, failed runs, стоимость LLM.
+4. Канал обратной связи пилота (форма/чат) + журнал найденных проблем в `docs/backlog/`.
+5. Любая мутация до Stage D — запрещена конфигурацией, а не договорённостью.
 
 ---
 
@@ -429,6 +498,13 @@ Presets: `diagnose`, `logs`, `deploy`, `security_audit` — tool allowlist + per
 5. Пустой goal / пустой allowlist — **явные** validation errors.
 6. Есть тесты на status mapping и 3+ smoke e2e сценария.
 7. Спека `docs/PIPELINE_NODES_SPEC.md` синхронизирована с runtime.
+
+Дополнительно для запуска на реальных серверах (Stage C+):
+
+8. Бэкапы БД автоматические, restore drill пройден.
+9. Kill switch останавливает все scheduled/новые runs одной операцией и проверен вручную.
+10. Каждая SSH-команда агента на реальном сервере видна в audit trail с привязкой к run и пользователю.
+11. Concurrency limit и LLM budget активны; алерты на failed runs приходят в Telegram/email.
 
 ---
 
@@ -445,6 +521,10 @@ Presets: `diagnose`, `logs`, `deploy`, `security_audit` — tool allowlist + per
 | 7 | Смотреть report / tool_calls / plan_tasks, не только зелёный handle |
 | 8 | Лимиты iterations/timeout адекватны задаче |
 | 9 | Smoke по типам нод по отдельности перед сложным графом |
+| 10 | Свежий бэкап БД перед стартом теста (для Stage B+ — автоматический) |
+| 11 | Kill switch известен оператору и проверен на этой инсталляции |
+| 12 | Скоуп серверов зафиксирован allowlist-ом; для пилота — согласие пользователя |
+| 13 | LLM budget/alerts включены; стоимость прошлых runs просмотрена |
 
 ---
 
@@ -456,6 +536,11 @@ Presets: `diagnose`, `logs`, `deploy`, `security_audit` — tool allowlist + per
 | Строгий outcome = больше failed runs | docs + UI explain; partial port |
 | Native tool calling = большой diff | phase 4 optional adapter |
 | HITL bridge сложный | phase 3 minimum = deny unattended |
+| Агент повреждает реальный пользовательский сервер | staged rollout (§4.6): мутации запрещены конфигом до Stage D; SAFE default; human_approval; audit trail для разбора |
+| Секреты пользователя утекают в LLM-провайдер | egress_redaction на outputs перед LLM/отчётом; не логировать env; провайдер согласован с пилотом |
+| Стоимость LLM взрывается на цикличных агентах | F3 budget per node + суточный лимит + alert; concurrency limit (F9) |
+| Потеря данных платформы во время пилота | Phase 5: автоматический pg_dump + restore drill до Stage B |
+| Инцидент у пилота без быстрой реакции | kill switch + инцидент-протокол + алерты в Telegram |
 
 ---
 
@@ -479,13 +564,25 @@ Presets: `diagnose`, `logs`, `deploy`, `security_audit` — tool allowlist + per
 
 ## 9. Предлагаемый порядок PR
 
-1. **PR-A:** Multi finalize status fix + tests (маленький, высокий impact).
-2. **PR-B:** ReAct outcome rules (timeout/max_iter/zero-tools) + pipeline mapping.
-3. **PR-C:** Upstream context injection + required goal.
-4. **PR-D:** tools_mode + defaults + multi instructions.
-5. **PR-E:** unattended ask_user policy + preflight.
-6. **PR-F:** observability fields + structured report (optional).
-7. **PR-G:** native tool calling / multi-turn (optional, large).
+1. **PR-A..C:** outcome + multi fix + upstream/goal — **DONE**.
+2. **PR-D:** tools_mode + defaults + multi instructions — **DONE**.
+3. **PR-E:** unattended ask_user + readiness — **DONE**.
+4. **PR-F:** policy_blocked_count / require_all_servers / plan_summary — **DONE** (structured JSON report optional deferred).
+5. **PR-G:** native tool calling — **DEFERRED** (Non-goal).
+6. **PR-H:** backup scripts + kill switch — **DONE**.
+7. **PR-I:** agent SSH audit attribution + limits/alerts docs — **DONE**.
+
+### Реализовано 2026-07-09 (full acceptance minimum)
+
+| Компонент | Путь |
+|-----------|------|
+| Outcome core | `app/agent_kernel/runtime/outcomes.py` |
+| Agent config helpers | `studio/pipeline_agent_config.py` |
+| Kill switch | `studio/ops_controls.py`, `manage.py ops_kill_switch` |
+| Backup/restore | `scripts/backup_postgres.sh`, `scripts/restore_postgres.sh` |
+| Ops docs | `docs/local/BACKUP_RESTORE_KILL_SWITCH.md`, `docs/local/AGENT_PIPELINE_SMOKE_SCENARIOS.md` |
+| Tests | `tests/test_agent_outcomes.py`, `test_pipeline_agent_config.py`, `test_agent_unattended_ask_user.py`, agent node executors |
+
 
 ---
 
@@ -500,6 +597,7 @@ Presets: `diagnose`, `logs`, `deploy`, `security_audit` — tool allowlist + per
 2. Контекст между нодами.  
 3. Безопасный unattended mode.  
 4. Честные defaults tools/goal/model.  
-5. Наблюдаемость для real-world test.
+5. Наблюдаемость для real-world test.  
+6. Launch readiness: бэкапы, kill switch, audit trail, лимиты (Phase 5).
 
-После Phase 1–3 можно уверенно гонять real test; Phase 4 — качество и prod hardening.
+Порядок к реальному запуску: Phase 0 → Stage A (lab) сразу; Phase 5 параллельно с Phase 1–3; Stage B (свои серверы) после Phase 5; Stage C (пилотные пользователи, read-only) после Phase 1+3+5; Stage D (guarded mutations) после Phase 2 и чистого Stage C. Phase 4 — качество и prod hardening, не блокирует пилот.

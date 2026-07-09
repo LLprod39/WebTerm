@@ -27,5 +27,6 @@ class AgentReactNode(BaseNode):
             {"id": self.node_id, "type": self.node_type, "data": self.node_data},
             dict(ctx.extra.get("context") or {}),
             run,
+            node_outputs=dict(ctx.node_outputs or {}),
         )
         return NodeResult(output=dict(result or {}))
