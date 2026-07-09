@@ -92,48 +92,48 @@ export default function Login() {
   return (
     <div className="app-shell-bg min-h-dvh text-foreground">
       <div className="grid min-h-dvh lg:grid-cols-[42fr_58fr]">
-        {/* Left brand panel — SoftHeader wash, not heavy chrome */}
-        <section className="relative hidden overflow-hidden border-r border-border/50 lg:flex lg:flex-col lg:justify-between">
+        {/* Left brand panel — catalog style */}
+        <section className="relative hidden overflow-hidden border-r border-border lg:flex lg:flex-col lg:justify-between">
           <div
             aria-hidden
             className="pointer-events-none absolute inset-0"
             style={{
               background:
-                "linear-gradient(120deg, hsl(var(--primary) / 0.10), transparent 42%), linear-gradient(250deg, hsl(var(--ai) / 0.09), transparent 46%), hsl(var(--surface-1) / 0.55)",
+                "radial-gradient(ellipse 80% 50% at 0% 0%, hsl(var(--primary) / 0.08), transparent 55%), hsl(var(--surface-0))",
             }}
           />
-          <div aria-hidden className="accent-gradient absolute inset-y-0 left-0 w-0.5 opacity-70" />
+          <div aria-hidden className="absolute inset-y-0 left-0 w-1 bg-primary" />
 
           <div className="relative px-10 py-10">
             <div className="flex items-center gap-3">
-              <div className="accent-gradient flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white shadow-elev-1">
+              <div className="flex h-10 w-10 items-center justify-center rounded-sm border border-primary bg-primary font-display text-sm font-bold text-primary-foreground shadow-elev-1">
                 W
               </div>
               <div>
-                <div className="text-[15px] font-semibold leading-5 text-foreground">WebTermAI</div>
-                <div className="text-xs leading-4 text-muted-foreground/80">{t("login.brand_subtitle")}</div>
+                <div className="font-display text-[15px] font-bold leading-5 tracking-tight text-foreground">WebTerm</div>
+                <div className="text-2xs uppercase tracking-[0.12em] text-muted-foreground">{t("login.brand_subtitle")}</div>
               </div>
             </div>
 
             <div className="mt-20 max-w-xl">
-              <p className="text-xs font-semibold uppercase tracking-wide text-primary/90">{t("login.kicker")}</p>
-              <h2 className="mt-3 text-[1.75rem] font-semibold leading-[2.125rem] tracking-tight text-foreground">
+              <p className="text-2xs font-medium uppercase tracking-[0.14em] text-primary">{t("login.kicker")}</p>
+              <h2 className="mt-3 font-display text-[1.9rem] font-bold leading-[1.15] tracking-tight text-foreground">
                 {t("login.hero_title")}
               </h2>
               <p className="mt-3 max-w-lg text-sm leading-6 text-muted-foreground">{t("login.hero_desc")}</p>
             </div>
           </div>
 
-          <div className="relative grid gap-3 px-10 pb-10 text-sm text-muted-foreground">
-            <div className="flex items-center gap-3 rounded-xl border border-border/40 bg-surface-1/40 px-3.5 py-2.5 shadow-elev-1">
+          <div className="relative grid gap-2 px-10 pb-10 text-sm text-muted-foreground">
+            <div className="flex items-center gap-3 rounded-sm border border-border bg-card px-3.5 py-2.5 shadow-elev-1">
               <Server className="h-4 w-4 shrink-0 text-primary" />
               <span className="leading-5">{t("login.bullet_ssh")}</span>
             </div>
-            <div className="flex items-center gap-3 rounded-xl border border-border/40 bg-surface-1/40 px-3.5 py-2.5 shadow-elev-1">
+            <div className="flex items-center gap-3 rounded-sm border border-border bg-card px-3.5 py-2.5 shadow-elev-1">
               <ShieldCheck className="h-4 w-4 shrink-0 text-primary" />
               <span className="leading-5">{t("login.bullet_sso")}</span>
             </div>
-            <div className="flex items-center gap-3 rounded-xl border border-border/40 bg-surface-1/40 px-3.5 py-2.5 shadow-elev-1">
+            <div className="flex items-center gap-3 rounded-sm border border-border bg-card px-3.5 py-2.5 shadow-elev-1">
               <LockKeyhole className="h-4 w-4 shrink-0 text-primary" />
               <span className="leading-5">{t("login.bullet_session")}</span>
             </div>
@@ -154,16 +154,15 @@ export default function Login() {
           <div className="relative w-full max-w-[440px]">
             <div className="mb-6 flex items-start justify-between gap-4">
               <div>
-                <div className="accent-gradient mb-5 flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white shadow-elev-1 lg:hidden">
+                <div className="mb-5 flex h-10 w-10 items-center justify-center rounded-sm border border-primary bg-primary font-display text-sm font-bold text-primary-foreground shadow-elev-1 lg:hidden">
                   W
                 </div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-primary/90">{t("login.eyebrow")}</p>
+                <p className="text-2xs font-medium uppercase tracking-[0.14em] text-primary">{t("login.eyebrow")}</p>
                 <h1 className="type-h1 mt-2 text-foreground">{t("login.title")}</h1>
                 <p className="mt-1.5 text-sm leading-5 text-muted-foreground">{t("login.subtitle")}</p>
               </div>
 
-              {/* Quiet lang pills — agents filter grammar */}
-              <div className="flex shrink-0 items-center gap-0.5 text-sm">
+              <div className="flex shrink-0 items-center gap-0.5 border border-border p-0.5 text-2xs uppercase tracking-wider">
                 {(["en", "ru"] as const).map((code) => (
                   <button
                     key={code}
@@ -171,9 +170,9 @@ export default function Login() {
                     onClick={() => setLang(code)}
                     aria-pressed={lang === code}
                     className={cn(
-                      "rounded-md px-2.5 py-1 uppercase transition-colors",
+                      "rounded-sm px-2.5 py-1.5 transition-colors",
                       lang === code
-                        ? "bg-surface-2 font-medium text-foreground shadow-elev-1"
+                        ? "bg-primary font-medium text-primary-foreground"
                         : "text-muted-foreground hover:text-foreground",
                     )}
                   >
@@ -183,9 +182,8 @@ export default function Login() {
               </div>
             </div>
 
-            {/* Form surface — agent list card grammar */}
-            <div className="overflow-hidden rounded-2xl border border-border/50 bg-surface-1/60 shadow-elev-2">
-              <div className="flex items-center gap-1 border-b border-border/50 px-3 py-2.5 text-sm">
+            <div className="overflow-hidden rounded-sm border border-border-strong bg-card shadow-elev-2">
+              <div className="flex items-center gap-1 border-b border-border bg-surface-0 px-2 py-2 text-xs">
                 {(
                   [
                     { id: "local" as const, label: t("login.local_tab") },
@@ -198,9 +196,9 @@ export default function Login() {
                     onClick={() => selectMode(tab.id)}
                     aria-pressed={authMode === tab.id}
                     className={cn(
-                      "min-h-9 rounded-md px-3 py-1.5 transition-colors",
+                      "min-h-9 rounded-sm px-3 py-1.5 transition-colors",
                       authMode === tab.id
-                        ? "bg-surface-2 font-medium text-foreground shadow-elev-1"
+                        ? "bg-primary font-medium text-primary-foreground"
                         : "text-muted-foreground hover:text-foreground",
                     )}
                   >
@@ -221,7 +219,7 @@ export default function Login() {
                         value={username}
                         onChange={(event) => setUsername(event.target.value)}
                         placeholder="admin"
-                        className="h-11 border-border/70 bg-card/70 shadow-elev-1"
+                        className="h-11"
                         autoComplete="username"
                       />
                     </div>
@@ -239,12 +237,12 @@ export default function Login() {
                           onKeyDown={(event) => setCapsLock(event.getModifierState("CapsLock"))}
                           onKeyUp={(event) => setCapsLock(event.getModifierState("CapsLock"))}
                           onBlur={() => setCapsLock(false)}
-                          className="h-11 border-border/70 bg-card/70 pr-12 shadow-elev-1"
+                          className="h-11 pr-12"
                           autoComplete="current-password"
                         />
                         <button
                           type="button"
-                          className="absolute right-0.5 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          className="absolute right-0.5 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           onClick={() => setPasswordVisible((visible) => !visible)}
                           aria-label={passwordVisible ? t("login.hide_password") : t("login.show_password")}
                           title={passwordVisible ? t("login.hide_password") : t("login.show_password")}
@@ -264,7 +262,7 @@ export default function Login() {
 
                     <Button
                       type="submit"
-                      className="h-11 w-full shadow-elev-1"
+                      className="h-11 w-full"
                       disabled={loading || !username.trim() || !password.trim()}
                       loading={loading}
                     >
@@ -274,16 +272,16 @@ export default function Login() {
                 ) : (
                   <div className="space-y-4">
                     <div className="flex items-start gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary shadow-elev-1">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm border border-primary/35 bg-primary/12 text-primary">
                         <ShieldCheck className="h-4 w-4" />
                       </div>
                       <div className="min-w-0">
-                        <h2 className="text-[15px] font-semibold leading-5 text-foreground">{t("login.sso_title")}</h2>
+                        <h2 className="font-display text-[15px] font-bold leading-5 text-foreground">{t("login.sso_title")}</h2>
                         <p className="mt-1 text-[13px] leading-5 text-muted-foreground">{t("login.sso_desc")}</p>
                       </div>
                     </div>
 
-                    <div className="rounded-lg border border-border/50 bg-surface-2/40 px-3.5 py-2.5 text-sm shadow-elev-1">
+                    <div className="rounded-sm border border-border bg-surface-0 px-3.5 py-2.5 text-sm">
                       <span className="text-muted-foreground">{t("login.sso_provider_label")}</span>
                       <span className="ml-2 font-medium text-foreground">{t("login.sso_provider_value")}</span>
                     </div>
@@ -292,7 +290,7 @@ export default function Login() {
 
                     <Button
                       type="button"
-                      className="h-11 w-full shadow-elev-1"
+                      className="h-11 w-full"
                       onClick={handleSsoContinue}
                       loading={loading}
                     >

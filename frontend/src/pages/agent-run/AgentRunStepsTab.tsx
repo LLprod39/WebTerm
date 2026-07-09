@@ -30,17 +30,19 @@ export function AgentStepsTab({ report, steps }: { report: AgentRunReportRespons
       <div className="border-b border-border/70 p-4">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0">
-            <h3 className="text-base font-semibold text-foreground">Ход агента</h3>
+            <h3 className="font-display text-base font-bold tracking-tight text-foreground">Ход работы</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              {steps.length ? `${stats.done} из ${steps.length} шагов завершено` : "Шаги появятся после планирования или выполнения команд."}
+              {steps.length
+                ? `${stats.done} из ${steps.length} шагов завершено`
+                : "Шаги появятся после планирования или выполнения команд."}
             </p>
           </div>
           {steps.length ? (
-            <div className="grid min-w-[420px] grid-cols-4 gap-2 max-sm:min-w-0 max-sm:grid-cols-2">
+            <div className="grid min-w-0 grid-cols-2 gap-2 sm:min-w-[280px] sm:grid-cols-4">
               <StepMiniStat label="Готово" value={stats.done} />
               <StepMiniStat label="Активно" value={stats.active} />
               <StepMiniStat label="Риски" value={stats.problems} />
-              <StepMiniStat label="Прогресс" value={`${stats.progress}%`} />
+              <StepMiniStat label="%" value={`${stats.progress}%`} />
             </div>
           ) : null}
         </div>

@@ -7,9 +7,25 @@
     <meta name="application-name" content="WebTermAI" />
     <meta name="description" content="Server management console with terminal access and AI assistance." />
     <meta name="author" content="WEU AI" />
-    <meta name="theme-color" content="#08111f" />
+    <meta name="theme-color" content="#09090b" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="alternate icon" href="/favicon.ico" />
+    <script>
+      (function () {
+        try {
+          // Last style applied for this browser session/user (FOUC guard).
+          // Per-user map is applied after auth loads in the app.
+          var style = localStorage.getItem("webterm.ui-style.active");
+          if (style !== "catalog" && style !== "classic") {
+            style = localStorage.getItem("webterm.ui-style");
+          }
+          if (style !== "catalog" && style !== "classic") style = "catalog";
+          document.documentElement.setAttribute("data-ui-style", style);
+        } catch (e) {
+          document.documentElement.setAttribute("data-ui-style", "catalog");
+        }
+      })();
+    </script>
 
     <meta property="og:title" content="WebTermAI" />
     <meta property="og:description" content="Server management console with terminal access and AI assistance." />

@@ -1,97 +1,71 @@
-# WEU AI Platform — Design System
+# WebTerm — Design System
+
+Two user-selectable UI styles (Dashboard → **Настроить виджеты**, per-user localStorage):
+
+| Id | Look |
+| --- | --- |
+| `catalog` (default) | Editorial ops: ink, acid lime, Syne + IBM Plex Mono, hard offset shadows |
+| `classic` | Previous console: teal, Inter + JetBrains Mono, soft elevation, violet AI |
+
+Tokens: `html[data-ui-style="…"]` in `src/index.css`. Provider: `src/lib/ui-style.tsx`. Switcher: `DashboardUiStyleSwitcher` inside widget edit mode.
 
 ## 1. Color System
 
-- **Mode:** Dark-first (CSS custom properties via `hsl(var(--...))`)
-- **Semantic Tokens (shadcn/ui):**
-  - `--background` / `--foreground` — base surfaces and text
-  - `--card` — elevated card surfaces
-  - `--primary` — brand accent (buttons, active states)
-  - `--secondary` — subtle fills, hover states
-  - `--muted` / `--muted-foreground` — subdued text, labels
-  - `--border` — dividers, card borders
-  - `--destructive` — error, danger actions
-- **Status Colors:**
-  - `emerald-500` — success / healthy / allowed
-  - `amber-500` — warning / attention
-  - `red-500` — critical / error / denied
-  - `blue-400` — info / active
-  - `violet-500` — groups / secondary accent
-- **Contrast:** WCAG AA minimum for all text
+- **Mode:** Dark-first (`hsl(var(--...))`)
+- **Ink / bone**
+  - `--background` — near-black ink `#09090b`
+  - `--foreground` — bone `#f4f1ea`
+- **Surfaces:** `--surface-0` … `--surface-3`, `--card`, `--popover`
+- **Primary (acid lime `#c8f542`):** buttons, active nav, focus ring, kickers
+- **AI accent (sky):** `--ai` — agents / AI panels only, not primary CTAs
+- **Status:** success / warning / destructive / info
+- **Contrast:** WCAG AA for text
 
 ## 2. Typography
 
-- **Font Stack:** `Inter` (`font-sans`), `JetBrains Mono` (`font-mono`)
-- **Scale utilities** (defined in `index.css @layer utilities`; adopt these instead of ad-hoc sizes):
-  - `.type-display` — 28/34, semibold, tracking-tight (hero numbers, marketing)
-  - `.type-h1` — 22/28, semibold, tracking-tight (page title)
-  - `.type-h2` — 18/24, semibold (section title)
-  - `.type-h3` — 15/20, semibold (card title)
-  - `.type-body` — 13/20 (default body)
-  - `.type-body-sm` — 12/20 (secondary body)
-  - `.type-label` — `text-2xs` (11px), semibold, uppercase, tracking-wide, muted (labels/kickers)
-- **Floor:** never go below `text-2xs` (11px). No `text-[10px]`/`text-[9px]`. The only exception is
-  non-textual preview glyphs inside scaled swatches (e.g. terminal font-size preview).
-- **Weights:** `font-medium` (body), `font-semibold` (headings), `font-bold` (emphasis)
+- **UI body:** `IBM Plex Mono` (`font-sans` / `font-mono`)
+- **Display:** `Syne` (`font-display`) — titles, metrics, dialog titles
+- **Scale utilities** (`index.css`):
+  - `.type-display` — large metric / hero number
+  - `.type-h1` / `.type-h2` / `.type-h3`
+  - `.type-body` / `.type-body-sm`
+  - `.type-label` — 2xs, uppercase, wide tracking
+- **Floor:** never below `text-2xs` (11px)
 
-## 3. Spacing & Grid
+## 3. Geometry & Elevation
 
-- **Base Unit:** 4px
-- **Container:** max-width `7xl` (`max-w-7xl mx-auto`)
-- **Section Gap:** `space-y-6`
-- **Card Padding:** `px-5 py-4` (header), `p-5` (body)
-- **Grid System:** 12-column CSS grid with responsive breakpoints
+- **Radius:** `0.25rem` (`rounded-sm`) — sharp catalog edges, not pill SaaS
+- **Shadows:** hard offset — `--shadow-1/2/3` (`2px/4px/8px  … 0 black`)
+- **Borders:** solid `border` / `border-strong`, avoid heavy translucency stacks
 
 ## 4. Components
 
-- **Cards:** `rounded-xl border border-border bg-card shadow-sm`
-- **Section Cards (SettingsSectionCard):**
-  - Header: icon (8×8 rounded-lg `bg-primary/10`), title, description, optional actions
-  - Body: `p-5`
-- **Buttons:** shadcn/ui `Button` — variants: default, outline, ghost, destructive
-- **Inputs:** shadcn/ui `Input` — height `h-9`, border-border
-- **Select:** shadcn/ui `Select` or native `<select>` with `h-9 rounded-lg border`
-- **Switch:** shadcn/ui `Switch`
-- **Badge:** shadcn/ui `Badge` — default, secondary, outline
-- **StatusBadge:** custom — dot + text, tones: info, success, warning, danger, neutral
-- **Avatar:** initials in colored circle, `h-10 w-10 rounded-full`
+- **Buttons:** solid primary with hard shadow; outline = border only
+- **Cards / panels:** `rounded-sm border border-border bg-card shadow-elev-1`
+- **Dialogs / sheets / menus:** hard border, solid surface, `shadow-elev-3`, no heavy blur glass
+- **Tabs:** active tab = primary fill
+- **Inputs:** `bg-surface-0`, sharp corners, ring on focus
+- **Badges:** uppercase 2xs mono labels
+- **Sidebar:** acid left bar on active item; display wordmark
 
 ## 5. Motion
 
-- **Transitions:** `transition-all duration-200`
-- **Hover:** `hover:bg-secondary/20`, `hover:border-border`
-- **Focus:** `focus:border-primary/40 focus:ring-1 focus:ring-primary/30`
-- **Animations:** Framer Motion for layout shifts, accordion expand/collapse
+- **Ease:** `--ease-standard: cubic-bezier(0.16, 1, 0.3, 1)`
+- Prefer opacity/transform over soft glows
 
 ## 6. Voice & Tone
 
-- **Principles:** Professional, concise, corporate B2B
-- **Language:** Russian primary, English secondary
-- **Rules:**
-  - No marketing hype or AI-generated buzzwords
-  - No sci-fi terminology ("Fleet Health", "Control Center", "System Overview")
-  - Use standard IT terminology ("Серверы", "Панель администратора", "Настройки")
-  - Labels: short, dry, descriptive
-  - Descriptions: one line, factual
-  - Use "вы" form, not "ты"
+- Professional, concise, ops-facing
+- Russian primary, English secondary
+- No marketing hype; standard IT labels
 
-## 7. Layout Patterns
+## 7. Anti-patterns
 
-- **Settings Pages:**
-  - Header: icon + title + description (one line)
-  - Stats bar: horizontal metrics in `rounded-xl border bg-card/secondary`
-  - Two-column: content (left) + sidebar (right, sticky)
-  - Cards list: vertical stack of expandable cards
-- **Forms:**
-  - Labels above inputs
-  - Grid layout for multi-field forms
-  - Actions at bottom: primary Save + ghost Cancel
+- Avoid teal→violet gradients and purple “AI SaaS” chrome
+- Avoid large soft blur overlays on every panel
+- Avoid Inter / generic rounded-xl card stacks as the default look
+- Avoid mixing random English into Russian UI
 
-## 8. Anti-patterns
+## 8. How restyles cascade
 
-- **Avoid:** Flashy colored backgrounds on cards (`bg-emerald-950/10`)
-- **Avoid:** `bg-white/[0.03]` and `bg-white/[0.06]` — use design tokens instead
-- **Avoid:** Hardcoded `ring-white/[0.06]` — use `border-border` tokens
-- **Avoid:** Inconsistent select styling (native vs shadcn mixed)
-- **Avoid:** Oversized headers (`text-2xl font-bold`) on sub-pages
-- **Avoid:** Random English words mixed into Russian UI ("staff", "override")
+Tokens live in `src/index.css`. Most pages use `PageShell`, shadcn primitives, and semantic colors — they pick up this system automatically. One-off pages with hard-coded teal/violet classes may still need local cleanup.

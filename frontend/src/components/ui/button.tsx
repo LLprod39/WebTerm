@@ -6,26 +6,28 @@ import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex touch-manipulation select-none items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium ring-offset-background transition-[color,background-color,border-color,transform] duration-150 ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:translate-y-px disabled:pointer-events-none disabled:translate-y-0 disabled:opacity-55 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex touch-manipulation select-none items-center justify-center gap-2 whitespace-nowrap rounded-sm text-xs font-medium tracking-wide ring-offset-background transition-[color,background-color,border-color,box-shadow,transform] duration-150 ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:translate-x-px active:translate-y-px disabled:pointer-events-none disabled:translate-y-0 disabled:opacity-55 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground hover:bg-primary-hover",
+          "border border-primary bg-primary text-primary-foreground shadow-hard-sm hover:bg-primary-hover hover:shadow-hard",
         destructive:
-          "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        outline: "border border-border/80 bg-card/70 text-foreground hover:border-border-strong hover:bg-secondary/70",
-        secondary: "border border-border/70 bg-secondary/80 text-secondary-foreground hover:border-border-strong hover:bg-secondary",
+          "border border-destructive bg-destructive text-destructive-foreground shadow-hard-sm hover:bg-destructive/90",
+        outline:
+          "border border-border-strong bg-transparent text-foreground hover:border-muted-foreground hover:bg-secondary/60",
+        secondary:
+          "border border-border bg-secondary text-secondary-foreground hover:border-border-strong hover:bg-surface-2",
         ghost: "text-muted-foreground hover:bg-surface-2 hover:text-foreground",
-        ai: "bg-ai text-ai-foreground hover:bg-ai/90",
+        ai: "border border-ai/50 bg-ai text-ai-foreground shadow-hard-sm hover:bg-ai/90",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
         default: "h-9 px-4 py-2",
-        xs: "h-8 rounded-md px-3 text-xs",
-        sm: "h-8 rounded-lg px-3",
-        lg: "h-10 rounded-lg px-8",
-        icon: "h-9 w-9 rounded-lg",
+        xs: "h-8 rounded-sm px-3 text-2xs",
+        sm: "h-8 rounded-sm px-3",
+        lg: "h-10 rounded-sm px-8 text-sm",
+        icon: "h-9 w-9 rounded-sm",
       },
     },
     defaultVariants: {

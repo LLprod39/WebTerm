@@ -2,7 +2,11 @@ import { backendPath, type AgentRunReportArtifact, type AgentRunReportResponse, 
 import type { StatusTone } from "@/design/status";
 
 
-export type ReportTab = "overview" | "events" | "logs" | "artifacts" | "agent";
+/** Simplified report IA: Итог · Ход · Материалы */
+export type ReportTab = "summary" | "progress" | "materials";
+
+export type MaterialsSection = "events" | "logs" | "artifacts";
+
 export const severityTone: Record<AgentRunReportSeverity, StatusTone> = {
   success: "success",
   info: "info",
@@ -130,9 +134,40 @@ export function primaryOutcomeSummary(report: AgentRunReportResponse) {
   return (
     cleanInlineMarkdown(report.report.root_cause || "") ||
     cleanInlineMarkdown(report.report.summary) ||
+    cleanInlineMarkdown(report.report_state?.headline || "") ||
     cleanInlineMarkdown(report.report_state?.description || "") ||
     "Отчёт пока формируется."
   );
+}
+
+/**
+ * Single human status for the page header — not dual run+severity badges.
+ */
+export function unifiedRunStatus(report: AgentRunReportResponse): { label: string; tone: StatusTone; pulse?: boolean } {
+  const status = report.run.status;
+  if (status === "waiting") return { label: "Ждёт вас", tone: "warning", pulse: true };
+  if (status === "plan_review") return { label: "Нужно подтверждение", tone: "ai", pulse: true };
+  if (status === "running") return { label: "Выполняется", tone: "info", pulse: true };
+  if (status === "pending") return { label: "В очереди", tone: "neutral", pulse: true };
+  if (status === "paused") return { label: "На паузе", tone: "warning" };
+  if (status === "failed") return { label: "Ошибка", tone: "danger" };
+  if (status === "stopped") return { label: "Остановлен", tone: "neutral" };
+
+  // completed / terminal success path — severity tells if it was clean
+  const sev = report.report.severity;
+  if (sev === "critical" || sev === "fatal") return { label: "Проблема", tone: "danger" };
+  if (sev === "high" || sev === "warning") return { label: "С замечаниями", tone: "warning" };
+  if (sev === "success") return { label: "Успех", tone: "success" };
+  return { label: "Завершён", tone: "success" };
+}
+
+export function problemCount(report: AgentRunReportResponse) {
+  return report.report.findings.filter((item) => _severityRank(item.severity) >= _severityRank("warning")).length
+    + report.report.risks.filter((item) => _severityRank(item.severity) >= _severityRank("warning")).length;
+}
+
+export function actionCount(report: AgentRunReportResponse) {
+  return report.report.recommendations.filter((item) => isMeaningfulReportText(item.description || item.title)).length;
 }
 
 export function riskLabel(report: AgentRunReportResponse) {

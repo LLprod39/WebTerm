@@ -55,16 +55,16 @@ export function PageHero({
   className?: string;
 }) {
   return (
-    <section className={cn("relative overflow-hidden rounded-xl border border-border/60 bg-surface-1 px-5 py-5 shadow-elev-1 sm:px-6", className)}>
+    <section className={cn("relative overflow-hidden rounded-sm border border-border bg-card px-5 py-5 shadow-elev-1 sm:px-6", className)}>
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-[0.07]"
+        className="pointer-events-none absolute inset-0 opacity-40"
         style={{
           background:
-            "radial-gradient(120% 140% at 0% 0%, hsl(var(--primary)), transparent 45%), radial-gradient(120% 140% at 100% 0%, hsl(var(--ai)), transparent 45%)",
+            "radial-gradient(100% 120% at 0% 0%, hsl(var(--primary) / 0.08), transparent 50%)",
         }}
       />
-      <div className="accent-gradient absolute left-0 top-0 h-full w-1" />
+      <div className="absolute left-0 top-0 h-full w-1 bg-primary" />
       <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0 space-y-1.5 pl-1">
           <div className="enterprise-kicker">{kicker}</div>
@@ -78,8 +78,7 @@ export function PageHero({
 }
 
 /**
- * Soft page header — an airy "hat" without corporate chrome: a faint teal→violet
- * wash, a thin gradient hairline on top, title with an optional quiet count.
+ * Soft page header — catalog-style hat: acid hairline, quiet surface, display title.
  */
 export function SoftHeader({
   title,
@@ -100,7 +99,7 @@ export function SoftHeader({
   return (
     <header
       className={cn(
-        "relative overflow-hidden rounded-2xl",
+        "relative overflow-hidden rounded-sm border border-border bg-card/80",
         compact ? "px-4 py-3.5 sm:px-5" : "px-5 py-5 sm:px-6",
         className,
       )}
@@ -110,16 +109,16 @@ export function SoftHeader({
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "linear-gradient(120deg, hsl(var(--primary) / 0.09), transparent 42%), linear-gradient(250deg, hsl(var(--ai) / 0.08), transparent 46%), hsl(var(--surface-1) / 0.45)",
+            "linear-gradient(120deg, hsl(var(--primary) / 0.07), transparent 48%), hsl(var(--surface-1) / 0.35)",
         }}
       />
-      <div aria-hidden className="accent-gradient absolute inset-x-0 top-0 h-0.5 opacity-70" />
+      <div aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-primary opacity-80" />
       <div className="relative flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h1 className="type-h1 text-foreground">
             {title}
             {count !== undefined && count !== null ? (
-              <span className="ml-2 font-normal text-muted-foreground">{count}</span>
+              <span className="ml-2 font-mono text-base font-normal text-muted-foreground">{count}</span>
             ) : null}
           </h1>
           {subtitle ? <p className="mt-0.5 text-sm leading-5 text-muted-foreground">{subtitle}</p> : null}
@@ -144,7 +143,7 @@ export function StatStrip({
   return (
     <div
       className={cn(
-        "grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border/50 bg-border/40 sm:grid-cols-4",
+        "grid grid-cols-2 gap-px overflow-hidden rounded-sm border border-border bg-border sm:grid-cols-4",
         className,
       )}
     >
@@ -175,9 +174,9 @@ export function StatStripItem({
   }[tone];
 
   return (
-    <div className={cn("bg-surface-1/75 px-4 py-3 sm:px-5", className)}>
-      <div className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground/70">{label}</div>
-      <div className={cn("mt-1 text-xl font-semibold tabular-nums tracking-tight leading-none", valueTone)}>{value}</div>
+    <div className={cn("bg-card px-4 py-3 sm:px-5", className)}>
+      <div className="text-2xs font-medium uppercase tracking-[0.12em] text-muted-foreground/70">{label}</div>
+      <div className={cn("mt-1 font-display text-xl font-bold tabular-nums tracking-tight leading-none", valueTone)}>{value}</div>
       {hint ? <div className="mt-1 text-xs leading-4 text-muted-foreground/70">{hint}</div> : null}
     </div>
   );
@@ -217,7 +216,7 @@ export function MetricCard({
   }[tone];
 
   return (
-    <div className={cn("group relative overflow-hidden rounded-xl border transition-all duration-200 hover:shadow-elev-1", toneStyles.card, className)}>
+    <div className={cn("group relative overflow-hidden rounded-sm border transition-all duration-200 hover:shadow-elev-1", toneStyles.card, className)}>
       <div className={cn("absolute left-0 top-0 h-full w-0.5", toneStyles.bar)} />
       <div className="px-5 py-4">
         <div className="flex items-start justify-between gap-3">
@@ -227,7 +226,7 @@ export function MetricCard({
             <div className="mt-1.5 type-body-sm text-muted-foreground/80">{description}</div>
           </div>
           {icon ? (
-            <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors", toneStyles.icon)}>
+            <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-sm border border-border/60 transition-colors", toneStyles.icon)}>
               {icon}
             </div>
           ) : null}
@@ -255,11 +254,11 @@ export function SectionCard({
   bodyClassName?: string;
 }) {
   return (
-    <section className={cn("overflow-hidden rounded-xl border border-border/60 bg-surface-1 shadow-elev-1", className)}>
-      <div className="flex flex-col gap-3 border-b border-border/60 bg-surface-2/50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+    <section className={cn("overflow-hidden rounded-sm border border-border bg-card shadow-elev-1", className)}>
+      <div className="flex flex-col gap-3 border-b border-border bg-surface-2/40 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2.5">
           {icon ? (
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm border border-primary/30 bg-primary/10 text-primary">
               {icon}
             </div>
           ) : null}
@@ -321,9 +320,9 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <div className={cn("flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-border/60 bg-surface-1/60 px-6 py-12 text-center", className)}>
+    <div className={cn("flex flex-col items-center justify-center gap-4 rounded-sm border border-dashed border-border bg-card/50 px-6 py-12 text-center", className)}>
       {icon ? (
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-surface-2 text-muted-foreground/70">
+        <div className="flex h-12 w-12 items-center justify-center rounded-sm border border-border bg-surface-2 text-muted-foreground/70">
           {icon}
         </div>
       ) : null}
@@ -357,11 +356,11 @@ export function StatusBadge({
   }[tone];
 
   return (
-    <span className={cn("inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-semibold uppercase tracking-wide", styles.badge, className)}>
+    <span className={cn("inline-flex items-center gap-1.5 rounded-sm border px-2 py-0.5 text-2xs font-medium uppercase tracking-[0.1em]", styles.badge, className)}>
       {dot ? (
         <span className="relative flex h-1.5 w-1.5">
-          {styles.pulse && <span className={cn("absolute inline-flex h-full w-full animate-ping rounded-full opacity-60", styles.dot)} />}
-          <span className={cn("relative inline-flex h-1.5 w-1.5 rounded-full", styles.dot)} />
+          {styles.pulse && <span className={cn("absolute inline-flex h-full w-full animate-ping rounded-none opacity-60", styles.dot)} />}
+          <span className={cn("relative inline-flex h-1.5 w-1.5 rounded-none", styles.dot)} />
         </span>
       ) : null}
       {label}

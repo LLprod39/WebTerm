@@ -83,45 +83,45 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-sidebar-border/90 bg-sidebar">
+    <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar">
       {/* Logo area */}
-      <div className="flex h-16 items-center gap-3 border-b border-sidebar-border/80 px-3">
+      <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-3">
         <button
           type="button"
           onClick={toggleSidebar}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-sidebar-primary/20 bg-sidebar-primary/15 text-sidebar-primary shadow-[0_0_24px_hsl(var(--sidebar-primary)_/_0.08)] transition-colors hover:bg-sidebar-primary/20"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm border border-sidebar-primary/40 bg-sidebar-primary/12 text-sidebar-primary transition-colors hover:bg-sidebar-primary/20"
           aria-label={collapsed ? localize(lang, "Развернуть меню", "Expand sidebar") : localize(lang, "Свернуть меню", "Collapse sidebar")}
           title={collapsed ? localize(lang, "Развернуть меню", "Expand sidebar") : localize(lang, "Свернуть меню", "Collapse sidebar")}
         >
-          {collapsed ? <span className="text-xs font-bold text-sidebar-primary">W</span> : <CollapseIcon className="h-4 w-4 text-sidebar-primary" />}
+          {collapsed ? <span className="font-display text-xs font-bold text-sidebar-primary">W</span> : <CollapseIcon className="h-4 w-4 text-sidebar-primary" />}
         </button>
         {!collapsed && (
           <div className="min-w-0">
-            <div className="truncate text-sm font-semibold text-sidebar-foreground">WebTermAI</div>
-            <div className="truncate text-xs text-sidebar-foreground/70">{t("nav.ops_workspace")}</div>
+            <div className="truncate font-display text-sm font-bold tracking-tight text-sidebar-foreground">WebTerm</div>
+            <div className="truncate text-2xs uppercase tracking-[0.12em] text-sidebar-foreground/55">{t("nav.ops_workspace")}</div>
           </div>
         )}
       </div>
 
       {/* Navigation */}
-      <SidebarContent className="px-3 py-4">
+      <SidebarContent className="px-2 py-4">
         {navSections.map((section) => (
           <SidebarGroup key={section.id} className={collapsed ? "mb-2" : "mb-4"}>
             {!collapsed ? (
-              <div className="mb-2 px-3 text-xs font-medium uppercase tracking-[0.14em] text-sidebar-foreground/70">
+              <div className="mb-2 px-3 text-2xs font-medium uppercase tracking-[0.14em] text-sidebar-foreground/50">
                 {section.label}
               </div>
             ) : null}
             <SidebarGroupContent>
-              <SidebarMenu className="space-y-1">
+              <SidebarMenu className="space-y-0.5">
                 {section.items.map((item) => (
                   <SidebarMenuItem key={item.titleKey}>
                     <SidebarMenuButton asChild>
                       <NavLink
                         to={item.url}
                         end={item.url === "/dashboard"}
-                        className="group relative flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-sidebar-foreground/70 transition-all duration-150 hover:bg-sidebar-accent/80 hover:text-sidebar-foreground"
-                        activeClassName="bg-sidebar-accent/90 text-sidebar-accent-foreground font-semibold before:absolute before:left-0 before:top-1/2 before:h-6 before:w-1 before:-translate-y-1/2 before:rounded-r before:content-[''] before:[background-image:linear-gradient(180deg,hsl(var(--primary)),hsl(var(--ai)))]"
+                        className="group relative flex min-h-10 items-center gap-2.5 rounded-sm px-3 py-2 text-xs text-sidebar-foreground/65 transition-all duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                        activeClassName="bg-primary/12 text-primary font-medium before:absolute before:left-0 before:top-1/2 before:h-5 before:w-[3px] before:-translate-y-1/2 before:bg-primary before:content-['']"
                         title={collapsed ? t(item.titleKey) : undefined}
                       >
                         <item.icon className="h-4 w-4 shrink-0 transition-colors" />
@@ -137,13 +137,13 @@ export function AppSidebar() {
       </SidebarContent>
 
       {/* Footer */}
-      <SidebarFooter className="space-y-2 border-t border-sidebar-border/80 px-3 py-3">
+      <SidebarFooter className="space-y-2 border-t border-sidebar-border px-3 py-3">
         {!collapsed ? (
-          <div className="grid grid-cols-2 gap-1 rounded-lg border border-sidebar-border/80 bg-sidebar-accent/40 p-1 text-xs">
+          <div className="grid grid-cols-2 gap-1 rounded-sm border border-sidebar-border bg-sidebar-accent/30 p-1 text-2xs uppercase tracking-wider">
             <button
               type="button"
               onClick={() => setLang("en")}
-              className={`min-h-9 rounded-md px-2 py-1.5 transition-colors ${lang === "en" ? "bg-sidebar text-sidebar-primary shadow-sm" : "text-sidebar-foreground/60 hover:text-sidebar-foreground"}`}
+              className={`min-h-8 rounded-sm px-2 py-1.5 transition-colors ${lang === "en" ? "bg-primary text-primary-foreground" : "text-sidebar-foreground/55 hover:text-sidebar-foreground"}`}
               aria-pressed={lang === "en"}
             >
               EN
@@ -151,7 +151,7 @@ export function AppSidebar() {
             <button
               type="button"
               onClick={() => setLang("ru")}
-              className={`min-h-9 rounded-md px-2 py-1.5 transition-colors ${lang === "ru" ? "bg-sidebar text-sidebar-primary shadow-sm" : "text-sidebar-foreground/60 hover:text-sidebar-foreground"}`}
+              className={`min-h-8 rounded-sm px-2 py-1.5 transition-colors ${lang === "ru" ? "bg-primary text-primary-foreground" : "text-sidebar-foreground/55 hover:text-sidebar-foreground"}`}
               aria-pressed={lang === "ru"}
             >
               RU
@@ -161,7 +161,7 @@ export function AppSidebar() {
           <button
             type="button"
             onClick={() => setLang(lang === "ru" ? "en" : "ru")}
-            className="flex h-10 w-10 items-center justify-center rounded-lg text-sidebar-foreground transition-colors hover:bg-sidebar-accent"
+            className="flex h-10 w-10 items-center justify-center rounded-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent"
             aria-label={localize(lang, "Переключить язык", "Switch language")}
             title={localize(lang, "Переключить язык", "Switch language")}
           >
@@ -170,13 +170,13 @@ export function AppSidebar() {
         )}
 
         <div className={collapsed ? "flex flex-col items-center gap-2" : "flex items-center gap-2.5"}>
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-sidebar-primary/20 bg-primary/15 text-xs font-bold text-primary">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm border border-primary/35 bg-primary/12 text-xs font-bold text-primary">
             {(data?.user?.username || "U").slice(0, 1).toUpperCase()}
           </div>
           {!collapsed && (
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-sidebar-foreground truncate">{data?.user?.username || "user"}</p>
-              <p className="mt-0.5 flex items-center gap-1 text-xs font-medium text-sidebar-foreground/70">
+              <p className="truncate text-xs font-medium text-sidebar-foreground">{data?.user?.username || "user"}</p>
+              <p className="mt-0.5 flex items-center gap-1 text-2xs uppercase tracking-wider text-sidebar-foreground/55">
                 <ShieldCheck className="h-2.5 w-2.5" />
                 {roleLabel}
               </p>
@@ -185,7 +185,7 @@ export function AppSidebar() {
           {!collapsed && (
             <button
               type="button"
-              className="ml-auto flex h-9 w-9 items-center justify-center rounded-lg text-sidebar-foreground/50 transition-colors hover:bg-sidebar-accent hover:text-destructive"
+              className="ml-auto flex h-9 w-9 items-center justify-center rounded-sm text-sidebar-foreground/50 transition-colors hover:bg-sidebar-accent hover:text-destructive"
               aria-label={t("nav.signout")}
               onClick={handleLogout}
               title={t("nav.signout")}
@@ -196,7 +196,7 @@ export function AppSidebar() {
           {collapsed && (
             <button
               type="button"
-              className="flex h-10 w-10 items-center justify-center rounded-lg text-sidebar-foreground/50 transition-colors hover:bg-sidebar-accent hover:text-destructive"
+              className="flex h-10 w-10 items-center justify-center rounded-sm text-sidebar-foreground/50 transition-colors hover:bg-sidebar-accent hover:text-destructive"
               aria-label={t("nav.signout")}
               onClick={handleLogout}
               title={t("nav.signout")}

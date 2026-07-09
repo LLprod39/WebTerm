@@ -1,11 +1,97 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Syne:wght@500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/*
+  Dual UI styles (user preference, Settings → Appearance):
+  - catalog  — editorial ops (acid lime, Syne, hard shadows) — default
+  - classic  — previous console (teal, Inter, soft elevation)
+  Applied via <html data-ui-style="...">
+*/
+
 @layer base {
-  :root {
+  /* ── Catalog (default) ─────────────────────────────────────────── */
+  :root,
+  html[data-ui-style="catalog"] {
+    --background: 240 10% 4%;
+    --foreground: 40 31% 94%;
+
+    --card: 240 10% 8%;
+    --card-foreground: 40 31% 94%;
+
+    --popover: 240 11% 9%;
+    --popover-foreground: 40 31% 94%;
+
+    --primary: 75 90% 61%;
+    --primary-foreground: 0 0% 7%;
+
+    --secondary: 240 10% 11%;
+    --secondary-foreground: 40 12% 82%;
+
+    --muted: 240 9% 12%;
+    --muted-foreground: 40 6% 58%;
+
+    --accent: 75 90% 61%;
+    --accent-foreground: 0 0% 7%;
+
+    --destructive: 0 72% 58%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 240 11% 17%;
+    --border-strong: 240 11% 23%;
+    --input: 240 11% 17%;
+    --ring: 75 90% 61%;
+
+    --radius: 0.25rem;
+
+    --primary-hover: 75 92% 55%;
+    --primary-subtle: 75 90% 61%;
+
+    --ai: 204 100% 75%;
+    --ai-foreground: 210 40% 8%;
+
+    --surface-0: 240 10% 4%;
+    --surface-1: 240 10% 8%;
+    --surface-2: 240 11% 11%;
+    --surface-3: 240 11% 13%;
+
+    --shadow-1: 2px 2px 0 rgb(0 0 0 / 0.65);
+    --shadow-2: 4px 4px 0 rgb(0 0 0 / 0.55);
+    --shadow-3: 8px 8px 0 rgb(0 0 0 / 0.55);
+
+    --ease-standard: cubic-bezier(0.16, 1, 0.3, 1);
+
+    --success: 152 58% 58%;
+    --warning: 42 84% 62%;
+    --info: 204 100% 75%;
+
+    --terminal-bg: 240 12% 3%;
+    --terminal-fg: 75 30% 78%;
+    --terminal-cursor: 75 90% 61%;
+
+    --sidebar-background: 240 12% 3%;
+    --sidebar-foreground: 40 12% 82%;
+    --sidebar-primary: 75 90% 61%;
+    --sidebar-primary-foreground: 0 0% 7%;
+    --sidebar-accent: 240 10% 10%;
+    --sidebar-accent-foreground: 40 20% 92%;
+    --sidebar-border: 240 11% 14%;
+    --sidebar-ring: 75 90% 61%;
+
+    --font-ui: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --font-display: "Syne", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --dot-radius: 0;
+    --focus-radius: 0;
+    --selection-bg: hsl(var(--primary));
+    --selection-fg: hsl(var(--primary-foreground));
+    --shell-glow: radial-gradient(ellipse 100% 50% at 50% -15%, hsl(var(--primary) / 0.06), transparent 50%);
+  }
+
+  /* ── Classic (previous product look) ───────────────────────────── */
+  html[data-ui-style="classic"] {
     --background: 209 56% 6%;
     --foreground: 204 29% 94%;
 
@@ -37,26 +123,21 @@
 
     --radius: 0.5rem;
 
-    /* Primary accent steps (teal) */
     --primary-hover: 172 71% 42%;
     --primary-subtle: 172 71% 46%;
 
-    /* Secondary accent — AI / agents (violet #9b87f5) */
     --ai: 250 84% 75%;
     --ai-foreground: 250 40% 10%;
 
-    /* Elevation ramp — surfaces from base (0) to overlay (3) */
     --surface-0: 209 56% 6%;
     --surface-1: 207 45% 9%;
     --surface-2: 207 40% 12%;
     --surface-3: 207 43% 15%;
 
-    /* Shadow tokens (full box-shadow values) */
     --shadow-1: 0 1px 2px hsl(209 56% 3% / 0.4);
     --shadow-2: 0 8px 24px hsl(209 56% 3% / 0.35);
     --shadow-3: 0 24px 60px hsl(209 56% 3% / 0.5);
 
-    /* Motion */
     --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
 
     --success: 153 58% 50%;
@@ -76,7 +157,15 @@
     --sidebar-border: 207 20% 17%;
     --sidebar-ring: 168 70% 46%;
 
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-display: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --dot-radius: 999px;
+    --focus-radius: var(--radius);
+    --selection-bg: hsl(var(--primary) / 0.28);
+    --selection-fg: hsl(var(--foreground));
+    --shell-glow: radial-gradient(circle at 18% 0%, hsl(var(--primary) / 0.07), transparent 28rem),
+      radial-gradient(circle at 92% 14%, hsl(var(--info) / 0.045), transparent 24rem);
   }
 }
 
@@ -92,20 +181,34 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    background: hsl(var(--background));
+    background: var(--shell-glow), hsl(var(--background));
+    font-family: var(--font-ui);
     font-feature-settings: "cv11", "ss01";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
+  h1, h2, h3, h4, .font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+
+  html[data-ui-style="catalog"] h1,
+  html[data-ui-style="catalog"] h2,
+  html[data-ui-style="catalog"] h3,
+  html[data-ui-style="catalog"] h4,
+  html[data-ui-style="catalog"] .font-display {
+    letter-spacing: -0.03em;
+  }
+
   ::selection {
-    background: hsl(var(--primary) / 0.28);
-    color: hsl(var(--foreground));
+    background: var(--selection-bg);
+    color: var(--selection-fg);
   }
 
   ::-webkit-scrollbar {
-    width: 5px;
-    height: 5px;
+    width: 6px;
+    height: 6px;
   }
 
   ::-webkit-scrollbar-track {
@@ -113,40 +216,41 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: hsl(var(--border));
-    border-radius: 999px;
+    background: hsl(var(--border-strong));
+    border-radius: var(--dot-radius);
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground) / 0.5);
+    background: hsl(var(--muted-foreground) / 0.55);
   }
 
-  /* Clean focus styles */
   *:focus-visible {
     outline: 2px solid hsl(var(--ring));
     outline-offset: 2px;
-    border-radius: var(--radius);
+    border-radius: var(--focus-radius);
   }
 }
 
 @layer utilities {
   .font-mono {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-mono);
   }
 
-  /* Typographic scale — adopt these instead of ad-hoc text sizes.
-     Floor is the Label tier (11px / text-2xs); nothing smaller. */
+  .font-display {
+    font-family: var(--font-display);
+  }
+
   .type-display {
-    @apply text-[1.75rem] font-semibold leading-[2.125rem] tracking-tight;
+    @apply text-[1.75rem] font-bold leading-[2.125rem] tracking-tight font-display;
   }
   .type-h1 {
-    @apply text-[1.375rem] font-semibold leading-7 tracking-tight;
+    @apply text-[1.375rem] font-bold leading-7 tracking-tight font-display;
   }
   .type-h2 {
-    @apply text-lg font-semibold leading-6;
+    @apply text-lg font-bold leading-6 font-display;
   }
   .type-h3 {
-    @apply text-[0.9375rem] font-semibold leading-5;
+    @apply text-[0.9375rem] font-semibold leading-5 font-display;
   }
   .type-body {
     @apply text-[0.8125rem] leading-5;
@@ -155,69 +259,84 @@
     @apply text-xs leading-5;
   }
   .type-label {
-    @apply text-2xs font-semibold uppercase tracking-wide text-muted-foreground;
+    @apply text-2xs font-medium uppercase tracking-[0.12em] text-muted-foreground;
+  }
+
+  html[data-ui-style="classic"] .type-display,
+  html[data-ui-style="classic"] .type-h1,
+  html[data-ui-style="classic"] .type-h2 {
+    font-weight: 600;
+  }
+
+  .shadow-hard {
+    box-shadow: var(--shadow-2);
+  }
+
+  .shadow-hard-sm {
+    box-shadow: var(--shadow-1);
+  }
+
+  .shadow-hard-lg {
+    box-shadow: var(--shadow-3);
   }
 }
 
 @layer components {
   .app-shell-bg {
-    background:
-      radial-gradient(circle at 18% 0%, hsl(var(--primary) / 0.07), transparent 28rem),
-      radial-gradient(circle at 92% 14%, hsl(var(--info) / 0.045), transparent 24rem),
-      hsl(var(--background));
+    background: var(--shell-glow), hsl(var(--background));
   }
 
-  /* Panel styles */
   .enterprise-panel {
-    @apply rounded-xl border border-border/60 bg-card/95;
+    @apply rounded-sm border border-border bg-card;
     box-shadow: var(--shadow-2);
   }
 
   .workspace-panel {
-    @apply rounded-xl border border-border/60 bg-card/95;
-    box-shadow: var(--shadow-2);
-  }
-
-  .workspace-subtle {
-    @apply border border-border/70 bg-secondary/40;
-  }
-
-  .workspace-empty {
-    @apply flex flex-col gap-4 rounded-lg border border-dashed border-border/60 bg-secondary/20 px-6 py-8;
-  }
-
-  .enterprise-kicker {
-    @apply text-xs font-semibold uppercase tracking-wide text-primary;
-  }
-
-  /* Card styles */
-  .corp-card {
-    @apply rounded-xl border border-border/60 bg-card/95;
+    @apply rounded-sm border border-border bg-card;
     box-shadow: var(--shadow-1);
   }
 
-  /* Accent gradient — teal → violet, for hero bars / active nav / primary CTAs */
+  .workspace-subtle {
+    @apply border border-border bg-secondary/50;
+  }
+
+  .workspace-empty {
+    @apply flex flex-col gap-4 rounded-sm border border-dashed border-border bg-secondary/20 px-6 py-8;
+  }
+
+  .enterprise-kicker {
+    @apply text-2xs font-medium uppercase tracking-[0.14em] text-primary;
+  }
+
+  .corp-card {
+    @apply rounded-sm border border-border bg-card;
+    box-shadow: var(--shadow-1);
+  }
+
   .accent-gradient {
+    background: hsl(var(--primary));
+  }
+
+  html[data-ui-style="classic"] .accent-gradient {
     background-image: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--ai)));
   }
 
   .corp-surface {
-    @apply transition-colors duration-150 hover:bg-secondary/50;
+    @apply transition-colors duration-150 hover:bg-secondary/70;
   }
 
-  /* Row hover — for list items inside cards */
   .row-hover {
-    @apply transition-colors duration-100 hover:bg-secondary/40;
+    @apply transition-colors duration-100 hover:bg-secondary/50;
   }
 
-  /* Data row */
   .data-row {
-    @apply flex items-center gap-3 px-4 py-3 transition-colors duration-100 hover:bg-secondary/40;
+    @apply flex items-center gap-3 border-b border-border/70 px-4 py-3 transition-colors duration-100 hover:bg-secondary/40 last:border-b-0;
   }
 
-  /* Status indicators */
   .status-dot {
-    @apply h-2 w-2 rounded-full;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: var(--dot-radius);
   }
 
   .status-dot-online {
@@ -229,25 +348,23 @@
   }
 
   .status-dot-unknown {
-    @apply status-dot bg-muted;
+    @apply status-dot bg-muted-foreground/50;
   }
 
-  /* Icon container variants */
   .icon-box {
-    @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-lg;
+    @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-sm;
   }
 
   .icon-box-primary {
-    @apply icon-box border border-primary/20 bg-primary/15 text-primary;
+    @apply icon-box border border-primary/35 bg-primary/15 text-primary;
   }
 
   .icon-box-muted {
-    @apply icon-box border border-border/70 bg-secondary/70 text-muted-foreground;
+    @apply icon-box border border-border bg-secondary text-muted-foreground;
   }
 
-  /* Section divider */
   .section-divider {
-    @apply border-b border-border/60;
+    @apply border-b border-border;
   }
 }
 

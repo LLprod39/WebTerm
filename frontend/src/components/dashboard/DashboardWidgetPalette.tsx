@@ -3,6 +3,7 @@ import { Layout } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
+import { DashboardUiStyleSwitcher } from "./DashboardUiStyleSwitcher";
 import {
   dashboardWidgetDescriptions,
   getDashboardWidthLabel,
@@ -27,8 +28,10 @@ export function DashboardWidgetPalette({
           initial={{ height: 0, opacity: 0 }}
           animate={{ height: "auto", opacity: 1 }}
           exit={{ height: 0, opacity: 0 }}
-          className="overflow-hidden"
+          className="overflow-hidden space-y-4"
         >
+          <DashboardUiStyleSwitcher />
+
           <div className="rounded-xl border border-dashed border-border/80 bg-secondary/10 p-5 shadow-inner space-y-4">
             <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80 flex items-center gap-1.5">
               <Layout className="h-3.5 w-3.5" /> Библиотека виджетов (нажмите для добавления/удаления с экрана)

@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 import { formatDuration } from "./formatters";
-import { _severityRank, reportSignalCount, riskLabel, severityTone, toneBoxFromStatusTone, type ReportTab } from "./reportShared";
+import { _severityRank, reportSignalCount, riskLabel, severityTone, toneBoxFromStatusTone } from "./reportShared";
 
 
 export function StateBlock({ title, description, icon, danger = false }: { title: string; description?: string; icon?: ReactNode; danger?: boolean }) {
@@ -44,46 +44,56 @@ export function PendingQuestionPanel({
   if (!question || report.run.status !== "waiting") return null;
 
   return (
-    <section className="enterprise-panel border-amber-500/35 bg-amber-500/5 p-4 sm:p-5">
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,520px)]">
+    <section className="rounded-sm border-2 border-warning/50 bg-warning/10 p-5 shadow-elev-2 sm:p-6">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <StatusBadge label="Нужен ваш ответ" tone="warning" pulse />
+        <span className="text-2xs font-medium uppercase tracking-wider text-warning/90">
+          Агент остановлен до ответа
+        </span>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,400px)]">
         <div className="min-w-0">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <StatusBadge label="Агент ждёт ответа" tone="warning" pulse />
-            <span className="rounded-md border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-200">
-              human-in-the-loop
-            </span>
-          </div>
           <div className="flex gap-3">
-            <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+            <MessageSquare className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
             <div className="min-w-0">
-              <h3 className="text-base font-semibold text-foreground">Вопрос агента</h3>
-              <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-foreground/85">{question}</p>
+              <h3 className="font-display text-lg font-bold tracking-tight text-foreground">
+                Вопрос агента
+              </h3>
+              <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-foreground">
+                {question}
+              </p>
             </div>
           </div>
         </div>
 
         <form
-          className="min-w-0 space-y-3 rounded-lg border border-border/70 bg-background/45 p-3"
+          className="min-w-0 space-y-3 rounded-sm border border-border bg-card p-4"
           onSubmit={(event) => {
             event.preventDefault();
             onSubmit();
           }}
         >
+          <label className="text-2xs font-medium uppercase tracking-wider text-muted-foreground" htmlFor="agent-hitl-reply">
+            Ваш ответ
+          </label>
           <Textarea
+            id="agent-hitl-reply"
             value={answer}
             onChange={(event) => onAnswerChange(event.target.value)}
-            placeholder="Введите ответ агенту"
+            placeholder="Напишите ответ…"
             aria-label="Ответ агенту"
-            className="min-h-[104px] resize-y"
+            className="min-h-[120px] resize-y"
             disabled={submitting}
+            autoFocus
           />
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs leading-5 text-muted-foreground">
-              После отправки запуск вернётся в выполнение, а ответ попадёт в события отчёта.
+            <p className="text-2xs leading-5 text-muted-foreground">
+              После отправки агент продолжит работу.
             </p>
-            <Button type="submit" size="sm" className="h-9 shrink-0 gap-1.5" disabled={submitting || !answer.trim()}>
+            <Button type="submit" size="sm" className="h-10 shrink-0 gap-1.5" disabled={submitting || !answer.trim()}>
               {submitting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              {submitting ? "Отправляем" : "Отправить ответ"}
+              {submitting ? "Отправляем…" : "Отправить"}
             </Button>
           </div>
         </form>
@@ -172,7 +182,7 @@ export function LiveRunBanner({
   onCopyText,
 }: {
   report: AgentRunReportResponse;
-  onOpenTab: (tab: ReportTab) => void;
+  onOpenTab: (tab: string) => void;
   onCleanupStale: () => void;
   cleaningStale: boolean;
   onCopyText: (value: string) => void;

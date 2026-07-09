@@ -1,8 +1,17 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
-import { AlertTriangle, CheckCircle2, FileText, FolderArchive, List, RefreshCw, Square, Terminal, Workflow } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle2,
+  FileText,
+  FolderOpen,
+  RefreshCw,
+  Square,
+  Workflow,
+} from "lucide-react";
 
 import {
   approvePipelinePlan,
@@ -12,40 +21,44 @@ import {
   retryAgentRunReportDelivery,
   stopAgent,
 } from "@/lib/api";
-import { agentRunStatusPresentation } from "@/design/status";
 import { StatusBadge } from "@/components/system/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useI18n } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 
 import { AgentStepsTab } from "./agent-run/AgentRunStepsTab";
-import { ArtifactsTab, LogsTab } from "./agent-run/AgentRunLogsArtifactsTabs";
-import { EventsTab } from "./agent-run/AgentRunEventsTab";
 import {
-  LiveRunBanner,
   PendingQuestionPanel,
-  ReportMetricCards,
   StateBlock,
 } from "./agent-run/AgentRunCommonPanels";
+import { MaterialsTab } from "./agent-run/AgentRunMaterialsTab";
 import { OverviewTab } from "./agent-run/AgentRunOverviewTab";
-import { primaryOutcomeSummary, severityLabel, severityTone, type ReportTab } from "./agent-run/reportShared";
+import {
+  primaryOutcomeSummary,
+  unifiedRunStatus,
+  type ReportTab,
+} from "./agent-run/reportShared";
+import { formatDuration } from "./agent-run/formatters";
 
-
-const tabItems: Array<{ value: ReportTab; label: string; icon: LucideIcon }> = [
-  { value: "overview", label: "Обзор", icon: FileText },
-  { value: "events", label: "События", icon: List },
-  { value: "logs", label: "Логи", icon: Terminal },
-  { value: "artifacts", label: "Артефакты", icon: FolderArchive },
-  { value: "agent", label: "Ход агента", icon: Workflow },
+const tabItems: Array<{ value: ReportTab; label: string; hint: string; icon: LucideIcon }> = [
+  { value: "summary", label: "Итог", hint: "Что случилось", icon: FileText },
+  { value: "progress", label: "Ход", hint: "Шаги агента", icon: Workflow },
+  { value: "materials", label: "Материалы", hint: "Логи и файлы", icon: FolderOpen },
 ];
 
-
+/**
+ * Agent run report — simplified IA:
+ * 1. One status + one-liner
+ * 2. HITL first if waiting
+ * 3. Three zones: Итог · Ход · Материалы
+ */
 export default function AgentRunPage() {
   const { runId } = useParams<{ runId: string }>();
   const rid = parseInt(runId || "0", 10);
   const { t } = useI18n();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<ReportTab>("overview");
+  const [activeTab, setActiveTab] = useState<ReportTab>("summary");
   const [stopping, setStopping] = useState(false);
   const [approving, setApproving] = useState(false);
   const [cleaningStale, setCleaningStale] = useState(false);
@@ -62,7 +75,9 @@ export default function AgentRunPage() {
     retry: false,
     refetchInterval: (query) => {
       const status = query.state.data?.run?.status;
-      return status && ["running", "pending", "paused", "waiting", "plan_review"].includes(status) ? 2500 : false;
+      return status && ["running", "pending", "paused", "waiting", "plan_review"].includes(status)
+        ? 2500
+        : false;
     },
   });
 
@@ -111,10 +126,12 @@ export default function AgentRunPage() {
     setActionNotice(null);
     try {
       const response = await cleanupStaleAgentRuns({ limit: 50 });
-      setActionNotice(`Очищено stale-запусков: ${response.cleanup.cleaned}; отменено dispatch: ${response.cleanup.canceled_dispatches}.`);
+      setActionNotice(
+        `Очищено зависших запусков: ${response.cleanup.cleaned}.`,
+      );
       await refresh();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Не удалось очистить stale-запуск.");
+      setActionError(err instanceof Error ? err.message : "Не удалось очистить зависший запуск.");
     } finally {
       setCleaningStale(false);
     }
@@ -130,7 +147,7 @@ export default function AgentRunPage() {
       setActionNotice("Доставка отчёта запущена повторно.");
       await refresh();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Не удалось повторить доставку отчёта.");
+      setActionError(err instanceof Error ? err.message : "Не удалось повторить доставку.");
     } finally {
       setRetryingDelivery(false);
     }
@@ -153,21 +170,9 @@ export default function AgentRunPage() {
       setActionNotice("Ответ отправлен агенту.");
       await refresh();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Не удалось отправить ответ агенту.");
+      setActionError(err instanceof Error ? err.message : "Не удалось отправить ответ.");
     } finally {
       setReplying(false);
-    }
-  };
-
-  const copyText = async (value: string) => {
-    if (!value) return;
-    try {
-      await navigator.clipboard?.writeText(value);
-      setActionNotice("Скопировано.");
-      setActionError(null);
-    } catch {
-      setActionNotice(null);
-      setActionError(value);
     }
   };
 
@@ -184,28 +189,46 @@ export default function AgentRunPage() {
     return <StateBlock title={t("run.not_found_title")} description={message} danger />;
   }
 
-  const status = agentRunStatusPresentation(run.status);
+  const outcome = unifiedRunStatus(data);
+  const oneLiner = primaryOutcomeSummary(data);
+  const canCleanup = Boolean(data.report_state?.execution_state?.can_cleanup);
 
   return (
     <div
       data-agent-run-scroll
       className="h-full min-h-0 overflow-y-auto overflow-x-hidden bg-background [scrollbar-gutter:stable]"
     >
-      <header className="sticky top-0 z-20 border-b border-border/70 bg-background/95 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-[1680px] flex-col gap-3 px-4 py-3 sm:px-6 2xl:px-8">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <header className="sticky top-0 z-20 border-b border-border bg-background/95 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 px-4 py-3 sm:px-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-3">
-                <h1 className="truncate text-2xl font-semibold tracking-[-0.02em] text-foreground sm:text-3xl">
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-muted-foreground" asChild>
+                  <Link to="/agents">
+                    <ArrowLeft className="h-3.5 w-3.5" />
+                    Агенты
+                  </Link>
+                </Button>
+                <span className="font-mono text-2xs text-muted-foreground">#{run.id}</span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h1 className="font-display truncate text-xl font-bold tracking-tight text-foreground sm:text-2xl">
                   {data.report.title || run.agent_name}
                 </h1>
-                <StatusBadge label={t(status.labelKey)} tone={status.tone} pulse={status.pulse} />
-                <StatusBadge
-                  label={severityLabel[data.report.severity] || data.report.severity}
-                  tone={severityTone[data.report.severity] || "neutral"}
-                />
+                <StatusBadge label={outcome.label} tone={outcome.tone} pulse={outcome.pulse} />
               </div>
-              <p className="mt-1 max-w-4xl text-sm leading-6 text-muted-foreground">{primaryOutcomeSummary(data)}</p>
+
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{oneLiner}</p>
+
+              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-2xs text-muted-foreground">
+                {(data.report.meta.server || run.server_name) ? (
+                  <span>Сервер: <span className="text-foreground/80">{data.report.meta.server || run.server_name}</span></span>
+                ) : null}
+                {run.duration_ms > 0 ? (
+                  <span>Время: <span className="text-foreground/80">{formatDuration(run.duration_ms)}</span></span>
+                ) : null}
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -221,25 +244,37 @@ export default function AgentRunPage() {
                   {t("agent.stop")}
                 </Button>
               ) : null}
-              {data.report_state?.execution_state?.can_cleanup ? (
-                <Button size="sm" variant="outline" className="h-9 gap-1.5 border-amber-500/30 text-amber-200 hover:text-amber-100" onClick={onCleanupStale} disabled={cleaningStale}>
+              {canCleanup ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-9 gap-1.5"
+                  onClick={onCleanupStale}
+                  disabled={cleaningStale}
+                >
                   {cleaningStale ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <AlertTriangle className="h-3.5 w-3.5" />}
-                  {cleaningStale ? "Очищаем" : "Очистить stale"}
+                  {cleaningStale ? "Очищаем…" : "Снять зависший"}
                 </Button>
               ) : null}
-              <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => void refresh()} aria-label={t("udash.refresh")}>
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-9 w-9"
+                onClick={() => void refresh()}
+                aria-label={t("udash.refresh")}
+              >
                 <RefreshCw className="h-4 w-4" />
               </Button>
             </div>
           </div>
 
           {actionError ? <div className="text-sm text-destructive">{actionError}</div> : null}
-          {actionNotice ? <div className="text-sm text-emerald-300">{actionNotice}</div> : null}
+          {actionNotice ? <div className="text-sm text-success">{actionNotice}</div> : null}
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-[1680px] flex-col gap-4 px-4 py-5 sm:px-6 2xl:px-8">
-        <ReportMetricCards report={data} />
+      <main className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-5 sm:px-6">
+        {/* HITL dominates when waiting */}
         <PendingQuestionPanel
           report={data}
           answer={replyText}
@@ -247,42 +282,52 @@ export default function AgentRunPage() {
           onAnswerChange={setReplyText}
           onSubmit={onReply}
         />
-        <LiveRunBanner
-          report={data}
-          onOpenTab={setActiveTab}
-          onCleanupStale={onCleanupStale}
-          cleaningStale={cleaningStale}
-          onCopyText={copyText}
-        />
 
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as ReportTab)} className="space-y-4">
-          <TabsContent value="overview">
-            <OverviewTab report={data} onRetryDelivery={onRetryDelivery} retryingDelivery={retryingDelivery} />
-          </TabsContent>
-          <TabsContent value="events">
-            <EventsTab report={data} />
-          </TabsContent>
-          <TabsContent value="logs">
-            <LogsTab report={data} logs={data.logs} />
-          </TabsContent>
-          <TabsContent value="artifacts">
-            <ArtifactsTab report={data} />
-          </TabsContent>
-          <TabsContent value="agent">
-            <AgentStepsTab report={data} steps={data.agent_steps} />
-          </TabsContent>
-
-          <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto p-1.5 sm:w-auto">
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => setActiveTab(value as ReportTab)}
+          className="space-y-4"
+        >
+          <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-sm border border-border bg-surface-0 p-1 sm:w-auto">
             {tabItems.map((item) => {
               const Icon = item.icon;
               return (
-                <TabsTrigger key={item.value} value={item.value} className="h-10 gap-2 px-3 text-sm">
+                <TabsTrigger
+                  key={item.value}
+                  value={item.value}
+                  className={cn(
+                    "h-10 gap-2 rounded-sm px-3.5 text-sm data-[state=active]:shadow-none",
+                  )}
+                >
                   <Icon className="h-4 w-4" />
-                  {item.label}
+                  <span className="flex flex-col items-start leading-none">
+                    <span>{item.label}</span>
+                    <span className="mt-0.5 hidden text-2xs font-normal opacity-70 sm:block">
+                      {item.hint}
+                    </span>
+                  </span>
                 </TabsTrigger>
               );
             })}
           </TabsList>
+
+          <TabsContent value="summary" className="mt-0 outline-none">
+            <OverviewTab
+              report={data}
+              onRetryDelivery={onRetryDelivery}
+              retryingDelivery={retryingDelivery}
+              onOpenProgress={() => setActiveTab("progress")}
+              onOpenMaterials={() => setActiveTab("materials")}
+            />
+          </TabsContent>
+
+          <TabsContent value="progress" className="mt-0 outline-none">
+            <AgentStepsTab report={data} steps={data.agent_steps} />
+          </TabsContent>
+
+          <TabsContent value="materials" className="mt-0 outline-none">
+            <MaterialsTab report={data} />
+          </TabsContent>
         </Tabs>
       </main>
     </div>

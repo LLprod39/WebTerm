@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-quer
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Suspense, lazy, type ReactNode } from "react";
 import { I18nProvider, useI18n } from "./lib/i18n";
+import { UiStyleProvider } from "./lib/ui-style";
 import AppLayout from "./components/AppLayout";
 import { fetchAuthSession } from "./lib/api";
 import { canAccessStudio, hasAnyFeatureAccess, hasFeatureAccess } from "./lib/featureAccess";
@@ -151,6 +152,7 @@ function FeatureGate({
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
+    <UiStyleProvider>
     <I18nProvider>
       <TooltipProvider>
         <Toaster />
@@ -395,6 +397,7 @@ const App = () => (
         </BrowserRouter>
       </TooltipProvider>
     </I18nProvider>
+    </UiStyleProvider>
   </QueryClientProvider>
 );
 
