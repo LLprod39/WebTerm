@@ -60,6 +60,13 @@ export function NovaContextSettings({ settings, onChange }: NovaContextSettingsP
             <div className="text-[13px] font-medium text-foreground">{t("terminal.ai.nova.settings.sudo.title")}</div>
             <p className="mt-0.5 text-xs text-muted-foreground">{t("terminal.ai.nova.settings.sudo.description")}</p>
           </div>
+          {settings.novaSudoPolicy === "disabled" ? (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-2 text-xs leading-snug text-amber-100/95">
+              Sudo выключен: Nova не сможет выполнять systemctl/apt/service fix без прав.
+              Для сложных ops включите <span className="font-semibold">Ask</span> (подтверждение на команду)
+              или <span className="font-semibold">Approved</span> (если доверяете сессии).
+            </div>
+          ) : null}
           <div className="grid grid-cols-3 gap-1.5">
             {SUDO_OPTIONS.map((option) => {
               const active = settings.novaSudoPolicy === option.value;

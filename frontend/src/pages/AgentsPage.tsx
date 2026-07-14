@@ -5,6 +5,7 @@ import {
   cleanupStaleAgentRuns,
   deleteAgent,
   fetchAgents,
+  fetchAuthSession,
   runAgent,
   stopAgent,
   updateAgent,
@@ -58,6 +59,13 @@ export default function AgentsPage() {
     queryFn: () => fetchAgents(),
     refetchInterval: 10_000,
   });
+  const { data: authSession } = useQuery({
+    queryKey: ["auth", "session"],
+    queryFn: fetchAuthSession,
+    staleTime: 60_000,
+    retry: false,
+  });
+  const isAdmin = Boolean(authSession?.user?.is_staff);
 
   const allAgents = data?.agents || [];
   const agents = allAgents.filter(
@@ -96,11 +104,15 @@ export default function AgentsPage() {
   const scheduledWorker = workerStates.scheduled_agents;
   const showScheduledWorker = scheduledAgents > 0 || Boolean(scheduledWorker && scheduledWorker.status !== "missing");
 
-  const onRun = async (ag: AgentItem) => {
-    const blockedReason = runBlockedReason(ag, lang);
+  const openCreate = () => {
+    setCreateOpen(true);
+  };
+
+  const launchAgent = async (ag: AgentItem) => {
+    const blockedReason = runBlockedReason(ag, lang, { isAdmin });
     if (blockedReason) {
       setActionError(blockedReason);
-      return;
+      return false;
     }
 
     setRunningId(ag.id);
@@ -115,9 +127,10 @@ export default function AgentsPage() {
       }
       if ((ag.mode === "full" || ag.mode === "multi") && res.run_id) {
         navigate(`/agents/run/${res.run_id}`);
-        return;
+        return true;
       }
       await queryClient.invalidateQueries({ queryKey: ["agents"] });
+      return true;
     } catch {
       setResult({
         run_id: 0,
@@ -127,9 +140,15 @@ export default function AgentsPage() {
         duration_ms: 0,
         commands_output: [],
       });
+      setReportModalOpen(true);
+      return false;
     } finally {
       setRunningId(null);
     }
+  };
+
+  const onRun = async (ag: AgentItem) => {
+    await launchAgent(ag);
   };
 
   const onStop = async (ag: AgentItem) => {
@@ -220,13 +239,17 @@ export default function AgentsPage() {
     );
   }
 
-  const systemProblems = countAgentSystemProblems({
-    runtimeOverview,
-    executionReadiness: executionReadiness || executionWarning,
-    scheduledWorker,
-    showScheduledWorker,
-  });
-  const healthSection = (
+  // Worker/ops diagnostics are admin-only — regular operators should not see
+  // "agents may fail" banners or manage.py fix commands.
+  const systemProblems = isAdmin
+    ? countAgentSystemProblems({
+        runtimeOverview,
+        executionReadiness: executionReadiness || executionWarning,
+        scheduledWorker,
+        showScheduledWorker,
+      })
+    : 0;
+  const healthSection = isAdmin ? (
     <AgentSystemHealthSection
       runtimeOverview={runtimeOverview}
       showRuntimeOverview={showRuntimeOverview}
@@ -238,7 +261,7 @@ export default function AgentsPage() {
       onCleanupStale={onCleanupStale}
       cleaningStale={cleaningStale}
     />
-  );
+  ) : null;
 
   return (
     <PageShell width="7xl" className="space-y-4">
@@ -252,8 +275,9 @@ export default function AgentsPage() {
             <Button size="icon" variant="ghost" onClick={() => queryClient.invalidateQueries({ queryKey: ["agents"] })} aria-label={t("udash.refresh")}>
               <RefreshCw className="h-4 w-4" />
             </Button>
-            <Button className="gap-1.5" onClick={() => setCreateOpen(true)}>
-              <Plus className="h-4 w-4" /> {t("agent.new")}
+            <Button className="gap-1.5 shadow-elev-1" onClick={openCreate}>
+              <Plus className="h-4 w-4" />
+              {t("agent.new")}
             </Button>
           </>
         }
@@ -294,7 +318,7 @@ export default function AgentsPage() {
       {systemProblems > 0 ? healthSection : null}
 
       {actionError ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div className="rounded-sm border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive shadow-elev-1">
           <div className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 items-start gap-2">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -314,7 +338,7 @@ export default function AgentsPage() {
       ) : null}
 
       {actionNotice ? (
-        <div className="rounded-lg border border-success/25 bg-success/10 px-4 py-3 text-sm text-foreground">
+        <div className="rounded-sm border border-success/30 bg-success/10 px-4 py-3 text-sm text-foreground shadow-elev-1">
           <div className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 items-start gap-2">
               <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
@@ -334,17 +358,23 @@ export default function AgentsPage() {
       ) : null}
 
       {result && !reportModalOpen && (
-        <div className="bg-card border border-border rounded-lg px-4 py-3 flex items-center gap-3">
-          <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${result.status === "completed" ? "bg-primary/20 text-primary" : "bg-destructive/20 text-destructive"}`}>
+        <div className="flex items-center gap-3 rounded-sm border border-border bg-card px-4 py-3 shadow-elev-1">
+          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-sm border ${result.status === "completed" ? "border-success/30 bg-success/15 text-success" : "border-destructive/30 bg-destructive/15 text-destructive"}`}>
             {result.status === "completed" ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
           </div>
-          <div className="flex-1 min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="text-sm font-medium text-foreground">{result.server_name}</div>
             <div className="text-xs text-muted-foreground">{result.status} · {formatDuration(result.duration_ms)}</div>
           </div>
-          <Button size="sm" className="h-9 shrink-0 gap-1.5 text-xs" onClick={() => setReportModalOpen(true)}>
-            <FileText className="h-3.5 w-3.5" /> {t("agent.report")}
-          </Button>
+          {result.run_id > 0 ? (
+            <Button size="sm" variant="outline" className="h-9 shrink-0 gap-1.5 text-xs" onClick={() => navigate(`/agents/run/${result.run_id}`)}>
+              <FileText className="h-3.5 w-3.5" /> {t("agent.report")}
+            </Button>
+          ) : (
+            <Button size="sm" className="h-9 shrink-0 gap-1.5 text-xs" onClick={() => setReportModalOpen(true)}>
+              <FileText className="h-3.5 w-3.5" /> {t("agent.report")}
+            </Button>
+          )}
           <Button
             size="icon"
             variant="ghost"
@@ -367,11 +397,12 @@ export default function AgentsPage() {
         onModeFilterChange={setModeFilter}
         lang={lang}
         t={t}
+        isAdmin={isAdmin}
         createdAgentId={createdAgentId}
         runningId={runningId}
         stoppingId={stoppingId}
         activeRunByAgentId={activeRunByAgentId}
-        onCreate={() => setCreateOpen(true)}
+        onCreate={openCreate}
         onEdit={setEditingAgent}
         onRun={onRun}
         onStop={onStop}
@@ -381,17 +412,60 @@ export default function AgentsPage() {
 
       {systemProblems === 0 ? healthSection : null}
 
-      <CreateAgentDialog open={createOpen} onClose={() => setCreateOpen(false)}
-        onSaved={async ({ id, mode }) => {
+      <CreateAgentDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onSaved={async ({ id, mode, action, runAfterSave }) => {
           setModeFilter("all");
           setCreatedAgentId(id);
           setCreateOpen(false);
           await queryClient.invalidateQueries({ queryKey: ["agents", "list"] });
-          if (mode === "full" || mode === "multi") {
-            navigate("/agents");
+
+          if (action === "create" && runAfterSave) {
+            const refreshed = await fetchAgents();
+            const created = refreshed.agents.find((agent) => agent.id === id);
+            if (created) {
+              await launchAgent(created);
+            } else {
+              // Fallback shell if list is momentarily stale
+              await launchAgent({
+                id,
+                name: "",
+                mode,
+                mode_display: mode,
+                agent_type: "custom",
+                agent_type_display: "custom",
+                server_count: 0,
+                server_ids: [],
+                server_names: [],
+                schedule_minutes: 0,
+                schedule_config: { mode: "manual" },
+                is_enabled: true,
+                commands: [],
+                ai_prompt: "",
+                goal: "",
+                system_prompt: "",
+                max_iterations: 40,
+                allow_multi_server: false,
+                tools_config: {},
+                sudo_policy: "disabled",
+                stop_conditions: [],
+                skill_slugs: [],
+                input_artifacts: [],
+                report_delivery: {},
+                session_timeout_seconds: 1200,
+                max_connections: 5,
+                last_run_at: null,
+                last_run_status: null,
+                last_run_id: null,
+                active_run_id: null,
+              });
+            }
           }
+
           window.setTimeout(() => setCreatedAgentId((current) => (current === id ? null : current)), 8000);
-        }} />
+        }}
+      />
       <CreateAgentDialog
         open={Boolean(editingAgent)}
         initialAgent={editingAgent}

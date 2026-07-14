@@ -45,6 +45,21 @@ def build_auth_settings(*, debug: bool) -> dict[str, object]:
             if header.strip()
         ],
         "DOMAIN_AUTH_AUTO_CREATE": env_bool("DOMAIN_AUTH_AUTO_CREATE", True),
+        # Anti-spoofing: the identity header is only trusted when the request
+        # originates from one of these proxy addresses (IP or CIDR), and/or when
+        # a valid shared secret header is present. If neither is configured the
+        # middleware fails closed and refuses header-based auto-login.
+        "DOMAIN_AUTH_TRUSTED_PROXIES": [
+            proxy.strip()
+            for proxy in (os.getenv("DOMAIN_AUTH_TRUSTED_PROXIES", "") or "").split(",")
+            if proxy.strip()
+        ],
+        "DOMAIN_AUTH_SHARED_SECRET": os.getenv("DOMAIN_AUTH_SHARED_SECRET", "") or "",
+        "DOMAIN_AUTH_SHARED_SECRET_HEADER": (
+            os.getenv("DOMAIN_AUTH_SHARED_SECRET_HEADER", "X-Domain-Auth-Secret")
+            or "X-Domain-Auth-Secret"
+        ).strip()
+        or "X-Domain-Auth-Secret",
         "DOMAIN_AUTH_LOWERCASE_USERNAMES": env_bool("DOMAIN_AUTH_LOWERCASE_USERNAMES", True),
         "DOMAIN_AUTH_DEFAULT_PROFILE": (
             os.getenv("DOMAIN_AUTH_DEFAULT_PROFILE", "server_only") or "server_only"

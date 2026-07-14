@@ -35,9 +35,17 @@ from typing import Any
 from loguru import logger
 from pydantic import ValidationError
 
+from servers.agent_budgets import (
+    NOVA_COMPACT_AFTER_TURNS,
+    NOVA_DEFAULT_ITERATION_TIMEOUT_SEC,
+    NOVA_DEFAULT_MAX_ITERATIONS,
+    NOVA_DEFAULT_TOTAL_TIMEOUT_SEC,
+)
 from servers.services.terminal_ai.agent.prompts import (
+    build_partial_stop_summary,
     build_system_prompt,
     build_user_turn_prompt,
+    compact_agent_history,
 )
 from servers.services.terminal_ai.agent.schemas import (
     AgentResult,
@@ -56,9 +64,9 @@ from servers.services.terminal_ai.schemas import parse_or_repair
 logger = logging.getLogger(__name__)
 
 # Hard limits. The loop will halt itself when any is exceeded.
-DEFAULT_MAX_ITERATIONS = 30
-DEFAULT_ITERATION_TIMEOUT_SEC = 180.0  # wall-clock per iteration (LLM + tool)
-DEFAULT_TOTAL_TIMEOUT_SEC = 1800.0  # wall-clock for the whole loop (30 min)
+DEFAULT_MAX_ITERATIONS = NOVA_DEFAULT_MAX_ITERATIONS
+DEFAULT_ITERATION_TIMEOUT_SEC = NOVA_DEFAULT_ITERATION_TIMEOUT_SEC  # wall-clock per iteration (LLM + tool)
+DEFAULT_TOTAL_TIMEOUT_SEC = float(NOVA_DEFAULT_TOTAL_TIMEOUT_SEC)  # wall-clock for the whole loop
 
 # Cap on LLM output size before we force-terminate the stream to avoid
 # runaway responses. The loop accepts anything that parses as JSON first.
@@ -110,6 +118,7 @@ class AgentContext:
     total_timeout_sec: float = DEFAULT_TOTAL_TIMEOUT_SEC
     dry_run: bool = False
     sudo_policy: str = "disabled"
+    compact_after_turns: int = NOVA_COMPACT_AFTER_TURNS
 
 
 # ---------------------------------------------------------------------------
@@ -447,6 +456,11 @@ async def run_agent_loop(
                     "content": result.output,
                 }
             )
+            # Compact in-place so subsequent turns and partial reports see summary.
+            history[:] = compact_agent_history(
+                history,
+                compact_after=int(getattr(ctx, "compact_after_turns", NOVA_COMPACT_AFTER_TURNS) or NOVA_COMPACT_AFTER_TURNS),
+            )
 
             if result.fatal:
                 stopped = True
@@ -463,6 +477,17 @@ async def run_agent_loop(
         raise
     finally:
         todos_out = [Todo.model_validate(t) for t in tool_ctx.todos]
+        # Always produce a non-empty Russian partial summary when the loop
+        # stops without a normal ``done`` final_text (budget/timeout/error).
+        if stopped and not (final_text or "").strip():
+            final_text = build_partial_stop_summary(
+                user_message=ctx.user_message,
+                history=history,
+                stop_reason=stop_reason,
+                iterations=iterations,
+                tool_calls=tool_calls,
+                todos=todos_out,
+            )
         if ctx.emit is not None:
             if stopped:
                 await ctx.emit(
@@ -471,6 +496,7 @@ async def run_agent_loop(
                         "reason": stop_reason,
                         "iterations": iterations,
                         "tool_calls": tool_calls,
+                        "final_text": final_text,
                     }
                 )
             else:

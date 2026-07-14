@@ -1,11 +1,32 @@
 import type { Dispatch, SetStateAction } from "react";
-import { BookOpen, Brain, CalendarDays, CheckCircle2, Layers, Server, Settings2, Shield, Search, Zap, type LucideIcon } from "lucide-react";
+import { BookOpen, Brain, CalendarDays, CheckCircle2, Layers, Server, Settings2, Shield, Search, Terminal, type LucideIcon } from "lucide-react";
 import { InlineAlert } from "@/components/system/InlineAlert";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { AgentInputArtifact, AgentScheduleConfig, AgentScheduleMode, AgentTemplate, FrontendServer, StudioSkill } from "@/lib/api";
 import { localize } from "@/lib/i18n";
-import { AGENT_ICONS, type AgentSudoPolicy, type AgentTaskDraft, type AgentWizardCheck, type AgentWizardStep, FULL_AGENT_TOOL_OPTIONS, QUICK_TIMES, SCHEDULE_MODES, SCHEDULE_PRESETS, SUDO_AGENT_OPTIONS, WEEKDAYS, agentModeLabel, buildDefaultToolsConfig, finalizeScheduleConfig, formatScheduleConfigLabel, sudoAgentOption } from "./agentPageUtils";
+import { cn } from "@/lib/utils";
+import {
+  AGENT_BUDGET_PROFILES,
+  AGENT_ICONS,
+  type AgentBudgetProfileId,
+  type AgentSudoPolicy,
+  type AgentTaskDraft,
+  type AgentWizardCheck,
+  type AgentWizardStep,
+  FULL_AGENT_TOOL_OPTIONS,
+  QUICK_TIMES,
+  SCHEDULE_MODES,
+  SCHEDULE_PRESETS,
+  SUDO_AGENT_OPTIONS,
+  WEEKDAYS,
+  agentModeLabel,
+  buildDefaultToolsConfig,
+  finalizeScheduleConfig,
+  formatScheduleConfigLabel,
+  resolveBudgetProfileId,
+  sudoAgentOption,
+} from "./agentPageUtils";
 import { AgentMaterialsSection } from "./AgentMaterialsSection";
 import { AgentWizardReviewStep } from "./AgentWizardReviewStep";
 type SummaryRow = { icon: LucideIcon; label: string; value: string };
@@ -88,6 +109,9 @@ type AgentWizardStepContentProps = {
   commandCount: number;
   readiness: number;
   readinessChecks: AgentWizardCheck[];
+  runAfterSave?: boolean;
+  setRunAfterSave?: StateSetter<boolean>;
+  isEditing?: boolean;
 };
 export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
   const {
@@ -167,29 +191,38 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
     commandCount,
     readiness,
     readinessChecks,
+    runAfterSave = true,
+    setRunAfterSave,
+    isEditing = false,
   } = props;
+
   return (
     <div className="space-y-6">
       <div className="space-y-6">
         {step === "template" && (
           <>
-            <section className="space-y-4">
-              <h3 className="text-sm font-semibold text-foreground">{localize(lang, "Тип агента", "Agent type")}</h3>
-              <p className="mb-4 mt-0.5 text-xs leading-5 text-muted-foreground">
-                {localize(
-                  lang,
-                  "Выберите, как агент будет работать. От этого зависят доступные поля и поведение.",
-                  "Choose how the agent works. This determines the available fields and its behaviour.",
-                )}
-              </p>
+            <section className="space-y-3">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">
+                  {localize(lang, "Тип агента", "Agent type")}
+                </h3>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  {localize(
+                    lang,
+                    "Выберите, как агент будет работать. От этого зависят доступные поля и поведение.",
+                    "Choose how the agent works. This determines the available fields and its behaviour.",
+                  )}
+                </p>
+              </div>
               <div className="grid gap-3 md:grid-cols-3">
                 {[
                   {
                     key: "mini" as const,
-                    icon: Zap,
+                    icon: Terminal,
                     label: localize(lang, "Mini-агент", "Mini Agent"),
                     text: localize(lang, "Выполняет заданный список команд и делает краткий разбор результата.", "Runs a fixed list of commands and briefly analyses the result."),
-                    when: localize(lang, "Когда шаги известны заранее", "When the steps are known upfront"),
+                    when: localize(lang, "Быстрый старт · без worker", "Quick start · no worker"),
+                    accent: "text-primary border-primary/30 bg-primary/10",
                   },
                   {
                     key: "full" as const,
@@ -197,20 +230,35 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
                     label: localize(lang, "Полный агент", "Full Agent"),
                     text: localize(lang, "Сам решает шаги к цели, используя инструменты и проверки.", "Decides the steps toward a goal on its own, using tools and checks."),
                     when: localize(lang, "Когда нужна автономность", "When autonomy is needed"),
+                    accent: "text-ai border-ai/30 bg-ai/10",
                   },
                   {
                     key: "multi" as const,
                     icon: Layers,
-                    label: "Pipeline",
+                    label: localize(lang, "Мульти-агент", "Multi-agent"),
                     text: localize(lang, "Координирует несколько агентов и серверов в одном сценарии.", "Coordinates several agents and servers in one scenario."),
                     when: localize(lang, "Когда задача многошаговая", "When the task is multi-step"),
+                    accent: "text-info border-info/30 bg-info/10",
                   },
                 ].map((item) => {
                   const Icon = item.icon;
                   const active = mode === item.key;
                   return (
-                    <button key={item.key} type="button" aria-pressed={active} onClick={() => setMode(item.key)} className={`flex min-h-[120px] flex-col rounded-xl border p-4 text-left transition-colors ${active ? "border-primary bg-primary/10 text-foreground" : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>
-                      <span className={`mb-3 flex h-9 w-9 items-center justify-center rounded-lg border ${active ? "border-primary/30 bg-primary/15 text-primary" : "border-border/60 bg-surface-2 text-primary"}`}><Icon className="h-4 w-4" /></span>
+                    <button
+                      key={item.key}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => setMode(item.key)}
+                      className={cn(
+                        "flex min-h-[120px] flex-col rounded-sm border p-4 text-left transition-colors",
+                        active
+                          ? "border-primary bg-primary/10 text-foreground shadow-elev-1"
+                          : "border-border bg-surface-1 text-muted-foreground hover:border-primary/45 hover:text-foreground",
+                      )}
+                    >
+                      <span className={cn("mb-3 flex h-9 w-9 items-center justify-center rounded-sm border", item.accent)}>
+                        <Icon className="h-4 w-4" />
+                      </span>
                       <span className="block text-sm font-semibold text-foreground">{item.label}</span>
                       <span className="mt-1 block text-xs leading-5 text-muted-foreground">{item.text}</span>
                       <span className="mt-auto pt-2 text-2xs font-medium uppercase tracking-wide text-primary/80">{item.when}</span>
@@ -219,21 +267,29 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
                 })}
               </div>
             </section>
-            <section className="space-y-4">
-              <div className="mb-4">
-                <h3 className="text-sm font-semibold text-foreground">{localize(lang, "Шаблон", "Template")}</h3>
+
+            <section className="space-y-3">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">
+                  {localize(lang, "Шаблон", "Template")}
+                </h3>
               </div>
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 <button
                   type="button"
-                  onClick={() => { setSelectedType("custom"); setStep("basics"); }}
-                  className="min-h-[104px] rounded-lg border border-dashed border-primary/35 bg-primary/5 p-4 text-left transition-colors hover:border-primary/60 hover:bg-primary/10"
+                  onClick={() => {
+                    setSelectedType("custom");
+                    setStep("basics");
+                  }}
+                  className="min-h-[104px] rounded-sm border border-dashed border-primary/40 bg-primary/5 p-4 text-left transition-colors hover:border-primary hover:bg-primary/10"
                 >
                   <div className="mb-3 flex items-center gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10 text-primary">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm border border-primary/30 bg-primary/10 text-primary">
                       <Settings2 className="h-4 w-4" />
                     </span>
-                    <span className="min-w-0 truncate text-sm font-semibold text-foreground">{localize(lang, "Вручную", "Custom")}</span>
+                    <span className="min-w-0 truncate text-sm font-semibold text-foreground">
+                      {localize(lang, "Вручную", "Custom")}
+                    </span>
                   </div>
                   <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">
                     {localize(lang, "Создать агента без шаблона", "Create an agent without a template")}
@@ -242,12 +298,23 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
                 {templates.map((tpl) => {
                   const TemplateIcon = AGENT_ICONS[tpl.type] || Settings2;
                   return (
-                    <button key={tpl.type} type="button" onClick={() => onSelectTemplate(tpl)} className="min-h-[104px] rounded-lg border border-border/60 bg-surface-2/40 p-4 text-left transition-colors hover:border-primary/50 hover:bg-primary/5">
+                    <button
+                      key={tpl.type}
+                      type="button"
+                      onClick={() => onSelectTemplate(tpl)}
+                      className="min-h-[104px] rounded-sm border border-border bg-surface-1 p-4 text-left transition-colors hover:border-primary/50 hover:bg-primary/5"
+                    >
                       <div className="mb-3 flex items-center gap-3">
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-secondary/50 text-primary"><TemplateIcon className="h-4 w-4" /></span>
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm border border-border bg-surface-2 text-primary">
+                          <TemplateIcon className="h-4 w-4" />
+                        </span>
                         <span className="min-w-0 truncate text-sm font-semibold text-foreground">{tpl.name}</span>
                       </div>
-                      <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">{tpl.mode === "full" ? (tpl.goal || localize(lang, "Автономная OPS-задача", "Autonomous OPS task")) : localize(lang, `${tpl.command_count} команд`, `${tpl.command_count} commands`)}</p>
+                      <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">
+                        {tpl.mode === "full" || tpl.mode === "multi"
+                          ? (tpl.goal || localize(lang, "Автономная OPS-задача", "Autonomous OPS task"))
+                          : localize(lang, `${tpl.command_count} команд`, `${tpl.command_count} commands`)}
+                      </p>
                     </button>
                   );
                 })}
@@ -257,27 +324,50 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
         )}
         {step === "basics" && (
           <section className="space-y-4">
-            <h3 className="text-sm font-semibold text-foreground">{localize(lang, "Основные настройки", "Basics")}</h3>
+            <h3 className="text-sm font-semibold text-foreground">
+              {localize(lang, "Основные настройки", "Basics")}
+            </h3>
             <div className="space-y-2">
-              <label className="pt-2 text-sm font-medium text-muted-foreground">{localize(lang, "Название агента", "Agent name")} <span className="text-primary">*</span></label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={localize(lang, "Анализ логов", "Log analysis")} className="h-10 bg-background/60" />
+              <label className="text-sm font-medium text-foreground">
+                {localize(lang, "Название агента", "Agent name")} <span className="text-primary">*</span>
+              </label>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={localize(lang, "Анализ логов", "Log analysis")}
+                className="h-10"
+              />
             </div>
             {mode === "mini" ? (
               <div className="space-y-2">
-                <div className="pt-2">
+                <div>
                   <label className="text-sm font-medium text-foreground">{t("agent.commands_label")} <span className="text-primary">*</span></label>
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">{localize(lang, "Каждая команда — с новой строки. Агент выполнит их по порядку.", "One command per line. The agent runs them in order.")}</p>
                 </div>
-                <Textarea value={commands} onChange={(e) => setCommands(e.target.value)} rows={7} className="bg-background/60 font-mono text-xs" placeholder={"hostname\nuptime\nfree -m"} />
+                <Textarea value={commands} onChange={(e) => setCommands(e.target.value)} rows={7} className="font-mono text-xs" placeholder={"hostname\nuptime\nfree -m"} />
               </div>
             ) : (
               <>
                 <div className="space-y-2">
-                  <div className="pt-2">
-                    <label className="text-sm font-medium text-foreground">{localize(lang, "Цель", "Goal")}</label>
-                    <p className="mt-1 text-xs leading-5 text-muted-foreground">{localize(lang, "Что агент должен сделать — желаемый результат.", "What the agent should achieve — the desired outcome.")}</p>
+                  <div>
+                    <label className="text-sm font-medium text-foreground">
+                      {localize(lang, "Цель", "Goal")}
+                    </label>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                      {localize(lang, "Что агент должен сделать — желаемый результат.", "What the agent should achieve — the desired outcome.")}
+                    </p>
                   </div>
-                  <Textarea value={goal} onChange={(e) => setGoal(e.target.value)} rows={3} className="bg-background/60 text-sm" placeholder={localize(lang, "Например: найти причину высокой нагрузки на web-prod-01", "e.g. find the cause of high load on web-prod-01")} />
+                  <Textarea
+                    value={goal}
+                    onChange={(e) => setGoal(e.target.value)}
+                    rows={3}
+                    className="text-sm"
+                    placeholder={localize(
+                      lang,
+                      "Например: найти причину высокой нагрузки на web-prod-01",
+                      "e.g. find the cause of high load on web-prod-01",
+                    )}
+                  />
                 </div>
                 <div className="space-y-2">
                   <div className="pt-2">
@@ -285,6 +375,49 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
                     <p className="mt-1 text-xs leading-5 text-muted-foreground">{localize(lang, "Как агенту себя вести: роль, стиль, ограничения.", "How the agent should behave: role, style, constraints.")}</p>
                   </div>
                   <Textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} rows={3} className="bg-background/60 text-sm" placeholder={localize(lang, "Например: действуй осторожно, ничего не меняй без подтверждения", "e.g. act carefully, do not change anything without confirmation")} />
+                </div>
+                <div className="space-y-2">
+                  <div className="pt-1">
+                    <label className="text-sm font-medium text-foreground">{localize(lang, "Профиль бюджета", "Budget profile")}</label>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                      {localize(
+                        lang,
+                        "Для сложных задач выберите «Сложная» (60 шагов / 30 мин). Можно уточнить числа ниже.",
+                        "For complex ops pick Complex (60 steps / 30 min). Fine-tune numbers below if needed.",
+                      )}
+                    </p>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {(Object.keys(AGENT_BUDGET_PROFILES) as AgentBudgetProfileId[]).map((id) => {
+                      const profile = AGENT_BUDGET_PROFILES[id];
+                      const active = resolveBudgetProfileId(maxIter, sessionTimeoutSeconds) === id;
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => {
+                            setMaxIter(profile.maxIterations);
+                            setSessionTimeoutSeconds(profile.sessionTimeoutSeconds);
+                            setToolsConfig((prev) => ({
+                              ...prev,
+                              // Backend also accepts numeric timeout keys via tools_config payload.
+                              command_timeout: profile.commandTimeout as unknown as boolean,
+                              command_timeout_seconds: profile.commandTimeout as unknown as boolean,
+                            }));
+                          }}
+                          className={`min-h-[72px] rounded-lg border p-3 text-left transition-colors ${
+                            active
+                              ? "border-primary bg-primary/10 text-foreground"
+                              : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                          }`}
+                        >
+                          <div className="text-xs font-semibold">{lang === "ru" ? profile.labelRu : profile.labelEn}</div>
+                          <div className="mt-1 text-[11px] leading-snug opacity-90">{lang === "ru" ? profile.descRu : profile.descEn}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <label className="text-xs font-medium text-muted-foreground">
@@ -300,6 +433,15 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
                     <Input type="number" min={1} max={10} value={maxConnections} onChange={(e) => setMaxConnections(Number(e.target.value))} className="mt-1 h-9 bg-background/60" />
                   </label>
                 </div>
+                {mode === "multi" ? (
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    {localize(
+                      lang,
+                      "Мульти-агент — оркестратор с планом и subagents (не Studio Graph). Для инцидентов/деплоя предпочтительнее Полный или Мульти с профилем «Сложная».",
+                      "Multi-agent is an orchestrated plan with subagents (not Studio Graph). Prefer Full or Multi with the Complex budget for incidents/deploys.",
+                    )}
+                  </p>
+                ) : null}
               </>
             )}
             <div className="space-y-2">
@@ -527,6 +669,9 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
             telegramEnabled={telegramEnabled}
             readiness={readiness}
             readinessChecks={readinessChecks}
+            runAfterSave={runAfterSave}
+            setRunAfterSave={setRunAfterSave}
+            isEditing={isEditing}
           />
         )}
       </div>

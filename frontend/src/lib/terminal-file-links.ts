@@ -109,6 +109,27 @@ export function hasTextExtension(filename: string): boolean {
  * Extract text file paths/names from a terminal line.
  * Prefers full path tokens (src/app.py, /etc/a.conf) over bare basenames.
  */
+/** Reject common false positives that look like files but are not. */
+export function isLikelyEditablePathToken(name: string): boolean {
+  const token = (name || "").trim();
+  if (!token || !hasTextExtension(token)) return false;
+  // Drop pure version-like tokens (e.g. "1.0.txt" is ok; "v2.3.4" without real ext already fails).
+  const base = token.split("/").pop() || token;
+  // Extremely long tokens are usually log noise / concatenated output.
+  if (token.length > 240) return false;
+  // Reject paths with shell meta that shouldn't open as files.
+  if (/[;&|<>*?\s]/.test(token)) return false;
+  // Bare single-char + ext is almost always noise.
+  if (!token.includes("/") && base.length <= 3) return false;
+  // Reject tokens that are mostly digits before extension (e.g. "12345.log" ok, "2024.12" no).
+  const dot = base.lastIndexOf(".");
+  if (dot > 0) {
+    const stem = base.slice(0, dot);
+    if (/^\d{1,2}$/.test(stem)) return false;
+  }
+  return true;
+}
+
 export function extractTextFilenames(line: string): string[] {
   const clean = stripAnsi(line);
   if (!clean.trim()) return [];
@@ -119,13 +140,15 @@ export function extractTextFilenames(line: string): string[] {
     const tail = longMatch[1].trim();
     // Prefer symlink target when it looks like a text file path
     const arrowParts = tail.split(/\s+->\s+/);
-    const left = arrowParts[0]?.trim() || tail;
-    const right = arrowParts[1]?.trim();
-    if (right && hasTextExtension(right)) {
+    // Filename is last path segment; strip trailing indicators like * @ |
+    const normalizeName = (raw: string) => raw.replace(/[*@|=/]+$/g, "").trim();
+    const left = normalizeName(arrowParts[0]?.trim() || tail);
+    const right = arrowParts[1] ? normalizeName(arrowParts[1].trim()) : "";
+    if (right && isLikelyEditablePathToken(right)) {
       names.add(right);
       return Array.from(names);
     }
-    if (hasTextExtension(left)) {
+    if (isLikelyEditablePathToken(left)) {
       names.add(left);
     }
     return Array.from(names);
@@ -135,11 +158,12 @@ export function extractTextFilenames(line: string): string[] {
   const re = new RegExp(FILE_PATH_RE.source, FILE_PATH_RE.flags);
   while ((match = re.exec(clean)) !== null) {
     const name = match[1];
-    if (name && hasTextExtension(name)) {
+    if (name && isLikelyEditablePathToken(name)) {
       names.add(name);
     }
   }
-  return Array.from(names);
+  // Prefer longest unique paths so src/app.py wins over app.py when both present.
+  return Array.from(names).sort((a, b) => b.length - a.length);
 }
 
 /**
@@ -197,14 +221,26 @@ export function createTerminalFileLinkProvider(
       const links: ILink[] = [];
       const clean = stripAnsi(text);
       // Prefer longer matches first so "src/app.py" wins over accidental shorter tokens.
+      // Drop a shorter name fully contained as a path segment of a longer match.
       const ordered = [...filenames].sort((a, b) => b.length - a.length);
       const usedRanges: Array<{ start: number; end: number }> = [];
+      const acceptedTokens: string[] = [];
 
       for (const filename of ordered) {
+        if (
+          acceptedTokens.some(
+            (longer) =>
+              longer !== filename &&
+              (longer.endsWith(`/${filename}`) || longer.endsWith(filename)),
+          )
+        ) {
+          continue;
+        }
         const start = findFilenameIndex(clean, filename, usedRanges);
         if (start < 0) continue;
         const end = start + filename.length;
         usedRanges.push({ start, end });
+        acceptedTokens.push(filename);
         const range: IBufferRange = {
           start: { x: start + 1, y: bufferLineNumber },
           end: { x: end, y: bufferLineNumber },

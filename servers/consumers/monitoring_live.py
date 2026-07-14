@@ -8,7 +8,8 @@ They then receive per-server samples every few seconds:
   {"type": "live.metrics", "server_id": 1, "cpu_percent": ..., ...}
   {"type": "live.state", "server_id": 1, "state": "streaming" | "connecting" | "error" | "stopped"}
 
-Collectors are shared: one SSH session per server regardless of viewer count
+Collectors are shared: one SSH session per host:port regardless of viewer count
+or how many inventory rows (users) point at the same host
 (see servers/monitoring_live.py). Disconnecting unsubscribes automatically.
 """
 

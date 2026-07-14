@@ -21,10 +21,18 @@ export function workerStateTone(worker?: BackgroundWorkerStateRecord): "neutral"
   return "neutral";
 }
 
-export function runBlockedReason(agent: AgentItem, lang: "ru" | "en") {
+export function runBlockedReason(agent: AgentItem, lang: "ru" | "en", options?: { isAdmin?: boolean }) {
   const readiness = agent.execution_readiness;
   if (readiness?.required && !readiness.ready) {
-    return readiness.next_action || readiness.description || localize(lang, "Execution worker не готов.", "Execution worker is not ready.");
+    if (options?.isAdmin) {
+      return readiness.next_action || readiness.description || localize(lang, "Execution worker не готов.", "Execution worker is not ready.");
+    }
+    // Operators should not see manage.py / ops commands — only a clear user-facing reason.
+    return localize(
+      lang,
+      "Запуск временно недоступен. Попробуйте позже или обратитесь к администратору.",
+      "Launch is temporarily unavailable. Try again later or contact an administrator.",
+    );
   }
   if (agent.is_enabled === false) {
     return localize(lang, "Агент выключен.", "Agent is disabled.");

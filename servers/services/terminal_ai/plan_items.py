@@ -41,12 +41,23 @@ def resolve_auto_execution_mode(
     1. planner-provided execution_mode
     2. safety fallback from planned commands / user intent
     """
+    from servers.services.agent_complexity import classify_goal_complexity
+
     planner_mode = normalize_execution_mode(str((plan_obj or {}).get("execution_mode") or ""))
+    commands_count = len(commands_raw) if isinstance(commands_raw, list) else 0
+    assessment = classify_goal_complexity(
+        user_message,
+        planned_command_count=commands_count,
+        planner_execution_mode=planner_mode,
+    )
+    if assessment.is_complex:
+        # Complex goals must not silently batch under pure fast.
+        return "step"
+
     if planner_mode in ("step", "fast"):
         return planner_mode
 
-    commands_count = len(commands_raw) if isinstance(commands_raw, list) else 0
-    if commands_count <= 2:
+    if commands_count <= 2 and assessment.is_simple:
         return "fast"
 
     text = str(user_message or "").lower()
@@ -71,6 +82,51 @@ def resolve_auto_execution_mode(
         return "step"
 
     return "step"
+
+
+def apply_fast_complexity_routing(
+    *,
+    user_message: str,
+    requested_mode: str,
+    plan_obj: dict[str, Any] | None,
+    commands_raw: Any = None,
+    policy: str = "ask",
+) -> dict[str, Any]:
+    """Post-plan Fast gate: ask/upgrade instead of silent short execute.
+
+    Returns keys: action, execution_mode, assistant_text, assessment, plan_obj.
+    When action is ``ask``, callers should surface assistant_text and not run
+    the command queue. When ``upgrade``, callers should start Nova.
+    """
+    from servers.services.agent_complexity import (
+        classify_goal_complexity,
+        resolve_fast_complex_action,
+    )
+
+    commands_count = len(commands_raw) if isinstance(commands_raw, list) else 0
+    if commands_count == 0 and isinstance(plan_obj, dict):
+        raw = plan_obj.get("commands") or []
+        commands_count = len(raw) if isinstance(raw, list) else 0
+
+    assessment = classify_goal_complexity(
+        user_message,
+        planned_command_count=commands_count,
+        planner_execution_mode=str((plan_obj or {}).get("execution_mode") or requested_mode),
+    )
+    decision = resolve_fast_complex_action(
+        assessment,
+        requested_mode=requested_mode,
+        policy=policy,  # type: ignore[arg-type]
+    )
+    # If planner already chose mode=ask/answer, leave it alone.
+    plan_mode = str((plan_obj or {}).get("mode") or "").lower()
+    if plan_mode in ("ask", "answer"):
+        decision = {
+            **decision,
+            "action": "allow",
+            "assistant_text": "",
+        }
+    return {**decision, "plan_obj": plan_obj or {}}
 
 
 def normalize_command_text(command: str) -> str:

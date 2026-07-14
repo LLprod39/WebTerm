@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   extractTextFilenames,
   hasTextExtension,
+  isLikelyEditablePathToken,
   joinRemotePath,
   parsePromptCwd,
 } from "./terminal-file-links";
@@ -67,5 +68,12 @@ describe("terminal-file-links", () => {
     expect(hasTextExtension("script.sh")).toBe(true);
     expect(hasTextExtension("archive.tar.gz")).toBe(false);
     expect(hasTextExtension("src/main.py")).toBe(true);
+  });
+
+  it("filters noise tokens that are not editable paths", () => {
+    expect(isLikelyEditablePathToken("12.log")).toBe(false);
+    expect(isLikelyEditablePathToken("app.py;rm")).toBe(false);
+    expect(isLikelyEditablePathToken("src/main.py")).toBe(true);
+    expect(extractTextFilenames("see src/main.py and also app.py")).toContain("src/main.py");
   });
 });

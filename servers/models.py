@@ -35,6 +35,7 @@ from servers.models_monitoring import (
     ServerHealthCheck,
     ServerWatcherDraft,
 )
+from servers.models_playbooks import Playbook, PlaybookRun
 
 __all__ = [
     "AgentRun",
@@ -64,5 +65,7 @@ __all__ = [
     "ServerMemorySnapshot",
     "ServerShare",
     "ServerWatcherDraft",
+    "Playbook",
+    "PlaybookRun",
     "TerminalAiChatMessage",
 ]

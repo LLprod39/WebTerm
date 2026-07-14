@@ -52,16 +52,20 @@ def test_task_error_and_skip_markers_preserve_legacy_reasons():
 
 
 def test_context_summary_helpers_match_orchestrator_format():
-    task = {"id": 3, "name": "Deploy"}
+    task = {"id": 3, "name": "Deploy", "role": "custom", "status": "done"}
 
     context = append_task_result_context("", task, "ok" * 600)
     context = append_task_result_context(context, task, "retry ok", retry=True)
     context = append_user_answer_context(context, task, "continue")
 
-    assert "### Задача 3: Deploy\nРезультат: " in context
-    assert "### Задача 3: Deploy (повтор)\nРезультат: retry ok" in context
+    # Structured handoff includes role/status and result excerpt (not only free text).
+    assert "### Задача 3: Deploy" in context
+    assert "status=done" in context
+    assert "Результат:" in context
+    assert "retry" in context
     assert "### Ответ пользователя по задаче 3\ncontinue" in context
     assert task["result"] == "Пользователь ответил: continue"
+    assert isinstance(task.get("handoff"), dict)
 
 
 def test_build_replanned_tasks_keeps_done_tasks_and_reassigns_ids():

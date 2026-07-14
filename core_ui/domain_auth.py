@@ -6,6 +6,8 @@ and can auto-create local users with a restricted access profile.
 """
 from __future__ import annotations
 
+import hmac
+import ipaddress
 import os
 import re
 
@@ -95,6 +97,75 @@ def _candidate_meta_keys() -> list[tuple[str, str]]:
         seen.add(meta_key)
         candidates.append((header, meta_key))
     return candidates
+
+
+_MISCONFIG_WARNED = False
+
+
+def _trusted_proxy_networks() -> list[ipaddress._BaseNetwork]:
+    raw = getattr(settings, "DOMAIN_AUTH_TRUSTED_PROXIES", []) or []
+    networks: list[ipaddress._BaseNetwork] = []
+    for item in raw:
+        value = str(item or "").strip()
+        if not value:
+            continue
+        try:
+            networks.append(ipaddress.ip_network(value, strict=False))
+        except ValueError:
+            logger.warning("DOMAIN_AUTH_TRUSTED_PROXIES entry is not a valid IP/CIDR: {}", value)
+    return networks
+
+
+def _shared_secret() -> str:
+    return str(getattr(settings, "DOMAIN_AUTH_SHARED_SECRET", "") or "")
+
+
+def _shared_secret_meta_key() -> str:
+    header = str(getattr(settings, "DOMAIN_AUTH_SHARED_SECRET_HEADER", "X-Domain-Auth-Secret") or "X-Domain-Auth-Secret")
+    normalized = header.strip().upper().replace("-", "_")
+    return normalized if normalized.startswith("HTTP_") else f"HTTP_{normalized}"
+
+
+def _remote_addr_trusted(request, networks: list[ipaddress._BaseNetwork]) -> bool:
+    remote_addr = str(request.META.get("REMOTE_ADDR", "") or "").strip()
+    if not remote_addr:
+        return False
+    try:
+        addr = ipaddress.ip_address(remote_addr)
+    except ValueError:
+        return False
+    return any(addr in network for network in networks)
+
+
+def _request_from_trusted_source(request) -> bool:
+    """
+    Only trust the identity header when the request provably comes from the
+    trusted authentication proxy. Without a trusted-proxy allowlist or a shared
+    secret, any client could forge the header, so we fail closed.
+    """
+    global _MISCONFIG_WARNED
+    networks = _trusted_proxy_networks()
+    secret = _shared_secret()
+
+    if not networks and not secret:
+        if not _MISCONFIG_WARNED:
+            logger.error(
+                "Domain auto-login is enabled but neither DOMAIN_AUTH_TRUSTED_PROXIES nor "
+                "DOMAIN_AUTH_SHARED_SECRET is configured. Header-based login is refused to "
+                "prevent identity spoofing. Configure the trusted proxy or shared secret."
+            )
+            _MISCONFIG_WARNED = True
+        return False
+
+    if secret:
+        provided = str(request.META.get(_shared_secret_meta_key(), "") or "")
+        if provided and hmac.compare_digest(provided, secret):
+            return True
+
+    if networks and _remote_addr_trusted(request, networks):
+        return True
+
+    return False
 
 
 def _extract_principal(request) -> str:
@@ -243,7 +314,11 @@ class DomainAutoLoginMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        if _env_enabled() and not getattr(request.user, "is_authenticated", False):
+        if (
+            _env_enabled()
+            and not getattr(request.user, "is_authenticated", False)
+            and _request_from_trusted_source(request)
+        ):
             principal = _extract_principal(request)
             if principal:
                 user = resolve_domain_user(principal)

@@ -261,8 +261,8 @@ describe("KubernetesPage", () => {
   it("renders an operator overview without admin provider controls", async () => {
     renderPage();
 
-    expect(screen.getByRole("heading", { name: "Kubernetes Ops" })).toBeInTheDocument();
-    expect(await screen.findByText("Только просмотр")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Кластерный пульт" })).toBeInTheDocument();
+    expect(await screen.findByText("Sidebar выкл.")).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Кластеры" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Требует внимания" })).toBeInTheDocument();
     expect(screen.queryByText("Админ-диагностика")).not.toBeInTheDocument();

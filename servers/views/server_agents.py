@@ -181,12 +181,29 @@ def agent_create(request):
 
     goal = data.get("goal", "")
     system_prompt = data.get("system_prompt", "")
-    max_iterations = min(int(data.get("max_iterations", 20)), 100)
+    from servers.agent_budgets import (
+        FULL_DEFAULT_MAX_ITERATIONS,
+        FULL_DEFAULT_SESSION_TIMEOUT_SEC,
+        FULL_MAX_ITERATIONS_CAP,
+        clamp_full_iterations,
+    )
+
+    try:
+        raw_iterations = data.get("max_iterations", FULL_DEFAULT_MAX_ITERATIONS)
+        max_iterations = clamp_full_iterations(int(raw_iterations if raw_iterations not in (None, "") else FULL_DEFAULT_MAX_ITERATIONS))
+    except (TypeError, ValueError):
+        max_iterations = FULL_DEFAULT_MAX_ITERATIONS
+    max_iterations = min(max_iterations, FULL_MAX_ITERATIONS_CAP)
     allow_multi_server = bool(data.get("allow_multi_server", False))
     tools_config = data.get("tools_config", {})
     sudo_policy = normalize_sudo_policy(data.get("sudo_policy"))
     stop_conditions = data.get("stop_conditions", [])
-    session_timeout = int(data.get("session_timeout_seconds", 600))
+    try:
+        raw_timeout = data.get("session_timeout_seconds", FULL_DEFAULT_SESSION_TIMEOUT_SEC)
+        session_timeout = int(raw_timeout if raw_timeout not in (None, "") else FULL_DEFAULT_SESSION_TIMEOUT_SEC)
+    except (TypeError, ValueError):
+        session_timeout = FULL_DEFAULT_SESSION_TIMEOUT_SEC
+    session_timeout = max(30, min(session_timeout, 3600))
     max_connections = min(int(data.get("max_connections", 5)), 10)
     skill_slugs = skill_provider_registry.sanitize_accessible_skill_slugs(
         request.user,

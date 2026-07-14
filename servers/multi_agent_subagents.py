@@ -23,6 +23,11 @@ def prepare_plan_tasks(
 
     prepared_tasks: list[dict] = []
     for index, item in enumerate(tasks, start=1):
+        # Prefer engine-level complex-task budget when the planner did not
+        # pin a lower per-task max_iterations.
+        requested_iters = item.get("max_iterations")
+        if requested_iters is None:
+            requested_iters = max_task_iterations
         subagent = build_task_subagent_spec(
             task_name=item["name"],
             task_description=item["description"],
@@ -31,7 +36,8 @@ def prepare_plan_tasks(
             tool_registry=tool_registry,
             requested_role=item.get("role"),
             requested_tool_names=item.get("tool_names"),
-            requested_max_iterations=item.get("max_iterations"),
+            requested_max_iterations=requested_iters,
+            max_task_iterations_cap=max_task_iterations,
         )
         task = make_task(
             index,
@@ -79,6 +85,9 @@ def build_task_subagent(
             "task": task,
         }
 
+    requested_iters = task.get("max_iterations")
+    if requested_iters is None:
+        requested_iters = max_task_iterations
     spec = build_task_subagent_spec(
         task_name=task.get("name", ""),
         task_description=task.get("description", ""),
@@ -87,7 +96,8 @@ def build_task_subagent(
         tool_registry=tool_registry,
         requested_role=task.get("role"),
         requested_tool_names=task.get("tool_names"),
-        requested_max_iterations=task.get("max_iterations"),
+        requested_max_iterations=requested_iters,
+        max_task_iterations_cap=max_task_iterations,
     )
     role_spec = ROLE_SPECS.get(spec.role, fallback_role_spec)
     local_registry = tool_registry.subset(allowed_names=spec.tool_names)

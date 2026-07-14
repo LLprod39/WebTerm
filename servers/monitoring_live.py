@@ -6,9 +6,13 @@ metrics every few seconds. Samples are fanned out to all subscribers through
 the Channels layer and are never written to the database — the periodic
 run_monitor worker remains the source of persisted history.
 
+Collectors are keyed by host:port, not inventory row id. If two users add the
+same physical host, exactly one SSH session streams metrics and both server
+rows receive the same live samples under their own server_id.
+
 The manager is per-process: with a single ASGI process (the default
-deployment) exactly one SSH session exists per watched server regardless of
-how many operators have live mode enabled.
+deployment) exactly one SSH session exists per watched endpoint regardless of
+how many operators have the servers page open.
 """
 
 from __future__ import annotations
@@ -25,6 +29,16 @@ from loguru import logger
 
 def live_group_name(server_id: int) -> str:
     return f"monitoring_live_{int(server_id)}"
+
+
+def monitoring_endpoint_key(host: str, port: int | str | None) -> str:
+    """Stable key for a physical SSH endpoint shared across inventory rows."""
+    normalized_host = (host or "").strip().lower()
+    try:
+        normalized_port = int(port or 22)
+    except (TypeError, ValueError):
+        normalized_port = 22
+    return f"{normalized_host}:{normalized_port}"
 
 
 def _live_interval_seconds() -> int:
@@ -110,37 +124,63 @@ def compute_cpu_percent(prev: dict, current: dict) -> float | None:
 
 
 class _CollectorEntry:
-    __slots__ = ("server_id", "refcount", "task", "idle_since")
+    __slots__ = ("endpoint_key", "refcount", "task", "idle_since", "server_refcounts", "host", "port")
 
-    def __init__(self, server_id: int):
-        self.server_id = server_id
+    def __init__(self, endpoint_key: str, host: str, port: int):
+        self.endpoint_key = endpoint_key
+        self.host = host
+        self.port = port
         self.refcount = 0
         self.task: asyncio.Task | None = None
         self.idle_since: float | None = None
+        # inventory server_id -> active WS subscriptions for that row
+        self.server_refcounts: dict[int, int] = {}
 
 
 class LiveMetricsManager:
-    """Refcounted per-server collector tasks (one SSH session per server)."""
+    """Refcounted collectors keyed by host:port (one SSH session per endpoint)."""
 
     def __init__(self):
-        self._entries: dict[int, _CollectorEntry] = {}
+        self._entries: dict[str, _CollectorEntry] = {}
+        self._server_to_endpoint: dict[int, str] = {}
         self._lock = asyncio.Lock()
 
     async def subscribe(self, server_id: int) -> None:
+        server_id = int(server_id)
+        endpoint = await self._resolve_endpoint(server_id)
+        if endpoint is None:
+            return
+        endpoint_key, host, port = endpoint
+
         async with self._lock:
-            entry = self._entries.get(server_id)
+            entry = self._entries.get(endpoint_key)
             if entry is None or entry.task is None or entry.task.done():
-                entry = _CollectorEntry(server_id)
-                self._entries[server_id] = entry
-                entry.task = asyncio.create_task(self._run_collector(server_id, entry))
+                entry = _CollectorEntry(endpoint_key, host, port)
+                self._entries[endpoint_key] = entry
+                entry.task = asyncio.create_task(self._run_collector(entry))
+            entry.server_refcounts[server_id] = entry.server_refcounts.get(server_id, 0) + 1
             entry.refcount += 1
             entry.idle_since = None
+            self._server_to_endpoint[server_id] = endpoint_key
 
     async def unsubscribe(self, server_id: int) -> None:
+        server_id = int(server_id)
         async with self._lock:
-            entry = self._entries.get(server_id)
-            if entry is None:
+            endpoint_key = self._server_to_endpoint.get(server_id)
+            if not endpoint_key:
                 return
+            entry = self._entries.get(endpoint_key)
+            if entry is None:
+                self._server_to_endpoint.pop(server_id, None)
+                return
+
+            remaining = entry.server_refcounts.get(server_id, 0) - 1
+            if remaining <= 0:
+                entry.server_refcounts.pop(server_id, None)
+                self._server_to_endpoint.pop(server_id, None)
+            else:
+                entry.server_refcounts[server_id] = remaining
+
             entry.refcount = max(0, entry.refcount - 1)
             if entry.refcount == 0:
                 entry.idle_since = time.monotonic()
@@ -152,58 +192,120 @@ class LiveMetricsManager:
             return False
         return time.monotonic() - entry.idle_since >= _live_grace_seconds()
 
-    async def _broadcast(self, server_id: int, payload: dict) -> None:
-        channel_layer = get_channel_layer()
-        if channel_layer is None:
-            return
-        with contextlib.suppress(Exception):
-            await channel_layer.group_send(live_group_name(server_id), payload)
+    def _active_server_ids(self, entry: _CollectorEntry) -> list[int]:
+        return sorted(server_id for server_id, count in entry.server_refcounts.items() if count > 0)
 
-    async def _broadcast_state(self, server_id: int, state: str, error: str = "") -> None:
-        await self._broadcast(
-            server_id,
-            {"type": "live.state", "server_id": server_id, "state": state, "error": error[:300]},
+    async def _broadcast_to_servers(self, server_ids: list[int], payload: dict) -> None:
+        channel_layer = get_channel_layer()
+        if channel_layer is None or not server_ids:
+            return
+        for server_id in server_ids:
+            event = {**payload, "server_id": server_id}
+            with contextlib.suppress(Exception):
+                await channel_layer.group_send(live_group_name(server_id), event)
+
+    async def _broadcast_state(self, entry: _CollectorEntry, state: str, error: str = "") -> None:
+        await self._broadcast_to_servers(
+            self._active_server_ids(entry),
+            {"type": "live.state", "state": state, "error": error[:300]},
         )
 
-    async def _run_collector(self, server_id: int, entry: _CollectorEntry) -> None:
+    async def _resolve_endpoint(self, server_id: int) -> tuple[str, str, int] | None:
         from servers.models import Server
-        from servers.monitor import _build_connect_kwargs, sync_to_async
+        from servers.monitor import sync_to_async
 
+        def _load():
+            return (
+                Server.objects.filter(id=server_id, is_active=True, server_type="ssh")
+                .values_list("host", "port")
+                .first()
+            )
+
+        row = await sync_to_async(_load)()
+        if not row:
+            return None
+        host = (row[0] or "").strip()
+        if not host:
+            return None
+        try:
+            port = int(row[1] or 22)
+        except (TypeError, ValueError):
+            port = 22
+        return monitoring_endpoint_key(host, port), host, port
+
+    async def _pick_connection_server(self, entry: _CollectorEntry):
+        """Pick an inventory row to open SSH with (prefer currently subscribed rows)."""
+        from servers.models import Server
+        from servers.monitor import sync_to_async
+
+        preferred_ids = self._active_server_ids(entry)
+
+        def _load():
+            qs = Server.objects.filter(
+                is_active=True,
+                server_type="ssh",
+                host__iexact=entry.host,
+                port=entry.port,
+            ).order_by("id")
+            servers = list(qs)
+            if not servers:
+                return None
+            if preferred_ids:
+                preferred = {sid for sid in preferred_ids}
+                ordered = [s for s in servers if s.id in preferred] + [s for s in servers if s.id not in preferred]
+                return ordered
+            return servers
+
+        return await sync_to_async(_load)()
+
+    async def _run_collector(self, entry: _CollectorEntry) -> None:
         started_at = time.monotonic()
         interval = _live_interval_seconds()
         attempts = 0
 
         try:
             while not self._should_stop(entry, started_at):
-                server = await sync_to_async(
-                    lambda: Server.objects.filter(id=server_id, is_active=True, server_type="ssh").first()
-                )()
-                if server is None:
-                    await self._broadcast_state(server_id, "stopped", "Server not available")
+                candidates = await self._pick_connection_server(entry)
+                if not candidates:
+                    await self._broadcast_state(entry, "stopped", "Server not available")
                     return
 
                 attempts += 1
-                await self._broadcast_state(server_id, "connecting")
-                try:
-                    await self._stream_from_server(server, entry, started_at, interval)
-                    return  # clean stop (no subscribers / lifetime cap)
-                except asyncio.CancelledError:
-                    raise
-                except Exception as exc:
-                    logger.debug("Monitor live: stream for {} failed: {}", server.name, exc)
-                    await self._broadcast_state(server_id, "error", str(exc))
+                await self._broadcast_state(entry, "connecting")
+                last_error: Exception | None = None
+                connected = False
+                for server in candidates:
+                    try:
+                        await self._stream_from_server(server, entry, started_at, interval)
+                        return  # clean stop (no subscribers / lifetime cap)
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as exc:
+                        last_error = exc
+                        logger.debug(
+                            "Monitor live: stream for {} via server_id={} failed: {}",
+                            entry.endpoint_key,
+                            server.id,
+                            exc,
+                        )
+                        continue
+
+                if not connected:
+                    await self._broadcast_state(entry, "error", str(last_error or "connection failed"))
                     if attempts >= 3:
                         return
-                    # Wait before reconnecting, but keep honoring stop conditions.
                     for _ in range(10):
                         if self._should_stop(entry, started_at):
                             return
                         await asyncio.sleep(0.5)
         finally:
             async with self._lock:
-                if self._entries.get(server_id) is entry:
-                    del self._entries[server_id]
-            await self._broadcast_state(server_id, "stopped")
+                if self._entries.get(entry.endpoint_key) is entry:
+                    del self._entries[entry.endpoint_key]
+                for server_id, mapped in list(self._server_to_endpoint.items()):
+                    if mapped == entry.endpoint_key and server_id not in entry.server_refcounts:
+                        self._server_to_endpoint.pop(server_id, None)
+            await self._broadcast_state(entry, "stopped")
 
     async def _stream_from_server(
         self,
@@ -212,13 +314,15 @@ class LiveMetricsManager:
         started_at: float,
         interval: int,
     ) -> None:
+        from servers.monitor import _build_connect_kwargs
+
         kwargs = await _build_connect_kwargs(server)
         command = REMOTE_LOOP_TEMPLATE.format(interval=interval)
         prev_sample: dict | None = None
 
         async with asyncssh.connect(**kwargs) as conn:
             async with conn.create_process(command) as process:
-                await self._broadcast_state(server.id, "streaming")
+                await self._broadcast_state(entry, "streaming")
                 while not self._should_stop(entry, started_at):
                     try:
                         line = await asyncio.wait_for(process.stdout.readline(), timeout=interval * 5)
@@ -231,11 +335,10 @@ class LiveMetricsManager:
                         continue
                     cpu_percent = compute_cpu_percent(prev_sample, sample) if prev_sample else None
                     prev_sample = sample
-                    await self._broadcast(
-                        server.id,
+                    await self._broadcast_to_servers(
+                        self._active_server_ids(entry),
                         {
                             "type": "live.metrics",
-                            "server_id": server.id,
                             "cpu_percent": cpu_percent,
                             "memory_percent": sample["memory_percent"],
                             "disk_percent": sample["disk_percent"],

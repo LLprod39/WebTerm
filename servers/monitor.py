@@ -392,6 +392,107 @@ async def _save_unreachable(server: Server, error_msg: str, elapsed_ms: int = 0)
     return health
 
 
+def _monitoring_endpoint_key(server: Server) -> str:
+    host = (server.host or "").strip().lower()
+    try:
+        port = int(server.port or 22)
+    except (TypeError, ValueError):
+        port = 22
+    return f"{host}:{port}"
+
+
+async def _mirror_health_check(
+    source: ServerHealthCheck,
+    target_servers: list[Server],
+) -> list[ServerHealthCheck]:
+    """Copy a health snapshot onto sibling inventory rows for the same host:port."""
+    if not target_servers:
+        return []
+
+    raw = dict(source.raw_output) if isinstance(source.raw_output, dict) else {}
+    raw["mirrored_from_server_id"] = source.server_id
+
+    def _create_all() -> list[ServerHealthCheck]:
+        rows: list[ServerHealthCheck] = []
+        for target in target_servers:
+            if target.id == source.server_id:
+                continue
+            rows.append(
+                ServerHealthCheck.objects.create(
+                    server=target,
+                    status=source.status,
+                    cpu_percent=source.cpu_percent,
+                    memory_percent=source.memory_percent,
+                    memory_used_mb=source.memory_used_mb,
+                    memory_total_mb=source.memory_total_mb,
+                    disk_percent=source.disk_percent,
+                    disk_used_gb=source.disk_used_gb,
+                    disk_total_gb=source.disk_total_gb,
+                    load_1m=source.load_1m,
+                    load_5m=source.load_5m,
+                    load_15m=source.load_15m,
+                    uptime_seconds=source.uptime_seconds,
+                    process_count=source.process_count,
+                    response_time_ms=source.response_time_ms,
+                    is_deep=source.is_deep,
+                    raw_output=raw,
+                )
+            )
+        return rows
+
+    return await sync_to_async(_create_all)()
+
+
+async def _check_endpoint_group(
+    servers: list[Server],
+    *,
+    deep: bool,
+    use_lite: bool,
+) -> list[ServerHealthCheck]:
+    """Probe one physical endpoint and mirror status onto all inventory rows."""
+    if not servers:
+        return []
+
+    results: list[ServerHealthCheck] = []
+    # Non-SSH or lite: TCP once, then mirror.
+    if use_lite or any(s.server_type != "ssh" for s in servers):
+        primary = servers[0]
+        hc = await probe_server_lite(primary)
+        if hc:
+            results.append(hc)
+            # probe_server_lite may reuse a recent check without creating a new row;
+            # still mirror a fresh snapshot for siblings so every row has current status.
+            if hc.status == ServerHealthCheck.STATUS_UNREACHABLE or not getattr(hc, "id", None):
+                mirrored = await _mirror_health_check(hc, servers[1:])
+                results.extend(mirrored)
+            else:
+                # Fresh or reused OK probe: ensure siblings get the same status.
+                mirrored = await _mirror_health_check(hc, servers[1:])
+                results.extend(mirrored)
+        return results
+
+    # SSH: try credentials from each inventory row until one succeeds, then mirror.
+    last_hc: ServerHealthCheck | None = None
+    for candidate in servers:
+        hc = await check_server(candidate, deep=deep)
+        if not hc:
+            continue
+        results.append(hc)
+        last_hc = hc
+        if hc.status != ServerHealthCheck.STATUS_UNREACHABLE:
+            siblings = [s for s in servers if s.id != candidate.id]
+            results.extend(await _mirror_health_check(hc, siblings))
+            return results
+
+    # All candidates unreachable: mirror the last failure onto remaining rows that
+    # did not get their own check (if we only tried some before giving up — we try all).
+    if last_hc is not None:
+        already = {hc.server_id for hc in results if getattr(hc, "server_id", None)}
+        remaining = [s for s in servers if s.id not in already]
+        results.extend(await _mirror_health_check(last_hc, remaining))
+    return results
+
+
 async def check_all_servers(
     deep: bool = False,
     lite: bool = False,
@@ -403,6 +504,10 @@ async def check_all_servers(
     lite=True runs TCP reachability only (quick fleet sweep).
     deep=True runs full SSH metrics + optional deep diagnostics.
     Non-SSH servers always get a TCP reachability probe.
+
+    Inventory rows that share the same host:port are treated as one physical
+    endpoint: only one probe runs and the resulting status is mirrored to every
+    user-owned server row so each list shows the correct current health.
     """
     normalized_ids = sorted({int(item) for item in (server_ids or []) if str(item).strip().isdigit()})
     use_lite = bool(lite and not deep)
@@ -419,20 +524,45 @@ async def check_all_servers(
         logger.info("Monitor: no active servers to check")
         return []
 
+    groups: dict[str, list[Server]] = {}
+    for server in servers:
+        groups.setdefault(_monitoring_endpoint_key(server), []).append(server)
+
+    logger.info(
+        "Monitor: checking {} inventory rows as {} unique endpoint(s)",
+        len(servers),
+        len(groups),
+    )
+
     sem = asyncio.Semaphore(concurrency)
     results: list[ServerHealthCheck] = []
 
-    async def _check(srv: Server):
+    async def _check_group(group: list[Server]):
         async with sem:
-            if use_lite or srv.server_type != "ssh":
-                hc = await probe_server_lite(srv)
-            else:
-                hc = await check_server(srv, deep=deep)
-            if hc:
-                results.append(hc)
+            group_results = await _check_endpoint_group(group, deep=deep, use_lite=use_lite)
+            results.extend(group_results)
 
-    await asyncio.gather(*[_check(s) for s in servers], return_exceptions=True)
+    await asyncio.gather(*[_check_group(group) for group in groups.values()], return_exceptions=True)
     return results
+
+
+def schedule_health_check_for_server_ids(server_ids: list[int], *, deep: bool = False) -> None:
+    """Fire-and-forget health check after a server is added (does not block HTTP)."""
+    import threading
+
+    ids = sorted({int(item) for item in server_ids if item})
+    if not ids:
+        return
+
+    def _worker() -> None:
+        try:
+            from asgiref.sync import async_to_sync
+
+            async_to_sync(check_all_servers)(deep=deep, lite=False, server_ids=ids, concurrency=1)
+        except Exception as exc:
+            logger.debug("Background health check for servers {} failed: {}", ids, exc)
+
+    threading.Thread(target=_worker, daemon=True, name="monitor-server-bootstrap").start()
 
 
 async def cleanup_old_data(days: int = 7) -> None:

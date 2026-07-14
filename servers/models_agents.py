@@ -60,7 +60,7 @@ class ServerAgent(models.Model):
     # Full-agent fields
     goal = models.TextField(blank=True, help_text="Goal for the agent to achieve (full mode)")
     system_prompt = models.TextField(blank=True, help_text="System prompt defining agent role and style")
-    max_iterations = models.IntegerField(default=20, help_text="Max ReAct loop iterations (1-100)")
+    max_iterations = models.IntegerField(default=40, help_text="Max ReAct loop iterations (1-100)")
     allow_multi_server = models.BooleanField(default=False, help_text="Allow simultaneous multi-server connections")
     tools_config = models.JSONField(default=dict, blank=True, help_text="Tool availability overrides")
     sudo_policy = models.CharField(
@@ -70,7 +70,7 @@ class ServerAgent(models.Model):
         help_text="Controlled sudo policy for SSH commands executed by this agent.",
     )
     stop_conditions = models.JSONField(default=list, blank=True, help_text="Conditions to stop the agent early")
-    session_timeout_seconds = models.IntegerField(default=600, help_text="Max session duration in seconds")
+    session_timeout_seconds = models.IntegerField(default=1200, help_text="Max session duration in seconds")
     max_connections = models.IntegerField(default=5, help_text="Max simultaneous SSH connections")
     skill_slugs = models.JSONField(default=list, blank=True, help_text="Studio skills attached to this agent")
     input_artifacts = models.JSONField(

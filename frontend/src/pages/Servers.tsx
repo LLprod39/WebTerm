@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   fetchAuthSession,
   fetchFrontendBootstrap,
@@ -12,14 +12,13 @@ import {
 import { localize, useI18n } from "@/lib/i18n";
 import {
   Plus,
-  Radio,
   Search,
   Server,
   Settings,
   Layers,
   BookOpen,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { DeleteDialog } from "@/components/system/ConfirmDialog";
 import { ContentPanel } from "@/components/system/ContentPanel";
@@ -27,7 +26,6 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageShell, QueryStateBlock, SoftHeader, StatStrip, StatStripItem } from "@/components/ui/page-shell";
-import { PlaybooksPanel, usePlaybooksPanel } from "./servers/PlaybooksPanel";
 import { ServerAdvancedDialog } from "./servers/ServerAdvancedDialog";
 import { ServerFormDialog } from "./servers/ServerFormDialog";
 import { ServerGroupDialog } from "./servers/ServerGroupDialog";
@@ -45,12 +43,14 @@ import { useServerGroupController } from "./servers/useServerGroupController";
 import { useServerKnowledgeController } from "./servers/useServerKnowledgeController";
 import { useServerRulesController } from "./servers/useServerRulesController";
 import { useServerSecurityController } from "./servers/useServerSecurityController";
-import { useMonitoringLive } from "./servers/useMonitoringLive";
+import { isFreshLiveSample, statusFromLiveMetrics, useMonitoringLive } from "./servers/useMonitoringLive";
 import { useServersListController } from "./servers/useServersListController";
 import { useServerSharesController } from "./servers/useServerSharesController";
+import { PlaybooksWorkspace } from "./automation/PlaybooksWorkspace";
 
 export default function Servers() {
   const { t, lang } = useI18n();
+  const location = useLocation();
   const tr = useCallback((key: string, vars?: Record<string, string | number>) => {
     let text = t(key);
     if (!vars) return text;
@@ -67,7 +67,19 @@ export default function Servers() {
     await queryClient.invalidateQueries({ queryKey: ["settings", "activity"] });
   }, [queryClient]);
   const [advancedTab, setAdvancedTab] = useState<AdvancedTab>("access");
-  const [mainTab, setMainTab] = useState<MainTab>("servers");
+  const initialTab = (location.state as { mainTab?: MainTab } | null)?.mainTab;
+  const [mainTab, setMainTab] = useState<MainTab>(
+    initialTab === "playbook" || initialTab === "groups" || initialTab === "rules" || initialTab === "servers"
+      ? initialTab
+      : "servers",
+  );
+
+  useEffect(() => {
+    const tab = (location.state as { mainTab?: MainTab } | null)?.mainTab;
+    if (tab === "playbook" || tab === "groups" || tab === "rules" || tab === "servers") {
+      setMainTab(tab);
+    }
+  }, [location.state]);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [advancedServer, setAdvancedServer] = useState<FrontendServer | null>(null);
   const [advancedLoading, setAdvancedLoading] = useState(false);
@@ -141,35 +153,70 @@ export default function Servers() {
     refetchIntervalInBackground: false,
   });
   const servers = useMemo(() => data?.servers ?? [], [data?.servers]);
-  const [liveEnabled, setLiveEnabled] = useState(false);
+  // Live monitoring is always on for the servers list: backend shares one SSH
+  // collector per host:port across all viewers/users.
   const liveServerIds = useMemo(() => servers.map((server) => server.id), [servers]);
-  const { metricsByServerId: liveMetrics, connected: liveConnected } = useMonitoringLive(
+  const { metricsByServerId: liveMetrics } = useMonitoringLive(
     liveServerIds,
-    liveEnabled && mainTab === "servers",
+    mainTab === "servers" && liveServerIds.length > 0,
   );
+
+  // Backup path: when live WS is down, SSH quick metrics refresh so numbers don't
+  // stay frozen for hours (lite TCP refresh does NOT update CPU/RAM/disk).
+  useEffect(() => {
+    if (mainTab !== "servers" || liveServerIds.length === 0) return;
+    let cancelled = false;
+    const pullMetrics = () => {
+      void refreshMonitoringFleet({ metrics: true }).then(() => {
+        if (!cancelled) {
+          void queryClient.invalidateQueries({ queryKey: ["monitoring", "status"] });
+        }
+      });
+    };
+    pullMetrics();
+    const timer = window.setInterval(pullMetrics, 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [mainTab, liveServerIds.length, queryClient]);
+
   const fleetHealthByServerId = useMemo(() => {
     const map = new Map<number, MonitoringStatusItem>();
     for (const item of monitoringStatus?.servers ?? []) {
       map.set(item.server_id, item);
     }
-    // Live WebSocket samples override the minute-cadence snapshot while live mode is on.
+    // Live WebSocket samples override the snapshot when fresh.
+    // Once live is active for a host, never fall back to a stale DB CPU (e.g. 100% from days ago).
+    const nowMs = Date.now();
     for (const [serverId, live] of liveMetrics) {
+      if (!isFreshLiveSample(live, nowMs)) continue;
       const base = map.get(serverId);
-      if (!base) continue;
+      const liveStatus = statusFromLiveMetrics(live);
+      const serverMeta = servers.find((s) => s.id === serverId);
       map.set(serverId, {
-        ...base,
-        cpu_percent: live.cpu_percent ?? base.cpu_percent,
-        memory_percent: live.memory_percent ?? base.memory_percent,
-        disk_percent: live.disk_percent ?? base.disk_percent,
-        load_1m: live.load_1m ?? base.load_1m,
+        server_id: serverId,
+        server_name: base?.server_name || serverMeta?.name || "",
+        host: base?.host || serverMeta?.host || "",
+        server_type: base?.server_type || serverMeta?.server_type || "",
+        status: liveStatus,
+        checked_at: base?.checked_at ?? null,
+        age_seconds: 0,
+        is_stale: false,
+        response_time_ms: base?.response_time_ms ?? null,
+        cpu_percent: live.cpu_percent,
+        memory_percent: live.memory_percent,
+        disk_percent: live.disk_percent,
+        load_1m: live.load_1m,
+        metrics_checked_at: new Date(nowMs).toISOString(),
         metrics_age_seconds: 0,
+        is_lite: false,
       });
     }
     return map;
-  }, [monitoringStatus, liveMetrics]);
+  }, [monitoringStatus, liveMetrics, servers]);
   const serversList = useServersListController(servers);
   const { collapsed, filtered, grouped, onlineCount, search, setSearch, toggleGroup } = serversList;
-  const playbooksPanel = usePlaybooksPanel({ servers, t, tr, lang });
   const groups = useMemo(() => (Array.isArray(data?.groups) ? data.groups : []), [data?.groups]);
   const manageableGroups = useMemo(
     () =>
@@ -183,15 +230,6 @@ export default function Servers() {
   const groupCount = manageableGroups.length;
   const offlineCount = Math.max(0, servers.length - onlineCount);
   const isAdmin = authData?.user?.is_staff ?? false;
-
-  const fleetRefreshRequested = useRef(false);
-  useEffect(() => {
-    if (!monitoringStatus?.meta?.has_stale || fleetRefreshRequested.current) return;
-    fleetRefreshRequested.current = true;
-    void refreshMonitoringFleet().then(() => {
-      void queryClient.invalidateQueries({ queryKey: ["monitoring", "status"] });
-    });
-  }, [monitoringStatus?.meta?.has_stale, queryClient]);
 
   const rulesController = useServerRulesController({
     activeServer: advancedServer,
@@ -269,34 +307,6 @@ export default function Servers() {
                 className="h-9 w-full pl-9 text-sm sm:w-72"
               />
             </div>
-            {servers.length > 0 ? (
-              <Button
-                variant="outline"
-                onClick={() => setLiveEnabled((value) => !value)}
-                aria-pressed={liveEnabled}
-                title={localize(
-                  lang,
-                  liveEnabled
-                    ? "Живой мониторинг включён: метрики обновляются каждые ~2 сек"
-                    : "Включить живой мониторинг (метрики каждые ~2 сек, пока открыта страница)",
-                  liveEnabled
-                    ? "Live monitoring on: metrics refresh every ~2s"
-                    : "Enable live monitoring (~2s metrics while this page is open)",
-                )}
-                className={cn(
-                  "gap-1.5",
-                  liveEnabled && "border-success/50 bg-success/10 text-success hover:bg-success/15 hover:text-success",
-                )}
-              >
-                <span className="relative flex h-3.5 w-3.5 items-center justify-center">
-                  {liveEnabled && liveConnected ? (
-                    <span className="absolute inline-flex h-2.5 w-2.5 animate-ping rounded-full bg-success opacity-60" />
-                  ) : null}
-                  <Radio className="relative h-3.5 w-3.5" />
-                </span>
-                Live
-              </Button>
-            ) : null}
             <Button className="gap-1.5" onClick={openCreate}>
               <Plus className="h-4 w-4" /> {t("srv.add")}
             </Button>
@@ -336,17 +346,29 @@ export default function Servers() {
       ) : null}
 
       <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as MainTab)} className="space-y-3">
-        <TabsList className="h-auto justify-start gap-1 overflow-x-auto rounded-lg border border-border/50 bg-surface-2/40 p-0.5">
-          <TabsTrigger value="servers" className="min-h-9 gap-2 px-3 text-sm data-[state=active]:bg-surface-1 data-[state=active]:shadow-elev-1">
+        <TabsList className="h-auto justify-start gap-1 overflow-x-auto rounded-sm border border-border bg-surface-0 p-0.5">
+          <TabsTrigger
+            value="servers"
+            className="min-h-9 gap-2 px-3 text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-elev-1"
+          >
             <Server className="h-4 w-4" /> {t("srv.list")}
           </TabsTrigger>
-          <TabsTrigger value="groups" className="min-h-9 gap-2 px-3 text-sm data-[state=active]:bg-surface-1 data-[state=active]:shadow-elev-1">
+          <TabsTrigger
+            value="groups"
+            className="min-h-9 gap-2 px-3 text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-elev-1"
+          >
             <Layers className="h-4 w-4" /> {t("srv.groups")}
           </TabsTrigger>
-          <TabsTrigger value="rules" className="min-h-9 gap-2 px-3 text-sm data-[state=active]:bg-surface-1 data-[state=active]:shadow-elev-1">
+          <TabsTrigger
+            value="rules"
+            className="min-h-9 gap-2 px-3 text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-elev-1"
+          >
             <Settings className="h-4 w-4" /> {t("srv.rules_tab")}
           </TabsTrigger>
-          <TabsTrigger value="playbook" className="min-h-9 gap-2 px-3 text-sm data-[state=active]:bg-surface-1 data-[state=active]:shadow-elev-1">
+          <TabsTrigger
+            value="playbook"
+            className="min-h-9 gap-2 px-3 text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-elev-1"
+          >
             <BookOpen className="h-4 w-4" /> {t("pb.title")}
           </TabsTrigger>
         </TabsList>
@@ -398,7 +420,11 @@ export default function Servers() {
 
         <TabsContent value="playbook" className="mt-0 space-y-3">
           <ContentPanel className="p-4 sm:p-5">
-            <PlaybooksPanel {...playbooksPanel} />
+            <PlaybooksWorkspace
+              servers={servers}
+              groups={groups}
+              enabled={mainTab === "playbook"}
+            />
           </ContentPanel>
         </TabsContent>
       </Tabs>

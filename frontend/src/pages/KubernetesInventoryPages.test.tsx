@@ -375,7 +375,7 @@ describe("Kubernetes inventory pages", () => {
     expect(await screen.findByRole("heading", { name: "prod-kz-1" })).toBeInTheDocument();
     expect(screen.getAllByText("payments-api").length).toBeGreaterThan(0);
     expect(screen.getByText("payments-api-abc123")).toBeInTheDocument();
-    expect(screen.getByText("ClusterIP")).toBeInTheDocument();
+    expect(screen.getAllByText("ClusterIP").length).toBeGreaterThan(0);
     expect(screen.getAllByText("k8s.cluster.view").length).toBeGreaterThan(0);
     expect(fetchKubernetesCluster).toHaveBeenCalledWith("cluster_1");
 

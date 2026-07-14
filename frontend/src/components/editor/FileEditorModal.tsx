@@ -132,29 +132,38 @@ export function FileEditorModal({
   }, [tabs.length, t]);
 
   /* ---- drag title bar ---- */
+  // Drag/resize read start geometry only from refs so a null ref or a
+  // stale setState closure cannot crash the whole Terminal page (white screen).
   const onDragStart = useCallback((e: React.MouseEvent) => {
     if (mode === "maximized") return;
     const target = e.target as HTMLElement | null;
     if (target?.closest("button, input, a, [role='button'], [data-no-drag]")) return;
 
     e.preventDefault();
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const origX = rect.x;
-    const origY = rect.y;
-    dragRef.current = { startX, startY, origX, origY };
+    e.stopPropagation();
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      origX: rect.x,
+      origY: rect.y,
+    };
 
     const onMove = (ev: MouseEvent) => {
-      if (!dragRef.current) return;
-      const dx = ev.clientX - startX;
-      const dy = ev.clientY - startY;
+      const drag = dragRef.current;
+      if (!drag) return;
+      const dx = ev.clientX - drag.startX;
+      const dy = ev.clientY - drag.startY;
       const maxX = Math.max(0, window.innerWidth - 120);
       const maxY = Math.max(0, window.innerHeight - 48);
-      setRect((r) => ({
-        ...r,
-        x: Math.min(maxX, Math.max(-r.w + 120, origX + dx)),
-        y: Math.min(maxY, Math.max(0, origY + dy)),
-      }));
+      try {
+        setRect((r) => ({
+          ...r,
+          x: Math.min(maxX, Math.max(-r.w + 120, drag.origX + dx)),
+          y: Math.min(maxY, Math.max(0, drag.origY + dy)),
+        }));
+      } catch {
+        // never let drag update take down the tree
+      }
     };
     const onUp = () => {
       dragRef.current = null;
@@ -172,21 +181,29 @@ export function FileEditorModal({
     if (mode === "maximized") return;
     e.preventDefault();
     e.stopPropagation();
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const origW = rect.w;
-    const origH = rect.h;
-    resizeRef.current = { startX, startY, origW, origH, origX: rect.x, origY: rect.y };
+    resizeRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      origW: rect.w,
+      origH: rect.h,
+      origX: rect.x,
+      origY: rect.y,
+    };
 
     const onMove = (ev: MouseEvent) => {
-      if (!resizeRef.current) return;
-      const dx = ev.clientX - startX;
-      const dy = ev.clientY - startY;
-      setRect((r) => ({
-        ...r,
-        w: Math.max(480, origW + dx),
-        h: Math.max(300, origH + dy),
-      }));
+      const resize = resizeRef.current;
+      if (!resize) return;
+      const dx = ev.clientX - resize.startX;
+      const dy = ev.clientY - resize.startY;
+      try {
+        setRect((r) => ({
+          ...r,
+          w: Math.max(480, resize.origW + dx),
+          h: Math.max(300, resize.origH + dy),
+        }));
+      } catch {
+        // never let resize update take down the tree
+      }
     };
     const onUp = () => {
       resizeRef.current = null;

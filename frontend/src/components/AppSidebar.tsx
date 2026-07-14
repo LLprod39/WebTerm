@@ -31,15 +31,19 @@ export function AppSidebar() {
     staleTime: 60_000,
     retry: false,
   });
+  const isStaff = Boolean(data?.user?.is_staff);
   const hasKubernetesFeature = hasFeatureAccess(data?.user, "kubernetes");
   const { data: kubernetesReadiness } = useQuery({
     queryKey: ["kubernetes", "readiness", "sidebar"],
+    // Staff always get the nav entry when the feature is on; readiness only gates operators.
     queryFn: fetchKubernetesReadiness,
-    enabled: hasKubernetesFeature,
+    enabled: hasKubernetesFeature && !isStaff,
     staleTime: 60_000,
     retry: false,
   });
-  const kubernetesNavReady = Boolean(kubernetesReadiness?.ready_for_sidebar);
+  // Admins: open Kubernetes as soon as the feature is granted.
+  // Operators: keep production/pilot sidebar gate (ready_for_sidebar).
+  const kubernetesNavReady = isStaff || Boolean(kubernetesReadiness?.ready_for_sidebar);
 
   const navItems = [
     { titleKey: "nav.dashboard", url: "/dashboard", icon: LayoutDashboard, feature: "dashboard" },

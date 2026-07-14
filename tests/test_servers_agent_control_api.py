@@ -81,7 +81,10 @@ def test_agent_endpoints_crud_run_and_control_flow(monkeypatch):
     assert listed_agent["skill_slugs"] == []
     assert listed_agent["input_artifacts"] == []
     assert listed_agent["report_delivery"]["telegram"]["enabled"] is False
-    assert listed_agent["session_timeout_seconds"] == 600
+    from servers.agent_budgets import FULL_DEFAULT_MAX_ITERATIONS, FULL_DEFAULT_SESSION_TIMEOUT_SEC
+
+    assert listed_agent["session_timeout_seconds"] == FULL_DEFAULT_SESSION_TIMEOUT_SEC
+    assert listed_agent["max_iterations"] == FULL_DEFAULT_MAX_ITERATIONS
     assert listed_agent["max_connections"] == 5
     assert listed_agent["execution_readiness"]["required"] is False
     assert listed_agent["execution_readiness"]["ready"] is True

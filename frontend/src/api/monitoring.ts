@@ -115,9 +115,14 @@ export async function fetchMonitoringStatus() {
   return apiFetch<MonitoringStatusResponse>("/servers/api/monitoring/status/");
 }
 
-export async function refreshMonitoringFleet() {
-  return apiFetch<MonitoringStatusResponse>("/servers/api/monitoring/refresh/", {
+/** Refresh fleet monitoring.
+ *  - metrics: true → SSH quick metrics (CPU/RAM/disk) — use when list is open
+ *  - default → lite TCP reachability only
+ */
+export async function refreshMonitoringFleet(options?: { metrics?: boolean }) {
+  return apiFetch<MonitoringStatusResponse & { mode?: string }>("/servers/api/monitoring/refresh/", {
     method: "POST",
+    body: JSON.stringify({ metrics: Boolean(options?.metrics) }),
   });
 }
 

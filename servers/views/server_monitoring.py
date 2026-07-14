@@ -46,6 +46,55 @@ def _latest_health_checks_by_server_id(
     return {hc.server_id: hc for hc in checks}
 
 
+def _resolve_display_status(
+    hc: ServerHealthCheck | None,
+    metrics_hc: ServerHealthCheck | None,
+    *,
+    stale_seconds: int,
+    now,
+) -> str:
+    """Pick a status that matches what the operator sees in metrics.
+
+    A flaky lite TCP probe can write ``unreachable`` while a slightly older full
+    check (or live SSH stream) still has valid CPU/RAM. Prefer the metrics-based
+    health when that probe is still fresh so the list does not flash "Недоступен".
+    """
+    if not hc:
+        if metrics_hc and metrics_hc.status:
+            metrics_age = (
+                int((now - metrics_hc.checked_at).total_seconds()) if metrics_hc.checked_at else None
+            )
+            if metrics_age is not None and metrics_age <= stale_seconds:
+                return metrics_hc.status
+        return "unknown"
+
+    status = hc.status or "unknown"
+    raw_output = hc.raw_output if isinstance(hc.raw_output, dict) else {}
+    is_lite = bool(raw_output.get("lite"))
+
+    if status != ServerHealthCheck.STATUS_UNREACHABLE:
+        return status
+
+    # Latest says unreachable. If we still have a fresh non-unreachable metrics
+    # snapshot (and the failure was only a lite probe, or metrics are very fresh),
+    # keep showing the metrics-derived health.
+    if not metrics_hc or not metrics_hc.status or metrics_hc.status == ServerHealthCheck.STATUS_UNREACHABLE:
+        return status
+    if metrics_hc.id == hc.id:
+        return status
+
+    metrics_age = int((now - metrics_hc.checked_at).total_seconds()) if metrics_hc.checked_at else None
+    if metrics_age is None:
+        return status
+
+    # Lite probe failures are noisy; trust metrics for the full stale window.
+    # Full SSH failures only yield if metrics are very recent (likely still up).
+    trust_window = stale_seconds if is_lite else min(90, stale_seconds)
+    if metrics_age <= trust_window:
+        return metrics_hc.status
+    return status
+
+
 def _serialize_monitoring_status_item(
     server: Server,
     hc: ServerHealthCheck | None,
@@ -61,15 +110,21 @@ def _serialize_monitoring_status_item(
     source = hc if hc and hc.cpu_percent is not None else metrics_hc
     metrics_checked_at = source.checked_at if source and source.checked_at else None
     metrics_age_seconds = int((now - metrics_checked_at).total_seconds()) if metrics_checked_at else None
+    status = _resolve_display_status(hc, metrics_hc, stale_seconds=stale_seconds, now=now)
+    # Age/staleness should follow the data we actually show (metrics when present).
+    display_checked_at = metrics_checked_at or checked_at
+    display_age = (
+        int((now - display_checked_at).total_seconds()) if display_checked_at else age_seconds
+    )
     return {
         "server_id": server.id,
         "server_name": server.name,
         "host": server.host,
         "server_type": server.server_type or "ssh",
-        "status": hc.status if hc else "unknown",
+        "status": status,
         "checked_at": checked_at.isoformat() if checked_at else None,
-        "age_seconds": age_seconds,
-        "is_stale": age_seconds is None or age_seconds > stale_seconds,
+        "age_seconds": display_age,
+        "is_stale": display_age is None or display_age > stale_seconds,
         "response_time_ms": hc.response_time_ms if hc else None,
         "cpu_percent": source.cpu_percent if source else None,
         "memory_percent": source.memory_percent if source else None,
@@ -309,36 +364,68 @@ def monitoring_status(request):
 @require_feature("servers")
 @require_http_methods(["POST"])
 def monitoring_refresh(request):
-    """Debounced lite fleet reachability check (TCP only)."""
+    """Debounced fleet check.
+
+    Default (lite): TCP reachability only — does not refresh CPU/RAM/disk.
+    With body ``{"metrics": true}``: full SSH quick metrics (CPU/RAM/disk) so the
+    servers list can update when live WebSocket is unavailable.
+    """
     from servers.monitor import check_all_servers
 
-    cooldown_seconds = max(
-        30,
-        int(getattr(settings, "MONITORING_FLEET_REFRESH_COOLDOWN_SECONDS", 120) or 120),
+    try:
+        body = json.loads(request.body) if request.body else {}
+    except Exception:
+        body = {}
+    want_metrics = bool(
+        body.get("metrics")
+        or body.get("full")
+        or str(request.GET.get("metrics") or "").lower() in ("1", "true", "yes")
     )
+
+    if want_metrics:
+        cooldown_seconds = max(
+            45,
+            int(getattr(settings, "MONITORING_METRICS_REFRESH_COOLDOWN_SECONDS", 90) or 90),
+        )
+        mode_key = "metrics"
+    else:
+        cooldown_seconds = max(
+            30,
+            int(getattr(settings, "MONITORING_FLEET_REFRESH_COOLDOWN_SECONDS", 120) or 120),
+        )
+        mode_key = "lite"
+
     lock_timeout_seconds = max(30, cooldown_seconds)
-    lock_key = f"monitoring:fleet-refresh:lock:{request.user.id}"
-    recent_key = f"monitoring:fleet-refresh:recent:{request.user.id}"
+    lock_key = f"monitoring:fleet-refresh:{mode_key}:lock:{request.user.id}"
+    recent_key = f"monitoring:fleet-refresh:{mode_key}:recent:{request.user.id}"
 
     payload = _build_monitoring_status_payload(request.user)
 
     if cache.get(recent_key):
         payload["cached"] = True
+        payload["mode"] = mode_key
         return JsonResponse(payload)
 
     if not cache.add(lock_key, "1", timeout=lock_timeout_seconds):
         payload["queued"] = True
+        payload["mode"] = mode_key
         return JsonResponse(payload, status=202)
 
     server_ids = list(_accessible_servers_queryset(request.user).values_list("id", flat=True))
     try:
-        async_to_sync(check_all_servers)(lite=True, deep=False, server_ids=server_ids)
+        # lite=False runs SSH quick metrics (not deep diagnostics).
+        async_to_sync(check_all_servers)(
+            lite=not want_metrics,
+            deep=False,
+            server_ids=server_ids,
+        )
     finally:
         cache.delete(lock_key)
 
     cache.set(recent_key, "1", timeout=cooldown_seconds)
     payload = _build_monitoring_status_payload(request.user)
     payload["refreshed"] = True
+    payload["mode"] = mode_key
     return JsonResponse(payload)
 
 
@@ -371,7 +458,7 @@ def server_health_history(request, server_id):
 @require_http_methods(["POST"])
 def server_health_check_now(request, server_id):
     """Trigger an immediate health check for a server."""
-    from servers.monitor import check_server
+    from servers.monitor import check_all_servers
 
     server = _accessible_servers_queryset(request.user).filter(id=server_id).first()
     if not server:
@@ -388,8 +475,10 @@ def server_health_check_now(request, server_id):
 
     cooldown_seconds = max(5, int(getattr(settings, "MONITORING_HEALTHCHECK_COOLDOWN_SECONDS", 60) or 60))
     lock_timeout_seconds = max(10, int(getattr(settings, "MONITORING_HEALTHCHECK_LOCK_SECONDS", 45) or 45))
-    lock_key = f"monitoring:healthcheck:lock:{server.id}:deep:{int(deep)}"
-    recent_key = f"monitoring:healthcheck:recent:{server.id}:deep:{int(deep)}"
+    # Lock by physical endpoint so concurrent users of the same host share one probe.
+    host_key = f"{(server.host or '').strip().lower()}:{int(server.port or 22)}"
+    lock_key = f"monitoring:healthcheck:lock:{host_key}:deep:{int(deep)}"
+    recent_key = f"monitoring:healthcheck:recent:{host_key}:deep:{int(deep)}"
 
     latest = ServerHealthCheck.objects.filter(server=server).order_by("-checked_at").first()
     if cache.get(recent_key):
@@ -422,7 +511,19 @@ def server_health_check_now(request, server_id):
         )
 
     try:
-        health_check = async_to_sync(check_server)(server, deep=deep)
+        # Probe the shared host:port once and mirror status onto sibling inventory rows.
+        sibling_ids = list(
+            Server.objects.filter(
+                is_active=True,
+                server_type="ssh",
+                host__iexact=(server.host or "").strip(),
+                port=int(server.port or 22),
+            ).values_list("id", flat=True)
+        )
+        results = async_to_sync(check_all_servers)(deep=deep, server_ids=sibling_ids or [server.id], concurrency=1)
+        health_check = next((hc for hc in results if hc.server_id == server.id), None)
+        if health_check is None and results:
+            health_check = results[0]
     except Exception as exc:
         cache.delete(lock_key)
         return JsonResponse({"success": False, "error": str(exc)}, status=500)

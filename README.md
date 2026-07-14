@@ -113,24 +113,50 @@ VITE_ENABLE_DEMO_MODE=true
 
 ## Docker
 
-Local full stack:
+### One-command Linux server install
+
+On a clean Linux host (installs Docker if needed, prepares env, starts the full
+platform including agent workers, creates admin):
+
+```bash
+chmod +x install-server.sh
+./install-server.sh --host 10.0.0.15
+# or with HTTPS:
+./install-server.sh --host webterm.example.com --https
+```
+
+This starts postgres, redis, backend, frontend, nginx, MCP services, plus
+ops-supervisor, scheduled-agents, scheduled-pipelines, monitor,
+kubernetes-ops-sync, and celery-worker.
+
+### Local full stack
 
 ```bash
 cp .env.example .env
 docker compose up -d --build
 ```
 
-Production-like stack:
+### Production-like stack (manual)
 
 ```bash
 cp .env.production.example .env.production
+# edit secrets / SITE_URL / ALLOWED_HOSTS
+./docker/install-production.sh --generate-secrets --create-superuser \
+  --superuser-username admin \
+  --superuser-email admin@example.com \
+  --superuser-password 'ChangeMe123!'
+```
+
+Or:
+
+```bash
 docker compose --env-file .env.production -f docker-compose.production.yml up -d --build
 ```
 
 Check services:
 
 ```bash
-docker compose ps
+docker compose --env-file .env.production -f docker-compose.production.yml ps
 curl http://127.0.0.1:8080/api/health/
 ```
 

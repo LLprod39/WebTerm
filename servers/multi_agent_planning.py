@@ -55,7 +55,13 @@ Attached skills:
 - Каждая задача должна быть самодостаточной и конкретной
 - Используй русский язык для имён и описаний
 - Порядок задач важен — они выполняются последовательно
-- Каждая задача должна быть выполнима за 5-7 SSH-команд максимум
+- Каждая задача — один измеримый outcome; subagent может сделать до 10–12 tool steps
+  (не ограничивайся 5–7 SSH-командами — разведка, действие и локальная проверка
+  внутри задачи допустимы, если это один coherent outcome)
+- Для сложных multi-step ops (инцидент, деплой, миграция, multi-service fix)
+  планируй минимум: разведка → действие → post-change verification
+- Если план меняет состояние (restart/deploy/edit/config), обязательно включи
+  задачу с role=post_change_verifier (или явную verification-задачу в конце)
 - Если attached skills содержат runtime guardrails, учитывай их как обязательные ограничения
 
 Доступные subagent roles:
@@ -79,11 +85,14 @@ Attached skills:
     response = await engine._call_llm_raw(system_prompt, user_msg)
     orchestrator_log.append({"role": "assistant", "content": response, "timestamp": timezone.now().isoformat()})
 
+    from servers.services.agent_complexity import ensure_verification_task
+
     tasks = parse_plan_response(
         response,
         max_tasks=MAX_PLAN_TASKS,
         fallback_goal=engine.agent.goal or engine.agent.ai_prompt,
     )
+    tasks = ensure_verification_task(tasks, max_tasks=MAX_PLAN_TASKS)
     return engine._prepare_plan_tasks(tasks)
 
 
@@ -179,11 +188,14 @@ async def replan_multi_agent_tasks(engine: Any, goal: str, plan_tasks: list[dict
     response = await engine._call_llm_raw(system_prompt, user_msg)
     orchestrator_log.append({"role": "assistant", "content": response, "timestamp": timezone.now().isoformat()})
 
+    from servers.services.agent_complexity import ensure_verification_task
+
     tasks = parse_plan_response(
         response,
         max_tasks=MAX_PLAN_TASKS,
         fallback_goal=engine.agent.goal or engine.agent.ai_prompt,
     )
+    tasks = ensure_verification_task(tasks, max_tasks=MAX_PLAN_TASKS)
     return engine._prepare_plan_tasks(tasks[:MAX_PLAN_TASKS])
 
 

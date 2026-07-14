@@ -17,6 +17,7 @@ export * from "@/api/monitoring";
 export * from "@/api/servers";
 export * from "@/api/server-files";
 export * from "@/api/server-memory";
+export * from "@/api/playbooks";
 export * from "@/api/settings";
 export * from "@/api/plugins";
 export * from "@/api/studio";

@@ -269,6 +269,13 @@ def build_kubernetes_readiness_report(user=None, *, include_release_artifact_gat
     fleet_count = K8sFleetBundle.objects.count()
     worker_state = _sync_worker_state()
     override = str(getattr(settings, "KUBERNETES_OPS_READY_FOR_SIDEBAR", "") or "").lower() in {"1", "true", "yes"}
+    pilot = str(getattr(settings, "KUBERNETES_OPS_PILOT_SIDEBAR", "") or "").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    # Production-only gates waived for closed pilot when PILOT_SIDEBAR is set.
+    pilot_exempt_required_ids = frozenset({"sidebar_release_scope", "release_evidence_artifact"})
     checks = [
         _check(
             "architecture_guard",
@@ -298,20 +305,33 @@ def build_kubernetes_readiness_report(user=None, *, include_release_artifact_gat
         _sidebar_release_scope_check(user),
     ]
     if include_release_artifact_gate:
-        checks.append(_release_evidence_artifact_check(require_ready=override))
+        checks.append(_release_evidence_artifact_check(require_ready=override and not pilot))
+    if pilot:
+        for item in checks:
+            if item.get("id") in pilot_exempt_required_ids:
+                item["required"] = False
+                if item.get("status") != "ready":
+                    item["detail"] = (
+                        f"{item.get('detail', '')} "
+                        "[pilot: waived for closed pilot via KUBERNETES_OPS_PILOT_SIDEBAR]"
+                    ).strip()
     required_ok = all(item["status"] == "ready" for item in checks if item["required"])
+    # Production: all required ready + READY_FOR_SIDEBAR.
+    # Pilot: same but production-only evidence checks are not required.
     ready_for_sidebar = required_ok and override
     summary = {
         "ready": sum(1 for item in checks if item["status"] == "ready"),
         "missing": sum(1 for item in checks if item["status"] == "missing"),
         "manual": sum(1 for item in checks if item["status"] == "manual"),
         "total": len(checks),
+        "pilot_sidebar": pilot,
     }
     status = "ready" if ready_for_sidebar else ("configured" if required_ok else "not_configured")
     return {
         "success": True,
         "status": status,
         "ready_for_sidebar": ready_for_sidebar,
+        "pilot_sidebar": pilot,
         "summary": summary,
         "access_policy": kubernetes_permission_policy(user),
         "security_review": build_kubernetes_security_review(),

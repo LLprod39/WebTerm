@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
+import socket
 import tempfile
 import urllib.error
 import urllib.parse
@@ -32,25 +34,70 @@ def _allowed_hosts() -> set[str]:
     return {str(item).lower() for item in configured if str(item).strip()}
 
 
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Refuse redirects so a whitelisted host cannot bounce us to an internal target."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: D401
+        raise RemotePackageError("Remote plugin package host attempted a redirect, which is not allowed.")
+
+
+def _assert_public_host(host: str) -> None:
+    """Reject hosts that resolve to private, loopback, link-local or reserved IPs (SSRF guard)."""
+    if not host:
+        raise RemotePackageError("Remote plugin package host is missing.")
+    try:
+        resolved = socket.getaddrinfo(host, 443, proto=socket.IPPROTO_TCP)
+    except OSError as exc:
+        raise RemotePackageError(f"Remote plugin package host could not be resolved: {exc}") from exc
+    addresses = {info[4][0] for info in resolved}
+    if not addresses:
+        raise RemotePackageError("Remote plugin package host could not be resolved.")
+    for raw_addr in addresses:
+        try:
+            addr = ipaddress.ip_address(raw_addr)
+        except ValueError as exc:
+            raise RemotePackageError("Remote plugin package host resolved to an invalid address.") from exc
+        if (
+            addr.is_private
+            or addr.is_loopback
+            or addr.is_link_local
+            or addr.is_reserved
+            or addr.is_multicast
+            or addr.is_unspecified
+        ):
+            raise RemotePackageError("Remote plugin package host resolves to a non-public address.")
+
+
 def _validate_remote_url(url: str) -> urllib.parse.ParseResult:
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme != "https":
         raise RemotePackageError("Remote plugin package URL must use HTTPS.")
     allowed = _allowed_hosts()
+    if not allowed:
+        raise RemotePackageError(
+            "Remote plugin package downloads are disabled: "
+            "PLUGIN_MARKETPLACE_REMOTE_PACKAGE_ALLOWED_HOSTS is not configured."
+        )
     host = (parsed.hostname or "").lower()
-    if allowed and host not in allowed:
+    if host not in allowed:
         raise RemotePackageError("Remote plugin package host is not allowed.")
     return parsed
 
 
 def fetch_remote_package_bytes(url: str) -> bytes:
-    _validate_remote_url(url)
+    parsed = _validate_remote_url(url)
+    # SSRF guard: only enforced on the actual network fetch (not on offline staging),
+    # so a whitelisted hostname cannot point/redirect at an internal address.
+    _assert_public_host((parsed.hostname or "").lower())
+    opener = urllib.request.build_opener(_NoRedirectHandler)
     try:
-        with urllib.request.urlopen(url, timeout=20) as response:
+        with opener.open(url, timeout=20) as response:
             content_length = response.headers.get("Content-Length")
             if content_length and int(content_length) > MAX_REMOTE_PACKAGE_BYTES:
                 raise RemotePackageError("Remote plugin package is too large.")
             data = response.read(MAX_REMOTE_PACKAGE_BYTES + 1)
+    except RemotePackageError:
+        raise
     except (urllib.error.URLError, TimeoutError, ValueError) as exc:
         raise RemotePackageError(f"Remote package download failed: {exc}") from exc
     if len(data) > MAX_REMOTE_PACKAGE_BYTES:

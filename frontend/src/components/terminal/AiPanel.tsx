@@ -52,14 +52,18 @@ const quickPrompts = ["Объясни вывод", "Предложи коман�
 
 const modeConfig: Record<AiExecutionMode, { icon: typeof Zap; label: string; desc: string }> = {
   auto: { icon: Wand2, label: "Авто", desc: "Режим выбирается автоматически" },
-  fast: { icon: Zap, label: "Fast", desc: "Быстрый ответ без лишних шагов" },
+  fast: {
+    icon: Zap,
+    label: "Fast",
+    desc: "Короткие линейные задачи (до ~10 команд). Сложные multi-step ops лучше в Nova",
+  },
   step: { icon: Footprints, label: "Step", desc: "Пошаговый и более подробный режим" },
   // Nova: ReAct agent — no pre-plan, picks tools one at a time. Can
   // operate on extra servers (see settings → Agent → Extra targets).
   agent: {
     icon: Sparkles,
     label: "Nova",
-    desc: "Агент: сам выбирает инструменты, делает todo-лист, может работать с несколькими серверами",
+    desc: "Сложные задачи: разведка → действие → проверка, todo, multi-server, адаптивный ReAct",
   },
 };
 

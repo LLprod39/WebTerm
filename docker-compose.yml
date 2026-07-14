@@ -35,6 +35,11 @@ x-backend-worker: &backend-worker
     POSTGRES_USER: ${POSTGRES_USER:-weu}
     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-weu_secret_change_me}
     DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-local-compose-only-change-this-secret-before-public-deploy-2026-03-12}
+    # Managed secrets (пароли серверов, k8s-токены) шифруются ключом из MANAGED_SECRET_KEY
+    # (fallback: SECRET_KEY). Дефолт ниже повторяет dev-fallback Django SECRET_KEY, чтобы
+    # workers в контейнерах расшифровывали секреты, сохранённые локальным dev-бэкендом
+    # (runserver без DJANGO_SECRET_KEY). Все процессы обязаны использовать один ключ.
+    MANAGED_SECRET_KEY: ${MANAGED_SECRET_KEY:-${DJANGO_SECRET_KEY:-django-insecure-@b9idj_4skbcph+21q6^bc0qbs*$$qs&@7r2sqfn*1#)z5_i%my}}
     CHANNEL_REDIS_URL: redis://redis:6379/1
     CELERY_BROKER_URL: redis://redis:6379/0
     CELERY_RESULT_BACKEND: redis://redis:6379/0
@@ -433,6 +438,19 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # Ansible runner image only — not a long-running service.
+  # Build: docker compose --profile ansible build ansible-runner
+  # Backend starts ad-hoc: docker run --rm -v workdir:/ansible webterm-ansible:latest ...
+  ansible-runner:
+    profiles: ["ansible"]
+    image: ${WEBTERM_ANSIBLE_IMAGE:-webterm-ansible:latest}
+    build:
+      context: .
+      dockerfile: docker/ansible-runner/Dockerfile
+    entrypoint: ["ansible-playbook"]
+    command: ["--version"]
+    restart: "no"
 
 volumes:
   mini_prod_postgres_data:

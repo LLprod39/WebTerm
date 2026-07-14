@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, Bot, Layers, Server, Shield, Tag } from "lucide-react";
+import { ArrowLeft, ArrowRight, Layers, Play, Server, Shield, Tag } from "lucide-react";
 import {
   createAgent,
   fetchAgentTemplates,
@@ -11,14 +11,12 @@ import {
   type AgentItem,
   type AgentScheduleConfig,
   type AgentScheduleMode,
-  type AgentTaskDraft,
   type AgentTemplate,
   type StudioSkill,
 } from "@/lib/api";
 import { localize, useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { AsyncButton } from "@/components/system/AsyncButton";
-import { InlineAlert } from "@/components/system/InlineAlert";
 import {
   Dialog,
   DialogBody,
@@ -33,6 +31,7 @@ import { AgentWizardStepContent } from "./AgentWizardStepContent";
 import {
   AGENT_WIZARD_STEPS,
   type AgentSudoPolicy,
+  type AgentTaskDraft,
   type AgentWizardStep,
   buildAgentWizardReadiness,
   buildDefaultToolsConfig,
@@ -50,12 +49,21 @@ import {
   sudoAgentOption,
   validateAgentWizardSchema,
 } from "./agentPageUtils";
+
+export type CreateAgentSavedPayload = {
+  id: number;
+  mode: "mini" | "full" | "multi";
+  action: "create" | "update";
+  runAfterSave: boolean;
+};
+
 type CreateAgentDialogProps = {
   open: boolean;
   onClose: () => void;
   initialAgent?: AgentItem | null;
-  onSaved: (saved: { id: number; mode: "mini" | "full" | "multi"; action: "create" | "update" }) => Promise<void> | void;
+  onSaved: (saved: CreateAgentSavedPayload) => Promise<void> | void;
 };
+
 export function CreateAgentDialog({
   open,
   onClose,
@@ -65,6 +73,8 @@ export function CreateAgentDialog({
   const { t, lang } = useI18n();
   const isEditing = Boolean(initialAgent);
   const [step, setStep] = useState<AgentWizardStep>("template");
+  // Mini works inline without the execution worker — safest default for operators
+  // who just need to run a command list. Full/multi stay one click away.
   const [mode, setMode] = useState<"mini" | "full" | "multi">("mini");
   const [selectedType, setSelectedType] = useState("");
   const [name, setName] = useState("");
@@ -72,11 +82,12 @@ export function CreateAgentDialog({
   const [aiPrompt, setAiPrompt] = useState("");
   const [goal, setGoal] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
-  const [maxIter, setMaxIter] = useState(20);
+  // Keep in sync with servers.agent_budgets FULL_DEFAULT_* (complex-task defaults).
+  const [maxIter, setMaxIter] = useState(40);
   const [toolsConfig, setToolsConfig] = useState<Record<string, boolean>>(() => buildDefaultToolsConfig());
   const [sudoPolicy, setSudoPolicy] = useState<AgentSudoPolicy>("disabled");
   const [stopConditionsText, setStopConditionsText] = useState("");
-  const [sessionTimeoutSeconds, setSessionTimeoutSeconds] = useState(600);
+  const [sessionTimeoutSeconds, setSessionTimeoutSeconds] = useState(1200);
   const [maxConnections, setMaxConnections] = useState(5);
   const [selectedServers, setSelectedServers] = useState<number[]>([]);
   const [schedule, setSchedule] = useState(0);
@@ -91,6 +102,7 @@ export function CreateAgentDialog({
   const [toolsExpanded, setToolsExpanded] = useState(false);
   const [skillsExpanded, setSkillsExpanded] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [runAfterSave, setRunAfterSave] = useState(true);
   const { data: tplData } = useQuery({ queryKey: ["agents", "templates"], queryFn: fetchAgentTemplates, enabled: open });
   const { data: bootstrapData } = useQuery({ queryKey: ["frontend", "bootstrap"], queryFn: fetchFrontendBootstrap, staleTime: 30_000 });
   const { data: availableSkillsData } = useQuery<unknown>({ queryKey: ["studio", "skills", "agent-picker"], queryFn: studioSkills.list, enabled: open });
@@ -170,21 +182,6 @@ export function CreateAgentDialog({
   ]);
   const canSave = readiness === 100 && schemaValidation.isValid;
   const resetForm = () => {
-    setStep("template");
-    setMode("mini");
-    setSelectedType("");
-    setName("");
-    setCommands("");
-    setAiPrompt("");
-    setGoal("");
-    setSystemPrompt("");
-    setMaxIter(20);
-    setToolsConfig(buildDefaultToolsConfig());
-    setSudoPolicy("disabled");
-    setStopConditionsText("");
-    setSessionTimeoutSeconds(600);
-    setMaxConnections(5);
-    setSelectedServers([]);
     setSchedule(0);
     setScheduleConfig(defaultScheduleConfig());
     setSelectedSkillSlugs([]);
@@ -196,6 +193,22 @@ export function CreateAgentDialog({
     setServerSearch("");
     setToolsExpanded(false);
     setSkillsExpanded(false);
+    setMaxIter(40);
+    setToolsConfig(buildDefaultToolsConfig());
+    setSudoPolicy("disabled");
+    setStopConditionsText("");
+    setSessionTimeoutSeconds(1200);
+    setMaxConnections(5);
+    setSelectedServers([]);
+    setAiPrompt("");
+    setCommands("");
+    setRunAfterSave(true);
+    setMode("mini");
+    setSelectedType("");
+    setName("");
+    setGoal("");
+    setSystemPrompt("");
+    setStep("template");
   };
   useEffect(() => {
     if (!open) return;
@@ -211,11 +224,11 @@ export function CreateAgentDialog({
     setAiPrompt(initialAgent.ai_prompt || "");
     setGoal(initialAgent.goal || "");
     setSystemPrompt(initialAgent.system_prompt || "");
-    setMaxIter(initialAgent.max_iterations || 20);
+    setMaxIter(initialAgent.max_iterations || 40);
     setToolsConfig({ ...buildDefaultToolsConfig(), ...(initialAgent.tools_config || {}) });
     setSudoPolicy(sudoAgentOption(initialAgent.sudo_policy).value);
     setStopConditionsText((initialAgent.stop_conditions || []).join("\n"));
-    setSessionTimeoutSeconds(initialAgent.session_timeout_seconds || 600);
+    setSessionTimeoutSeconds(initialAgent.session_timeout_seconds || 1200);
     setMaxConnections(initialAgent.max_connections || 5);
     setSelectedServers(initialAgent.server_ids || []);
     setSchedule(initialAgent.schedule_minutes || 0);
@@ -230,6 +243,7 @@ export function CreateAgentDialog({
     setServerSearch("");
     setToolsExpanded(false);
     setSkillsExpanded(false);
+    setRunAfterSave(false);
   }, [open, initialAgent]);
   const onSelectTemplate = (tpl: AgentTemplate) => {
     setSelectedType(tpl.type);
@@ -239,6 +253,9 @@ export function CreateAgentDialog({
     setGoal(tpl.goal || "");
     setSystemPrompt(tpl.system_prompt || "");
     setStopConditionsText((tpl.stop_conditions || []).join("\n"));
+    if (tpl.mode === "mini" || tpl.mode === "full" || tpl.mode === "multi") {
+      setMode(tpl.mode === "full" && mode === "multi" ? "multi" : tpl.mode);
+    }
     setStep("basics");
   };
   const onSave = async () => {
@@ -273,10 +290,10 @@ export function CreateAgentDialog({
       };
       if (initialAgent) {
         await updateAgent(initialAgent.id, payload);
-        await onSaved({ id: initialAgent.id, mode, action: "update" });
+        await onSaved({ id: initialAgent.id, mode, action: "update", runAfterSave });
       } else {
         const created = await createAgent(payload);
-        await onSaved({ id: created.id, mode, action: "create" });
+        await onSaved({ id: created.id, mode, action: "create", runAfterSave });
         resetForm();
       }
     } finally {
@@ -361,11 +378,32 @@ export function CreateAgentDialog({
   const visibleSkills = skillsExpanded ? availableSkills : availableSkills.slice(0, 4);
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
-      <DialogContent className="flex max-h-[calc(100dvh-24px)] max-w-[min(760px,calc(100vw-24px))] flex-col p-0">
-        <DialogHeader className="px-6 py-4">
-          <div className="min-w-0 pr-12">
-            <DialogTitle className="text-lg">{isEditing ? localize(lang, "Редактирование агента", "Edit agent") : localize(lang, "Создание агента", "Create agent")}</DialogTitle>
-            <DialogDescription>{localize(lang, "Несколько шагов — и агент готов к запуску.", "A few steps and the agent is ready to run.")}</DialogDescription>
+      <DialogContent className="flex max-h-[calc(100dvh-20px)] max-w-[min(840px,calc(100vw-16px))] flex-col gap-0 overflow-hidden rounded-sm border-border p-0 shadow-elev-3 sm:max-w-[min(840px,calc(100vw-24px))]">
+        <DialogHeader className="relative space-y-0 border-b border-border px-5 py-4 sm:px-6">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(120deg, hsl(var(--ai) / 0.08), transparent 42%), linear-gradient(to bottom, hsl(var(--primary) / 0.05), transparent 60%)",
+            }}
+          />
+          <div aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-primary" />
+          <div className="relative min-w-0 pr-10">
+            <DialogTitle className="font-display text-xl font-bold tracking-tight sm:text-2xl">
+              {isEditing
+                ? localize(lang, "Редактирование агента", "Edit agent")
+                : localize(lang, "Создание агента", "Create agent")}
+            </DialogTitle>
+            <DialogDescription className="mt-1.5 max-w-2xl text-sm leading-6 text-muted-foreground">
+              {isEditing
+                ? localize(lang, "Обновите цель, серверы или права — и сохраните.", "Update goal, servers, or access — then save.")
+                : localize(
+                  lang,
+                  "Сначала выберите тип: мини, полный или мульти — затем настройте и запустите.",
+                  "First pick a type: mini, full, or multi — then configure and run.",
+                )}
+            </DialogDescription>
           </div>
         </DialogHeader>
         <AgentWizardProgress
@@ -375,7 +413,7 @@ export function CreateAgentDialog({
           onStepChange={setStep}
           canVisitStep={canVisitStep}
         />
-        <DialogBody className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
+        <DialogBody className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
           <AgentWizardStepContent
             step={step}
             lang={lang}
@@ -453,9 +491,12 @@ export function CreateAgentDialog({
             commandCount={commandCount}
             readiness={readiness}
             readinessChecks={readinessChecks}
+            runAfterSave={runAfterSave}
+            setRunAfterSave={setRunAfterSave}
+            isEditing={isEditing}
           />
         </DialogBody>
-        <DialogFooter className="shrink-0 items-stretch justify-between gap-3 px-4 py-4 sm:flex-row sm:items-center sm:px-6">
+        <DialogFooter className="shrink-0 items-stretch justify-between gap-3 border-t border-border bg-surface-0/50 px-4 py-3.5 sm:flex-row sm:items-center sm:px-6">
           <Button variant="ghost" className="gap-2" onClick={currentStepIndex === 0 ? onClose : goBack}>
             <ArrowLeft className="h-4 w-4" /> {currentStepIndex === 0 ? localize(lang, "Отмена", "Cancel") : t("agent.back")}
           </Button>
@@ -467,11 +508,26 @@ export function CreateAgentDialog({
             <div className="hidden flex-1 sm:block" />
           )}
           {step === "review" ? (
-            <AsyncButton className="min-w-40 gap-2" onClick={onSave} loading={saving} loadingLabel={localize(lang, "Сохраняем...", "Saving...")} disabled={!canSave}>
-              {isEditing ? localize(lang, "Сохранить", "Save") : t("agent.create")}
+            <AsyncButton
+              className="min-w-44 gap-2 shadow-elev-1"
+              onClick={onSave}
+              loading={saving}
+              loadingLabel={localize(lang, "Сохраняем…", "Saving…")}
+              disabled={!canSave}
+            >
+              {runAfterSave && !isEditing ? (
+                <>
+                  <Play className="h-4 w-4" />
+                  {localize(lang, "Создать и запустить", "Create & run")}
+                </>
+              ) : isEditing ? (
+                localize(lang, "Сохранить", "Save")
+              ) : (
+                t("agent.create")
+              )}
             </AsyncButton>
           ) : (
-            <Button className="min-w-32 gap-2" onClick={goNext} disabled={Boolean(currentStepBlockingCheck)}>
+            <Button className="min-w-32 gap-2 shadow-elev-1" onClick={goNext} disabled={Boolean(currentStepBlockingCheck)}>
               {localize(lang, "Далее", "Next")} <ArrowRight className="h-4 w-4" />
             </Button>
           )}

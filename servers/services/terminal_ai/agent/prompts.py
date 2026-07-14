@@ -33,6 +33,10 @@ from servers.services.terminal_ai.prompts import sanitize_for_prompt
 # Hard cap on how much history we keep in the prompt before summarising
 # older turns. Beyond this the loop will trim the oldest exchanges.
 MAX_HISTORY_TURNS = 30
+# After this many history entries, older tool turns are compacted into a
+# summary entry so long Nova runs do not only hard-truncate.
+COMPACT_AFTER_TURNS = 20
+COMPACT_KEEP_RECENT = 12
 
 
 def build_tool_catalogue(tools: dict[str, TerminalTool]) -> str:
@@ -210,6 +214,156 @@ def build_system_prompt(
     return base
 
 
+def compact_agent_history(
+    history: list[dict[str, Any]],
+    *,
+    compact_after: int = COMPACT_AFTER_TURNS,
+    keep_recent: int = COMPACT_KEEP_RECENT,
+) -> list[dict[str, Any]]:
+    """Compact older tool turns into a summary entry for long Nova runs.
+
+    When history exceeds ``compact_after`` entries, everything except the
+    last ``keep_recent`` entries is folded into a single
+    ``role=summary`` block capturing tools used and observation snippets.
+    Idempotent if a summary is already the first entry and total length is
+    within ``compact_after + 1``.
+    """
+    if not history or len(history) <= compact_after:
+        return history
+
+    keep = max(4, int(keep_recent))
+    if len(history) <= keep:
+        return history
+
+    older = history[:-keep]
+    recent = history[-keep:]
+    # Avoid re-compacting endlessly: drop prior summary from older slice.
+    older = [entry for entry in older if entry.get("role") != "summary"]
+    if not older:
+        return recent
+
+    tool_lines: list[str] = []
+    for entry in older:
+        role = entry.get("role")
+        content = entry.get("content")
+        turn = entry.get("turn", "?")
+        if role == "tool_call" and isinstance(content, dict):
+            tool = content.get("tool") or "?"
+            args_preview = json.dumps(content.get("args") or {}, ensure_ascii=False)[:180]
+            tool_lines.append(f"- turn {turn}: {tool}({args_preview})")
+        elif role == "tool_result":
+            raw = content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)
+            snippet = sanitize_for_prompt(str(raw)[:240], mode="observation")
+            tool_lines.append(f"- turn {turn} observation: {snippet}")
+        elif role == "user":
+            tool_lines.append(
+                f"- turn {turn} user: {sanitize_for_prompt(str(content or '')[:200], mode='context')}"
+            )
+
+    summary_text = (
+        "Сжатый журнал более ранних шагов (не полный лог):\n"
+        + ("\n".join(tool_lines[-40:]) if tool_lines else "(нет деталей)")
+    )
+    summary_entry = {
+        "turn": "summary",
+        "role": "summary",
+        "content": summary_text,
+    }
+    return [summary_entry, *recent]
+
+
+def build_partial_stop_summary(
+    *,
+    user_message: str,
+    history: list[dict[str, Any]],
+    stop_reason: str,
+    iterations: int,
+    tool_calls: int,
+    todos: list[Any] | None = None,
+) -> str:
+    """Build a non-empty Russian partial summary when Nova stops without ``done``."""
+    reason_label = {
+        "max_iterations": "достигнут лимит шагов",
+        "total_timeout": "истёк общий тайм-аут",
+        "llm_timeout": "LLM не ответил вовремя",
+        "llm_error": "ошибка LLM",
+        "user_stop": "остановлено вами",
+        "fatal_tool_error": "критическая ошибка инструмента",
+        "cancelled": "выполнение отменено",
+    }.get(str(stop_reason or ""), str(stop_reason or "остановлен"))
+
+    evidence: list[str] = []
+    for entry in history:
+        if entry.get("role") != "tool_result":
+            continue
+        raw = entry.get("content")
+        text = raw if isinstance(raw, str) else json.dumps(raw, ensure_ascii=False)
+        text = str(text or "").strip()
+        if not text:
+            continue
+        snippet = text.replace("\n", " ")[:220]
+        evidence.append(f"- {snippet}")
+        if len(evidence) >= 6:
+            break
+
+    # Prefer last observations (most recent evidence).
+    if len(evidence) > 6:
+        evidence = evidence[-6:]
+    # Reverse collect order if we took first N — re-walk from end.
+    if evidence and history:
+        rev: list[str] = []
+        for entry in reversed(history):
+            if entry.get("role") != "tool_result":
+                continue
+            raw = entry.get("content")
+            text = raw if isinstance(raw, str) else json.dumps(raw, ensure_ascii=False)
+            text = str(text or "").strip()
+            if not text:
+                continue
+            rev.append(f"- {text.replace(chr(10), ' ')[:220]}")
+            if len(rev) >= 6:
+                break
+        evidence = list(reversed(rev))
+
+    todo_lines: list[str] = []
+    for item in todos or []:
+        try:
+            status = getattr(item, "status", None) or (item.get("status") if isinstance(item, dict) else "")
+            content = getattr(item, "content", None) or (item.get("content") if isinstance(item, dict) else "")
+            if content:
+                todo_lines.append(f"- [{status or '?'}] {content}")
+        except Exception:  # noqa: BLE001
+            continue
+
+    goal = sanitize_for_prompt((user_message or "")[:300], mode="context") or "(цель не указана)"
+    parts = [
+        f"## Частичный итог (задача не завершена: {reason_label})",
+        "",
+        f"**Цель:** {goal}",
+        f"**Прогресс:** шагов {iterations}, вызовов инструментов {tool_calls}.",
+        "",
+        "### Что успели сделать / доказательства",
+    ]
+    if evidence:
+        parts.extend(evidence)
+    else:
+        parts.append("- Пока нет сохранённых результатов инструментов.")
+
+    if todo_lines:
+        parts.extend(["", "### Чеклист", *todo_lines[:12]])
+
+    parts.extend(
+        [
+            "",
+            "### Что делать дальше",
+            "- Переключитесь на Nova и продолжите с уточнённой целью, если лимит шагов/тайм-аут.",
+            "- Проверьте вывод последних tool calls выше.",
+            "- При необходимости включите sudo policy Ask/Approved для systemctl/apt.",
+        ]
+    )
+    return "\n".join(parts).strip()
+
+
 def build_user_turn_prompt(
     *,
     user_message: str,
@@ -221,14 +375,16 @@ def build_user_turn_prompt(
 
     ``history`` entries have the shape::
 
-        {"role": "user"|"tool_call"|"tool_result", "content": <dict|str>}
+        {"role": "user"|"tool_call"|"tool_result"|"summary", "content": <dict|str>}
 
     Tool results are sanitised through
     :func:`sanitize_for_prompt` before inclusion to block prompt
     injection and redact secrets.
     """
-    # Keep only the last MAX_HISTORY_TURNS entries — older context rolls off.
-    recent = history[-MAX_HISTORY_TURNS:]
+    compacted = compact_agent_history(history)
+    # Keep only the last MAX_HISTORY_TURNS entries — older context rolls off
+    # after compaction summary is already included.
+    recent = compacted[-MAX_HISTORY_TURNS:]
 
     parts: list[str] = []
     if user_message.strip():
@@ -247,7 +403,12 @@ def build_user_turn_prompt(
     for entry in recent:
         role = entry.get("role")
         content = entry.get("content")
-        if role == "tool_call":
+        if role == "summary":
+            parts.append(
+                "\n[compacted earlier work]\n"
+                + sanitize_for_prompt(str(content or "")[:3500], mode="context")
+            )
+        elif role == "tool_call":
             # Content is {tool, args, thinking}
             parts.append(
                 f"\n[turn {entry.get('turn', '?')}] agent → tool:\n"

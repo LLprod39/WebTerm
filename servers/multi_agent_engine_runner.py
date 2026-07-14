@@ -89,10 +89,20 @@ async def run_multi_agent_engine(
     await engine._sync_runtime_control()
     t0 = time.monotonic()
 
+    from servers.agent_budgets import MULTI_DEFAULT_COMMAND_TIMEOUT_SEC, clamp_command_timeout
+
+    tools_cfg = dict(getattr(engine.agent, "tools_config", None) or {})
+    command_timeout = clamp_command_timeout(
+        tools_cfg.get("command_timeout")
+        or tools_cfg.get("command_timeout_seconds")
+        or getattr(engine, "command_timeout", None)
+        or MULTI_DEFAULT_COMMAND_TIMEOUT_SEC
+    )
+    engine.command_timeout = command_timeout
     engine.session = AgentSessionManager(
         allowed_servers=engine.servers,
         max_connections=engine.agent.max_connections or 5,
-        command_timeout=30,
+        command_timeout=command_timeout,
         event_callback=engine.event_callback,
         available_skills=[skill.to_detail_dict() for skill in engine.skills],
         sudo_policy=engine.permission_engine.sudo_policy,
@@ -253,7 +263,7 @@ async def execute_existing_multi_agent_plan(engine: Any, run: AgentRun) -> Agent
     engine.session = AgentSessionManager(
         allowed_servers=engine.servers,
         max_connections=engine.agent.max_connections or 5,
-        command_timeout=30,
+        command_timeout=int(getattr(engine, "command_timeout", 90) or 90),
         event_callback=engine.event_callback,
         sudo_policy=engine.permission_engine.sudo_policy,
     )

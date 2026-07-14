@@ -81,7 +81,16 @@ def create_agent(ctx: AssistantActionContext) -> dict:
     ai_prompt = str(data.get("ai_prompt") or (tpl or {}).get("ai_prompt") or "")
     goal = str(data.get("goal") or (tpl or {}).get("goal") or data.get("description") or "")
     system_prompt = str(data.get("system_prompt") or (tpl or {}).get("system_prompt") or "")
-    max_iterations = max(1, min(int(data.get("max_iterations") or 20), 100))
+    from servers.agent_budgets import (
+        FULL_DEFAULT_MAX_ITERATIONS,
+        FULL_DEFAULT_SESSION_TIMEOUT_SEC,
+        clamp_full_iterations,
+    )
+
+    try:
+        max_iterations = clamp_full_iterations(int(data.get("max_iterations") or FULL_DEFAULT_MAX_ITERATIONS))
+    except (TypeError, ValueError):
+        max_iterations = FULL_DEFAULT_MAX_ITERATIONS
     schedule_minutes = int(data.get("schedule_minutes") or 0)
     schedule_config = normalize_schedule_config(data.get("schedule_config"), fallback_minutes=schedule_minutes)
     schedule = schedule_minutes_for_config(schedule_config, schedule_minutes)
@@ -94,6 +103,12 @@ def create_agent(ctx: AssistantActionContext) -> dict:
         commands = list((tpl or {}).get("commands") or [])
     if mode == ServerAgent.MODE_MINI and not commands:
         raise AssistantActionError("Mini agent requires commands")
+
+    try:
+        session_timeout_seconds = int(data.get("session_timeout_seconds") or FULL_DEFAULT_SESSION_TIMEOUT_SEC)
+    except (TypeError, ValueError):
+        session_timeout_seconds = FULL_DEFAULT_SESSION_TIMEOUT_SEC
+    session_timeout_seconds = max(30, min(session_timeout_seconds, 3600))
 
     agent = ServerAgent.objects.create(
         user=ctx.user,
@@ -109,7 +124,7 @@ def create_agent(ctx: AssistantActionContext) -> dict:
         tools_config=data.get("tools_config") if isinstance(data.get("tools_config"), dict) else {},
         sudo_policy=normalize_sudo_policy(data.get("sudo_policy")),
         stop_conditions=data.get("stop_conditions") if isinstance(data.get("stop_conditions"), list) else [],
-        session_timeout_seconds=int(data.get("session_timeout_seconds") or 600),
+        session_timeout_seconds=session_timeout_seconds,
         max_connections=max(1, min(int(data.get("max_connections") or 5), 10)),
         schedule_minutes=schedule,
         schedule_config=schedule_config,

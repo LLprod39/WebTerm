@@ -92,7 +92,7 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
     engine.session = AgentSessionManager(
         allowed_servers=engine.servers,
         max_connections=engine.agent.max_connections or 5,
-        command_timeout=30,
+        command_timeout=int(getattr(engine, "command_timeout", 90) or 90),
         event_callback=engine.event_callback,
         available_skills=[skill.to_detail_dict() for skill in engine.skills],
         sudo_policy=engine.permission_engine.sudo_policy,
@@ -247,10 +247,12 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
             if action_name is None:
                 if engine._should_reprompt_missing_action(llm_response, tool_calls_log):
                     correction = engine._missing_action_correction()
+                    engine._missing_action_reprompts = int(getattr(engine, "_missing_action_reprompts", 0)) + 1
                     logger.warning(
-                        "agent_run {} iteration {} missing ACTION despite tool intent; reprompting",
+                        "agent_run {} iteration {} missing ACTION despite tool intent; reprompting ({}/2)",
                         run.pk,
                         iteration,
+                        engine._missing_action_reprompts,
                     )
                     iter_entry["observation"] = correction
                     iterations_log.append(iter_entry)
@@ -337,6 +339,38 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
                     "content": engine.hook_manager.build_observation_message(observation, limit=4000),
                 }
             )
+
+            # Mid-run replan: at ~50% budget or after consecutive tool failures,
+            # inject a system-style user message so the model re-scopes remaining work.
+            from servers.agent_runtime_guidance import (
+                count_consecutive_tool_failures,
+                mid_run_replan_message,
+                should_inject_mid_run_replan,
+            )
+
+            if not getattr(engine, "_mid_run_replan_injected", False):
+                consecutive_failures = count_consecutive_tool_failures(tool_calls_log)
+                if should_inject_mid_run_replan(
+                    iteration=iteration,
+                    max_iterations=engine.max_iterations,
+                    consecutive_failures=consecutive_failures,
+                    already_injected=False,
+                ):
+                    replan_msg = mid_run_replan_message(
+                        iterations_used=iteration,
+                        iterations_max=engine.max_iterations,
+                        consecutive_failures=consecutive_failures,
+                    )
+                    history.append({"role": "user", "content": replan_msg})
+                    engine._mid_run_replan_injected = True
+                    await engine._emit(
+                        "agent_status",
+                        {
+                            "status": "mid_run_replan",
+                            "iteration": iteration,
+                            "message": replan_msg[:240],
+                        },
+                    )
 
         if engine._stop_requested:
             exit_reason = EXIT_STOPPED

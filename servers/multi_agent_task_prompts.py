@@ -65,6 +65,9 @@ Attached skills:
 THOUGHT: <рассуждение>
 ACTION: tool_name {{"param1": "val1"}}
 
+Альтернатива JSON:
+{{"thinking": "<рассуждение>", "tool": "tool_name", "args": {{"param1": "val1"}}}}
+
 Если attached skills релевантны задаче, сначала открой нужный skill через read_skill перед сервис-специфичными изменениями.
 Если attached skills содержат runtime guardrails, соблюдай их как обязательные ограничения.
 Нельзя вызывать инструменты вне выданного tool slice.

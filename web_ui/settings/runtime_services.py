@@ -116,6 +116,10 @@ def build_runtime_service_settings(*, base_dir: Path, agent_projects_dir: Path) 
         "KUBERNETES_OPS_STALE_AFTER_SECONDS": env_int("KUBERNETES_OPS_STALE_AFTER_SECONDS", 900),
         "KUBERNETES_OPS_AUDIT_RETENTION_DAYS": env_int("KUBERNETES_OPS_AUDIT_RETENTION_DAYS", 365),
         "KUBERNETES_OPS_READY_FOR_SIDEBAR": env_bool("KUBERNETES_OPS_READY_FOR_SIDEBAR", False),
+        # Pilot: allow sidebar when runtime inventory is healthy even if
+        # production-only release_scope evidence is still missing. Never use
+        # for real production without READY_FOR_SIDEBAR + approval.
+        "KUBERNETES_OPS_PILOT_SIDEBAR": env_bool("KUBERNETES_OPS_PILOT_SIDEBAR", False),
         "KUBERNETES_OPS_RELEASE_ENVIRONMENT": os.getenv("KUBERNETES_OPS_RELEASE_ENVIRONMENT", "local").strip().lower(),
         "KUBERNETES_OPS_PRODUCTION_APPROVAL_REF": os.getenv("KUBERNETES_OPS_PRODUCTION_APPROVAL_REF", "").strip(),
         "KUBERNETES_OPS_RELEASE_EVIDENCE_MAX_AGE_SECONDS": env_int("KUBERNETES_OPS_RELEASE_EVIDENCE_MAX_AGE_SECONDS", 86400),

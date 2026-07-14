@@ -198,8 +198,9 @@ export default function AgentRunPage() {
       data-agent-run-scroll
       className="h-full min-h-0 overflow-y-auto overflow-x-hidden bg-background [scrollbar-gutter:stable]"
     >
-      <header className="sticky top-0 z-20 border-b border-border bg-background/95 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 px-4 py-3 sm:px-6">
+      <header className="sticky top-0 z-20 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
+        <div aria-hidden className="h-0.5 w-full bg-primary/90" />
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 px-4 py-3.5 sm:px-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
               <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -209,7 +210,7 @@ export default function AgentRunPage() {
                     Агенты
                   </Link>
                 </Button>
-                <span className="font-mono text-2xs text-muted-foreground">#{run.id}</span>
+                <span className="type-label text-muted-foreground">Отчёт · #{run.id}</span>
               </div>
 
               <div className="flex flex-wrap items-center gap-2.5">
@@ -221,19 +222,28 @@ export default function AgentRunPage() {
 
               <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{oneLiner}</p>
 
-              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-2xs text-muted-foreground">
+              <div className="mt-2.5 flex flex-wrap gap-2">
                 {(data.report.meta.server || run.server_name) ? (
-                  <span>Сервер: <span className="text-foreground/80">{data.report.meta.server || run.server_name}</span></span>
+                  <span className="inline-flex items-center rounded-sm border border-border bg-surface-0 px-2 py-1 text-2xs text-muted-foreground">
+                    Сервер: <span className="ml-1 font-medium text-foreground/85">{data.report.meta.server || run.server_name}</span>
+                  </span>
                 ) : null}
                 {run.duration_ms > 0 ? (
-                  <span>Время: <span className="text-foreground/80">{formatDuration(run.duration_ms)}</span></span>
+                  <span className="inline-flex items-center rounded-sm border border-border bg-surface-0 px-2 py-1 text-2xs text-muted-foreground">
+                    Время: <span className="ml-1 font-mono font-medium text-foreground/85">{formatDuration(run.duration_ms)}</span>
+                  </span>
+                ) : null}
+                {run.agent_mode ? (
+                  <span className="inline-flex items-center rounded-sm border border-border bg-surface-0 px-2 py-1 text-2xs uppercase tracking-wide text-muted-foreground">
+                    {run.agent_mode}
+                  </span>
                 ) : null}
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
               {isPlanReview ? (
-                <Button size="sm" className="h-9 gap-1.5" onClick={onApprove} disabled={approving}>
+                <Button size="sm" className="h-9 gap-1.5 shadow-elev-1" onClick={onApprove} disabled={approving}>
                   {approving ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
                   {approving ? t("run.approving") : t("run.approve")}
                 </Button>
@@ -268,13 +278,20 @@ export default function AgentRunPage() {
             </div>
           </div>
 
-          {actionError ? <div className="text-sm text-destructive">{actionError}</div> : null}
-          {actionNotice ? <div className="text-sm text-success">{actionNotice}</div> : null}
+          {actionError ? (
+            <div className="rounded-sm border border-destructive/35 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {actionError}
+            </div>
+          ) : null}
+          {actionNotice ? (
+            <div className="rounded-sm border border-success/30 bg-success/10 px-3 py-2 text-sm text-success">
+              {actionNotice}
+            </div>
+          ) : null}
         </div>
       </header>
 
       <main className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-5 sm:px-6">
-        {/* HITL dominates when waiting */}
         <PendingQuestionPanel
           report={data}
           answer={replyText}
@@ -296,12 +313,12 @@ export default function AgentRunPage() {
                   key={item.value}
                   value={item.value}
                   className={cn(
-                    "h-10 gap-2 rounded-sm px-3.5 text-sm data-[state=active]:shadow-none",
+                    "h-11 gap-2 rounded-sm px-3.5 text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-elev-1",
                   )}
                 >
                   <Icon className="h-4 w-4" />
                   <span className="flex flex-col items-start leading-none">
-                    <span>{item.label}</span>
+                    <span className="font-medium">{item.label}</span>
                     <span className="mt-0.5 hidden text-2xs font-normal opacity-70 sm:block">
                       {item.hint}
                     </span>

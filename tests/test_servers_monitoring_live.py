@@ -4,12 +4,14 @@ import time
 import pytest
 from channels.routing import URLRouter
 from channels.testing import WebsocketCommunicator
+from django.contrib.auth.models import User
 
 from servers.monitoring_live import (
     REMOTE_LOOP_TEMPLATE,
     LiveMetricsManager,
     compute_cpu_percent,
     live_group_name,
+    monitoring_endpoint_key,
     parse_live_line,
 )
 from tests.servers_api_smoke_harness import create_server, grant_feature
@@ -57,37 +59,46 @@ def test_remote_loop_template_formats_interval():
     assert "/^MemTotal:/{t=$2}" in command
 
 
+def test_monitoring_endpoint_key_normalizes_host_port():
+    assert monitoring_endpoint_key("Host.Example.COM", "22") == "host.example.com:22"
+    assert monitoring_endpoint_key("  10.0.0.1 ", None) == "10.0.0.1:22"
+
+
+@pytest.mark.django_db(transaction=True)
 def test_manager_shares_one_collector_and_stops_when_idle(settings):
     settings.MONITORING_LIVE_GRACE_SECONDS = 0
+    user = User.objects.create_user(username="live-mgr", password="x")
+    server = create_server(user, name="live-srv", host="10.0.0.50", port=22, server_type="ssh", is_active=True)
 
     async def scenario():
         manager = LiveMetricsManager()
-        started: list[int] = []
+        started: list[str] = []
 
-        async def fake_run(server_id, entry):
-            started.append(server_id)
+        async def fake_run(entry):
+            started.append(entry.endpoint_key)
             started_at = time.monotonic()
             try:
                 while not manager._should_stop(entry, started_at):
                     await asyncio.sleep(0.01)
             finally:
                 async with manager._lock:
-                    if manager._entries.get(server_id) is entry:
-                        del manager._entries[server_id]
+                    if manager._entries.get(entry.endpoint_key) is entry:
+                        del manager._entries[entry.endpoint_key]
 
         manager._run_collector = fake_run
 
-        await manager.subscribe(7)
-        await manager.subscribe(7)
+        await manager.subscribe(server.id)
+        await manager.subscribe(server.id)
         await asyncio.sleep(0.02)  # let the collector task start
-        assert started == [7], "second viewer must reuse the running collector"
-        task = manager._entries[7].task
+        endpoint = monitoring_endpoint_key(server.host, server.port)
+        assert started == [endpoint], "second viewer must reuse the running collector"
+        task = manager._entries[endpoint].task
 
-        await manager.unsubscribe(7)
+        await manager.unsubscribe(server.id)
         await asyncio.sleep(0.05)
         assert not task.done(), "collector must keep running while a viewer remains"
 
-        await manager.unsubscribe(7)
+        await manager.unsubscribe(server.id)
         for _ in range(50):
             if task.done():
                 break
@@ -95,11 +106,62 @@ def test_manager_shares_one_collector_and_stops_when_idle(settings):
         assert task.done(), "collector must stop when the last viewer leaves"
 
         # A later subscribe starts a fresh collector.
-        await manager.subscribe(7)
+        await manager.subscribe(server.id)
         await asyncio.sleep(0.02)
-        assert started == [7, 7]
-        await manager.unsubscribe(7)
+        assert started == [endpoint, endpoint]
+        await manager.unsubscribe(server.id)
         await asyncio.sleep(0.05)
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.django_db(transaction=True)
+def test_manager_dedupes_same_host_across_users(settings):
+    """Two inventory rows for the same host:port share one collector."""
+    settings.MONITORING_LIVE_GRACE_SECONDS = 0
+    user_a = User.objects.create_user(username="live-a", password="x")
+    user_b = User.objects.create_user(username="live-b", password="x")
+    server_a = create_server(user_a, name="a", host="shared.example", port=22, server_type="ssh", is_active=True)
+    server_b = create_server(user_b, name="b", host="shared.example", port=22, server_type="ssh", is_active=True)
+
+    async def scenario():
+        manager = LiveMetricsManager()
+        started: list[str] = []
+
+        async def fake_run(entry):
+            started.append(entry.endpoint_key)
+            started_at = time.monotonic()
+            try:
+                while not manager._should_stop(entry, started_at):
+                    await asyncio.sleep(0.01)
+            finally:
+                async with manager._lock:
+                    if manager._entries.get(entry.endpoint_key) is entry:
+                        del manager._entries[entry.endpoint_key]
+
+        manager._run_collector = fake_run
+
+        await manager.subscribe(server_a.id)
+        await manager.subscribe(server_b.id)
+        await asyncio.sleep(0.02)
+
+        endpoint = monitoring_endpoint_key("shared.example", 22)
+        assert started == [endpoint]
+        entry = manager._entries[endpoint]
+        assert entry.refcount == 2
+        assert set(entry.server_refcounts) == {server_a.id, server_b.id}
+
+        await manager.unsubscribe(server_a.id)
+        await asyncio.sleep(0.02)
+        assert not entry.task.done()
+        assert entry.refcount == 1
+
+        await manager.unsubscribe(server_b.id)
+        for _ in range(50):
+            if entry.task.done():
+                break
+            await asyncio.sleep(0.02)
+        assert entry.task.done()
 
     asyncio.run(scenario())
 
@@ -108,8 +170,6 @@ def test_manager_shares_one_collector_and_stops_when_idle(settings):
 @pytest.mark.django_db(transaction=True)
 async def test_live_consumer_filters_subscriptions_and_forwards_metrics(monkeypatch):
     from channels.db import database_sync_to_async
-    from django.contrib.auth.models import User
-
     from servers.routing import websocket_urlpatterns
 
     @database_sync_to_async

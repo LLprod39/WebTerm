@@ -13,11 +13,20 @@ type AgentWizardProgressProps = {
   canVisitStep: (step: AgentWizardStep) => boolean;
 };
 
-/** Minimal one-line stepper: numbered labels, completed = check, thin progress track. */
+/** Catalog stepper: sharp pills, acid active rail, check for completed steps. */
 export function AgentWizardProgress({ step, currentStepIndex, lang, onStepChange, canVisitStep }: AgentWizardProgressProps) {
+  const total = AGENT_WIZARD_STEPS.length;
+  const progressPct = Math.round(((currentStepIndex + 1) / total) * 100);
+
   return (
-    <div className="border-b border-border/50 px-6">
-      <div className="flex items-center gap-1 overflow-x-auto">
+    <div className="border-b border-border bg-surface-0/40">
+      <div className="h-0.5 w-full bg-surface-2">
+        <div
+          className="h-full bg-primary transition-[width] duration-500 ease-[var(--ease-standard)]"
+          style={{ width: `${progressPct}%` }}
+        />
+      </div>
+      <div className="flex items-stretch gap-0.5 overflow-x-auto px-4 sm:px-6">
         {AGENT_WIZARD_STEPS.map((item, index) => {
           const active = item.key === step;
           const complete = index < currentStepIndex;
@@ -30,28 +39,28 @@ export function AgentWizardProgress({ step, currentStepIndex, lang, onStepChange
               onClick={() => onStepChange(item.key)}
               aria-current={active ? "step" : undefined}
               className={cn(
-                "relative flex shrink-0 items-center gap-1.5 px-2.5 py-2.5 text-sm transition-colors disabled:cursor-not-allowed",
+                "relative flex min-h-11 shrink-0 items-center gap-2 px-2.5 py-2.5 text-sm transition-colors disabled:cursor-not-allowed sm:px-3",
                 active
-                  ? "font-medium text-foreground after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-primary"
+                  ? "font-semibold text-foreground after:absolute after:inset-x-1 after:bottom-0 after:h-0.5 after:bg-primary"
                   : complete
                     ? "text-muted-foreground hover:text-foreground"
-                    : "text-muted-foreground/50",
+                    : "text-muted-foreground/45",
               )}
             >
               <span
                 className={cn(
-                  "flex h-4.5 w-4.5 min-h-[18px] min-w-[18px] items-center justify-center rounded-full text-2xs font-semibold",
+                  "flex h-[18px] w-[18px] items-center justify-center rounded-sm font-mono text-[10px] font-semibold",
                   active
-                    ? "bg-primary text-primary-foreground"
+                    ? "bg-primary text-primary-foreground shadow-elev-1"
                     : complete
-                      ? "bg-success/15 text-success"
-                      : "bg-surface-2 text-muted-foreground/70",
+                      ? "border border-success/40 bg-success/15 text-success"
+                      : "border border-border bg-surface-2 text-muted-foreground/70",
                 )}
                 aria-hidden
               >
                 {complete ? <Check className="h-3 w-3" /> : index + 1}
               </span>
-              {localize(lang, item.labelRu, item.labelEn)}
+              <span className="hidden sm:inline">{localize(lang, item.labelRu, item.labelEn)}</span>
             </button>
           );
         })}

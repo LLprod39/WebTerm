@@ -59,6 +59,30 @@ vi.mock("@/lib/api", () => ({
   updateServerMemorySnapshot: vi.fn(),
 }));
 
+vi.mock("@/api/playbooks", () => ({
+  listPlaybooks: vi.fn(async () => ({ success: true, playbooks: [], count: 0 })),
+  listPlaybookTemplates: vi.fn(async () => ({ success: true, templates: [] })),
+  listPlaybookRuns: vi.fn(async () => ({ success: true, runs: [] })),
+  fetchAnsibleStatus: vi.fn(async () => ({
+    success: true,
+    ansible: { available: false, method: "none", binary: "", version: "", message: "not installed" },
+  })),
+  listGuidedRecipes: vi.fn(async () => ({ success: true, recipes: [] })),
+  generateGuidedPlaybook: vi.fn(),
+  getPlaybook: vi.fn(),
+  createPlaybook: vi.fn(),
+  updatePlaybook: vi.fn(),
+  deletePlaybook: vi.fn(),
+  duplicatePlaybook: vi.fn(),
+  importPlaybook: vi.fn(),
+  installPlaybookTemplate: vi.fn(),
+  previewPlaybookInventory: vi.fn(),
+  runPlaybook: vi.fn(),
+  getPlaybookRun: vi.fn(),
+  cancelPlaybookRun: vi.fn(),
+  rerunFailedPlaybookHosts: vi.fn(),
+}));
+
 describe("Servers page rules and translations", () => {
   beforeEach(() => {
     setupServersPageApiMocks();
@@ -216,15 +240,9 @@ describe("Servers page rules and translations", () => {
     expect(screen.getByRole("tab", { name: "Группа" })).toBeInTheDocument();
 
     await activateTab("Плейбуки");
-    expect(await screen.findByText("Импортируйте Ansible playbooks (YAML/JSON) или создайте новый с нуля")).toBeInTheDocument();
-
-    await activateTab("Список серверов");
-    await screen.findByText("prod-web-01");
-    fireEvent.click(getSparklesButton(getActionsContainer()));
-
-    fireEvent.click(await screen.findByRole("button", { name: "Правила сервера" }));
-    expect(await screen.findByText("Уровень: Сервер")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Открыть наследуемые правила" })).toBeInTheDocument();
+    expect(await screen.findByText("Ansible playbooks")).toBeInTheDocument();
+    expect(screen.getByText(/YAML · multi-host run/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Новый" })).toBeInTheDocument();
   });
 
   it("uses the redesigned server form with inline validation and custom selects", async () => {

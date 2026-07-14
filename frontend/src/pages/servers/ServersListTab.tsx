@@ -27,18 +27,12 @@ import { cn } from "@/lib/utils";
 import { resolveServerOs, serverOsLabelKey } from "@/lib/server-os";
 import { displayServerGroupName, formatServerCount } from "./formatters";
 
-function metricToneClass(value: number, warn: number, crit: number): string {
-  if (value >= crit) return "text-destructive font-semibold";
-  if (value >= warn) return "text-warning";
-  return "text-muted-foreground/70";
-}
+type MetricLevel = "ok" | "warn" | "crit";
 
-function formatMetricsAge(seconds: number, lang: string): string {
-  if (seconds < 90) return localize(lang, `${seconds} с назад`, `${seconds}s ago`);
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 90) return localize(lang, `${minutes} мин назад`, `${minutes}m ago`);
-  const hours = Math.round(minutes / 60);
-  return localize(lang, `${hours} ч назад`, `${hours}h ago`);
+function metricLevel(value: number, warn: number, crit: number): MetricLevel {
+  if (value >= crit) return "crit";
+  if (value >= warn) return "warn";
+  return "ok";
 }
 
 // Mirrors warn/crit thresholds in servers/monitor.py.
@@ -47,6 +41,53 @@ const METRIC_THRESHOLDS = {
   memory: { warn: 85, crit: 95 },
   disk: { warn: 80, crit: 90 },
 } as const;
+
+const METRIC_CHIP: Record<MetricLevel, { chip: string; bar: string; value: string }> = {
+  ok: {
+    chip: "border-border bg-surface-0",
+    bar: "bg-primary",
+    value: "text-foreground",
+  },
+  warn: {
+    chip: "border-warning/40 bg-warning/10",
+    bar: "bg-warning",
+    value: "text-warning",
+  },
+  crit: {
+    chip: "border-destructive/40 bg-destructive/10",
+    bar: "bg-destructive",
+    value: "text-destructive",
+  },
+};
+
+/** Compact metric chip: label + value + mini fill bar. */
+function MetricChip({
+  label,
+  value,
+  warn,
+  crit,
+}: {
+  label: string;
+  value: number;
+  warn: number;
+  crit: number;
+}) {
+  const level = metricLevel(value, warn, crit);
+  const tone = METRIC_CHIP[level];
+  const pct = Math.max(0, Math.min(100, Math.round(value)));
+
+  return (
+    <span className={cn("inline-flex min-w-[4.25rem] flex-col gap-1 rounded-sm border px-2 py-1", tone.chip)}>
+      <span className="flex items-baseline justify-between gap-1.5 leading-none">
+        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
+        <span className={cn("font-mono text-[12px] font-semibold tabular-nums", tone.value)}>{pct}%</span>
+      </span>
+      <span className="h-1 w-full overflow-hidden rounded-[1px] bg-border/80">
+        <span className={cn("block h-full rounded-[1px] transition-[width] duration-300 ease-out", tone.bar)} style={{ width: `${pct}%` }} />
+      </span>
+    </span>
+  );
+}
 
 export function FleetMetricsLine({ health, lang }: { health: MonitoringStatusItem; lang: string }) {
   const items = [
@@ -62,31 +103,19 @@ export function FleetMetricsLine({ health, lang }: { health: MonitoringStatusIte
 
   if (!items.length) return null;
 
-  const age = health.metrics_age_seconds ?? null;
-  const outdated = age !== null && age > 600;
   const titleParts = items.map((item) => `${item.label} ${Math.round(item.value)}%`);
   if (typeof health.load_1m === "number") titleParts.push(`load ${health.load_1m.toFixed(2)}`);
-  if (age === 0) {
-    titleParts.push(localize(lang, "живые данные", "live"));
-  } else if (age !== null) {
-    titleParts.push(localize(lang, `обновлено ${formatMetricsAge(age, lang)}`, `updated ${formatMetricsAge(age, lang)}`));
-  }
 
   return (
-    <span
-      className={cn(
-        "flex items-center gap-1 font-mono text-2xs tabular-nums leading-none",
-        outdated && "opacity-50",
-      )}
-      title={titleParts.join(" · ")}
-    >
-      {items.map((item, idx) => (
-        <span key={item.label} className="flex items-center gap-1">
-          {idx > 0 ? <span className="text-muted-foreground/40">·</span> : null}
-          <span className={metricToneClass(item.value, item.warn, item.crit)}>
-            {item.label} {Math.round(item.value)}%
-          </span>
-        </span>
+    <span className="inline-flex flex-wrap items-center gap-1.5" title={titleParts.join(" · ")}>
+      {items.map((item) => (
+        <MetricChip
+          key={item.label}
+          label={item.label}
+          value={item.value}
+          warn={item.warn}
+          crit={item.crit}
+        />
       ))}
     </span>
   );
@@ -128,7 +157,7 @@ export function ServersListTab({
   const groupEntries = Object.entries(grouped);
 
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-3">
       {groupEntries.map(([group, inGroup]) => {
         const isCollapsed = collapsed[group];
         const groupLabel = displayServerGroupName(group, lang);
@@ -138,12 +167,12 @@ export function ServersListTab({
         }).length;
 
         return (
-          <section key={group} className="overflow-hidden rounded-xl border border-border/50 bg-surface-1/60 shadow-elev-1">
+          <section key={group} className="overflow-hidden rounded-sm border border-border bg-card shadow-elev-1">
             <button
               onClick={() => onToggleGroup(group)}
               className={cn(
-                "flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-surface-2/50 sm:px-4",
-                !isCollapsed && "border-b border-border/50",
+                "flex w-full items-center gap-2.5 border-l-2 border-l-transparent px-3 py-3 text-left transition-colors hover:bg-surface-1 sm:px-4",
+                !isCollapsed && "border-b border-border border-l-primary/70 bg-surface-0/40",
               )}
               aria-expanded={!isCollapsed}
               aria-label={tr(isCollapsed ? "srv.expand_group" : "srv.collapse_group", { name: groupLabel })}
@@ -151,17 +180,19 @@ export function ServersListTab({
               <ChevronRight
                 className={cn(
                   "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200",
-                  !isCollapsed && "rotate-90",
+                  !isCollapsed && "rotate-90 text-primary",
                 )}
                 aria-hidden
               />
-              <span className="text-sm font-semibold text-foreground">{groupLabel}</span>
-              <span className="text-xs text-muted-foreground">
+              <span className="font-display text-sm font-bold tracking-tight text-foreground">{groupLabel}</span>
+              <span className="rounded-sm border border-border bg-surface-0 px-2 py-0.5 font-mono text-2xs tabular-nums text-muted-foreground">
                 {formatServerCount(inGroup.length, lang)}
-                {onlineInGroup > 0 ? (
-                  <span className="text-success"> · {onlineInGroup} {localize(lang, "онлайн", "online")}</span>
-                ) : null}
               </span>
+              {onlineInGroup > 0 ? (
+                <span className="rounded-sm border border-success/30 bg-success/10 px-2 py-0.5 text-2xs font-medium text-success">
+                  {onlineInGroup} {localize(lang, "онлайн", "online")}
+                </span>
+              ) : null}
             </button>
 
             <AnimatePresence initial={false}>
@@ -173,64 +204,80 @@ export function ServersListTab({
                   transition={{ duration: 0.18 }}
                   className="overflow-hidden"
                 >
-                  {/* Column headers on wide screens */}
-                  <div className="hidden border-b border-border/40 bg-surface-2/30 px-4 py-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground/70 lg:grid lg:grid-cols-[minmax(0,1.4fr)_minmax(10rem,1fr)_minmax(7rem,0.7fr)_auto] lg:items-center lg:gap-3">
+                  <div className="hidden border-b border-border bg-surface-0 px-4 py-2 type-label text-muted-foreground lg:grid lg:grid-cols-[minmax(0,1.35fr)_minmax(9rem,0.85fr)_minmax(14rem,1.15fr)_auto] lg:items-center lg:gap-3">
                     <span>{localize(lang, "Сервер", "Server")}</span>
                     <span>{localize(lang, "Адрес", "Address")}</span>
-                    <span>{localize(lang, "Статус", "Status")}</span>
+                    <span>{localize(lang, "Нагрузка", "Load")}</span>
                     <span className="sr-only">{localize(lang, "Действия", "Actions")}</span>
                   </div>
 
-                  <div className="divide-y divide-border/40">
+                  <div className="divide-y divide-border">
                     {inGroup.map((server) => {
                       const fleetHealth = fleetHealthByServerId.get(server.id);
                       const osKind = resolveServerOs(server);
                       const address = `${server.host}:${server.port}`;
+                      const statusDot = fleetHealth ? (
+                        <FleetHealthIndicator
+                          status={fleetHealth.status}
+                          stale={fleetHealth.is_stale}
+                          showLabel={false}
+                        />
+                      ) : (
+                        <StatusIndicator status={server.status} showLabel={false} />
+                      );
 
                       return (
                         <div
                           key={server.id}
-                          className="group px-3 py-2.5 transition-colors hover:bg-surface-2/40 sm:px-4"
+                          className="group px-3 py-3 transition-colors hover:bg-surface-1/80 sm:px-4"
                         >
-                          <div className="flex items-center gap-2.5 lg:grid lg:grid-cols-[minmax(0,1.4fr)_minmax(10rem,1fr)_minmax(7rem,0.7fr)_auto] lg:gap-3">
+                          <div className="flex items-center gap-3 lg:grid lg:grid-cols-[minmax(0,1.35fr)_minmax(9rem,0.85fr)_minmax(14rem,1.15fr)_auto] lg:items-center lg:gap-3">
                             <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                              <span className="flex shrink-0 items-center" aria-hidden>
+                                {statusDot}
+                              </span>
                               <ServerOsBadge kind={osKind} size="sm" />
                               <div className="min-w-0">
                                 <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                                   <span className="text-sm font-semibold leading-5 text-foreground">{server.name}</span>
                                   {server.is_shared ? (
-                                    <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground/70">
+                                    <span className="rounded-sm border border-border bg-surface-0 px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                                       {t("srv.shared_badge")}
                                     </span>
                                   ) : null}
                                 </div>
-                                <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground/80 lg:hidden">
+                                <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground lg:hidden">
                                   {address}
-                                  <span className="ml-2 font-sans text-muted-foreground/60">{t(serverOsLabelKey(osKind))}</span>
+                                  <span className="ml-2 font-sans text-muted-foreground/70">{t(serverOsLabelKey(osKind))}</span>
                                 </p>
+                                {fleetHealth ? (
+                                  <div className="mt-2 sm:hidden">
+                                    <FleetMetricsLine health={fleetHealth} lang={lang} />
+                                  </div>
+                                ) : null}
                               </div>
                             </div>
 
                             <div className="hidden min-w-0 lg:block">
-                              <p className="truncate font-mono text-[13px] leading-4 text-muted-foreground">{address}</p>
-                              <p className="mt-0.5 truncate text-xs text-muted-foreground/60">{t(serverOsLabelKey(osKind))}</p>
+                              <p className="truncate font-mono text-[13px] leading-5 text-foreground/80">{address}</p>
+                              <p className="mt-0.5 truncate text-xs text-muted-foreground">{t(serverOsLabelKey(osKind))}</p>
                             </div>
 
-                            <div className="hidden shrink-0 flex-col items-start gap-1 sm:flex">
+                            <div className="hidden min-w-0 items-center sm:flex">
                               {fleetHealth ? (
-                                <FleetHealthIndicator status={fleetHealth.status} stale={fleetHealth.is_stale} showLabel />
+                                <FleetMetricsLine health={fleetHealth} lang={lang} />
                               ) : (
-                                <StatusIndicator status={server.status} showLabel />
+                                <span className="rounded-sm border border-dashed border-border px-2.5 py-1.5 font-mono text-2xs text-muted-foreground">
+                                  {localize(lang, "нет данных", "no data")}
+                                </span>
                               )}
-                              {fleetHealth ? <FleetMetricsLine health={fleetHealth} lang={lang} /> : null}
                             </div>
 
-                            <div className="flex shrink-0 items-center gap-0.5">
+                            <div className="flex shrink-0 items-center gap-1">
                               <Button
                                 asChild
                                 size="sm"
-                                variant="outline"
-                                className="h-8 gap-1.5 hover:border-primary hover:text-primary"
+                                className="h-8 gap-1.5 shadow-elev-1"
                               >
                                 <Link to={`/servers/${server.id}/terminal`}>
                                   <Terminal className="h-3.5 w-3.5" /> SSH

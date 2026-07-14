@@ -18,7 +18,7 @@ def make_task(
     *,
     role: str = "custom",
     permission_mode: str = "SAFE",
-    max_iterations: int = 7,
+    max_iterations: int = 12,
     tool_names: list[str] | None = None,
 ) -> dict[str, Any]:
     return {

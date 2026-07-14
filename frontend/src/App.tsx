@@ -13,6 +13,7 @@ const queryClient = new QueryClient();
 const Index = lazy(() => import("./pages/Index"));
 const Login = lazy(() => import("./pages/Login"));
 const Servers = lazy(() => import("./pages/Servers"));
+const AutomationPage = lazy(() => import("./pages/AutomationPage"));
 const TerminalPage = lazy(() => import("./pages/TerminalPage"));
 const DashboardRouter = lazy(() => import("./pages/DashboardRouter"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -21,6 +22,9 @@ const SettingsGroupsPage = lazy(() => import("./pages/SettingsGroupsPage"));
 const SettingsPermissionsPage = lazy(() => import("./pages/SettingsPermissionsPage"));
 // New Settings Pages with Layout
 const SettingsLayout = lazy(() => import("./components/settings/SettingsLayout"));
+const SettingsIndexRedirect = lazy(() =>
+  import("./components/settings/SettingsLayout").then((mod) => ({ default: mod.SettingsIndexRedirect })),
+);
 const SettingsReadinessPage = lazy(() => import("./pages/settings/SettingsReadinessPage"));
 const SettingsLimitsPage = lazy(() => import("./pages/settings/SettingsLimitsPage"));
 const SettingsAIPage = lazy(() => import("./pages/settings/SettingsAIPage"));
@@ -183,6 +187,14 @@ const App = () => (
                   element={(
                     <FeatureGate feature="servers">
                       <Servers />
+                    </FeatureGate>
+                  )}
+                />
+                <Route
+                  path="/automation"
+                  element={(
+                    <FeatureGate feature="servers">
+                      <AutomationPage />
                     </FeatureGate>
                   )}
                 />
@@ -363,7 +375,7 @@ const App = () => (
                     </FeatureGate>
                   )}
                 >
-                  <Route index element={<Navigate to="/settings/readiness" replace />} />
+                  <Route index element={<SettingsIndexRedirect />} />
                   <Route path="readiness" element={<SettingsReadinessPage />} />
                   <Route path="limits" element={<SettingsLimitsPage />} />
                   <Route path="ai" element={<SettingsAIPage />} />

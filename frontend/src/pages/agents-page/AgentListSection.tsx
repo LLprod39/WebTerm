@@ -44,6 +44,8 @@ type AgentListSectionProps = {
   onModeFilterChange: (mode: AgentMode) => void;
   lang: "ru" | "en";
   t: (key: string) => string;
+  /** Staff see ops-level blocked reasons; operators get a short user-facing message. */
+  isAdmin?: boolean;
   createdAgentId: number | null;
   runningId: number | null;
   stoppingId: number | null;
@@ -104,6 +106,7 @@ export function AgentListSection({
   onModeFilterChange,
   lang,
   t,
+  isAdmin = false,
   createdAgentId,
   runningId,
   stoppingId,
@@ -116,8 +119,6 @@ export function AgentListSection({
   onTogglePause,
 }: AgentListSectionProps) {
   const [search, setSearch] = useState("");
-  const showFilters = totalCount >= 4;
-  const showSearch = totalCount >= 6;
 
   const visibleAgents = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -137,8 +138,8 @@ export function AgentListSection({
         title={t("agent.empty")}
         description={localize(
           lang,
-          "Создайте первого агента — он выполнит команды или задачу на выбранных серверах.",
-          "Create your first agent — it will run commands or a task on the selected servers.",
+          "Создайте агента: выберите тип (мини, полный или мульти), цель или команды и серверы.",
+          "Create an agent: pick a type (mini, full, or multi), a goal or commands, and servers.",
         )}
         actions={
           <Button size="sm" onClick={() => onCreate()} className="gap-1.5">
@@ -150,44 +151,36 @@ export function AgentListSection({
   }
 
   return (
-    <div className="space-y-2.5">
-      {(showFilters || showSearch) && (
-        <div className="flex flex-wrap items-center justify-between gap-2.5">
-          {showFilters ? (
-            <div className="flex items-center gap-0.5 text-sm">
-              {(["all", "mini", "full", "multi"] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  aria-pressed={modeFilter === m}
-                  onClick={() => onModeFilterChange(m)}
-                  className={cn(
-                    "rounded-md px-2.5 py-1 transition-colors",
-                    modeFilter === m
-                      ? "bg-surface-2 font-medium text-foreground shadow-elev-1"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {agentModeLabel(m, lang)}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <span />
-          )}
-          {showSearch ? (
-            <div className="relative w-full max-w-64 sm:w-64">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={localize(lang, "Поиск…", "Search…")}
-                className="h-8 pl-8 text-sm"
-              />
-            </div>
-          ) : null}
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2.5">
+        <div className="flex items-center gap-0.5 rounded-sm border border-border bg-surface-0 p-0.5 text-sm">
+          {(["all", "mini", "full", "multi"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              aria-pressed={modeFilter === m}
+              onClick={() => onModeFilterChange(m)}
+              className={cn(
+                "rounded-sm px-2.5 py-1.5 transition-colors",
+                modeFilter === m
+                  ? "bg-primary font-semibold text-primary-foreground shadow-elev-1"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {agentModeLabel(m, lang)}
+            </button>
+          ))}
         </div>
-      )}
+        <div className="relative w-full max-w-64 sm:w-64">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={localize(lang, "Поиск по имени, цели, серверу…", "Search name, goal, server…")}
+            className="h-9 pl-8 text-sm"
+          />
+        </div>
+      </div>
 
       {visibleAgents.length === 0 ? (
         <EmptyState
@@ -208,9 +201,8 @@ export function AgentListSection({
           }
         />
       ) : (
-        <div className="overflow-hidden rounded-xl border border-border/50 bg-surface-1/60 shadow-elev-1">
-          {/* Column headers — wide screens only */}
-          <div className="hidden border-b border-border/40 bg-surface-2/30 px-4 py-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground/70 lg:grid lg:grid-cols-[minmax(0,1.6fr)_minmax(7rem,0.7fr)_minmax(9rem,0.9fr)_minmax(8rem,0.8fr)_auto] lg:gap-3 lg:items-center">
+        <div className="overflow-hidden rounded-sm border border-border bg-card shadow-elev-1">
+          <div className="hidden border-b border-border bg-surface-0 px-4 py-2.5 type-label text-muted-foreground lg:grid lg:grid-cols-[minmax(0,1.6fr)_minmax(7rem,0.7fr)_minmax(9rem,0.9fr)_minmax(8rem,0.8fr)_auto] lg:items-center lg:gap-3">
             <span>{localize(lang, "Агент", "Agent")}</span>
             <span>{localize(lang, "Серверы", "Servers")}</span>
             <span>{localize(lang, "Последний запуск", "Last run")}</span>
@@ -218,13 +210,13 @@ export function AgentListSection({
             <span className="sr-only">{localize(lang, "Действия", "Actions")}</span>
           </div>
 
-          <div className="divide-y divide-border/40">
+          <div className="divide-y divide-border">
             {visibleAgents.map((ag) => {
               const isStarting = runningId === ag.id;
               const isStopping = stoppingId === ag.id;
               const isRunning = isStarting || !!ag.active_run_id;
               const isPaused = ag.schedule_state === "paused";
-              const blockedReason = runBlockedReason(ag, lang);
+              const blockedReason = runBlockedReason(ag, lang, { isAdmin });
               const activeRun = activeRunByAgentId.get(ag.id);
               const activeRunMeta = activeRunStatus(activeRun, ag.active_run_id, lang);
               const activeRunQuestion = String(activeRun?.pending_question || "").trim();
@@ -253,12 +245,12 @@ export function AgentListSection({
                 <div
                   key={ag.id}
                   className={cn(
-                    "group px-3 py-2.5 transition-colors sm:px-4",
-                    createdAgentId === ag.id ? "bg-primary/5" : "hover:bg-surface-2/40",
+                    "group px-3 py-3 transition-colors sm:px-4",
+                    createdAgentId === ag.id ? "bg-primary/8" : "hover:bg-surface-1",
                     isPaused && "opacity-70",
                   )}
                 >
-                  <div className="flex items-start gap-2.5 sm:items-center lg:grid lg:grid-cols-[minmax(0,1.6fr)_minmax(7rem,0.7fr)_minmax(9rem,0.9fr)_minmax(8rem,0.8fr)_auto] lg:gap-3 lg:items-center">
+                  <div className="flex items-start gap-2.5 sm:items-center lg:grid lg:grid-cols-[minmax(0,1.6fr)_minmax(7rem,0.7fr)_minmax(9rem,0.9fr)_minmax(8rem,0.8fr)_auto] lg:items-center lg:gap-3">
                     <div className="flex min-w-0 flex-1 items-start gap-2.5 sm:items-center">
                       <span className="relative mt-1.5 flex h-2 w-2 shrink-0 sm:mt-0" aria-hidden>
                         {dot.pulse ? (
@@ -275,14 +267,13 @@ export function AgentListSection({
                           </span>
                         </div>
                         {summary ? (
-                          <p className="mt-0.5 truncate text-[13px] leading-4 text-muted-foreground">{summary}</p>
+                          <p className="mt-0.5 truncate text-[13px] leading-5 text-muted-foreground">{summary}</p>
                         ) : null}
-                        {/* Compact meta under name on small screens */}
-                        <p className="mt-0.5 truncate text-xs text-muted-foreground/70 lg:hidden">
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground/75 lg:hidden">
                           {[runMeta, serverLabel(ag), scheduleMeta].filter(Boolean).join(" · ")}
                         </p>
                         {activeRunQuestion ? (
-                          <p className="mt-1.5 flex max-w-2xl items-start gap-1.5 rounded-md bg-warning/10 px-2 py-1 text-xs leading-4 text-foreground">
+                          <p className="mt-1.5 flex max-w-2xl items-start gap-1.5 rounded-sm border border-warning/30 bg-warning/10 px-2 py-1.5 text-xs leading-4 text-foreground">
                             <MessageSquare className="mt-0.5 h-3 w-3 shrink-0 text-warning" aria-hidden />
                             <span className="min-w-0 break-words">{activeRunQuestion}</span>
                           </p>
@@ -293,19 +284,19 @@ export function AgentListSection({
                       </div>
                     </div>
 
-                    <div className="hidden min-w-0 truncate text-[13px] leading-4 text-muted-foreground lg:block" title={ag.server_names.join(", ")}>
+                    <div className="hidden min-w-0 truncate text-[13px] leading-5 text-muted-foreground lg:block" title={ag.server_names.join(", ")}>
                       {serverLabel(ag)}
                     </div>
-                    <div className="hidden min-w-0 truncate text-[13px] leading-4 text-muted-foreground lg:block">
+                    <div className="hidden min-w-0 truncate text-[13px] leading-5 text-muted-foreground lg:block">
                       {runMeta}
                     </div>
-                    <div className="hidden min-w-0 truncate text-[13px] leading-4 text-muted-foreground lg:block">
+                    <div className="hidden min-w-0 truncate text-[13px] leading-5 text-muted-foreground lg:block">
                       {scheduleMeta}
                     </div>
 
-                    <div className="flex shrink-0 items-center gap-0.5 self-center">
+                    <div className="flex shrink-0 items-center gap-1 self-center">
                       {ag.active_run_id ? (
-                        <Button asChild size="sm" className="h-8 gap-1.5">
+                        <Button asChild size="sm" className="h-8 gap-1.5 shadow-elev-1">
                           <Link to={`/agents/run/${ag.active_run_id}`}>
                             {activeRunMeta.status === "waiting" ? <MessageSquare className="h-3.5 w-3.5" /> : null}
                             {activeRunCta}
@@ -313,17 +304,26 @@ export function AgentListSection({
                         </Button>
                       ) : (
                         <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-8 w-8 text-muted-foreground hover:text-primary"
+                          size="sm"
+                          variant="outline"
+                          className="h-8 gap-1.5"
                           disabled={isRunning || Boolean(blockedReason)}
                           onClick={() => onRun(ag)}
                           aria-label={localize(lang, `Запустить ${ag.name}`, `Run ${ag.name}`)}
                           title={blockedReason || t("agent.run")}
                         >
-                          <Play className={cn("h-4 w-4", isStarting && "animate-pulse")} />
+                          <Play className={cn("h-3.5 w-3.5", isStarting && "animate-pulse")} />
+                          <span className="hidden sm:inline">{t("agent.run")}</span>
                         </Button>
                       )}
+
+                      {ag.last_run_id && !ag.active_run_id ? (
+                        <Button asChild size="icon" variant="ghost" className="hidden h-8 w-8 text-muted-foreground hover:text-foreground sm:inline-flex">
+                          <Link to={`/agents/run/${ag.last_run_id}`} aria-label={t("agent.report")}>
+                            <FileText className="h-4 w-4" />
+                          </Link>
+                        </Button>
+                      ) : null}
 
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
