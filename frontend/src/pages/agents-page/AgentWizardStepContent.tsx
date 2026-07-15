@@ -40,6 +40,7 @@ type AgentWizardStepContentProps = {
   setMode: StateSetter<AgentMode>;
   templates: AgentTemplate[];
   onSelectTemplate: (template: AgentTemplate) => void;
+  selectedType: string;
   setSelectedType: StateSetter<string>;
   setStep: StateSetter<AgentWizardStep>;
   name: string;
@@ -122,6 +123,7 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
     setMode,
     templates,
     onSelectTemplate,
+    selectedType,
     setSelectedType,
     setStep,
     name,
@@ -217,20 +219,20 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
               <div className="grid gap-3 md:grid-cols-3">
                 {[
                   {
+                    key: "full" as const,
+                    icon: Brain,
+                    label: localize(lang, "Полный агент", "Full Agent"),
+                    text: localize(lang, "Сам решает шаги к цели, используя инструменты и проверки.", "Decides the steps toward a goal on its own, using tools and checks."),
+                    when: localize(lang, "По умолчанию · автономность", "Default · autonomy"),
+                    accent: "text-ai border-ai/30 bg-ai/10",
+                  },
+                  {
                     key: "mini" as const,
                     icon: Terminal,
                     label: localize(lang, "Mini-агент", "Mini Agent"),
                     text: localize(lang, "Выполняет заданный список команд и делает краткий разбор результата.", "Runs a fixed list of commands and briefly analyses the result."),
                     when: localize(lang, "Быстрый старт · без worker", "Quick start · no worker"),
                     accent: "text-primary border-primary/30 bg-primary/10",
-                  },
-                  {
-                    key: "full" as const,
-                    icon: Brain,
-                    label: localize(lang, "Полный агент", "Full Agent"),
-                    text: localize(lang, "Сам решает шаги к цели, используя инструменты и проверки.", "Decides the steps toward a goal on its own, using tools and checks."),
-                    when: localize(lang, "Когда нужна автономность", "When autonomy is needed"),
-                    accent: "text-ai border-ai/30 bg-ai/10",
                   },
                   {
                     key: "multi" as const,
@@ -277,11 +279,17 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 <button
                   type="button"
+                  aria-pressed={selectedType === "custom"}
                   onClick={() => {
                     setSelectedType("custom");
                     setStep("basics");
                   }}
-                  className="min-h-[104px] rounded-sm border border-dashed border-primary/40 bg-primary/5 p-4 text-left transition-colors hover:border-primary hover:bg-primary/10"
+                  className={cn(
+                    "min-h-[104px] rounded-sm border border-dashed p-4 text-left transition-colors",
+                    selectedType === "custom"
+                      ? "border-primary bg-primary/10 shadow-elev-1"
+                      : "border-primary/40 bg-primary/5 hover:border-primary hover:bg-primary/10",
+                  )}
                 >
                   <div className="mb-3 flex items-center gap-3">
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm border border-primary/30 bg-primary/10 text-primary">
@@ -292,17 +300,28 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
                     </span>
                   </div>
                   <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">
-                    {localize(lang, "Создать агента без шаблона", "Create an agent without a template")}
+                    {localize(
+                      lang,
+                      "По умолчанию · создать агента без шаблона",
+                      "Default · create an agent without a template",
+                    )}
                   </p>
                 </button>
                 {templates.map((tpl) => {
                   const TemplateIcon = AGENT_ICONS[tpl.type] || Settings2;
+                  const templateActive = selectedType === tpl.type;
                   return (
                     <button
                       key={tpl.type}
                       type="button"
+                      aria-pressed={templateActive}
                       onClick={() => onSelectTemplate(tpl)}
-                      className="min-h-[104px] rounded-sm border border-border bg-surface-1 p-4 text-left transition-colors hover:border-primary/50 hover:bg-primary/5"
+                      className={cn(
+                        "min-h-[104px] rounded-sm border p-4 text-left transition-colors",
+                        templateActive
+                          ? "border-primary bg-primary/10 shadow-elev-1"
+                          : "border-border bg-surface-1 hover:border-primary/50 hover:bg-primary/5",
+                      )}
                     >
                       <div className="mb-3 flex items-center gap-3">
                         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm border border-border bg-surface-2 text-primary">

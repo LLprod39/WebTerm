@@ -73,10 +73,10 @@ export function CreateAgentDialog({
   const { t, lang } = useI18n();
   const isEditing = Boolean(initialAgent);
   const [step, setStep] = useState<AgentWizardStep>("template");
-  // Mini works inline without the execution worker — safest default for operators
-  // who just need to run a command list. Full/multi stay one click away.
-  const [mode, setMode] = useState<"mini" | "full" | "multi">("mini");
-  const [selectedType, setSelectedType] = useState("");
+  // Pilot default: full agent (autonomous goal + tools). Mini stays one click away.
+  // Custom ("manual") scenario is pre-selected so Next works immediately.
+  const [mode, setMode] = useState<"mini" | "full" | "multi">("full");
+  const [selectedType, setSelectedType] = useState("custom");
   const [name, setName] = useState("");
   const [commands, setCommands] = useState("");
   const [aiPrompt, setAiPrompt] = useState("");
@@ -203,8 +203,8 @@ export function CreateAgentDialog({
     setAiPrompt("");
     setCommands("");
     setRunAfterSave(true);
-    setMode("mini");
-    setSelectedType("");
+    setMode("full");
+    setSelectedType("custom");
     setName("");
     setGoal("");
     setSystemPrompt("");
@@ -400,8 +400,8 @@ export function CreateAgentDialog({
                 ? localize(lang, "Обновите цель, серверы или права — и сохраните.", "Update goal, servers, or access — then save.")
                 : localize(
                   lang,
-                  "Сначала выберите тип: мини, полный или мульти — затем настройте и запустите.",
-                  "First pick a type: mini, full, or multi — then configure and run.",
+                  "По умолчанию: полный агент и сценарий «Вручную» — можно сразу нажать Далее или выбрать другое.",
+                  "Default: full agent and Custom scenario — press Next right away or pick something else.",
                 )}
             </DialogDescription>
           </div>
@@ -422,6 +422,7 @@ export function CreateAgentDialog({
             setMode={setMode}
             templates={templates}
             onSelectTemplate={onSelectTemplate}
+            selectedType={selectedType}
             setSelectedType={setSelectedType}
             setStep={setStep}
             name={name}

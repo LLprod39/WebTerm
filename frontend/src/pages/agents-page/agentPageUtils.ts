@@ -90,6 +90,10 @@ export const FULL_AGENT_TOOL_OPTIONS = [
   { key: "analyze_output", label: "Analyze output" },
   { key: "list_skills", label: "List skills" },
   { key: "read_skill", label: "Read skill" },
+  { key: "list_materials", label: "List materials" },
+  { key: "read_material", label: "Read material" },
+  { key: "run_script_material", label: "Run script material" },
+  { key: "update_material_task", label: "Update material task" },
 ] as const;
 export type AgentSudoPolicy = "disabled" | "ask" | "approved";
 export const SUDO_AGENT_OPTIONS: Array<{

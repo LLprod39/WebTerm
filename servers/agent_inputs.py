@@ -9,20 +9,51 @@ from app.agent_kernel.memory.redaction import sanitize_prompt_context_text
 MAX_ARTIFACTS = 10
 MAX_ARTIFACT_CONTENT = 12000
 MAX_PROMPT_CONTENT = 18000
+MAX_PROMPT_INLINE_CHARS = 4500
 MAX_TASKS = 80
 ARTIFACT_KINDS = {"document", "task_list", "script"}
 TELEGRAM_DIGEST_LIMIT = 950
 TELEGRAM_LINE_LIMIT = 180
+MATERIALS_TOOL_NAMES = (
+    "list_materials",
+    "read_material",
+    "run_script_material",
+    "update_material_task",
+)
+
+MATERIALS_RUNTIME_PROTOCOL = """## Operator materials — working rules
+У тебя есть operator-provided materials (документы, чеклисты, готовые скрипты).
+Это не «фон для вдохновения», а рабочий инвентарь:
+
+1. Сначала `list_materials` (или смотри каталог ниже), чтобы знать id/kind/name.
+2. `document` — reference/SOP: читай через `read_material` когда нужны детали.
+3. `task_list` — checklist/plan: иди по пунктам; обновляй статус через `update_material_task`
+   с кратким evidence (что проверил / exit code / ключевая строка).
+4. `script` — ГОТОВЫЙ исполняемый артефакт оператора:
+   - **Не пиши свой скрипт с нуля**, если есть подходящий material script.
+   - Не копируй скрипт вручную через `echo`/`cat <<EOF` — используй `run_script_material`.
+   - Типичный цикл: (опционально `read_material` / `dry_run=true`) → `run_script_material`
+     → проверка результата (сервисы/логи/порты) → при сбое: fix точечно + re-run script
+     или `update_material_task` как blocked с причиной.
+5. Цель оператора + materials = источник истины. Если script закрывает цель (например СБК),
+   запусти его, проверь outcome, закрой связанные tasks. Не заменяй готовый script своей
+   импровизацией, пока script не доказан непригодным."""
 
 SCRIPT_MATERIAL_RUNTIME_PROTOCOL = """## Script material runtime protocol
-Если среди материалов есть `script`, это не просто справочный текст, а кандидат на выполнение.
-Работай с ним так:
-- сначала прочитай скрипт и сопоставь его с целью/описанием задачи;
-- определи, безопасно ли его запускать, какие аргументы, переменные окружения, права и серверы нужны;
-- если задача подразумевает запуск и скрипт безопасен, создай на целевом сервере временную директорию через `mktemp -d`, запиши скрипт во временный файл, выставь права через `chmod`, запусти его через `timeout`, зафиксируй exit code, stdout и stderr;
-- после запуска проверь, что ничего не сломалось: состояние затронутых сервисов, ключевые логи, файлы/процессы/порты по смыслу скрипта;
-- удали временный файл/директорию, если задача явно не требует оставить артефакты;
-- если скрипт выполняет разрушительные действия, меняет критичные конфиги, требует секреты или цель неясна — не запускай его молча, запроси подтверждение или предложи dry-run/проверку."""
+Материалы kind=`script` исполняются tool'ом `run_script_material`:
+- tool сам кладёт скрипт во временный файл на сервере, `chmod`, `timeout`, cleanup;
+- параметры: `material` (id/name), `server`, optional `args`, optional `dry_run`;
+- `dry_run=true` — syntax/preview без полного запуска (если применимо);
+- после run всегда смотри exit_code + stdout/stderr и **проверяй side-effects** на хосте;
+- destructive / secrets / неясная цель → `ask_user` или dry_run, не silent production blast.
+Запрещено: переписывать operator script «как удобнее» и запускать самодельный аналог."""
+
+TASK_LIST_RUNTIME_PROTOCOL = """## Task list material runtime protocol
+Материалы kind=`task_list` — чеклист оператора:
+- выполняй пункты по смыслу цели; не отмечай done без evidence;
+- `update_material_task` с `task_index` (0-based) и `status` = pending|in_progress|done|skipped|blocked;
+- в `evidence` кратко: команда/результат/что увидел;
+- нельзя завершать весь run как success, пока required open tasks без done/blocked."""
 
 
 def _normalize_tasks(raw: Any) -> list[dict[str, Any]]:
@@ -36,11 +67,16 @@ def _normalize_tasks(raw: Any) -> list[dict[str, Any]]:
         details = str(item.get("details") or "").strip()[:1200]
         if not title and not details:
             continue
+        status = str(item.get("status") or "").strip().lower()
+        if status not in {"pending", "in_progress", "done", "skipped", "blocked"}:
+            status = "done" if bool(item.get("done")) else "pending"
         tasks.append(
             {
                 "title": title or details[:80] or "Task",
                 "details": details,
-                "done": bool(item.get("done")),
+                "done": status == "done",
+                "status": status,
+                "evidence": str(item.get("evidence") or "").strip()[:800],
             }
         )
     return tasks
@@ -48,13 +84,17 @@ def _normalize_tasks(raw: Any) -> list[dict[str, Any]]:
 
 def _tasks_to_markdown(tasks: list[dict[str, Any]]) -> str:
     lines = []
-    for task in tasks:
-        mark = "x" if task.get("done") else " "
+    for index, task in enumerate(tasks):
+        status = str(task.get("status") or ("done" if task.get("done") else "pending"))
+        mark = "x" if status == "done" else ("~" if status == "in_progress" else " ")
         title = str(task.get("title") or "").strip()
         details = str(task.get("details") or "").strip()
-        line = f"- [{mark}] {title}"
+        line = f"- [{mark}] [{index}] {title} ({status})"
         if details:
             line += f" — {details}"
+        evidence = str(task.get("evidence") or "").strip()
+        if evidence:
+            line += f" | evidence: {evidence}"
         lines.append(line)
     return "\n".join(lines)
 
@@ -70,6 +110,7 @@ def normalize_input_artifacts(raw: Any) -> list[dict[str, Any]]:
         kind = str(item.get("kind") or "document").strip()
         if kind not in ARTIFACT_KINDS:
             kind = "document"
+        material_id = str(item.get("id") or f"m{index}").strip()[:40] or f"m{index}"
         name = str(item.get("name") or f"material-{index}").strip()[:120]
         content = str(item.get("content") or "").strip()
         tasks = _normalize_tasks(item.get("tasks")) if kind == "task_list" else []
@@ -78,6 +119,7 @@ def normalize_input_artifacts(raw: Any) -> list[dict[str, Any]]:
         if not content and not tasks:
             continue
         normalized = {
+            "id": material_id,
             "kind": kind,
             "name": name or f"material-{index}",
             "content": content[:MAX_ARTIFACT_CONTENT],
@@ -96,7 +138,55 @@ def normalize_input_artifacts(raw: Any) -> list[dict[str, Any]]:
         if size_bytes > 0:
             normalized["size_bytes"] = min(size_bytes, 50_000_000)
         items.append(normalized)
+    # Ensure unique ids
+    seen: set[str] = set()
+    for index, item in enumerate(items, start=1):
+        mid = str(item.get("id") or f"m{index}")
+        if mid in seen:
+            mid = f"m{index}"
+        seen.add(mid)
+        item["id"] = mid
     return items
+
+
+def get_material_by_ref(artifacts: Any, material_ref: str) -> dict[str, Any] | None:
+    needle = str(material_ref or "").strip().lower()
+    if not needle:
+        return None
+    items = normalize_input_artifacts(artifacts)
+    for item in items:
+        if str(item.get("id") or "").lower() == needle:
+            return item
+        if str(item.get("name") or "").lower() == needle:
+            return item
+    # partial name match
+    for item in items:
+        name = str(item.get("name") or "").lower()
+        if needle in name or name in needle:
+            return item
+    return None
+
+
+def materials_catalog(artifacts: Any) -> list[dict[str, Any]]:
+    catalog: list[dict[str, Any]] = []
+    for item in normalize_input_artifacts(artifacts):
+        content = str(item.get("content") or "")
+        tasks = list(item.get("tasks") or [])
+        entry = {
+            "id": item["id"],
+            "kind": item["kind"],
+            "name": item["name"],
+            "chars": len(content),
+            "run_hint": item.get("run_hint") or "",
+        }
+        if item["kind"] == "task_list":
+            open_tasks = sum(1 for t in tasks if str(t.get("status") or "pending") not in {"done", "skipped"})
+            entry["tasks_total"] = len(tasks)
+            entry["tasks_open"] = open_tasks
+        if item.get("source_name"):
+            entry["source_name"] = item["source_name"]
+        catalog.append(entry)
+    return catalog
 
 
 def normalize_report_delivery(raw: Any) -> dict:
@@ -113,25 +203,60 @@ def normalize_report_delivery(raw: Any) -> dict:
 
 
 def build_agent_materials_prompt(artifacts: Any) -> str:
+    """Prompt slice: catalog + protocols + compact bodies (full via read_material)."""
     items = normalize_input_artifacts(artifacts)
     if not items:
         return ""
 
-    sections = ["## Operator-provided materials", "Используй эти материалы как рабочий контекст агента."]
+    sections = [
+        "## Operator-provided materials",
+        MATERIALS_RUNTIME_PROTOCOL,
+    ]
     if any(item["kind"] == "script" for item in items):
         sections.append(SCRIPT_MATERIAL_RUNTIME_PROTOCOL)
+    if any(item["kind"] == "task_list" for item in items):
+        sections.append(TASK_LIST_RUNTIME_PROTOCOL)
+
+    sections.append("### Materials catalog")
+    for entry in materials_catalog(items):
+        extra = ""
+        if entry.get("tasks_total") is not None:
+            extra = f", tasks={entry['tasks_open']}/{entry['tasks_total']} open"
+        hint = f", hint={entry['run_hint']!r}" if entry.get("run_hint") else ""
+        sections.append(
+            f"- id=`{entry['id']}` kind=`{entry['kind']}` name=`{entry['name']}` "
+            f"chars={entry['chars']}{extra}{hint}"
+        )
+    sections.append(
+        "Tools: `list_materials`, `read_material`, `run_script_material`, `update_material_task`. "
+        "Читай полный body только когда нужно; scripts запускай tool'ом."
+    )
+
     used_chars = 0
     for item in items:
-        raw_content = _tasks_to_markdown(item.get("tasks") or []) if item["kind"] == "task_list" and item.get("tasks") else item["content"]
+        raw_content = (
+            _tasks_to_markdown(item.get("tasks") or [])
+            if item["kind"] == "task_list" and item.get("tasks")
+            else item["content"]
+        )
         content = sanitize_prompt_context_text(raw_content).text
         if not content:
             continue
+        # Prefer compact inline: scripts/docs get a short preview; small bodies full.
+        if len(content) > MAX_PROMPT_INLINE_CHARS:
+            if item["kind"] == "script":
+                preview = "\n".join(content.splitlines()[:40])
+                content = preview + "\n\n… [truncated — use read_material / run_script_material]"
+            elif item["kind"] == "document":
+                content = content[:1200] + "\n\n… [truncated — use read_material for full body]"
+            # task_list: keep markdown checklist (usually small)
         remaining = MAX_PROMPT_CONTENT - used_chars
-        if remaining <= 0:
+        if remaining <= 200:
+            sections.append("\n(Additional material bodies omitted — use `read_material` by id.)")
             break
         content = content[:remaining]
         used_chars += len(content)
-        title = f"{item['name']} ({item['kind']})"
+        title = f"{item['id']}: {item['name']} ({item['kind']})"
         hint = f"\nRun/use hint: {item['run_hint']}" if item.get("run_hint") else ""
         fence = "bash" if item["kind"] == "script" else "text"
         sections.append(f"\n### {title}{hint}\n```{fence}\n{content}\n```")

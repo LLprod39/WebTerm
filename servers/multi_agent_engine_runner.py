@@ -105,6 +105,9 @@ async def run_multi_agent_engine(
         command_timeout=command_timeout,
         event_callback=engine.event_callback,
         available_skills=[skill.to_detail_dict() for skill in engine.skills],
+        available_materials=list(
+            getattr(engine, "input_materials", None) or getattr(engine.agent, "input_artifacts", None) or []
+        ),
         sudo_policy=engine.permission_engine.sudo_policy,
     )
 
@@ -265,6 +268,10 @@ async def execute_existing_multi_agent_plan(engine: Any, run: AgentRun) -> Agent
         max_connections=engine.agent.max_connections or 5,
         command_timeout=int(getattr(engine, "command_timeout", 90) or 90),
         event_callback=engine.event_callback,
+        available_skills=[skill.to_detail_dict() for skill in engine.skills],
+        available_materials=list(
+            getattr(engine, "input_materials", None) or getattr(engine.agent, "input_artifacts", None) or []
+        ),
         sudo_policy=engine.permission_engine.sudo_policy,
     )
 

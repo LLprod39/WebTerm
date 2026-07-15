@@ -58,6 +58,11 @@ Attached skills:
 - Каждая задача — один измеримый outcome; subagent может сделать до 10–12 tool steps
   (не ограничивайся 5–7 SSH-командами — разведка, действие и локальная проверка
   внутри задачи допустимы, если это один coherent outcome)
+- Если в materials есть kind=script: планируй запуск operator script через
+  run_script_material (id из каталога), а не «написать свой bash». Типичный
+  каркас: inspect/dry_run → run_script_material → verify side-effects.
+- Если есть task_list: учитывай пункты чеклиста в плане (можно 1:1 seed),
+  subagent обновляет progress через update_material_task.
 - Для сложных multi-step ops (инцидент, деплой, миграция, multi-service fix)
   планируй минимум: разведка → действие → post-change verification
 - Если план меняет состояние (restart/deploy/edit/config), обязательно включи
