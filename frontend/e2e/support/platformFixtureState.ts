@@ -1,5 +1,6 @@
 import { makeAgentFixtureData } from "./platformFixtureAgents";
 import { makeAgentRunFixtureData } from "./platformFixtureAgentRun";
+import { makeServerDetailFixtures } from "./platformFixtureServerDetail";
 import { makeSettingsFixtureData } from "./platformFixtureSettings";
 import { makeStudioMarsFixtureData } from "./platformFixtureStudioMars";
 import { makeSessionUser, PlatformMockOptions, ServerItem } from "./platformFixtureTypes";
@@ -45,6 +46,7 @@ export function makePlatformFixtureContext(options: PlatformMockOptions = {}) {
     ...makeStudioMarsFixtureData(),
     ...makeAgentRunFixtureData(),
     ...makeSettingsFixtureData(),
+    ...makeServerDetailFixtures(),
   };
 }
 

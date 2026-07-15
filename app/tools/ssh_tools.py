@@ -211,13 +211,29 @@ class SSHConnectionManager:
                     final_command = "; ".join(exports) + "; " + command
                     logger.debug("Applying {} environment variable(s) to SSH command", len(exports))
 
-            resolved_sudo_auth_mode = sudo_auth_mode or getattr(server, "sudo_auth_mode", "none")
+            # Explicit sudo_auth_mode=None means "inherit server setting"; "none" disables sudo.
+            if sudo_auth_mode is not None:
+                resolved_sudo_auth_mode = sudo_auth_mode
+            else:
+                resolved_sudo_auth_mode = getattr(server, "sudo_auth_mode", "none") or "none"
             resolved_sudo_password = sudo_password or ""
-            if not resolved_sudo_password and getattr(server, "sudo_auth_mode", "none") == "stored_password":
-                resolved_sudo_password = await sync_to_async(
-                    get_server_sudo_secret,
-                    thread_sensitive=True,
-                )(server)
+            if (
+                not resolved_sudo_password
+                and str(resolved_sudo_auth_mode).strip().lower() == "stored_password"
+            ):
+                try:
+                    resolved_sudo_password = await sync_to_async(
+                        get_server_sudo_secret,
+                        thread_sensitive=True,
+                    )(server)
+                except Exception as sudo_exc:
+                    # Broken/rotated encryption key must not break non-sudo commands
+                    # (e.g. OS detection). Log and continue without password.
+                    logger.warning(
+                        "Failed to load sudo secret for SSH execute (continuing without): {}",
+                        sudo_exc,
+                    )
+                    resolved_sudo_password = ""
             prepared = prepare_sudo_command(
                 final_command,
                 SUDO_POLICY_APPROVED,

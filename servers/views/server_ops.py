@@ -220,7 +220,10 @@ def server_execute_command(request, server_id):
 @require_feature("servers")
 @require_http_methods(["POST"])
 def server_detect_os(request, server_id):
-    """SSH OS detection for a single server."""
+    """SSH OS detection for a single server.
+
+    Manual UI action always forces a fresh probe (ignores auto-detect cooldown).
+    """
     from servers.os_detect_service import detect_os_for_server
 
     server = _accessible_servers_queryset(request.user).filter(id=server_id).first()
@@ -228,12 +231,19 @@ def server_detect_os(request, server_id):
         return JsonResponse({"success": False, "error": "Server not found"}, status=404)
 
     try:
-        result = detect_os_for_server(server.id)
+        body = json.loads(request.body) if request.body else {}
+    except Exception:
+        body = {}
+    # Explicit user action defaults to force=true; allow opt-out with force=false.
+    force = True if "force" not in body else bool(body.get("force"))
+
+    try:
+        result = detect_os_for_server(server.id, force=force)
     except Exception as exc:
         return JsonResponse({"success": False, "error": str(exc)}, status=500)
 
     server.refresh_from_db(fields=["detected_os", "detected_os_meta", "detected_os_attempted_at"])
-    if result.get("success") and not result.get("cached"):
+    if result.get("success") and not result.get("cached") and not result.get("needs_retry"):
         log_user_activity(
             user=request.user,
             request=request,
@@ -245,7 +255,7 @@ def server_detect_os(request, server_id):
             entity_id=server.id,
             entity_name=server.name,
         )
-    else:
+    elif not result.get("cached"):
         log_user_activity(
             user=request.user,
             request=request,
@@ -259,7 +269,8 @@ def server_detect_os(request, server_id):
         )
 
     fields = _serialize_detected_os_fields(server)
-    status_code = 200 if result.get("success") else 500
+    # Cached/queued probes stay 200; unresolved known-failure probes also 200 with needs_retry.
+    status_code = 200 if result.get("success") or result.get("cached") or result.get("queued") or result.get("needs_retry") else 500
     return JsonResponse(
         {
             **result,
@@ -274,7 +285,8 @@ def server_detect_os(request, server_id):
 @require_http_methods(["POST"])
 def server_detect_os_batch(request):
     """Batch OS detection for accessible servers."""
-    from servers.os_detect import detect_os_batch, detection_is_stale
+    from servers.os_detect import detect_os_batch
+    from servers.os_detect_service import server_needs_os_detect
 
     try:
         data = json.loads(request.body) if request.body else {}
@@ -290,7 +302,8 @@ def server_detect_os_batch(request):
         wanted = {int(x) for x in server_ids}
         servers = [server for server in servers if server.id in wanted]
     if only_stale:
-        servers = [server for server in servers if detection_is_stale(server)]
+        # Includes empty + unknown + time-stale known distros.
+        servers = [server for server in servers if server_needs_os_detect(server)]
 
     if not servers:
         return JsonResponse({"success": True, "results": [], "count": 0})

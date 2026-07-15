@@ -38,7 +38,14 @@ def sync_to_async(func, thread_sensitive=False):
     return _s2a(func, thread_sensitive=thread_sensitive)
 
 
+# Dual /proc/stat samples (1s apart) give real CPU%; nproc normalizes load fallback.
 QUICK_COMMANDS = (
+    "s1=$(head -n1 /proc/stat 2>/dev/null); "
+    "sleep 1; "
+    "s2=$(head -n1 /proc/stat 2>/dev/null); "
+    "echo \"CPUSTAT1=$s1\"; "
+    "echo \"CPUSTAT2=$s2\"; "
+    "echo \"NPROC=$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)\"; "
     "cat /proc/loadavg;"
     "free -m | grep Mem;"
     "df -h / | tail -1;"
@@ -83,13 +90,16 @@ async def _build_connect_kwargs(server: Server) -> dict[str, Any]:
 
 
 def _determine_status(metrics: dict[str, Any]) -> str:
-    cpu = metrics.get("cpu_percent", 0)
-    mem = metrics.get("memory_percent", 0)
-    disk = metrics.get("disk_percent", 0)
+    cpu = metrics.get("cpu_percent")
+    mem = metrics.get("memory_percent")
+    disk = metrics.get("disk_percent")
+    cpu_v = float(cpu) if isinstance(cpu, (int, float)) else 0.0
+    mem_v = float(mem) if isinstance(mem, (int, float)) else 0.0
+    disk_v = float(disk) if isinstance(disk, (int, float)) else 0.0
 
-    if cpu >= CPU_CRIT or mem >= MEM_CRIT or disk >= DISK_CRIT:
+    if cpu_v >= CPU_CRIT or mem_v >= MEM_CRIT or disk_v >= DISK_CRIT:
         return ServerHealthCheck.STATUS_CRITICAL
-    if cpu >= CPU_WARN or mem >= MEM_WARN or disk >= DISK_WARN:
+    if cpu_v >= CPU_WARN or mem_v >= MEM_WARN or disk_v >= DISK_WARN:
         return ServerHealthCheck.STATUS_WARNING
     return ServerHealthCheck.STATUS_HEALTHY
 
@@ -162,7 +172,8 @@ async def check_server(server: Server, deep: bool = False) -> ServerHealthCheck 
 
     try:
         async with asyncssh.connect(**kwargs) as conn:
-            result = await asyncio.wait_for(conn.run(cmd, check=False), timeout=30)
+            # Quick probe sleeps 1s for dual /proc/stat samples; leave headroom for deep cmds.
+            result = await asyncio.wait_for(conn.run(cmd, check=False), timeout=45)
             raw = result.stdout or ""
             docker_raw = ""
             if deep:

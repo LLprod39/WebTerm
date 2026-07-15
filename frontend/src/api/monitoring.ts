@@ -188,7 +188,14 @@ export interface AdminDashboardData {
   online_users: { count: number; total_registered: number; users: Array<{ username: string; action: string; time: string }> };
   ai: { requests_today: number };
   terminals: { active: number; connections: Array<{ server: string; user: string; connected_at: string }> };
-  agents: { running: number; today: number; succeeded_24h: number; failed_24h: number; success_rate: number };
+  agents: {
+    running: number;
+    today: number;
+    succeeded_24h: number;
+    failed_24h: number;
+    success_rate: number;
+    daily?: Array<{ date: string; succeeded: number; failed: number }>;
+  };
   api_usage: Record<string, { calls: number; input_tokens: number; output_tokens: number; errors: number; cost_usd: number }>;
   api_calls_today: number;
   providers: Record<string, { enabled: boolean; model: string }>;

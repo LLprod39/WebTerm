@@ -8,7 +8,7 @@ from datetime import date, timedelta, timezone
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Q, Sum
-from django.db.models.functions import TruncHour
+from django.db.models.functions import TruncDate, TruncHour
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone as django_timezone
@@ -95,11 +95,35 @@ def _collect_admin_dashboard_data(include_version: bool = False) -> dict:
         agents_today = AgentRun.objects.filter(created_at__date=today).count()
         succeeded_24h = AgentRun.objects.filter(status="completed", created_at__gte=last_24h).count()
         failed_24h = AgentRun.objects.filter(status="failed", created_at__gte=last_24h).count()
+        daily_rows = {
+            row["day"].isoformat() if hasattr(row["day"], "isoformat") else str(row["day"]): row
+            for row in AgentRun.objects.filter(created_at__gte=last_7d)
+            .annotate(day=TruncDate("created_at"))
+            .values("day")
+            .annotate(
+                succeeded=Count("id", filter=Q(status="completed")),
+                failed=Count("id", filter=Q(status="failed")),
+            )
+            if row["day"] is not None
+        }
     else:
         agents_running = 0
         agents_today = 0
         succeeded_24h = 0
         failed_24h = 0
+        daily_rows = {}
+
+    agents_daily = []
+    for offset in range(6, -1, -1):
+        day = today - timedelta(days=offset)
+        row = daily_rows.get(day.isoformat(), {})
+        agents_daily.append(
+            {
+                "date": day.isoformat(),
+                "succeeded": row.get("succeeded", 0),
+                "failed": row.get("failed", 0),
+            }
+        )
 
     total_finished_24h = succeeded_24h + failed_24h
     success_rate = round(succeeded_24h / total_finished_24h * 100) if total_finished_24h > 0 else 100
@@ -204,6 +228,7 @@ def _collect_admin_dashboard_data(include_version: bool = False) -> dict:
             "succeeded_24h": succeeded_24h,
             "failed_24h": failed_24h,
             "success_rate": success_rate,
+            "daily": agents_daily,
         },
         "api_usage": api_usage,
         "api_calls_today": sum(v["calls"] for v in api_usage.values()),

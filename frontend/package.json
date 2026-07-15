@@ -18,7 +18,8 @@
     "test:e2e:visual": "playwright test e2e/visual.spec.ts",
     "test:e2e:visual:update": "playwright test e2e/visual.spec.ts --update-snapshots",
     "test:e2e:headed": "playwright test --headed",
-    "test:e2e:debug": "playwright test --debug"
+    "test:e2e:debug": "playwright test --debug",
+    "demo:record": "playwright test --config=playwright.demo.config.ts --project=chromium-demo"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.1",

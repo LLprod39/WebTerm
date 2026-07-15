@@ -2,11 +2,11 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Activity, Maximize2, Minimize2 } from "lucide-react";
 
-import { fetchAdminDashboard } from "@/api";
+import { fetchAdminDashboard, fetchMonitoringDashboard } from "@/api";
 import { fetchPluginSurfaces } from "@/api";
 import { Button } from "@/components/ui/button";
 import { CustomizableDashboard } from "@/components/dashboard/CustomizableDashboard";
-import { PageHero, PageShell, QueryStateBlock } from "@/components/ui/page-shell";
+import { PageHero, PageShell, QueryStateBlock, StatusBadge } from "@/components/ui/page-shell";
 import { localize, useI18n } from "@/lib/i18n";
 import { buildAdminDashboardWidgets } from "./admin-dashboard/adminDashboardWidgets";
 import { buildPluginDashboardWidgets } from "@/plugins/dashboardWidgets";
@@ -28,6 +28,11 @@ export default function AdminDashboard() {
     queryFn: fetchAdminDashboard,
     refetchInterval: 30000,
   });
+  const { data: monitoring } = useQuery({
+    queryKey: ["monitoring-dashboard"],
+    queryFn: fetchMonitoringDashboard,
+    refetchInterval: 30000,
+  });
   const { data: pluginSurfaces } = useQuery({
     queryKey: ["plugins", "surfaces", "dashboard", "admin"],
     queryFn: fetchPluginSurfaces,
@@ -35,10 +40,24 @@ export default function AdminDashboard() {
 
   const d = dashResponse?.data;
   const availableWidgets = useMemo(() => {
-    const builtins = d ? buildAdminDashboardWidgets(d, lang) : [];
+    const builtins = d ? buildAdminDashboardWidgets(d, lang, monitoring) : [];
     const pluginWidgets = buildPluginDashboardWidgets(pluginSurfaces?.surfaces?.dashboard_widgets ?? []);
     return [...builtins, ...pluginWidgets];
-  }, [d, lang, pluginSurfaces?.surfaces?.dashboard_widgets]);
+  }, [d, lang, monitoring, pluginSurfaces?.surfaces?.dashboard_widgets]);
+
+  const verdict = useMemo(() => {
+    if (!monitoring?.summary) return null;
+    const { critical, unreachable, warning, active_alerts } = monitoring.summary;
+    const failedAgents = d?.agents?.failed_24h ?? 0;
+    const problems = critical + unreachable + active_alerts;
+    if (problems > 0) {
+      return { tone: "danger" as const, label: localize(lang, `Проблем: ${problems}`, `Problems: ${problems}`) };
+    }
+    if (warning > 0 || failedAgents > 0) {
+      return { tone: "warning" as const, label: localize(lang, "Есть предупреждения", "Warnings present") };
+    }
+    return { tone: "success" as const, label: localize(lang, "Стабильно", "Stable") };
+  }, [monitoring?.summary, d?.agents?.failed_24h, lang]);
 
   return (
     <PageShell width={isFullWidth ? "full" : "7xl"}>
@@ -52,6 +71,7 @@ export default function AdminDashboard() {
         )}
         actions={
           <div className="flex items-center gap-2">
+            {verdict ? <StatusBadge label={verdict.label} tone={verdict.tone} /> : null}
             <Button
               variant="outline"
               size="sm"
@@ -61,12 +81,12 @@ export default function AdminDashboard() {
               {isFullWidth ? (
                 <>
                   <Minimize2 className="h-3.5 w-3.5" />
-                  <span>Обычный экран</span>
+                  <span>{localize(lang, "Обычный экран", "Normal width")}</span>
                 </>
               ) : (
                 <>
                   <Maximize2 className="h-3.5 w-3.5" />
-                  <span>На весь экран</span>
+                  <span>{localize(lang, "На весь экран", "Full width")}</span>
                 </>
               )}
             </Button>

@@ -180,27 +180,87 @@ export function demoServerAdminFallback<T>(path: string, _options: RequestInit =
   if (path.includes("/api/models")) return DEMO_MODELS as T;
 
   // Admin dashboard — must match AdminDashboardData shape
-  if (path.includes("/api/admin/dashboard")) return {
-    success: true,
-    data: {
-      online_users: { count: 1, total_registered: 1, users: [{ username: "demo", action: "login", time: new Date().toISOString() }] },
-      ai: { requests_today: 0 },
-      terminals: { active: 0, connections: [] },
-      agents: { running: 0, today: 0, succeeded_24h: 0, failed_24h: 0, success_rate: 0 },
-      api_usage: {},
-      api_calls_today: 0,
-      providers: { gemini: { enabled: true, model: "gemini-2.0-flash" } },
-      servers: { total: 3, active: 2 },
-      tasks: { total: 0, in_progress: 0 },
-      hourly_activity: [],
-      top_users: [{ username: "demo", total: 5, ai_requests: 2, terminal_sessions: 3 }],
-      recent_activity: [{ user: "demo", category: "auth", action: "login", time: new Date().toISOString() }],
-      fleet_health: { avg_cpu: 25, avg_memory: 40, avg_disk: 35, healthy: 2, warning: 0, critical: 0, unreachable: 1 },
-      active_alerts_count: 0,
-      alerts: [],
-      app_version: "demo",
-    },
-  } as T;
+  if (path.includes("/api/admin/dashboard")) {
+    const now = Date.now();
+    const minutesAgo = (m: number) => new Date(now - m * 60_000).toISOString();
+    const dayIso = (offset: number) => new Date(now - offset * 86_400_000).toISOString().slice(0, 10);
+    const hourlyPattern = [4, 3, 2, 2, 3, 5, 9, 14, 18, 22, 26, 24, 21, 25, 28, 31, 27, 22, 17, 14, 12, 9, 7, 5];
+    return {
+      success: true,
+      data: {
+        online_users: {
+          count: 3,
+          total_registered: 12,
+          users: [
+            { username: "demo", action: "terminal_command", time: minutesAgo(1) },
+            { username: "a.petrov", action: "chat_request", time: minutesAgo(2) },
+            { username: "i.sidorova", action: "http_request", time: minutesAgo(4) },
+          ],
+        },
+        ai: { requests_today: 128 },
+        terminals: {
+          active: 2,
+          connections: [
+            { server: "web-prod-01", user: "demo", connected_at: minutesAgo(25) },
+            { server: "db-prod-01", user: "a.petrov", connected_at: minutesAgo(6) },
+          ],
+        },
+        agents: {
+          running: 1,
+          today: 14,
+          succeeded_24h: 18,
+          failed_24h: 2,
+          success_rate: 90,
+          daily: [
+            { date: dayIso(6), succeeded: 9, failed: 1 },
+            { date: dayIso(5), succeeded: 12, failed: 0 },
+            { date: dayIso(4), succeeded: 8, failed: 2 },
+            { date: dayIso(3), succeeded: 15, failed: 1 },
+            { date: dayIso(2), succeeded: 11, failed: 0 },
+            { date: dayIso(1), succeeded: 17, failed: 2 },
+            { date: dayIso(0), succeeded: 12, failed: 1 },
+          ],
+        },
+        api_usage: {
+          gemini: { calls: 64, input_tokens: 182_400, output_tokens: 45_100, errors: 0, cost_usd: 0.1138 },
+          claude: { calls: 38, input_tokens: 240_800, output_tokens: 88_400, errors: 1, cost_usd: 0.9876 },
+          openai: { calls: 26, input_tokens: 96_300, output_tokens: 31_200, errors: 0, cost_usd: 0.255 },
+        },
+        api_calls_today: 128,
+        providers: {
+          gemini: { enabled: true, model: "gemini-2.0-flash" },
+          claude: { enabled: true, model: "claude-sonnet-4-6" },
+          openai: { enabled: true, model: "gpt-5-mini" },
+          ollama: { enabled: false, model: "" },
+        },
+        servers: { total: 3, active: 2 },
+        tasks: { total: 6, in_progress: 2 },
+        hourly_activity: hourlyPattern.map((count, index) => ({
+          hour: new Date(now - (23 - index) * 3_600_000).toISOString(),
+          count,
+        })),
+        top_users: [
+          { username: "demo", total: 214, ai_requests: 64, terminal_sessions: 38 },
+          { username: "a.petrov", total: 122, ai_requests: 31, terminal_sessions: 27 },
+          { username: "i.sidorova", total: 78, ai_requests: 12, terminal_sessions: 19 },
+        ],
+        recent_activity: [
+          { user: "demo", category: "terminal", action: "terminal_command", time: minutesAgo(1) },
+          { user: "a.petrov", category: "agent", action: "agent_run", time: minutesAgo(3) },
+          { user: "i.sidorova", category: "auth", action: "login", time: minutesAgo(9) },
+          { user: "demo", category: "server", action: "http_request", time: minutesAgo(14) },
+          { user: "a.petrov", category: "agent", action: "agent_run", time: minutesAgo(21) },
+        ],
+        fleet_health: { avg_cpu: 38, avg_memory: 65, avg_disk: 60, healthy: 1, warning: 1, critical: 0, unreachable: 1 },
+        active_alerts_count: 2,
+        alerts: [
+          { server: "staging-01", type: "unreachable", severity: "critical", title: "Server unreachable", time: minutesAgo(31) },
+          { server: "db-prod-01", type: "resource", severity: "warning", title: "resource", time: minutesAgo(22) },
+        ],
+        app_version: "demo",
+      },
+    } as T;
+  }
   if (path.includes("/api/admin/users/sessions")) return { success: true, online_count: 1, total_registered: 1, active_today: 1, sessions: [] } as T;
   if (path.includes("/api/admin/users/activity")) return { success: true, total: 0, events: [] } as T;
 
@@ -210,13 +270,44 @@ export function demoServerAdminFallback<T>(path: string, _options: RequestInit =
     thresholds: { cpu_warn: 80, cpu_crit: 95, mem_warn: 85, mem_crit: 95, disk_warn: 80, disk_crit: 90 },
     stats: { total_checks: 0, active_alerts: 0, last_check_at: null, monitored_servers: 0 },
   } as T;
-  if (path.includes("/servers/api/monitoring/dashboard")) return {
-    success: true,
-    servers: [],
-    alerts: [],
-    summary: { total_servers: 3, healthy: 2, warning: 0, critical: 0, unreachable: 1, unknown: 0, active_alerts: 0, avg_cpu: 25, avg_memory: 40, avg_disk: 35 },
-    recent_activity: [],
-  } as T;
+  if (path.includes("/servers/api/monitoring/dashboard")) {
+    const now = Date.now();
+    const minutesAgo = (m: number) => new Date(now - m * 60_000).toISOString();
+    return {
+      success: true,
+      servers: [
+        {
+          server_id: 1, server_name: "web-prod-01", host: "192.168.1.10", status: "healthy",
+          cpu_percent: 34, memory_percent: 52, disk_percent: 61, load_1m: 0.8,
+          uptime_seconds: 3_456_000, response_time_ms: 42, checked_at: minutesAgo(2),
+        },
+        {
+          server_id: 2, server_name: "db-prod-01", host: "192.168.1.11", status: "warning",
+          cpu_percent: 41, memory_percent: 78, disk_percent: 72, load_1m: 1.9,
+          uptime_seconds: 8_640_000, response_time_ms: 55, checked_at: minutesAgo(2),
+        },
+        {
+          server_id: 3, server_name: "staging-01", host: "192.168.1.20", status: "unreachable",
+          cpu_percent: null, memory_percent: null, disk_percent: null, load_1m: null,
+          uptime_seconds: null, response_time_ms: null, checked_at: minutesAgo(31),
+        },
+      ],
+      alerts: [
+        {
+          id: 1, server_id: 3, server_name: "staging-01", alert_type: "unreachable", severity: "critical",
+          title: "Сервер недоступен", message: "TCP-проба не отвечает более 30 минут",
+          is_resolved: false, created_at: minutesAgo(31),
+        },
+        {
+          id: 2, server_id: 2, server_name: "db-prod-01", alert_type: "resource", severity: "warning",
+          title: "Высокая загрузка памяти", message: "RAM 78% превышает порог 75%",
+          is_resolved: false, created_at: minutesAgo(22),
+        },
+      ],
+      summary: { total_servers: 3, healthy: 1, warning: 1, critical: 0, unreachable: 1, unknown: 0, active_alerts: 2, avg_cpu: 38, avg_memory: 65, avg_disk: 66 },
+      recent_activity: [],
+    } as T;
+  }
   if (path.includes("/servers/api/monitoring/status")) return {
     success: true,
     servers: [],
@@ -232,7 +323,46 @@ export function demoServerAdminFallback<T>(path: string, _options: RequestInit =
   } as T;
 
   // Agents
-  if (path.includes("/servers/api/agents/dashboard")) return { success: true, active: [], recent: [] } as T;
+  if (path.includes("/servers/api/agents/dashboard")) {
+    const now = Date.now();
+    const minutesAgo = (m: number) => new Date(now - m * 60_000).toISOString();
+    const baseRun = {
+      agent_mode: "full", agent_type: "deploy_watcher", pending_question: "",
+      connected_servers: [], ai_analysis: "", final_report: "", commands_output: [],
+    };
+    const finished = (
+      id: number, agentName: string, serverId: number, serverName: string,
+      status: string, startedMinAgo: number, durationSec: number, iterations: number,
+    ) => ({
+      ...baseRun,
+      id, agent_id: 1, agent_name: agentName, server_id: serverId, server_name: serverName,
+      status, total_iterations: iterations, duration_ms: durationSec * 1000,
+      started_at: minutesAgo(startedMinAgo), completed_at: minutesAgo(startedMinAgo - Math.ceil(durationSec / 60)),
+    });
+    return {
+      success: true,
+      active: [
+        {
+          ...baseRun,
+          id: 120, agent_id: 1, agent_name: "Deploy Watcher", server_id: 1, server_name: "web-prod-01",
+          status: "running", total_iterations: 3, duration_ms: 0,
+          started_at: minutesAgo(4), completed_at: null,
+        },
+      ],
+      recent: [
+        finished(119, "Health Check", 2, "db-prod-01", "completed", 42, 38, 5),
+        finished(118, "Deploy Watcher", 1, "web-prod-01", "completed", 95, 61, 7),
+        finished(117, "Log Auditor", 2, "db-prod-01", "failed", 150, 24, 3),
+        finished(116, "Health Check", 1, "web-prod-01", "completed", 210, 33, 5),
+        finished(115, "Deploy Watcher", 1, "web-prod-01", "completed", 300, 58, 6),
+        finished(114, "Backup Verifier", 2, "db-prod-01", "completed", 420, 112, 9),
+        finished(113, "Health Check", 3, "staging-01", "failed", 510, 19, 2),
+        finished(112, "Deploy Watcher", 1, "web-prod-01", "completed", 640, 66, 7),
+        finished(111, "Log Auditor", 2, "db-prod-01", "completed", 760, 29, 4),
+        finished(110, "Health Check", 1, "web-prod-01", "completed", 900, 31, 5),
+      ],
+    } as T;
+  }
   if (path.includes("/servers/api/agents/schedules/dispatch/")) {
     return {
       success: true,

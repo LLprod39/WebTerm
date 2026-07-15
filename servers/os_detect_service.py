@@ -15,21 +15,58 @@ from django.utils import timezone
 from loguru import logger
 
 from servers.models import Server
-from servers.os_detect import detect_os_batch, detect_server_os, detection_is_stale
+from servers.os_detect import (
+    VALID_OS_KINDS,
+    detect_os_batch,
+    detect_server_os,
+    detection_is_stale,
+)
 
-FAILURE_COOLDOWN = timedelta(hours=24)
+# Connect/auth failures or empty probes: retry sooner than a real distro hit.
+FAILURE_COOLDOWN = timedelta(minutes=30)
+# Explicit unknown (SSH ok but could not map distro): retry often enough for bootstrap.
+UNKNOWN_RETRY_COOLDOWN = timedelta(minutes=15)
+# Known distro: re-check after a week unless forced.
 SUCCESS_RECHECK_COOLDOWN = timedelta(days=7)
 BOOTSTRAP_MAX_SERVERS = 15
 
 
+def resolved_os_kind(server: Server | str | None) -> str:
+    """Return a known ServerOsKind or empty string when unresolved."""
+    if isinstance(server, Server):
+        kind = (server.detected_os or "").strip().lower()
+    else:
+        kind = (server or "").strip().lower()
+    if kind in VALID_OS_KINDS:
+        return kind
+    return ""
+
+
+def is_known_detected_os(server: Server | str | None) -> bool:
+    return bool(resolved_os_kind(server))
+
+
 def server_needs_os_detect(server: Server) -> bool:
+    """True when OS is missing, unknown, or the known detection is stale."""
     if not server.is_active:
         return False
     if (server.server_type or "ssh").lower() != "ssh":
         return False
-    if not (server.detected_os or "").strip():
+    if not is_known_detected_os(server):
         return True
     return detection_is_stale(server)
+
+
+def _cooldown_for_server(server: Server) -> timedelta:
+    if is_known_detected_os(server) and not detection_is_stale(server):
+        # Caller should not re-detect; keep a long window for safety.
+        return SUCCESS_RECHECK_COOLDOWN
+    kind = (server.detected_os or "").strip().lower()
+    if kind == "unknown":
+        return UNKNOWN_RETRY_COOLDOWN
+    if is_known_detected_os(server):
+        return SUCCESS_RECHECK_COOLDOWN
+    return FAILURE_COOLDOWN
 
 
 def os_detect_cooldown_allows(server: Server, *, force: bool = False) -> bool:
@@ -38,11 +75,11 @@ def os_detect_cooldown_allows(server: Server, *, force: bool = False) -> bool:
     attempted_at = server.detected_os_attempted_at
     if not attempted_at:
         return True
-    now = timezone.now()
-    if (server.detected_os or "").strip() and not detection_is_stale(server):
+    # Fresh known OS: do not hammer until stale window (handled by server_needs_os_detect).
+    if is_known_detected_os(server) and not detection_is_stale(server):
         return False
-    cooldown = SUCCESS_RECHECK_COOLDOWN if (server.detected_os or "").strip() else FAILURE_COOLDOWN
-    return (now - attempted_at) >= cooldown
+    cooldown = _cooldown_for_server(server)
+    return (timezone.now() - attempted_at) >= cooldown
 
 
 def filter_servers_for_auto_detect(servers: list[Server], *, force: bool = False) -> list[Server]:
@@ -61,6 +98,7 @@ def detect_os_for_server(server_id: int, *, force: bool = False) -> dict[str, An
             "cached": True,
             "server_id": server.id,
             "detected_os": (server.detected_os or "").strip(),
+            "needs_retry": not is_known_detected_os(server),
         }
 
     if not force and not server_needs_os_detect(server):

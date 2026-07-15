@@ -1,7 +1,10 @@
-import { Activity, AlertTriangle, Bot, Clock, Server, Terminal as TerminalIcon, Users } from "lucide-react";
+import { Activity, AlertTriangle, Bot, Clock, LayoutGrid, Server, Siren, Terminal as TerminalIcon, TrendingUp, Users } from "lucide-react";
+import { Link } from "react-router-dom";
 import {
   Area,
   AreaChart,
+  Bar,
+  BarChart,
   CartesianGrid,
   ResponsiveContainer,
   Tooltip,
@@ -9,8 +12,11 @@ import {
   YAxis,
 } from "recharts";
 
-import type { AdminDashboardData } from "@/api";
+import type { AdminDashboardData, MonitoringDashboard } from "@/api";
+import { Button } from "@/components/ui/button";
 import { MetricCard, MetricGrid, SectionCard, StatusBadge } from "@/components/ui/page-shell";
+import { AttentionPanel, type AttentionItem } from "@/components/dashboard/AttentionPanel";
+import { FleetHeatmap } from "@/components/dashboard/FleetHeatmap";
 import { getWidgetNumberProp, getWidgetStringProp } from "@/components/dashboard/widgetProps";
 import type { WidgetDefinition } from "@/components/dashboard/CustomizableDashboard";
 import { localize } from "@/lib/i18n";
@@ -71,8 +77,193 @@ function formatChartHour(value: unknown) {
   return date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
 }
 
-export function buildAdminDashboardWidgets(d: AdminDashboardData, lang: string): WidgetDefinition[] {
+function formatChartDay(lang: string, value: unknown) {
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) return String(value ?? "");
+  return date.toLocaleDateString(lang === "ru" ? "ru-RU" : "en-GB", { day: "2-digit", month: "2-digit" });
+}
+
+function shortProviderName(provider: string) {
+  const key = provider.toLowerCase();
+  if (key === "openai") return "OpenAI";
+  if (key === "xai") return "xAI";
+  return provider.charAt(0).toUpperCase() + provider.slice(1);
+}
+
+function buildAdminAttentionItems(d: AdminDashboardData, mon: MonitoringDashboard | undefined, lang: string): AttentionItem[] {
+  const items: AttentionItem[] = [];
+  const unreachableIds = new Set<number>();
+
+  for (const server of mon?.servers ?? []) {
+    if (server.status === "unreachable") {
+      unreachableIds.add(server.server_id);
+      items.push({
+        id: `srv-unreachable-${server.server_id}`,
+        severity: "critical",
+        title: `${localize(lang, "Сервер недоступен", "Server unreachable")}: ${server.server_name}`,
+        detail: server.host,
+        time: server.checked_at,
+        action: { label: localize(lang, "К серверам", "Servers"), to: "/servers" },
+      });
+    } else if (server.status === "critical") {
+      items.push({
+        id: `srv-critical-${server.server_id}`,
+        severity: "critical",
+        title: `${localize(lang, "Критическая нагрузка", "Critical load")}: ${server.server_name}`,
+        detail: `CPU ${server.cpu_percent ?? "—"}% · RAM ${server.memory_percent ?? "—"}% · ${localize(lang, "Диск", "Disk")} ${server.disk_percent ?? "—"}%`,
+        time: server.checked_at,
+        action: { label: localize(lang, "Терминал", "Terminal"), to: `/servers/${server.server_id}/terminal` },
+      });
+    }
+  }
+
+  for (const alert of (mon?.alerts ?? []).filter((a) => !a.is_resolved)) {
+    // A separate "unreachable" row already covers these servers.
+    if (unreachableIds.has(alert.server_id) && alert.alert_type.toLowerCase().includes("unreachable")) continue;
+    items.push({
+      id: `alert-${alert.id}`,
+      severity: alert.severity === "critical" ? "critical" : alert.severity === "warning" ? "warning" : "info",
+      title: alert.title,
+      detail: `${alert.server_name} · ${alert.message}`,
+      time: alert.created_at,
+      action: { label: localize(lang, "Терминал", "Terminal"), to: `/servers/${alert.server_id}/terminal` },
+    });
+  }
+
+  if (d.agents?.failed_24h) {
+    items.push({
+      id: "agents-failed-24h",
+      severity: "warning",
+      title: localize(lang, `Сбои агентов за 24 ч: ${d.agents.failed_24h}`, `Agent failures in 24h: ${d.agents.failed_24h}`),
+      detail: localize(lang, `Успешность запусков ${d.agents.success_rate}%`, `Run success rate ${d.agents.success_rate}%`),
+      action: { label: localize(lang, "К агентам", "Agents"), to: "/agents" },
+    });
+  }
+
+  for (const [provider, usage] of Object.entries(d.api_usage ?? {})) {
+    if (usage.errors > 0) {
+      items.push({
+        id: `llm-errors-${provider}`,
+        severity: "warning",
+        title: `${localize(lang, "Ошибки LLM-провайдера", "LLM provider errors")}: ${shortProviderName(provider)} — ${usage.errors}`,
+        detail: localize(lang, "Проверьте ключи, лимиты и доступность модели", "Check keys, limits and model availability"),
+        action: { label: localize(lang, "Настройки AI", "AI settings"), to: "/settings/ai" },
+      });
+    }
+  }
+
+  return items;
+}
+
+export function buildAdminDashboardWidgets(
+  d: AdminDashboardData,
+  lang: string,
+  mon?: MonitoringDashboard,
+): WidgetDefinition[] {
   return [
+    {
+      id: "attention_panel",
+      title: localize(lang, "Требует внимания", "Needs attention"),
+      icon: <Siren className="h-4 w-4" />,
+      defaultSize: { w: 12, h: 1 },
+      render: (config) => {
+        const limit = getWidgetNumberProp(config, "limit", 6);
+        const tone = getWidgetStringProp(config, "tone", "default");
+        const title = getWidgetStringProp(config, "customTitle", localize(lang, "Требует внимания", "Needs attention"));
+        const items = buildAdminAttentionItems(d, mon, lang);
+
+        return (
+          <SectionCard
+            title={title}
+            icon={<Siren className="h-4 w-4" />}
+            description={localize(lang, "Сводка проблем по всей платформе с быстрыми действиями", "Platform-wide problems with one-click follow-ups")}
+            className={sectionToneStyles[tone]}
+          >
+            <AttentionPanel items={items} lang={lang} maxItems={limit} />
+          </SectionCard>
+        );
+      },
+    },
+    {
+      id: "fleet_heatmap",
+      title: localize(lang, "Карта флота", "Fleet map"),
+      icon: <LayoutGrid className="h-4 w-4" />,
+      defaultSize: { w: 12, h: 1 },
+      render: (config) => {
+        const tone = getWidgetStringProp(config, "tone", "default");
+        const title = getWidgetStringProp(config, "customTitle", localize(lang, "Карта флота", "Fleet map"));
+        const summary = mon?.summary;
+
+        return (
+          <SectionCard
+            title={title}
+            icon={<LayoutGrid className="h-4 w-4" />}
+            description={
+              summary
+                ? `${summary.healthy} ${localize(lang, "в норме", "healthy")} · ${summary.warning + summary.critical} ${localize(lang, "под нагрузкой", "stressed")} · ${summary.unreachable} ${localize(lang, "недоступно", "unreachable")}`
+                : undefined
+            }
+            actions={
+              <Button size="xs" variant="outline" asChild>
+                <Link to="/servers">{localize(lang, "Все серверы", "All servers")}</Link>
+              </Button>
+            }
+            className={sectionToneStyles[tone]}
+          >
+            <FleetHeatmap servers={mon?.servers ?? []} lang={lang} />
+          </SectionCard>
+        );
+      },
+    },
+    {
+      id: "agents_trend",
+      title: localize(lang, "Тренд запусков агентов", "Agent runs trend"),
+      icon: <TrendingUp className="h-4 w-4" />,
+      defaultSize: { w: 4, h: 1 },
+      render: (config) => {
+        const tone = getWidgetStringProp(config, "tone", "default");
+        const title = getWidgetStringProp(config, "customTitle", localize(lang, "Запуски агентов, 7 дней", "Agent runs, 7 days"));
+        const daily = d.agents?.daily ?? [];
+        const total = daily.reduce((sum, day) => sum + day.succeeded + day.failed, 0);
+        const failed = daily.reduce((sum, day) => sum + day.failed, 0);
+        const successRate = total > 0 ? Math.round(((total - failed) / total) * 100) : null;
+
+        return (
+          <SectionCard
+            title={title}
+            icon={<TrendingUp className="h-4 w-4" />}
+            description={
+              total > 0
+                ? `${total} ${localize(lang, "запусков", "runs")} · ${successRate}% ${localize(lang, "успех", "success")}`
+                : localize(lang, "Запусков за неделю не было", "No runs this week")
+            }
+            className={sectionToneStyles[tone]}
+          >
+            <div className="h-[180px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={daily} margin={{ top: 5, right: 5, left: -25, bottom: 0 }} barCategoryGap="25%">
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" vertical={false} />
+                  <XAxis dataKey="date" tickFormatter={(value) => formatChartDay(lang, value)} className="text-xs font-medium fill-muted-foreground" />
+                  <YAxis allowDecimals={false} className="text-xs font-medium fill-muted-foreground" />
+                  <Tooltip
+                    labelFormatter={(value) => formatChartDay(lang, value)}
+                    cursor={{ fill: "hsl(var(--muted) / 0.25)" }}
+                    contentStyle={{
+                      background: "hsl(var(--background))",
+                      borderColor: "hsl(var(--border))",
+                      borderRadius: "4px",
+                      fontSize: "11px",
+                    }}
+                  />
+                  <Bar dataKey="succeeded" stackId="runs" name={localize(lang, "Успешно", "Succeeded")} fill="hsl(var(--success))" />
+                  <Bar dataKey="failed" stackId="runs" name={localize(lang, "Сбой", "Failed")} fill="hsl(var(--destructive))" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </SectionCard>
+        );
+      },
+    },
     {
       id: "fleet_metrics",
       title: "Метрики инфраструктуры",

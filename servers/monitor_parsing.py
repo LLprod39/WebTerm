@@ -1,3 +1,5 @@
+"""Pure parsers for server monitor SSH command output."""
+
 from __future__ import annotations
 
 import contextlib
@@ -64,12 +66,62 @@ def _parse_uptime(line: str) -> int:
     return 0
 
 
+def _parse_proc_stat_line(line: str) -> tuple[int, int] | None:
+    """Parse a `cpu ...` /proc/stat line -> (total_ticks, idle_ticks)."""
+    parts = line.strip().split()
+    if not parts or parts[0] != "cpu":
+        return None
+    try:
+        ticks = [int(value) for value in parts[1:]]
+    except ValueError:
+        return None
+    if len(ticks) < 4:
+        return None
+    # user nice system idle iowait ... — idle time includes iowait.
+    idle_ticks = ticks[3] + (ticks[4] if len(ticks) > 4 else 0)
+    return sum(ticks), idle_ticks
+
+
+def cpu_percent_from_stat_ticks(
+    prev_total: int,
+    prev_idle: int,
+    curr_total: int,
+    curr_idle: int,
+) -> float | None:
+    """CPU usage between two /proc/stat samples; None until a positive delta exists."""
+    delta_total = curr_total - prev_total
+    delta_idle = curr_idle - prev_idle
+    if delta_total <= 0:
+        return None
+    usage = (1 - delta_idle / delta_total) * 100
+    return round(max(0.0, min(100.0, usage)), 1)
+
+
+def _cpu_percent_from_load(load_1m: float, cpu_count: int) -> float:
+    """Normalize 1-minute load average by core count (approximation, not true CPU %)."""
+    cores = max(1, int(cpu_count or 1))
+    return min(round(float(load_1m) * 100.0 / cores, 1), 100.0)
+
+
 def _parse_quick_output(raw: str) -> dict[str, Any]:
     lines = [line for line in raw.strip().splitlines() if line.strip()]
     result: dict[str, Any] = {}
+    stat_samples: dict[str, tuple[int, int]] = {}
 
     for line in lines:
         stripped = line.strip()
+        if stripped.startswith("CPUSTAT1=") or stripped.startswith("CPUSTAT2="):
+            key, _, payload = stripped.partition("=")
+            parsed = _parse_proc_stat_line(payload)
+            if parsed is not None:
+                stat_samples[key] = parsed
+            continue
+        if stripped.startswith("NPROC="):
+            with contextlib.suppress(ValueError):
+                nproc = int(stripped.split("=", 1)[1].strip())
+                if nproc > 0:
+                    result["cpu_count"] = nproc
+            continue
         if re.match(r"^\d+\.\d+\s+\d+\.\d+\s+\d+\.\d+", stripped):
             l1, l5, l15 = _parse_loadavg(stripped)
             result["load_1m"] = l1
@@ -100,13 +152,32 @@ def _parse_quick_output(raw: str) -> dict[str, Any]:
             with contextlib.suppress(ValueError):
                 result["net_tx_bytes"] = int(stripped.split("=", 1)[1].strip())
 
+    # Prefer real CPU utilization from dual /proc/stat samples (same model as live metrics).
+    s1 = stat_samples.get("CPUSTAT1")
+    s2 = stat_samples.get("CPUSTAT2")
+    if s1 and s2:
+        cpu = cpu_percent_from_stat_ticks(s1[0], s1[1], s2[0], s2[1])
+        if cpu is not None:
+            result["cpu_percent"] = cpu
+            result["cpu_source"] = "proc_stat"
+            return result
+
+    # Fallback: load average normalized by reported core count (never assume 1 core silently
+    # when nproc is present — that was the bug that pinned multi-core hosts at 100%).
     if "load_1m" in result:
-        result["cpu_percent"] = min(round(result["load_1m"] * 100 / max(_get_cpu_estimate(result), 1), 1), 100.0)
+        cores = int(result.get("cpu_count") or 0)
+        if cores <= 0:
+            cores = 1
+        result["cpu_percent"] = _cpu_percent_from_load(result["load_1m"], cores)
+        result["cpu_source"] = "loadavg"
     return result
 
 
 def _get_cpu_estimate(parsed: dict) -> int:
-    """Rough CPU count estimate based on load context (default 1)."""
+    """CPU core count from parsed quick output (default 1)."""
+    cores = parsed.get("cpu_count")
+    if isinstance(cores, int) and cores > 0:
+        return cores
     return 1
 
 

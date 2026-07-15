@@ -19,10 +19,14 @@ import {
   Maximize2,
   Minimize2,
   CheckCircle2,
+  Siren,
 } from "lucide-react";
 import { relativeTime, cn } from "@/lib/utils";
+import { isRunFailure, isRunFinished, isRunSuccess } from "@/lib/runStatus";
 import { useI18n, localize } from "@/lib/i18n";
 import { CustomizableDashboard, type WidgetDefinition } from "@/components/dashboard/CustomizableDashboard";
+import { AttentionPanel, type AttentionItem } from "@/components/dashboard/AttentionPanel";
+import { RunPulse } from "@/components/dashboard/RunPulse";
 import { getWidgetNumberProp, getWidgetStringProp } from "@/components/dashboard/widgetProps";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -85,10 +89,8 @@ export default function UserDashboard() {
     if (!boot && !runs && !mon) return [];
 
     const recentRuns = runs?.recent ?? [];
-    const finishedRuns = recentRuns.filter((r) =>
-      ["succeeded", "success", "failed", "error"].includes(r.status),
-    );
-    const succeededRuns = recentRuns.filter((r) => r.status === "succeeded" || r.status === "success");
+    const finishedRuns = recentRuns.filter((r) => isRunFinished(r.status));
+    const succeededRuns = recentRuns.filter((r) => isRunSuccess(r.status));
     const recentSuccessRate = finishedRuns.length
       ? Math.round((succeededRuns.length / finishedRuns.length) * 100)
       : null;
@@ -96,7 +98,85 @@ export default function UserDashboard() {
       ? finishedRuns.reduce((sum, r) => sum + (r.duration_ms ?? 0), 0) / finishedRuns.length / 1000
       : null;
 
+    const attentionItems: AttentionItem[] = [];
+    for (const run of runs?.active ?? []) {
+      if (run.pending_question) {
+        attentionItems.push({
+          id: `run-question-${run.id}`,
+          severity: "warning",
+          title: `${localize(lang, "Агент ждёт вашего ответа", "Agent is waiting for your reply")}: ${run.agent_name}`,
+          detail: run.pending_question,
+          time: run.started_at,
+          action: { label: localize(lang, "Ответить", "Reply"), to: `/agents/run/${run.id}` },
+        });
+      }
+    }
+    for (const server of mon?.servers ?? []) {
+      if (server.status === "unreachable") {
+        attentionItems.push({
+          id: `srv-unreachable-${server.server_id}`,
+          severity: "critical",
+          title: `${localize(lang, "Сервер недоступен", "Server unreachable")}: ${server.server_name}`,
+          detail: server.host,
+          time: server.checked_at,
+          action: { label: localize(lang, "К серверам", "Servers"), to: "/servers" },
+        });
+      }
+    }
+    for (const alert of (mon?.alerts ?? []).filter((a) => !a.is_resolved).slice(0, 6)) {
+      attentionItems.push({
+        id: `alert-${alert.id}`,
+        severity: alert.severity === "critical" ? "critical" : alert.severity === "warning" ? "warning" : "info",
+        title: alert.title,
+        detail: `${alert.server_name} · ${alert.message}`,
+        time: alert.created_at,
+        action: { label: localize(lang, "Терминал", "Terminal"), to: `/servers/${alert.server_id}/terminal` },
+      });
+    }
+    for (const run of recentRuns.filter((r) => isRunFailure(r.status)).slice(0, 4)) {
+      attentionItems.push({
+        id: `run-failed-${run.id}`,
+        severity: "warning",
+        title: `${localize(lang, "Сбой агента", "Agent run failed")}: ${run.agent_name}`,
+        detail: `${localize(lang, "сервер", "server")}: ${run.server_name}`,
+        time: run.started_at,
+        action: { label: localize(lang, "Разбор", "Inspect"), to: `/agents/run/${run.id}` },
+      });
+    }
+
     const builtins: WidgetDefinition[] = [
+      {
+        id: "my_attention",
+        title: localize(lang, "Требует внимания", "Needs attention"),
+        icon: <Siren className="h-4 w-4" />,
+        defaultSize: { w: 12, h: 1 },
+        render: (config) => {
+          const limit = getWidgetNumberProp(config, "limit", 6);
+          const tone = getWidgetStringProp(config, "tone", "default");
+          const title = getWidgetStringProp(config, "customTitle", localize(lang, "Требует внимания", "Needs attention"));
+
+          return (
+            <SectionCard
+              title={title}
+              icon={<Siren className="h-4 w-4" />}
+              description={localize(lang, "Вопросы агентов, сбои и алерты по вашим серверам", "Agent questions, failures and alerts on your servers")}
+              className={sectionToneStyles[tone]}
+            >
+              <AttentionPanel
+                items={attentionItems}
+                lang={lang}
+                maxItems={limit}
+                allClearTitle={localize(lang, "У вас всё в порядке", "You're all clear")}
+                allClearDetail={localize(
+                  lang,
+                  "Агенты не ждут ответа, серверы на связи, сбоев нет.",
+                  "No agents waiting, servers reachable, no failures.",
+                )}
+              />
+            </SectionCard>
+          );
+        },
+      },
       {
         id: "quick_stats",
         title: localize(lang, "Краткая сводка", "Quick stats"),
@@ -141,6 +221,11 @@ export default function UserDashboard() {
                   tone={mon?.summary?.active_alerts ? "warning" : "default"}
                 />
               </MetricGrid>
+              <RunPulse
+                runs={recentRuns}
+                lang={lang}
+                className="mt-4 rounded-sm border border-border/60 bg-surface-1/60 px-3 py-2"
+              />
             </SectionCard>
           );
         },
@@ -204,9 +289,7 @@ export default function UserDashboard() {
             <SectionCard title={title} icon={<Clock className="h-4 w-4" />} className={sectionToneStyles[tone]}>
               <div className="space-y-3">
                 {displayRuns.map((r) => {
-                  const isSuccess = r.status === "succeeded" || r.status === "success";
-                  const isFailed = r.status === "failed" || r.status === "error";
-                  const runTone: StatusTone = isSuccess ? "success" : isFailed ? "danger" : "info";
+                  const runTone: StatusTone = isRunSuccess(r.status) ? "success" : isRunFailure(r.status) ? "danger" : "info";
 
                   return (
                     <Link
@@ -301,34 +384,51 @@ export default function UserDashboard() {
       },
       {
         id: "recent_servers",
-        title: localize(lang, "Недавние серверы", "Recent servers"),
+        title: localize(lang, "Быстрое подключение", "Quick connect"),
         icon: <TerminalIcon className="h-4 w-4" />,
-        defaultSize: { w: 4, h: 1 },
+        defaultSize: { w: 6, h: 1 },
         render: (config) => {
+          const limit = getWidgetNumberProp(config, "limit", 5);
           const tone = getWidgetStringProp(config, "tone", "default");
-          const title = getWidgetStringProp(config, "customTitle", localize(lang, "Недавние подключенные", "Recently connected"));
-          const displayServers = boot?.servers?.slice(0, 5) ?? [];
+          const title = getWidgetStringProp(config, "customTitle", localize(lang, "Быстрое подключение", "Quick connect"));
+          const displayServers = boot?.servers?.slice(0, limit) ?? [];
 
           return (
-            <SectionCard title={title} icon={<Clock className="h-4 w-4" />} className={sectionToneStyles[tone]}>
-              <div className="space-y-2">
+            <SectionCard
+              title={title}
+              icon={<TerminalIcon className="h-4 w-4" />}
+              description={localize(lang, "Один клик — и вы в терминале", "One click to a live terminal")}
+              className={sectionToneStyles[tone]}
+            >
+              <div className="grid gap-2 sm:grid-cols-2">
                 {displayServers.map((s) => (
                   <Link
                     key={s.id}
                     to={`/servers/${s.id}/terminal`}
-                    className="flex items-center gap-3 rounded-xl border border-border/50 bg-surface-2/40 p-2.5 text-xs hover:border-primary/50 hover:bg-surface-2 transition-all"
+                    className="group flex items-center gap-3 rounded-sm border border-border bg-surface-1 px-3 py-3 text-xs transition-all hover:border-primary/60 hover:shadow-elev-1"
                   >
-                    <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-surface-2">
-                      <TerminalIcon className="h-3 w-3 text-muted-foreground" />
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm border border-border bg-surface-2 text-muted-foreground transition-colors group-hover:border-primary/40 group-hover:text-primary">
+                      <TerminalIcon className="h-4 w-4" />
                     </div>
-                    <span className="font-semibold truncate text-foreground/95">{s.name}</span>
-                    <span className="ml-auto text-xs font-mono text-muted-foreground/50">{s.host}</span>
+                    <div className="min-w-0">
+                      <div className="truncate font-semibold text-foreground/95">{s.name}</div>
+                      <div className="truncate font-mono text-2xs text-muted-foreground/60">{s.host}</div>
+                    </div>
                   </Link>
                 ))}
-                {displayServers.length === 0 && (
-                  <div className="py-6 text-center text-xs text-muted-foreground">{localize(lang, "Нет недавних серверов", "No recent servers")}</div>
-                )}
+                <Link
+                  to="/servers/hub"
+                  className="flex items-center justify-center gap-2 rounded-sm border border-dashed border-border bg-surface-1/40 px-3 py-3 text-xs font-semibold text-muted-foreground transition-all hover:border-primary/60 hover:text-primary"
+                >
+                  <Server className="h-4 w-4" />
+                  {localize(lang, "Все серверы", "All servers")}
+                </Link>
               </div>
+              {displayServers.length === 0 && (
+                <div className="mt-2 py-4 text-center text-xs text-muted-foreground">
+                  {localize(lang, "Серверов пока нет — добавьте первый в Хабе серверов.", "No servers yet — add your first one in the Server hub.")}
+                </div>
+              )}
             </SectionCard>
           );
         },
