@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 DOD_CHECKS: tuple[tuple[str, str], ...] = (
     ("explicit_admin_access", "Admin Mode requires explicit admin feature access."),
     ("rancher_cluster_namespace", "Rancher-backed cluster and namespace selection is proven."),

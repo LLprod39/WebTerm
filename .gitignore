@@ -152,3 +152,11 @@ docs/local/
 
 .gemini/
 gha-creds-*.json
+
+# Local working junk — never commit
+.token-savior-cache.json
+.tools/
+mcps/
+56 скринов/
+AgentFrontedTest/
+/*.png

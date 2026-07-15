@@ -3,10 +3,11 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-import tomllib
 import zipfile
 from pathlib import Path, PurePosixPath
 from typing import Any
+
+import tomllib
 
 from plugin_marketplace.services.dependency_policy_service import (
     configured_sandbox_dependency_allowlist,

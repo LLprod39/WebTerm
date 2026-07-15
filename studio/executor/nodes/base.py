@@ -60,7 +60,7 @@ class BaseNode(ABC):
         self.node_data = node_data
 
     @abstractmethod
-    async def execute(self, ctx: "ExecutionContext") -> NodeResult:
+    async def execute(self, ctx: ExecutionContext) -> NodeResult:
         """Execute this node and return the result."""
         ...
 

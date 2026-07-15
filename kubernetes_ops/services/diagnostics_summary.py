@@ -4,12 +4,19 @@ from typing import Any
 
 from django.db.models import Q
 
-from kubernetes_ops.models import K8sAppRef, K8sCluster, K8sEvent, K8sNamespace, K8sNetworkRef, K8sPodRef, K8sWorkloadRef
-from kubernetes_ops.services.network_detail import build_network_detail, network_for_value
+from kubernetes_ops.models import (
+    K8sAppRef,
+    K8sCluster,
+    K8sEvent,
+    K8sNamespace,
+    K8sNetworkRef,
+    K8sPodRef,
+    K8sWorkloadRef,
+)
 from kubernetes_ops.services.namespace_detail import build_namespace_detail
+from kubernetes_ops.services.network_detail import build_network_detail, network_for_value
 from kubernetes_ops.services.pod_detail import build_pod_detail, pod_for_value
 from kubernetes_ops.services.workload_detail import build_workload_detail, workload_for_value
-
 
 HEALTH_SEVERITY = {
     K8sCluster.HEALTH_DEGRADED: "critical",

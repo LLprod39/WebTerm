@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import json
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from kubernetes_ops.services.readonly_rbac import READONLY_SERVICE_ACCOUNT_CONTRACT
 

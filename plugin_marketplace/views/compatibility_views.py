@@ -13,8 +13,7 @@ from plugin_marketplace.services.compatibility_matrix_service import (
     run_compatibility_job,
     run_compatibility_matrix_update,
 )
-from plugin_marketplace.views.common import json_error, parse_json_body
-from plugin_marketplace.views.common import staff_required
+from plugin_marketplace.views.common import json_error, parse_json_body, staff_required
 
 
 @login_required

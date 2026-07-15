@@ -41,7 +41,7 @@ export function ToolMenu({
   onCloseWorkspace?: () => void;
 }) {
   const normalizedQuery = query.trim().toLowerCase();
-  const pinnedAppIds: WorkspaceAppId[] = ["overview", "files", "services", "logs", "quick-run", "settings"];
+  const pinnedAppIds: WorkspaceAppId[] = ["files", "services", "logs", "quick-run", "settings"];
   const visibleApps = apps.filter((app) => !app.hidden);
   const pinnedApps = visibleApps.filter((app) => pinnedAppIds.includes(app.id));
   const filteredApps = visibleApps.filter((app) => {

@@ -1,6 +1,6 @@
 from kubernetes_ops.models import K8sCluster, K8sProvider
-from kubernetes_ops.services.admin_resources import build_resource_ref, rancher_resource_path
 from kubernetes_ops.services.admin_resource_registry import common_resource_payload
+from kubernetes_ops.services.admin_resources import build_resource_ref, rancher_resource_path
 
 
 def _provider() -> K8sProvider:

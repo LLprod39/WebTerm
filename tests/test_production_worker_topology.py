@@ -2,7 +2,6 @@ from pathlib import Path
 
 import yaml
 
-
 ROOT = Path(__file__).resolve().parents[1]
 PIPELINE_RUNTIME_ENV = {
     "CHANNEL_REDIS_URL",
@@ -63,7 +62,7 @@ def test_render_pipeline_workers_have_runtime_env():
         assert service["type"] == "worker"
         assert service["runtime"] == "docker"
         assert service["dockerCommand"] == command
-        assert PIPELINE_RUNTIME_ENV <= _env_keys(service)
+        assert _env_keys(service) >= PIPELINE_RUNTIME_ENV
 
 
 def test_render_kubernetes_ops_sync_worker_is_declared():

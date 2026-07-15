@@ -35,7 +35,6 @@ from kubernetes_ops.services.release_production_action_evidence import (
 )
 from kubernetes_ops.services.release_scope import PRODUCTION_ENVIRONMENTS, is_local_release_indicator
 
-
 EXTERNAL_EVIDENCE_BUNDLE_SCHEMA_VERSION = "kubernetes_ops.external_evidence_bundle.v1"
 EXTERNAL_EVIDENCE_BUNDLE_ARTIFACT = "artifacts/kubernetes_ops_external_evidence_bundle.json"
 PRODUCTION_EVIDENCE_SETTING = "KUBERNETES_OPS_PRODUCTION_EVIDENCE_REF"

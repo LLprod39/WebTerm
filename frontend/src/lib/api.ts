@@ -173,7 +173,7 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   const { timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS, ...requestOptions } = options;
   try {
     const csrfToken = isMutationRequest(requestOptions.method) ? await ensureCsrfToken(forceBackend) : getCookie("csrftoken");
-    const jsonHeaders = isFormDataBody(requestOptions.body) ? {} : { "Content-Type": "application/json" };
+    const jsonHeaders: Record<string, string> = isFormDataBody(requestOptions.body) ? {} : { "Content-Type": "application/json" };
     response = await fetchWithTimeout(`${apiBaseForPath(path)}${path}`, {
       credentials: "include",
       ...requestOptions,

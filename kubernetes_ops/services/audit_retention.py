@@ -9,7 +9,6 @@ from django.utils import timezone
 
 from kubernetes_ops.models import K8sAuditEvent
 
-
 DEFAULT_AUDIT_RETENTION_DAYS = 365
 MAX_AUDIT_RETENTION_DAYS = 3650
 

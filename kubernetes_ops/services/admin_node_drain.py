@@ -12,10 +12,10 @@ from kubernetes_ops.services.admin_resources import (
     rancher_api_path,
     sanitize_kubernetes_resource,
 )
+from kubernetes_ops.services.admin_write_approval import assert_admin_session_approved
 from kubernetes_ops.services.describe import sanitize_metadata
 from kubernetes_ops.services.normalizers import payload_items
 from kubernetes_ops.services.provider_clients import KubernetesProviderError, ProviderJsonClient, ProviderTransport
-from kubernetes_ops.services.admin_write_approval import assert_admin_session_approved
 
 
 def execute_node_drain(

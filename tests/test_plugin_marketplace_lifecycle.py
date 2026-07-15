@@ -6,7 +6,7 @@ from django.test import Client, override_settings
 
 from app.plugins.catalog import DEMO_PLUGIN_MANIFEST
 from core_ui.models import UserAppPermission
-from plugin_marketplace.models import PluginInstallEvent, PluginInstallation, PluginPackage, PluginSecretBinding
+from plugin_marketplace.models import PluginInstallation, PluginInstallEvent, PluginPackage, PluginSecretBinding
 from plugin_marketplace.services.install_service import set_installation_status
 from plugin_marketplace.services.signing_service import canonical_manifest_hash
 

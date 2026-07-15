@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { PipelineActivityState } from "@/components/pipeline/pipelineActivity";
-import type { PipelineRun } from "@/lib/api";
+import type { PipelineLastRun, PipelineRun } from "@/lib/api";
 
 import { getPipelineActivityCopy, localize } from "./presentation";
 
@@ -41,7 +41,7 @@ export function PipelineEditorToolbar({
   lang: "en" | "ru";
   pipelineId: number | null;
   pipelineName: string;
-  resolvedLastRun: PipelineRun | null;
+  resolvedLastRun: PipelineLastRun | null;
   runDisabled: boolean;
   runPending: boolean;
   saveDisabled: boolean;

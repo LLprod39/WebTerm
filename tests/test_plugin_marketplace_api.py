@@ -5,10 +5,15 @@ from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
 from django.test import Client
 
-from app.plugins.catalog import DEMO_PLUGIN_ID
-from app.plugins.catalog import DEMO_PLUGIN_MANIFEST
+from app.plugins.catalog import DEMO_PLUGIN_ID, DEMO_PLUGIN_MANIFEST
 from core_ui.models import UserActivityLog, UserAppPermission
-from plugin_marketplace.models import PluginInstallEvent, PluginInstallation, PluginPackage, PluginPermissionGrant, PluginSecretBinding
+from plugin_marketplace.models import (
+    PluginInstallation,
+    PluginInstallEvent,
+    PluginPackage,
+    PluginPermissionGrant,
+    PluginSecretBinding,
+)
 from studio.models import Pipeline, PipelineRun
 from studio.pipeline_executor import PipelineExecutor
 from studio.pipeline_validation import validate_pipeline_definition

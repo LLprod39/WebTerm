@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 PILOT_TEMPLATE_SLUGS = {
     "pilot-keycloak-access-change",
     "pilot-kubernetes-rollout",

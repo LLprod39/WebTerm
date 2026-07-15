@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.plugins.contracts import PluginManifest, SURFACE_KINDS
+from app.plugins.contracts import SURFACE_KINDS, PluginManifest
 from app.plugins.validation import validate_plugin_manifest
 
 

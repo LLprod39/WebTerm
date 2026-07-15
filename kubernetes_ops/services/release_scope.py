@@ -4,7 +4,6 @@ from typing import Any
 
 from django.conf import settings
 
-
 PRODUCTION_ENVIRONMENTS = {"prod", "production"}
 PRODUCTION_CORE_EVIDENCE_REFS = (
     ("production_approval", "KUBERNETES_OPS_PRODUCTION_APPROVAL_REF", "<change-or-approval-id>"),

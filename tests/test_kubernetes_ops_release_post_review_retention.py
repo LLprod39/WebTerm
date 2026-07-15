@@ -3,9 +3,18 @@ from __future__ import annotations
 import pytest
 from django.contrib.auth.models import User
 
-from kubernetes_ops.models import K8sAdminAction, K8sAdminRecording, K8sAdminRecordingEvent, K8sAdminSession, K8sCluster, K8sProvider
+from kubernetes_ops.models import (
+    K8sAdminAction,
+    K8sAdminRecording,
+    K8sAdminRecordingEvent,
+    K8sAdminSession,
+    K8sCluster,
+    K8sProvider,
+)
 from kubernetes_ops.services.release_evidence import build_kubernetes_release_evidence
-from kubernetes_ops.services.release_post_review_retention import build_kubernetes_release_post_review_retention_evidence
+from kubernetes_ops.services.release_post_review_retention import (
+    build_kubernetes_release_post_review_retention_evidence,
+)
 
 
 @pytest.mark.django_db

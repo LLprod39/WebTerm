@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, FileText, Plus, type LucideIcon } from "lucide-react";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { ChevronDown, ChevronUp, FileText, Plus } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -11,7 +11,8 @@ import { CATEGORY_ICONS, localize } from "./presentation";
 type PaletteNode = {
   type: string;
   label: string;
-  icon: LucideIcon;
+  // Lucide icons and plugin-provided icon components both satisfy this shape.
+  icon: ComponentType<{ className?: string }>;
   iconClassName?: string;
   description: string;
 };

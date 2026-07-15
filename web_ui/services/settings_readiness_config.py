@@ -333,7 +333,7 @@ def domain_auth_check() -> dict[str, Any]:
             else getattr(settings, "DOMAIN_AUTH_AUTO_CREATE", True)
         ),
         "default_profile": getattr(config, "domain_auth_default_profile", None)
-        or str(getattr(settings, "DOMAIN_AUTH_DEFAULT_PROFILE", "server_only") or "server_only"),
+        or str(getattr(settings, "DOMAIN_AUTH_DEFAULT_PROFILE", "pilot_user") or "pilot_user"),
     }
     if not enabled:
         return readiness_check(

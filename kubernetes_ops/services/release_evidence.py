@@ -11,12 +11,12 @@ from django.utils import timezone
 
 from app.egress_redaction import redact_egress_text
 from kubernetes_ops.models import K8sAppRef, K8sCluster, K8sProvider, K8sWorkloadRef
-from kubernetes_ops.services.release_admin_mode_safety import build_kubernetes_release_admin_mode_safety_evidence
-from kubernetes_ops.services.release_action_controls import build_kubernetes_release_action_controls_evidence
-from kubernetes_ops.services.release_audit_redaction import build_kubernetes_release_audit_redaction_evidence
 from kubernetes_ops.services.provider_probe import probe_kubernetes_provider, probe_result_payload
 from kubernetes_ops.services.readiness import build_kubernetes_readiness_report
+from kubernetes_ops.services.release_action_controls import build_kubernetes_release_action_controls_evidence
+from kubernetes_ops.services.release_admin_mode_safety import build_kubernetes_release_admin_mode_safety_evidence
 from kubernetes_ops.services.release_artifact_safety import build_kubernetes_release_evidence_artifact_safety_report
+from kubernetes_ops.services.release_audit_redaction import build_kubernetes_release_audit_redaction_evidence
 from kubernetes_ops.services.release_backend_workstream import (
     build_kubernetes_release_backend_workstream,
     build_kubernetes_release_backend_workstream_blocker_groups,
@@ -27,17 +27,25 @@ from kubernetes_ops.services.release_contract import RELEASE_EVIDENCE_SCHEMA_VER
 from kubernetes_ops.services.release_definition_of_done import build_kubernetes_release_definition_of_done
 from kubernetes_ops.services.release_evidence_checklist import build_kubernetes_production_evidence_checklist
 from kubernetes_ops.services.release_external_evidence_bundle import load_kubernetes_external_evidence_bundle_artifact
+from kubernetes_ops.services.release_handoff_plan import build_kubernetes_release_evidence_execution_plan
+from kubernetes_ops.services.release_interactive_live_smoke import load_kubernetes_interactive_live_smoke_artifact
+from kubernetes_ops.services.release_interactive_shell_streams import (
+    build_kubernetes_release_interactive_shell_stream_evidence,
+)
 from kubernetes_ops.services.release_interactive_transport_evidence import (
     load_kubernetes_interactive_transport_evidence_artifact,
 )
-from kubernetes_ops.services.release_interactive_live_smoke import load_kubernetes_interactive_live_smoke_artifact
-from kubernetes_ops.services.release_interactive_shell_streams import build_kubernetes_release_interactive_shell_stream_evidence
-from kubernetes_ops.services.release_handoff_plan import build_kubernetes_release_evidence_execution_plan
 from kubernetes_ops.services.release_normal_user_surface import build_kubernetes_release_normal_user_surface_evidence
-from kubernetes_ops.services.release_post_review_retention import build_kubernetes_release_post_review_retention_evidence
+from kubernetes_ops.services.release_post_review_retention import (
+    build_kubernetes_release_post_review_retention_evidence,
+)
 from kubernetes_ops.services.release_preflight import load_kubernetes_release_preflight_artifact
-from kubernetes_ops.services.release_production_action_evidence import load_kubernetes_production_action_evidence_artifact
-from kubernetes_ops.services.release_provider_secret_lifecycle import build_kubernetes_release_provider_secret_lifecycle_evidence
+from kubernetes_ops.services.release_production_action_evidence import (
+    load_kubernetes_production_action_evidence_artifact,
+)
+from kubernetes_ops.services.release_provider_secret_lifecycle import (
+    build_kubernetes_release_provider_secret_lifecycle_evidence,
+)
 from kubernetes_ops.services.release_scope import build_kubernetes_release_scope_report
 from kubernetes_ops.services.release_secret_read_controls import build_kubernetes_release_secret_read_controls_evidence
 from kubernetes_ops.services.release_studio_diagnosis import build_kubernetes_release_studio_diagnosis_draft_evidence
@@ -184,39 +192,35 @@ def build_kubernetes_release_evidence(
         "release_contract": build_kubernetes_release_contract(),
         "blockers": blockers,
     }
-    artifact_safety = build_kubernetes_release_evidence_artifact_safety_report(evidence)
-    if not artifact_safety.get("success"):
-        blockers = [*blockers, f"artifact_safety:{artifact_safety.get('status') or 'failed'}"]
-    evidence["artifact_safety"] = artifact_safety
-    evidence["blockers"] = blockers
-    evidence["production_ready"] = not blockers
-    release_summary = build_kubernetes_release_summary(evidence)
-    evidence["release_summary"] = release_summary
-    evidence["completion_audit"] = release_summary.get("completion_audit") or {}
-    _attach_backend_workstream(evidence)
-    artifact_safety = build_kubernetes_release_evidence_artifact_safety_report(evidence)
-    if not artifact_safety.get("success") and not any(str(item).startswith("artifact_safety:") for item in blockers):
-        blockers = [*blockers, f"artifact_safety:{artifact_safety.get('status') or 'failed'}"]
-    evidence["artifact_safety"] = artifact_safety
-    evidence["blockers"] = blockers
-    evidence["production_ready"] = not blockers
-    release_summary = build_kubernetes_release_summary(evidence)
-    evidence["release_summary"] = release_summary
-    evidence["completion_audit"] = release_summary.get("completion_audit") or {}
-    _attach_backend_workstream(evidence)
+    # The artifact-safety gate re-runs after every enrichment step (summary,
+    # backend workstream, execution plan) because each step adds new content
+    # that must also pass redaction/safety checks.
+    blockers = _apply_artifact_safety_pass(evidence, blockers)
+    blockers = _apply_artifact_safety_pass(evidence, blockers)
     evidence["production_execution_plan"] = build_kubernetes_release_evidence_execution_plan(evidence)
-    artifact_safety = build_kubernetes_release_evidence_artifact_safety_report(evidence)
-    if not artifact_safety.get("success") and not any(str(item).startswith("artifact_safety:") for item in blockers):
-        blockers = [*blockers, f"artifact_safety:{artifact_safety.get('status') or 'failed'}"]
-    evidence["artifact_safety"] = artifact_safety
-    evidence["blockers"] = blockers
-    evidence["production_ready"] = not blockers
-    release_summary = build_kubernetes_release_summary(evidence)
-    evidence["release_summary"] = release_summary
-    evidence["completion_audit"] = release_summary.get("completion_audit") or {}
-    _attach_backend_workstream(evidence)
+    blockers = _apply_artifact_safety_pass(evidence, blockers)
     evidence["production_execution_plan"] = build_kubernetes_release_evidence_execution_plan(evidence)
     return evidence
+
+
+def _apply_artifact_safety_pass(evidence: dict[str, Any], blockers: list) -> list:
+    """Run the artifact-safety gate and refresh the derived summary/workstream.
+
+    Adds the artifact_safety blocker at most once, then rebuilds
+    release_summary / completion_audit / backend_workstream so they reflect
+    the current blocker list.
+    """
+    artifact_safety = build_kubernetes_release_evidence_artifact_safety_report(evidence)
+    if not artifact_safety.get("success") and not any(str(item).startswith("artifact_safety:") for item in blockers):
+        blockers = [*blockers, f"artifact_safety:{artifact_safety.get('status') or 'failed'}"]
+    evidence["artifact_safety"] = artifact_safety
+    evidence["blockers"] = blockers
+    evidence["production_ready"] = not blockers
+    release_summary = build_kubernetes_release_summary(evidence)
+    evidence["release_summary"] = release_summary
+    evidence["completion_audit"] = release_summary.get("completion_audit") or {}
+    _attach_backend_workstream(evidence)
+    return blockers
 
 
 def _attach_backend_workstream(evidence: dict[str, Any]) -> None:

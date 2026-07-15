@@ -126,9 +126,9 @@ def _shell_from_module(task: dict[str, Any]) -> tuple[str, str | None]:
         return f"# file: {path}", "file"
 
     if isinstance(task.get("lineinfile"), dict):
-        l = task["lineinfile"]
-        path = l.get("path") or l.get("dest") or ""
-        line = str(l.get("line") or "").replace("'", "'\\''")
+        lineinfile = task["lineinfile"]
+        path = lineinfile.get("path") or lineinfile.get("dest") or ""
+        line = str(lineinfile.get("line") or "").replace("'", "'\\''")
         if path and line:
             return (
                 f"grep -qxF '{line}' {path} 2>/dev/null || echo '{line}' >> {path}",
@@ -188,7 +188,7 @@ def _shell_from_module(task: dict[str, Any]) -> tuple[str, str | None]:
             msg = msg.get("msg", "")
         return f"echo {json.dumps(str(msg))}", None
 
-    module_keys = [k for k in task.keys() if k not in ignore]
+    module_keys = [k for k in task if k not in ignore]
     if module_keys:
         mod = module_keys[0]
         val = task[mod]

@@ -10,8 +10,6 @@ from core_ui.managed_secrets import (
 )
 from core_ui.managed_secrets import (
     has_server_auth_secret,
-)
-from core_ui.managed_secrets import (
     has_server_sudo_secret,
 )
 from core_ui.managed_secrets import (

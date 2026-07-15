@@ -130,11 +130,15 @@ def test_create_agent_dialog_seeds_complex_defaults():
 
 
 def test_model_and_engine_defaults_wire_to_budgets():
+    from servers.agent_engine import DEFAULT_COMMAND_TIMEOUT, MAX_ITERATIONS_CAP, SESSION_TIMEOUT_DEFAULT
     from servers.models_agents import ServerAgent
-    from servers.agent_engine import DEFAULT_COMMAND_TIMEOUT, SESSION_TIMEOUT_DEFAULT, MAX_ITERATIONS_CAP
     from servers.multi_agent_engine_config import (
         DEFAULT_COMMAND_TIMEOUT as MULTI_CMD,
+    )
+    from servers.multi_agent_engine_config import (
         MAX_TASK_ITERATIONS,
+    )
+    from servers.multi_agent_engine_config import (
         SESSION_TIMEOUT_DEFAULT as MULTI_SESSION,
     )
 
@@ -393,9 +397,9 @@ def test_multi_config_and_planning_prompt_no_five_to_seven_cap():
 
 
 def test_subagent_spec_honors_engine_cap_above_role_default():
+    from app.agent_kernel.domain.specs import ToolSpec
     from app.agent_kernel.runtime.subagents import build_task_subagent_spec
     from app.agent_kernel.tools.registry import ToolRegistry
-    from app.agent_kernel.domain.specs import ToolSpec
 
     registry = ToolRegistry(
         {

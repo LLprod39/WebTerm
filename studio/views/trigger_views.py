@@ -53,7 +53,7 @@ def _activation_context(trigger_type: str, webhook_payload_map) -> dict:
     if trigger_type == PipelineTrigger.TYPE_WEBHOOK and isinstance(webhook_payload_map, dict):
         return {str(key): "__mapped__" for key, path in webhook_payload_map.items() if str(key).strip() and str(path).strip()}
     if trigger_type == PipelineTrigger.TYPE_MONITORING:
-        return {field: "__monitoring__" for field in _MONITORING_CONTEXT}
+        return dict.fromkeys(_MONITORING_CONTEXT, "__monitoring__")
     return {}
 
 

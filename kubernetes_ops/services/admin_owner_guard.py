@@ -6,7 +6,6 @@ from kubernetes_ops.models import K8sAppRef, K8sCluster
 from kubernetes_ops.services.admin_ownership import build_admin_resource_ownership
 from kubernetes_ops.services.admin_resources import AdminResourceError, KubernetesResourceRef
 
-
 GUARDED_OWNERS = {K8sAppRef.OWNER_DEVTRON, K8sAppRef.OWNER_FLEET, K8sAppRef.OWNER_EXTERNAL}
 
 

@@ -132,7 +132,7 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
             else:
                 try:
                     await engine.session.open(primary_server)
-                except Exception as exc:
+                except Exception:
                     disconnected.append(str(primary_server.name if primary_server else "?"))
                     raise
         engine._disconnected_servers = disconnected

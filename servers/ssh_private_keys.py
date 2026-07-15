@@ -7,7 +7,6 @@ from pathlib import Path
 import asyncssh
 from django.conf import settings
 
-
 MAX_INLINE_PRIVATE_KEY_BYTES = 256 * 1024
 
 

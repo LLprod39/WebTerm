@@ -3,7 +3,10 @@ from __future__ import annotations
 from django.conf import settings
 from django.core.checks import Error, Tags, register
 
-from plugin_marketplace.services.backend_sandbox_runner_service import BACKEND_SANDBOX_PROVIDER_EXTERNAL, BACKEND_SANDBOX_PROVIDERS
+from plugin_marketplace.services.backend_sandbox_runner_service import (
+    BACKEND_SANDBOX_PROVIDER_EXTERNAL,
+    BACKEND_SANDBOX_PROVIDERS,
+)
 from plugin_marketplace.services.compatibility_matrix_service import COMPATIBILITY_JOB_ISOLATION_MODES
 from plugin_marketplace.services.dependency_policy_service import invalid_dependency_allowlist_entries
 from plugin_marketplace.services.frontend_bundle_policy_service import FRONTEND_BUNDLE_REVIEW_ATTESTATION_KIND

@@ -8,7 +8,6 @@ from kubernetes_ops.models import K8sAppRef, K8sCluster, K8sFleetBundle, K8sWork
 from kubernetes_ops.services.action_sanitizers import bounded_action_text, sanitize_action_value, sanitize_public_links
 from kubernetes_ops.services.admin_resources import cluster_for_value
 
-
 SCHEMA_VERSION = "kubernetes_ops.helm_ownership.v1"
 MAX_RELEASES = 150
 MAX_RELATED = 25

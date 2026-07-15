@@ -200,7 +200,7 @@ export function demoKubernetesFallback<T>(path: string, _options: RequestInit = 
         report: {},
         reason: "demo request",
         approval_ref: "",
-        requested_by: DEMO_SESSION.user.username,
+        requested_by: DEMO_SESSION.user?.username ?? "demo-user",
         created_at: new Date(0).toISOString(),
         updated_at: new Date(0).toISOString(),
       },
@@ -212,7 +212,7 @@ export function demoKubernetesFallback<T>(path: string, _options: RequestInit = 
       event: {
         id: 0,
         action: "k8s.deeplink.open",
-        username: DEMO_SESSION.user.username,
+        username: DEMO_SESSION.user?.username ?? "demo-user",
         provider: "demo",
         cluster: "",
         payload: {},
@@ -398,7 +398,7 @@ function demoKubernetesAdminSession() {
     allowed_kinds: ["*"],
     allowed_namespaces: ["*"],
     metadata: {},
-    created_by: DEMO_SESSION.user.username,
+    created_by: DEMO_SESSION.user?.username ?? "demo-user",
     created_at: new Date(0).toISOString(),
     updated_at: new Date(0).toISOString(),
   };

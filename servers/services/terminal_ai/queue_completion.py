@@ -53,7 +53,7 @@ async def handle_queue_completion(owner: Any) -> None:
 
 async def _maybe_generate_report(owner: Any, *, user_message: str, done_items: list[dict[str, Any]]) -> str:
     settings = getattr(owner, "_ai_settings", {}) or {}
-    if not owner._is_auto_report_enabled(settings, getattr(owner, "_ai_execution_mode", "step")):
+    if not owner._is_auto_report_enabled(settings, getattr(owner, "_ai_execution_mode", "agent")):
         return ""
 
     await owner._send_ai_event(terminal_events.ai_status("generating_report"))

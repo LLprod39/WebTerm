@@ -11,6 +11,7 @@ from loguru import logger
 from core_ui.decorators import require_feature
 from kubernetes_ops.models import K8sActionRequest, K8sAuditEvent
 from kubernetes_ops.serializers import serialize_action_request
+from kubernetes_ops.services.action_execution import execute_approved_action_request
 from kubernetes_ops.services.action_requests import (
     ActionRequestValidationError,
     approve_external_action_request,
@@ -18,7 +19,6 @@ from kubernetes_ops.services.action_requests import (
     record_external_action_verification,
     sanitized_action_rejection_payload,
 )
-from kubernetes_ops.services.action_execution import execute_approved_action_request
 from kubernetes_ops.services.action_sanitizers import reference_action_text
 from kubernetes_ops.services.action_summary import build_action_request_summary
 from kubernetes_ops.services.admin_resources import cluster_for_value

@@ -13,7 +13,12 @@ from django.utils import timezone
 
 from servers.models import Server, ServerGroup, ServerGroupMember, ServerShare
 from servers.secret_utils import get_server_auth_secret, get_server_sudo_secret
-from servers.services.server_query import can_access_server_context, get_active_share, get_servers_for_user, user_has_server_capability
+from servers.services.server_query import (
+    can_access_server_context,
+    get_active_share,
+    get_servers_for_user,
+    user_has_server_capability,
+)
 
 
 def _serialize_detected_os_fields(server: Server) -> dict:

@@ -10,8 +10,8 @@ from django.utils import timezone
 from .execution_policy import build_execution_policy_decisions, summarize_execution_policy_decisions
 from .models import PipelineRun
 from .pipeline_routing import build_execution_graph, reachable_nodes_from_entry, serialize_routing_state
-from .pipeline_runtime_context import validate_pipeline_runtime_context
 from .pipeline_run_state import update_run_status
+from .pipeline_runtime_context import validate_pipeline_runtime_context
 from .pipeline_validation import validate_pipeline_definition
 
 logger = logging.getLogger(__name__)

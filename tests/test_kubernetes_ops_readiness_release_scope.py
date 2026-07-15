@@ -10,7 +10,6 @@ from kubernetes_ops.services import readiness as readiness_service
 from kubernetes_ops.services.readiness import build_kubernetes_readiness_report
 from studio.models import MCPServerPool
 
-
 PRODUCTION_REFS = {
     "KUBERNETES_OPS_PRODUCTION_EVIDENCE_REF": "artifact:production-bundle",
     "KUBERNETES_OPS_IDENTITY_RUNTIME_EVIDENCE_REF": "artifact:sso-proof",

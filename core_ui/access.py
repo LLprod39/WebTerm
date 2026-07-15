@@ -22,6 +22,7 @@ STUDIO_SECTION_FEATURES = {
 }
 
 VALID_ACCESS_PROFILES = {
+    "pilot_user",
     "server_only",
     "operator_server_only",
     "operator_studio_runner",
@@ -32,7 +33,11 @@ VALID_ACCESS_PROFILES = {
     "custom",
 }
 
+# Closed pilot: user dashboard + servers surface + agents. No Studio/K8s/MARS/settings.
+PILOT_USER_FEATURES = frozenset({"dashboard", "servers", "agents"})
+
 _PROFILE_TRUE_FEATURES = {
+    "pilot_user": set(PILOT_USER_FEATURES),
     "server_only": {"servers"},
     "operator_server_only": {"servers"},
     "operator_studio_runner": {
@@ -58,6 +63,7 @@ _PROFILE_TRUE_FEATURES = {
 }
 
 PROFILE_STAFF_FLAGS = {
+    "pilot_user": False,
     "server_only": False,
     "operator_server_only": False,
     "operator_studio_runner": False,
@@ -237,6 +243,7 @@ def build_user_access_payload(
 
     profile = "custom"
     for profile_name in (
+        "pilot_user",
         "operator_server_only",
         "operator_studio_runner",
         "team_admin_no_secrets",

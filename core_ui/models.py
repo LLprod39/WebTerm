@@ -149,9 +149,9 @@ FEATURE_CHOICES = [
     ("knowledge_base", "Knowledge Base"),
 ]
 
-# Features allowed by default for non-staff users.
+# Features allowed by default for non-staff users (aligned with pilot_user).
 # Settings remain opt-in, and the admin dashboard stays staff-only.
-DEFAULT_ALLOWED_FEATURES = {"servers", "agents", "knowledge_base", "dashboard"}
+DEFAULT_ALLOWED_FEATURES = {"servers", "agents", "dashboard"}
 # Features that must be granted explicitly even for staff users.
 EXPLICIT_OPT_IN_FEATURES = {
     "kubernetes",

@@ -1,8 +1,9 @@
-import { CheckCircle2, Clock3, Database, FileText, Loader2, Workflow, XCircle } from "lucide-react";
+import { useMemo } from "react";
+import { CheckCircle2, Clock3, Database, FileText, Loader2, ShieldCheck, Workflow, XCircle } from "lucide-react";
 
 import type { AssistantAction, AssistantChatMessage, AssistantChatSession, AssistantChatTurnResponse } from "@/api";
 import { Badge } from "@/components/ui/badge";
-import { localize } from "@/lib/i18n";
+import { localize, useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 

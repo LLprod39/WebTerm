@@ -8,8 +8,12 @@ from typing import Any
 from kubernetes_ops.models import K8sPodRef
 from kubernetes_ops.serializers import serialize_pod_ref
 from kubernetes_ops.services.describe import sanitize_links, sanitize_metadata
-from kubernetes_ops.services.provider_clients import KubernetesProviderError, ProviderJsonClient, ProviderTransport, provider_path
-
+from kubernetes_ops.services.provider_clients import (
+    KubernetesProviderError,
+    ProviderJsonClient,
+    ProviderTransport,
+    provider_path,
+)
 
 DEFAULT_TAIL_LINES = 120
 MAX_TAIL_LINES = 500

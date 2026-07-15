@@ -10,15 +10,18 @@ from app.plugins.permissions import check_plugin_permission
 from core_ui.decorators import require_feature
 from core_ui.models import UserActivityLog
 from plugin_marketplace.models import PluginInstallation
+from plugin_marketplace.services.access_scope_service import (
+    group_payload,
+    installation_scope_payload,
+    update_installation_scope,
+)
 from plugin_marketplace.services.install_service import (
     list_catalog_plugins,
     list_installations,
     record_event,
     set_installation_status,
 )
-from plugin_marketplace.services.access_scope_service import group_payload, installation_scope_payload, update_installation_scope
-from plugin_marketplace.views.common import json_error, staff_required
-from plugin_marketplace.views.common import parse_json_body
+from plugin_marketplace.views.common import json_error, parse_json_body, staff_required
 
 
 @login_required

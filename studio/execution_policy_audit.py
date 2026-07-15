@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from studio.execution_policy import ExecutionPolicyDecision
 
 
-def _operation_kind(decision: "ExecutionPolicyDecision") -> str:
+def _operation_kind(decision: ExecutionPolicyDecision) -> str:
     if decision.node_type == "agent/ssh_cmd":
         return "ssh_command"
     if decision.node_type == "agent/mcp_call":
@@ -20,7 +20,7 @@ def _operation_kind(decision: "ExecutionPolicyDecision") -> str:
     return f"studio_{decision.action_class}"
 
 
-def decision_audit_metadata(decision: "ExecutionPolicyDecision") -> dict[str, Any]:
+def decision_audit_metadata(decision: ExecutionPolicyDecision) -> dict[str, Any]:
     return build_execution_policy_audit_metadata(
         tool_name=decision.node_type or decision.stage,
         args={

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from studio.ops_controls import assert_agents_not_paused, get_ops_control_status, set_ops_paused
 from studio.pipeline_agent_config import (
     INTERACTION_UNATTENDED,
     agent_node_allows_ask_user,
@@ -9,7 +10,6 @@ from studio.pipeline_agent_config import (
     resolve_interaction_mode,
     resolve_tools_config,
 )
-from studio.ops_controls import assert_agents_not_paused, get_ops_control_status, set_ops_paused
 
 
 def test_tools_mode_allowlist_empty_fails():

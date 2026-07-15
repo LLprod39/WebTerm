@@ -8,6 +8,7 @@ from django.core.exceptions import ValidationError
 
 from kubernetes_ops.models import K8sAdminAction, K8sAdminSession, K8sCluster, K8sProvider
 from kubernetes_ops.permissions import kubernetes_permission_policy
+from kubernetes_ops.services.admin_node_drain import execute_node_drain
 from kubernetes_ops.services.admin_resources import (
     AdminResourceError,
     KubernetesResourceRef,
@@ -15,7 +16,6 @@ from kubernetes_ops.services.admin_resources import (
     rancher_resource_path,
     sanitize_kubernetes_resource,
 )
-from kubernetes_ops.services.admin_node_drain import execute_node_drain
 from kubernetes_ops.services.admin_sessions import refresh_admin_session_state
 from kubernetes_ops.services.admin_write_approval import assert_admin_session_approved, assert_production_write_approved
 from kubernetes_ops.services.describe import sanitize_metadata

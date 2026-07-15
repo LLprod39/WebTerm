@@ -5,7 +5,6 @@ from typing import Any
 from kubernetes_ops.models import K8sActionRequest
 from kubernetes_ops.services.action_sanitizers import reference_action_text, sanitize_action_value
 
-
 PRODUCTION_ROLLOUT_RESTART_TEMPLATE_SCHEMA = "kubernetes_ops.production_rollout_restart_template.v1"
 PRODUCTION_RESTART_CHECK_IDS = ["rollout_status_observed", "pod_readiness_observed", "recent_warning_events_checked"]
 

@@ -492,7 +492,7 @@ class SSHTerminalAiControlsMixin:
         await self._send_ai_event(
             terminal_events.ai_response(
                 assistant_text="🧹 Память текущего чата очищена.",
-                execution_mode=str(getattr(self, "_ai_execution_mode", "step")),
+                execution_mode=str(getattr(self, "_ai_execution_mode", "agent")),
             )
         )
 

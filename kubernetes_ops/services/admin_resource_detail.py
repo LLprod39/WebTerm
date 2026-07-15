@@ -6,6 +6,7 @@ from typing import Any
 from kubernetes_ops.models import K8sAdminAction, K8sCluster, K8sProvider
 from kubernetes_ops.services.admin_ownership import build_admin_resource_ownership
 from kubernetes_ops.services.admin_resource_events import fetch_resource_events_snapshot
+from kubernetes_ops.services.admin_resource_summary import build_resource_row_summary
 from kubernetes_ops.services.admin_resources import (
     AdminResourceError,
     KubernetesResourceRef,
@@ -19,7 +20,6 @@ from kubernetes_ops.services.admin_resources import (
     secret_values_payload,
     secret_values_visible_for_request,
 )
-from kubernetes_ops.services.admin_resource_summary import build_resource_row_summary
 from kubernetes_ops.services.describe import sanitize_metadata
 from kubernetes_ops.services.logs import _redact_log_line
 from kubernetes_ops.services.provider_clients import ProviderJsonClient, ProviderTransport

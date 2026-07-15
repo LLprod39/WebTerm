@@ -76,6 +76,7 @@ export interface MonitoringStatusItem {
   host: string;
   server_type: string;
   status: FleetHealthStatus;
+  /** Timestamp of the row that produced `status` (may be metrics after override). */
   checked_at: string | null;
   age_seconds: number | null;
   is_stale: boolean;
@@ -86,7 +87,12 @@ export interface MonitoringStatusItem {
   load_1m?: number | null;
   metrics_checked_at?: string | null;
   metrics_age_seconds?: number | null;
+  /** Whether the status-defining row is a lite TCP probe. */
   is_lite: boolean;
+  /** Raw latest probe timestamp (when different from status row). */
+  probe_checked_at?: string | null;
+  probe_is_lite?: boolean;
+  status_from_metrics?: boolean;
 }
 
 export interface MonitoringStatusResponse {
@@ -103,6 +109,7 @@ export interface MonitoringStatusResponse {
   };
   meta: {
     stale_after_seconds: number;
+    full_fail_metrics_trust_seconds?: number;
     latest_checked_at: string | null;
     has_stale: boolean;
   };

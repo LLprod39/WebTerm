@@ -11,10 +11,21 @@ from typing import Any
 from django.conf import settings
 from django.core.exceptions import ValidationError
 
-from kubernetes_ops.models import K8sAdminAction, K8sAdminRecording, K8sAdminSession, K8sAuditEvent, K8sCluster, K8sProvider
+from kubernetes_ops.models import (
+    K8sAdminAction,
+    K8sAdminRecording,
+    K8sAdminSession,
+    K8sAuditEvent,
+    K8sCluster,
+    K8sProvider,
+)
 from kubernetes_ops.permissions import kubernetes_permission_policy
 from kubernetes_ops.services.admin_delete import DEFAULT_PROTECTED_NAMESPACES
-from kubernetes_ops.services.admin_recording import create_interactive_recording, interactive_recording_policy, recording_public_payload
+from kubernetes_ops.services.admin_recording import (
+    create_interactive_recording,
+    interactive_recording_policy,
+    recording_public_payload,
+)
 from kubernetes_ops.services.admin_resources import (
     AdminResourceError,
     KubernetesResourceRef,
@@ -26,7 +37,6 @@ from kubernetes_ops.services.admin_sessions import refresh_admin_session_state
 from kubernetes_ops.services.admin_write_approval import assert_admin_session_approved
 from kubernetes_ops.services.describe import sanitize_metadata
 from kubernetes_ops.services.provider_clients import provider_path
-
 
 DEFAULT_ALLOWED_EXEC_COMMANDS = {
     "/bin/bash",

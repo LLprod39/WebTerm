@@ -42,6 +42,11 @@ CHANNEL_LAYERS = {
 # Isolate uploaded files from dev workspace
 MEDIA_ROOT = TEST_ARTIFACT_ROOT / "media"
 
+# Plugin package fixtures in tests are staged from this fake host.
+# Deploy-check tests that assert the unset-allowlist errors override this
+# explicitly with override_settings(...=[]).
+PLUGIN_MARKETPLACE_REMOTE_PACKAGE_ALLOWED_HOSTS = ["packages.example"]
+
 # Keep tests self-contained even when .env points development at PostgreSQL.
 DATABASES = {
     "default": {

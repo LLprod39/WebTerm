@@ -5,7 +5,6 @@ from typing import Any
 
 from studio.services.pipeline_template_text import _contains_term, _normalise_query, _text
 
-
 _EMAIL_RE = re.compile(r"(?<![A-Za-z0-9._%+-])([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})(?![A-Za-z0-9._%+-])")
 _URL_RE = re.compile(r"https?://[^\s,;\"')\]}]+", re.IGNORECASE)
 _PACKAGE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9+._:@~/-]{0,127}$")

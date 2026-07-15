@@ -32,7 +32,6 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from loguru import logger
 from pydantic import ValidationError
 
 from servers.agent_budgets import (

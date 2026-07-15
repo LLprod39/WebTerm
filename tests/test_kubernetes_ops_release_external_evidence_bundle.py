@@ -17,7 +17,9 @@ from kubernetes_ops.services.release_external_evidence_bundle import (
     write_kubernetes_external_evidence_bundle,
 )
 from kubernetes_ops.services.release_interactive_live_smoke import INTERACTIVE_LIVE_SMOKE_SCHEMA_VERSION
-from kubernetes_ops.services.release_interactive_production_controls import INTERACTIVE_PRODUCTION_CONTROLS_SCHEMA_VERSION
+from kubernetes_ops.services.release_interactive_production_controls import (
+    INTERACTIVE_PRODUCTION_CONTROLS_SCHEMA_VERSION,
+)
 from kubernetes_ops.services.release_interactive_transport_evidence import INTERACTIVE_TRANSPORT_EVIDENCE_SCHEMA_VERSION
 from kubernetes_ops.services.release_production_action_evidence import PRODUCTION_ACTION_EVIDENCE_SCHEMA_VERSION
 

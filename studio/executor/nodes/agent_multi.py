@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 class AgentMultiNode(BaseNode):
     node_type = "agent/multi"
 
-    async def execute(self, ctx: "ExecutionContext") -> NodeResult:
+    async def execute(self, ctx: ExecutionContext) -> NodeResult:
         from studio.pipeline_agent_runtime import execute_agent_multi
 
         run = ctx.extra.get("run")

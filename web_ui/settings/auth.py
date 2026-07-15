@@ -62,9 +62,9 @@ def build_auth_settings(*, debug: bool) -> dict[str, object]:
         or "X-Domain-Auth-Secret",
         "DOMAIN_AUTH_LOWERCASE_USERNAMES": env_bool("DOMAIN_AUTH_LOWERCASE_USERNAMES", True),
         "DOMAIN_AUTH_DEFAULT_PROFILE": (
-            os.getenv("DOMAIN_AUTH_DEFAULT_PROFILE", "server_only") or "server_only"
+            os.getenv("DOMAIN_AUTH_DEFAULT_PROFILE", "pilot_user") or "pilot_user"
         ).strip().lower()
-        or "server_only",
+        or "pilot_user",
         "LDAP_ENABLED": env_bool("LDAP_ENABLED", False),
         "LDAP_SERVER": _ldap_server_uri(),
         "LDAP_BIND_DN": (os.getenv("LDAP_BIND_DN", "") or "").strip(),

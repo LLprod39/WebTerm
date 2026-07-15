@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 class AgentSSHCommandNode(BaseNode):
     node_type = "agent/ssh_cmd"
 
-    async def execute(self, ctx: "ExecutionContext") -> NodeResult:
+    async def execute(self, ctx: ExecutionContext) -> NodeResult:
         from studio.pipeline_agent_runtime import execute_agent_ssh_cmd
 
         run = ctx.extra.get("run")

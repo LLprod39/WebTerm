@@ -5,7 +5,10 @@ from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError
 
-from kubernetes_ops.services.release_preflight import collect_kubernetes_release_preflight, write_kubernetes_release_preflight
+from kubernetes_ops.services.release_preflight import (
+    collect_kubernetes_release_preflight,
+    write_kubernetes_release_preflight,
+)
 
 
 class Command(BaseCommand):

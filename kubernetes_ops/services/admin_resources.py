@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import urllib.parse
 from dataclasses import dataclass
 from typing import Any
@@ -7,21 +8,39 @@ from django.core.exceptions import ValidationError
 from django.db.models import Q
 
 from kubernetes_ops.models import K8sAdminAction, K8sAdminSession, K8sCluster, K8sProvider
+from kubernetes_ops.permissions import kubernetes_permission_policy
 from kubernetes_ops.services.admin_api_discovery import api_resource_catalog_payload
 from kubernetes_ops.services.admin_crd_discovery import crd_discovery_payload
 from kubernetes_ops.services.admin_manifest_contract import build_resource_manifest_contract
-from kubernetes_ops.permissions import kubernetes_permission_policy
-from kubernetes_ops.services.admin_ownership import attach_item_ownership, build_admin_resource_ownership, summarize_ownership
+from kubernetes_ops.services.admin_ownership import (
+    attach_item_ownership,
+    build_admin_resource_ownership,
+    summarize_ownership,
+)
 from kubernetes_ops.services.admin_resource_catalog import build_resource_catalog, resource_catalog_action_summary
-from kubernetes_ops.services.admin_resource_registry import COMMON_RESOURCES, common_resource_payload, display_kind, pluralize_kind
-from kubernetes_ops.services.admin_resource_query import append_query, filter_resource_items_for_search, list_query_options, response_continue_token
-from kubernetes_ops.services.admin_sessions import refresh_admin_session_state
-from kubernetes_ops.services.admin_resource_sanitizer import sanitize_kubernetes_resource, resource_was_redacted
+from kubernetes_ops.services.admin_resource_query import (
+    append_query,
+    filter_resource_items_for_search,
+    list_query_options,
+    response_continue_token,
+)
+from kubernetes_ops.services.admin_resource_registry import (
+    COMMON_RESOURCES,
+    common_resource_payload,
+    display_kind,
+    pluralize_kind,
+)
+from kubernetes_ops.services.admin_resource_sanitizer import resource_was_redacted, sanitize_kubernetes_resource
 from kubernetes_ops.services.admin_resource_summary import attach_resource_summaries, build_resource_row_summary
-from kubernetes_ops.services.admin_secret_values import SecretValueAccessError, bool_value, secret_values_payload, secret_values_visible_for_request as _secret_values_visible_for_request
+from kubernetes_ops.services.admin_secret_values import SecretValueAccessError, bool_value, secret_values_payload
+from kubernetes_ops.services.admin_secret_values import (
+    secret_values_visible_for_request as _secret_values_visible_for_request,
+)
+from kubernetes_ops.services.admin_sessions import refresh_admin_session_state
 from kubernetes_ops.services.describe import sanitize_metadata
 from kubernetes_ops.services.normalizers import payload_items
 from kubernetes_ops.services.provider_clients import ProviderJsonClient, ProviderTransport, provider_path
+
 
 class AdminResourceError(ValueError):
     def __init__(self, message: str, *, code: str, status: int = 400, payload: dict[str, Any] | None = None):

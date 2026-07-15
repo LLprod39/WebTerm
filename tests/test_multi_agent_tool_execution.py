@@ -89,8 +89,8 @@ async def test_execute_multi_agent_tool_builtin_path_runs_permission_sandbox_and
 
     monkeypatch.setattr(
         tool_execution,
-        "AGENT_TOOLS",
-        {"ssh_execute": {"fn": fake_ssh_execute}},
+        "get_all_agent_tools",
+        lambda: {"ssh_execute": {"fn": fake_ssh_execute}},
     )
 
     result = await execute_multi_agent_tool(
@@ -119,8 +119,8 @@ async def test_execute_multi_agent_tool_disabled_builtin_keeps_legacy_message(mo
 
     monkeypatch.setattr(
         tool_execution,
-        "AGENT_TOOLS",
-        {"ssh_execute": {"fn": fake_ssh_execute}},
+        "get_all_agent_tools",
+        lambda: {"ssh_execute": {"fn": fake_ssh_execute}},
     )
 
     result = await execute_multi_agent_tool(

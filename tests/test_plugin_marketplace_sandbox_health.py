@@ -8,7 +8,7 @@ from django.test import override_settings
 from app.plugins.agent_tools import active_agent_tools
 from app.plugins.catalog import DEMO_PLUGIN_MANIFEST
 from core_ui.models import UserActivityLog
-from plugin_marketplace.models import PluginInstallEvent, PluginInstallation, PluginPackage
+from plugin_marketplace.models import PluginInstallation, PluginInstallEvent, PluginPackage
 from plugin_marketplace.services.agent_tool_service import agent_tool_execution_provider
 from plugin_marketplace.services.install_service import set_installation_status
 from plugin_marketplace.services.package_service import install_local_package

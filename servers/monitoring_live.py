@@ -320,32 +320,31 @@ class LiveMetricsManager:
         command = REMOTE_LOOP_TEMPLATE.format(interval=interval)
         prev_sample: dict | None = None
 
-        async with asyncssh.connect(**kwargs) as conn:
-            async with conn.create_process(command) as process:
-                await self._broadcast_state(entry, "streaming")
-                while not self._should_stop(entry, started_at):
-                    try:
-                        line = await asyncio.wait_for(process.stdout.readline(), timeout=interval * 5)
-                    except asyncio.TimeoutError:
-                        continue
-                    if not line:
-                        raise ConnectionError("live metrics stream ended")
-                    sample = parse_live_line(line)
-                    if sample is None:
-                        continue
-                    cpu_percent = compute_cpu_percent(prev_sample, sample) if prev_sample else None
-                    prev_sample = sample
-                    await self._broadcast_to_servers(
-                        self._active_server_ids(entry),
-                        {
-                            "type": "live.metrics",
-                            "cpu_percent": cpu_percent,
-                            "memory_percent": sample["memory_percent"],
-                            "disk_percent": sample["disk_percent"],
-                            "load_1m": sample["load_1m"],
-                            "ts": time.time(),
-                        },
-                    )
+        async with asyncssh.connect(**kwargs) as conn, conn.create_process(command) as process:
+            await self._broadcast_state(entry, "streaming")
+            while not self._should_stop(entry, started_at):
+                try:
+                    line = await asyncio.wait_for(process.stdout.readline(), timeout=interval * 5)
+                except asyncio.TimeoutError:
+                    continue
+                if not line:
+                    raise ConnectionError("live metrics stream ended")
+                sample = parse_live_line(line)
+                if sample is None:
+                    continue
+                cpu_percent = compute_cpu_percent(prev_sample, sample) if prev_sample else None
+                prev_sample = sample
+                await self._broadcast_to_servers(
+                    self._active_server_ids(entry),
+                    {
+                        "type": "live.metrics",
+                        "cpu_percent": cpu_percent,
+                        "memory_percent": sample["memory_percent"],
+                        "disk_percent": sample["disk_percent"],
+                        "load_1m": sample["load_1m"],
+                        "ts": time.time(),
+                    },
+                )
 
 
 live_metrics_manager = LiveMetricsManager()

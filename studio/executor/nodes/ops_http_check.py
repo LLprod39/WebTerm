@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from studio.executor.context import ExecutionContext
 
 
-async def execute_http_check(ctx: "ExecutionContext", config: dict[str, Any], *, async_client_factory: Any) -> NodeResult:
+async def execute_http_check(ctx: ExecutionContext, config: dict[str, Any], *, async_client_factory: Any) -> NodeResult:
     url = ctx.resolve_template(str(config.get("url") or ""))
     if not url:
         return NodeResult(error="url is required")

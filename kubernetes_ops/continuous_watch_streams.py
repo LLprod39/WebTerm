@@ -8,9 +8,15 @@ from channels.db import database_sync_to_async
 
 from kubernetes_ops.services.admin_resources import AdminResourceError
 from kubernetes_ops.services.admin_streams import bounded_stream_float, bounded_stream_int
-from kubernetes_ops.services.admin_watch import build_admin_resource_watch_continuous_payload, prepare_admin_resource_watch_continuous_stream
+from kubernetes_ops.services.admin_watch import (
+    build_admin_resource_watch_continuous_payload,
+    prepare_admin_resource_watch_continuous_stream,
+)
 from kubernetes_ops.services.provider_clients import KubernetesProviderError
-from kubernetes_ops.services.provider_watch_streams import MAX_PROVIDER_WATCH_STREAM_BYTES, open_provider_watch_event_stream
+from kubernetes_ops.services.provider_watch_streams import (
+    MAX_PROVIDER_WATCH_STREAM_BYTES,
+    open_provider_watch_event_stream,
+)
 
 
 async def run_continuous_watch_follow(consumer, params: dict[str, str], stream: dict) -> None:

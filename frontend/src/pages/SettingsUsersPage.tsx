@@ -31,7 +31,7 @@ const INITIAL_CREATE_FORM: UserCreateForm = {
   password: "",
   is_staff: false,
   is_active: true,
-  access_profile: "server_only",
+  access_profile: "pilot_user",
   groups: [],
 };
 

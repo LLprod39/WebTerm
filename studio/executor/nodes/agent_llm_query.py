@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 class AgentLLMQueryNode(BaseNode):
     node_type = "agent/llm_query"
 
-    async def execute(self, ctx: "ExecutionContext") -> NodeResult:
+    async def execute(self, ctx: ExecutionContext) -> NodeResult:
         from studio.pipeline_agent_llm import execute_agent_llm_query
 
         run = ctx.extra.get("run")

@@ -7,8 +7,8 @@ from django.db.models import Q
 from django.utils import timezone
 
 from app.agent_kernel.memory.compaction import compact_text, unique_preserving_order
-from app.agent_kernel.memory.types import AUTOMATION_CANDIDATE_PREFIX, PATTERN_CANDIDATE_PREFIX, SKILL_DRAFT_PREFIX
 from app.agent_kernel.memory.trust import prompt_provenance_label
+from app.agent_kernel.memory.types import AUTOMATION_CANDIDATE_PREFIX, PATTERN_CANDIDATE_PREFIX, SKILL_DRAFT_PREFIX
 
 
 def search_runbooks(query: str, *, server_id: int | None = None, group_id: int | None = None) -> list[dict]:

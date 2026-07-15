@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 PREREQUISITE_COMMAND_IDS = (
     "live_provider_smoke",
     "readonly_rbac_live",

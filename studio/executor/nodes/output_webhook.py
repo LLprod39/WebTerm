@@ -18,7 +18,11 @@ from studio.executor.nodes.base import BaseNode, NodeResult
 from studio.executor.registry import registry
 from studio.pipeline_redaction import (
     redact_pipeline_text as _redact_pipeline_text,
+)
+from studio.pipeline_redaction import (
     redacted_execution_context as _redacted_context,
+)
+from studio.pipeline_redaction import (
     redacted_node_outputs_payload as _redacted_node_outputs_payload,
 )
 
@@ -28,7 +32,7 @@ if TYPE_CHECKING:
 _SIMPLE_TEMPLATE_PATTERN = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
 
-def _render_template_value(value, ctx: "ExecutionContext", safe_context: dict[str, object] | None = None):
+def _render_template_value(value, ctx: ExecutionContext, safe_context: dict[str, object] | None = None):
     if isinstance(value, str):
         return _SIMPLE_TEMPLATE_PATTERN.sub(
             lambda match: str((safe_context or {}).get(match.group(1), ctx.get_variable(match.group(1), ""))),
@@ -60,7 +64,7 @@ class OutputWebhookNode(BaseNode):
 
     node_type = "output/webhook"
 
-    async def execute(self, ctx: "ExecutionContext") -> NodeResult:
+    async def execute(self, ctx: ExecutionContext) -> NodeResult:
         url = str(_render_template_value(self.node_data.get("url", ""), ctx) or "").strip()
         if not url:
             return NodeResult(error="No URL configured")

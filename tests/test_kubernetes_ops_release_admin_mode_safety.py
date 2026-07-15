@@ -8,7 +8,6 @@ from kubernetes_ops.models import K8sActionRequest, K8sAdminAction, K8sAdminSess
 from kubernetes_ops.services.release_contract import RELEASE_EVIDENCE_SCHEMA_VERSION
 from kubernetes_ops.services.release_evidence import build_kubernetes_release_evidence
 
-
 READY_PREFLIGHT_RESULT_IDS = (
     "django_check",
     "architecture_guard",

@@ -311,7 +311,9 @@ export default function AgentConfigPage() {
         }
         confirmLabel={localize(lang, "Удалить", "Delete")}
         cancelLabel={localize(lang, "Отмена", "Cancel")}
-        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+        onConfirm={() => {
+          if (deleteTarget) deleteMutation.mutate(deleteTarget.id);
+        }}
       />
     </div>
     </div>

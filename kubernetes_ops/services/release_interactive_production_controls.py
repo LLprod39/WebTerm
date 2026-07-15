@@ -16,7 +16,6 @@ from kubernetes_ops.services.admin_interactive_transport_readiness import (
 )
 from kubernetes_ops.services.release_scope import PRODUCTION_ENVIRONMENTS
 
-
 INTERACTIVE_PRODUCTION_CONTROLS_SCHEMA_VERSION = "kubernetes_ops.interactive_production_controls.v1"
 INTERACTIVE_PRODUCTION_CONTROLS_ARTIFACT = "artifacts/kubernetes_ops_interactive_production_controls.json"
 

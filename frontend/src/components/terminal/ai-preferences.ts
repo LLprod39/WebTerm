@@ -19,8 +19,9 @@ export const DEFAULT_AI_SETTINGS: AiAssistantSettings = {
 };
 
 export const DEFAULT_AI_PREFERENCES: AiPreferences = {
+  // Pilot default: Agent chat + Nova (ReAct) execution.
   chatMode: "agent",
-  executionMode: "auto",
+  executionMode: "agent",
   settings: DEFAULT_AI_SETTINGS,
 };
 
@@ -118,13 +119,13 @@ export function sanitizeAiSettings(value: unknown): AiAssistantSettings {
 export function sanitizeAiPreferences(value: unknown): AiPreferences {
   const raw = value && typeof value === "object" ? (value as Partial<AiPreferences>) : {};
   const chatMode = raw.chatMode === "ask" || raw.chatMode === "agent" ? raw.chatMode : DEFAULT_AI_PREFERENCES.chatMode;
-  const executionMode =
-    raw.executionMode === "auto" ||
-    raw.executionMode === "fast" ||
-    raw.executionMode === "step" ||
-    raw.executionMode === "agent"
-      ? raw.executionMode
-      : DEFAULT_AI_PREFERENCES.executionMode;
+  // UI exposes Fast + Nova only; map legacy auto/step to Nova (agent) for pilot defaults.
+  let executionMode: AiPreferences["executionMode"] = DEFAULT_AI_PREFERENCES.executionMode;
+  if (raw.executionMode === "fast" || raw.executionMode === "agent") {
+    executionMode = raw.executionMode;
+  } else if (raw.executionMode === "auto" || raw.executionMode === "step") {
+    executionMode = "agent";
+  }
 
   return {
     chatMode,

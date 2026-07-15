@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import type { Ref } from "react";
 import {
   AlertTriangle,
   Copy,
@@ -263,7 +263,7 @@ export function TextEditorWorkspace({
 }: {
   activeTab: EditorTab | null;
   softWrap: boolean;
-  textareaRef: RefObject<HTMLTextAreaElement | null>;
+  textareaRef: Ref<HTMLTextAreaElement>;
   lang: string;
   onContentChange: (tabId: string, content: string) => void;
   onTryAnotherFile: (tab: EditorTab) => void;

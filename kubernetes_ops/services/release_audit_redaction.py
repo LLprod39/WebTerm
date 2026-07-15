@@ -6,7 +6,6 @@ from app.egress_redaction import redact_egress_text
 from kubernetes_ops.models import K8sAuditEvent, K8sCluster
 from kubernetes_ops.serializers import serialize_audit_event, serialize_cluster_event
 
-
 RAW_MARKERS = (
     "audit-redaction-token",
     "audit-redaction-password",

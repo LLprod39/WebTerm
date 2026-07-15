@@ -2,8 +2,8 @@
 Encryption utilities for server credential storage.
 Moved from passwords/encryption.py — passwords/ module is being retired.
 """
-import os
 import base64
+import os
 
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.backends import default_backend

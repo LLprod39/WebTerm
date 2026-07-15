@@ -15,6 +15,7 @@ import {
   fetchKubernetesClusters,
   fetchKubernetesReadiness,
 } from "@/api";
+import type { KubernetesAdminResourceDetailResponse, KubernetesAdminResourceDiscoveryResponse } from "@/api/kubernetes-admin";
 import { I18nProvider } from "@/lib/i18n";
 import KubernetesAdminPage from "@/pages/KubernetesAdminPage";
 
@@ -355,7 +356,7 @@ describe("KubernetesAdminPage", () => {
   });
 });
 
-function discoveryFixture() {
+function discoveryFixture(): KubernetesAdminResourceDiscoveryResponse {
   return {
     success: true,
     mode: "admin_read_only",
@@ -435,11 +436,12 @@ function resourceListFixture(query: { api_version?: string; kind?: string; resou
   };
 }
 
-function detailFixture(query: { api_version?: string; kind?: string; resource?: string; namespace?: string; name?: string }) {
+function detailFixture(query: { api_version?: string; kind?: string; resource?: string; namespace?: string; name?: string }): KubernetesAdminResourceDetailResponse {
   const resource = query.kind === "Widget" ? widgetItem : query.kind === "Pod" ? podItem : deploymentItem;
   return {
     ...yamlFixture(query),
     operation: "resource_detail",
+    paths: { resource: "/api/v1/resource", events: "/api/v1/events" },
     describe: { identity: { name: query.name, kind: query.kind } },
     resource,
     events: {

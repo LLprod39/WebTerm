@@ -78,12 +78,11 @@ def resolve_tools_config(
     # denylist
     known = list(all_tool_names or [])
     if not known:
-        try:
-            from servers.agent_tools import get_all_agent_tools
+        # App-level provider seam (registered by servers.apps.ServersConfig.ready):
+        # keeps the studio -> servers import boundary intact.
+        from app.agent_tool_catalog import list_agent_tool_names
 
-            known = list(get_all_agent_tools().keys())
-        except Exception:
-            known = list(SAFE_DEFAULT_TOOLS)
+        known = list(list_agent_tool_names()) or list(SAFE_DEFAULT_TOOLS)
     denied = set(tool_names)
     return {name: (name not in denied) for name in known}, None
 

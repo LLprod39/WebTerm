@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ReactFlowProvider, useEdgesState, useNodesState, useReactFlow } from "@xyflow/react";
+import { ReactFlowProvider, useEdgesState, useNodesState, useReactFlow, type Edge, type Node } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -48,8 +48,8 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     queryFn: studioNodeManifests.get,
     staleTime: 5 * 60_000,
   });
-  const [nodes, setNodes, onNodesChangeRaw] = useNodesState([]);
-  const [edges, setEdges, onEdgesChangeRaw] = useEdgesState([]);
+  const [nodes, setNodes, onNodesChangeRaw] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChangeRaw] = useEdgesState<Edge>([]);
   const [selectedNode, setSelectedNode] = useState<PipelineNode | null>(null);
   const [pipelineName, setPipelineName] = useState("");
   const [lastRun, setLastRun] = useState<PipelineRun | null>(null);

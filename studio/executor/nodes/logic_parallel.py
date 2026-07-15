@@ -13,5 +13,5 @@ if TYPE_CHECKING:
 class LogicParallelNode(BaseNode):
     node_type = "logic/parallel"
 
-    async def execute(self, ctx: "ExecutionContext") -> NodeResult:
+    async def execute(self, ctx: ExecutionContext) -> NodeResult:
         return NodeResult(output={"status": "completed", "output": "параллельное разветвление"})

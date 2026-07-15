@@ -21,7 +21,6 @@ from kubernetes_ops.models import (
 )
 from servers.models import BackgroundWorkerState
 
-
 DEMO_CLUSTER_NAME = "webterm-k8s-demo"
 DEMO_RANCHER_PROVIDER = "demo-rancher"
 DEMO_DEVTRON_PROVIDER = "demo-devtron"

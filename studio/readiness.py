@@ -15,8 +15,7 @@ from studio.pipeline_validation import validate_pipeline_definition
 from studio.readiness_requirements import integration_requirements as build_integration_requirements
 
 _MONITORING_CONTEXT_FIELDS = set(
-    "alert_id alert_type alert_severity alert_title alert_message alert_metadata server_id server_name "
-    "server_host server_username container_name container_names container_names_csv trigger_source".split()
+    ["alert_id", "alert_type", "alert_severity", "alert_title", "alert_message", "alert_metadata", "server_id", "server_name", "server_host", "server_username", "container_name", "container_names", "container_names_csv", "trigger_source"]
 )
 
 

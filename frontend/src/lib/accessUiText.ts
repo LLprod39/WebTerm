@@ -39,6 +39,7 @@ const FEATURE_LABELS: Record<AccessUiLang, Record<string, string>> = {
 
 const PROFILE_LABELS: Record<AccessUiLang, Record<string, string>> = {
   en: {
+    pilot_user: "Pilot user",
     server_only: "Server only",
     operator_server_only: "Operator: servers",
     operator_studio_runner: "Operator: Studio runner",
@@ -49,6 +50,7 @@ const PROFILE_LABELS: Record<AccessUiLang, Record<string, string>> = {
     reset_defaults: "Reset defaults",
   },
   ru: {
+    pilot_user: "Пилот (пользователь)",
     server_only: "Только серверы",
     operator_server_only: "Оператор: серверы",
     operator_studio_runner: "Оператор: Studio запуск",
@@ -61,6 +63,7 @@ const PROFILE_LABELS: Record<AccessUiLang, Record<string, string>> = {
 };
 
 export const ACCESS_PROFILE_OPTIONS = [
+  "pilot_user",
   "operator_server_only",
   "operator_studio_runner",
   "team_admin_no_secrets",

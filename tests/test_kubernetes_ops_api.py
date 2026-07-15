@@ -8,8 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core_ui.managed_secrets import KUBERNETES_PROVIDER_TOKEN_NAMESPACE, get_kubernetes_provider_token
-from core_ui.models import UserAppPermission
-from core_ui.models import ManagedSecret
+from core_ui.models import ManagedSecret, UserAppPermission
 from kubernetes_ops.background_workers import KUBERNETES_OPS_SYNC_WORKER
 from kubernetes_ops.models import K8sAppRef, K8sAuditEvent, K8sCluster, K8sFleetBundle, K8sProvider, K8sWorkloadRef
 from kubernetes_ops.services.secrets import resolve_provider_token

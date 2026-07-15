@@ -11,11 +11,20 @@ from loguru import logger
 
 from core_ui.decorators import require_feature
 from core_ui.managed_secrets import delete_kubernetes_provider_token, set_kubernetes_provider_token
-from kubernetes_ops.models import K8sAppRef, K8sAuditEvent, K8sCluster, K8sEvent, K8sFleetBundle, K8sNamespace, K8sProvider, K8sWorkloadRef
+from kubernetes_ops.models import (
+    K8sAppRef,
+    K8sAuditEvent,
+    K8sCluster,
+    K8sEvent,
+    K8sFleetBundle,
+    K8sNamespace,
+    K8sProvider,
+    K8sWorkloadRef,
+)
 from kubernetes_ops.serializers import (
     serialize_app,
-    serialize_cluster_event,
     serialize_cluster,
+    serialize_cluster_event,
     serialize_fleet_bundle,
     serialize_kubernetes_event,
     serialize_namespace,

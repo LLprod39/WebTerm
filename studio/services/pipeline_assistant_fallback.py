@@ -3,11 +3,11 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from studio.services.pipeline_assistant_interview import augment_response_with_interview_questions
 from studio.services.pipeline_assistant_keycloak_fallback import (
     build_keycloak_draft_response,
     is_keycloak_request,
 )
-from studio.services.pipeline_assistant_interview import augment_response_with_interview_questions
 from studio.services.pipeline_template_recommendations import (
     build_template_graph_patch,
     build_template_resource_plan,

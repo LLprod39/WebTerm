@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import contextlib
 
-from asgiref.sync import sync_to_async
 import httpx
+from asgiref.sync import sync_to_async
 
 from core_ui.services.notification_config import load_notification_config
 from servers.agent_inputs import format_telegram_report_message, normalize_report_delivery

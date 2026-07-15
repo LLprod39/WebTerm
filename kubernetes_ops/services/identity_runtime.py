@@ -11,7 +11,6 @@ from core_ui.access import PROFILE_STAFF_FLAGS, VALID_ACCESS_PROFILES
 from core_ui.services.settings_status import ldap_status_payload
 from kubernetes_ops.services.release_scope import PRODUCTION_ENVIRONMENTS, is_local_release_indicator
 
-
 SAFE_AUTO_CREATE_PROFILES = {"server_only", "custom", "reset_defaults"}
 
 

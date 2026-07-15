@@ -38,7 +38,11 @@ from kubernetes_ops.services.identity_runtime import (
 )
 from kubernetes_ops.services.operator_docs import build_kubernetes_operator_docs_report, kubernetes_operator_docs_check
 from kubernetes_ops.services.release_artifact import build_kubernetes_release_evidence_artifact_report
-from kubernetes_ops.services.release_scope import PRODUCTION_ENVIRONMENTS, is_local_release_indicator, production_core_reference_checks
+from kubernetes_ops.services.release_scope import (
+    PRODUCTION_ENVIRONMENTS,
+    is_local_release_indicator,
+    production_core_reference_checks,
+)
 from kubernetes_ops.services.security_review import build_kubernetes_security_review, kubernetes_security_review_check
 from kubernetes_ops.services.terminal_safety import (
     build_kubernetes_terminal_safety_report,

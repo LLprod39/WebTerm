@@ -10,7 +10,10 @@ from kubernetes_ops.services.access_model import (
     READ_ONLY_SERVICE_ACCOUNT,
     build_kubernetes_access_model_report,
 )
-from kubernetes_ops.services.identity_runtime import build_kubernetes_identity_runtime_report, kubernetes_identity_runtime_check
+from kubernetes_ops.services.identity_runtime import (
+    build_kubernetes_identity_runtime_report,
+    kubernetes_identity_runtime_check,
+)
 
 
 def test_kubernetes_access_model_report_documents_oidc_rbac_mapping():

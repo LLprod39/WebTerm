@@ -85,7 +85,7 @@ export default function AgentsPage() {
   const workerStates = data?.worker_states || {};
   const runtimeOverview = data?.runtime_overview;
   const activeRunByAgentId = new Map<number, AgentRuntimeRunItem>();
-  for (const item of runtimeOverview?.items.active_runs || []) {
+  for (const item of runtimeOverview?.items?.active_runs || []) {
     if (item.agent_id) {
       activeRunByAgentId.set(item.agent_id, item);
     }

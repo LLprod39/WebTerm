@@ -126,10 +126,11 @@ def test_playbook_run_dry_run(auth_client, user, server, monkeypatch):
         playbook_runner.execute_playbook_run(run_id, master_password=master_password)
 
     monkeypatch.setattr(playbook_runner, "start_playbook_run_async", fake_start)
-    # Also patch the import used in views
-    import servers.views.server_playbooks as views_mod
+    # Patch the reference used by the run view (lives in server_playbook_run_views,
+    # split out from server_playbooks for size limits).
+    import servers.views.server_playbook_run_views as run_views_mod
 
-    monkeypatch.setattr(views_mod, "start_playbook_run_async", fake_start)
+    monkeypatch.setattr(run_views_mod, "start_playbook_run_async", fake_start)
 
     r = auth_client.post(
         f"/servers/api/playbooks/{pb.id}/run/",
@@ -185,8 +186,9 @@ def test_playbook_run_shell_live_progress(auth_client, user, server, monkeypatch
         async def disconnect(self, conn_id):
             return None
 
-    monkeypatch.setattr(playbook_runner, "SSHExecuteTool", FakeExecuteTool)
-    monkeypatch.setattr(playbook_runner, "ssh_manager", FakeSSHManager())
+    # Per-server execution lives in playbook_runner_support (split out for size limits).
+    monkeypatch.setattr("servers.services.playbook_runner_support.SSHExecuteTool", FakeExecuteTool)
+    monkeypatch.setattr("servers.services.playbook_runner_support.ssh_manager", FakeSSHManager())
 
     run = PlaybookRun.objects.create(
         playbook=pb,

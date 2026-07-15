@@ -15,7 +15,6 @@ from studio.services.pipeline_template_recommendations import (
 )
 from studio.templates_data import PIPELINE_TEMPLATES
 
-
 PILOT_TEMPLATE_SLUGS = {
     "pilot-keycloak-access-change",
     "pilot-kubernetes-rollout",
@@ -173,7 +172,7 @@ def test_load_pipeline_templates_creates_pilot_ops_templates():
     call_command("load_pipeline_templates", "--force", stdout=out)
 
     loaded_slugs = set(PipelineTemplate.objects.filter(category="Pilot OPS").values_list("slug", flat=True))
-    assert PILOT_TEMPLATE_SLUGS <= loaded_slugs
+    assert loaded_slugs >= PILOT_TEMPLATE_SLUGS
 
     template = PipelineTemplate.objects.get(slug="pilot-keycloak-access-change")
     assert template.graph_version == CURRENT_PIPELINE_GRAPH_VERSION

@@ -9,16 +9,28 @@ from kubernetes_ops.models import K8sActionRequest, K8sAppRef, K8sCluster, K8sFl
 from kubernetes_ops.services.action_errors import ActionRequestValidationError
 from kubernetes_ops.services.action_gitops import gitops_merge_request_preview
 from kubernetes_ops.services.action_production_templates import rollout_restart_production_template
+from kubernetes_ops.services.action_resources import (
+    resource_apply_preview,
+    resource_delete_preview,
+    resource_patch_preview,
+)
 from kubernetes_ops.services.action_rollback import build_action_rollback_plan
 from kubernetes_ops.services.action_sanitizers import (
     MAX_TEXT,
+)
+from kubernetes_ops.services.action_sanitizers import (
     bounded_action_text as _bounded_text,
+)
+from kubernetes_ops.services.action_sanitizers import (
     reference_action_text as _reference_text,
+)
+from kubernetes_ops.services.action_sanitizers import (
     sanitize_action_value as _sanitize_value,
+)
+from kubernetes_ops.services.action_sanitizers import (
     sanitize_public_links as _sanitize_public_links,
 )
 from kubernetes_ops.services.action_verification import mark_native_verification_plan_recorded
-from kubernetes_ops.services.action_resources import resource_apply_preview, resource_delete_preview, resource_patch_preview
 from kubernetes_ops.services.action_workloads import workload_restart_preview, workload_scale_preview
 
 LIFECYCLE = ["request", "preflight", "diff/preview", "approval", "execute", "verify", "report", "audit"]

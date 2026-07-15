@@ -30,6 +30,14 @@ def _monitoring_stale_seconds() -> int:
     return max(60, int(getattr(settings, "MONITORING_STATUS_STALE_SECONDS", 300) or 300))
 
 
+def _monitoring_full_fail_trust_seconds() -> int:
+    """How long full SSH unreachable may still yield to fresher metrics."""
+    return max(
+        15,
+        int(getattr(settings, "MONITORING_FULL_FAIL_METRICS_TRUST_SECONDS", 90) or 90),
+    )
+
+
 def _latest_health_checks_by_server_id(
     server_ids: list[int], *, with_metrics: bool = False
 ) -> dict[int, ServerHealthCheck]:
@@ -46,53 +54,76 @@ def _latest_health_checks_by_server_id(
     return {hc.server_id: hc for hc in checks}
 
 
+def _is_lite_probe(hc: ServerHealthCheck | None) -> bool:
+    if not hc:
+        return False
+    raw_output = hc.raw_output if isinstance(hc.raw_output, dict) else {}
+    return bool(raw_output.get("lite"))
+
+
 def _resolve_display_status(
     hc: ServerHealthCheck | None,
     metrics_hc: ServerHealthCheck | None,
     *,
     stale_seconds: int,
     now,
-) -> str:
-    """Pick a status that matches what the operator sees in metrics.
+    full_fail_trust_seconds: int | None = None,
+) -> tuple[str, ServerHealthCheck | None]:
+    """Pick status + the health-check row that produced it.
 
     A flaky lite TCP probe can write ``unreachable`` while a slightly older full
     check (or live SSH stream) still has valid CPU/RAM. Prefer the metrics-based
     health when that probe is still fresh so the list does not flash "Недоступен".
+
+    Returns ``(status, status_row)`` where ``status_row`` is the check whose
+    status/timestamps should be shown to the operator (or ``None`` for unknown).
     """
+    if full_fail_trust_seconds is None:
+        full_fail_trust_seconds = _monitoring_full_fail_trust_seconds()
+
     if not hc:
         if metrics_hc and metrics_hc.status:
             metrics_age = (
                 int((now - metrics_hc.checked_at).total_seconds()) if metrics_hc.checked_at else None
             )
             if metrics_age is not None and metrics_age <= stale_seconds:
-                return metrics_hc.status
-        return "unknown"
+                return metrics_hc.status, metrics_hc
+        return "unknown", None
 
     status = hc.status or "unknown"
-    raw_output = hc.raw_output if isinstance(hc.raw_output, dict) else {}
-    is_lite = bool(raw_output.get("lite"))
+    is_lite = _is_lite_probe(hc)
 
     if status != ServerHealthCheck.STATUS_UNREACHABLE:
-        return status
+        return status, hc
 
     # Latest says unreachable. If we still have a fresh non-unreachable metrics
     # snapshot (and the failure was only a lite probe, or metrics are very fresh),
     # keep showing the metrics-derived health.
     if not metrics_hc or not metrics_hc.status or metrics_hc.status == ServerHealthCheck.STATUS_UNREACHABLE:
-        return status
+        return status, hc
     if metrics_hc.id == hc.id:
-        return status
+        return status, hc
 
     metrics_age = int((now - metrics_hc.checked_at).total_seconds()) if metrics_hc.checked_at else None
     if metrics_age is None:
-        return status
+        return status, hc
 
     # Lite probe failures are noisy; trust metrics for the full stale window.
     # Full SSH failures only yield if metrics are very recent (likely still up).
-    trust_window = stale_seconds if is_lite else min(90, stale_seconds)
+    trust_window = stale_seconds if is_lite else min(int(full_fail_trust_seconds), stale_seconds)
     if metrics_age <= trust_window:
-        return metrics_hc.status
-    return status
+        return metrics_hc.status, metrics_hc
+    return status, hc
+
+
+def _metrics_source(
+    hc: ServerHealthCheck | None,
+    metrics_hc: ServerHealthCheck | None,
+) -> ServerHealthCheck | None:
+    """Prefer latest row when it carries metrics; else last metrics snapshot."""
+    if hc and hc.cpu_percent is not None:
+        return hc
+    return metrics_hc
 
 
 def _serialize_monitoring_status_item(
@@ -102,37 +133,52 @@ def _serialize_monitoring_status_item(
     now,
 ) -> dict:
     stale_seconds = _monitoring_stale_seconds()
-    checked_at = hc.checked_at if hc and hc.checked_at else None
-    age_seconds = int((now - checked_at).total_seconds()) if checked_at else None
-    raw_output = hc.raw_output if hc and isinstance(hc.raw_output, dict) else {}
+    full_fail_trust = _monitoring_full_fail_trust_seconds()
+    status, status_row = _resolve_display_status(
+        hc,
+        metrics_hc,
+        stale_seconds=stale_seconds,
+        now=now,
+        full_fail_trust_seconds=full_fail_trust,
+    )
     # Latest check may be a lite TCP probe without metrics; fall back to the
     # newest check that actually carries CPU/RAM/disk numbers.
-    source = hc if hc and hc.cpu_percent is not None else metrics_hc
+    source = _metrics_source(hc, metrics_hc)
+    status_checked_at = status_row.checked_at if status_row and status_row.checked_at else None
     metrics_checked_at = source.checked_at if source and source.checked_at else None
-    metrics_age_seconds = int((now - metrics_checked_at).total_seconds()) if metrics_checked_at else None
-    status = _resolve_display_status(hc, metrics_hc, stale_seconds=stale_seconds, now=now)
-    # Age/staleness should follow the data we actually show (metrics when present).
-    display_checked_at = metrics_checked_at or checked_at
+    # Age/staleness: prefer status-defining timestamp, else metrics we display.
+    display_checked_at = status_checked_at or metrics_checked_at
     display_age = (
-        int((now - display_checked_at).total_seconds()) if display_checked_at else age_seconds
+        int((now - display_checked_at).total_seconds()) if display_checked_at else None
     )
+    metrics_age_seconds = (
+        int((now - metrics_checked_at).total_seconds()) if metrics_checked_at else None
+    )
+    probe_checked_at = hc.checked_at if hc and hc.checked_at else None
     return {
         "server_id": server.id,
         "server_name": server.name,
         "host": server.host,
         "server_type": server.server_type or "ssh",
         "status": status,
-        "checked_at": checked_at.isoformat() if checked_at else None,
+        # Timestamps/RTT/lite flag follow the row that produced *status*.
+        "checked_at": status_checked_at.isoformat() if status_checked_at else None,
         "age_seconds": display_age,
         "is_stale": display_age is None or display_age > stale_seconds,
-        "response_time_ms": hc.response_time_ms if hc else None,
+        "response_time_ms": status_row.response_time_ms if status_row else None,
         "cpu_percent": source.cpu_percent if source else None,
         "memory_percent": source.memory_percent if source else None,
         "disk_percent": source.disk_percent if source else None,
         "load_1m": source.load_1m if source else None,
         "metrics_checked_at": metrics_checked_at.isoformat() if metrics_checked_at else None,
         "metrics_age_seconds": metrics_age_seconds,
-        "is_lite": bool(raw_output.get("lite")),
+        "is_lite": _is_lite_probe(status_row),
+        # Raw latest probe (may differ when status was overridden by metrics).
+        "probe_checked_at": probe_checked_at.isoformat() if probe_checked_at else None,
+        "probe_is_lite": _is_lite_probe(hc),
+        "status_from_metrics": bool(
+            status_row is not None and metrics_hc is not None and status_row.id == metrics_hc.id and hc is not None and status_row.id != hc.id
+        ),
     }
 
 
@@ -212,9 +258,52 @@ def _build_monitoring_status_payload(user) -> dict:
         },
         "meta": {
             "stale_after_seconds": _monitoring_stale_seconds(),
+            "full_fail_metrics_trust_seconds": _monitoring_full_fail_trust_seconds(),
             "latest_checked_at": latest_checked_at,
             "has_stale": stale_count > 0,
         },
+    }
+
+
+def _serialize_dashboard_server_item(
+    server: Server,
+    hc: ServerHealthCheck | None,
+    metrics_hc: ServerHealthCheck | None,
+    now,
+) -> dict:
+    """Dashboard row: same status resolution as fleet status API + richer metrics."""
+    stale_seconds = _monitoring_stale_seconds()
+    status, status_row = _resolve_display_status(
+        hc,
+        metrics_hc,
+        stale_seconds=stale_seconds,
+        now=now,
+    )
+    source = _metrics_source(hc, metrics_hc)
+    net_source = source or status_row or hc
+    net_rx_bytes, net_tx_bytes = _parse_net_traffic(net_source.raw_output if net_source else None)
+    checked_at = status_row.checked_at if status_row and status_row.checked_at else None
+    display_age = int((now - checked_at).total_seconds()) if checked_at else None
+    return {
+        "server_id": server.id,
+        "server_name": server.name,
+        "host": server.host,
+        "status": status,
+        "cpu_percent": source.cpu_percent if source else None,
+        "memory_percent": source.memory_percent if source else None,
+        "disk_percent": source.disk_percent if source else None,
+        "memory_used_mb": source.memory_used_mb if source else None,
+        "memory_total_mb": source.memory_total_mb if source else None,
+        "disk_used_gb": source.disk_used_gb if source else None,
+        "disk_total_gb": source.disk_total_gb if source else None,
+        "net_rx_bytes": net_rx_bytes,
+        "net_tx_bytes": net_tx_bytes,
+        "load_1m": source.load_1m if source else None,
+        "uptime_seconds": source.uptime_seconds if source else None,
+        "response_time_ms": status_row.response_time_ms if status_row else None,
+        "checked_at": checked_at.isoformat() if checked_at else None,
+        "is_stale": display_age is None or display_age > stale_seconds,
+        "is_lite": _is_lite_probe(status_row),
     }
 
 
@@ -224,66 +313,21 @@ def _build_monitoring_status_payload(user) -> dict:
 def monitoring_dashboard(request):
     """Aggregated monitoring data for user dashboard."""
     user = request.user
-    servers = _accessible_servers_queryset(user)
-    server_ids = list(servers.values_list("id", flat=True))
+    now = timezone.now()
+    servers = list(_accessible_servers_queryset(user))
+    server_ids = [server.id for server in servers]
+    latest_by_id = _latest_health_checks_by_server_id(server_ids)
+    metrics_by_id = _latest_health_checks_by_server_id(server_ids, with_metrics=True)
 
-    latest_checks_raw = (
-        ServerHealthCheck.objects.filter(server_id__in=server_ids).values("server_id").annotate(last_id=Max("id"))
-    )
-    latest_ids = [row["last_id"] for row in latest_checks_raw]
-    latest_checks = list(
-        ServerHealthCheck.objects.filter(id__in=latest_ids).select_related("server").order_by("-checked_at")
-    )
-
-    server_health = []
-    for hc in latest_checks:
-        net_rx_bytes, net_tx_bytes = _parse_net_traffic(hc.raw_output)
-        server_health.append(
-            {
-                "server_id": hc.server_id,
-                "server_name": hc.server.name,
-                "host": hc.server.host,
-                "status": hc.status,
-                "cpu_percent": hc.cpu_percent,
-                "memory_percent": hc.memory_percent,
-                "disk_percent": hc.disk_percent,
-                "memory_used_mb": hc.memory_used_mb,
-                "memory_total_mb": hc.memory_total_mb,
-                "disk_used_gb": hc.disk_used_gb,
-                "disk_total_gb": hc.disk_total_gb,
-                "net_rx_bytes": net_rx_bytes,
-                "net_tx_bytes": net_tx_bytes,
-                "load_1m": hc.load_1m,
-                "uptime_seconds": hc.uptime_seconds,
-                "response_time_ms": hc.response_time_ms,
-                "checked_at": hc.checked_at.isoformat() if hc.checked_at else None,
-            }
+    server_health = [
+        _serialize_dashboard_server_item(
+            server,
+            latest_by_id.get(server.id),
+            metrics_by_id.get(server.id),
+            now,
         )
-
-    checked_ids = {hc.server_id for hc in latest_checks}
-    for srv in servers:
-        if srv.id not in checked_ids:
-            server_health.append(
-                {
-                    "server_id": srv.id,
-                    "server_name": srv.name,
-                    "host": srv.host,
-                    "status": "unknown",
-                    "cpu_percent": None,
-                    "memory_percent": None,
-                    "disk_percent": None,
-                    "memory_used_mb": None,
-                    "memory_total_mb": None,
-                    "disk_used_gb": None,
-                    "disk_total_gb": None,
-                    "net_rx_bytes": None,
-                    "net_tx_bytes": None,
-                    "load_1m": None,
-                    "uptime_seconds": None,
-                    "response_time_ms": None,
-                    "checked_at": None,
-                }
-            )
+        for server in servers
+    ]
 
     active_alerts = list(
         ServerAlert.objects.filter(server_id__in=server_ids, is_resolved=False)
@@ -304,15 +348,22 @@ def monitoring_dashboard(request):
         for alert in active_alerts
     ]
 
-    agg = ServerHealthCheck.objects.filter(id__in=latest_ids).aggregate(
-        avg_cpu=Avg("cpu_percent"),
-        avg_mem=Avg("memory_percent"),
-        avg_disk=Avg("disk_percent"),
+    # Averages from last metrics snapshots (not lite TCP-only rows).
+    metrics_ids = [hc.id for hc in metrics_by_id.values() if getattr(hc, "id", None)]
+    agg = (
+        ServerHealthCheck.objects.filter(id__in=metrics_ids).aggregate(
+            avg_cpu=Avg("cpu_percent"),
+            avg_mem=Avg("memory_percent"),
+            avg_disk=Avg("disk_percent"),
+        )
+        if metrics_ids
+        else {"avg_cpu": None, "avg_mem": None, "avg_disk": None}
     )
 
-    status_counts = {}
-    for hc in latest_checks:
-        status_counts[hc.status] = status_counts.get(hc.status, 0) + 1
+    status_counts: dict[str, int] = {}
+    for item in server_health:
+        if item["status"] != "unknown":
+            status_counts[item["status"]] = status_counts.get(item["status"], 0) + 1
 
     recent_activity = list(UserActivityLog.objects.filter(user=user).order_by("-created_at")[:20])
     activity_data = [
@@ -334,6 +385,7 @@ def monitoring_dashboard(request):
             "alerts": alerts_data,
             "meta": {
                 "stale_after_seconds": _monitoring_stale_seconds(),
+                "full_fail_metrics_trust_seconds": _monitoring_full_fail_trust_seconds(),
             },
             "summary": {
                 "total_servers": len(server_ids),
@@ -341,7 +393,7 @@ def monitoring_dashboard(request):
                 "warning": status_counts.get("warning", 0),
                 "critical": status_counts.get("critical", 0),
                 "unreachable": status_counts.get("unreachable", 0),
-                "unknown": len(server_ids) - len(latest_checks),
+                "unknown": sum(1 for item in server_health if item["status"] == "unknown"),
                 "active_alerts": len(active_alerts),
                 "avg_cpu": round(agg["avg_cpu"] or 0, 1),
                 "avg_memory": round(agg["avg_mem"] or 0, 1),
@@ -374,7 +426,7 @@ def monitoring_refresh(request):
 
     try:
         body = json.loads(request.body) if request.body else {}
-    except Exception:
+    except (json.JSONDecodeError, UnicodeDecodeError, TypeError):
         body = {}
     want_metrics = bool(
         body.get("metrics")

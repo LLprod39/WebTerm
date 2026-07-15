@@ -5,7 +5,6 @@ from typing import Any
 from kubernetes_ops.services.admin_resource_sanitizer import resource_was_redacted
 from kubernetes_ops.services.admin_secret_values import bool_value
 
-
 SECRET_BODY_KEYS = ("data", "binaryData", "stringData")
 MAX_KEYS = 32
 
@@ -48,7 +47,7 @@ def build_resource_manifest_contract(
 
 
 def _sorted_keys(value: dict[str, Any]) -> list[str]:
-    return sorted(str(key) for key in value.keys())[:MAX_KEYS]
+    return sorted(str(key) for key in value)[:MAX_KEYS]
 
 
 def _secret_payload_redacted(resource: dict[str, Any], keys: list[str]) -> bool:

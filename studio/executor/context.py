@@ -36,7 +36,7 @@ class ExecutionContext:
     """
     run_id: int
     user: Any
-    pipeline: "Pipeline"
+    pipeline: Pipeline
     node_outputs: dict[str, dict[str, Any]] = field(default_factory=dict)
     stop_event: threading.Event = field(default_factory=threading.Event)
     memory_store: Any = None

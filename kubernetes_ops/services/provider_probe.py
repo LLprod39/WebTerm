@@ -105,7 +105,7 @@ def _public_path(path: str) -> str:
 
 def _payload_keys(payload: dict[str, Any]) -> tuple[str, ...]:
     keys: list[str] = []
-    for key in payload.keys():
+    for key in payload:
         normalized = str(key)
         if any(part in normalized.lower() for part in ("token", "secret", "password", "authorization", "credential")):
             keys.append("[redacted]")

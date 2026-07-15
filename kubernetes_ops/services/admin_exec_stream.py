@@ -5,7 +5,6 @@ from typing import Any
 from django.conf import settings
 
 from kubernetes_ops.models import K8sAdminAction, K8sAdminSession
-from kubernetes_ops.services.admin_interactive_transport_readiness import assert_interactive_transport_prerequisites
 from kubernetes_ops.services.admin_exec import (
     _audit_exec,
     _cluster_payload,
@@ -15,6 +14,7 @@ from kubernetes_ops.services.admin_exec import (
     _public_path,
     _record_exec_action,
 )
+from kubernetes_ops.services.admin_interactive_transport_readiness import assert_interactive_transport_prerequisites
 from kubernetes_ops.services.admin_recording import (
     create_interactive_recording,
     finish_interactive_recording_for_action,

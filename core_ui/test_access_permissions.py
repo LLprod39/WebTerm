@@ -2,7 +2,9 @@ from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
 
+from core_ui.access import PILOT_USER_FEATURES, access_profile_permissions, build_user_access_payload
 from core_ui.models import GroupAppPermission, UserAppPermission
+from core_ui.views.access_views import _apply_access_profile
 
 
 class AccessPermissionsTests(TestCase):
@@ -38,6 +40,34 @@ class AccessPermissionsTests(TestCase):
         features = self.auth_features(user)
 
         self.assertTrue(features["dashboard"])
+        dashboard_response = self.client.get(reverse("api_admin_dashboard"))
+        self.assertEqual(dashboard_response.status_code, 403)
+
+    def test_pilot_user_profile_grants_user_workspace_only(self):
+        user = self.create_user("pilot")
+        _apply_access_profile(user, "pilot_user")
+
+        features = self.auth_features(user)
+        for feature in PILOT_USER_FEATURES:
+            self.assertTrue(features[feature], feature)
+        self.assertFalse(features["studio"])
+        self.assertFalse(features["settings"])
+        self.assertFalse(features["kubernetes"])
+        self.assertFalse(features["mars"])
+        self.assertFalse(features.get("knowledge_base", False))
+        self.assertFalse(user.is_staff)
+
+        access = build_user_access_payload(user)
+        self.assertEqual(access["access_profile"], "pilot_user")
+        self.assertEqual(
+            {name for name, allowed in access["effective_permissions"].items() if allowed},
+            set(PILOT_USER_FEATURES),
+        )
+        self.assertEqual(access_profile_permissions("pilot_user")["dashboard"], True)
+        self.assertEqual(access_profile_permissions("pilot_user")["servers"], True)
+        self.assertEqual(access_profile_permissions("pilot_user")["agents"], True)
+
+        # User dashboard surface is allowed; staff admin metrics stay forbidden.
         dashboard_response = self.client.get(reverse("api_admin_dashboard"))
         self.assertEqual(dashboard_response.status_code, 403)
 

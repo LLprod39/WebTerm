@@ -174,7 +174,7 @@ class SSHTerminalAiToolsMixin:
 
     def _legacy_direct_exec_enabled(self) -> bool:
         """Whether legacy Terminal AI may use the non-PTY direct executor."""
-        return self._normalize_execution_mode(getattr(self, "_ai_execution_mode", "step")) != "fast"
+        return self._normalize_execution_mode(getattr(self, "_ai_execution_mode", "agent")) != "fast"
 
     @staticmethod
     def _normalize_command_text(cmd: str) -> str:

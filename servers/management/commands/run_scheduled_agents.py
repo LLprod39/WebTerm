@@ -23,6 +23,7 @@ from servers.worker_state import (
     stop_background_worker,
 )
 
+
 class Command(BaseCommand):
     help = "Poll and dispatch scheduled server agents."
 
@@ -102,7 +103,7 @@ class Command(BaseCommand):
             cycle_started=True,
         )
         try:
-            from studio.ops_controls import assert_schedulers_not_paused
+            from app.core.ops_controls import assert_schedulers_not_paused
 
             paused = assert_schedulers_not_paused()
         except Exception:

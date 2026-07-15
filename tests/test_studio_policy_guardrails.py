@@ -1,11 +1,10 @@
-import pytest
 from itertools import count
 
+import pytest
 from django.contrib.auth.models import User
 
 from studio.models import CURRENT_PIPELINE_GRAPH_VERSION
 from studio.pipeline_validation import validate_pipeline_definition
-
 
 pytestmark = pytest.mark.django_db
 

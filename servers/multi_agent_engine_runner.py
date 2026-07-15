@@ -11,9 +11,9 @@ from loguru import logger
 
 from app.agent_kernel.mcp_runtime import load_mcp_bindings
 from app.agent_kernel.runtime.outcomes import (
-    AgentOutcome,
     OUTCOME_FAILED,
     STATUS_FAILED,
+    AgentOutcome,
     merge_outcome_into_report_payload,
     resolve_multi_agent_outcome,
 )

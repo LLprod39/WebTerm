@@ -7,8 +7,8 @@ from asgiref.sync import sync_to_async as _s2a
 from loguru import logger
 
 from app.agent_kernel.mcp_runtime import execute_mcp_binding
-from app.plugins.agent_tools import execute_plugin_agent_tool
 from app.execution_policy import safe_payload_preview
+from app.plugins.agent_tools import execute_plugin_agent_tool
 from app.sudo_policy import prepare_sudo_command_args
 from servers.agent_tools import get_all_agent_tools
 

@@ -11,6 +11,8 @@ import {
 } from "@/api";
 import { I18nProvider } from "@/lib/i18n";
 import SettingsKubernetesPage from "@/pages/settings/SettingsKubernetesPage";
+import { featureMap } from "@/test/featureFlags";
+import type { KubernetesOverviewResponse } from "@/api/kubernetes";
 
 vi.mock("@/api", () => ({
   createKubernetesProvider: vi.fn(),
@@ -45,7 +47,7 @@ function providerFixture() {
   };
 }
 
-function overviewFixture() {
+function overviewFixture(): KubernetesOverviewResponse {
   return {
     success: true,
     readiness: {
@@ -111,6 +113,7 @@ function overviewFixture() {
     },
     providers: [providerFixture()],
     clusters: [],
+    workloads: [],
     apps: [],
     fleet_rollouts: [],
   };
@@ -142,7 +145,7 @@ describe("SettingsKubernetesPage", () => {
         username: "admin",
         email: "admin@example.test",
         is_staff: true,
-        features: { settings: true, kubernetes: true },
+        features: featureMap({ settings: true, kubernetes: true }),
       },
     });
     vi.mocked(fetchKubernetesOverview).mockResolvedValue(overviewFixture());

@@ -23,7 +23,7 @@ def sync_legacy_ai_queue_state(
     ai_session.forbidden_patterns = list(getattr(owner, "_ai_forbidden_patterns", []) or [])
     ai_session.user_message = str(getattr(owner, "_ai_user_message", "") or "")
     ai_session.chat_mode = str(getattr(owner, "_ai_chat_mode", "agent") or "agent")
-    ai_session.execution_mode = str(getattr(owner, "_ai_execution_mode", "step") or "step")
+    ai_session.execution_mode = str(getattr(owner, "_ai_execution_mode", "agent") or "agent")
     ai_session.run_id = str(getattr(owner, "_ai_run_id", "") or "")
     ai_session.marker_token = str(getattr(owner, "_ai_marker_token", "") or "")
     ai_session.last_done_items = getattr(owner, "_ai_last_done_items", [])

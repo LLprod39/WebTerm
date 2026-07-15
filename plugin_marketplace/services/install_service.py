@@ -12,11 +12,11 @@ from app.plugins.catalog import ensure_builtin_plugins_registered, project_plugi
 from app.plugins.registry import plugin_registry
 from core_ui.activity import log_user_activity
 from core_ui.models import UserActivityLog
-from plugin_marketplace.models import PluginInstallEvent, PluginInstallation, PluginPackage
+from plugin_marketplace.models import PluginInstallation, PluginInstallEvent, PluginPackage
 from plugin_marketplace.services.access_scope_service import installation_allowed_for_user
 from plugin_marketplace.services.package_attestation_policy_service import attestation_enable_blockers
-from plugin_marketplace.services.serialization import catalog_payload, installation_payload
 from plugin_marketplace.services.sandbox_policy_service import sandbox_enable_blockers
+from plugin_marketplace.services.serialization import catalog_payload, installation_payload
 
 
 def _actor_or_none(actor):

@@ -2,8 +2,8 @@ from django.urls import path
 
 from .views import (
     command_history,
-    server_agent_runs,
     server_agent_dashboard,
+    server_agent_runs,
     server_agents,
     server_auth_session,
     server_context,

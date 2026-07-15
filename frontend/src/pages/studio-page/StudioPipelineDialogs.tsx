@@ -244,7 +244,9 @@ export function DeletePipelineDialog({
       description={target ? localize(lang, `Удалить "${target.name}"? Действие нельзя отменить.`, `Delete "${target.name}"? This cannot be undone.`) : ""}
       confirmLabel={localize(lang, "Удалить", "Delete")}
       cancelLabel={localize(lang, "Отмена", "Cancel")}
-      onConfirm={() => target && onConfirm(target.id)}
+      onConfirm={() => {
+        if (target) onConfirm(target.id);
+      }}
     />
   );
 }

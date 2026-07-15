@@ -5,7 +5,15 @@ from django.test import TestCase
 from django.urls import reverse
 
 from core_ui.models import UserAppPermission
-from kubernetes_ops.models import K8sActionRequest, K8sAppRef, K8sAuditEvent, K8sCluster, K8sFleetBundle, K8sProvider, K8sWorkloadRef
+from kubernetes_ops.models import (
+    K8sActionRequest,
+    K8sAppRef,
+    K8sAuditEvent,
+    K8sCluster,
+    K8sFleetBundle,
+    K8sProvider,
+    K8sWorkloadRef,
+)
 
 
 class KubernetesOpsActionRequestTests(TestCase):

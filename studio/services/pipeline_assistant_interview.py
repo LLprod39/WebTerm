@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 ARGUMENT_QUESTIONS = {
     "realm": "Укажи Keycloak realm.",
     "username": "Укажи username/login/email пользователя или service account.",

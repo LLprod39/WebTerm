@@ -191,7 +191,7 @@ def _string_map(value: Any) -> dict[str, str]:
 
 
 def _bounded_keys(value: dict[str, Any]) -> list[str]:
-    return sorted(str(key)[:180] for key in value.keys())[:MAX_KEYS]
+    return sorted(str(key)[:180] for key in value)[:MAX_KEYS]
 
 
 def _bounded_limit(value: int | str | None) -> int:

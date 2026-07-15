@@ -31,8 +31,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements-mini.txt ./
-RUN pip install --no-cache-dir -r requirements-mini.txt
+# requirements.lock is compiled from requirements-mini.txt (pinned + hashed).
+# Regenerate after changing requirements-mini.txt:
+#   uv pip compile requirements-mini.txt -o requirements.lock \
+#     --python-version 3.11 --python-platform linux --generate-hashes
+COPY requirements.lock ./
+RUN pip install --no-cache-dir --require-hashes -r requirements.lock
 
 COPY . .
 RUN chmod +x docker/render-backend-start.sh

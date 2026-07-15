@@ -218,6 +218,7 @@ def _normalize_principal(principal: str) -> tuple[str, str]:
 def _apply_access_profile(user: User, profile: str) -> None:
     """
     Apply access profile to user (same semantics as settings access UI):
+    - pilot_user (closed pilot: dashboard + servers + agents)
     - server_only
     - admin_full
     - operator_studio_runner
@@ -244,22 +245,22 @@ def _apply_access_profile(user: User, profile: str) -> None:
         user.save(update_fields=["is_staff"])
 
     with transaction.atomic():
-        for feature, allowed in target.items():
-            UserAppPermission.objects.update_or_create(
-                user=user,
-                feature=feature,
-                defaults={"allowed": allowed},
-            )
+        UserAppPermission.objects.bulk_create(
+            [UserAppPermission(user=user, feature=feature, allowed=allowed) for feature, allowed in target.items()],
+            update_conflicts=True,
+            unique_fields=["user", "feature"],
+            update_fields=["allowed"],
+        )
 
 
 def _domain_access_profile() -> str:
-    fallback = str(getattr(settings, "DOMAIN_AUTH_DEFAULT_PROFILE", "server_only") or "server_only")
-    configured = str(_cfg_value("domain_auth_default_profile", fallback) or "server_only")
+    fallback = str(getattr(settings, "DOMAIN_AUTH_DEFAULT_PROFILE", "pilot_user") or "pilot_user")
+    configured = str(_cfg_value("domain_auth_default_profile", fallback) or "pilot_user")
     profile = configured.strip().lower()
-    if profile in VALID_ACCESS_PROFILES:
+    if profile in VALID_ACCESS_PROFILES and profile not in {"custom", "reset_defaults"}:
         return profile
-    logger.warning("DOMAIN_AUTH_DEFAULT_PROFILE={} is invalid, fallback to server_only", configured)
-    return "server_only"
+    logger.warning("DOMAIN_AUTH_DEFAULT_PROFILE={} is invalid, fallback to pilot_user", configured)
+    return "pilot_user"
 
 
 def resolve_domain_user(principal: str) -> User | None:

@@ -4,7 +4,15 @@ from typing import Any
 
 from django.db.models import Q
 
-from kubernetes_ops.models import K8sAppRef, K8sAuditEvent, K8sCluster, K8sEvent, K8sNetworkRef, K8sPodRef, K8sWorkloadRef
+from kubernetes_ops.models import (
+    K8sAppRef,
+    K8sAuditEvent,
+    K8sCluster,
+    K8sEvent,
+    K8sNetworkRef,
+    K8sPodRef,
+    K8sWorkloadRef,
+)
 from kubernetes_ops.serializers import (
     serialize_app,
     serialize_cluster,
@@ -15,7 +23,6 @@ from kubernetes_ops.serializers import (
     serialize_workload,
 )
 from kubernetes_ops.services.logs import _redact_log_line
-
 
 MAX_OWNER_APPS = 10
 MAX_RELATED_WORKLOADS = 20

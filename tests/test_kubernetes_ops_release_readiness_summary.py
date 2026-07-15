@@ -9,9 +9,9 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core_ui.models import UserAppPermission
-from kubernetes_ops.services.release_external_evidence_bundle import EXTERNAL_EVIDENCE_BUNDLE_SCHEMA_VERSION
 from kubernetes_ops.services.release_contract import RELEASE_EVIDENCE_SCHEMA_VERSION
 from kubernetes_ops.services.release_evidence_checklist import build_kubernetes_production_evidence_checklist
+from kubernetes_ops.services.release_external_evidence_bundle import EXTERNAL_EVIDENCE_BUNDLE_SCHEMA_VERSION
 from kubernetes_ops.services.release_readiness_summary import build_kubernetes_release_readiness_summary
 
 

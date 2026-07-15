@@ -23,7 +23,10 @@ from tests.servers_api_smoke_harness import (
 )
 
 
-@pytest.mark.django_db
+# transaction=True: the check-now view runs check_all_servers via async_to_sync /
+# sync_to_async worker threads; a wrapping test transaction would deadlock SQLite
+# ("database table is locked").
+@pytest.mark.django_db(transaction=True)
 def test_monitoring_alerts_and_ai_analyze_endpoints(monkeypatch):
     user = User.objects.create_user(username="monitor-user", password="x")
     staff = User.objects.create_user(username="monitor-staff", password="x", is_staff=True)
@@ -75,9 +78,10 @@ def test_monitoring_alerts_and_ai_analyze_endpoints(monkeypatch):
     assert history.json()["success"] is True
     assert history.json()["checks"][0]["id"] == existing_check.id
 
-    async def fake_check_server(_target_server, deep=False):
+    async def fake_check_server(target_server, deep=False):
         return SimpleNamespace(
             id=999,
+            server_id=target_server.id,
             status=ServerHealthCheck.STATUS_HEALTHY,
             cpu_percent=30.0,
             memory_percent=45.0,

@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   getStudioPipelineRunWsUrl,
   studioRuns,
+  type PipelineLastRun,
   type PipelineRun,
 } from "@/lib/api";
 import { isLivePipelineRunStatus } from "./pipelineGraphUtils";
@@ -18,7 +19,7 @@ export function usePipelineRunGraphOverlay({
   graphRunId: number | null;
   hasLocalChanges: boolean;
   lastRunId: number | null | undefined;
-  pipelineLastRun: PipelineRun | null | undefined;
+  pipelineLastRun: PipelineLastRun | null | undefined;
   setGraphRunId: Dispatch<SetStateAction<number | null>>;
   setLastRun: Dispatch<SetStateAction<PipelineRun | null>>;
 }) {

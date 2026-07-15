@@ -25,7 +25,8 @@ def normalize_execution_mode(mode: Any) -> str:
         return "fast"
     if raw in ("agent", "nova", "react", "interactive"):
         return "agent"
-    return "step"
+    # Pilot default when mode is missing/unknown: Nova (agent).
+    return "agent"
 
 
 def resolve_auto_execution_mode(

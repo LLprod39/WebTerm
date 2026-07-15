@@ -7,9 +7,21 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core_ui.models import UserAppPermission
-from kubernetes_ops.models import K8sAdminAction, K8sAdminSession, K8sAppRef, K8sAuditEvent, K8sCluster, K8sFleetBundle, K8sProvider
+from kubernetes_ops.models import (
+    K8sAdminAction,
+    K8sAdminSession,
+    K8sAppRef,
+    K8sAuditEvent,
+    K8sCluster,
+    K8sFleetBundle,
+    K8sProvider,
+)
 from kubernetes_ops.services.admin_logs import get_admin_pod_log_snapshot
-from kubernetes_ops.services.admin_resources import AdminResourceError, get_cluster_resource_yaml, list_cluster_resources
+from kubernetes_ops.services.admin_resources import (
+    AdminResourceError,
+    get_cluster_resource_yaml,
+    list_cluster_resources,
+)
 from kubernetes_ops.services.admin_watch import get_admin_resource_watch_preview
 
 

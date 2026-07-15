@@ -17,7 +17,6 @@ from kubernetes_ops.services.provider_exec_streams import open_provider_exec_str
 from kubernetes_ops.services.provider_interactive_shell_streams import open_provider_interactive_shell_stream
 from kubernetes_ops.services.provider_port_forward_tunnels import open_provider_port_forward_tunnel
 
-
 INTERACTIVE_LIVE_SMOKE_SCHEMA_VERSION = "kubernetes_ops.interactive_live_smoke.v1"
 INTERACTIVE_LIVE_SMOKE_ARTIFACT = "artifacts/kubernetes_ops_interactive_live_smoke.json"
 INTERACTIVE_LIVE_SMOKE_EVIDENCE_SETTING = "KUBERNETES_ADMIN_INTERACTIVE_LIVE_SMOKE_EVIDENCE_REF"

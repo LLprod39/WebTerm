@@ -18,6 +18,8 @@ from studio.executor.nodes.base import BaseNode, NodeResult
 from studio.executor.registry import registry
 from studio.pipeline_redaction import (
     redact_pipeline_text as _redact_pipeline_text,
+)
+from studio.pipeline_redaction import (
     redacted_execution_context as _redacted_pipeline_context,
 )
 
@@ -37,7 +39,7 @@ class OutputReportNode(BaseNode):
 
     node_type = "output/report"
 
-    async def execute(self, ctx: "ExecutionContext") -> NodeResult:
+    async def execute(self, ctx: ExecutionContext) -> NodeResult:
         from studio.models import PipelineRun
 
         template = str(self.node_data.get("template") or "")

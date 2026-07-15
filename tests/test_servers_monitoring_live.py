@@ -170,6 +170,7 @@ def test_manager_dedupes_same_host_across_users(settings):
 @pytest.mark.django_db(transaction=True)
 async def test_live_consumer_filters_subscriptions_and_forwards_metrics(monkeypatch):
     from channels.db import database_sync_to_async
+
     from servers.routing import websocket_urlpatterns
 
     @database_sync_to_async

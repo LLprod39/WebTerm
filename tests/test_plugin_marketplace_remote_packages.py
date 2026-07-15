@@ -9,7 +9,7 @@ from django.contrib.auth.models import User
 from django.test import override_settings
 
 from app.plugins.catalog import DEMO_PLUGIN_MANIFEST
-from plugin_marketplace.models import PluginInstallEvent, PluginInstallation, PluginPackage
+from plugin_marketplace.models import PluginInstallation, PluginInstallEvent, PluginPackage
 from plugin_marketplace.services.package_retention_service import retained_package_exists
 from plugin_marketplace.services.remote_package_service import (
     RemotePackageError,

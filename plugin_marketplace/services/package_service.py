@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from django.db import transaction
 from django.conf import settings
+from django.db import transaction
 
 from app.plugins.validation import PluginValidationError, validate_plugin_manifest
 from core_ui.models import UserActivityLog

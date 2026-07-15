@@ -47,7 +47,7 @@ export function AppSidebar() {
 
   const navItems = [
     { titleKey: "nav.dashboard", url: "/dashboard", icon: LayoutDashboard, feature: "dashboard" },
-    { titleKey: "nav.servers", url: "/servers", icon: Server, feature: null },
+    { titleKey: "nav.servers", url: "/servers", icon: Server, feature: "servers" },
     { titleKey: "nav.agents", url: "/agents", icon: Bot, feature: "agents" },
     { titleKey: "nav.chat", url: "/chat", icon: MessageSquare, feature: "orchestrator", ready: CHAT_NAV_READY },
     { titleKey: "nav.studio", url: "/studio", icon: Workflow, feature: "studio" },

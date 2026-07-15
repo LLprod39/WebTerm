@@ -185,10 +185,10 @@ export function RunWizard({
                 <button
                   key={group.id}
                   type="button"
-                  onClick={() => toggleGroup(group.id)}
+                  onClick={() => { if (group.id != null) toggleGroup(group.id); }}
                   className={cn(
                     "flex w-full items-center gap-2.5 rounded-sm border px-3 py-2.5 text-left text-xs transition-colors",
-                    groupIds.has(group.id)
+                    group.id != null && groupIds.has(group.id)
                       ? "border-primary bg-primary/10 text-foreground"
                       : "border-border bg-surface-0/50 text-muted-foreground hover:text-foreground",
                   )}

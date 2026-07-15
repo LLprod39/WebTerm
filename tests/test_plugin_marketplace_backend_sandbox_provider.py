@@ -10,7 +10,13 @@ from django.test import override_settings
 from app.plugins.agent_tools import active_agent_tools
 from app.plugins.catalog import DEMO_PLUGIN_MANIFEST
 from plugin_marketplace.checks import plugin_marketplace_deploy_check
-from plugin_marketplace.models import MarketplaceCatalogItem, MarketplaceSource, PluginCompatibilityJob, PluginInstallation, PluginPackage
+from plugin_marketplace.models import (
+    MarketplaceCatalogItem,
+    MarketplaceSource,
+    PluginCompatibilityJob,
+    PluginInstallation,
+    PluginPackage,
+)
 from plugin_marketplace.services.agent_tool_service import agent_tool_execution_provider
 from plugin_marketplace.services.backend_sandbox_runner_service import execute_sandbox_package
 from plugin_marketplace.services.compatibility_matrix_service import run_compatibility_job

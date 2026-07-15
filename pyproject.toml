@@ -87,3 +87,26 @@ config_filename = ".importlinter"
 # grow.  Remove a file from this list once it has been refactored under the
 # standard limit.
 [tool.architecture.legacy_baselines]
+".tools/k8s-provider-fixture.py" = 771
+"frontend/src/api/kubernetes.ts" = 502
+"frontend/src/components/editor/FileEditorModal.tsx" = 1002
+"frontend/src/lib/api-demo-server-admin.ts" = 814
+"frontend/src/pages/KubernetesPage.tsx" = 595
+"frontend/src/pages/Servers.tsx" = 513
+"frontend/src/pages/agents-page/AgentWizardStepContent.tsx" = 680
+"frontend/src/pages/agents-page/CreateAgentDialog.tsx" = 538
+"frontend/src/pages/agents-page/agentPageUtils.ts" = 528
+"frontend/src/pages/automation/PlaybooksWorkspace.tsx" = 769
+"kubernetes_ops/services/admin_resources.py" = 519
+"servers/agent_engine_runner.py" = 503
+"servers/services/terminal_ai/agent/loop.py" = 521
+"servers/views/server_files.py" = 519
+"servers/views/server_monitoring.py" = 553
+"studio/executor/nodes/ops.py" = 515
+"studio/pipeline_agent_runtime.py" = 586
+"tests/test_agent_and_pipeline_policy_enforcement.py" = 506
+"tests/test_kubernetes_ops_action_requests.py" = 508
+"tests/test_kubernetes_ops_admin_resources.py" = 510
+"tests/test_kubernetes_ops_release_evidence.py" = 522
+"tests/test_kubernetes_ops_release_handoff.py" = 518
+"tests/test_kubernetes_ops_release_readiness_summary.py" = 632

@@ -1,6 +1,6 @@
+import pytest
 from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
-import pytest
 
 from studio.models import Pipeline, PipelineRun
 from studio.pipeline_executor import PipelineExecutor

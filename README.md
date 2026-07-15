@@ -169,6 +169,14 @@ python -m pytest
 python scripts/check_architecture_sizes.py --strict-new
 ```
 
+After editing `requirements-mini.txt`, regenerate the pinned lock used by the
+Docker backend image:
+
+```bash
+uv pip compile requirements-mini.txt -o requirements.lock \
+  --python-version 3.11 --python-platform linux --generate-hashes
+```
+
 ```bash
 cd frontend
 npm run build

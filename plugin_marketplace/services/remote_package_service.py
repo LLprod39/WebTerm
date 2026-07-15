@@ -17,8 +17,8 @@ from app.plugins.validation import validate_plugin_manifest
 from core_ui.models import UserActivityLog
 from plugin_marketplace.models import PluginInstallation, PluginPackage
 from plugin_marketplace.services.install_service import record_event
-from plugin_marketplace.services.package_service import PluginPackageValidationError, validate_wtp_package
 from plugin_marketplace.services.package_retention_service import retain_package_bytes
+from plugin_marketplace.services.package_service import PluginPackageValidationError, validate_wtp_package
 
 MAX_REMOTE_PACKAGE_BYTES = 10 * 1024 * 1024
 
