@@ -89,34 +89,48 @@ function MetricChip({
   );
 }
 
+function MetricChipPending({ label }: { label: string }) {
+  return (
+    <span className="inline-flex min-w-[4.25rem] flex-col gap-1 rounded-sm border border-dashed border-border bg-surface-0 px-2 py-1">
+      <span className="flex items-baseline justify-between gap-1.5 leading-none">
+        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
+        <span className="font-mono text-[12px] font-semibold tabular-nums text-muted-foreground/70">—</span>
+      </span>
+      <span className="h-1 w-full overflow-hidden rounded-[1px] bg-border/60" />
+    </span>
+  );
+}
+
 export function FleetMetricsLine({ health, lang }: { health: MonitoringStatusItem; lang: string }) {
   const items = [
     { label: "CPU", value: health.cpu_percent, ...METRIC_THRESHOLDS.cpu },
     { label: localize(lang, "ОЗУ", "RAM"), value: health.memory_percent, ...METRIC_THRESHOLDS.memory },
     { label: localize(lang, "Диск", "Disk"), value: health.disk_percent, ...METRIC_THRESHOLDS.disk },
-  ].filter((item) => typeof item.value === "number") as Array<{
-    label: string;
-    value: number;
-    warn: number;
-    crit: number;
-  }>;
+  ];
 
-  if (!items.length) return null;
+  const known = items.filter((item) => typeof item.value === "number");
+  // Keep three slots once we have any metric (or online health) so chips don't pop in one-by-one.
+  const showPlaceholders = known.length > 0 || (!health.is_stale && health.status !== "unknown");
+  if (!known.length && !showPlaceholders) return null;
 
-  const titleParts = items.map((item) => `${item.label} ${Math.round(item.value)}%`);
+  const titleParts = known.map((item) => `${item.label} ${Math.round(item.value as number)}%`);
   if (typeof health.load_1m === "number") titleParts.push(`load ${health.load_1m.toFixed(2)}`);
 
   return (
-    <span className="inline-flex flex-wrap items-center gap-1.5" title={titleParts.join(" · ")}>
-      {items.map((item) => (
-        <MetricChip
-          key={item.label}
-          label={item.label}
-          value={item.value}
-          warn={item.warn}
-          crit={item.crit}
-        />
-      ))}
+    <span className="inline-flex flex-wrap items-center gap-1.5" title={titleParts.join(" · ") || undefined}>
+      {items.map((item) =>
+        typeof item.value === "number" ? (
+          <MetricChip
+            key={item.label}
+            label={item.label}
+            value={item.value}
+            warn={item.warn}
+            crit={item.crit}
+          />
+        ) : showPlaceholders ? (
+          <MetricChipPending key={item.label} label={item.label} />
+        ) : null,
+      )}
     </span>
   );
 }

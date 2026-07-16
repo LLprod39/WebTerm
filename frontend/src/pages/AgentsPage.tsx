@@ -29,7 +29,7 @@ import { PageShell, SoftHeader, StatStrip, StatStripItem } from "@/components/ui
 import { SkeletonList } from "@/components/ui/list-state";
 import { CreateAgentDialog } from "./agents-page/CreateAgentDialog";
 import { AgentListSection } from "./agents-page/AgentListSection";
-import { AgentSystemHealthSection, countAgentSystemProblems } from "./agents-page/AgentSystemHealthSection";
+import { AgentSystemHealthSection } from "./agents-page/AgentSystemHealthSection";
 import {
   formatDuration,
   isAgentScheduled,
@@ -239,16 +239,8 @@ export default function AgentsPage() {
     );
   }
 
-  // Worker/ops diagnostics are admin-only — regular operators should not see
-  // "agents may fail" banners or manage.py fix commands.
-  const systemProblems = isAdmin
-    ? countAgentSystemProblems({
-        runtimeOverview,
-        executionReadiness: executionReadiness || executionWarning,
-        scheduledWorker,
-        showScheduledWorker,
-      })
-    : 0;
+  // Worker/ops diagnostics are admin-only. No "healthy services" strip —
+  // show only when something is actually broken (and only to staff).
   const healthSection = isAdmin ? (
     <AgentSystemHealthSection
       runtimeOverview={runtimeOverview}
@@ -315,7 +307,8 @@ export default function AgentsPage() {
         </StatStrip>
       ) : null}
 
-      {systemProblems > 0 ? healthSection : null}
+      {/* Admin-only: only when workers/runtime have problems (no healthy strip). */}
+      {healthSection}
 
       {actionError ? (
         <div className="rounded-sm border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive shadow-elev-1">
@@ -409,8 +402,6 @@ export default function AgentsPage() {
         onDelete={onDelete}
         onTogglePause={onTogglePause}
       />
-
-      {systemProblems === 0 ? healthSection : null}
 
       <CreateAgentDialog
         open={createOpen}

@@ -29,6 +29,11 @@ from servers.models_memory import (
     ServerMemoryRevalidation,
     ServerMemorySnapshot,
 )
+from servers.models_metrics import (
+    ServerCertificate,
+    ServerMetricRollup,
+    ServerMetricSample,
+)
 from servers.models_monitoring import (
     BackgroundWorkerState,
     ServerAlert,
@@ -48,6 +53,7 @@ __all__ = [
     "Server",
     "ServerAgent",
     "ServerAlert",
+    "ServerCertificate",
     "ServerCommandHistory",
     "ServerConnection",
     "ServerGroup",
@@ -63,6 +69,8 @@ __all__ = [
     "ServerMemoryPolicy",
     "ServerMemoryRevalidation",
     "ServerMemorySnapshot",
+    "ServerMetricRollup",
+    "ServerMetricSample",
     "ServerShare",
     "ServerWatcherDraft",
     "Playbook",

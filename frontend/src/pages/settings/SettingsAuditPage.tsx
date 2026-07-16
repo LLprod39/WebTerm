@@ -140,15 +140,15 @@ export default function SettingsAuditPage() {
 
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "logging" | "activity")} className="w-full">
         <TabsList className="grid h-auto w-full max-w-md grid-cols-2 gap-1 rounded-xl border border-border bg-card p-1 shadow-sm">
-          <TabsTrigger value="logging" className="min-h-10 gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none">
+          <TabsTrigger value="logging" className="min-h-10 gap-2 rounded-sm px-4 py-2 text-sm font-semibold">
             <Eye className="h-4 w-4" />
             Логирование
           </TabsTrigger>
-          <TabsTrigger value="activity" className="min-h-10 gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none">
+          <TabsTrigger value="activity" className="min-h-10 gap-2 rounded-sm px-4 py-2 text-sm font-semibold">
             <Activity className="h-4 w-4" />
             Журнал
             {filteredActivity.length > 0 && (
-              <Badge variant="default" className="ml-1 h-5 px-1.5 text-xs bg-primary text-primary-foreground">
+              <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
                 {filteredActivity.length}
               </Badge>
             )}

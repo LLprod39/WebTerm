@@ -50,6 +50,61 @@ def test_compute_cpu_percent_from_tick_deltas():
     assert compute_cpu_percent(current, current) is None
 
 
+@pytest.mark.django_db
+def test_live_sample_cache_roundtrip():
+    from servers.monitoring_live import fetch_live_samples, store_live_samples
+
+    store_live_samples(
+        [4242],
+        {
+            "cpu_percent": 11.0,
+            "memory_percent": 33.0,
+            "disk_percent": 44.0,
+            "load_1m": 0.2,
+            "ts": time.time(),
+        },
+    )
+    cached = fetch_live_samples([4242, 9999])
+    assert 4242 in cached
+    assert cached[4242]["cpu_percent"] == 11.0
+    assert cached[4242]["memory_percent"] == 33.0
+    assert 9999 not in cached
+
+
+@pytest.mark.django_db
+def test_status_prefers_fresher_live_cache_over_db_snapshot():
+    from django.utils import timezone
+
+    from servers.views.server_monitoring import _apply_cached_live_metrics
+
+    now = timezone.now()
+    item = {
+        "server_id": 1,
+        "status": "healthy",
+        "cpu_percent": 90.0,
+        "memory_percent": 90.0,
+        "disk_percent": 90.0,
+        "load_1m": 1.0,
+        "metrics_checked_at": (now - __import__("datetime").timedelta(seconds=50)).isoformat(),
+        "metrics_age_seconds": 50,
+        "is_lite": False,
+        "is_stale": False,
+    }
+    live = {
+        "cpu_percent": 12.0,
+        "memory_percent": 34.0,
+        "disk_percent": 56.0,
+        "load_1m": 0.3,
+        "ts": now.timestamp(),
+    }
+    merged = _apply_cached_live_metrics(item, live, now)
+    assert merged["cpu_percent"] == 12.0
+    assert merged["memory_percent"] == 34.0
+    assert merged["disk_percent"] == 56.0
+    assert merged["metrics_age_seconds"] is not None
+    assert merged["metrics_age_seconds"] <= 2
+
+
 def test_remote_loop_template_formats_interval():
     command = REMOTE_LOOP_TEMPLATE.format(interval=2)
     assert "sleep 2" in command

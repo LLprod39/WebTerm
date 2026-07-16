@@ -1,13 +1,17 @@
 # WebTerm — Design System
 
-Two user-selectable UI styles (Dashboard → **Настроить виджеты**, per-user localStorage):
+User-selectable UI styles (Dashboard → **Настроить виджеты**, per-user localStorage):
 
 | Id | Look |
 | --- | --- |
-| `catalog` (default) | Editorial ops: ink, acid lime, Syne + IBM Plex Mono, hard offset shadows |
+| `catalog` | Editorial ops: ink, acid lime, Syne + IBM Plex Mono, hard offset shadows |
 | `classic` | Previous console: teal, Inter + JetBrains Mono, soft elevation, violet AI |
+| `pulse` | Violet night ops: orchid primary, cyan AI, Outfit + DM Sans, soft glass + aurora glow |
+| `signal` | Brutal ops: carbon black, amber alarm, Space Grotesk + mono, zero radius, stamp shadows, tactical grid |
+| `folio` | Folio **light**: warm cream paper, terracotta ink, Fraunces + Manrope |
+| `folio-dark` (**default**) | Folio **dark**: same editorial language, night paper surfaces |
 
-Tokens: `html[data-ui-style="…"]` in `src/index.css`. Provider: `src/lib/ui-style.tsx`. Switcher: `DashboardUiStyleSwitcher` inside widget edit mode.
+Tokens: `html[data-ui-style="…"]` in `src/index.css`. Provider: `src/lib/ui-style.tsx`. Switcher: `DashboardUiStyleSwitcher` inside widget edit mode. Default is `folio-dark` for every account without a saved preference. `folio` is the only light `color-scheme`.
 
 ## 1. Color System
 

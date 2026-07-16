@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { KnowledgeIcons } from "@/lib/app-icons";
 
 import type { ServerKnowledgeController } from "./useServerKnowledgeController";
 
@@ -67,7 +68,12 @@ export function ServerKnowledgeDialogs({
       >
         <DialogContent className="max-w-xl">
           <DialogHeader>
-            <DialogTitle>{knowledgeEditingId ? t("srv.edit") : t("srv.add_entry")}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-sm border border-border bg-surface-0 text-primary">
+                <KnowledgeIcons.entry className="h-3.5 w-3.5" strokeWidth={1.5} />
+              </span>
+              {knowledgeEditingId ? t("srv.edit") : t("srv.add_entry")}
+            </DialogTitle>
             <DialogDescription>{t("srv.knowledge_manual_dialog_desc")}</DialogDescription>
           </DialogHeader>
           <DialogBody className="space-y-4">
@@ -151,7 +157,12 @@ export function ServerKnowledgeDialogs({
       >
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>{t("srv.ai_knowledge_dialog_title")}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-sm border border-border bg-surface-0 text-primary">
+                <KnowledgeIcons.ai className="h-3.5 w-3.5" strokeWidth={1.5} />
+              </span>
+              {t("srv.ai_knowledge_dialog_title")}
+            </DialogTitle>
             <DialogDescription>{t("srv.ai_knowledge_dialog_desc")}</DialogDescription>
           </DialogHeader>
           <DialogBody className="space-y-4">

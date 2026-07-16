@@ -20,7 +20,13 @@ from django.conf import settings
 from django.utils import timezone
 from loguru import logger
 
+from servers.metrics_parsing import build_metrics_v2
+from servers.metrics_script import build_metrics_script
 from servers.models import Server, ServerAlert, ServerHealthCheck
+
+# Alert rules live in monitor_alerts (split for size limits); re-exported for tests.
+from servers.monitor_alerts import _create_alerts  # noqa: F401
+from servers.monitor_metrics import create_metric_sample, mirror_metric_sample
 from servers.monitor_parsing import (
     _parse_deep_output,
     _parse_docker_output,
@@ -28,9 +34,6 @@ from servers.monitor_parsing import (
 )
 from servers.secret_utils import get_server_auth_secret
 from servers.ssh_host_keys import build_server_connect_kwargs, ensure_server_known_hosts
-
-# Alert rules live in monitor_alerts (split for size limits); re-exported for tests.
-from servers.monitor_alerts import _create_alerts  # noqa: F401
 
 
 def sync_to_async(func, thread_sensitive=False):
@@ -166,17 +169,22 @@ async def check_server(server: Server, deep: bool = False) -> ServerHealthCheck 
         logger.debug("Monitor: cannot build connect kwargs for {}: {}", server.name, exc)
         return await _save_unreachable(server, str(exc))
 
-    cmd = QUICK_COMMANDS
-    if deep:
-        cmd += ";" + DEEP_COMMANDS
-
+    metrics: dict[str, Any] | None = None
     try:
         async with asyncssh.connect(**kwargs) as conn:
-            # Quick probe sleeps 1s for dual /proc/stat samples; leave headroom for deep cmds.
-            result = await asyncio.wait_for(conn.run(cmd, check=False), timeout=45)
+            # Collector v2 sleeps 1s for dual /proc/stat samples; legacy quick
+            # commands run only when the v2 markers are missing from the output.
+            result = await asyncio.wait_for(conn.run(build_metrics_script(), check=False), timeout=45)
             raw = result.stdout or ""
+            metrics = build_metrics_v2(raw)
+            if metrics is None:
+                legacy_result = await asyncio.wait_for(conn.run(QUICK_COMMANDS, check=False), timeout=45)
+                raw = legacy_result.stdout or ""
+            deep_raw = ""
             docker_raw = ""
             if deep:
+                deep_result = await asyncio.wait_for(conn.run(DEEP_COMMANDS, check=False), timeout=30)
+                deep_raw = deep_result.stdout or ""
                 docker_result = await asyncio.wait_for(conn.run(DOCKER_MONITOR_COMMAND, check=False), timeout=20)
                 docker_raw = docker_result.stdout or ""
     except Exception as exc:
@@ -186,8 +194,9 @@ async def check_server(server: Server, deep: bool = False) -> ServerHealthCheck 
 
     elapsed = int((time.monotonic() - t0) * 1000)
 
-    metrics = _parse_quick_output(raw)
-    deep_data = _parse_deep_output(raw) if deep else None
+    if metrics is None:
+        metrics = _parse_quick_output(raw)
+    deep_data = _parse_deep_output(deep_raw) if deep else None
     if deep:
         docker_data = _parse_docker_output(docker_raw)
         if deep_data is None:
@@ -195,7 +204,7 @@ async def check_server(server: Server, deep: bool = False) -> ServerHealthCheck 
         deep_data["docker"] = docker_data
 
     status = _determine_status(metrics)
-    raw_output = {"quick": raw}
+    raw_output = {"quick": raw[:8000]}
     if deep_data:
         raw_output["deep"] = deep_data
 
@@ -218,6 +227,15 @@ async def check_server(server: Server, deep: bool = False) -> ServerHealthCheck 
         is_deep=deep,
         raw_output=raw_output,
     )
+
+    if metrics.get("collector_version") == 2:
+        try:
+            sample = await sync_to_async(create_metric_sample)(
+                server, metrics, source="deep" if deep else "quick"
+            )
+            health._metric_sample = sample
+        except Exception as exc:
+            logger.debug("Monitor: failed to persist metric sample for {}: {}", server.name, exc)
 
     await _create_alerts(server, metrics, deep_data)
 
@@ -287,6 +305,7 @@ async def _mirror_health_check(
 
     raw = dict(source.raw_output) if isinstance(source.raw_output, dict) else {}
     raw["mirrored_from_server_id"] = source.server_id
+    source_sample = getattr(source, "_metric_sample", None)
 
     def _create_all() -> list[ServerHealthCheck]:
         rows: list[ServerHealthCheck] = []
@@ -314,6 +333,8 @@ async def _mirror_health_check(
                     raw_output=raw,
                 )
             )
+        if source_sample is not None:
+            mirror_metric_sample(source_sample, target_servers)
         return rows
 
     return await sync_to_async(_create_all)()
@@ -442,7 +463,7 @@ def schedule_health_check_for_server_ids(server_ids: list[int], *, deep: bool = 
 
 
 async def cleanup_old_data(days: int = 7) -> None:
-    """Remove health checks and resolved alerts older than N days."""
+    """Remove health checks, resolved alerts, and expired metric series data."""
     cutoff = timezone.now() - timedelta(days=days)
     deleted_hc = await sync_to_async(
         lambda: ServerHealthCheck.objects.filter(checked_at__lt=cutoff).delete()
@@ -450,4 +471,14 @@ async def cleanup_old_data(days: int = 7) -> None:
     deleted_alerts = await sync_to_async(
         lambda: ServerAlert.objects.filter(is_resolved=True, created_at__lt=cutoff).delete()
     )()
-    logger.info("Monitor cleanup: removed {} health checks, {} resolved alerts", deleted_hc[0], deleted_alerts[0])
+
+    from servers.metrics_rollup import cleanup_metric_data
+
+    deleted_metrics = await sync_to_async(cleanup_metric_data)()
+    logger.info(
+        "Monitor cleanup: removed {} health checks, {} resolved alerts, {} metric samples, {} rollups",
+        deleted_hc[0],
+        deleted_alerts[0],
+        deleted_metrics["samples"],
+        deleted_metrics["hour_rollups"] + deleted_metrics["day_rollups"],
+    )

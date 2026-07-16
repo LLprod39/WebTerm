@@ -1,5 +1,5 @@
 import type { ChangeEvent, Dispatch, ReactNode, SetStateAction } from "react";
-import { KeyRound, Network, ShieldCheck, Server, Upload } from "lucide-react";
+import { ActionIcons, ServerIcons } from "@/lib/app-icons";
 
 import { AsyncButton } from "@/components/system/AsyncButton";
 import { Button } from "@/components/ui/button";
@@ -48,6 +48,7 @@ interface ServerFormDialogProps {
 function DialogSection({
   title,
   description,
+  icon,
   children,
   className,
 }: {
@@ -60,7 +61,14 @@ function DialogSection({
   return (
     <section className={cn("border-t border-border/50 py-5 first:border-t-0 first:pt-0 last:pb-0", className)}>
       <div className="mb-4 min-w-0">
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          {icon ? (
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm border border-border bg-surface-0 text-primary">
+              {icon}
+            </span>
+          ) : null}
+          {title}
+        </h3>
         {description ? <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{description}</p> : null}
       </div>
       {children}
@@ -144,7 +152,7 @@ export function ServerFormDialog({
           <DialogSection
             title={t("srv.connection_section")}
             description={t("srv.connection_section_desc")}
-            icon={<Server className="h-4 w-4" />}
+            icon={<ServerIcons.identity className="h-3.5 w-3.5" strokeWidth={1.5} />}
           >
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2 md:col-span-2">
@@ -222,7 +230,7 @@ export function ServerFormDialog({
           <DialogSection
             title={t("srv.auth_section")}
             description={t("srv.auth_section_desc")}
-            icon={<KeyRound className="h-4 w-4" />}
+            icon={<ServerIcons.auth className="h-3.5 w-3.5" strokeWidth={1.5} />}
           >
             <div className="space-y-4">
               <div className="space-y-2">
@@ -249,7 +257,7 @@ export function ServerFormDialog({
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <FieldLabel required>{t("srv.private_key")}</FieldLabel>
                     <label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-border/80 bg-secondary/55 px-3 text-sm font-medium text-foreground transition-colors hover:border-border-strong hover:bg-secondary">
-                      <Upload className="h-4 w-4" />
+                      <ActionIcons.upload className="h-4 w-4" strokeWidth={1.5} />
                       {t("srv.private_key_upload")}
                       <input
                         type="file"
@@ -296,7 +304,7 @@ export function ServerFormDialog({
           <DialogSection
             title={t("srv.access_section")}
             description={t("srv.access_section_desc")}
-            icon={<ShieldCheck className="h-4 w-4" />}
+            icon={<ServerIcons.security className="h-3.5 w-3.5" strokeWidth={1.5} />}
           >
             <div className="space-y-4">
               <div className="space-y-2">
@@ -342,7 +350,7 @@ export function ServerFormDialog({
           <DialogSection
             title={t("srv.organization_section")}
             description={t("srv.organization_section_desc")}
-            icon={<Network className="h-4 w-4" />}
+            icon={<ServerIcons.network className="h-3.5 w-3.5" strokeWidth={1.5} />}
           >
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">

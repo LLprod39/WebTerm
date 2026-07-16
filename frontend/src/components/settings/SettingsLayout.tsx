@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Navigate, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Menu, Settings } from "lucide-react";
+import { SettingsIcons } from "@/lib/app-icons";
 
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -89,7 +89,7 @@ function SettingsSideNav({
                           : "border-border bg-surface-0 text-muted-foreground group-hover:text-foreground",
                       )}
                     >
-                      <Icon className="h-3.5 w-3.5" aria-hidden />
+                      <Icon className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden />
                     </span>
                     <span className="min-w-0">
                       <span className={cn("block font-medium leading-5", active && "text-foreground")}>
@@ -124,7 +124,7 @@ function SettingsMobileMenu({
       <div className="border-b border-border px-5 py-5">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-sm border border-primary/25 bg-primary/10">
-            <Settings className="h-5 w-5 text-primary" />
+            <SettingsIcons.shell className="h-5 w-5 text-primary" strokeWidth={1.5} />
           </div>
           <div className="min-w-0">
             <h2 className="font-display text-base font-bold text-foreground">{t("nav.settings")}</h2>
@@ -159,7 +159,7 @@ export default function SettingsLayout() {
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
           <SheetTrigger asChild>
             <Button variant="ghost" size="icon" className="shrink-0">
-              <Menu className="h-5 w-5" />
+              <SettingsIcons.menu className="h-5 w-5" strokeWidth={1.5} />
               <span className="sr-only">Открыть меню настроек</span>
             </Button>
           </SheetTrigger>
@@ -183,7 +183,7 @@ export default function SettingsLayout() {
           <div className="border-b border-border px-4 py-5">
             <div className="flex items-start gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm border border-primary/30 bg-primary/10 text-primary">
-                <Settings className="h-5 w-5" />
+                <SettingsIcons.shell className="h-5 w-5" strokeWidth={1.5} />
               </div>
               <div className="min-w-0">
                 <h1 className="font-display text-lg font-bold tracking-tight text-foreground">

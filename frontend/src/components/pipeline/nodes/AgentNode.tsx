@@ -1,7 +1,7 @@
 import { type NodeProps } from "@xyflow/react";
-import { Bot, Users } from "lucide-react";
 import { NodeBase } from "./NodeBase";
 import { useI18n } from "@/lib/i18n";
+import { PipelineNodeIcons } from "@/lib/app-icons";
 import { getNodeBranchLabel, getNodeTypeInfo, localize } from "./nodeMeta";
 import { getNodeRuntimeProps } from "./runtimeProps";
 
@@ -12,14 +12,13 @@ export function AgentNode({ data, selected, type }: NodeProps) {
   const label = (typeof d?.label === "string" ? d.label : "") || getNodeTypeInfo(type as string, lang).label;
   const goal = typeof d?.goal === "string" ? d.goal : "";
   const model = typeof d?.model === "string" ? d.model : "";
+  const Icon = isMulti ? PipelineNodeIcons.multiAgent : PipelineNodeIcons.agent;
 
   return (
     <NodeBase
       selected={selected}
       label={label}
-      icon={isMulti
-        ? <Users className="h-4 w-4 text-violet-400" />
-        : <Bot   className="h-4 w-4 text-violet-400" />}
+      icon={<Icon className="h-4 w-4 text-violet-400" strokeWidth={1.5} />}
       description={
         goal
           ? goal.slice(0, 50) + (goal.length > 50 ? "…" : "")

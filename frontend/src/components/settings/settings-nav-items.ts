@@ -1,19 +1,6 @@
-import {
-  Bot,
-  Users,
-  Shield,
-  FolderOpen,
-  ScrollText,
-  Activity,
-  Bell,
-  Boxes,
-  Gauge,
-  Globe,
-  Puzzle,
-  SlidersHorizontal,
-  LayoutDashboard,
-  type LucideIcon,
-} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+
+import { SettingsIcons } from "@/lib/app-icons";
 
 export interface SettingsNavItem {
   id: string;
@@ -38,6 +25,8 @@ export interface SettingsNavGroup {
  * 1. Launch — readiness + AI + limits + notifications
  * 2. Access — people and SSO
  * 3. Platform — memory, audit, k8s, plugins
+ *
+ * Icons come from SettingsIcons (curated, one glyph per concept).
  */
 export const settingsNavGroups: SettingsNavGroup[] = [
   {
@@ -49,7 +38,7 @@ export const settingsNavGroups: SettingsNavGroup[] = [
         id: "readiness",
         label: "Готовность",
         description: "Чеклист: что ещё не настроено",
-        icon: Gauge,
+        icon: SettingsIcons.readiness,
         path: "/settings/readiness",
         adminOnly: true,
         setupHint: "С чего начать после развёртывания",
@@ -58,7 +47,7 @@ export const settingsNavGroups: SettingsNavGroup[] = [
         id: "ai",
         label: "AI и модели",
         description: "Провайдеры, ключи, роли моделей",
-        icon: Bot,
+        icon: SettingsIcons.ai,
         path: "/settings/ai",
         setupHint: "Подключите LLM — чат, агенты, оркестратор",
       },
@@ -66,7 +55,7 @@ export const settingsNavGroups: SettingsNavGroup[] = [
         id: "limits",
         label: "Лимиты и бюджеты",
         description: "Runs, SSH, токены, MCP-таймауты",
-        icon: SlidersHorizontal,
+        icon: SettingsIcons.limits,
         path: "/settings/limits",
         adminOnly: true,
         setupHint: "Защита от перегрузки платформы",
@@ -75,7 +64,7 @@ export const settingsNavGroups: SettingsNavGroup[] = [
         id: "notifications",
         label: "Оповещения",
         description: "Telegram, email, публичный URL",
-        icon: Bell,
+        icon: SettingsIcons.notifications,
         path: "/settings/notifications",
         adminOnly: true,
         setupHint: "Куда слать алерты и отчёты агентов",
@@ -91,7 +80,7 @@ export const settingsNavGroups: SettingsNavGroup[] = [
         id: "access",
         label: "Обзор доступов",
         description: "Сводка рисков и быстрые ссылки",
-        icon: LayoutDashboard,
+        icon: SettingsIcons.access,
         path: "/settings/access",
         setupHint: "Карта пользователей, групп и прав",
       },
@@ -99,7 +88,7 @@ export const settingsNavGroups: SettingsNavGroup[] = [
         id: "users",
         label: "Пользователи",
         description: "Аккаунты, роли, активность",
-        icon: Users,
+        icon: SettingsIcons.users,
         path: "/settings/users",
         setupHint: "Создание и блокировка пользователей",
       },
@@ -107,7 +96,7 @@ export const settingsNavGroups: SettingsNavGroup[] = [
         id: "groups",
         label: "Группы",
         description: "Команды и общие права",
-        icon: FolderOpen,
+        icon: SettingsIcons.groups,
         path: "/settings/groups",
         setupHint: "Права пачками через группы",
       },
@@ -115,7 +104,7 @@ export const settingsNavGroups: SettingsNavGroup[] = [
         id: "permissions",
         label: "Разрешения",
         description: "Точечные feature-права",
-        icon: Shield,
+        icon: SettingsIcons.permissions,
         path: "/settings/permissions",
         setupHint: "Кто видит агентов, студию, k8s…",
       },
@@ -123,7 +112,7 @@ export const settingsNavGroups: SettingsNavGroup[] = [
         id: "sso",
         label: "SSO и домен",
         description: "LDAP, заголовок домена, auto-create",
-        icon: Globe,
+        icon: SettingsIcons.sso,
         path: "/settings/sso",
         adminOnly: true,
         setupHint: "Корпоративный вход без ручных учёток",
@@ -139,7 +128,7 @@ export const settingsNavGroups: SettingsNavGroup[] = [
         id: "memory",
         label: "Автозаметки",
         description: "Память AI по серверам",
-        icon: ScrollText,
+        icon: SettingsIcons.memory,
         path: "/settings/memory",
         adminOnly: true,
         setupHint: "Долгосрочный контекст на хостах",
@@ -148,7 +137,7 @@ export const settingsNavGroups: SettingsNavGroup[] = [
         id: "audit",
         label: "Аудит и журнал",
         description: "Что логировать и история действий",
-        icon: Activity,
+        icon: SettingsIcons.audit,
         path: "/settings/audit",
         adminOnly: true,
         setupHint: "Контроль изменений и расследования",
@@ -157,7 +146,7 @@ export const settingsNavGroups: SettingsNavGroup[] = [
         id: "kubernetes",
         label: "Kubernetes",
         description: "Rancher, Devtron, sync",
-        icon: Boxes,
+        icon: SettingsIcons.kubernetes,
         path: "/settings/kubernetes",
         adminOnly: true,
         setupHint: "Подключение k8s-кластеров",
@@ -166,7 +155,7 @@ export const settingsNavGroups: SettingsNavGroup[] = [
         id: "plugins",
         label: "Плагины",
         description: "Marketplace и локальные пакеты",
-        icon: Puzzle,
+        icon: SettingsIcons.plugins,
         path: "/settings/plugins",
         adminOnly: true,
         setupHint: "Расширения без пересборки образа",

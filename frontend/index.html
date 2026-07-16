@@ -20,13 +20,15 @@
           // Last style applied for this browser session/user (FOUC guard).
           // Per-user map is applied after auth loads in the app.
           var style = localStorage.getItem("webterm.ui-style.active");
-          if (style !== "catalog" && style !== "classic") {
+          var allowed = { catalog: 1, classic: 1, pulse: 1, signal: 1, folio: 1, "folio-dark": 1 };
+          if (style === "nocturne" || style === "haze") style = "folio-dark";
+          if (!allowed[style]) {
             style = localStorage.getItem("webterm.ui-style");
           }
-          if (style !== "catalog" && style !== "classic") style = "catalog";
+          if (!allowed[style]) style = "folio-dark";
           document.documentElement.setAttribute("data-ui-style", style);
         } catch (e) {
-          document.documentElement.setAttribute("data-ui-style", "catalog");
+          document.documentElement.setAttribute("data-ui-style", "folio-dark");
         }
 
         // Stale GH Pages/service-worker caches often keep old index + missing chunks.

@@ -1,6 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { FrontendGroup } from "@/lib/api";
-import { Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -11,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ServerIcons } from "@/lib/app-icons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -54,7 +54,12 @@ export function ServerGroupDialog({
     >
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>{editingGroup ? t("srv.edit_group") : t("srv.create_group")}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-sm border border-border bg-surface-0 text-primary">
+              <ServerIcons.group className="h-3.5 w-3.5" strokeWidth={1.5} />
+            </span>
+            {editingGroup ? t("srv.edit_group") : t("srv.create_group")}
+          </DialogTitle>
           <DialogDescription>{t("srv.group_settings")}</DialogDescription>
         </DialogHeader>
 
@@ -96,7 +101,7 @@ export function ServerGroupDialog({
         <DialogFooter>
           {editingGroup?.id && (
             <Button variant="outline" size="sm" onClick={() => openGroupRules(editingGroup.id!)} className="mr-auto gap-1.5">
-              <Layers className="h-3.5 w-3.5" /> {t("srv.rules_tab")}
+              <ServerIcons.context className="h-3.5 w-3.5" strokeWidth={1.5} /> {t("srv.rules_tab")}
             </Button>
           )}
           <Button variant="outline" size="sm" onClick={closeGroupDialog}>

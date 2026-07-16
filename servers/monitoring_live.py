@@ -123,6 +123,118 @@ def compute_cpu_percent(prev: dict, current: dict) -> float | None:
     return round(max(0.0, min(100.0, usage)), 1)
 
 
+def _live_cache_ttl_seconds() -> int:
+    """How long the last live sample stays available after the stream stops.
+
+    Background monitor only persists full metrics every ~60s. Live is faster but
+    was not stored — after a page reload the UI only saw the DB snapshot and looked
+    "old". Caching the last live tick bridges reload / short tab switches.
+    """
+    return max(30, int(getattr(settings, "MONITORING_LIVE_CACHE_SECONDS", 120) or 120))
+
+
+def live_cache_key(server_id: int) -> str:
+    return f"monitoring:live:last:{int(server_id)}"
+
+
+def _live_redis_client():
+    """Shared Redis so ASGI live writers and HTTP status readers share samples.
+
+    Falls back to None (caller uses Django cache) when Redis is unavailable.
+    """
+    import os
+
+    url = (
+        (getattr(settings, "CHANNEL_REDIS_URL", None) or "")
+        or (getattr(settings, "CELERY_BROKER_URL", None) or "")
+        or os.environ.get("CHANNEL_REDIS_URL", "")
+        or os.environ.get("CELERY_BROKER_URL", "")
+        or os.environ.get("REDIS_URL", "")
+    ).strip()
+    if not url:
+        return None
+    try:
+        import redis
+
+        return redis.Redis.from_url(url, decode_responses=True)
+    except Exception:
+        return None
+
+
+def store_live_samples(server_ids: list[int], payload: dict) -> None:
+    """Persist last live sample for HTTP status reads (Redis preferred)."""
+    if not server_ids:
+        return
+
+    sample = {
+        "cpu_percent": payload.get("cpu_percent"),
+        "memory_percent": payload.get("memory_percent"),
+        "disk_percent": payload.get("disk_percent"),
+        "load_1m": payload.get("load_1m"),
+        "ts": float(payload.get("ts") or time.time()),
+    }
+    # Skip incomplete frames (no usable metric).
+    if all(sample.get(k) is None for k in ("cpu_percent", "memory_percent", "disk_percent")):
+        return
+    ttl = _live_cache_ttl_seconds()
+
+    client = _live_redis_client()
+    if client is not None:
+        import json
+
+        pipe = client.pipeline()
+        body = json.dumps(sample)
+        for sid in server_ids:
+            pipe.setex(live_cache_key(sid), ttl, body)
+        with contextlib.suppress(Exception):
+            pipe.execute()
+            return
+
+    # Dev fallback: process-local Django cache (same process only).
+    with contextlib.suppress(Exception):
+        from django.core.cache import cache
+
+        cache.set_many({live_cache_key(sid): sample for sid in server_ids}, timeout=ttl)
+
+
+def fetch_live_samples(server_ids: list[int]) -> dict[int, dict]:
+    """Return cached live samples keyed by server_id (may be empty)."""
+    if not server_ids:
+        return {}
+
+    client = _live_redis_client()
+    if client is not None:
+        import json
+
+        keys = [live_cache_key(int(sid)) for sid in server_ids]
+        try:
+            values = client.mget(keys)
+        except Exception:
+            values = [None] * len(keys)
+        out: dict[int, dict] = {}
+        for sid, raw in zip(server_ids, values):
+            if not raw:
+                continue
+            with contextlib.suppress(TypeError, ValueError, json.JSONDecodeError):
+                value = json.loads(raw)
+                if isinstance(value, dict) and value.get("ts"):
+                    out[int(sid)] = value
+        return out
+
+    with contextlib.suppress(Exception):
+        from django.core.cache import cache
+
+        keys = {int(sid): live_cache_key(int(sid)) for sid in server_ids}
+        raw = cache.get_many(list(keys.values()))
+        out = {}
+        for sid, key in keys.items():
+            value = raw.get(key)
+            if isinstance(value, dict) and value.get("ts"):
+                out[sid] = value
+        return out
+    return {}
+
+
 class _CollectorEntry:
     __slots__ = ("endpoint_key", "refcount", "task", "idle_since", "server_refcounts", "host", "port")
 
@@ -195,6 +307,24 @@ class LiveMetricsManager:
     def _active_server_ids(self, entry: _CollectorEntry) -> list[int]:
         return sorted(server_id for server_id, count in entry.server_refcounts.items() if count > 0)
 
+    async def _inventory_server_ids(self, entry: _CollectorEntry) -> list[int]:
+        """All inventory rows for this physical endpoint (for cache fan-out)."""
+        from servers.models import Server
+        from servers.monitor import sync_to_async
+
+        def _load():
+            return list(
+                Server.objects.filter(
+                    is_active=True,
+                    server_type="ssh",
+                    host__iexact=entry.host,
+                    port=entry.port,
+                ).values_list("id", flat=True)
+            )
+
+        ids = await sync_to_async(_load)()
+        return sorted({int(sid) for sid in ids})
+
     async def _broadcast_to_servers(self, server_ids: list[int], payload: dict) -> None:
         channel_layer = get_channel_layer()
         if channel_layer is None or not server_ids:
@@ -203,6 +333,23 @@ class LiveMetricsManager:
             event = {**payload, "server_id": server_id}
             with contextlib.suppress(Exception):
                 await channel_layer.group_send(live_group_name(server_id), event)
+
+    async def _publish_live_sample(self, entry: _CollectorEntry, payload: dict) -> None:
+        """WS fan-out to active subscribers + cache for HTTP status / reload."""
+        from servers.monitor import sync_to_async
+
+        active_ids = self._active_server_ids(entry)
+        cache_ids = active_ids
+        # Prefer caching under every inventory row for this host:port so a reload
+        # of any user's server list still sees the fresh sample.
+        with contextlib.suppress(Exception):
+            inventory_ids = await self._inventory_server_ids(entry)
+            if inventory_ids:
+                cache_ids = inventory_ids
+        with contextlib.suppress(Exception):
+            await sync_to_async(store_live_samples)(cache_ids, payload)
+        if active_ids:
+            await self._broadcast_to_servers(active_ids, payload)
 
     async def _broadcast_state(self, entry: _CollectorEntry, state: str, error: str = "") -> None:
         await self._broadcast_to_servers(
@@ -332,10 +479,16 @@ class LiveMetricsManager:
                 sample = parse_live_line(line)
                 if sample is None:
                     continue
-                cpu_percent = compute_cpu_percent(prev_sample, sample) if prev_sample else None
+                # CPU needs two /proc/stat ticks. Seed prev and skip the first
+                # incomplete frame so clients don't flash RAM/disk without CPU
+                # (or wipe a full DB snapshot with a partial live override).
+                if prev_sample is None:
+                    prev_sample = sample
+                    continue
+                cpu_percent = compute_cpu_percent(prev_sample, sample)
                 prev_sample = sample
-                await self._broadcast_to_servers(
-                    self._active_server_ids(entry),
+                await self._publish_live_sample(
+                    entry,
                     {
                         "type": "live.metrics",
                         "cpu_percent": cpu_percent,

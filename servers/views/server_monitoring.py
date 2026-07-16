@@ -126,11 +126,66 @@ def _metrics_source(
     return metrics_hc
 
 
+def _apply_cached_live_metrics(item: dict, live: dict | None, now) -> dict:
+    """Overlay a fresh live cache sample onto a status item (for reload first paint).
+
+    Background monitor writes DB metrics about every 60s. Live samples are ~2s but
+    were only on the WebSocket — after F5 the list looked "old" until WS reconnected.
+    """
+    if not live or not isinstance(live, dict):
+        return item
+    try:
+        live_ts = float(live.get("ts") or 0)
+    except (TypeError, ValueError):
+        return item
+    if live_ts <= 0:
+        return item
+
+    from datetime import datetime, timezone as dt_timezone
+
+    live_dt = datetime.fromtimestamp(live_ts, tz=dt_timezone.utc)
+    live_age = int((now - live_dt).total_seconds())
+    # Ignore expired/stale cache entries even if TTL has not purged them.
+    if live_age < 0 or live_age > 180:
+        return item
+
+    metrics_checked_at = item.get("metrics_checked_at")
+    if metrics_checked_at:
+        with contextlib.suppress(TypeError, ValueError):
+            db_dt = datetime.fromisoformat(str(metrics_checked_at).replace("Z", "+00:00"))
+            if db_dt.tzinfo is None:
+                db_dt = db_dt.replace(tzinfo=dt_timezone.utc)
+            if live_dt <= db_dt:
+                return item
+
+    def _pick(key: str):
+        val = live.get(key)
+        return val if val is not None else item.get(key)
+
+    item["cpu_percent"] = _pick("cpu_percent")
+    item["memory_percent"] = _pick("memory_percent")
+    item["disk_percent"] = _pick("disk_percent")
+    item["load_1m"] = _pick("load_1m")
+    item["metrics_checked_at"] = live_dt.isoformat()
+    item["metrics_age_seconds"] = live_age
+    item["is_lite"] = False
+    # Live sample means the host was recently reachable.
+    if item.get("status") in (None, "unknown", "unreachable") and any(
+        item.get(k) is not None for k in ("cpu_percent", "memory_percent", "disk_percent")
+    ):
+        item["status"] = "healthy"
+        item["is_stale"] = False
+        item["age_seconds"] = live_age
+        item["checked_at"] = live_dt.isoformat()
+    return item
+
+
 def _serialize_monitoring_status_item(
     server: Server,
     hc: ServerHealthCheck | None,
     metrics_hc: ServerHealthCheck | None,
     now,
+    live_sample: dict | None = None,
 ) -> dict:
     stale_seconds = _monitoring_stale_seconds()
     full_fail_trust = _monitoring_full_fail_trust_seconds()
@@ -155,7 +210,7 @@ def _serialize_monitoring_status_item(
         int((now - metrics_checked_at).total_seconds()) if metrics_checked_at else None
     )
     probe_checked_at = hc.checked_at if hc and hc.checked_at else None
-    return {
+    item = {
         "server_id": server.id,
         "server_name": server.name,
         "host": server.host,
@@ -180,6 +235,7 @@ def _serialize_monitoring_status_item(
             status_row is not None and metrics_hc is not None and status_row.id == metrics_hc.id and hc is not None and status_row.id != hc.id
         ),
     }
+    return _apply_cached_live_metrics(item, live_sample, now)
 
 
 def _serialize_health_check(hc: ServerHealthCheck) -> dict:
@@ -230,9 +286,21 @@ def _build_monitoring_status_payload(user) -> dict:
     server_ids = [server.id for server in servers]
     latest_by_id = _latest_health_checks_by_server_id(server_ids)
     metrics_by_id = _latest_health_checks_by_server_id(server_ids, with_metrics=True)
+    # Last live WebSocket samples (cached ~2m) — fresher than 60s DB monitor after reload.
+    live_by_id: dict[int, dict] = {}
+    with contextlib.suppress(Exception):
+        from servers.monitoring_live import fetch_live_samples
+
+        live_by_id = fetch_live_samples(server_ids)
 
     items = [
-        _serialize_monitoring_status_item(server, latest_by_id.get(server.id), metrics_by_id.get(server.id), now)
+        _serialize_monitoring_status_item(
+            server,
+            latest_by_id.get(server.id),
+            metrics_by_id.get(server.id),
+            now,
+            live_sample=live_by_id.get(server.id),
+        )
         for server in servers
     ]
     checked_items = [item for item in items if item["checked_at"]]

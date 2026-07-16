@@ -1,5 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
-import { BookMarked, Code2, FolderPlus, Loader2, Shield, WandSparkles } from "lucide-react";
+import { BookMarked, Code2, FolderPlus, Loader2, Shield } from "lucide-react";
+import { StudioNavIcons } from "@/lib/app-icons";
 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
@@ -68,7 +69,7 @@ export function CreateSkillDialog({
           <DialogHeader className="border-0 p-0">
             <DialogTitle className="flex items-center gap-3 text-xl font-semibold">
               <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-primary/20 bg-primary/10">
-                <WandSparkles className="h-4 w-4 text-primary" />
+                <StudioNavIcons.skills className="h-4 w-4 text-primary" strokeWidth={1.5} />
               </span>
               {tr("Создать скилл", "Create skill")}
             </DialogTitle>
@@ -306,7 +307,7 @@ export function CreateSkillDialog({
           <div className="flex justify-end gap-2">
             <Button variant="ghost" className="text-muted-foreground" onClick={() => onOpenChange(false)}>{tr("Отмена", "Cancel")}</Button>
             <Button onClick={onSubmit} disabled={!canSubmitWizard || isPending} className="h-10 gap-2 px-5">
-              {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
+              {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <StudioNavIcons.skills className="h-4 w-4" strokeWidth={1.5} />}
               {tr("Создать", "Create")}
             </Button>
           </div>

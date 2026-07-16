@@ -53,6 +53,7 @@ const KubernetesFleetPage = lazy(() => import("./pages/KubernetesFleetPage"));
 const KubernetesDevtronPage = lazy(() => import("./pages/KubernetesDevtronPage"));
 const MarsPage = lazy(() => import("./pages/MarsPage"));
 const MarsRunPage = lazy(() => import("./pages/MarsRunPage"));
+const MonitoringInsightsPage = lazy(() => import("./pages/monitoring-insights/MonitoringInsightsPage"));
 
 function RouteLoader() {
   const { t } = useI18n();
@@ -182,6 +183,14 @@ const App = () => (
                 />
                 <Route path="/admin" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/dashboard/admin" element={<Navigate to="/dashboard" replace />} />
+                <Route
+                  path="/monitoring/insights"
+                  element={(
+                    <FeatureGate feature="dashboard">
+                      <MonitoringInsightsPage />
+                    </FeatureGate>
+                  )}
+                />
                 <Route
                   path="/servers"
                   element={(

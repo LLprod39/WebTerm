@@ -1,18 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  Bot,
-  FileText,
-  MessageSquare,
-  MoreHorizontal,
-  Pause,
-  Play,
-  Plus,
-  Search,
-  Settings2,
-  Square,
-  Trash2,
-} from "lucide-react";
+import { MoreHorizontal } from "lucide-react";
+import { ActionIcons, AgentIcons, NavIcons } from "@/lib/app-icons";
 
 import type { AgentItem, AgentRuntimeRunItem } from "@/lib/api";
 import { localize } from "@/lib/i18n";
@@ -134,7 +123,7 @@ export function AgentListSection({
   if (totalCount === 0) {
     return (
       <EmptyState
-        icon={<Bot className="h-5 w-5" />}
+        icon={<NavIcons.agents className="h-5 w-5" strokeWidth={1.5} />}
         title={t("agent.empty")}
         description={localize(
           lang,
@@ -143,7 +132,7 @@ export function AgentListSection({
         )}
         actions={
           <Button size="sm" onClick={() => onCreate()} className="gap-1.5">
-            <Plus className="h-4 w-4" /> {t("agent.create_first")}
+            <ActionIcons.add className="h-4 w-4" strokeWidth={1.5} /> {t("agent.create_first")}
           </Button>
         }
       />
@@ -172,7 +161,7 @@ export function AgentListSection({
           ))}
         </div>
         <div className="relative w-full max-w-64 sm:w-64">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <ActionIcons.search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" strokeWidth={1.5} />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -184,7 +173,7 @@ export function AgentListSection({
 
       {visibleAgents.length === 0 ? (
         <EmptyState
-          icon={<Bot className="h-5 w-5" />}
+          icon={<NavIcons.agents className="h-5 w-5" strokeWidth={1.5} />}
           title={localize(lang, "Ничего не найдено", "Nothing found")}
           description={localize(lang, "Измените поиск или фильтр.", "Change the search or filter.")}
           actions={
@@ -274,7 +263,7 @@ export function AgentListSection({
                         </p>
                         {activeRunQuestion ? (
                           <p className="mt-1.5 flex max-w-2xl items-start gap-1.5 rounded-sm border border-warning/30 bg-warning/10 px-2 py-1.5 text-xs leading-4 text-foreground">
-                            <MessageSquare className="mt-0.5 h-3 w-3 shrink-0 text-warning" aria-hidden />
+                            <NavIcons.chat className="mt-0.5 h-3 w-3 shrink-0 text-warning" strokeWidth={1.5} aria-hidden />
                             <span className="min-w-0 break-words">{activeRunQuestion}</span>
                           </p>
                         ) : null}
@@ -298,7 +287,7 @@ export function AgentListSection({
                       {ag.active_run_id ? (
                         <Button asChild size="sm" className="h-8 gap-1.5 shadow-elev-1">
                           <Link to={`/agents/run/${ag.active_run_id}`}>
-                            {activeRunMeta.status === "waiting" ? <MessageSquare className="h-3.5 w-3.5" /> : null}
+                            {activeRunMeta.status === "waiting" ? <NavIcons.chat className="h-3.5 w-3.5" strokeWidth={1.5} /> : null}
                             {activeRunCta}
                           </Link>
                         </Button>
@@ -312,7 +301,7 @@ export function AgentListSection({
                           aria-label={localize(lang, `Запустить ${ag.name}`, `Run ${ag.name}`)}
                           title={blockedReason || t("agent.run")}
                         >
-                          <Play className={cn("h-3.5 w-3.5", isStarting && "animate-pulse")} />
+                          <ActionIcons.play className={cn("h-3.5 w-3.5", isStarting && "animate-pulse")} strokeWidth={1.5} />
                           <span className="hidden sm:inline">{t("agent.run")}</span>
                         </Button>
                       )}
@@ -320,7 +309,7 @@ export function AgentListSection({
                       {ag.last_run_id && !ag.active_run_id ? (
                         <Button asChild size="icon" variant="ghost" className="hidden h-8 w-8 text-muted-foreground hover:text-foreground sm:inline-flex">
                           <Link to={`/agents/run/${ag.last_run_id}`} aria-label={t("agent.report")}>
-                            <FileText className="h-4 w-4" />
+                            <AgentIcons.report className="h-4 w-4" strokeWidth={1.5} />
                           </Link>
                         </Button>
                       ) : null}
@@ -340,29 +329,29 @@ export function AgentListSection({
                           {ag.last_run_id ? (
                             <DropdownMenuItem asChild>
                               <Link to={`/agents/run/${ag.last_run_id}`} className="flex items-center gap-2">
-                                <FileText className="h-3.5 w-3.5" /> {t("agent.report")}
+                                <AgentIcons.report className="h-3.5 w-3.5" strokeWidth={1.5} /> {t("agent.report")}
                               </Link>
                             </DropdownMenuItem>
                           ) : null}
                           <DropdownMenuItem onClick={() => onEdit(ag)} className="gap-2">
-                            <Settings2 className="h-3.5 w-3.5" /> {localize(lang, "Настроить", "Configure")}
+                            <AgentIcons.edit className="h-3.5 w-3.5" strokeWidth={1.5} /> {localize(lang, "Настроить", "Configure")}
                           </DropdownMenuItem>
                           {scheduled && onTogglePause ? (
                             <DropdownMenuItem onClick={() => onTogglePause(ag)} className="gap-2">
                               {isPaused ? (
                                 <>
-                                  <Play className="h-3.5 w-3.5" /> {localize(lang, "Возобновить расписание", "Resume schedule")}
+                                  <ActionIcons.play className="h-3.5 w-3.5" strokeWidth={1.5} /> {localize(lang, "Возобновить расписание", "Resume schedule")}
                                 </>
                               ) : (
                                 <>
-                                  <Pause className="h-3.5 w-3.5" /> {localize(lang, "Поставить на паузу", "Pause schedule")}
+                                  <ActionIcons.pause className="h-3.5 w-3.5" strokeWidth={1.5} /> {localize(lang, "Поставить на паузу", "Pause schedule")}
                                 </>
                               )}
                             </DropdownMenuItem>
                           ) : null}
                           {ag.active_run_id ? (
                             <DropdownMenuItem onClick={() => onStop(ag)} disabled={isStopping} className="gap-2">
-                              <Square className="h-3.5 w-3.5" /> {t("agent.stop")}
+                              <ActionIcons.stop className="h-3.5 w-3.5" strokeWidth={1.5} /> {t("agent.stop")}
                             </DropdownMenuItem>
                           ) : null}
                           <DropdownMenuSeparator />
@@ -370,7 +359,7 @@ export function AgentListSection({
                             onClick={() => onDelete(ag)}
                             className="gap-2 text-destructive focus:text-destructive"
                           >
-                            <Trash2 className="h-3.5 w-3.5" /> {localize(lang, "Удалить", "Delete")}
+                            <ActionIcons.delete className="h-3.5 w-3.5" strokeWidth={1.5} /> {localize(lang, "Удалить", "Delete")}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>

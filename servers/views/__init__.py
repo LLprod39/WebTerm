@@ -46,6 +46,7 @@ from servers.views.server_helpers import (  # noqa: F401
     _serialize_detected_os_fields,
     _shared_server_context_allowed,
 )
+from servers.views.server_insights import *  # noqa: F401, F403
 from servers.views.server_knowledge import *  # noqa: F401, F403
 from servers.views.server_linux_ui import *  # noqa: F401, F403
 from servers.views.server_linux_ui_workloads import *  # noqa: F401, F403

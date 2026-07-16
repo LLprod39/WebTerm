@@ -34,9 +34,8 @@ export function countAgentSystemProblems({
 }
 
 /**
- * Collapses the ops diagnostics (runtime queue, execution worker, scheduler)
- * into a single thin health strip. Healthy → one calm line, collapsed.
- * Problems → expanded with the detailed panels and fix commands.
+ * Ops diagnostics (runtime queue, execution worker, scheduler).
+ * Shown only when there are problems — no "all healthy" strip for operators.
  */
 export function AgentSystemHealthSection({
   runtimeOverview,
@@ -65,73 +64,47 @@ export function AgentSystemHealthSection({
     scheduledWorker,
     showScheduledWorker,
   });
-  const healthy = problems === 0;
 
   const [userExpanded, setUserExpanded] = useState<boolean | null>(null);
-  const open = userExpanded ?? !healthy;
+  // Default open when there are problems; user can collapse.
+  const open = userExpanded ?? true;
 
   const hasAnyPanel = showRuntimeOverview || Boolean(executionReadiness) || showScheduledWorker;
-  if (!hasAnyPanel) return null;
+  // Hide entirely when healthy — no "Служебные процессы работают" noise.
+  if (!hasAnyPanel || problems === 0) return null;
 
   return (
     <Collapsible open={open} onOpenChange={(next) => setUserExpanded(next)}>
-      <div
-        className={cn(
-          "overflow-hidden rounded-xl transition-colors",
-          healthy && !open
-            ? "border border-transparent"
-            : healthy
-              ? "border border-border/50 bg-surface-1/60"
-              : "border border-warning/25 bg-warning/5",
-        )}
-      >
+      <div className="overflow-hidden rounded-xl border border-warning/25 bg-warning/5 transition-colors">
         <CollapsibleTrigger asChild>
           <button
             type="button"
-            className={cn(
-              "flex w-full items-center gap-2 text-left transition-colors",
-              healthy ? "px-1 py-1 text-xs text-muted-foreground/70 hover:text-muted-foreground" : "px-4 py-3 hover:bg-warning/10",
-            )}
+            className="flex w-full items-center gap-2 px-4 py-3 text-left transition-colors hover:bg-warning/10"
             aria-label={localize(lang, "Служебные процессы агентов", "Agent background services")}
           >
-            {healthy ? (
-              <>
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-success/70" aria-hidden />
-                <span className="min-w-0 truncate">
-                  {localize(lang, "Служебные процессы работают", "Background services healthy")}
-                </span>
-                <ChevronDown
-                  className={cn("h-3 w-3 shrink-0 transition-transform duration-200", open && "rotate-180")}
-                  aria-hidden
-                />
-              </>
-            ) : (
-              <>
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-warning/10 text-warning">
-                  <AlertTriangle className="h-4 w-4" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold text-foreground">
-                    {localize(lang, "Агенты могут не запускаться", "Agents may fail to start")}
-                  </span>
-                  <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                    {localize(
-                      lang,
-                      "Проблемы со служебными процессами. Откройте, чтобы исправить.",
-                      "Background services have problems. Open to fix.",
-                    )}
-                  </span>
-                </span>
-                <StatusBadge
-                  label={localize(lang, `проблем: ${problems}`, `${problems} problem${problems === 1 ? "" : "s"}`)}
-                  tone="warning"
-                />
-                <ChevronDown
-                  className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200", open && "rotate-180")}
-                  aria-hidden
-                />
-              </>
-            )}
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-warning/10 text-warning">
+              <AlertTriangle className="h-4 w-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold text-foreground">
+                {localize(lang, "Агенты могут не запускаться", "Agents may fail to start")}
+              </span>
+              <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                {localize(
+                  lang,
+                  "Проблемы со служебными процессами. Откройте, чтобы исправить.",
+                  "Background services have problems. Open to fix.",
+                )}
+              </span>
+            </span>
+            <StatusBadge
+              label={localize(lang, `проблем: ${problems}`, `${problems} problem${problems === 1 ? "" : "s"}`)}
+              tone="warning"
+            />
+            <ChevronDown
+              className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200", open && "rotate-180")}
+              aria-hidden
+            />
           </button>
         </CollapsibleTrigger>
         <CollapsibleContent>

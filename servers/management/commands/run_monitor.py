@@ -19,6 +19,8 @@ from django.core.management.base import BaseCommand
 from loguru import logger
 
 from app.background_workers import STUDIO_MONITOR_WORKER
+from servers.cert_collector import collect_certificates_for_all
+from servers.metrics_rollup import run_metric_rollups
 from servers.monitor import check_all_servers, cleanup_old_data
 from servers.worker_state import claim_background_worker, heartbeat_background_worker, stop_background_worker
 
@@ -30,6 +32,8 @@ class Command(BaseCommand):
         parser.add_argument("--quick-interval", type=int, default=300, help="Quick check interval in seconds (default 300)")
         parser.add_argument("--deep-interval", type=int, default=600, help="Deep check interval in seconds (default 600)")
         parser.add_argument("--cleanup-interval", type=int, default=86400, help="Old data cleanup interval in seconds (default 86400)")
+        parser.add_argument("--rollup-interval", type=int, default=3600, help="Metric rollup interval in seconds (default 3600)")
+        parser.add_argument("--cert-interval", type=int, default=21600, help="TLS certificate scan interval in seconds (default 21600)")
         parser.add_argument("--concurrency", type=int, default=5, help="Max concurrent SSH connections (default 5)")
         parser.add_argument("--server-id", dest="server_ids", action="append", type=int, help="Restrict checks to one or more server IDs (repeatable)")
         parser.add_argument("--once", action="store_true", help="Run a single check and exit")
@@ -46,6 +50,8 @@ class Command(BaseCommand):
         quick_interval = options["quick_interval"]
         deep_interval = options["deep_interval"]
         cleanup_interval = options["cleanup_interval"]
+        rollup_interval = options["rollup_interval"]
+        cert_interval = options["cert_interval"]
         concurrency = options["concurrency"]
         server_ids = options["server_ids"] or []
         once = options["once"]
@@ -110,6 +116,8 @@ class Command(BaseCommand):
                         lite_quick,
                         worker_key,
                         lease_seconds,
+                        rollup_interval=rollup_interval,
+                        cert_interval=cert_interval,
                     )
                 )
             except KeyboardInterrupt:
@@ -127,6 +135,9 @@ class Command(BaseCommand):
         lite_quick: bool = True,
         worker_key: str = "default",
         lease_seconds: int = 180,
+        *,
+        rollup_interval: int = 3600,
+        cert_interval: int = 21600,
     ) -> dict:
         stop = asyncio.Event()
 
@@ -140,6 +151,10 @@ class Command(BaseCommand):
         deep_every_n = max(1, deep_interval // quick_interval)
         cleanup_counter = 0
         cleanup_every_n = max(1, cleanup_interval // quick_interval)
+        rollup_counter = 0
+        rollup_every_n = max(1, rollup_interval // quick_interval)
+        cert_counter = 0
+        cert_every_n = max(1, cert_interval // quick_interval)
         summary = {"cycle": 0, "mode": "", "checked": 0, "errors": 0, "cleanup_errors": 0}
 
         while not stop.is_set():
@@ -196,6 +211,36 @@ class Command(BaseCommand):
                 except Exception as exc:
                     summary["cleanup_errors"] += 1
                     logger.error("Monitor: cleanup failed: {}", exc)
+
+            rollup_counter += 1
+            # First cycle bootstraps rollups/certs so a fresh install sees data immediately.
+            if rollup_counter >= rollup_every_n or quick_counter == 1:
+                rollup_counter = 0
+                try:
+                    rollup_summary = await sync_to_async(run_metric_rollups, thread_sensitive=True)()
+                    logger.info(
+                        "Monitor: metric rollups updated ({} hour, {} day)",
+                        rollup_summary["hour_rows"],
+                        rollup_summary["day_rows"],
+                    )
+                except Exception as exc:
+                    logger.error("Monitor: metric rollup failed: {}", exc)
+
+            cert_counter += 1
+            if cert_counter >= cert_every_n or quick_counter == 1:
+                cert_counter = 0
+                try:
+                    cert_summary = await collect_certificates_for_all(
+                        concurrency=concurrency, server_ids=server_ids
+                    )
+                    logger.info(
+                        "Monitor: certificate scan done ({} of {} servers, {} certs)",
+                        cert_summary.get("scanned", 0),
+                        cert_summary.get("servers", 0),
+                        cert_summary.get("certificates", 0),
+                    )
+                except Exception as exc:
+                    logger.error("Monitor: certificate scan failed: {}", exc)
 
             try:
                 await asyncio.wait_for(stop.wait(), timeout=quick_interval)

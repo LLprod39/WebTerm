@@ -47,7 +47,7 @@ export function statusFromLiveMetrics(live: LiveServerMetrics): FleetHealthStatu
   ) {
     return "warning";
   }
-  // First tick often has cpu_percent=null (needs two /proc samples); still online.
+  // Live frames may still lack a field mid-stream; host is online while streaming.
   return "healthy";
 }
 
@@ -98,7 +98,7 @@ export function useMonitoringLive(serverIds: number[], enabled: boolean) {
       setMetricsByServerId((prev) => {
         const next = new Map(prev);
         const prevSample = prev.get(data.server_id);
-        // First live tick often has cpu=null — keep previous live cpu, not a days-old snapshot.
+        // Never blank a metric that already streamed this session (partial frames).
         next.set(data.server_id, {
           server_id: data.server_id,
           cpu_percent: data.cpu_percent ?? prevSample?.cpu_percent ?? null,

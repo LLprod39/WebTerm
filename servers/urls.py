@@ -10,6 +10,7 @@ from .views import (
     server_crud,
     server_files,
     server_groups,
+    server_insights,
     server_knowledge,
     server_linux_ui,
     server_linux_ui_workloads,
@@ -186,6 +187,7 @@ urlpatterns = [
     path("api/master-password/check/", server_auth_session.get_master_password, name="get_master_password"),
     path("api/master-password/clear/", server_auth_session.clear_master_password, name="clear_master_password"),
     # Monitoring
+    path("api/admin/insights/", server_insights.admin_insights, name="admin_insights"),
     path("api/monitoring/dashboard/", server_monitoring.monitoring_dashboard, name="monitoring_dashboard"),
     path("api/monitoring/status/", server_monitoring.monitoring_status, name="monitoring_status"),
     path("api/monitoring/refresh/", server_monitoring.monitoring_refresh, name="monitoring_refresh"),

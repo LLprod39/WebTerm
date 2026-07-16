@@ -1,27 +1,19 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import {
-  LayoutGrid,
-  BookOpen,
-  Server,
-  Bot,
-  Clock,
-  Bell,
-  Wand2,
-} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fetchAuthSession } from "@/lib/api";
 import { canAccessStudio, hasFeatureAccess } from "@/lib/featureAccess";
 import { localize, useI18n } from "@/lib/i18n";
+import { StudioNavIcons } from "@/lib/app-icons";
 
 const NAV_ITEMS = [
-  { path: "/studio", labelRu: "Обзор", labelEn: "Overview", icon: LayoutGrid, exact: true },
-  { path: "/studio/drafts", labelRu: "Черновики", labelEn: "Drafts", icon: Wand2, feature: "studio_pipelines" },
-  { path: "/studio/skills", labelRu: "Скиллы", labelEn: "OPS Skills", icon: BookOpen, feature: "studio_skills" },
-  { path: "/studio/mcp", labelRu: "MCP", labelEn: "MCP Tools", icon: Server, feature: "studio_mcp" },
-  { path: "/studio/agents", labelRu: "Профили", labelEn: "Profiles", icon: Bot, feature: "studio_agents" },
-  { path: "/studio/runs", labelRu: "Запуски", labelEn: "Runs", icon: Clock, feature: "studio_runs" },
-  { path: "/studio/notifications", labelRu: "Оповещения", labelEn: "Alerts", icon: Bell, feature: "studio_notifications" },
+  { path: "/studio", labelRu: "Обзор", labelEn: "Overview", icon: StudioNavIcons.overview, exact: true },
+  { path: "/studio/drafts", labelRu: "Черновики", labelEn: "Drafts", icon: StudioNavIcons.drafts, feature: "studio_pipelines" },
+  { path: "/studio/skills", labelRu: "Скиллы", labelEn: "OPS Skills", icon: StudioNavIcons.skills, feature: "studio_skills" },
+  { path: "/studio/mcp", labelRu: "MCP", labelEn: "MCP Tools", icon: StudioNavIcons.mcp, feature: "studio_mcp" },
+  { path: "/studio/agents", labelRu: "Профили", labelEn: "Profiles", icon: StudioNavIcons.agents, feature: "studio_agents" },
+  { path: "/studio/runs", labelRu: "Запуски", labelEn: "Runs", icon: StudioNavIcons.runs, feature: "studio_runs" },
+  { path: "/studio/notifications", labelRu: "Оповещения", labelEn: "Alerts", icon: StudioNavIcons.notifications, feature: "studio_notifications" },
 ] as const;
 
 export function StudioNav() {
@@ -70,7 +62,10 @@ export function StudioNav() {
                 : "text-muted-foreground/70 hover:bg-secondary/60 hover:text-foreground"
             )}
           >
-            <Icon className={cn("h-3.5 w-3.5 transition-colors", active ? "text-primary" : "group-hover:text-foreground/80")} />
+            <Icon
+              className={cn("h-3.5 w-3.5 transition-colors", active ? "text-primary" : "group-hover:text-foreground/80")}
+              strokeWidth={1.5}
+            />
             {label}
             <span className={cn(
               "absolute bottom-0 left-2 right-2 h-0.5 rounded-full transition-all duration-200",

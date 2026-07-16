@@ -313,7 +313,7 @@ export default function AgentRunPage() {
                   key={item.value}
                   value={item.value}
                   className={cn(
-                    "h-11 gap-2 rounded-sm px-3.5 text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-elev-1",
+                    "h-11 gap-2 rounded-sm px-3.5 text-sm",
                   )}
                 >
                   <Icon className="h-4 w-4" />

@@ -187,13 +187,22 @@ export default function Servers() {
       map.set(item.server_id, item);
     }
     // Live WebSocket samples override the snapshot when fresh.
-    // Once live is active for a host, never fall back to a stale DB CPU (e.g. 100% from days ago).
+    // Partial ticks (first sample often has cpu=null until two /proc reads) must NOT
+    // blank RAM/disk/CPU that we already have from a recent DB snapshot — that caused
+    // chips to pop in one-by-one ~1s after open.
     const nowMs = Date.now();
     for (const [serverId, live] of liveMetrics) {
       if (!isFreshLiveSample(live, nowMs)) continue;
       const base = map.get(serverId);
       const liveStatus = statusFromLiveMetrics(live);
       const serverMeta = servers.find((s) => s.id === serverId);
+      // Only fill null live fields from a non-stale DB snapshot (avoid days-old 100% CPU).
+      const baseMetricsFresh =
+        Boolean(base) &&
+        !base!.is_stale &&
+        (base!.metrics_age_seconds == null || base!.metrics_age_seconds <= 300);
+      const pickMetric = (liveVal: number | null | undefined, baseVal: number | null | undefined) =>
+        liveVal ?? (baseMetricsFresh ? (baseVal ?? null) : null);
       map.set(serverId, {
         server_id: serverId,
         server_name: base?.server_name || serverMeta?.name || "",
@@ -204,10 +213,10 @@ export default function Servers() {
         age_seconds: 0,
         is_stale: false,
         response_time_ms: base?.response_time_ms ?? null,
-        cpu_percent: live.cpu_percent,
-        memory_percent: live.memory_percent,
-        disk_percent: live.disk_percent,
-        load_1m: live.load_1m,
+        cpu_percent: pickMetric(live.cpu_percent, base?.cpu_percent),
+        memory_percent: pickMetric(live.memory_percent, base?.memory_percent),
+        disk_percent: pickMetric(live.disk_percent, base?.disk_percent),
+        load_1m: pickMetric(live.load_1m, base?.load_1m),
         metrics_checked_at: new Date(nowMs).toISOString(),
         metrics_age_seconds: 0,
         is_lite: false,
@@ -346,29 +355,17 @@ export default function Servers() {
       ) : null}
 
       <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as MainTab)} className="space-y-3">
-        <TabsList className="h-auto justify-start gap-1 overflow-x-auto rounded-sm border border-border bg-surface-0 p-0.5">
-          <TabsTrigger
-            value="servers"
-            className="min-h-9 gap-2 px-3 text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-elev-1"
-          >
+        <TabsList className="h-auto justify-start gap-1 rounded-sm border border-border bg-surface-0 p-0.5">
+          <TabsTrigger value="servers" className="min-h-9 gap-2 px-3 text-sm">
             <Server className="h-4 w-4" /> {t("srv.list")}
           </TabsTrigger>
-          <TabsTrigger
-            value="groups"
-            className="min-h-9 gap-2 px-3 text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-elev-1"
-          >
+          <TabsTrigger value="groups" className="min-h-9 gap-2 px-3 text-sm">
             <Layers className="h-4 w-4" /> {t("srv.groups")}
           </TabsTrigger>
-          <TabsTrigger
-            value="rules"
-            className="min-h-9 gap-2 px-3 text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-elev-1"
-          >
+          <TabsTrigger value="rules" className="min-h-9 gap-2 px-3 text-sm">
             <Settings className="h-4 w-4" /> {t("srv.rules_tab")}
           </TabsTrigger>
-          <TabsTrigger
-            value="playbook"
-            className="min-h-9 gap-2 px-3 text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-elev-1"
-          >
+          <TabsTrigger value="playbook" className="min-h-9 gap-2 px-3 text-sm">
             <BookOpen className="h-4 w-4" /> {t("pb.title")}
           </TabsTrigger>
         </TabsList>
