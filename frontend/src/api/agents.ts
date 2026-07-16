@@ -123,10 +123,16 @@ export async function deleteAgent(agentId: number) {
 }
 
 export async function runAgent(agentId: number, serverId?: number) {
-  return apiFetch<{ success: boolean; runs: AgentRunResult[]; run_id?: number }>(`/servers/api/agents/${agentId}/run/`, {
-    method: "POST",
-    body: JSON.stringify(serverId ? { server_id: serverId } : {}),
-  });
+  // Launch only queues the run (execution plane). Keep a modest timeout so a
+  // stuck HTTP thread cannot pin the UI for minutes.
+  return apiFetch<{ success: boolean; runs: AgentRunResult[]; run_id?: number; status?: string }>(
+    `/servers/api/agents/${agentId}/run/`,
+    {
+      method: "POST",
+      body: JSON.stringify(serverId ? { server_id: serverId } : {}),
+      timeoutMs: 60_000,
+    },
+  );
 }
 
 export async function stopAgent(agentId: number, runId?: number) {

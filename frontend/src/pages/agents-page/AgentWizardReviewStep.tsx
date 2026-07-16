@@ -141,8 +141,8 @@ export function AgentWizardReviewStep({
             <span className="mt-1 block text-xs leading-5 text-muted-foreground">
               {localize(
                 lang,
-                "Откроется live-отчёт (full/multi) или краткий результат (mini). Можно снять галочку и запустить позже из списка.",
-                "Opens a live report (full/multi) or a brief result (mini). Uncheck to run later from the list.",
+                "Откроется live-отчёт запуска. Можно снять галочку и запустить позже из списка.",
+                "Opens the live run report. Uncheck to run later from the list.",
               )}
             </span>
           </span>

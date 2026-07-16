@@ -26,17 +26,17 @@ def get_agent_execution_readiness() -> dict[str, Any]:
     if ready:
         severity = "success"
         title = "Execution worker готов"
-        description = "Full/multi-агенты могут быть забраны execution-plane worker."
+        description = "Mini/full/multi-агенты могут быть забраны execution-plane worker."
         next_action = ""
     elif status == "missing":
         severity = "warning"
         title = "Execution worker не запущен"
-        description = "Full/multi-агенты будут поставлены в очередь, но не начнут выполняться до запуска worker."
+        description = "Агенты будут поставлены в очередь, но не начнут выполняться до запуска worker."
         next_action = f"Запустите worker: {AGENT_EXECUTION_COMMAND}"
     elif is_stale:
         severity = "warning"
         title = "Execution worker heartbeat протух"
-        description = "Lease worker истёк; queued full/multi-агенты могут ждать до перезапуска worker."
+        description = "Lease worker истёк; queued-агенты могут ждать до перезапуска worker."
         next_action = f"Перезапустите worker: {AGENT_EXECUTION_COMMAND}"
     elif status == "error":
         severity = "critical"
@@ -46,7 +46,7 @@ def get_agent_execution_readiness() -> dict[str, Any]:
     else:
         severity = "warning"
         title = "Execution worker не активен"
-        description = f"Статус worker: {status}; full/multi-агенты могут остаться в очереди."
+        description = f"Статус worker: {status}; агенты могут остаться в очереди."
         next_action = f"Запустите worker: {AGENT_EXECUTION_COMMAND}"
     return {
         "required": True,
@@ -63,17 +63,6 @@ def get_agent_execution_readiness() -> dict[str, Any]:
 
 
 def get_agent_execution_readiness_for_mode(mode: str) -> dict[str, Any]:
-    if mode == "mini":
-        return {
-            "required": False,
-            "ready": True,
-            "status": "not_required",
-            "severity": "info",
-            "title": "Execution worker не требуется",
-            "description": "Mini-агенты выполняются inline и не требуют execution-plane worker.",
-            "next_action": "",
-            "supervisor_action": "",
-            "commands": _runtime_commands(),
-            "worker": None,
-        }
+    # All modes (including mini) use the execution-plane queue.
+    _ = mode
     return get_agent_execution_readiness()

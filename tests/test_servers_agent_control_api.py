@@ -86,8 +86,8 @@ def test_agent_endpoints_crud_run_and_control_flow(monkeypatch):
     assert listed_agent["session_timeout_seconds"] == FULL_DEFAULT_SESSION_TIMEOUT_SEC
     assert listed_agent["max_iterations"] == FULL_DEFAULT_MAX_ITERATIONS
     assert listed_agent["max_connections"] == 5
-    assert listed_agent["execution_readiness"]["required"] is False
-    assert listed_agent["execution_readiness"]["ready"] is True
+    # Mini agents use the same execution-plane worker as full/multi.
+    assert listed_agent["execution_readiness"]["required"] is True
 
     update_agent = client.post(
         f"/servers/api/agents/{agent_id}/update/",
@@ -151,10 +151,18 @@ def test_agent_endpoints_crud_run_and_control_flow(monkeypatch):
 
     completed_run = _build_run(AgentRun.STATUS_COMPLETED)
 
-    async def fake_run_agent_on_all_servers(_agent, _user):
-        return [completed_run]
+    captured_launch: dict[str, object] = {}
 
-    monkeypatch.setattr("servers.agent_service.run_agent_on_all_servers", fake_run_agent_on_all_servers)
+    def fake_launch(run_id: int, agent_id: int, server_ids: list[int], user_id: int, *, plan_only: bool = False):
+        captured_launch.update({
+            "run_id": run_id,
+            "agent_id": agent_id,
+            "server_ids": server_ids,
+            "user_id": user_id,
+            "plan_only": plan_only,
+        })
+
+    monkeypatch.setattr("servers.agent_launch.launch_agent_run_background", fake_launch)
 
     run_agent = client.post(
         f"/servers/api/agents/{agent_id}/run/",
@@ -162,11 +170,17 @@ def test_agent_endpoints_crud_run_and_control_flow(monkeypatch):
         content_type="application/json",
     )
     assert run_agent.status_code == 200
-    assert run_agent.json()["success"] is True
-    run_id = run_agent.json()["runs"][0]["run_id"]
-    assert AgentRunEvent.objects.filter(run=completed_run, event_type="agent_manual_dispatch").exists()
-    completed_run.refresh_from_db()
-    assert any(item["event_type"] == "agent_manual_dispatch" for item in completed_run.report_payload["events"])
+    payload = run_agent.json()
+    assert payload["success"] is True
+    assert payload["status"] == AgentRun.STATUS_PENDING
+    run_id = payload["run_id"]
+    assert payload["runs"][0]["run_id"] == run_id
+    pending_run = AgentRun.objects.get(pk=run_id)
+    assert pending_run.status == AgentRun.STATUS_PENDING
+    assert captured_launch["agent_id"] == agent_id
+    assert AgentRunEvent.objects.filter(run=pending_run, event_type="agent_manual_dispatch").exists()
+    pending_run.refresh_from_db()
+    assert any(item["event_type"] == "agent_manual_dispatch" for item in pending_run.report_payload["events"])
 
     runs = client.get(f"/servers/api/agents/{agent_id}/runs/")
     assert runs.status_code == 200
@@ -176,7 +190,7 @@ def test_agent_endpoints_crud_run_and_control_flow(monkeypatch):
     assert run_detail.status_code == 200
     assert run_detail.json()["success"] is True
 
-    run_log = client.get(f"/servers/api/agents/runs/{run_id}/log/")
+    run_log = client.get(f"/servers/api/agents/runs/{completed_run.id}/log/")
     assert run_log.status_code == 200
     assert run_log.json()["success"] is True
 

@@ -94,24 +94,19 @@ def _build_execution_state(run: AgentRun) -> dict[str, Any]:
         return state
 
     if dispatch is None:
-        if agent_mode in {"full", "multi"}:
-            state.update(
-                {
-                    "status": "dispatch_missing",
-                    "severity": "warning",
-                    "title": "Нет dispatch для активного запуска",
-                    "description": "Run активен, но в очереди execution-plane нет связанной задачи для worker.",
-                    "next_action": "Остановите этот run и запустите агент заново; если повторяется, проверьте создание AgentRunDispatch.",
-                }
-            )
-            return state
         state.update(
             {
-                "status": "inline",
-                "severity": "info",
-                "title": "Mini-агент выполняется inline",
-                "description": "Для mini-агента отдельный execution-plane dispatch не создаётся.",
-                "next_action": "Дождитесь завершения inline-команд.",
+                "status": "dispatch_missing",
+                "severity": "warning",
+                "title": "Нет dispatch для активного запуска",
+                "description": (
+                    f"Run ({agent_mode or 'agent'}) активен, но в очереди execution-plane "
+                    "нет связанной задачи для worker."
+                ),
+                "next_action": (
+                    "Остановите этот run и запустите агент заново; "
+                    "если повторяется, проверьте создание AgentRunDispatch."
+                ),
             }
         )
         return state

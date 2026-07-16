@@ -5,14 +5,30 @@ from servers.models import AgentRun
 from servers.run_events import record_run_event
 
 
-def launch_full_agent_run(*, agent, user, accessible_servers_queryset) -> dict:
-    server_ids = list(agent.servers.values_list("id", flat=True))
-    if not server_ids:
-        return {"ok": False, "status": 400, "error": "No servers assigned to agent"}
+def launch_queued_agent_run(
+    *,
+    agent,
+    user,
+    accessible_servers_queryset,
+    server_id: int | None = None,
+) -> dict:
+    """Queue mini/full/multi agent run for the dedicated execution-plane worker.
 
-    servers = list(accessible_servers_queryset.filter(id__in=server_ids))
-    if not servers:
-        return {"ok": False, "status": 400, "error": "No accessible servers"}
+    HTTP/API callers return immediately with a pending run; the worker performs
+    SSH + LLM so Daphne/runserver request threads never block on remote work.
+    """
+    if server_id is not None:
+        server = accessible_servers_queryset.filter(id=int(server_id)).first()
+        if not server:
+            return {"ok": False, "status": 404, "error": "Server not found"}
+        servers = [server]
+    else:
+        server_ids = list(agent.servers.values_list("id", flat=True))
+        if not server_ids:
+            return {"ok": False, "status": 400, "error": "No servers assigned to agent"}
+        servers = list(accessible_servers_queryset.filter(id__in=server_ids))
+        if not servers:
+            return {"ok": False, "status": 400, "error": "No accessible servers"}
 
     already_running = AgentRun.objects.filter(
         agent=agent,
@@ -40,6 +56,7 @@ def launch_full_agent_run(*, agent, user, accessible_servers_queryset) -> dict:
         {
             "agent_id": agent.id,
             "agent_name": agent.name,
+            "agent_mode": agent.mode,
             "server_ids": [server.id for server in servers],
             "plan_only": False,
             "status": AgentRun.STATUS_PENDING,
@@ -59,3 +76,13 @@ def launch_full_agent_run(*, agent, user, accessible_servers_queryset) -> dict:
         "run": run_result,
         "servers": servers,
     }
+
+
+def launch_full_agent_run(*, agent, user, accessible_servers_queryset, server_id: int | None = None) -> dict:
+    """Backward-compatible alias for queued agent launch (all modes)."""
+    return launch_queued_agent_run(
+        agent=agent,
+        user=user,
+        accessible_servers_queryset=accessible_servers_queryset,
+        server_id=server_id,
+    )

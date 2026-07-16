@@ -1,9 +1,9 @@
 """
 Background launch helpers and worker execution for long-running agent runs.
 
-Full/multi-agent launches are now queued for a dedicated execution-plane worker
-process. This module still owns the shared execution routine and live event
-delivery used by that worker.
+Mini/full/multi launches are queued for a dedicated execution-plane worker
+process. This module owns the shared execution routine and live event delivery
+used by that worker.
 """
 
 from __future__ import annotations
@@ -76,7 +76,7 @@ def _mark_background_failure(run_id: int, exc: Exception, *, phase: str) -> None
 
 
 def launch_agent_run_background(run_id: int, agent_id: int, server_ids: list[int], user_id: int, *, plan_only: bool = False) -> AgentRunDispatch:
-    """Queue a new full/multi agent run for the dedicated execution worker."""
+    """Queue a mini/full/multi agent run for the dedicated execution worker."""
     run = AgentRun.objects.get(pk=run_id)
     return enqueue_agent_run_dispatch(
         run=run,
@@ -106,6 +106,21 @@ async def _run_agent_background(run_id: int, agent_id: int, server_ids: list[int
         lambda: _load_servers_in_order(server_ids),
         thread_sensitive=True,
     )()
+    if not servers:
+        await sync_to_async(_mark_background_failure, thread_sensitive=True)(
+            run_id,
+            RuntimeError("No servers available for agent run"),
+            phase="launch",
+        )
+        return
+
+    # Mini agents: fixed command list + single LLM analysis (no ReAct engine).
+    if not agent.is_full and not agent.is_multi:
+        from servers.agents import run_agent_on_all_servers
+
+        await run_agent_on_all_servers(agent, user, servers=servers, primary_run=run)
+        return
+
     skills, skill_errors = await sync_to_async(
         lambda: skill_provider_registry.resolve_skills(list(agent.skill_slugs or [])),
         thread_sensitive=True,

@@ -120,16 +120,18 @@ export default function AgentsPage() {
     setActionNotice(null);
     setResult(null);
     try {
+      // All modes return immediately with a queued run_id; execution is async.
       const res = await runAgent(ag.id);
+      const runId = res.run_id || res.runs?.[0]?.run_id;
+      await queryClient.invalidateQueries({ queryKey: ["agents"] });
+      if (runId) {
+        navigate(`/agents/run/${runId}`);
+        return true;
+      }
       if (res.runs?.length > 0) {
         setResult(res.runs[0]);
         setReportModalOpen(true);
       }
-      if ((ag.mode === "full" || ag.mode === "multi") && res.run_id) {
-        navigate(`/agents/run/${res.run_id}`);
-        return true;
-      }
-      await queryClient.invalidateQueries({ queryKey: ["agents"] });
       return true;
     } catch {
       setResult({

@@ -119,7 +119,7 @@ def test_dispatch_scheduled_agents_launches_due_full_agent(monkeypatch):
 
 
 @pytest.mark.django_db
-def test_dispatch_scheduled_agents_runs_mini_agent_inline(monkeypatch):
+def test_dispatch_scheduled_agents_queues_mini_agent(monkeypatch):
     user = User.objects.create_user(username="sched-mini-user", password="x")
     server = _create_server(user, name="scheduled-mini-node")
     agent = ServerAgent.objects.create(
@@ -134,29 +134,36 @@ def test_dispatch_scheduled_agents_runs_mini_agent_inline(monkeypatch):
     )
     agent.servers.set([server])
 
-    async def fake_run_agent_on_all_servers(agent_obj, user_obj):
-        run = await sync_to_async(AgentRun.objects.create)(
-            agent=agent_obj,
-            server=server,
-            user=user_obj,
-            status=AgentRun.STATUS_COMPLETED,
-            ai_analysis="scheduled mini ok",
-        )
-        agent_obj.last_run_at = timezone.now()
-        await sync_to_async(agent_obj.save)(update_fields=["last_run_at"])
-        return [run]
+    captured: dict[str, object] = {}
 
-    monkeypatch.setattr("servers.scheduled_agents.run_agent_on_all_servers", fake_run_agent_on_all_servers)
+    def fake_launch(run_id: int, agent_id: int, server_ids: list[int], user_id: int, *, plan_only: bool = False):
+        captured.update({
+            "run_id": run_id,
+            "agent_id": agent_id,
+            "server_ids": server_ids,
+            "user_id": user_id,
+            "plan_only": plan_only,
+        })
+
+    monkeypatch.setattr("servers.agent_launch.launch_agent_run_background", fake_launch)
 
     summary = dispatch_scheduled_agents(limit=10)
 
     assert summary["launched_agents"] == 1
     assert summary["mini_runs"] == 1
+    assert summary["background_runs"] == 1
     assert summary["runs_created"] == 1
     run = AgentRun.objects.get(agent=agent)
-    assert run.status == AgentRun.STATUS_COMPLETED
+    assert run.status == AgentRun.STATUS_PENDING
     assert AgentRunEvent.objects.filter(run=run, event_type="agent_scheduled_dispatch").exists()
     assert any(item["event_type"] == "agent_scheduled_dispatch" for item in run.report_payload["events"])
+    assert captured == {
+        "run_id": run.id,
+        "agent_id": agent.id,
+        "server_ids": [server.id],
+        "user_id": user.id,
+        "plan_only": False,
+    }
 
 
 @pytest.mark.django_db

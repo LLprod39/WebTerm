@@ -27,8 +27,15 @@ from tests.servers_api_smoke_harness import json_payload as _json
 
 
 @pytest.mark.django_db
-def test_full_agent_run_launches_in_background(monkeypatch):
-    user = User.objects.create_user(username="full-agent-user", password="x")
+@pytest.mark.parametrize(
+    ("mode", "extra_fields"),
+    [
+        (ServerAgent.MODE_FULL, {"goal": "Inspect the server", "ai_prompt": "Check the host"}),
+        (ServerAgent.MODE_MINI, {"commands": ["uname -a"], "ai_prompt": "Summarize"}),
+    ],
+)
+def test_agent_run_launches_in_background(monkeypatch, mode, extra_fields):
+    user = User.objects.create_user(username=f"agent-user-{mode}", password="x")
     _grant_feature(user, "agents")
     client = Client()
     client.force_login(user)
@@ -36,11 +43,10 @@ def test_full_agent_run_launches_in_background(monkeypatch):
     server = _create_server(user)
     agent = ServerAgent.objects.create(
         user=user,
-        name="Full Agent",
-        mode=ServerAgent.MODE_FULL,
+        name=f"{mode} Agent",
+        mode=mode,
         agent_type=ServerAgent.TYPE_CUSTOM,
-        goal="Inspect the server",
-        ai_prompt="Check the host",
+        **extra_fields,
     )
     agent.servers.set([server])
 
@@ -71,6 +77,7 @@ def test_full_agent_run_launches_in_background(monkeypatch):
 
     run = AgentRun.objects.get(pk=payload["run_id"])
     assert run.status == AgentRun.STATUS_PENDING
+    assert AgentRunDispatch.objects.filter(run=run).count() == 0  # fake_launch skips real enqueue
     assert captured == {
         "run_id": run.id,
         "agent_id": agent.id,
