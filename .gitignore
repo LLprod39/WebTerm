@@ -160,3 +160,7 @@ mcps/
 56 скринов/
 AgentFrontedTest/
 /*.png
+
+# Local Ollama sticky URL (WSL host)
+.ollama_wsl_url
+

@@ -77,11 +77,19 @@ def build_ollama_payload(request: OllamaStreamRequest) -> dict[str, Any]:
             {"role": "user", "content": request.prompt},
         ],
         "stream": True,
+        # Keep local replies bounded — long tool JSON should not run forever
+        "options": {
+            "num_predict": 1024 if request.json_mode else 2048,
+            "temperature": 0.2 if request.json_mode else 0.5,
+        },
     }
     if request.json_mode:
         payload["format"] = "json"
     if request.think_value is not None:
         payload["think"] = request.think_value
+    # Always disable deep thinking for tool JSON — it stalls chat UX
+    if request.json_mode and request.think_value is None:
+        payload["think"] = False
     return payload
 
 
@@ -123,6 +131,12 @@ async def stream_ollama_response(
                             )
                         if request_target["kind"] == "local":
                             set_configured_base_url(base_url)
+                            try:
+                                from app.core.ollama_config import remember_ollama_url
+
+                                remember_ollama_url(base_url)
+                            except Exception:
+                                pass
                         _log_usage(
                             usage_logger,
                             payload=payload,
@@ -220,13 +234,17 @@ async def stream_ollama_response(
 
 
 async def _iter_ollama_content(byte_stream: Any) -> AsyncGenerator[str, None]:
+    """Yield assistant content strings. Thinking fragments are prefixed with a sentinel."""
     pending = ""
     async for chunk_bytes in byte_stream.iter_any():
         pending += chunk_bytes.decode("utf-8")
         stop_stream = False
         while "\n" in pending:
             raw_line, pending = pending.split("\n", 1)
-            content, done = _extract_ollama_content_line(raw_line)
+            content, thinking, done = _extract_ollama_content_line(raw_line)
+            # Use printable sentinel — never NUL (\x00), Postgres rejects it in JSON logs
+            if thinking:
+                yield f"«THINK»{thinking}"
             if content:
                 yield content
             if done:
@@ -236,15 +254,17 @@ async def _iter_ollama_content(byte_stream: Any) -> AsyncGenerator[str, None]:
             break
 
     if pending.strip():
-        content, _done = _extract_ollama_content_line(pending, trailing=True)
+        content, thinking, _done = _extract_ollama_content_line(pending, trailing=True)
+        if thinking:
+            yield f"«THINK»{thinking}"
         if content:
             yield content
 
 
-def _extract_ollama_content_line(raw_line: str, *, trailing: bool = False) -> tuple[str, bool]:
+def _extract_ollama_content_line(raw_line: str, *, trailing: bool = False) -> tuple[str, str, bool]:
     line = raw_line.strip()
     if not line:
-        return "", False
+        return "", "", False
     try:
         chunk_json = json.loads(line)
     except json.JSONDecodeError:
@@ -252,8 +272,14 @@ def _extract_ollama_content_line(raw_line: str, *, trailing: bool = False) -> tu
             logger.debug("Ollama: trailing stream fragment ignored: {}", redacted_log_text(line, limit=160))
         else:
             logger.debug(f"Ollama: failed to parse stream line: {line[:160]}")
-        return "", False
-    return (chunk_json.get("message") or {}).get("content") or "", bool(chunk_json.get("done"))
+        return "", "", False
+    msg = chunk_json.get("message") or {}
+    content = msg.get("content") or ""
+    thinking = msg.get("thinking") or ""
+    # Some builds put partial think on the root
+    if not thinking and isinstance(chunk_json.get("thinking"), str):
+        thinking = chunk_json.get("thinking") or ""
+    return content, thinking, bool(chunk_json.get("done"))
 
 
 def _log_usage(
