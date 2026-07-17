@@ -20,7 +20,7 @@ import { NavIcons } from "@/lib/app-icons";
 import { prefetchRouteForPath } from "@/lib/route-prefetch";
 import { cn } from "@/lib/utils";
 
-const CHAT_NAV_READY = false;
+const CHAT_NAV_READY = true;
 
 export function AppSidebar() {
   const { state, toggleSidebar } = useSidebar();

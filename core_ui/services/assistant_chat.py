@@ -50,6 +50,10 @@ def serialize_action(action: AssistantAction) -> dict[str, Any]:
         "result": action.result_payload,
         "error": action.error,
         "target_url": action.target_url,
+        "blast_radius": action.blast_radius or {},
+        "dry_run_preview": action.dry_run_preview or {},
+        "undo_payload": action.undo_payload or {},
+        "async_run_ref": action.async_run_ref or {},
         "created_at": action.created_at.isoformat(),
         "updated_at": action.updated_at.isoformat(),
         "confirmed_at": action.confirmed_at.isoformat() if action.confirmed_at else None,
@@ -75,6 +79,9 @@ def serialize_chat_session(session: ChatSession, *, include_messages: bool = Fal
     payload = {
         "id": session.pk,
         "title": session.title,
+        "kind": getattr(session, "kind", None) or "manual",
+        "pinned_context": getattr(session, "pinned_context", None) or {},
+        "total_usage": getattr(session, "total_usage", None) or {},
         "created_at": session.created_at.isoformat(),
         "updated_at": session.updated_at.isoformat(),
     }
@@ -165,7 +172,13 @@ def _create_action(
     )
 
 
-def execute_action(action: AssistantAction, *, request=None, confirmed: bool = False) -> AssistantAction:
+def execute_action(
+    action: AssistantAction,
+    *,
+    request=None,
+    confirmed: bool = False,
+    typed_confirm: str | None = None,
+) -> AssistantAction:
     spec = get_action_spec(action.action_type)
     if spec is None or spec.handler is None:
         action.status = AssistantAction.STATUS_FAILED
@@ -186,10 +199,21 @@ def execute_action(action: AssistantAction, *, request=None, confirmed: bool = F
         action.save(update_fields=["status", "updated_at"])
         return action
 
+    if confirmed:
+        from core_ui.services.operator_security import validate_typed_confirm
+
+        typed_error = validate_typed_confirm(action, typed_confirm)
+        if typed_error:
+            action.status = AssistantAction.STATUS_REQUIRES_CONFIRMATION
+            action.error = typed_error
+            action.save(update_fields=["status", "error", "updated_at"])
+            return action
+
     action.status = AssistantAction.STATUS_RUNNING
     if confirmed:
         action.confirmed_at = timezone.now()
-    action.save(update_fields=["status", "confirmed_at", "updated_at"])
+        action.error = ""
+    action.save(update_fields=["status", "confirmed_at", "error", "updated_at"])
 
     try:
         result = spec.handler(
@@ -214,8 +238,35 @@ def execute_action(action: AssistantAction, *, request=None, confirmed: bool = F
         target_url = str(action.result_payload.get("target_url") or "")
         if target_url:
             action.target_url = target_url[:300]
+        if isinstance(action.result_payload, dict):
+            if action.result_payload.get("blast_radius"):
+                action.blast_radius = action.result_payload.get("blast_radius") or {}
+            if action.result_payload.get("dry_run_preview"):
+                action.dry_run_preview = action.result_payload.get("dry_run_preview") or {}
+            if action.result_payload.get("undo_payload"):
+                action.undo_payload = action.result_payload.get("undo_payload") or {}
+            if action.result_payload.get("async") or action.result_payload.get("async_kind"):
+                from core_ui.services.operator_async import normalize_async_ref
+
+                action.async_run_ref = {
+                    **(action.async_run_ref or {}),
+                    **normalize_async_ref(action.result_payload, action_type=action.action_type),
+                }
     action.completed_at = timezone.now()
-    action.save(update_fields=["status", "error", "result_payload", "target_url", "completed_at", "updated_at"])
+    action.save(
+        update_fields=[
+            "status",
+            "error",
+            "result_payload",
+            "target_url",
+            "blast_radius",
+            "dry_run_preview",
+            "undo_payload",
+            "async_run_ref",
+            "completed_at",
+            "updated_at",
+        ]
+    )
     return action
 
 
@@ -234,10 +285,47 @@ def cancel_action(action: AssistantAction) -> AssistantAction:
 
 
 def handle_user_message(session: ChatSession, user, message: str, *, request=None) -> AssistantTurnResult:
+    """Handle a user message via the Operator tool-calling loop.
+
+    On loop failure BEFORE anything was persisted the turn falls back to the
+    legacy planner flow, so chat keeps working even when native tool-calling
+    is unavailable (provider without tools, transport failure). Mid-turn LLM
+    failures are handled inside the loop itself (visible error bubble).
+    """
     text = str(message or "").strip()
     if not text:
         raise AssistantActionError("message is required")
 
+    last_message_id = session.messages.order_by("-id").values_list("id", flat=True).first() or 0
+
+    # Preferred path: native tool-calling operator loop
+    try:
+        from core_ui.services.operator_loop import handle_operator_message_sync
+
+        result = handle_operator_message_sync(session, user, text, request=request)
+        return AssistantTurnResult(
+            user_message=result.user_message,
+            assistant_message=result.assistant_message,
+            actions=list(result.actions or []),
+        )
+    except ValueError as exc:
+        # start_operator_turn guards raise before any messages are written
+        logger.warning("operator loop rejected message: {}", exc)
+        return _operator_error_turn(session, user, text, str(exc), request=request)
+    except Exception as exc:
+        turn_wrote_rows = (
+            session.messages.order_by("-id").values_list("id", flat=True).first() or 0
+        ) > last_message_id
+        if turn_wrote_rows:
+            # Partial turn already visible in the chat — never duplicate rows.
+            logger.exception("operator loop failed mid-turn: {}", exc)
+            raise AssistantActionError(f"Оператор не смог ответить: {exc}") from exc
+        logger.exception("operator loop failed before writes; planner fallback: {}", exc)
+        return _planner_fallback_turn(session, user, text, request=request)
+
+
+def _planner_fallback_turn(session: ChatSession, user, text: str, *, request=None) -> AssistantTurnResult:
+    """Legacy v1 flow: one planner call proposing actions (no tool loop)."""
     with transaction.atomic():
         user_message = ChatMessage.objects.create(session=session, role=ChatMessage.ROLE_USER, content=text)
         session.title = (session.title if session.messages.count() > 1 else text[:80]) or session.title
@@ -247,7 +335,9 @@ def handle_user_message(session: ChatSession, user, message: str, *, request=Non
         history = _chat_history(session)
         catalog = _action_catalog_for_user(user)
         runtime_context = build_runtime_context(user)
-        plan = asyncio.run(_call_planner(history=history, catalog=catalog, runtime_context=runtime_context, message=text))
+        plan = asyncio.run(
+            _call_planner(history=history, catalog=catalog, runtime_context=runtime_context, message=text)
+        )
     except Exception as exc:
         logger.exception("assistant chat planner failed; using heuristic fallback: {}", exc)
         runtime_context = build_runtime_context(user)
@@ -291,6 +381,43 @@ def handle_user_message(session: ChatSession, user, message: str, *, request=Non
         description=text[:400],
         entity_type="chat_session",
         entity_id=str(session.pk),
-        metadata={"actions": [action.action_type for action in actions]},
+        metadata={"actions": [action.action_type for action in actions], "source": "planner_fallback"},
     )
     return AssistantTurnResult(user_message=user_message, assistant_message=assistant_message, actions=actions)
+
+
+def _operator_error_turn(
+    session: ChatSession,
+    user,
+    text: str,
+    error: str,
+    *,
+    request=None,
+) -> AssistantTurnResult:
+    """Create user + assistant error so the UI never shows a silent dead-end."""
+    with transaction.atomic():
+        user_message = ChatMessage.objects.create(session=session, role=ChatMessage.ROLE_USER, content=text)
+        if session.messages.count() <= 1 or session.title in {"", "Новый чат"}:
+            session.title = text[:80] or session.title
+            session.save(update_fields=["title", "updated_at"])
+        else:
+            session.save(update_fields=["updated_at"])
+        reply = (error or "Оператор временно недоступен. Попробуй ещё раз.").strip()[:2000]
+        assistant_message = ChatMessage.objects.create(
+            session=session,
+            role=ChatMessage.ROLE_ASSISTANT,
+            content=reply,
+            metadata={"source": "operator_error"},
+        )
+    log_user_activity(
+        user=user,
+        request=request,
+        category="assistant",
+        action="chat_message_error",
+        status=UserActivityLog.STATUS_ERROR,
+        description=text[:400],
+        entity_type="chat_session",
+        entity_id=str(session.pk),
+        metadata={"error": reply[:400]},
+    )
+    return AssistantTurnResult(user_message=user_message, assistant_message=assistant_message, actions=[])

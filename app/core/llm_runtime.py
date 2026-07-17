@@ -48,7 +48,8 @@ def _provider_timeout_seconds(provider: str, *, endpoint_name: str | None = None
     if provider == "claude":
         return _setting_int("LLM_CLAUDE_STREAM_TIMEOUT_SECONDS", 120, minimum=1)
     if provider == "ollama":
-        return _setting_int("LLM_OLLAMA_STREAM_TIMEOUT_SECONDS", 300, minimum=1)
+        # Operator tools can hang on huge prompts; fail faster so the UI recovers
+        return _setting_int("LLM_OLLAMA_STREAM_TIMEOUT_SECONDS", 120, minimum=1)
     if provider == "openai" and endpoint_name == "responses":
         return _setting_int("LLM_OPENAI_RESPONSES_TIMEOUT_SECONDS", 300, minimum=1)
     if provider == "openai":

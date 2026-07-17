@@ -4,12 +4,14 @@ ASGI WebSocket routing.
 We keep this separated so apps (e.g. servers/) can register their WS URLs.
 """
 
+from core_ui.routing import websocket_urlpatterns as core_ui_websocket_urlpatterns
 from kubernetes_ops.routing import websocket_urlpatterns as kubernetes_websocket_urlpatterns
 from mars.routing import websocket_urlpatterns as mars_websocket_urlpatterns
 from servers.routing import websocket_urlpatterns as servers_websocket_urlpatterns
 from studio.routing import websocket_urlpatterns as studio_websocket_urlpatterns
 
 websocket_urlpatterns = [
+    *core_ui_websocket_urlpatterns,
     *servers_websocket_urlpatterns,
     *studio_websocket_urlpatterns,
     *mars_websocket_urlpatterns,

@@ -106,6 +106,13 @@ def serialize_agent_item(
         "last_run_status": last_run.status if last_run else None,
         "last_run_id": last_run.id if last_run else None,
         "active_run_id": active_run.id if active_run else None,
+        "active_run_status": active_run.status if active_run else None,
+        "active_run_started_at": active_run.started_at.isoformat() if active_run and active_run.started_at else None,
+        "active_run_iterations": int(active_run.total_iterations or 0) if active_run else 0,
+        "active_run_server_name": (
+            active_run.server.name if active_run and active_run.server_id and active_run.server else None
+        ),
+        "active_run_pending_question": (active_run.pending_question or "")[:200] if active_run else "",
         "execution_readiness": execution_readiness or get_agent_execution_readiness_for_mode(agent.mode),
         "schedule_state": compute_schedule_state(agent, current_time),
         "due_now": bool(next_due_at is not None and next_due_at <= current_time and agent.is_enabled),
@@ -127,8 +134,12 @@ def list_agents_for_user(user, *, mode_filter: str | None = None) -> list[dict]:
     execution_readiness = get_agent_execution_readiness()
     data: list[dict] = []
     for agent in queryset:
-        last_run = AgentRun.objects.filter(agent=agent).first()
-        active_run = AgentRun.objects.filter(agent=agent, status__in=ACTIVE_AGENT_RUN_STATUSES).first()
+        last_run = AgentRun.objects.filter(agent=agent).select_related("server").first()
+        active_run = (
+            AgentRun.objects.filter(agent=agent, status__in=ACTIVE_AGENT_RUN_STATUSES)
+            .select_related("server")
+            .first()
+        )
         data.append(
             serialize_agent_item(
                 agent,
@@ -160,8 +171,12 @@ def list_scheduled_agents_for_user(user, *, limit: int = 50) -> dict:
         "active_runs": 0,
     }
     for agent in agents:
-        last_run = AgentRun.objects.filter(agent=agent).first()
-        active_run = AgentRun.objects.filter(agent=agent, status__in=ACTIVE_AGENT_RUN_STATUSES).first()
+        last_run = AgentRun.objects.filter(agent=agent).select_related("server").first()
+        active_run = (
+            AgentRun.objects.filter(agent=agent, status__in=ACTIVE_AGENT_RUN_STATUSES)
+            .select_related("server")
+            .first()
+        )
         item = serialize_agent_item(
             agent,
             now=current_time,

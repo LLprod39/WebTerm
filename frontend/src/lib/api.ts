@@ -241,6 +241,10 @@ export function getMonitoringLiveWsUrl(): string {
   return `${buildWsBase()}/ws/monitoring/live/`;
 }
 
+export function getOperatorChatWsUrl(chatId: number | string): string {
+  return `${buildWsBase()}/ws/operator/${chatId}/`;
+}
+
 export function getKubernetesAdminLogStreamWsUrl(
   sessionId: string,
   query: { cluster_id: string; namespace: string; pod: string; tail?: number; container?: string; follow?: boolean; max_batches?: number; poll_interval_seconds?: number; idle_timeout_seconds?: number },

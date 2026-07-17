@@ -108,6 +108,7 @@ urlpatterns = [
     path("api/dashboard-custom/layout/<str:dashboard_type>/", views.api_dashboard_layout, name="api_dashboard_layout"),
     # Assistant chat
     path("api/assistant/chats/", assistant_chat_views.api_assistant_chats, name="api_assistant_chats"),
+    path("api/assistant/duty/", assistant_chat_views.api_assistant_duty, name="api_assistant_duty"),
     path(
         "api/assistant/chats/message/",
         assistant_chat_views.api_assistant_chat_create_and_message,
@@ -118,6 +119,11 @@ urlpatterns = [
         "api/assistant/chats/<int:chat_id>/message/",
         assistant_chat_views.api_assistant_chat_message,
         name="api_assistant_chat_message",
+    ),
+    path(
+        "api/assistant/chats/<int:chat_id>/artifacts/",
+        assistant_chat_views.api_assistant_artifacts,
+        name="api_assistant_artifacts",
     ),
     path(
         "api/assistant/actions/<int:action_id>/confirm/",

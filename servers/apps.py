@@ -63,5 +63,10 @@ class ServersConfig(AppConfig):
             parse_host_port_value=parse_host_port_value,
         )
         register_assistant_actions()
+        from servers.operator_tools import register_operator_tools
+        from servers.operator_mutate_tools import register_operator_mutate_tools
+
+        register_operator_tools()
+        register_operator_mutate_tools()
 
         from . import signals  # noqa: F401

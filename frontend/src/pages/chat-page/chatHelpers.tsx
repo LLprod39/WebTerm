@@ -9,19 +9,78 @@ import { cn } from "@/lib/utils";
 
 type PlainObject = Record<string, unknown>;
 
+export type QuickPromptCard = {
+  id: string;
+  labelRu: string;
+  labelEn: string;
+  hintRu: string;
+  hintEn: string;
+  promptRu: string;
+  promptEn: string;
+};
+
+/** Empty-state starters — short labels, real operator tasks. */
+export const QUICK_PROMPT_CARDS: QuickPromptCard[] = [
+  {
+    id: "fleet",
+    labelRu: "Флот",
+    labelEn: "Fleet",
+    hintRu: "Статус и worst",
+    hintEn: "Status & worst",
+    promptRu: "Что с флотом? Коротко: статус, worst, алерты.",
+    promptEn: "Fleet status? Short: health, worst hosts, alerts.",
+  },
+  {
+    id: "servers",
+    labelRu: "Серверы",
+    labelEn: "Servers",
+    hintRu: "Инвентарь",
+    hintEn: "Inventory",
+    promptRu: "Покажи список серверов.",
+    promptEn: "List servers.",
+  },
+  {
+    id: "forecasts",
+    labelRu: "Прогнозы",
+    labelEn: "Forecasts",
+    hintRu: "Диск / cert",
+    hintEn: "Disk / cert",
+    promptRu: "Посмотри прогнозы по флоту. 1–2 строки + карточка.",
+    promptEn: "Check fleet forecasts. 1–2 lines + card.",
+  },
+  {
+    id: "agents",
+    labelRu: "Агенты",
+    labelEn: "Agents",
+    hintRu: "Список и runs",
+    hintEn: "List & runs",
+    promptRu: "Покажи агентов.",
+    promptEn: "Show agents.",
+  },
+  {
+    id: "alerts",
+    labelRu: "Алерты",
+    labelEn: "Alerts",
+    hintRu: "Открытые",
+    hintEn: "Open",
+    promptRu: "Покажи свежие алерты.",
+    promptEn: "Show recent alerts.",
+  },
+  {
+    id: "duty",
+    labelRu: "Брифинг",
+    labelEn: "Briefing",
+    hintRu: "Дежурный",
+    hintEn: "Duty",
+    promptRu: "Сделай краткий операторский брифинг.",
+    promptEn: "Short operator duty briefing.",
+  },
+];
+
+/** @deprecated use QUICK_PROMPT_CARDS */
 export const QUICK_PROMPTS = {
-  ru: [
-    "Покажи агентов",
-    "Покажи пайплайны",
-    "Покажи доступные MCP servers",
-    "Собери черновик пайплайна для ежедневной проверки сервера",
-  ],
-  en: [
-    "Show agents",
-    "Show pipelines",
-    "Show available MCP servers",
-    "Draft a pipeline for daily server checks",
-  ],
+  ru: QUICK_PROMPT_CARDS.map((c) => c.promptRu),
+  en: QUICK_PROMPT_CARDS.map((c) => c.promptEn),
 };
 
 export function formatDateTime(value: string, lang: "ru" | "en") {
@@ -70,24 +129,24 @@ export function actionRiskLabel(risk: AssistantAction["risk"], lang: "ru" | "en"
 }
 
 export function statusTone(status: AssistantAction["status"]) {
-  if (status === "completed") return "border-emerald-500/35 bg-emerald-500/10 text-emerald-300";
+  if (status === "completed") return "border-success/35 bg-success/10 text-success";
   if (status === "failed" || status === "cancelled") return "border-destructive/35 bg-destructive/10 text-destructive";
   if (status === "running") return "border-primary/35 bg-primary/10 text-primary";
-  if (status === "requires_confirmation") return "border-amber-500/35 bg-amber-500/10 text-amber-300";
+  if (status === "requires_confirmation") return "border-warning/35 bg-warning/10 text-warning";
   return "border-border bg-secondary/55 text-muted-foreground";
 }
 
 export function actionTone(action: AssistantAction) {
   if (action.status === "failed" || action.status === "cancelled") return "border-destructive/35";
-  if (action.risk === "dangerous") return "border-amber-500/35";
+  if (action.risk === "dangerous") return "border-warning/35";
   return "border-border/80";
 }
 
 export function ActionIcon({ action }: { action: AssistantAction }) {
-  if (action.status === "completed") return <CheckCircle2 className="h-4 w-4 text-emerald-400" />;
+  if (action.status === "completed") return <CheckCircle2 className="h-4 w-4 text-success" />;
   if (action.status === "failed" || action.status === "cancelled") return <XCircle className="h-4 w-4 text-destructive" />;
   if (action.status === "running") return <Loader2 className="h-4 w-4 animate-spin text-primary" />;
-  if (action.requires_confirmation) return <ShieldCheck className="h-4 w-4 text-amber-400" />;
+  if (action.requires_confirmation) return <ShieldCheck className="h-4 w-4 text-warning" />;
   return <Clock3 className="h-4 w-4 text-muted-foreground" />;
 }
 
@@ -204,7 +263,7 @@ function RawJsonPreview({ label, value }: { label: string; value: PlainObject })
   if (!value || Object.keys(value).length === 0) return null;
 
   return (
-    <details className="rounded-lg border border-border/70 bg-background/45 px-3 py-2">
+    <details className="rounded-sm border border-border/70 bg-background/45 px-3 py-2">
       <summary className="cursor-pointer text-xs font-medium text-muted-foreground">{label}</summary>
       <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-2xs leading-5 text-muted-foreground">
         {text}
@@ -220,7 +279,7 @@ function KeyValueStrip({ value, lang }: { value: PlainObject; lang: "ru" | "en" 
   return (
     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
       {fields.map(([key, field]) => (
-        <div key={key} className="min-w-0 rounded-lg border border-border/65 bg-background/45 px-3 py-2">
+        <div key={key} className="min-w-0 rounded-sm border border-border/65 bg-background/45 px-3 py-2">
           <div className="truncate text-2xs font-medium text-muted-foreground">{humanizeKey(key, lang)}</div>
           <div className="mt-1 truncate text-xs font-semibold text-foreground">{stringifyShort(field)}</div>
         </div>
@@ -239,7 +298,7 @@ function ResultList({
   empty: string;
 }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-border/70 bg-background/45">
+    <div className="overflow-hidden rounded-sm border border-border/70 bg-background/45">
       <div className="flex items-center justify-between border-b border-border/60 px-3 py-2">
         <div className="flex min-w-0 items-center gap-2 text-xs font-semibold text-foreground">
           <Database className="h-3.5 w-3.5 shrink-0 text-primary" />
@@ -260,7 +319,7 @@ function ResultList({
                   {meta.length ? (
                     <div className="mt-1 flex min-w-0 flex-wrap gap-1.5">
                       {meta.slice(0, 3).map((item) => (
-                        <span key={item} className="rounded-md border border-border/60 bg-secondary/50 px-1.5 py-0.5 text-2xs text-muted-foreground">
+                        <span key={item} className="rounded-sm border border-border/60 bg-secondary/50 px-1.5 py-0.5 text-2xs text-muted-foreground">
                           {item}
                         </span>
                       ))}
@@ -298,7 +357,7 @@ export function ActionResultPreview({ action }: { action: AssistantAction }) {
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <span className="font-medium text-foreground">{localize(lang, "Результат", "Result")}</span>
         {typeof total === "number" ? (
-          <span className="rounded-md border border-border/60 bg-secondary/45 px-2 py-0.5">
+          <span className="rounded-sm border border-border/60 bg-secondary/45 px-2 py-0.5">
             {localize(lang, "записей", "records")}: {total}
           </span>
         ) : null}
@@ -311,7 +370,7 @@ export function ActionResultPreview({ action }: { action: AssistantAction }) {
         />
       ) : null}
       {primary && !list ? (
-        <div className="space-y-2 rounded-lg border border-border/70 bg-background/45 p-3">
+        <div className="space-y-2 rounded-sm border border-border/70 bg-background/45 p-3">
           <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
             <FileText className="h-3.5 w-3.5 text-primary" />
             {humanizeKey(primary.key, lang)}
@@ -358,10 +417,17 @@ export function mergeTurnIntoChat(previous: AssistantChatSession | undefined, tu
 
 export function replaceActionInChat(previous: AssistantChatSession | undefined, action: AssistantAction): AssistantChatSession | undefined {
   if (!previous?.messages) return previous;
-  return {
-    ...previous,
-    messages: previous.messages.map((message) => {
-      if (message.id !== action.message_id) return message;
+  const messageId = action.message_id;
+  const targetId =
+    messageId ||
+    [...previous.messages].reverse().find((m) => m.role === "assistant")?.id ||
+    null;
+
+  if (targetId) {
+    let matched = false;
+    const messages = previous.messages.map((message) => {
+      if (message.id !== targetId) return message;
+      matched = true;
       const existing = message.metadata.actions || [];
       const replaced = existing.some((item) => item.id === action.id)
         ? existing.map((item) => (item.id === action.id ? action : item))
@@ -373,7 +439,24 @@ export function replaceActionInChat(previous: AssistantChatSession | undefined, 
           actions: replaced,
         },
       };
-    }),
+    });
+    if (matched) {
+      return { ...previous, messages };
+    }
+  }
+
+  // Action arrived before assistant row is in cache — synthesize a stub so the card shows
+  const stubId = messageId || Date.now();
+  const stub: AssistantChatMessage = {
+    id: stubId,
+    role: "assistant",
+    content: action.title || "Нужно подтверждение",
+    created_at: action.created_at || new Date().toISOString(),
+    metadata: { actions: [action], source: "ws_confirm_stub" },
+  };
+  return {
+    ...previous,
+    messages: [...previous.messages, stub].sort((a, b) => a.id - b.id),
   };
 }
 
