@@ -16,7 +16,7 @@ from typing import Any
 from django.conf import settings
 from django.utils import timezone
 
-from servers.models import ServerMetricRollup, ServerMetricSample
+from servers.models import ServerAiInsight, ServerMetricRollup, ServerMetricSample
 
 # metric_key -> ServerMetricSample field, copied as-is.
 METRIC_SCALAR_FIELDS: dict[str, str] = {
@@ -189,7 +189,16 @@ def cleanup_metric_data(now: datetime | None = None) -> dict[str, int]:
         granularity=ServerMetricRollup.GRANULARITY_DAY,
         bucket_start__lt=now - timedelta(days=day_days),
     ).delete()
-    return {"samples": deleted_samples, "hour_rollups": deleted_hours, "day_rollups": deleted_days}
+    insight_days = int(getattr(settings, "AI_INSIGHTS_RETENTION_DAYS", 60) or 60)
+    deleted_insights, _ = ServerAiInsight.objects.filter(
+        created_at__lt=now - timedelta(days=insight_days)
+    ).delete()
+    return {
+        "samples": deleted_samples,
+        "hour_rollups": deleted_hours,
+        "day_rollups": deleted_days,
+        "ai_insights": deleted_insights,
+    }
 
 
 def fetch_metric_series(

@@ -1,9 +1,9 @@
-import { Fragment, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Clock3, RotateCcw, Server as ServerIcon } from "lucide-react";
 
 import type { InsightServer } from "@/api/monitoring-insights";
 import { Sparkline } from "@/components/dashboard/Sparkline";
-import { EmptyState, SectionCard, StatusBadge } from "@/components/ui/page-shell";
+import { StatusBadge } from "@/components/ui/page-shell";
 import { useI18n, localize } from "@/lib/i18n";
 import { cn, relativeTime } from "@/lib/utils";
 
@@ -24,13 +24,47 @@ function valueTone(value: number | null | undefined): string {
   return "text-foreground";
 }
 
+function scoreToneBg(score: number): string {
+  if (score >= 80) return "bg-success";
+  if (score >= 60) return "bg-warning";
+  return "bg-destructive";
+}
+
+function scoreToneText(score: number): string {
+  if (score >= 80) return "text-success";
+  if (score >= 60) return "text-warning";
+  return "text-destructive";
+}
+
+/** One clickable cell per server, colored by health score. */
+function HealthStrip({ servers, onPick }: { servers: InsightServer[]; onPick: (id: number) => void }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1 border-b border-border bg-surface-2/30 px-3 py-2">
+      {servers.map((server) => (
+        <button
+          key={server.id}
+          type="button"
+          title={`${server.name} · ${server.health_score}/100`}
+          aria-label={`${server.name}: ${server.health_score}/100`}
+          onClick={() => onPick(server.id)}
+          className={cn(
+            "h-3.5 w-3.5 transition-transform hover:scale-125 focus-visible:scale-125 focus-visible:outline-none",
+            scoreToneBg(server.health_score),
+            server.status === "unreachable" && "opacity-50",
+          )}
+        />
+      ))}
+    </div>
+  );
+}
+
 function MetricCell({ value, spark }: { value: number | null; spark: number[] }) {
   return (
     <div className="flex items-center justify-end gap-2">
       <span className={cn("font-mono text-xs tabular-nums", valueTone(value))}>{formatPercent(value)}</span>
       {spark.length >= 2 ? (
-        <span className={cn("hidden w-16 lg:block", valueTone(value === null ? null : Math.max(value, ...spark)))}>
-          <Sparkline data={spark} height={20} width={64} />
+        <span className={cn("hidden w-14 2xl:block", valueTone(value === null ? null : Math.max(value, ...spark)))}>
+          <Sparkline data={spark} height={18} width={56} />
         </span>
       ) : null}
     </div>
@@ -52,7 +86,7 @@ function ExpandedDetails({ server }: { server: InsightServer }) {
   const topMem = server.top_processes?.by_memory ?? [];
 
   return (
-    <div className="space-y-4 border-t border-border bg-surface-1/40 px-4 py-4">
+    <div className="space-y-3 border-t border-border bg-surface-1/40 px-4 py-3.5">
       <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-6">
         <DetailChip label="iowait" value={formatPercent(server.cpu_iowait_percent, 1)} />
         <DetailChip label="steal" value={formatPercent(server.cpu_steal_percent, 1)} />
@@ -127,9 +161,17 @@ function ExpandedDetails({ server }: { server: InsightServer }) {
   );
 }
 
-export function FleetMetricsTable({ servers }: { servers: InsightServer[] }) {
+const headerCell = "px-3 py-2 text-2xs font-medium uppercase tracking-[0.12em] text-muted-foreground/70 bg-card";
+
+export function FleetMetricsTable({ servers, className }: { servers: InsightServer[]; className?: string }) {
   const { lang } = useI18n();
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
+
+  // Worst health first — the operator's eye lands on trouble immediately.
+  const sorted = useMemo(
+    () => [...servers].sort((a, b) => a.health_score - b.health_score || a.name.localeCompare(b.name)),
+    [servers],
+  );
 
   const toggle = (id: number) => {
     setExpanded((prev) => {
@@ -140,149 +182,155 @@ export function FleetMetricsTable({ servers }: { servers: InsightServer[] }) {
     });
   };
 
+  const pickFromStrip = (id: number) => {
+    setExpanded((prev) => new Set(prev).add(id));
+    requestAnimationFrame(() => {
+      document.getElementById(`fleet-row-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  };
+
   return (
-    <SectionCard
-      title={localize(lang, "Флот — расширенные метрики", "Fleet — extended metrics")}
-      description={localize(
-        lang,
-        "Клик по строке раскрывает диски, процессы и сеть",
-        "Click a row to expand disks, processes, and network",
-      )}
-      icon={<ServerIcon className="h-4 w-4" />}
-      bodyClassName="p-0"
+    <section
+      className={cn("flex flex-col overflow-hidden rounded-sm border border-border bg-card shadow-elev-1", className)}
     >
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-surface-2/40 px-4 py-2">
+        <div className="flex items-center gap-2">
+          <ServerIcon className="h-3.5 w-3.5 text-primary" aria-hidden />
+          <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-foreground">
+            {localize(lang, "Флот", "Fleet")}
+          </h2>
+          <span className="font-mono text-2xs text-muted-foreground">{servers.length}</span>
+        </div>
+        <span className="hidden text-2xs text-muted-foreground sm:block">
+          {localize(lang, "худшие сверху · клик по строке — детали", "worst first · click a row for details")}
+        </span>
+      </div>
+
       {servers.length === 0 ? (
-        <div className="px-4 py-4">
-          <EmptyState
-            icon={<ServerIcon className="h-5 w-5" />}
-            title={localize(lang, "Нет активных серверов", "No active servers")}
-            description={localize(lang, "Добавьте серверы на вкладке «Серверы».", "Add servers on the Servers page.")}
-          />
+        <div className="px-4 py-8 text-center text-xs text-muted-foreground">
+          {localize(lang, "Нет активных серверов.", "No active servers.")}
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[860px] border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-border bg-surface-2/40 text-left">
-                <th className="px-4 py-2 text-2xs font-medium uppercase tracking-[0.12em] text-muted-foreground/70">
-                  {localize(lang, "Сервер", "Server")}
-                </th>
-                <th className="px-3 py-2 text-right text-2xs font-medium uppercase tracking-[0.12em] text-muted-foreground/70">CPU</th>
-                <th className="px-3 py-2 text-right text-2xs font-medium uppercase tracking-[0.12em] text-muted-foreground/70">RAM</th>
-                <th className="px-3 py-2 text-right text-2xs font-medium uppercase tracking-[0.12em] text-muted-foreground/70">
-                  {localize(lang, "Диск", "Disk")}
-                </th>
-                <th className="px-3 py-2 text-right text-2xs font-medium uppercase tracking-[0.12em] text-muted-foreground/70">Swap</th>
-                <th className="px-3 py-2 text-right text-2xs font-medium uppercase tracking-[0.12em] text-muted-foreground/70">
-                  {localize(lang, "Ошибки/10м", "Errors/10m")}
-                </th>
-                <th className="px-3 py-2 text-center text-2xs font-medium uppercase tracking-[0.12em] text-muted-foreground/70">
-                  {localize(lang, "Сигналы", "Signals")}
-                </th>
-                <th className="px-4 py-2 text-right text-2xs font-medium uppercase tracking-[0.12em] text-muted-foreground/70">
-                  {localize(lang, "Прогнозы", "Forecasts")}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {servers.map((server) => {
-                const isOpen = expanded.has(server.id);
-                const worstPrediction = server.predictions[0];
-                const Chevron = isOpen ? ChevronDown : ChevronRight;
-                return (
-                  <Fragment key={server.id}>
-                    <tr
-                      className="cursor-pointer border-b border-border/60 transition-colors hover:bg-surface-1/60 focus-visible:bg-surface-1/60 focus-visible:outline-none"
-                      onClick={() => toggle(server.id)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          toggle(server.id);
-                        }
-                      }}
-                      tabIndex={0}
-                      aria-expanded={isOpen}
-                    >
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center gap-2">
-                          <Chevron className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" aria-hidden />
-                          <StatusBadge label={server.status} tone={statusTone[server.status]} />
-                          <div className="min-w-0">
-                            <div className="truncate font-medium text-foreground">{server.name}</div>
-                            <div className="truncate font-mono text-2xs text-muted-foreground">{server.host}</div>
+        <>
+          <HealthStrip servers={sorted} onPick={pickFromStrip} />
+          <div className="min-h-0 flex-1 overflow-auto">
+            <table className="w-full min-w-[860px] border-collapse text-sm">
+              <thead className="sticky top-0 z-10">
+                <tr className="border-b border-border text-left shadow-[0_1px_0_hsl(var(--border))]">
+                  <th className={cn(headerCell, "px-4")}>{localize(lang, "Сервер", "Server")}</th>
+                  <th className={cn(headerCell, "w-14 text-right")}>{localize(lang, "Здоровье", "Health")}</th>
+                  <th className={cn(headerCell, "text-right")}>CPU</th>
+                  <th className={cn(headerCell, "text-right")}>RAM</th>
+                  <th className={cn(headerCell, "text-right")}>{localize(lang, "Диск", "Disk")}</th>
+                  <th className={cn(headerCell, "text-right")}>Swap</th>
+                  <th className={cn(headerCell, "text-right")}>{localize(lang, "Ошиб/10м", "Err/10m")}</th>
+                  <th className={cn(headerCell, "text-center")}>{localize(lang, "Сигналы", "Signals")}</th>
+                  <th className={cn(headerCell, "px-4 text-right")}>{localize(lang, "Прогнозы", "Forecasts")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map((server) => {
+                  const isOpen = expanded.has(server.id);
+                  const worstPrediction = server.predictions[0];
+                  const Chevron = isOpen ? ChevronDown : ChevronRight;
+                  return (
+                    <Fragment key={server.id}>
+                      <tr
+                        id={`fleet-row-${server.id}`}
+                        className="cursor-pointer border-b border-border/60 transition-colors hover:bg-surface-1/60 focus-visible:bg-surface-1/60 focus-visible:outline-none"
+                        onClick={() => toggle(server.id)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            toggle(server.id);
+                          }
+                        }}
+                        tabIndex={0}
+                        aria-expanded={isOpen}
+                      >
+                        <td className="px-4 py-2">
+                          <div className="flex items-center gap-2">
+                            <Chevron className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" aria-hidden />
+                            <StatusBadge label={server.status} tone={statusTone[server.status]} />
+                            <div className="min-w-0">
+                              <div className="truncate text-xs font-medium text-foreground">{server.name}</div>
+                              <div className="truncate font-mono text-2xs text-muted-foreground">{server.host}</div>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2.5"><MetricCell value={server.cpu_percent} spark={server.spark.cpu} /></td>
-                      <td className="px-3 py-2.5"><MetricCell value={server.memory_percent} spark={server.spark.mem} /></td>
-                      <td className="px-3 py-2.5">
-                        <div className="flex items-center justify-end gap-2">
-                          {server.worst_disk ? (
-                            <span className="hidden font-mono text-2xs text-muted-foreground xl:inline">{server.worst_disk.mount}</span>
-                          ) : null}
-                          <span className={cn("font-mono text-xs tabular-nums", valueTone(server.worst_disk?.percent ?? null))}>
-                            {formatPercent(server.worst_disk?.percent ?? null)}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <span className={cn("font-display text-sm font-bold tabular-nums", scoreToneText(server.health_score))}>
+                            {server.health_score}
                           </span>
-                          {server.spark.disk.length >= 2 ? (
-                            <span className={cn("hidden w-16 lg:block", valueTone(server.worst_disk?.percent ?? null))}>
-                              <Sparkline data={server.spark.disk} height={20} width={64} />
+                        </td>
+                        <td className="px-3 py-2"><MetricCell value={server.cpu_percent} spark={server.spark.cpu} /></td>
+                        <td className="px-3 py-2"><MetricCell value={server.memory_percent} spark={server.spark.mem} /></td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center justify-end gap-2">
+                            {server.worst_disk ? (
+                              <span className="hidden max-w-28 truncate font-mono text-2xs text-muted-foreground 2xl:inline">
+                                {server.worst_disk.mount}
+                              </span>
+                            ) : null}
+                            <span className={cn("font-mono text-xs tabular-nums", valueTone(server.worst_disk?.percent ?? null))}>
+                              {formatPercent(server.worst_disk?.percent ?? null)}
                             </span>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2.5 text-right">
-                        <span className={cn("font-mono text-xs tabular-nums", valueTone(server.swap_percent))}>
-                          {formatPercent(server.swap_percent)}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2.5 text-right">
-                        <span className={cn("font-mono text-xs tabular-nums", (server.journal_err_10m ?? 0) > 0 ? "text-warning" : "text-muted-foreground")}>
-                          {server.journal_err_10m ?? "—"}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <div className="flex items-center justify-center gap-1.5 text-muted-foreground">
-                          {server.reboot_required ? (
-                            <span title={localize(lang, "Требуется перезагрузка", "Reboot required")}>
-                              <RotateCcw className="h-3.5 w-3.5 text-warning" aria-hidden />
-                            </span>
-                          ) : null}
-                          {server.ntp_synchronized === false ? (
-                            <span title={localize(lang, "NTP не синхронизирован", "NTP not synchronized")}>
-                              <Clock3 className="h-3.5 w-3.5 text-warning" aria-hidden />
-                            </span>
-                          ) : null}
-                          {!server.reboot_required && server.ntp_synchronized !== false ? (
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <span className={cn("font-mono text-xs tabular-nums", valueTone(server.swap_percent))}>
+                            {formatPercent(server.swap_percent)}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <span className={cn("font-mono text-xs tabular-nums", (server.journal_err_10m ?? 0) > 0 ? "text-warning" : "text-muted-foreground")}>
+                            {server.journal_err_10m ?? "—"}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center justify-center gap-1.5 text-muted-foreground">
+                            {server.reboot_required ? (
+                              <span title={localize(lang, "Требуется перезагрузка", "Reboot required")}>
+                                <RotateCcw className="h-3.5 w-3.5 text-warning" aria-hidden />
+                              </span>
+                            ) : null}
+                            {server.ntp_synchronized === false ? (
+                              <span title={localize(lang, "NTP не синхронизирован", "NTP not synchronized")}>
+                                <Clock3 className="h-3.5 w-3.5 text-warning" aria-hidden />
+                              </span>
+                            ) : null}
+                            {!server.reboot_required && server.ntp_synchronized !== false ? (
+                              <span className="text-2xs text-muted-foreground/50">—</span>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td className="px-4 py-2 text-right">
+                          {server.predictions.length > 0 && worstPrediction ? (
+                            <StatusBadge
+                              label={String(server.predictions.length)}
+                              tone={worstPrediction.severity === "critical" ? "danger" : worstPrediction.severity === "warning" ? "warning" : "info"}
+                              dot={false}
+                            />
+                          ) : (
                             <span className="text-2xs text-muted-foreground/50">—</span>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td className="px-4 py-2.5 text-right">
-                        {server.predictions.length > 0 && worstPrediction ? (
-                          <StatusBadge
-                            label={String(server.predictions.length)}
-                            tone={worstPrediction.severity === "critical" ? "danger" : worstPrediction.severity === "warning" ? "warning" : "info"}
-                            dot={false}
-                          />
-                        ) : (
-                          <span className="text-2xs text-muted-foreground/50">—</span>
-                        )}
-                      </td>
-                    </tr>
-                    {isOpen ? (
-                      <tr className="border-b border-border/60">
-                        <td colSpan={8} className="p-0">
-                          <ExpandedDetails server={server} />
+                          )}
                         </td>
                       </tr>
-                    ) : null}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                      {isOpen ? (
+                        <tr className="border-b border-border/60">
+                          <td colSpan={9} className="p-0">
+                            <ExpandedDetails server={server} />
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
-    </SectionCard>
+    </section>
   );
 }

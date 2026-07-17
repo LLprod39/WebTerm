@@ -62,6 +62,7 @@ class ServerAlert(models.Model):
     TYPE_SERVICE = "service"
     TYPE_LOG_ERROR = "log_error"
     TYPE_UNREACHABLE = "unreachable"
+    TYPE_FORECAST = "forecast"
     TYPE_CHOICES = [
         (TYPE_CPU, "High CPU"),
         (TYPE_MEMORY, "High Memory"),
@@ -69,6 +70,7 @@ class ServerAlert(models.Model):
         (TYPE_SERVICE, "Failed Service"),
         (TYPE_LOG_ERROR, "Log Error"),
         (TYPE_UNREACHABLE, "Unreachable"),
+        (TYPE_FORECAST, "Forecast"),
     ]
 
     SEVERITY_INFO = "info"

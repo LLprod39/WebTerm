@@ -30,9 +30,11 @@ from servers.models_memory import (
     ServerMemorySnapshot,
 )
 from servers.models_metrics import (
+    ServerAiInsight,
     ServerCertificate,
     ServerMetricRollup,
     ServerMetricSample,
+    ServerPrediction,
 )
 from servers.models_monitoring import (
     BackgroundWorkerState,
@@ -52,6 +54,7 @@ __all__ = [
     "GlobalServerRules",
     "Server",
     "ServerAgent",
+    "ServerAiInsight",
     "ServerAlert",
     "ServerCertificate",
     "ServerCommandHistory",
@@ -71,6 +74,7 @@ __all__ = [
     "ServerMemorySnapshot",
     "ServerMetricRollup",
     "ServerMetricSample",
+    "ServerPrediction",
     "ServerShare",
     "ServerWatcherDraft",
     "Playbook",

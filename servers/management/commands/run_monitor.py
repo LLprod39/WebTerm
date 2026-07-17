@@ -19,7 +19,9 @@ from django.core.management.base import BaseCommand
 from loguru import logger
 
 from app.background_workers import STUDIO_MONITOR_WORKER
+from servers.ai_insights import run_ai_insights_for_servers
 from servers.cert_collector import collect_certificates_for_all
+from servers.forecast_persistence import run_forecast_persistence
 from servers.metrics_rollup import run_metric_rollups
 from servers.monitor import check_all_servers, cleanup_old_data
 from servers.worker_state import claim_background_worker, heartbeat_background_worker, stop_background_worker
@@ -34,6 +36,7 @@ class Command(BaseCommand):
         parser.add_argument("--cleanup-interval", type=int, default=86400, help="Old data cleanup interval in seconds (default 86400)")
         parser.add_argument("--rollup-interval", type=int, default=3600, help="Metric rollup interval in seconds (default 3600)")
         parser.add_argument("--cert-interval", type=int, default=21600, help="TLS certificate scan interval in seconds (default 21600)")
+        parser.add_argument("--ai-interval", type=int, default=21600, help="AI insight analysis interval in seconds (default 21600)")
         parser.add_argument("--concurrency", type=int, default=5, help="Max concurrent SSH connections (default 5)")
         parser.add_argument("--server-id", dest="server_ids", action="append", type=int, help="Restrict checks to one or more server IDs (repeatable)")
         parser.add_argument("--once", action="store_true", help="Run a single check and exit")
@@ -52,6 +55,7 @@ class Command(BaseCommand):
         cleanup_interval = options["cleanup_interval"]
         rollup_interval = options["rollup_interval"]
         cert_interval = options["cert_interval"]
+        ai_interval = options["ai_interval"]
         concurrency = options["concurrency"]
         server_ids = options["server_ids"] or []
         once = options["once"]
@@ -118,6 +122,7 @@ class Command(BaseCommand):
                         lease_seconds,
                         rollup_interval=rollup_interval,
                         cert_interval=cert_interval,
+                        ai_interval=ai_interval,
                     )
                 )
             except KeyboardInterrupt:
@@ -138,6 +143,7 @@ class Command(BaseCommand):
         *,
         rollup_interval: int = 3600,
         cert_interval: int = 21600,
+        ai_interval: int = 21600,
     ) -> dict:
         stop = asyncio.Event()
 
@@ -155,6 +161,11 @@ class Command(BaseCommand):
         rollup_every_n = max(1, rollup_interval // quick_interval)
         cert_counter = 0
         cert_every_n = max(1, cert_interval // quick_interval)
+        ai_counter = 0
+        ai_every_n = max(1, ai_interval // quick_interval)
+        # Duty briefings: check about once per hour of monitor cycles
+        briefing_counter = 0
+        briefing_every_n = max(1, 3600 // max(1, quick_interval))
         summary = {"cycle": 0, "mode": "", "checked": 0, "errors": 0, "cleanup_errors": 0}
 
         while not stop.is_set():
@@ -225,6 +236,19 @@ class Command(BaseCommand):
                     )
                 except Exception as exc:
                     logger.error("Monitor: metric rollup failed: {}", exc)
+                try:
+                    forecast_summary = await sync_to_async(run_forecast_persistence, thread_sensitive=True)(
+                        server_ids
+                    )
+                    logger.info(
+                        "Monitor: forecasts persisted ({} servers, {} predictions, +{}/-{} alerts)",
+                        forecast_summary["servers"],
+                        forecast_summary["predictions"],
+                        forecast_summary["alerts_created"],
+                        forecast_summary["alerts_resolved"],
+                    )
+                except Exception as exc:
+                    logger.error("Monitor: forecast persistence failed: {}", exc)
 
             cert_counter += 1
             if cert_counter >= cert_every_n or quick_counter == 1:
@@ -241,6 +265,38 @@ class Command(BaseCommand):
                     )
                 except Exception as exc:
                     logger.error("Monitor: certificate scan failed: {}", exc)
+
+            briefing_counter += 1
+            if briefing_counter >= briefing_every_n:
+                briefing_counter = 0
+                try:
+                    from core_ui.services.operator_duty import deliver_briefings_for_all_users
+
+                    briefing_summary = await sync_to_async(
+                        deliver_briefings_for_all_users, thread_sensitive=True
+                    )(force=False)
+                    if briefing_summary.get("delivered"):
+                        logger.info("Monitor: operator duty briefings {}", briefing_summary)
+                except Exception as exc:
+                    logger.error("Monitor: operator duty briefing failed: {}", exc)
+
+            ai_counter += 1
+            # No first-cycle bootstrap: LLM passes are costly, wait for history.
+            if ai_counter >= ai_every_n:
+                ai_counter = 0
+                try:
+                    ai_summary = await sync_to_async(run_ai_insights_for_servers, thread_sensitive=True)(
+                        server_ids
+                    )
+                    if ai_summary.get("enabled"):
+                        logger.info(
+                            "Monitor: AI insights pass done (analyzed {}, reused {}, errors {})",
+                            ai_summary.get("analyzed", 0),
+                            ai_summary.get("reused", 0),
+                            ai_summary.get("errors", 0),
+                        )
+                except Exception as exc:
+                    logger.error("Monitor: AI insights pass failed: {}", exc)
 
             try:
                 await asyncio.wait_for(stop.wait(), timeout=quick_interval)

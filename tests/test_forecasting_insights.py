@@ -249,7 +249,12 @@ def test_admin_insights_payload(client):
     assert payload["summary"]["certificates_expiring_30d"] == 1
     assert payload["summary"]["predictions_total"] >= 2  # disk_full + cert_expiry
 
+    assert 5 <= payload["summary"]["fleet_health_score"] <= 100
+    assert payload["summary"]["fleet_health_worst"] <= payload["summary"]["fleet_health_score"]
+
     entry = payload["servers"][0]
+    # Unknown status + critical disk forecast + warning alert + expiring cert eat points.
+    assert 5 <= entry["health_score"] < 80
     assert entry["cpu_percent"] == 41.5
     assert entry["worst_disk"]["mount"] == "/"
     assert entry["reboot_required"] is True

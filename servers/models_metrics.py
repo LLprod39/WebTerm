@@ -107,6 +107,104 @@ class ServerMetricRollup(models.Model):
         return f"{self.server.name}: {self.metric_key} [{self.granularity}] @ {self.bucket_start}"
 
 
+class ServerPrediction(models.Model):
+    """Persisted deterministic forecast for one (server, kind, target) triple.
+
+    One row per triple: it re-activates on recurrence and resolves when the
+    trend disappears, so alerting/watcher layers get stable identities.
+    """
+
+    STATUS_ACTIVE = "active"
+    STATUS_RESOLVED = "resolved"
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, "Active"),
+        (STATUS_RESOLVED, "Resolved"),
+    ]
+
+    server = models.ForeignKey(Server, on_delete=models.CASCADE, related_name="predictions")
+    kind = models.CharField(max_length=30)
+    target = models.CharField(max_length=150)
+    severity = models.CharField(max_length=10, default="info")
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
+
+    eta_days = models.FloatField(null=True, blank=True)
+    predicted_for = models.DateTimeField(null=True, blank=True)
+    current_value = models.FloatField(null=True, blank=True)
+    threshold = models.FloatField(null=True, blank=True)
+    unit = models.CharField(max_length=20, blank=True)
+    slope_per_day = models.FloatField(null=True, blank=True)
+    confidence = models.FloatField(default=0.5)
+    evidence = models.JSONField(default=dict, blank=True)
+
+    first_seen_at = models.DateTimeField(auto_now_add=True)
+    last_seen_at = models.DateTimeField(null=True, blank=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-last_seen_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["server", "kind", "target"],
+                name="uniq_server_prediction_kind_target",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["server", "status", "-last_seen_at"]),
+            models.Index(fields=["status", "severity", "-last_seen_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.server.name}: {self.kind} {self.target} [{self.status}]"
+
+
+class ServerAiInsight(models.Model):
+    """LLM analysis verdict for one physical endpoint or the whole fleet."""
+
+    KIND_SERVER = "server"
+    KIND_FLEET = "fleet"
+    KIND_CHOICES = [
+        (KIND_SERVER, "Server"),
+        (KIND_FLEET, "Fleet"),
+    ]
+
+    VERDICT_LOW = "low"
+    VERDICT_MEDIUM = "medium"
+    VERDICT_HIGH = "high"
+    VERDICT_CRITICAL = "critical"
+    VERDICT_UNKNOWN = "unknown"
+    VERDICT_CHOICES = [
+        (VERDICT_LOW, "Low risk"),
+        (VERDICT_MEDIUM, "Medium risk"),
+        (VERDICT_HIGH, "High risk"),
+        (VERDICT_CRITICAL, "Critical risk"),
+        (VERDICT_UNKNOWN, "Unknown"),
+    ]
+
+    kind = models.CharField(max_length=10, choices=KIND_CHOICES, default=KIND_SERVER)
+    server = models.ForeignKey(
+        Server, on_delete=models.CASCADE, related_name="ai_insights", null=True, blank=True
+    )
+    endpoint_key = models.CharField(max_length=270, blank=True, db_index=True)
+
+    verdict = models.CharField(max_length=10, choices=VERDICT_CHOICES, default=VERDICT_UNKNOWN)
+    content = models.TextField(blank=True)
+    context_fingerprint = models.CharField(max_length=64, blank=True)
+    model_used = models.CharField(max_length=100, blank=True)
+    error = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["kind", "endpoint_key", "-created_at"]),
+            models.Index(fields=["server", "-created_at"]),
+        ]
+
+    def __str__(self):
+        target = self.endpoint_key or "fleet"
+        return f"AI insight [{self.verdict}] {target} @ {self.created_at}"
+
+
 class ServerCertificate(models.Model):
     """TLS certificate observed on a server's listening port."""
 

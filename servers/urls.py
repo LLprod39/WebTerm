@@ -188,6 +188,7 @@ urlpatterns = [
     path("api/master-password/clear/", server_auth_session.clear_master_password, name="clear_master_password"),
     # Monitoring
     path("api/admin/insights/", server_insights.admin_insights, name="admin_insights"),
+    path("api/admin/insights/ai/run/", server_insights.admin_insights_ai_run, name="admin_insights_ai_run"),
     path("api/monitoring/dashboard/", server_monitoring.monitoring_dashboard, name="monitoring_dashboard"),
     path("api/monitoring/status/", server_monitoring.monitoring_status, name="monitoring_status"),
     path("api/monitoring/refresh/", server_monitoring.monitoring_refresh, name="monitoring_refresh"),

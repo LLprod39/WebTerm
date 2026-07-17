@@ -7,6 +7,8 @@ latest collector-v2 sample with 24h sparklines, deterministic predictions
 
 from __future__ import annotations
 
+import json
+import threading
 from datetime import timedelta
 from typing import Any
 
@@ -16,7 +18,15 @@ from django.db.models import Max
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
+from loguru import logger
 
+from servers.ai_insights import (
+    ai_insights_enabled,
+    latest_fleet_insight,
+    latest_insights_by_endpoint,
+    run_ai_insights_for_servers,
+    serialize_insight,
+)
 from servers.forecasting import build_server_predictions
 from servers.models import (
     Server,
@@ -27,7 +37,10 @@ from servers.models import (
 )
 from servers.views.server_monitoring import _latest_health_checks_by_server_id
 
-__all__ = ["admin_insights"]
+__all__ = ["admin_insights", "admin_insights_ai_run"]
+
+_AI_RUN_LOCK_KEY = "servers_admin_ai_insights_running"
+_AI_RUN_LOCK_SECONDS = 600
 
 _CACHE_KEY = "servers_admin_insights_v1"
 _CACHE_SECONDS = 60
@@ -88,6 +101,59 @@ def _fd_percent(sample: ServerMetricSample | None) -> float | None:
     return round(sample.fd_used / sample.fd_max * 100.0, 2)
 
 
+def _health_score(
+    *,
+    status: str,
+    predictions: list[dict[str, Any]],
+    alerts: list[ServerAlert],
+    certs: list[ServerCertificate],
+    sample: ServerMetricSample | None,
+    now,
+) -> int:
+    """Deterministic 0-100 wellbeing index: status + forecasts + alerts + hygiene."""
+    score = 100.0
+    if status == "warning":
+        score -= 15
+    elif status in ("critical", "unreachable"):
+        score -= 40
+    elif status == "unknown":
+        score -= 10
+
+    prediction_penalty = sum(
+        15 if item["severity"] == "critical" else 7 if item["severity"] == "warning" else 0
+        for item in predictions
+    )
+    score -= min(prediction_penalty, 30)
+
+    alert_penalty = sum(10 if alert.severity == "critical" else 3 for alert in alerts)
+    score -= min(alert_penalty, 25)
+
+    cert_penalty = 0
+    for cert in certs:
+        if cert.not_after is None:
+            continue
+        days = (cert.not_after - now).days
+        if days < 0:
+            cert_penalty += 15
+        elif days <= 7:
+            cert_penalty += 10
+        elif days <= 30:
+            cert_penalty += 4
+    score -= min(cert_penalty, 20)
+
+    if sample:
+        if (sample.journal_err_10m or 0) > 5:
+            score -= 4
+        if sample.reboot_required:
+            score -= 2
+        if sample.ntp_synchronized is False:
+            score -= 2
+        if sample.zombie_count:
+            score -= 1
+
+    return int(max(5, min(100, round(score))))
+
+
 def _serialize_server(
     server: Server,
     *,
@@ -95,12 +161,14 @@ def _serialize_server(
     sample: ServerMetricSample | None,
     spark: dict[str, list[float]],
     predictions: list[dict[str, Any]],
+    endpoint_key: str,
 ) -> dict[str, Any]:
     worst_disk = _worst_disk(sample)
     return {
         "id": server.id,
         "name": server.name,
         "host": server.host,
+        "endpoint_key": endpoint_key,
         "owner": server.user.username,
         "status": health.status if health else "unknown",
         "checked_at": health.checked_at.isoformat() if health and health.checked_at else None,
@@ -166,6 +234,24 @@ def _build_insights_payload() -> dict[str, Any]:
     samples_by_id = _latest_samples_by_server_id(server_ids)
     sparks_by_id = _sparklines_by_server_id(server_ids, now)
 
+    alert_rows = list(
+        ServerAlert.objects.filter(server_id__in=server_ids, is_resolved=False)
+        .select_related("server")
+        .order_by("-created_at")[:300]
+    )
+    alerts_by_server: dict[int, list[ServerAlert]] = {}
+    for alert in alert_rows:
+        alerts_by_server.setdefault(alert.server_id, []).append(alert)
+
+    cert_rows = list(
+        ServerCertificate.objects.filter(server_id__in=server_ids, is_active=True)
+        .select_related("server")
+        .order_by("not_after")
+    )
+    certs_by_server: dict[int, list[ServerCertificate]] = {}
+    for cert in cert_rows:
+        certs_by_server.setdefault(cert.server_id, []).append(cert)
+
     status_counts = {"healthy": 0, "warning": 0, "critical": 0, "unreachable": 0, "unknown": 0}
     all_predictions: list[dict[str, Any]] = []
     # Inventory rows sharing one host:port carry mirrored samples; the flat
@@ -186,15 +272,23 @@ def _build_insights_payload() -> dict[str, Any]:
             seen_endpoint_predictions.add(dedupe_key)
             all_predictions.append({**item, "server_id": server.id, "server_name": server.name})
 
-        server_entries.append(
-            _serialize_server(
-                server,
-                health=health,
-                sample=samples_by_id.get(server.id),
-                spark=sparks_by_id.get(server.id, {"cpu": [], "mem": [], "disk": []}),
-                predictions=predictions,
-            )
+        entry = _serialize_server(
+            server,
+            health=health,
+            sample=samples_by_id.get(server.id),
+            spark=sparks_by_id.get(server.id, {"cpu": [], "mem": [], "disk": []}),
+            predictions=predictions,
+            endpoint_key=endpoint_key,
         )
+        entry["health_score"] = _health_score(
+            status=status,
+            predictions=predictions,
+            alerts=alerts_by_server.get(server.id, []),
+            certs=certs_by_server.get(server.id, []),
+            sample=samples_by_id.get(server.id),
+            now=now,
+        )
+        server_entries.append(entry)
 
     severity_rank = {"critical": 0, "warning": 1, "info": 2}
     all_predictions.sort(
@@ -204,11 +298,6 @@ def _build_insights_payload() -> dict[str, Any]:
         )
     )
 
-    cert_rows = list(
-        ServerCertificate.objects.filter(server_id__in=server_ids, is_active=True)
-        .select_related("server")
-        .order_by("not_after")
-    )
     certificates = [_serialize_certificate(cert, now) for cert in cert_rows]
 
     alerts = [
@@ -222,10 +311,12 @@ def _build_insights_payload() -> dict[str, Any]:
             "message": alert.message[:300],
             "created_at": alert.created_at.isoformat(),
         }
-        for alert in ServerAlert.objects.filter(server_id__in=server_ids, is_resolved=False)
-        .select_related("server")
-        .order_by("-created_at")[:_MAX_ALERTS]
+        for alert in alert_rows[:_MAX_ALERTS]
     ]
+
+    scores = [entry["health_score"] for entry in server_entries]
+    fleet_health_score = int(round(sum(scores) / len(scores))) if scores else 100
+    fleet_health_worst = min(scores) if scores else 100
 
     expiring_30d = sum(
         1 for cert in certificates if cert["days_left"] is not None and cert["days_left"] <= 30
@@ -236,12 +327,26 @@ def _build_insights_payload() -> dict[str, Any]:
         if cert.fingerprint_changed_at and (now - cert.fingerprint_changed_at) <= timedelta(days=7)
     )
 
+    endpoint_keys = sorted({entry["endpoint_key"] for entry in server_entries})
+    insights_by_endpoint = latest_insights_by_endpoint(endpoint_keys)
+    ai_block = {
+        "enabled": ai_insights_enabled(),
+        "running": bool(cache.get(_AI_RUN_LOCK_KEY)),
+        "fleet": serialize_insight(latest_fleet_insight()),
+        "by_endpoint": {
+            key: serialize_insight(row) for key, row in insights_by_endpoint.items()
+        },
+    }
+
     return {
         "success": True,
         "generated_at": now.isoformat(),
+        "ai": ai_block,
         "summary": {
             "servers_total": len(servers),
             **status_counts,
+            "fleet_health_score": fleet_health_score,
+            "fleet_health_worst": fleet_health_worst,
             "active_alerts": len(alerts),
             "predictions_total": len(all_predictions),
             "predictions_critical": sum(1 for item in all_predictions if item["severity"] == "critical"),
@@ -273,3 +378,37 @@ def admin_insights(request):
     payload = _build_insights_payload()
     cache.set(_CACHE_KEY, payload, _CACHE_SECONDS)
     return JsonResponse(payload)
+
+
+@login_required
+@require_http_methods(["POST"])
+def admin_insights_ai_run(request):
+    """Queue an AI analysis pass (whole fleet or one server) in the background."""
+    if not request.user.is_staff:
+        return JsonResponse({"success": False, "error": "Admin access required"}, status=403)
+    if not ai_insights_enabled():
+        return JsonResponse({"success": False, "error": "AI insights disabled"}, status=400)
+
+    try:
+        body = json.loads(request.body or b"{}")
+    except json.JSONDecodeError:
+        body = {}
+    server_id = body.get("server_id")
+    force = bool(body.get("force", True))
+    server_ids = [int(server_id)] if server_id else None
+
+    if not cache.add(_AI_RUN_LOCK_KEY, "1", _AI_RUN_LOCK_SECONDS):
+        return JsonResponse({"success": True, "queued": False, "running": True})
+
+    def _worker() -> None:
+        try:
+            summary = run_ai_insights_for_servers(server_ids, force=force)
+            logger.info("AI insights run finished: {}", summary)
+        except Exception as exc:
+            logger.error("AI insights run failed: {}", exc)
+        finally:
+            cache.delete(_AI_RUN_LOCK_KEY)
+            cache.delete(_CACHE_KEY)
+
+    threading.Thread(target=_worker, daemon=True, name="admin-ai-insights").start()
+    return JsonResponse({"success": True, "queued": True})

@@ -5,8 +5,6 @@ Re-exported from servers.monitor for backward compatibility (tests import it the
 """
 from __future__ import annotations
 
-from datetime import timedelta
-
 from asgiref.sync import sync_to_async as _s2a
 from django.utils import timezone
 
@@ -20,25 +18,30 @@ def sync_to_async(func, thread_sensitive=False):
 
 async def _create_alerts(server: Server, metrics: dict, deep_data: dict | None = None) -> None:
     now = timezone.now()
-    recent_window = now - timedelta(minutes=15)
 
-    async def _alert_exists(alert_type: str, fingerprint: str = "") -> bool:
-        def _exists() -> bool:
+    async def _find_existing(alert_type: str, fingerprint: str = "") -> ServerAlert | None:
+        """Unresolved alert of the same type+fingerprint, regardless of age.
+
+        While an alert stays unresolved it must be updated in place — the old
+        15-minute window re-created a fresh row every cycle for long-running
+        problems, flooding the feed with duplicates.
+        """
+
+        def _find() -> ServerAlert | None:
             rows = ServerAlert.objects.filter(
                 server=server,
                 alert_type=alert_type,
                 is_resolved=False,
-                created_at__gte=recent_window,
-            ).only("metadata")
+            ).only("id", "metadata", "severity", "title", "message")
             if not fingerprint:
-                return rows.exists()
+                return rows.first()
             for row in rows:
                 metadata = row.metadata if isinstance(row.metadata, dict) else {}
                 if str(metadata.get("fingerprint") or "") == fingerprint:
-                    return True
-            return False
+                    return row
+            return None
 
-        return await sync_to_async(_exists)()
+        return await sync_to_async(_find)()
 
     async def _create(
         alert_type: str,
@@ -49,11 +52,23 @@ async def _create_alerts(server: Server, metrics: dict, deep_data: dict | None =
         *,
         fingerprint: str = "",
     ):
-        if await _alert_exists(alert_type, fingerprint):
-            return
         payload = dict(meta or {})
         if fingerprint:
             payload["fingerprint"] = fingerprint
+        payload["last_seen_at"] = now.isoformat()
+
+        existing = await _find_existing(alert_type, fingerprint)
+        if existing is not None:
+            def _update() -> None:
+                existing.severity = severity
+                existing.title = title
+                existing.message = message
+                existing.metadata = {**(existing.metadata or {}), **payload}
+                existing.save(update_fields=["severity", "title", "message", "metadata"])
+
+            await sync_to_async(_update)()
+            return
+
         await sync_to_async(ServerAlert.objects.create)(
             server=server,
             alert_type=alert_type,

@@ -51,6 +51,7 @@ export interface InsightServer {
   id: number;
   name: string;
   host: string;
+  endpoint_key: string;
   owner: string;
   status: "healthy" | "warning" | "critical" | "unreachable" | "unknown";
   checked_at: string | null;
@@ -81,6 +82,7 @@ export interface InsightServer {
   uptime_seconds: number | null;
   spark: { cpu: number[]; mem: number[]; disk: number[] };
   predictions: InsightPrediction[];
+  health_score: number;
 }
 
 export interface InsightCertificate {
@@ -110,10 +112,32 @@ export interface InsightAlert {
   created_at: string;
 }
 
+export type AiVerdict = "low" | "medium" | "high" | "critical" | "unknown";
+
+export interface AiInsight {
+  id: number;
+  kind: "server" | "fleet";
+  endpoint_key: string;
+  server_id: number | null;
+  verdict: AiVerdict;
+  content: string;
+  error: string;
+  model: string;
+  created_at: string;
+}
+
+export interface AdminInsightsAi {
+  enabled: boolean;
+  running: boolean;
+  fleet: AiInsight | null;
+  by_endpoint: Record<string, AiInsight | null>;
+}
+
 export interface AdminInsightsResponse {
   success: boolean;
   generated_at: string;
   cached?: boolean;
+  ai: AdminInsightsAi;
   summary: {
     servers_total: number;
     healthy: number;
@@ -121,6 +145,8 @@ export interface AdminInsightsResponse {
     critical: number;
     unreachable: number;
     unknown: number;
+    fleet_health_score: number;
+    fleet_health_worst: number;
     active_alerts: number;
     predictions_total: number;
     predictions_critical: number;
@@ -138,4 +164,14 @@ export interface AdminInsightsResponse {
 export async function fetchAdminInsights(refresh = false) {
   const qs = refresh ? "?refresh=1" : "";
   return apiFetch<AdminInsightsResponse>(`/servers/api/admin/insights/${qs}`);
+}
+
+export async function runAiInsights(serverId?: number) {
+  return apiFetch<{ success: boolean; queued: boolean; running?: boolean }>(
+    "/servers/api/admin/insights/ai/run/",
+    {
+      method: "POST",
+      body: JSON.stringify(serverId ? { server_id: serverId, force: true } : { force: true }),
+    },
+  );
 }
