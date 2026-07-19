@@ -53,6 +53,16 @@ export interface AssistantChatMessage {
   created_at: string;
 }
 
+export interface AssistantActiveTurn {
+  turn_id: number;
+  status: string;
+  iteration?: number;
+  busy?: boolean;
+  assistant_message_id?: number | null;
+  assistant_text?: string;
+  pending_action_id?: number | null;
+}
+
 export interface AssistantChatSession {
   id: number;
   title: string;
@@ -62,17 +72,45 @@ export interface AssistantChatSession {
   created_at: string;
   updated_at: string;
   messages?: AssistantChatMessage[];
+  /** Open / parked operator turn — survives leaving the page. */
+  active_turn?: AssistantActiveTurn | null;
 }
 
 export type OperatorWsEvent =
-  | { type: "ready"; chat_id: number }
+  | {
+      type: "ready";
+      chat_id: number;
+      busy?: boolean;
+      health?: { ok: boolean; checks?: Record<string, string>; issues?: string[] };
+    }
+  | {
+      type: "turn_snapshot";
+      chat_id?: number;
+      turn_id?: number;
+      status?: string;
+      iteration?: number;
+      busy?: boolean;
+      assistant_message_id?: number | null;
+      assistant_text?: string;
+      user_message_id?: number | null;
+      user_text?: string;
+      pending_action?: AssistantAction | null;
+      in_process?: boolean;
+    }
   | { type: "token"; text: string }
   | { type: "tool_started"; id?: string; name?: string; arguments?: Record<string, unknown> }
   | { type: "tool_result"; id?: string; name?: string; ok?: boolean; preview?: string; action?: AssistantAction }
   | { type: "confirm_required"; turn_id?: number; action_id?: number; action?: Partial<AssistantAction> & { id: number } }
   | { type: "action_update"; action: AssistantAction }
   | { type: "usage"; usage?: Record<string, number> }
-  | { type: "thinking"; iteration?: number; phase?: string; message?: string }
+  | {
+      type: "thinking";
+      iteration?: number;
+      phase?: string;
+      message?: string;
+      /** True when model already streamed real reasoning tokens this turn. */
+      reasoning_active?: boolean;
+    }
   | { type: "thinking_delta"; text: string; iteration?: number }
   | { type: "turn_started" | "turn_done" | "turn_complete"; status?: string; actions?: AssistantAction[] }
   | { type: "error"; message: string }
@@ -116,6 +154,12 @@ export function updateAssistantChat(
   return apiFetch<AssistantChatSession>(`/api/assistant/chats/${chatId}/`, {
     method: "PATCH",
     body: JSON.stringify(payload),
+  });
+}
+
+export function deleteAssistantChat(chatId: number) {
+  return apiFetch<{ ok: boolean }>(`/api/assistant/chats/${chatId}/`, {
+    method: "DELETE",
   });
 }
 

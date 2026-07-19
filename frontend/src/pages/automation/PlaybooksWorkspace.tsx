@@ -73,9 +73,9 @@ function detailToEditor(pb: PlaybookDetail): PlaybookEditorState {
       pb.tasks?.length > 0
         ? pb.tasks.map((t) => ({
             id: t.id || newLocalTaskId(),
-            command: t.command,
-            description: t.description || "",
-            continue_on_error: Boolean(t.continue_on_error),
+            command: String(t?.command ?? ""),
+            description: String(t?.description ?? ""),
+            continue_on_error: Boolean(t?.continue_on_error),
           }))
         : [{ id: newLocalTaskId(), command: "", description: "", continue_on_error: false }],
   };

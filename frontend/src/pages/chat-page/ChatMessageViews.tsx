@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Bot, CheckCircle2, Circle, Loader2, User, XCircle } from "lucide-react";
+import { Bot, Check, CheckCircle2, Circle, Copy, Loader2, RotateCcw, User, XCircle } from "lucide-react";
 
 import type { AssistantAction, AssistantChatMessage } from "@/api";
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,9 @@ import {
   type InteractiveServerItem,
   type ServerPanelActions,
 } from "./InteractiveServersPanel";
+import { MetricsSnapshotCard, type MetricsSnapshot } from "./MetricsSnapshotCard";
 import { OperatorMarkdown } from "./OperatorMarkdown";
+import { cleanStepTitle } from "./PlanTasksPanel";
 
 
 function actionServerLabel(action: AssistantAction): string {
@@ -205,12 +208,41 @@ export function PlanChecklist({ plan }: { plan: { title?: string; steps?: Array<
               ) : (
                 <Circle className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
               )}
-              <span className={cn(done && "text-muted-foreground line-through")}>{step.text}</span>
+              <span
+                title={step.text}
+                className={cn("line-clamp-2", done && "text-muted-foreground line-through")}
+              >
+                {cleanStepTitle(step.text)}
+              </span>
             </li>
           );
         })}
       </ul>
     </div>
+  );
+}
+
+/** Copy message markdown to clipboard with a brief confirmation state. */
+function CopyMessageButton({ content, lang }: { content: string; lang: "ru" | "en" }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        void navigator.clipboard
+          ?.writeText(content)
+          .then(() => {
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 1500);
+          })
+          .catch(() => undefined);
+      }}
+      className="rounded p-1 text-muted-foreground/60 transition-colors hover:text-foreground"
+      aria-label={localize(lang, "Скопировать", "Copy")}
+      title={localize(lang, "Скопировать текст", "Copy text")}
+    >
+      {copied ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
+    </button>
   );
 }
 
@@ -221,6 +253,7 @@ export function MessageBubble({
   onCancelAction,
   onUndoAction,
   onSaveRunbook,
+  onRetry,
   serverPanelActions,
   agentPanelActions,
   forecastPanelActions,
@@ -231,6 +264,8 @@ export function MessageBubble({
   onCancelAction: (actionId: number) => void;
   onUndoAction?: (actionId: number) => void;
   onSaveRunbook?: (message: AssistantChatMessage) => void;
+  /** Re-send the previous user message; provided only for the latest assistant message. */
+  onRetry?: () => void;
   serverPanelActions?: ServerPanelActions;
   agentPanelActions?: AgentPanelActions;
   forecastPanelActions?: ForecastPanelActions;
@@ -241,16 +276,23 @@ export function MessageBubble({
   const Icon = isUser ? User : Bot;
   const plan = message.metadata.plan as { title?: string; steps?: Array<{ id?: number; text?: string; status?: string }> } | undefined;
   const chart = message.metadata.chart as { title?: string; series?: number[]; unit?: string } | undefined;
+  const metrics = message.metadata.metrics as MetricsSnapshot | undefined;
   const table = message.metadata.table as DataTable | undefined;
   const tables = (message.metadata.tables as DataTable[] | undefined) || (table ? [table] : []);
   const completedMutations = actions.filter((a) => a.status === "completed" && a.risk !== "read");
 
   if (isUser) {
+    // Strip hidden operator context (pins / human terminal trail) from display
+    const displayContent = String(message.content || "")
+      .replace(/\n\n\[Human terminal on[^\]]*\][\s\S]*$/i, "")
+      .replace(/\n\nКонтекст серверов:[\s\S]*$/i, "")
+      .replace(/\nКонтекст пользователей:[\s\S]*$/i, "")
+      .trim();
     return (
       <div className="group flex justify-end gap-3 animate-in fade-in-0 slide-in-from-bottom-1 duration-200">
         <div className="min-w-0 max-w-[min(560px,85%)]">
           <div className="rounded-sm rounded-br-md bg-primary px-3.5 py-2.5 text-[13px] font-medium leading-5 tracking-tight text-primary-foreground shadow-sm">
-            <div className="whitespace-pre-wrap break-words">{message.content}</div>
+            <div className="whitespace-pre-wrap break-words">{displayContent || message.content}</div>
           </div>
           <div className="mt-1 pr-0.5 text-right text-[10px] tabular-nums text-muted-foreground/70 opacity-0 transition-opacity group-hover:opacity-100">
             {formatDateTime(message.created_at, lang)}
@@ -282,12 +324,27 @@ export function MessageBubble({
               {actions.length} {localize(lang, "действ.", "actions")}
             </span>
           ) : null}
+          <span className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+            {message.content ? <CopyMessageButton content={message.content} lang={lang} /> : null}
+            {onRetry ? (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="rounded p-1 text-muted-foreground/60 transition-colors hover:text-foreground"
+                aria-label={localize(lang, "Повторить", "Retry")}
+                title={localize(lang, "Повторить последний запрос", "Retry last request")}
+              >
+                <RotateCcw className="h-3 w-3" />
+              </button>
+            ) : null}
+          </span>
         </div>
         {message.content ? (
           <div className="max-w-[min(640px,100%)]">
-            <OperatorMarkdown content={message.content} stripTables={hasStructuredTable} />
+            <OperatorMarkdown content={message.content} stripTables={hasStructuredTable || Boolean(metrics)} />
           </div>
         ) : null}
+        {metrics ? <MetricsSnapshotCard data={metrics} /> : null}
         {plan ? (
           <div className="max-w-[min(920px,100%)]">
             <PlanChecklist plan={plan} />
@@ -327,6 +384,8 @@ export function MessageBubble({
                 title={t.title}
                 items={t.items as InteractiveServerItem[]}
                 actions={serverPanelActions}
+                defaultExpanded={Boolean((t as { default_expanded?: boolean }).default_expanded)}
+                note={typeof (t as { note?: string }).note === "string" ? (t as { note?: string }).note : undefined}
               />
             );
           }

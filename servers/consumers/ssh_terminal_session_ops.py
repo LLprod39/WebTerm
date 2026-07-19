@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import errno
 import os
 import uuid
 from typing import Any
 
+import asyncssh
 from channels.db import database_sync_to_async
 from loguru import logger
 
@@ -30,6 +32,89 @@ _TermSize = terminal_input.TerminalSize
 
 
 class SSHTerminalSessionOpsMixin:
+    @staticmethod
+    def _format_ssh_connect_error(exc: Exception) -> str:
+        """Map SSH/network connect failures to a short user-facing message."""
+        errnos: set[int] = set()
+        stack: list[BaseException] = [exc]
+        seen: set[int] = set()
+        while stack:
+            current = stack.pop()
+            obj_id = id(current)
+            if obj_id in seen:
+                continue
+            seen.add(obj_id)
+
+            errno_val = getattr(current, "errno", None)
+            if isinstance(errno_val, int):
+                errnos.add(errno_val)
+
+            # asyncio may wrap OSError as "Connect call failed (...)" without errno
+            # on the outer exception in some paths; also walk causes/context.
+            for attr in ("__cause__", "__context__"):
+                nested = getattr(current, attr, None)
+                if isinstance(nested, BaseException):
+                    stack.append(nested)
+            if isinstance(current, BaseExceptionGroup):
+                stack.extend(current.exceptions)
+
+        if (
+            isinstance(exc, ConnectionResetError)
+            or errno.ECONNRESET in errnos
+        ):
+            return (
+                "SSH сервер принял TCP-соединение и сразу закрыл его "
+                "(Connection reset by peer). Проверьте sshd, порт, firewall, "
+                "bastion/VPN и allowlist по IP."
+            )
+        if errno.ECONNREFUSED in errnos:
+            return (
+                "SSH порт недоступен (Connection refused). "
+                "Проверьте, что sshd запущен и слушает нужный порт."
+            )
+        if errno.EHOSTUNREACH in errnos or errno.ENETUNREACH in errnos:
+            return (
+                "Нет маршрута до SSH-хоста (host/network unreachable). "
+                "Проверьте IP, VPN/bastion, маршрутизацию и firewall."
+            )
+        if errno.ETIMEDOUT in errnos or isinstance(exc, (TimeoutError, asyncio.TimeoutError)):
+            return (
+                "Таймаут подключения к SSH серверу. "
+                "Проверьте маршрут, firewall, bastion/VPN и доступность порта."
+            )
+        if isinstance(exc, asyncssh.misc.HostKeyNotVerifiable):
+            return f"SSH host key не доверен: {exc}"
+        if isinstance(exc, asyncssh.misc.PermissionDenied):
+            return f"SSH аутентификация отклонена: {exc}"
+        if isinstance(exc, asyncssh.Error):
+            return f"SSH ошибка: {exc}"
+
+        text = str(exc) or exc.__class__.__name__
+        # Fallback for wrapped OSError messages without errno on the outer type.
+        lowered = text.lower()
+        if "connection refused" in lowered:
+            return (
+                "SSH порт недоступен (Connection refused). "
+                "Проверьте, что sshd запущен и слушает нужный порт."
+            )
+        if "unreachable" in lowered or "no route" in lowered:
+            return (
+                "Нет маршрута до SSH-хоста (host/network unreachable). "
+                "Проверьте IP, VPN/bastion, маршрутизацию и firewall."
+            )
+        if "timed out" in lowered or "timeout" in lowered:
+            return (
+                "Таймаут подключения к SSH серверу. "
+                "Проверьте маршрут, firewall, bastion/VPN и доступность порта."
+            )
+        if "connection reset" in lowered:
+            return (
+                "SSH сервер принял TCP-соединение и сразу закрыл его "
+                "(Connection reset by peer). Проверьте sshd, порт, firewall, "
+                "bastion/VPN и allowlist по IP."
+            )
+        return text
+
     async def _handle_connect(self, content: dict[str, Any]):
         log_activity_async = consumer_module_attr("log_user_activity_async", log_user_activity_async)
 

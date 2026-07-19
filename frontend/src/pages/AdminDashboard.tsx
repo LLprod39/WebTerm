@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, Maximize2, Minimize2 } from "lucide-react";
+import { Activity, Maximize2, Minimize2, Radio } from "lucide-react";
 
 import { fetchAdminDashboard, fetchMonitoringDashboard } from "@/api";
 import { fetchPluginSurfaces } from "@/api";
@@ -8,8 +8,13 @@ import { Button } from "@/components/ui/button";
 import { CustomizableDashboard } from "@/components/dashboard/CustomizableDashboard";
 import { PageHero, PageShell, QueryStateBlock, StatusBadge } from "@/components/ui/page-shell";
 import { localize, useI18n } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 import { buildAdminDashboardWidgets } from "./admin-dashboard/adminDashboardWidgets";
 import { buildPluginDashboardWidgets } from "@/plugins/dashboardWidgets";
+import {
+  useMonitoringLive,
+  withLiveMonitoringDashboard,
+} from "@/pages/servers/useMonitoringLive";
 
 export default function AdminDashboard() {
   const { lang } = useI18n();
@@ -28,15 +33,31 @@ export default function AdminDashboard() {
     queryFn: fetchAdminDashboard,
     refetchInterval: 30000,
   });
-  const { data: monitoring } = useQuery({
+  const { data: monitoringResponse } = useQuery({
     queryKey: ["monitoring-dashboard"],
     queryFn: fetchMonitoringDashboard,
+    staleTime: 20_000,
     refetchInterval: 30000,
+    refetchIntervalInBackground: false,
+    placeholderData: (previous) => previous,
   });
   const { data: pluginSurfaces } = useQuery({
     queryKey: ["plugins", "surfaces", "dashboard", "admin"],
     queryFn: fetchPluginSurfaces,
   });
+
+  const liveServerIds = useMemo(
+    () => (monitoringResponse?.servers ?? []).map((s) => s.server_id),
+    [monitoringResponse?.servers],
+  );
+  const { metricsByServerId: liveMetrics, connected: liveConnected } = useMonitoringLive(
+    liveServerIds,
+    liveServerIds.length > 0,
+  );
+  const monitoring = useMemo(
+    () => withLiveMonitoringDashboard(monitoringResponse, liveMetrics),
+    [monitoringResponse, liveMetrics],
+  );
 
   const d = dashResponse?.data;
   const availableWidgets = useMemo(() => {
@@ -94,7 +115,17 @@ export default function AdminDashboard() {
               <Activity className="h-4 w-4 text-info" />
               <span className="text-xs font-semibold text-foreground/90">{localize(lang, "Версия", "Version")} v{d?.app_version || "2.0.0"}</span>
               <div className="h-3.5 w-px bg-border mx-1" />
-              <span className="text-xs text-muted-foreground">{localize(lang, "Автообновление 30 с", "Refreshes every 30s")}</span>
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1 text-xs font-medium",
+                  liveConnected ? "text-success" : "text-muted-foreground",
+                )}
+              >
+                <Radio className={cn("h-3.5 w-3.5", liveConnected && "animate-pulse")} />
+                {liveConnected
+                  ? localize(lang, "Live метрики", "Live metrics")
+                  : localize(lang, "Live…", "Live…")}
+              </span>
             </div>
           </div>
         }

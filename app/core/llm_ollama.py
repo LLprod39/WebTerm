@@ -27,6 +27,20 @@ class OllamaStreamRequest:
 
 
 def get_ollama_think_value(model_manager: Any) -> Any | None:
+    # Per-turn override from Operator chat "thinking mode" toggle
+    try:
+        from core_ui.services.operator_turn_runtime import operator_thinking_mode
+
+        override = operator_thinking_mode.get()
+        if override == "off":
+            return False
+        if override == "on":
+            return True
+        if override in {"low", "medium", "high"}:
+            return override
+    except Exception:  # noqa: BLE001
+        pass
+
     think_mode = model_manager._get_ollama_think_mode()
     if think_mode == "off":
         return False
@@ -81,6 +95,9 @@ def build_ollama_payload(request: OllamaStreamRequest) -> dict[str, Any]:
         "options": {
             "num_predict": 1024 if request.json_mode else 2048,
             "temperature": 0.2 if request.json_mode else 0.5,
+            # Large context: operator/agent system prompts run several thousand tokens
+            # and overflow Ollama's default 4096 window, truncating the reply to empty.
+            "num_ctx": 16384,
         },
     }
     if request.json_mode:

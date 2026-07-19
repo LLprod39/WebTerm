@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from django.utils import timezone
@@ -14,6 +15,229 @@ from app.assistant_actions import (
 )
 from core_ui.access import feature_allowed_for_user
 from servers.views.server_helpers import _accessible_servers_queryset
+
+
+# User asked to *see* inventory in chat (interactive card).
+# Includes typos like «Списко» via спис\w*
+_INVENTORY_CARD_RE = re.compile(
+    r"(?:"
+    r"спис\w*\s+сервер|"  # список/списко/списки серверов
+    r"сервер\w*.{0,24}спис\w*|"
+    r"(?:покажи|выведи|вывести|дай|дай-ка)\s+(?:мне\s+)?(?:спис\w*\s+)?сервер|"
+    r"какие\s+сервер|"
+    r"все\s+сервер|"
+    r"list\s+(?:all\s+)?servers?|"
+    r"show\s+(?:me\s+)?(?:the\s+)?(?:server\s+)?list|"
+    r"show\s+(?:me\s+)?(?:all\s+)?servers?|"
+    r"inventory\b|"
+    r"инвентар|"
+    r"^серверы\s*[.!?…]?\s*$|"
+    r"серверы\s*\?"
+    r")",
+    re.I | re.M,
+)
+
+# Connect / metrics / diagnose — must NOT open fleet inventory card.
+_HOST_ACTION_RE = re.compile(
+    r"(?:"
+    r"подключ|"
+    r"connect|"
+    r"ssh\b|"
+    r"метрик|"
+    r"metrics?|"
+    r"диагност|"
+    r"diagnos|"
+    r"\bdf\b|"
+    r"docker|"
+    r"uptime|"
+    r"проверь|"
+    r"check\b|"
+    r"соберите?|"
+    r"collect|"
+    r"run\s+command|"
+    r"выполни"
+    r")",
+    re.I,
+)
+
+_HOST_HINT_RE = re.compile(
+    r"(?:"
+    r"@([\w.-]{2,64})"
+    r"|(?:сервер(?:у|а|е|ом)?|server|host)\s+([^\s,;:]+)"
+    r"|(?:подключись|подключить|connect(?:\s+to)?)\s+(?:к\s+|to\s+)?(?:сервер(?:у)?\s+)?([^\s,;:]+)"
+    r"|(?:метрик\w*|metrics?|прогноз\w*|forecasts?)\s+(?:сервер\w*\s+)?([^\s,;:]+)"
+    r"|(?:на|к)\s+(?:сервер(?:е|у)?\s+)?([a-zA-Z0-9_.-]{2,64})"
+    r")",
+    re.I,
+)
+
+# Spoken / Cyrillic nicknames → inventory name stems
+_HOST_ALIASES: dict[str, str] = {
+    "графана": "grafana",
+    "графаны": "grafana",
+    "графану": "grafana",
+    "графаной": "grafana",
+    "grafana": "grafana",
+    "луникс": "lunix",
+    "lunix": "lunix",
+    "прометей": "prom",
+    "prometheus": "prom",
+    "пром": "prom",
+    "prom": "prom",
+    "редис": "redis",
+    "redis": "redis",
+    "бастион": "bastion",
+    "bastion": "bastion",
+}
+
+
+def user_wants_inventory_card(user_message: str | None) -> bool:
+    """True only when the operator asked to list inventory in the chat UI."""
+    text = str(user_message or "").strip()
+    if not text:
+        return False
+    # Named-host actions never get a fleet card (even if the word «сервер» appears).
+    if _HOST_ACTION_RE.search(text) and not _INVENTORY_CARD_RE.search(text):
+        return False
+    if _INVENTORY_CARD_RE.search(text):
+        return True
+    # Short phrases: «серверы», «servers please»
+    compact = re.sub(r"\s+", " ", text.lower()).strip()
+    if len(compact) <= 56 and re.search(r"сервер|servers?", compact):
+        if re.search(r"спис|list|show|покаж|какие|все|инвентар|inventory", compact):
+            return True
+        if compact in {"серверы", "servers", "сервера", "server list"}:
+            return True
+    return False
+
+
+def user_wants_named_host_action(user_message: str | None) -> bool:
+    """Connect / metrics / diagnose on a host — never fleet list card."""
+    text = str(user_message or "").strip()
+    if not text:
+        return False
+    if user_wants_inventory_card(text):
+        return False
+    return bool(_HOST_ACTION_RE.search(text))
+
+
+def normalize_host_hint(token: str | None) -> str:
+    """Map «графаны» → grafana, trim junk."""
+    raw = str(token or "").strip().strip("«»\"'.,);:")
+    if not raw:
+        return ""
+    low = raw.lower()
+    if low in _HOST_ALIASES:
+        return _HOST_ALIASES[low]
+    # Stem common Russian endings
+    for suf in ("ами", "ов", "ам", "ах", "ы", "и", "у", "е", "а", "ой", "ей"):
+        if len(low) > 4 and low.endswith(suf):
+            stem = low[: -len(suf)]
+            if stem in _HOST_ALIASES:
+                return _HOST_ALIASES[stem]
+            if stem + "а" in _HOST_ALIASES:
+                return _HOST_ALIASES[stem + "а"]
+    return raw
+
+
+def extract_server_hint(user_message: str | None) -> str | None:
+    """Best-effort host token from natural language (графана, lunix, @web-prod-01)."""
+    text = str(user_message or "").strip()
+    if not text:
+        return None
+    m = _HOST_HINT_RE.search(text)
+    if m:
+        for g in m.groups():
+            if g:
+                token = g.strip().strip("«»\"'.,)@")
+                if token.startswith("@"):
+                    token = token[1:]
+                if token and token.lower() not in {"сервер", "server", "host", "к", "to", "the", "и"}:
+                    return normalize_host_hint(token) or token
+    # Fallback: known aliases mentioned as whole words
+    low = text.lower()
+    for alias, canon in _HOST_ALIASES.items():
+        if re.search(rf"(?<!\w){re.escape(alias)}(?!\w)", low):
+            return canon
+    return None
+
+
+def prepare_list_servers_arguments(
+    arguments: dict[str, Any] | None,
+    *,
+    user_message: str | None,
+) -> dict[str, Any]:
+    """UI policy for list_servers.
+
+    - Explicit list request → show_in_chat, no filter (full inventory card).
+    - Never auto-inject q from the user message into list_servers (that caused
+      «графаны» to stick forever and empty name lists). Host lookup is resolve_server.
+    """
+    args = dict(arguments or {})
+    if user_wants_inventory_card(user_message):
+        args["show_in_chat"] = True
+        for key in ("q", "name", "query"):
+            args.pop(key, None)
+        return args
+
+    args["show_in_chat"] = False
+    # Normalize model-supplied filter only — do not invent one from chat text.
+    raw_q = str(args.get("q") or args.get("name") or args.get("query") or "").strip()
+    if raw_q:
+        args["q"] = normalize_host_hint(raw_q) or raw_q
+        args.pop("name", None)
+        args.pop("query", None)
+    return args
+
+
+def prefer_resolve_server_for_message(
+    arguments: dict[str, Any] | None,
+    *,
+    user_message: str | None,
+) -> dict[str, Any] | None:
+    """If the user asked metrics/connect on a named host, return resolve_server args.
+
+    Returns None when list_servers should still run (true inventory list).
+    """
+    if user_wants_inventory_card(user_message):
+        return None
+    if not user_wants_named_host_action(user_message):
+        return None
+    args = arguments if isinstance(arguments, dict) else {}
+    model_q = str(args.get("q") or args.get("name") or args.get("query") or "").strip()
+    hint = extract_server_hint(user_message)
+    q = normalize_host_hint(model_q) or hint
+    if not q:
+        return None
+    return {"q": q}
+
+
+def server_matches_query(server, q: str) -> bool:
+    """Loose name/host match: grafana ↔ grafana-01, графаны → grafana."""
+    q_raw = (q or "").strip()
+    if not q_raw:
+        return True
+    q_norm = normalize_host_hint(q_raw).lower()
+    q_low = q_raw.lower()
+    name = (getattr(server, "name", None) or "").lower()
+    host = (getattr(server, "host", None) or "").lower()
+    tags = str(getattr(server, "tags", "") or "").lower()
+    if str(getattr(server, "id", "")) == q_low:
+        return True
+    for token in {q_low, q_norm}:
+        if not token:
+            continue
+        if token in name or token in host or token in tags:
+            return True
+        if name.startswith(token) or token.startswith(name.split("-")[0] if name else ""):
+            if name and (name.startswith(token) or token in name.replace("-", "")):
+                return True
+        # stem match: grafana vs grafana-01
+        name_stem = name.split("-")[0] if name else ""
+        if name_stem and (name_stem == token or token.startswith(name_stem) or name_stem.startswith(token)):
+            if len(token) >= 3 and len(name_stem) >= 3:
+                return True
+    return False
 
 
 def _int_arg(ctx: AssistantActionContext, key: str, *, required: bool = True) -> int | None:
@@ -38,67 +262,251 @@ def _server_for_user(user, server_id: int):
     return server
 
 
-def list_servers(ctx: AssistantActionContext) -> dict[str, Any]:
-    qs = _accessible_servers_queryset(ctx.user).order_by("name")[:100]
-    # Best-effort latest health status for interactive chips
-    status_by_id: dict[int, str] = {}
+def _monitoring_rows_by_server_id(user) -> dict[int, dict[str, Any]]:
+    """Same status resolution as dashboard/API (metrics + live cache, not raw last row)."""
     try:
-        from servers.models import ServerHealthCheck
+        from servers.views.server_monitoring import _build_monitoring_status_payload
 
-        ids = [s.id for s in qs]
-        for h in ServerHealthCheck.objects.filter(server_id__in=ids).order_by("server_id", "-checked_at"):
-            if h.server_id not in status_by_id:
-                status_by_id[h.server_id] = h.status or "unknown"
+        payload = _build_monitoring_status_payload(user)
+        rows = payload.get("servers") if isinstance(payload, dict) else None
+        if not isinstance(rows, list):
+            return {}
+        out: dict[int, dict[str, Any]] = {}
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            sid = row.get("server_id")
+            if sid is None:
+                continue
+            out[int(sid)] = row
+        return out
     except Exception:  # noqa: BLE001
-        status_by_id = {}
+        return {}
 
-    # Count inventory aliases per physical endpoint (host:port)
+
+def _server_row(s, mon_by_id: dict[int, dict[str, Any]], endpoint_counts: dict[str, int]) -> dict[str, Any]:
+    key = f"{(s.host or '').strip().lower()}:{int(s.port or 22)}"
+    mon = mon_by_id.get(int(s.id), {})
+    status = str(mon.get("status") or "unknown")
+    return {
+        "id": s.id,
+        "name": s.name,
+        "host": s.host,
+        "port": s.port,
+        "os_family": getattr(s, "os_family", "") or "",
+        "tags": [
+            part.strip()
+            for part in str(getattr(s, "tags", "") or "").split(",")
+            if part.strip()
+        ],
+        "ai_read_only": bool(getattr(s, "ai_read_only", False)),
+        "status": status if status in {"healthy", "warning", "critical", "unreachable", "unknown"} else "unknown",
+        "is_stale": bool(mon.get("is_stale")),
+        "cpu_percent": mon.get("cpu_percent"),
+        "memory_percent": mon.get("memory_percent"),
+        "disk_percent": mon.get("disk_percent"),
+        "shared_endpoint_count": endpoint_counts.get(key, 1),
+        "terminal_url": f"/servers/{s.id}/terminal",
+    }
+
+
+def list_servers(ctx: AssistantActionContext) -> dict[str, Any]:
+    """List or filter inventory.
+
+    UX rules:
+    - show_in_chat=true → interactive «Серверы» card (set by loop only for «покажи список»).
+    - Default / lookup → no card. Prefer resolve_server for a named host.
+    - Operator loop injects show_in_chat + q from the user message so the model cannot spam the fleet card.
+    """
+    payload = ctx.input_payload if isinstance(ctx.input_payload, dict) else {}
+    q = str(payload.get("q") or payload.get("name") or payload.get("query") or "").strip()
+
+    # Default OFF — card only when explicitly requested (policy layer sets this for list intents).
+    if "show_in_chat" in payload:
+        show_in_chat = bool(payload.get("show_in_chat"))
+    elif "ui_table" in payload:
+        show_in_chat = bool(payload.get("ui_table"))
+    else:
+        show_in_chat = False
+
+    all_servers = list(_accessible_servers_queryset(ctx.user).order_by("name")[:300])
+    mon_by_id = _monitoring_rows_by_server_id(ctx.user)
+
+    endpoint_counts: dict[str, int] = {}
+    for s in all_servers:
+        key = f"{(s.host or '').strip().lower()}:{int(s.port or 22)}"
+        endpoint_counts[key] = endpoint_counts.get(key, 0) + 1
+
+    # Full name→id map always (survives truncation better when placed first in payload)
+    full_name_index = {
+        str(s.name): int(s.id) for s in all_servers if getattr(s, "name", None)
+    }
+
+    qs = all_servers
+    if q:
+        qs = [s for s in all_servers if server_matches_query(s, q)]
+
+    servers: list[dict[str, Any]] = []
+    status_counts = {"healthy": 0, "warning": 0, "critical": 0, "unreachable": 0, "unknown": 0}
+    for s in qs[:100]:
+        row = _server_row(s, mon_by_id, endpoint_counts)
+        status_counts[row["status"]] = status_counts.get(row["status"], 0) + 1
+        servers.append(row)
+
+    # Lookup with silent flag and no q was never intended — always emit rows for card or filter.
+    emit_rows = show_in_chat or bool(q)
+    if not emit_rows:
+        status_counts = {"healthy": 0, "warning": 0, "critical": 0, "unreachable": 0, "unknown": 0}
+        for s in all_servers:
+            mon = mon_by_id.get(int(s.id), {})
+            st = str(mon.get("status") or "unknown")
+            if st not in status_counts:
+                st = "unknown"
+            status_counts[st] = status_counts.get(st, 0) + 1
+        servers = []
+
+    unique_endpoints = len(
+        {
+            f"{(s.host or '').strip().lower()}:{int(s.port or 22)}"
+            for s in (qs if emit_rows else all_servers)
+        }
+    )
+    # Model-only notes (never shown in the chat card — use ui_note for humans).
+    model_notes: list[str] = []
+    ui_notes: list[str] = []
+    if q:
+        model_notes.append(f"Filtered by q={q!r}: {len(servers)} match(es).")
+    if show_in_chat:
+        model_notes.append(
+            "Interactive inventory card is shown in chat. "
+            "Reply with ONE short line only (count + status summary). "
+            "Do NOT list host names or invent role descriptions — the UI card has them."
+        )
+    else:
+        model_notes.append(
+            "UI card suppressed (lookup mode). "
+            "For a named host prefer operator.resolve_server(q=…)."
+        )
+    if not emit_rows:
+        model_notes.append(
+            f"Compact inventory: {len(full_name_index)} name(s) in name_index only "
+            f"(no server rows)."
+        )
+    if unique_endpoints and unique_endpoints < len(all_servers if not emit_rows else servers or all_servers):
+        mirror = (
+            f"{len(all_servers)} inventory rows map to {unique_endpoints} physical host:port endpoint(s)."
+        )
+        model_notes.append(mirror)
+        if show_in_chat:
+            ui_notes.append(mirror)
+
+    # name_index first so truncation of tool JSON keeps ids for every host (incl. lunix).
+    return {
+        "name_index": full_name_index if not q else {str(s["name"]): int(s["id"]) for s in servers if s.get("name")},
+        "count": len(full_name_index) if not emit_rows else len(servers),
+        "query": q or None,
+        "servers": servers,
+        "unique_endpoints": unique_endpoints,
+        "status_counts": status_counts,
+        "note": " ".join(model_notes) if model_notes else None,
+        "ui_note": " ".join(ui_notes) if ui_notes else None,
+        "reply_hint": (
+            "UI card attached. Answer ≤1 sentence with counts only. Zero host-name bullets."
+            if show_in_chat
+            else None
+        ),
+        "ui_table": show_in_chat,
+        "default_expanded": False,
+        "target_url": "/servers",
+    }
+
+
+def resolve_server(ctx: AssistantActionContext) -> dict[str, Any]:
+    """Resolve one host by name/host/id for connect/SSH — no inventory card in chat."""
+    q = str(
+        ctx.input_payload.get("q")
+        or ctx.input_payload.get("name")
+        or ctx.input_payload.get("server")
+        or ctx.input_payload.get("host")
+        or ""
+    ).strip()
+    if not q:
+        raise AssistantActionError("q or name is required (e.g. lunix)")
+
+    qs = list(_accessible_servers_queryset(ctx.user).order_by("name")[:300])
+    mon_by_id = _monitoring_rows_by_server_id(ctx.user)
     endpoint_counts: dict[str, int] = {}
     for s in qs:
         key = f"{(s.host or '').strip().lower()}:{int(s.port or 22)}"
         endpoint_counts[key] = endpoint_counts.get(key, 0) + 1
 
-    servers = []
-    for s in qs:
-        key = f"{(s.host or '').strip().lower()}:{int(s.port or 22)}"
-        servers.append(
-            {
-                "id": s.id,
-                "name": s.name,
-                "host": s.host,
-                "port": s.port,
-                "os_family": getattr(s, "os_family", "") or "",
-                "tags": [
-                    part.strip()
-                    for part in str(getattr(s, "tags", "") or "").split(",")
-                    if part.strip()
-                ],
-                "ai_read_only": bool(getattr(s, "ai_read_only", False)),
-                "status": status_by_id.get(s.id, "unknown"),
-                "shared_endpoint_count": endpoint_counts.get(key, 1),
-                "terminal_url": f"/servers/{s.id}/terminal",
-            }
-        )
-    unique_endpoints = sum(1 for n in endpoint_counts.values() if n)
-    # Actually unique = len(endpoint_counts)
-    unique_endpoints = len(endpoint_counts)
-    note = None
-    if unique_endpoints and unique_endpoints < len(servers):
-        note = (
-            f"{len(servers)} inventory rows map to {unique_endpoints} physical host:port "
-            "endpoint(s); health/metrics are mirrored across aliases."
-        )
+    q_norm = normalize_host_hint(q).lower()
+    q_low = q.lower()
+    exact = [
+        s
+        for s in qs
+        if (s.name or "").lower() == q_low
+        or (s.name or "").lower() == q_norm
+        or str(s.id) == q_low
+    ]
+    partial = [s for s in qs if s not in exact and server_matches_query(s, q)]
+    matches = exact or partial
+    rows = [_server_row(s, mon_by_id, endpoint_counts) for s in matches[:15]]
+
+    if not rows:
+        # Help the model: top names, no UI card
+        sample = [{"id": s.id, "name": s.name} for s in qs[:30]]
+        return {
+            "ok": False,
+            "found": False,
+            "query": q,
+            "match": None,
+            "matches": [],
+            "sample_names": sample,
+            "ui_table": False,
+            "error": f"No server matching {q!r}",
+            "target_url": "/servers",
+        }
+
+    best = rows[0]
     return {
-        "servers": servers,
-        "count": len(servers),
-        "unique_endpoints": unique_endpoints,
-        "note": note,
-        "target_url": "/servers",
+        "ok": True,
+        "found": True,
+        "query": q,
+        "match": best,
+        "server_id": best["id"],
+        "server_name": best["name"],
+        "matches": rows,
+        "match_count": len(rows),
+        "exact": bool(exact),
+        "ui_table": False,
+        "target_url": best.get("terminal_url") or f"/servers/{best['id']}/terminal",
     }
 
 
 def server_info(ctx: AssistantActionContext) -> dict[str, Any]:
-    server_id = _int_arg(ctx, "server_id")
+    # Accept name when id omitted
+    server_id = None
+    try:
+        server_id = _int_arg(ctx, "server_id", required=False)
+    except Exception:  # noqa: BLE001
+        server_id = None
+    if server_id is None:
+        name = str(ctx.input_payload.get("name") or ctx.input_payload.get("q") or "").strip()
+        if name:
+            resolved = resolve_server(
+                AssistantActionContext(
+                    user=ctx.user,
+                    input_payload={"q": name},
+                    request=ctx.request,
+                    source=ctx.source,
+                )
+            )
+            if not resolved.get("found"):
+                raise AssistantActionError(resolved.get("error") or f"Server {name!r} not found", status=404)
+            server_id = int(resolved["server_id"])
+        else:
+            raise AssistantActionError("server_id or name is required")
     assert server_id is not None
     s = _server_for_user(ctx.user, server_id)
     return {
@@ -109,6 +517,7 @@ def server_info(ctx: AssistantActionContext) -> dict[str, Any]:
         "username": getattr(s, "username", "") or "",
         "os_family": getattr(s, "os_family", "") or "",
         "ai_read_only": bool(getattr(s, "ai_read_only", False)),
+        "ui_table": False,
         "target_url": f"/servers/{s.id}",
     }
 
@@ -116,36 +525,53 @@ def server_info(ctx: AssistantActionContext) -> dict[str, Any]:
 def fleet_status(ctx: AssistantActionContext) -> dict[str, Any]:
     if not feature_allowed_for_user(ctx.user, "servers"):
         raise AssistantActionError("Feature access required: servers", status=403)
-    from servers.models import ServerHealthCheck
 
     servers = list(_accessible_servers_queryset(ctx.user).order_by("name")[:200])
-    ids = [s.id for s in servers]
-    latest_health: dict[int, Any] = {}
-    for h in ServerHealthCheck.objects.filter(server_id__in=ids).order_by("server_id", "-checked_at"):
-        if h.server_id not in latest_health:
-            latest_health[h.server_id] = h
+    mon_by_id = _monitoring_rows_by_server_id(ctx.user)
 
     status_counts = {"healthy": 0, "warning": 0, "critical": 0, "unreachable": 0, "unknown": 0}
     worst: list[dict[str, Any]] = []
+    endpoints: set[str] = set()
+    stale = 0
     for s in servers:
-        health = latest_health.get(s.id)
-        status = getattr(health, "status", None) or "unknown"
+        mon = mon_by_id.get(int(s.id), {})
+        status = str(mon.get("status") or "unknown")
+        if status not in status_counts:
+            status = "unknown"
         status_counts[status] = status_counts.get(status, 0) + 1
+        if mon.get("is_stale"):
+            stale += 1
+        endpoints.add(f"{(s.host or '').strip().lower()}:{int(s.port or 22)}")
         entry = {
             "server_id": s.id,
             "name": s.name,
             "status": status,
-            "cpu_percent": getattr(health, "cpu_percent", None),
-            "mem_percent": getattr(health, "memory_percent", None),
-            "disk_percent": getattr(health, "disk_percent", None),
+            "is_stale": bool(mon.get("is_stale")),
+            "cpu_percent": mon.get("cpu_percent"),
+            "mem_percent": mon.get("memory_percent"),
+            "disk_percent": mon.get("disk_percent"),
         }
         if status in {"critical", "warning", "unreachable"}:
             worst.append(entry)
     worst = worst[:15]
+    note = None
+    if len(endpoints) == 1 and len(servers) > 1:
+        only = next(iter(endpoints))
+        note = (
+            f"{len(servers)} inventory names share one endpoint ({only}). "
+            "Mirrored health is expected."
+        )
     return {
         "count": len(servers),
+        "unique_endpoints": len(endpoints),
         "status_counts": status_counts,
+        "stale_count": stale,
         "worst": worst,
+        "note": note,
+        "monitoring_hint": (
+            "Background health is written by `run_monitor` (or fleet refresh), independent of open browser tabs. "
+            "Live ~2s metrics stream only while a client is subscribed to /ws/monitoring/live/."
+        ),
         "target_url": "/monitoring",
     }
 
@@ -625,11 +1051,23 @@ def server_metrics(ctx: AssistantActionContext) -> dict[str, Any]:
     if sample and isinstance(sample.extra, dict):
         mirrored_from = sample.extra.get("mirrored_from_server_id")
     root_disk = getattr(health, "disk_percent", None)
+    status = getattr(health, "status", None) or "unknown"
+    has_samples = sample is not None or health is not None
+    # Long English note is for the model only; UI uses short ui_note.
+    status_note = None
+    ui_note = None
+    if status == "unreachable" and has_samples:
+        status_note = (
+            "Status «unreachable» is SSH/probe health — metrics below are the last successful sample, "
+            "not proof that no data exists. Do not open a terminal just to read these numbers. "
+            "Do not call list_servers; you already have server_id."
+        )
+        ui_note = "Последний снимок · SSH/probe unreachable"
     return {
         "server_id": server.id,
         "name": server.name,
         "host": server.host,
-        "status": getattr(health, "status", None) or "unknown",
+        "status": status,
         "cpu_percent": getattr(sample, "cpu_percent", None) if sample else getattr(health, "cpu_percent", None),
         "mem_percent": (
             getattr(sample, "memory_percent", None) if sample else getattr(health, "memory_percent", None)
@@ -644,6 +1082,9 @@ def server_metrics(ctx: AssistantActionContext) -> dict[str, Any]:
             if sample and getattr(sample, "collected_at", None)
             else (health.checked_at.isoformat() if health else None)
         ),
+        "status_note": status_note,
+        "ui_note": ui_note,
+        "ui_metrics": True,
         "target_url": f"/servers/{server.id}",
     }
 
@@ -667,6 +1108,64 @@ def server_memory(ctx: AssistantActionContext) -> dict[str, Any]:
         "stats": stats,
         "target_url": f"/servers/{server_id}",
     }
+
+
+def save_memory_lesson(ctx: AssistantActionContext) -> dict[str, Any]:
+    """Save a solved-problem lesson into server memory cards."""
+    from core_ui.services.operator_memory import save_lesson_from_operator, server_ids_from_arguments
+
+    title = str(ctx.input_payload.get("title") or "").strip()
+    lesson = str(ctx.input_payload.get("lesson") or ctx.input_payload.get("summary") or "").strip()
+    server_ids = server_ids_from_arguments(ctx.input_payload)
+    chat_id = ctx.input_payload.get("chat_id")
+    try:
+        chat_id_int = int(chat_id) if chat_id not in (None, "") else None
+    except (TypeError, ValueError) as exc:
+        raise AssistantActionError("chat_id must be an integer") from exc
+    run_dream = bool(ctx.input_payload.get("run_dream", False))
+    try:
+        return save_lesson_from_operator(
+            user=ctx.user,
+            title=title,
+            lesson=lesson,
+            server_ids=server_ids,
+            chat_id=chat_id_int,
+            run_dream=run_dream,
+        )
+    except PermissionError as exc:
+        raise AssistantActionError(str(exc), status=403) from exc
+    except ValueError as exc:
+        raise AssistantActionError(str(exc)) from exc
+
+
+def promote_chat_memory(ctx: AssistantActionContext) -> dict[str, Any]:
+    """Promote an important Operator conversation into durable memory (+ optional dream)."""
+    from core_ui.services.operator_memory import promote_chat_to_memory, server_ids_from_arguments
+
+    chat_id = ctx.input_payload.get("chat_id")
+    try:
+        chat_id_int = int(chat_id)
+    except (TypeError, ValueError) as exc:
+        raise AssistantActionError("chat_id is required") from exc
+    title = str(ctx.input_payload.get("title") or "").strip()
+    lesson = str(ctx.input_payload.get("lesson") or ctx.input_payload.get("summary") or "").strip()
+    server_ids = server_ids_from_arguments(ctx.input_payload) or None
+    run_dream = bool(ctx.input_payload.get("run_dream", True))
+    try:
+        return promote_chat_to_memory(
+            user=ctx.user,
+            chat_id=chat_id_int,
+            title=title,
+            lesson=lesson,
+            server_ids=server_ids,
+            run_dream=run_dream,
+        )
+    except LookupError as exc:
+        raise AssistantActionError(str(exc), status=404) from exc
+    except PermissionError as exc:
+        raise AssistantActionError(str(exc), status=403) from exc
+    except ValueError as exc:
+        raise AssistantActionError(str(exc)) from exc
 
 
 def metric_series(ctx: AssistantActionContext) -> dict[str, Any]:
@@ -748,23 +1247,65 @@ def propose_plan(ctx: AssistantActionContext) -> dict[str, Any]:
 def register_operator_tools() -> None:
     specs = [
         AssistantActionSpec(
-            action_type="operator.list_servers",
-            label="List servers",
-            description="List inventory servers accessible to the operator.",
+            action_type="operator.resolve_server",
+            label="Resolve server",
+            description=(
+                "Resolve one inventory host by name/host/id (e.g. lunix). "
+                "Use for connect / SSH / diagnostics on a named host. "
+                "Does NOT show the fleet inventory card in chat."
+            ),
             required_feature="servers",
             risk="read",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "q": {
+                        "type": "string",
+                        "description": "Server name, host, or id (e.g. lunix)",
+                    },
+                    "name": {"type": "string", "description": "Alias for q"},
+                },
+            },
+            handler=resolve_server,
+        ),
+        AssistantActionSpec(
+            action_type="operator.list_servers",
+            label="List servers",
+            description=(
+                "Inventory. For a named host ALWAYS use operator.resolve_server instead. "
+                "Full list card appears only when the user asked to list servers "
+                "(platform sets show_in_chat). Do not use this to «find» grafana/lunix."
+            ),
+            required_feature="servers",
+            risk="read",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "q": {
+                        "type": "string",
+                        "description": "Filter by name/host/tag/id (e.g. grafana) — no fleet card",
+                    },
+                    "name": {"type": "string", "description": "Alias for q"},
+                    "show_in_chat": {
+                        "type": "boolean",
+                        "description": "Platform-controlled; true only for explicit list-inventory requests.",
+                    },
+                },
+            },
             handler=list_servers,
         ),
         AssistantActionSpec(
             action_type="operator.server_info",
             label="Server info",
-            description="Get details for one accessible server (OS, host, ai_read_only).",
+            description="Get details for one accessible server (OS, host, ai_read_only). Accepts server_id or name.",
             required_feature="servers",
             risk="read",
             input_schema={
                 "type": "object",
-                "properties": {"server_id": {"type": "integer"}},
-                "required": ["server_id"],
+                "properties": {
+                    "server_id": {"type": "integer"},
+                    "name": {"type": "string", "description": "Server name if id unknown"},
+                },
             },
             handler=server_info,
         ),
@@ -857,6 +1398,52 @@ def register_operator_tools() -> None:
                 "required": ["server_id"],
             },
             handler=server_memory,
+        ),
+        AssistantActionSpec(
+            action_type="operator.memory.save_lesson",
+            label="Save lesson to memory",
+            description=(
+                "Persist a short solved-problem lesson into server memory cards. "
+                "Use after a successful diagnosis/fix. Requires title, lesson, server_ids."
+            ),
+            required_feature="servers",
+            risk="internal_write",
+            requires_confirmation=True,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "lesson": {"type": "string", "description": "What was wrong and how it was fixed"},
+                    "server_ids": {"type": "array", "items": {"type": "integer"}},
+                    "server_id": {"type": "integer"},
+                    "run_dream": {"type": "boolean", "description": "Run nearline dream compaction after save"},
+                    "chat_id": {"type": "integer"},
+                },
+                "required": ["title", "lesson"],
+            },
+            handler=save_memory_lesson,
+        ),
+        AssistantActionSpec(
+            action_type="operator.memory.promote_chat",
+            label="Promote chat to memory",
+            description=(
+                "When a conversation solved something important: distill it into durable "
+                "server memory and optionally run a dream cycle. Prefer an explicit lesson summary."
+            ),
+            required_feature="servers",
+            risk="internal_write",
+            requires_confirmation=True,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "chat_id": {"type": "integer"},
+                    "title": {"type": "string"},
+                    "lesson": {"type": "string", "description": "Best: explicit root-cause + fix summary"},
+                    "server_ids": {"type": "array", "items": {"type": "integer"}},
+                    "run_dream": {"type": "boolean", "description": "Default true — compact into patterns"},
+                },
+            },
+            handler=promote_chat_memory,
         ),
         AssistantActionSpec(
             action_type="operator.metric_series",

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { getMonitoringLiveWsUrl } from "@/lib/api";
-import type { FleetHealthStatus } from "@/lib/api";
+import type { FleetHealthStatus, MonitoringDashboard, ServerHealth } from "@/lib/api";
 
 export interface LiveServerMetrics {
   server_id: number;
@@ -176,4 +176,107 @@ export function useMonitoringLive(serverIds: number[], enabled: boolean) {
   }, [enabled, idsKey]);
 
   return { metricsByServerId, connected };
+}
+
+/**
+ * Overlay fresh live WS samples onto dashboard ServerHealth rows.
+ * Same data path as the Servers list — one stream per host:port on the backend.
+ */
+export function mergeLiveIntoServerHealth(
+  servers: ServerHealth[],
+  liveMetrics: Map<number, LiveServerMetrics>,
+  nowMs = Date.now(),
+): ServerHealth[] {
+  if (!servers.length || liveMetrics.size === 0) return servers;
+
+  return servers.map((server) => {
+    const live = liveMetrics.get(server.server_id);
+    if (!live || !isFreshLiveSample(live, nowMs)) return server;
+
+    const liveStatus = statusFromLiveMetrics(live);
+    // Always keep last-known snapshot under partial live frames so the UI
+    // never blanks CPU/RAM while the stream warms up or the base row is stale.
+    const pick = (liveVal: number | null | undefined, baseVal: number | null | undefined) =>
+      liveVal ?? baseVal ?? null;
+
+    return {
+      ...server,
+      status: liveStatus,
+      is_stale: false,
+      is_lite: false,
+      cpu_percent: pick(live.cpu_percent, server.cpu_percent),
+      memory_percent: pick(live.memory_percent, server.memory_percent),
+      disk_percent: pick(live.disk_percent, server.disk_percent),
+      load_1m: pick(live.load_1m, server.load_1m),
+      checked_at: new Date(nowMs).toISOString(),
+    };
+  });
+}
+
+/** Rebuild dashboard summary counters from (possibly live-merged) server rows. */
+export function summarizeLiveServerHealth(
+  servers: ServerHealth[],
+  previous?: MonitoringDashboard["summary"],
+): MonitoringDashboard["summary"] {
+  const statusCounts: Record<string, number> = {
+    healthy: 0,
+    warning: 0,
+    critical: 0,
+    unreachable: 0,
+    unknown: 0,
+  };
+  let cpuSum = 0;
+  let memSum = 0;
+  let diskSum = 0;
+  let cpuN = 0;
+  let memN = 0;
+  let diskN = 0;
+
+  for (const server of servers) {
+    const key = server.status in statusCounts ? server.status : "unknown";
+    statusCounts[key] += 1;
+    if (typeof server.cpu_percent === "number") {
+      cpuSum += server.cpu_percent;
+      cpuN += 1;
+    }
+    if (typeof server.memory_percent === "number") {
+      memSum += server.memory_percent;
+      memN += 1;
+    }
+    if (typeof server.disk_percent === "number") {
+      diskSum += server.disk_percent;
+      diskN += 1;
+    }
+  }
+
+  return {
+    total_servers: servers.length,
+    healthy: statusCounts.healthy,
+    warning: statusCounts.warning,
+    critical: statusCounts.critical,
+    unreachable: statusCounts.unreachable,
+    unknown: statusCounts.unknown,
+    active_alerts: previous?.active_alerts ?? 0,
+    avg_cpu: cpuN ? Math.round(cpuSum / cpuN) : previous?.avg_cpu ?? 0,
+    avg_memory: memN ? Math.round(memSum / memN) : previous?.avg_memory ?? 0,
+    avg_disk: diskN ? Math.round(diskSum / diskN) : previous?.avg_disk ?? 0,
+  };
+}
+
+/** Apply live overlay to a full MonitoringDashboard payload. */
+export function withLiveMonitoringDashboard(
+  mon: MonitoringDashboard | undefined,
+  liveMetrics: Map<number, LiveServerMetrics>,
+): MonitoringDashboard | undefined {
+  if (!mon) return mon;
+  const servers = mergeLiveIntoServerHealth(mon.servers ?? [], liveMetrics);
+  return {
+    ...mon,
+    servers,
+    summary: {
+      ...mon.summary,
+      ...summarizeLiveServerHealth(servers, mon.summary),
+      active_alerts: mon.summary?.active_alerts ?? 0,
+    },
+  };
 }

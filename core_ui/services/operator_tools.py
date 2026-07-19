@@ -81,6 +81,96 @@ def is_read_tool(action_type: str) -> bool:
     return spec.risk == "read" and not spec.requires_confirmation
 
 
+# Keys models commonly emit that should map onto the canonical schema key.
+_ARG_KEY_ALIASES = {
+    "cmd": "command",
+    "shell": "command",
+    "command_line": "command",
+    "commandline": "command",
+    "host": "server",
+    "hostname": "server",
+    "server_name": "server",
+    "target": "server",
+    "servers": "server_ids",
+    "server_names": "server_ids",
+    "hosts": "server_ids",
+    "dry": "dry_run",
+    "check": "check_mode",
+    "checkmode": "check_mode",
+}
+
+
+def _coerce_server_id(user, value: Any) -> int | None:
+    """Best-effort resolve a server reference (id, numeric string, or name) to an id."""
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, dict):
+        if value.get("id") is not None:
+            try:
+                return int(value["id"])
+            except (TypeError, ValueError):
+                return None
+        value = value.get("name") or value.get("hostname") or ""
+    if isinstance(value, str):
+        s = value.strip()
+        if not s:
+            return None
+        if s.isdigit():
+            return int(s)
+        from servers.views.server_helpers import _accessible_servers_queryset
+
+        qs = _accessible_servers_queryset(user)
+        row = qs.filter(name__iexact=s).first() or qs.filter(name__icontains=s).first()
+        return int(row.id) if row else None
+    return None
+
+
+def normalize_tool_arguments(user, action_type: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    """Coerce loose model arguments onto the canonical tool schema.
+
+    Tolerates key aliases (cmd→command, host→server, …), resolves server
+    names/numeric strings to ids, and coerces id lists. Never touches free-text
+    fields like ``command``. Best-effort: unresolved values are left as-is so the
+    tool handler can still surface a precise error.
+    """
+    if not isinstance(arguments, dict):
+        return {}
+    args: dict[str, Any] = {}
+    for key, value in arguments.items():
+        canonical = _ARG_KEY_ALIASES.get(str(key), str(key))
+        # Do not clobber an explicit canonical key with an alias duplicate.
+        if canonical in args and canonical != key:
+            continue
+        args[canonical] = value
+
+    # A single "server" reference collapses into server_id (or a q hint for lookups).
+    if "server" in args and "server_id" not in args:
+        raw = args.pop("server")
+        sid = _coerce_server_id(user, raw)
+        if sid is not None:
+            args["server_id"] = sid
+        elif isinstance(raw, (str, int)):
+            args.setdefault("q", str(raw))
+
+    if "server_id" in args:
+        sid = _coerce_server_id(user, args["server_id"])
+        if sid is not None:
+            args["server_id"] = sid
+
+    if isinstance(args.get("server_ids"), list):
+        resolved: list[int] = []
+        for item in args["server_ids"]:
+            sid = _coerce_server_id(user, item)
+            if sid is not None and sid not in resolved:
+                resolved.append(sid)
+        if resolved:
+            args["server_ids"] = resolved
+
+    return args
+
+
 def execute_tool(
     *,
     user,
@@ -116,6 +206,60 @@ def execute_tool(
 
 
 def truncate_tool_result(result: dict[str, Any], *, max_chars: int = 6000) -> str:
+    """Serialize tool result for the model; keep name_index when truncating large inventories."""
+    # Prefer a stable order so critical lookup fields survive truncation.
+    if isinstance(result, dict):
+        payload = result.get("result") if isinstance(result.get("result"), dict) else result
+        if isinstance(payload, dict) and (
+            "name_index" in payload or payload.get("ui_table") is False
+        ):
+            preferred_keys = (
+                "ok",
+                "found",
+                "query",
+                "server_id",
+                "server_name",
+                "match",
+                "reply_hint",
+                "name_index",
+                "count",
+                "status_counts",
+                "note",
+                "error",
+                "ui_table",
+                "match_count",
+                "matches",
+                "servers",
+            )
+            ordered: dict[str, Any] = {}
+            for key in preferred_keys:
+                if key in payload:
+                    ordered[key] = payload[key]
+            for key, value in payload.items():
+                if key not in ordered:
+                    ordered[key] = value
+            if result is not payload and "result" in result:
+                wrapped = {**result, "result": ordered}
+                text = json.dumps(wrapped, ensure_ascii=False, default=str)
+            else:
+                text = json.dumps(ordered, ensure_ascii=False, default=str)
+            if len(text) <= max_chars:
+                return text
+            # Drop bulky arrays first, keep name_index / match
+            slim = {
+                k: v
+                for k, v in ordered.items()
+                if k not in {"servers", "matches", "sample_names", "alerts", "agents"}
+            }
+            slim_text = json.dumps(
+                {**result, "result": slim} if result is not payload and "result" in result else slim,
+                ensure_ascii=False,
+                default=str,
+            )
+            if len(slim_text) <= max_chars:
+                return slim_text + "…[rows omitted]"
+            return slim_text[: max_chars - 20] + "…[truncated]"
+
     text = json.dumps(result, ensure_ascii=False, default=str)
     if len(text) <= max_chars:
         return text

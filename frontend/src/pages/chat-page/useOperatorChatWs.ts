@@ -17,10 +17,19 @@ type UseOperatorChatWsOptions = {
   enabled?: boolean;
   onToken?: (text: string) => void;
   onToolStep?: (step: StreamToolStep) => void;
+  onSshSession?: (payload: Record<string, unknown>) => void;
+  onToolResultDetail?: (payload: Record<string, unknown>) => void;
   onConfirmRequired?: (action: AssistantAction | { id: number }) => void;
   onActionUpdate?: (action: AssistantAction) => void;
   onTurnComplete?: (payload: { status?: string; actions?: AssistantAction[] }) => void;
   onError?: (message: string) => void;
+  onSnapshot?: (payload: {
+    status?: string;
+    busy?: boolean;
+    assistantText?: string;
+    userText?: string;
+    action?: AssistantAction | null;
+  }) => void;
 };
 
 export function useOperatorChatWs({
@@ -28,10 +37,13 @@ export function useOperatorChatWs({
   enabled = true,
   onToken,
   onToolStep,
+  onSshSession,
+  onToolResultDetail,
   onConfirmRequired,
   onActionUpdate,
   onTurnComplete,
   onError,
+  onSnapshot,
 }: UseOperatorChatWsOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const [ready, setReady] = useState(false);
@@ -48,22 +60,44 @@ export function useOperatorChatWs({
   const [thinkingStartedAt, setThinkingStartedAt] = useState<number | null>(null);
   const [thinkingIteration, setThinkingIteration] = useState<number | null>(null);
   const [reasoningText, setReasoningText] = useState("");
+  /** True after first real thinking_delta (not just status heartbeats). */
+  const [hasReasoningStream, setHasReasoningStream] = useState(false);
+  /** Last status message from backend (e.g. "Генерация JSON…"). */
+  const [statusMessage, setStatusMessage] = useState("");
+  /** Backend readiness probe (channel layer + LLM). Null until first "ready". */
+  const [health, setHealth] = useState<{
+    ok: boolean;
+    checks?: Record<string, string>;
+    issues?: string[];
+  } | null>(null);
+  /** A long-running spawned task (agent / pipeline run) the operator is waiting on. */
+  const [asyncTask, setAsyncTask] = useState<{
+    kind: string;
+    runId?: number | string;
+    status: "running" | "done" | "failed";
+  } | null>(null);
 
   const callbacks = useRef({
     onToken,
     onToolStep,
+    onSshSession,
+    onToolResultDetail,
     onConfirmRequired,
     onActionUpdate,
     onTurnComplete,
     onError,
+    onSnapshot,
   });
   callbacks.current = {
     onToken,
     onToolStep,
+    onSshSession,
+    onToolResultDetail,
     onConfirmRequired,
     onActionUpdate,
     onTurnComplete,
     onError,
+    onSnapshot,
   };
 
   const beginThinking = useCallback((iteration?: number) => {
@@ -78,6 +112,7 @@ export function useOperatorChatWs({
     setPhase("idle");
     setThinkingStartedAt(null);
     setThinkingIteration(null);
+    setAsyncTask(null);
   }, []);
 
   useEffect(() => {
@@ -110,6 +145,45 @@ export function useOperatorChatWs({
         const type = data.type;
         if (type === "ready") {
           setReady(true);
+          if ("health" in data && data.health && typeof data.health === "object") {
+            setHealth(
+              data.health as { ok: boolean; checks?: Record<string, string>; issues?: string[] },
+            );
+          }
+          if ("busy" in data && data.busy) {
+            beginThinking();
+          }
+          return;
+        }
+        if (type === "turn_snapshot") {
+          const assistantText = String(data.assistant_text || "");
+          const userText = String(data.user_text || "");
+          const status = String(data.status || "");
+          const isBusy =
+            Boolean(data.busy || data.in_process) ||
+            status === "running" ||
+            status === "resuming" ||
+            status === "awaiting_async";
+          if (assistantText) {
+            setStreamText(assistantText);
+          }
+          if (isBusy) {
+            beginThinking(typeof data.iteration === "number" ? data.iteration : undefined);
+            setPhase(assistantText ? "streaming" : "thinking");
+          } else if (status === "awaiting_confirm") {
+            endTurn();
+            const pending = data.pending_action as AssistantAction | null | undefined;
+            if (pending && typeof pending === "object" && typeof pending.id === "number") {
+              callbacks.current.onConfirmRequired?.(pending);
+            }
+          }
+          callbacks.current.onSnapshot?.({
+            status,
+            busy: isBusy,
+            assistantText,
+            userText,
+            action: (data.pending_action as AssistantAction | null | undefined) || null,
+          });
           return;
         }
         if (type === "turn_started") {
@@ -124,19 +198,22 @@ export function useOperatorChatWs({
           return;
         }
         if (type === "thinking_delta" && "text" in data && data.text) {
-          setReasoningText((prev) => (prev + String(data.text)).slice(-6000));
+          setHasReasoningStream(true);
+          setReasoningText((prev) => (prev + String(data.text)).slice(-8000));
           beginThinking(typeof data.iteration === "number" ? data.iteration : undefined);
           return;
         }
         if (type === "thinking") {
           const iter = typeof data.iteration === "number" ? data.iteration : undefined;
-          // New LLM round after tools — back to thinking
           setPhase("thinking");
           setBusy(true);
-          setThinkingStartedAt(Date.now());
+          setThinkingStartedAt((prev) => prev ?? Date.now());
           if (iter != null) setThinkingIteration(iter);
           if (typeof data.message === "string" && data.message) {
-            setReasoningText((prev) => (prev ? `${prev}\n` : "") + data.message);
+            setStatusMessage(String(data.message));
+          }
+          if ("reasoning_active" in data && data.reasoning_active === true) {
+            setHasReasoningStream(true);
           }
           return;
         }
@@ -164,13 +241,17 @@ export function useOperatorChatWs({
             const rest = prev.filter((s) => s.id !== step.id);
             return [...rest, step];
           });
-          // After tools, model thinks again until next tokens
           setPhase("thinking");
           setThinkingStartedAt(Date.now());
           callbacks.current.onToolStep?.(step);
+          callbacks.current.onToolResultDetail?.(data as Record<string, unknown>);
           if (data.action) {
             callbacks.current.onActionUpdate?.(data.action as AssistantAction);
           }
+          return;
+        }
+        if (type === "ssh_session") {
+          callbacks.current.onSshSession?.(data as Record<string, unknown>);
           return;
         }
         if (type === "plan_update") {
@@ -196,6 +277,64 @@ export function useOperatorChatWs({
           endTurn();
           return;
         }
+        if (type === "async_started") {
+          // Agent/playbook launched — stay "busy" in a waiting phase until async_done.
+          setBusy(true);
+          setPhase("tools");
+          setThinkingStartedAt((prev) => prev ?? Date.now());
+          const runId = "run_id" in data ? data.run_id : undefined;
+          const kind = "async_kind" in data ? data.async_kind : "agent_run";
+          setAsyncTask({
+            kind: String(kind || "agent_run"),
+            runId: runId as number | string | undefined,
+            status: "running",
+          });
+          setStatusMessage(
+            runId
+              ? `Жду ${String(kind)} #${runId}…`
+              : `Жду завершения ${String(kind)}…`,
+          );
+          setToolSteps((prev) => {
+            const id = `async-${runId || kind}`;
+            const step: StreamToolStep = {
+              id,
+              name: String(kind || "async_run"),
+              status: "running",
+              preview: runId ? `run #${runId}` : undefined,
+            };
+            return [...prev.filter((s) => s.id !== id), step];
+          });
+          return;
+        }
+        if (type === "async_done") {
+          const runId = "run_id" in data ? data.run_id : undefined;
+          const kind = "async_kind" in data ? data.async_kind : "async_run";
+          const ok = "ok" in data ? Boolean(data.ok) : true;
+          setAsyncTask({
+            kind: String(kind || "async_run"),
+            runId: runId as number | string | undefined,
+            status: ok ? "done" : "failed",
+          });
+          const id = `async-${runId || kind}`;
+          setToolSteps((prev) => {
+            const step: StreamToolStep = {
+              id,
+              name: String(kind || "async_run"),
+              status: ok ? "done" : "error",
+              preview: `${data.status || (ok ? "done" : "failed")}${runId ? ` #${runId}` : ""}`,
+            };
+            return [...prev.filter((s) => s.id !== id), step];
+          });
+          setStatusMessage(
+            ok
+              ? `Агент/задача завершены${runId ? ` (#${runId})` : ""} — пишу итог…`
+              : `Агент/задача завершились с ошибкой${runId ? ` (#${runId})` : ""} — разбираю…`,
+          );
+          setBusy(true);
+          setPhase("thinking");
+          setThinkingStartedAt(Date.now());
+          return;
+        }
         if (type === "action_update" && data.action) {
           callbacks.current.onActionUpdate?.(data.action as AssistantAction);
           return;
@@ -205,7 +344,18 @@ export function useOperatorChatWs({
           return;
         }
         if (type === "turn_done" || type === "turn_complete") {
-          endTurn();
+          const status = String(data.status || "");
+          // Parked turns (confirm / async wait) are not "idle" for the operator —
+          // keep a quiet waiting state so the UI doesn't look abandoned.
+          if (status === "awaiting_async") {
+            setBusy(true);
+            setPhase("tools");
+            setStatusMessage((prev) => prev || "Жду завершения агента…");
+          } else if (status === "awaiting_confirm") {
+            endTurn();
+          } else {
+            endTurn();
+          }
           callbacks.current.onTurnComplete?.({
             status: data.status as string | undefined,
             actions: data.actions as AssistantAction[] | undefined,
@@ -221,6 +371,7 @@ export function useOperatorChatWs({
       ws.onclose = () => {
         setReady(false);
         wsRef.current = null;
+        // Keep busy/stream — turn may continue in background on the server.
         if (closed) return;
         attempt += 1;
         const delay = Math.min(8_000, 500 * 2 ** Math.min(attempt, 4));
@@ -248,8 +399,21 @@ export function useOperatorChatWs({
     setToolSteps([]);
     setLivePlan(null);
     setReasoningText("");
+    setHasReasoningStream(false);
+    setStatusMessage("");
     setThinkingIteration(null);
   }, []);
+
+  const hydrateFromSnapshot = useCallback(
+    (text: string, opts?: { busy?: boolean; iteration?: number }) => {
+      if (text) setStreamText(text);
+      if (opts?.busy) {
+        beginThinking(opts.iteration);
+        setPhase(text ? "streaming" : "thinking");
+      }
+    },
+    [beginThinking],
+  );
 
   const sendMessage = useCallback(
     (message: string) => {
@@ -262,18 +426,28 @@ export function useOperatorChatWs({
       setPhase("thinking");
       setThinkingStartedAt(Date.now());
       setThinkingIteration(1);
+      // Reasoning mode is decided server-side by the admin model config
       ws.send(JSON.stringify({ type: "chat.message", message }));
       return true;
     },
     [resetStream],
   );
 
+  const stopTurn = useCallback(() => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+    ws.send(JSON.stringify({ type: "turn.stop" }));
+    return true;
+  }, []);
+
   const confirmAction = useCallback((actionId: number, typedConfirm?: string) => {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+    // Do not wipe streamText / existing UI — confirm resumes the same turn.
     setBusy(true);
     setPhase("thinking");
     setThinkingStartedAt(Date.now());
+    setStatusMessage("Подтверждено — выполняю…");
     ws.send(
       JSON.stringify({
         type: "action.confirm",
@@ -290,13 +464,21 @@ export function useOperatorChatWs({
     setBusy(true);
     setPhase("thinking");
     setThinkingStartedAt(Date.now());
-    ws.send(JSON.stringify({ type: "action.cancel", action_id: actionId }));
+    setStatusMessage("Отмена…");
+    ws.send(
+      JSON.stringify({
+        type: "action.cancel",
+        action_id: actionId,
+      }),
+    );
     return true;
   }, []);
 
   return {
     ready,
     busy,
+    health,
+    asyncTask,
     streamText,
     toolSteps,
     livePlan,
@@ -305,9 +487,14 @@ export function useOperatorChatWs({
     thinkingStartedAt,
     thinkingIteration,
     reasoningText,
+    hasReasoningStream,
+    statusMessage,
     sendMessage,
+    stopTurn,
     confirmAction,
     cancelAction,
     resetStream,
+    hydrateFromSnapshot,
+    endTurn,
   };
 }

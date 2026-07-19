@@ -66,7 +66,9 @@ export function PlaybookEditor({
     onChange({ tasks: next });
   };
 
-  const canSave = state.name.trim() && state.tasks.some((t) => t.command.trim());
+  const canSave =
+    Boolean(String(state.name ?? "").trim()) &&
+    state.tasks.some((t) => Boolean(String(t?.command ?? "").trim()));
 
   return (
     <section className="space-y-4">

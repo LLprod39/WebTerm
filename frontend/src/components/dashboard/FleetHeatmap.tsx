@@ -37,9 +37,20 @@ function MicroBar({ label, value }: { label: string; value: number | null }) {
   );
 }
 
+function hasAnyMetric(server: ServerHealth): boolean {
+  return (
+    typeof server.cpu_percent === "number" ||
+    typeof server.memory_percent === "number" ||
+    typeof server.disk_percent === "number"
+  );
+}
+
 /**
  * Fleet at a glance: one compact tile per server with status accent and
  * CPU/RAM/disk micro-bars. Click opens the server terminal.
+ *
+ * Never flash a hard "нет связи" when we still have last-known metrics or
+ * the row is merely stale / still probing — operators hate the red flicker.
  */
 export function FleetHeatmap({ servers, lang }: { servers: ServerHealth[]; lang: string }) {
   if (servers.length === 0) {
@@ -53,7 +64,14 @@ export function FleetHeatmap({ servers, lang }: { servers: ServerHealth[]; lang:
   return (
     <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(170px,1fr))]">
       {servers.map((server) => {
-        const offline = server.status === "unreachable";
+        const metrics = hasAnyMetric(server);
+        const hardOffline =
+          server.status === "unreachable" && !server.is_stale && !metrics;
+        const softOffline =
+          server.status === "unreachable" && !hardOffline;
+        const probing =
+          server.status === "unknown" || (Boolean(server.is_stale) && !hardOffline);
+
         return (
           <Link
             key={server.server_id}
@@ -61,25 +79,48 @@ export function FleetHeatmap({ servers, lang }: { servers: ServerHealth[]; lang:
             title={`${server.server_name} (${server.host})`}
             className={cn(
               "group relative overflow-hidden rounded-sm border border-border bg-surface-1 px-3 py-2.5 transition-all hover:border-primary/50 hover:shadow-elev-1",
-              offline && "opacity-75",
+              hardOffline && "opacity-75",
             )}
           >
-            <div className={cn("absolute inset-x-0 top-0 h-0.5", statusAccent[server.status])} />
+            <div
+              className={cn(
+                "absolute inset-x-0 top-0 h-0.5",
+                hardOffline
+                  ? statusAccent.unreachable
+                  : softOffline || probing
+                    ? statusAccent.unknown
+                    : statusAccent[server.status],
+              )}
+            />
             <div className="flex items-center justify-between gap-2">
               <span className="truncate text-xs font-semibold text-foreground/95">{server.server_name}</span>
-              {offline ? (
+              {hardOffline ? (
                 <WifiOff className="h-3.5 w-3.5 shrink-0 text-destructive" />
               ) : (
-                <span className={cn("h-1.5 w-1.5 shrink-0 rounded-none", statusAccent[server.status])} />
+                <span
+                  className={cn(
+                    "h-1.5 w-1.5 shrink-0 rounded-none",
+                    hardOffline
+                      ? statusAccent.unreachable
+                      : softOffline || probing
+                        ? statusAccent.unknown
+                        : statusAccent[server.status],
+                  )}
+                />
               )}
             </div>
             <div className="mt-0.5 truncate font-mono text-2xs text-muted-foreground/60">{server.host}</div>
-            {offline ? (
+            {hardOffline ? (
               <div className="mt-2.5 text-2xs font-medium uppercase tracking-[0.1em] text-destructive">
                 {localize(lang, "нет связи", "unreachable")}
               </div>
             ) : (
               <div className="mt-2.5 space-y-1">
+                {(softOffline || probing) && !metrics ? (
+                  <div className="text-2xs font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                    {localize(lang, "обновляется…", "updating…")}
+                  </div>
+                ) : null}
                 <MicroBar label="CPU" value={server.cpu_percent} />
                 <MicroBar label="RAM" value={server.memory_percent} />
                 <MicroBar label="HDD" value={server.disk_percent} />

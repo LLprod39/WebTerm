@@ -1,4 +1,4 @@
-"""Ground Operator mutations on server memory cards."""
+"""Ground Operator mutations on server memory cards + chat→memory promotion."""
 
 from __future__ import annotations
 
@@ -73,3 +73,186 @@ def server_ids_from_arguments(arguments: dict[str, Any] | None) -> list[int]:
             except (TypeError, ValueError):
                 continue
     return ids[:20]
+
+
+def _ingest_lesson_to_server(
+    *,
+    server_id: int,
+    title: str,
+    body: str,
+    actor_user_id: int | None,
+    chat_id: int | None = None,
+    importance: float = 0.85,
+    run_dream: bool = False,
+) -> dict[str, Any]:
+    from servers.adapters.memory_store import DjangoServerMemoryStore
+
+    store = DjangoServerMemoryStore()
+    raw_text = f"{title.strip()}\n\n{body.strip()}".strip()
+    event_id = store._ingest_event_sync(
+        int(server_id),
+        source_kind="operator_chat",
+        actor_kind="operator",
+        source_ref=f"operator-chat:{chat_id or 'adhoc'}:{title[:40]}",
+        session_id=f"operator-chat:{chat_id}" if chat_id else "",
+        event_type="operator_lesson",
+        raw_text=raw_text[:8000],
+        structured_payload={
+            "title": title[:200],
+            "lesson": body[:4000],
+            "chat_id": chat_id,
+            "source": "operator_chat",
+        },
+        importance_hint=max(0.5, min(float(importance or 0.85), 1.0)),
+        actor_user_id=actor_user_id,
+        force_compact=True,
+    )
+    dream_result = None
+    if run_dream:
+        with contextlib.suppress(Exception):
+            dream_result = store._run_dream_cycle_sync(int(server_id), job_kind="nearline", force=True)
+    return {
+        "server_id": int(server_id),
+        "event_id": event_id,
+        "dream": dream_result,
+    }
+
+
+def save_lesson_from_operator(
+    *,
+    user,
+    title: str,
+    lesson: str,
+    server_ids: list[int],
+    chat_id: int | None = None,
+    run_dream: bool = False,
+) -> dict[str, Any]:
+    """Persist a solved-problem lesson into server memory (and optional dream)."""
+    title = str(title or "").strip()
+    lesson = str(lesson or "").strip()
+    if not title or not lesson:
+        raise ValueError("title and lesson are required")
+    if not server_ids:
+        raise ValueError("server_ids is required (at least one server)")
+
+    from servers.views.server_helpers import _accessible_servers_queryset
+
+    accessible = {
+        int(sid)
+        for sid in _accessible_servers_queryset(user).filter(pk__in=server_ids).values_list("id", flat=True)
+    }
+    denied = [sid for sid in server_ids if int(sid) not in accessible]
+    if denied:
+        raise PermissionError(f"Servers not accessible: {denied}")
+
+    results = []
+    for sid in sorted(accessible)[:20]:
+        results.append(
+            _ingest_lesson_to_server(
+                server_id=sid,
+                title=title,
+                body=lesson,
+                actor_user_id=getattr(user, "id", None),
+                chat_id=chat_id,
+                run_dream=run_dream,
+            )
+        )
+    return {
+        "ok": True,
+        "title": title,
+        "servers": results,
+        "count": len(results),
+        "target_url": "/servers",
+    }
+
+
+def promote_chat_to_memory(
+    *,
+    user,
+    chat_id: int,
+    title: str = "",
+    lesson: str = "",
+    server_ids: list[int] | None = None,
+    run_dream: bool = True,
+    max_messages: int = 40,
+) -> dict[str, Any]:
+    """Turn an important Operator chat into durable server memory.
+
+    Prefer an explicit lesson summary from the model. If empty, compact recent
+    user/assistant turns into a lesson text.
+    """
+    from core_ui.models import ChatMessage, ChatSession
+
+    session = ChatSession.objects.filter(pk=int(chat_id), user=user).first()
+    if session is None:
+        raise LookupError("Chat not found")
+
+    messages = list(
+        ChatMessage.objects.filter(session=session)
+        .order_by("-id")[: max(5, min(int(max_messages or 40), 80))]
+    )
+    messages.reverse()
+
+    # Resolve servers: explicit ids, else pinned_context, else empty
+    pinned = session.pinned_context if isinstance(session.pinned_context, dict) else {}
+    resolved_ids = list(server_ids or [])
+    if not resolved_ids:
+        for key in ("servers", "pinned_servers"):
+            raw = pinned.get(key)
+            if isinstance(raw, list):
+                for item in raw:
+                    if isinstance(item, dict) and item.get("id") is not None:
+                        with contextlib.suppress(TypeError, ValueError):
+                            resolved_ids.append(int(item["id"]))
+                    else:
+                        with contextlib.suppress(TypeError, ValueError):
+                            resolved_ids.append(int(item))
+    resolved_ids = list(dict.fromkeys(resolved_ids))[:20]
+
+    if not resolved_ids:
+        raise ValueError(
+            "server_ids required — pin servers in chat or pass server_ids for memory binding"
+        )
+
+    lesson_text = str(lesson or "").strip()
+    if not lesson_text:
+        chunks: list[str] = []
+        for msg in messages:
+            role = str(msg.role or "")
+            content = str(msg.content or "").strip()
+            if not content or role == "system":
+                continue
+            prefix = "User" if role == "user" else "Operator"
+            chunks.append(f"{prefix}: {content[:800]}")
+        lesson_text = "\n\n".join(chunks[-24:]).strip()
+    if not lesson_text:
+        raise ValueError("Chat has no content to promote")
+
+    title_text = str(title or session.title or f"Lesson from chat #{session.pk}").strip()[:200]
+
+    result = save_lesson_from_operator(
+        user=user,
+        title=title_text,
+        lesson=lesson_text[:6000],
+        server_ids=resolved_ids,
+        chat_id=int(session.pk),
+        run_dream=bool(run_dream),
+    )
+    # Mark chat metadata so UI/tools know it was promoted
+    with contextlib.suppress(Exception):
+        meta = dict(session.pinned_context or {})
+        meta["memory_promoted"] = {
+            "at": __import__("django.utils.timezone", fromlist=["timezone"]).timezone.now().isoformat(),
+            "title": title_text,
+            "server_ids": resolved_ids,
+        }
+        session.pinned_context = meta
+        session.save(update_fields=["pinned_context", "updated_at"])
+
+    return {
+        **result,
+        "chat_id": int(session.pk),
+        "chat_title": session.title,
+        "message_count": len(messages),
+        "dream_requested": bool(run_dream),
+    }

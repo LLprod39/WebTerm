@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal, Workflow } from "lucide-react";
 import { ActionIcons, AgentIcons, NavIcons } from "@/lib/app-icons";
 
 import type { AgentItem, AgentRuntimeRunItem } from "@/lib/api";
@@ -122,20 +122,61 @@ export function AgentListSection({
 
   if (totalCount === 0) {
     return (
-      <EmptyState
-        icon={<NavIcons.agents className="h-5 w-5" strokeWidth={1.5} />}
-        title={t("agent.empty")}
-        description={localize(
-          lang,
-          "Создайте агента: выберите тип (мини, полный или мульти), цель или команды и серверы.",
-          "Create an agent: pick a type (mini, full, or multi), a goal or commands, and servers.",
-        )}
-        actions={
-          <Button size="sm" onClick={() => onCreate()} className="gap-1.5">
-            <ActionIcons.add className="h-4 w-4" strokeWidth={1.5} /> {t("agent.create_first")}
-          </Button>
-        }
-      />
+      <div className="workspace-empty space-y-4 rounded-sm border border-dashed border-border bg-card/50 px-6 py-10">
+        <div className="text-center">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-sm border border-border bg-surface-2 text-muted-foreground">
+            <NavIcons.agents className="h-5 w-5" strokeWidth={1.5} />
+          </div>
+          <h3 className="text-sm font-semibold text-foreground">{t("agent.empty")}</h3>
+          <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-muted-foreground">
+            {localize(
+              lang,
+              "Создайте агента: выберите тип (мини, полный или мульти), цель или команды и серверы.",
+              "Create an agent: pick a type (mini, full, or multi), a goal or commands, and servers.",
+            )}
+          </p>
+        </div>
+        <div className="mx-auto grid max-w-2xl gap-2 sm:grid-cols-3">
+          <button
+            type="button"
+            onClick={() => onCreate()}
+            className="rounded-lg border border-border bg-card px-3 py-3 text-left transition-colors hover:border-border-strong hover:bg-surface-1"
+          >
+            <ActionIcons.add className="mb-2 h-4 w-4 text-primary" strokeWidth={1.5} />
+            <div className="text-sm font-medium text-foreground">
+              {localize(lang, "С нуля", "From scratch")}
+            </div>
+            <div className="mt-0.5 text-[11px] text-muted-foreground">
+              {localize(lang, "Мастер создания агента", "Agent creation wizard")}
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => onCreate()}
+            className="rounded-lg border border-border bg-card px-3 py-3 text-left transition-colors hover:border-border-strong hover:bg-surface-1"
+          >
+            <AgentIcons.schedule className="mb-2 h-4 w-4 text-info" strokeWidth={1.5} />
+            <div className="text-sm font-medium text-foreground">
+              {localize(lang, "Шаблон «бэкапы»", "“Backups” template")}
+            </div>
+            <div className="mt-0.5 text-[11px] text-muted-foreground">
+              {localize(lang, "Проверка резервных копий", "Verify backups regularly")}
+            </div>
+          </button>
+          <Link
+            to="/studio"
+            className="rounded-lg border border-border bg-card px-3 py-3 text-left transition-colors hover:border-border-strong hover:bg-surface-1"
+          >
+            <Workflow className="mb-2 h-4 w-4 text-ai" strokeWidth={1.5} />
+            <div className="text-sm font-medium text-foreground">
+              {localize(lang, "Пайплайн в Studio", "Pipeline in Studio")}
+            </div>
+            <div className="mt-0.5 text-[11px] text-muted-foreground">
+              {localize(lang, "Сложные сценарии с узлами", "Complex multi-node flows")}
+            </div>
+          </Link>
+        </div>
+      </div>
     );
   }
 

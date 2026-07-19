@@ -249,14 +249,55 @@ def _guess_undo(command: str) -> str | None:
     return None
 
 
+def _steps_to_runbook_tasks(steps: Any) -> list[dict[str, Any]]:
+    """Convert a list of command steps into runbook tasks.
+
+    Accepts either bare command strings or dicts using any of the keys models
+    commonly emit (``command``/``cmd``). Steps without a command are skipped.
+    """
+    if not isinstance(steps, list):
+        return []
+    tasks: list[dict[str, Any]] = []
+    for idx, step in enumerate(steps):
+        if isinstance(step, str):
+            command = step.strip()
+            if not command:
+                continue
+            tasks.append(
+                {"id": f"step_{idx + 1}", "command": command, "description": "", "continue_on_error": False}
+            )
+        elif isinstance(step, dict):
+            command = str(step.get("command") or step.get("cmd") or "").strip()
+            if not command:
+                continue
+            tasks.append(
+                {
+                    "id": str(step.get("id") or f"step_{idx + 1}"),
+                    "command": command,
+                    "description": str(step.get("description") or "")[:500],
+                    "continue_on_error": bool(
+                        step.get("continue_on_error")
+                        if "continue_on_error" in step
+                        else step.get("continueOnError")
+                    ),
+                }
+            )
+    return tasks
+
+
 def create_playbook(ctx: AssistantActionContext) -> dict[str, Any]:
     from servers.models import Playbook
 
-    name = str(ctx.input_payload.get("name") or "Operator playbook").strip()[:200]
+    name = str(ctx.input_payload.get("name") or ctx.input_payload.get("title") or "Operator playbook").strip()[:200]
     yaml_text = str(ctx.input_payload.get("yaml") or ctx.input_payload.get("source_yaml") or "").strip()
-    tasks = ctx.input_payload.get("tasks") if isinstance(ctx.input_payload.get("tasks"), list) else []
-    if not yaml_text and not tasks:
-        raise AssistantActionError("yaml or tasks is required")
+    raw_tasks = ctx.input_payload.get("tasks") if isinstance(ctx.input_payload.get("tasks"), list) else []
+    # Models represent a runbook as a step/command list under various keys — accept them all.
+    raw_steps = ctx.input_payload.get("steps") or ctx.input_payload.get("commands") or []
+    runbook_tasks = _steps_to_runbook_tasks(raw_tasks or raw_steps)
+    if not yaml_text and not runbook_tasks:
+        raise AssistantActionError(
+            "Provide yaml, or steps/tasks as a list of {command, description}."
+        )
     kind = Playbook.KIND_ANSIBLE if yaml_text else Playbook.KIND_RUNBOOK
     pb = Playbook.objects.create(
         user=ctx.user,
@@ -264,12 +305,12 @@ def create_playbook(ctx: AssistantActionContext) -> dict[str, Any]:
         description=str(ctx.input_payload.get("description") or "Created from Operator chat")[:2000],
         kind=kind,
         source_yaml=yaml_text,
-        tasks=tasks,
+        tasks=raw_tasks if yaml_text else runbook_tasks,
         category=str(ctx.input_payload.get("category") or Playbook.CATEGORY_CUSTOM)[:30],
     )
     return {
         "ok": True,
-        "playbook": {"id": pb.id, "name": pb.name, "kind": pb.kind},
+        "playbook": {"id": pb.id, "name": pb.name, "kind": pb.kind, "task_count": len(pb.tasks or [])},
         "target_url": f"/playbooks/{pb.id}",
     }
 
@@ -360,24 +401,10 @@ def save_runbook(ctx: AssistantActionContext) -> dict[str, Any]:
     from servers.models import Playbook
 
     title = str(ctx.input_payload.get("title") or ctx.input_payload.get("name") or "Saved runbook").strip()[:200]
-    steps = ctx.input_payload.get("steps") or ctx.input_payload.get("tasks") or []
-    if not isinstance(steps, list) or not steps:
-        raise AssistantActionError("steps is required (list of {command, description})")
-    tasks = []
-    for idx, step in enumerate(steps):
-        if isinstance(step, str):
-            tasks.append({"id": f"step_{idx+1}", "command": step, "description": ""})
-        elif isinstance(step, dict) and step.get("command"):
-            tasks.append(
-                {
-                    "id": str(step.get("id") or f"step_{idx+1}"),
-                    "command": str(step["command"]),
-                    "description": str(step.get("description") or "")[:500],
-                    "continue_on_error": bool(step.get("continue_on_error")),
-                }
-            )
+    steps = ctx.input_payload.get("steps") or ctx.input_payload.get("tasks") or ctx.input_payload.get("commands") or []
+    tasks = _steps_to_runbook_tasks(steps)
     if not tasks:
-        raise AssistantActionError("No valid steps with command")
+        raise AssistantActionError("steps is required (list of {command, description})")
     pb = Playbook.objects.create(
         user=ctx.user,
         name=title,
@@ -415,6 +442,46 @@ def resolve_alert(ctx: AssistantActionContext) -> dict[str, Any]:
     }
 
 
+def _hhmm_or_none(value: Any) -> str | None:
+    """Return a normalized HH:MM string, or None when the input isn't a valid time."""
+    text = str(value or "").strip()
+    if not text or ":" not in text:
+        return None
+    try:
+        hour, minute = (int(part) for part in text.split(":", 1))
+    except (TypeError, ValueError):
+        return None
+    if 0 <= hour <= 23 and 0 <= minute <= 59:
+        return f"{hour:02d}:{minute:02d}"
+    return None
+
+
+def _cron_to_schedule_config(cron: str) -> dict[str, Any]:
+    """Map a simple 5-field cron (m h dom mon dow) to normalize_schedule_config keys.
+
+    Handles the common daily/weekly forms; returns {} when it can't parse cleanly.
+    """
+    parts = cron.split()
+    if len(parts) != 5:
+        return {}
+    minute, hour, dom, _mon, dow = parts
+    if not (minute.isdigit() and hour.isdigit()):
+        return {}
+    time_str = f"{int(hour):02d}:{int(minute):02d}"
+    if dow not in ("*", "?"):
+        weekdays: list[int] = []
+        for token in dow.split(","):
+            # cron dow: 0/7 = Sunday; normalize uses Mon=0..Sun=6.
+            if token.isdigit():
+                cron_dow = int(token) % 7
+                weekdays.append((cron_dow + 6) % 7)
+        if weekdays:
+            return {"mode": "weekly", "time": time_str, "weekdays": sorted(set(weekdays))}
+    if dom.isdigit():
+        return {"mode": "monthly", "time": time_str, "day_of_month": int(dom)}
+    return {"mode": "daily", "time": time_str}
+
+
 def schedule_agent(ctx: AssistantActionContext) -> dict[str, Any]:
     """Attach a schedule to an existing agent (phrase → cron-ish config)."""
     from servers.agent_schedule import normalize_schedule_config, schedule_minutes_for_config
@@ -431,20 +498,37 @@ def schedule_agent(ctx: AssistantActionContext) -> dict[str, Any]:
         schedule_minutes = int(ctx.input_payload.get("schedule_minutes") or 0)
     except (TypeError, ValueError):
         schedule_minutes = 0
-    cron = str(ctx.input_payload.get("cron") or "").strip()
+
     raw_config = ctx.input_payload.get("schedule_config")
-    if not isinstance(raw_config, dict):
-        raw_config = {}
-    if cron:
-        raw_config = {**raw_config, "type": "cron", "cron": cron}
-    elif schedule_minutes > 0:
-        raw_config = {**raw_config, "type": "interval", "minutes": schedule_minutes}
-    if ctx.input_payload.get("daily_hour") is not None:
+    raw_config = dict(raw_config) if isinstance(raw_config, dict) else {}
+
+    # Friendly inputs → the canonical keys normalize_schedule_config actually reads
+    # (mode / time / interval_minutes / weekdays). The previous mapping used type/
+    # minutes/hour, which normalize ignored — every schedule silently became "manual".
+    cron = str(ctx.input_payload.get("cron") or "").strip()
+    daily_hour = ctx.input_payload.get("daily_hour")
+    daily_time = _hhmm_or_none(ctx.input_payload.get("daily_time"))
+    weekdays_in = ctx.input_payload.get("weekdays")
+
+    if daily_time is None and daily_hour is not None:
         try:
-            hour = int(ctx.input_payload.get("daily_hour"))
-            raw_config = {**raw_config, "type": "daily", "hour": max(0, min(23, hour))}
+            daily_time = f"{max(0, min(23, int(daily_hour))):02d}:00"
         except (TypeError, ValueError):
-            pass
+            daily_time = None
+
+    if isinstance(weekdays_in, list) and weekdays_in:
+        raw_config["mode"] = "weekly"
+        raw_config["weekdays"] = weekdays_in
+        if daily_time:
+            raw_config["time"] = daily_time
+    elif daily_time:
+        raw_config.setdefault("mode", "daily")
+        raw_config["time"] = daily_time
+    elif cron:
+        raw_config.update(_cron_to_schedule_config(cron))
+    elif schedule_minutes > 0 and not raw_config.get("mode"):
+        raw_config["mode"] = "interval"
+        raw_config["interval_minutes"] = schedule_minutes
 
     config = normalize_schedule_config(raw_config, fallback_minutes=schedule_minutes)
     minutes = schedule_minutes_for_config(config, schedule_minutes)
@@ -549,7 +633,10 @@ def register_operator_mutate_tools() -> None:
         AssistantActionSpec(
             action_type="operator.create_playbook",
             label="Create playbook",
-            description="Create an ansible/runbook playbook from YAML or task list.",
+            description=(
+                "Create a playbook. For ansible pass yaml. For a command runbook pass "
+                "steps as a list of {command, description}."
+            ),
             required_feature="servers",
             risk="internal_write",
             requires_confirmation=True,
@@ -558,6 +645,17 @@ def register_operator_mutate_tools() -> None:
                 "properties": {
                     "name": {"type": "string"},
                     "yaml": {"type": "string"},
+                    "steps": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "command": {"type": "string"},
+                                "description": {"type": "string"},
+                            },
+                            "required": ["command"],
+                        },
+                    },
                     "tasks": {"type": "array"},
                     "description": {"type": "string"},
                 },
@@ -631,7 +729,11 @@ def register_operator_mutate_tools() -> None:
         AssistantActionSpec(
             action_type="operator.schedule_agent",
             label="Schedule agent",
-            description="Schedule an existing agent (interval minutes, daily hour, or cron). Optional deliver_to_chat.",
+            description=(
+                "Schedule an existing agent to run recurrently. Use daily_time 'HH:MM' "
+                "for a daily run, weekdays [0-6] (Mon=0) for weekly, schedule_minutes for "
+                "an interval, or cron. Optional deliver_to_chat posts the report here."
+            ),
             required_feature="agents",
             risk="internal_write",
             requires_confirmation=True,
@@ -641,6 +743,12 @@ def register_operator_mutate_tools() -> None:
                     "agent_id": {"type": "integer"},
                     "schedule_minutes": {"type": "integer"},
                     "daily_hour": {"type": "integer"},
+                    "daily_time": {"type": "string", "description": "HH:MM local time"},
+                    "weekdays": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "0=Mon … 6=Sun for weekly schedules",
+                    },
                     "cron": {"type": "string"},
                     "deliver_to_chat": {"type": "boolean"},
                 },

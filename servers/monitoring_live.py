@@ -130,7 +130,8 @@ def _live_cache_ttl_seconds() -> int:
     was not stored — after a page reload the UI only saw the DB snapshot and looked
     "old". Caching the last live tick bridges reload / short tab switches.
     """
-    return max(30, int(getattr(settings, "MONITORING_LIVE_CACHE_SECONDS", 120) or 120))
+    # 5 minutes: enough for dashboard navigation without flashing "нет связи".
+    return max(30, int(getattr(settings, "MONITORING_LIVE_CACHE_SECONDS", 300) or 300))
 
 
 def live_cache_key(server_id: int) -> str:

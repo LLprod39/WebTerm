@@ -1,12 +1,19 @@
-import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
 import {
   fetchAgentDashboardRuns,
   fetchFrontendBootstrap,
   fetchMonitoringDashboard,
   fetchPluginSurfaces,
+  refreshMonitoringFleet,
 } from "@/lib/api";
-import { PageShell, PageHero, MetricGrid, MetricCard, SectionCard, StatusBadge, QueryStateBlock } from "@/components/ui/page-shell";
+import {
+  readMonitoringDashboardCache,
+  writeMonitoringDashboardCache,
+} from "@/lib/monitoring-cache";
+import { PageShell, PageHero, MetricGrid, MetricCard, SectionCard, StatusBadge, QueryStateBlock, StatStrip, StatStripItem } from "@/components/ui/page-shell";
+import { SkeletonMetrics, SkeletonList } from "@/components/ui/list-state";
+import { Sparkline } from "@/components/dashboard/Sparkline";
 import {
   Activity,
   Bot,
@@ -19,6 +26,7 @@ import {
   Maximize2,
   Minimize2,
   CheckCircle2,
+  Radio,
   Siren,
 } from "lucide-react";
 import { relativeTime, cn } from "@/lib/utils";
@@ -31,6 +39,10 @@ import { getWidgetNumberProp, getWidgetStringProp } from "@/components/dashboard
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { buildPluginDashboardWidgets } from "@/plugins/dashboardWidgets";
+import {
+  useMonitoringLive,
+  withLiveMonitoringDashboard,
+} from "@/pages/servers/useMonitoringLive";
 
 const sectionToneStyles: Record<string, string> = {
   default: "",
@@ -47,9 +59,11 @@ function cpuToneClass(value: number): string {
 
 export default function UserDashboard() {
   const { lang } = useI18n();
+  const queryClient = useQueryClient();
   const [isFullWidth, setIsFullWidth] = useState(() => {
     return localStorage.getItem("user_dashboard_full_width") === "true";
   });
+  const [cachedMonitoring] = useState(() => readMonitoringDashboardCache());
 
   const toggleWidth = () => {
     setIsFullWidth((prev) => {
@@ -62,28 +76,82 @@ export default function UserDashboard() {
   const { data: bootstrapResponse, isLoading: bootLoading } = useQuery({
     queryKey: ["bootstrap"],
     queryFn: fetchFrontendBootstrap,
+    staleTime: 30_000,
   });
 
   const { data: runsResponse, isLoading: runsLoading } = useQuery({
     queryKey: ["agent-dashboard-runs"],
     queryFn: fetchAgentDashboardRuns,
     refetchInterval: 10000,
+    staleTime: 10_000,
   });
 
-  const { data: monitoringResponse, isLoading: monLoading } = useQuery({
+  const { data: monitoringResponse, isLoading: monLoading, isFetching: monFetching } = useQuery({
     queryKey: ["monitoring-dashboard"],
     queryFn: fetchMonitoringDashboard,
+    // Keep fleet health fresh; backend also overlays live SSH samples now.
+    staleTime: 30_000,
+    gcTime: 15 * 60_000,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: true,
+    placeholderData: (previous) => previous ?? cachedMonitoring,
+    initialData: cachedMonitoring,
+    initialDataUpdatedAt: cachedMonitoring ? Date.now() - 60_000 : undefined,
   });
   const { data: pluginSurfaces } = useQuery({
     queryKey: ["plugins", "surfaces", "dashboard", "user"],
     queryFn: fetchPluginSurfaces,
   });
 
+  // Persist last good snapshot so the next visit paints immediately.
+  useEffect(() => {
+    if (monitoringResponse?.success) {
+      writeMonitoringDashboardCache(monitoringResponse);
+    }
+  }, [monitoringResponse]);
+
+  // Background SSH metrics refresh (debounced server-side) so numbers stay warm
+  // even when live WS is still connecting or the monitor worker is slow.
+  useEffect(() => {
+    let cancelled = false;
+    const pull = () => {
+      void refreshMonitoringFleet({ metrics: true }).then(() => {
+        if (!cancelled) {
+          void queryClient.invalidateQueries({ queryKey: ["monitoring-dashboard"] });
+          void queryClient.invalidateQueries({ queryKey: ["monitoring", "status"] });
+        }
+      });
+    };
+    pull();
+    const timer = window.setInterval(pull, 90_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [queryClient]);
+
   const boot = bootstrapResponse;
   const runs = runsResponse;
-  const mon = monitoringResponse;
 
-  const isLoading = bootLoading || runsLoading || monLoading;
+  // Same live WS as Servers page — CPU/RAM/HDD stream while dashboard is open.
+  const liveServerIds = useMemo(() => {
+    const fromMon = (monitoringResponse?.servers ?? []).map((s) => s.server_id);
+    if (fromMon.length) return fromMon;
+    return (bootstrapResponse?.servers ?? []).map((s) => s.id);
+  }, [monitoringResponse?.servers, bootstrapResponse?.servers]);
+
+  const { metricsByServerId: liveMetrics, connected: liveConnected } = useMonitoringLive(
+    liveServerIds,
+    liveServerIds.length > 0,
+  );
+
+  const mon = useMemo(
+    () => withLiveMonitoringDashboard(monitoringResponse, liveMetrics),
+    [monitoringResponse, liveMetrics],
+  );
+
+  // With session cache / placeholder, don't block the whole page on monLoading.
+  const isLoading = (bootLoading && !boot) || (runsLoading && !runs);
 
   const availableWidgets = useMemo<WidgetDefinition[]>(() => {
     if (!boot && !runs && !mon) return [];
@@ -112,7 +180,12 @@ export default function UserDashboard() {
       }
     }
     for (const server of mon?.servers ?? []) {
-      if (server.status === "unreachable") {
+      // Ignore stale/unknown and rows that still carry last metrics — not confirmed outages.
+      const hasMetrics =
+        typeof server.cpu_percent === "number" ||
+        typeof server.memory_percent === "number" ||
+        typeof server.disk_percent === "number";
+      if (server.status === "unreachable" && !server.is_stale && !hasMetrics) {
         attentionItems.push({
           id: `srv-unreachable-${server.server_id}`,
           severity: "critical",
@@ -333,12 +406,62 @@ export default function UserDashboard() {
           const tone = getWidgetStringProp(config, "tone", "default");
           const title = getWidgetStringProp(config, "customTitle", localize(lang, "Состояние серверов", "Server health"));
           const displayServers = mon?.servers?.slice(0, limit) ?? [];
+          const isLive = (serverId: number) => liveMetrics.has(serverId);
 
           return (
-            <SectionCard title={title} icon={<Server className="h-4 w-4" />} className={sectionToneStyles[tone]}>
+            <SectionCard
+              title={title}
+              icon={<Server className="h-4 w-4" />}
+              className={sectionToneStyles[tone]}
+              description={
+                liveConnected
+                  ? localize(lang, "Live · CPU / RAM / Disk ~2с", "Live · CPU / RAM / Disk ~2s")
+                  : localize(lang, "Снимок + обновление…", "Snapshot + updating…")
+              }
+              actions={
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium",
+                    liveConnected
+                      ? "bg-success/10 text-success"
+                      : "bg-muted text-muted-foreground",
+                  )}
+                >
+                  <Radio className={cn("h-3 w-3", liveConnected && "animate-pulse")} />
+                  {liveConnected ? "Live" : localize(lang, "кэш", "cache")}
+                </span>
+              }
+            >
               <div className="space-y-2.5">
                 {displayServers.map((s) => {
-                  const statusTone: StatusTone = s.status === "healthy" ? "success" : s.status === "warning" ? "warning" : s.status === "critical" ? "danger" : s.status === "unreachable" ? "danger" : "neutral";
+                  const stale = Boolean(s.is_stale);
+                  const hasMetrics =
+                    typeof s.cpu_percent === "number" ||
+                    typeof s.memory_percent === "number" ||
+                    typeof s.disk_percent === "number";
+                  const displayStatus =
+                    s.status === "unreachable" && (stale || hasMetrics)
+                      ? "checking"
+                      : s.status === "unknown" && hasMetrics
+                        ? "healthy"
+                        : s.status;
+                  const statusTone: StatusTone =
+                    displayStatus === "healthy"
+                      ? "success"
+                      : displayStatus === "warning"
+                        ? "warning"
+                        : displayStatus === "critical"
+                          ? "danger"
+                          : displayStatus === "unreachable"
+                            ? "danger"
+                            : "neutral";
+                  const statusLabel =
+                    displayStatus === "checking"
+                      ? localize(lang, "проверка…", "checking…")
+                      : displayStatus === "unknown"
+                        ? localize(lang, "нет данных", "no data")
+                        : displayStatus;
+                  const live = isLive(s.server_id);
                   return (
                     <div key={s.server_id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl border border-border/60 bg-surface-2/40 hover:border-primary/40 hover:bg-surface-2 transition-all text-xs">
                       <div className="flex items-center gap-3 min-w-0">
@@ -348,25 +471,32 @@ export default function UserDashboard() {
                         <div className="truncate">
                           <span className="font-semibold text-foreground/95">{s.server_name}</span>
                           <span className="text-xs text-muted-foreground/50 ml-2 font-mono">({s.host})</span>
+                          {live ? (
+                            <span className="ml-2 text-[10px] font-medium uppercase tracking-wide text-success/80">
+                              live
+                            </span>
+                          ) : null}
                         </div>
                       </div>
-                      <div className="flex items-center gap-3.5 shrink-0 flex-wrap sm:flex-nowrap">
-                        <StatusBadge label={s.status} tone={statusTone} />
-                        {s.cpu_percent !== null && (
+                      <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+                        <StatusBadge label={statusLabel} tone={statusTone} />
+                        {s.cpu_percent !== null && s.cpu_percent !== undefined ? (
                           <div className="text-xs text-muted-foreground shrink-0 bg-surface-1 border border-border/60 rounded px-1.5 py-0.5 font-medium">
-                            CPU: <span className={cn("font-bold", cpuToneClass(s.cpu_percent))}>{s.cpu_percent}%</span>
+                            CPU: <span className={cn("font-bold", cpuToneClass(s.cpu_percent))}>{Math.round(s.cpu_percent)}%</span>
                           </div>
-                        )}
-                        {s.memory_percent !== null && (
+                        ) : monFetching || monLoading || liveConnected ? (
+                          <div className="text-xs text-muted-foreground/60 shrink-0">CPU: —</div>
+                        ) : null}
+                        {s.memory_percent !== null && s.memory_percent !== undefined ? (
                           <div className="text-xs text-muted-foreground shrink-0 bg-surface-1 border border-border/60 rounded px-1.5 py-0.5 font-medium">
-                            RAM: <span className="text-foreground/90 font-bold">{s.memory_percent}%</span>
+                            RAM: <span className="text-foreground/90 font-bold">{Math.round(s.memory_percent)}%</span>
                           </div>
-                        )}
-                        {s.response_time_ms !== null && (
-                          <span className="text-xs text-muted-foreground/50 font-mono shrink-0">
-                            {s.response_time_ms}ms
-                          </span>
-                        )}
+                        ) : null}
+                        {s.disk_percent !== null && s.disk_percent !== undefined ? (
+                          <div className="text-xs text-muted-foreground shrink-0 bg-surface-1 border border-border/60 rounded px-1.5 py-0.5 font-medium">
+                            HDD: <span className="text-foreground/90 font-bold">{Math.round(s.disk_percent)}%</span>
+                          </div>
+                        ) : null}
                         <Button size="xs" variant="outline" asChild className="shrink-0">
                           <Link to={`/servers/${s.server_id}/terminal`}>{localize(lang, "Терминал", "Terminal")}</Link>
                         </Button>
@@ -375,7 +505,11 @@ export default function UserDashboard() {
                   );
                 })}
                 {displayServers.length === 0 && (
-                  <div className="py-6 text-center text-xs text-muted-foreground">{localize(lang, "Нет данных по серверам", "No server data")}</div>
+                  <div className="py-6 text-center text-xs text-muted-foreground">
+                    {monLoading
+                      ? localize(lang, "Загрузка мониторинга…", "Loading monitoring…")
+                      : localize(lang, "Нет данных по серверам", "No server data")}
+                  </div>
                 )}
               </div>
             </SectionCard>
@@ -548,7 +682,7 @@ export default function UserDashboard() {
       },
     ];
     return [...builtins, ...buildPluginDashboardWidgets(pluginSurfaces?.surfaces?.dashboard_widgets ?? [])];
-  }, [boot, runs, mon, pluginSurfaces?.surfaces?.dashboard_widgets, lang]);
+  }, [boot, runs, mon, monLoading, monFetching, liveConnected, liveMetrics, pluginSurfaces?.surfaces?.dashboard_widgets, lang]);
 
   return (
     <PageShell width={isFullWidth ? "full" : "7xl"}>
@@ -589,9 +723,98 @@ export default function UserDashboard() {
         }
       />
 
-      <QueryStateBlock loading={isLoading}>
-        <CustomizableDashboard type="user" availableWidgets={availableWidgets} />
-      </QueryStateBlock>
+      {isLoading ? (
+        <div className="space-y-4">
+          <SkeletonMetrics count={4} />
+          <SkeletonList rows={4} />
+        </div>
+      ) : (
+        <>
+          <FlowKpiStrip
+            lang={lang}
+            onlineServers={
+              mon?.summary
+                ? (mon.summary.healthy || 0) + (mon.summary.warning || 0)
+                : null
+            }
+            totalServers={mon?.summary?.total_servers ?? boot?.servers?.length ?? 0}
+            runs7d={runs?.recent?.length ?? 0}
+            runSpark={
+              (runs?.recent ?? [])
+                .slice()
+                .reverse()
+                .map((r) => (isRunSuccess(r.status) ? 1 : isRunFailure(r.status) ? 0 : 0.5))
+            }
+            activeAlerts={mon?.summary?.active_alerts ?? 0}
+            tokensHint={localize(lang, "из LLM-слоя", "from LLM layer")}
+          />
+          <QueryStateBlock loading={false}>
+            <CustomizableDashboard type="user" availableWidgets={availableWidgets} />
+          </QueryStateBlock>
+        </>
+      )}
     </PageShell>
+  );
+}
+
+function FlowKpiStrip({
+  lang,
+  onlineServers,
+  totalServers,
+  runs7d,
+  runSpark,
+  activeAlerts,
+  tokensHint,
+}: {
+  lang: "ru" | "en";
+  onlineServers: number | null;
+  totalServers: number;
+  runs7d: number;
+  runSpark: number[];
+  activeAlerts: number;
+  tokensHint: string;
+}) {
+  const onlineLabel =
+    onlineServers === null
+      ? "—"
+      : `${onlineServers}/${totalServers || "—"}`;
+
+  return (
+    <StatStrip>
+      <StatStripItem
+        label={localize(lang, "Серверы онлайн", "Servers online")}
+        value={onlineLabel}
+        hint={localize(lang, "healthy + warning", "healthy + warning")}
+        tone={onlineServers !== null && totalServers > 0 && onlineServers < totalServers ? "warning" : "success"}
+      />
+      <div className="bg-card px-4 py-3 sm:px-5">
+        <div className="text-2xs font-medium uppercase tracking-[0.12em] text-muted-foreground/70">
+          {localize(lang, "Прогоны агентов", "Agent runs")}
+        </div>
+        <div className="mt-1 flex items-end justify-between gap-3">
+          <div className="font-display text-xl font-bold tabular-nums tracking-tight leading-none text-foreground">
+            {runs7d}
+          </div>
+          <div className="h-8 w-20 text-primary">
+            <Sparkline data={runSpark.length >= 2 ? runSpark : [0, 0.5, 1, 0.7, 0.9]} height={32} width={80} strokeWidth={1.5} />
+          </div>
+        </div>
+        <div className="mt-1 text-xs leading-4 text-muted-foreground/70">
+          {localize(lang, "недавние в ленте", "recent in feed")}
+        </div>
+      </div>
+      <StatStripItem
+        label={localize(lang, "Активные алерты", "Active alerts")}
+        value={activeAlerts}
+        hint={activeAlerts ? localize(lang, "требуют внимания", "need attention") : localize(lang, "тихо", "all clear")}
+        tone={activeAlerts ? "danger" : "success"}
+      />
+      <StatStripItem
+        label={localize(lang, "Токены ИИ", "AI tokens")}
+        value="—"
+        hint={tokensHint}
+        tone="default"
+      />
+    </StatStrip>
   );
 }

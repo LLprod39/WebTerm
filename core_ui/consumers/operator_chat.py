@@ -3,19 +3,21 @@
 URL: /ws/operator/<chat_id>/
 
 Client → server:
-  {"type": "chat.message", "message": "..."}
+  {"type": "chat.message", "message": "...", "thinking": true|false|"high"|...}
+  {"type": "turn.stop"}
   {"type": "action.confirm", "action_id": 1}
   {"type": "action.cancel", "action_id": 1}
   {"type": "ping"}
 
 Server → client:
-  token | tool_started | tool_result | confirm_required | action_update |
-  usage | turn_done | error | pong | turn_started | thinking
+  ready | turn_snapshot | token | tool_* | thinking* | confirm_required |
+  action_update | usage | turn_done | turn_complete | error | pong
+
+Turns run as background tasks and outlive this socket. Events are fan-out via
+channel group so leaving/reopening the page resumes the live dialog.
 """
 
 from __future__ import annotations
-
-import asyncio
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
@@ -24,8 +26,16 @@ from loguru import logger
 
 from core_ui.access import feature_allowed_for_user
 from core_ui.models import AssistantAction, ChatSession
-from core_ui.services.assistant_chat import cancel_action, execute_action, serialize_action
-from core_ui.services.operator_loop import handle_operator_message, resume_after_action
+from core_ui.services.operator_turn_runtime import (
+    broadcast_operator_event,
+    get_active_turn_snapshot,
+    is_chat_busy,
+    operator_group_name,
+    operator_health,
+    start_action_turn,
+    start_message_turn,
+    stop_active_turn,
+)
 
 
 class OperatorChatConsumer(AsyncJsonWebsocketConsumer):
@@ -33,7 +43,7 @@ class OperatorChatConsumer(AsyncJsonWebsocketConsumer):
         super().__init__(*args, **kwargs)
         self._user_id: int | None = None
         self._chat_id: int | None = None
-        self._busy = False
+        self._group: str | None = None
 
     async def connect(self):
         user = self.scope.get("user")
@@ -55,120 +65,140 @@ class OperatorChatConsumer(AsyncJsonWebsocketConsumer):
             await self.close()
             return
 
+        self._group = operator_group_name(self._chat_id)
+        await self.channel_layer.group_add(self._group, self.channel_name)
         await self.accept()
-        await self.send_json({"type": "ready", "chat_id": self._chat_id})
+        health = await operator_health()
+        await self.send_json(
+            {
+                "type": "ready",
+                "chat_id": self._chat_id,
+                "busy": is_chat_busy(self._chat_id),
+                "health": health,
+            }
+        )
+
+        # Reconnect: restore in-flight / parked turn UI without restarting work
+        snapshot = await get_active_turn_snapshot(self._chat_id, self._user_id)
+        if snapshot:
+            await self.send_json(snapshot)
+
+    async def disconnect(self, code):
+        if self._group and getattr(self, "channel_layer", None) is not None:
+            try:
+                await self.channel_layer.group_discard(self._group, self.channel_name)
+            except Exception:  # noqa: BLE001
+                logger.debug("operator group_discard failed chat_id={}", self._chat_id)
+        # Intentionally do NOT cancel background turns — they keep running.
+
+    async def operator_event(self, message):
+        """Channel-layer handler: fan-out operator loop events to this socket."""
+        event = message.get("event")
+        if isinstance(event, dict):
+            await self.send_json(event)
 
     async def receive_json(self, content, **kwargs):
         msg_type = str((content or {}).get("type") or "")
         if msg_type == "ping":
             await self.send_json({"type": "pong"})
             return
-        if self._busy:
-            await self.send_json({"type": "error", "message": "Turn already in progress"})
-            return
         if msg_type == "chat.message":
-            await self._handle_message(str((content or {}).get("message") or ""))
+            await self._handle_message(content or {})
+        elif msg_type == "turn.stop":
+            await self._handle_stop()
         elif msg_type == "action.confirm":
             await self._handle_action(
                 int((content or {}).get("action_id") or 0),
                 confirm=True,
                 typed_confirm=str((content or {}).get("typed_confirm") or "").strip() or None,
+                thinking=(content or {}).get("thinking"),
             )
         elif msg_type == "action.cancel":
-            await self._handle_action(int((content or {}).get("action_id") or 0), confirm=False)
+            await self._handle_action(
+                int((content or {}).get("action_id") or 0),
+                confirm=False,
+                thinking=(content or {}).get("thinking"),
+            )
         else:
             await self.send_json({"type": "error", "message": f"Unknown type: {msg_type}"})
 
-    async def _handle_message(self, message: str):
-        text = (message or "").strip()
+    async def _handle_message(self, content: dict):
+        text = str(content.get("message") or "").strip()
         if not text:
             await self.send_json({"type": "error", "message": "message is required"})
             return
+        if self._chat_id is None:
+            await self.send_json({"type": "error", "message": "Session not found"})
+            return
+        if is_chat_busy(self._chat_id):
+            await self.send_json({"type": "error", "message": "Turn already in progress"})
+            return
+
         session = await self._get_session()
         user = await self._get_user()
         if session is None or user is None:
             await self.send_json({"type": "error", "message": "Session not found"})
             return
-        self._busy = True
-        try:
 
-            async def on_event(event: dict):
-                await self.send_json(event)
+        # Optimistic ack so UI can show thinking before first model token
+        await broadcast_operator_event(self._chat_id, {"type": "turn_started", "chat_id": self._chat_id})
 
-            # Hard wall so a hung Ollama call cannot pin the socket forever
-            result = await asyncio.wait_for(
-                handle_operator_message(session, user, text, on_event=on_event),
-                timeout=180,
-            )
-            await self.send_json(
-                {
-                    "type": "turn_complete",
-                    "status": result.status,
-                    "assistant_message_id": result.assistant_message.pk if result.assistant_message else None,
-                    "user_message_id": result.user_message.pk if result.user_message else None,
-                    "actions": [serialize_action(a) for a in result.actions if a],
-                }
-            )
-        except asyncio.TimeoutError:
-            await self.send_json(
-                {
-                    "type": "error",
-                    "message": "Оператор завис на ответе модели (таймаут 180с). Попробуй ещё раз короче.",
-                }
-            )
-        except ValueError as exc:
-            await self.send_json({"type": "error", "message": str(exc)})
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("operator ws message failed: {}", exc)
-            await self.send_json({"type": "error", "message": str(exc) or "Operator turn failed"})
-        finally:
-            self._busy = False
+        started = start_message_turn(
+            chat_id=self._chat_id,
+            session=session,
+            user=user,
+            message=text,
+            thinking=content.get("thinking"),
+        )
+        if not started:
+            await self.send_json({"type": "error", "message": "Turn already in progress"})
 
-    async def _handle_action(self, action_id: int, *, confirm: bool, typed_confirm: str | None = None):
+    async def _handle_stop(self):
+        if self._chat_id is None:
+            await self.send_json({"type": "error", "message": "Session not found"})
+            return
+        stopped = await stop_active_turn(self._chat_id, self._user_id)
+        if not stopped:
+            # Nothing running — still acknowledge so the client can unstick its UI
+            await self.send_json({"type": "turn_done", "status": "stopped", "chat_id": self._chat_id})
+
+    async def _handle_action(
+        self,
+        action_id: int,
+        *,
+        confirm: bool,
+        typed_confirm: str | None = None,
+        thinking=None,
+    ):
         if action_id <= 0:
             await self.send_json({"type": "error", "message": "action_id is required"})
             return
+        if self._chat_id is None:
+            await self.send_json({"type": "error", "message": "Session not found"})
+            return
+        if is_chat_busy(self._chat_id):
+            await self.send_json({"type": "error", "message": "Turn already in progress"})
+            return
+
         user = await self._get_user()
         action = await self._get_action(action_id)
         if user is None or action is None:
             await self.send_json({"type": "error", "message": "Action not found"})
             return
-        self._busy = True
-        try:
-            if confirm:
-                action = await database_sync_to_async(execute_action)(
-                    action, confirmed=True, typed_confirm=typed_confirm
-                )
-            else:
-                action = await database_sync_to_async(cancel_action)(action)
-            await self.send_json({"type": "action_update", "action": serialize_action(action)})
 
-            if confirm and action.status == action.STATUS_REQUIRES_CONFIRMATION and action.error:
-                await self.send_json({"type": "error", "message": action.error})
-                return
-
-            async def on_event(event: dict):
-                await self.send_json(event)
-
-            result = await resume_after_action(
-                action=action,
-                on_event=on_event,
-                cancelled=not confirm,
-            )
-            if result is not None:
-                await self.send_json(
-                    {
-                        "type": "turn_complete",
-                        "status": result.status,
-                        "assistant_message_id": result.assistant_message.pk if result.assistant_message else None,
-                        "actions": [serialize_action(a) for a in result.actions if a],
-                    }
-                )
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("operator ws action failed: {}", exc)
-            await self.send_json({"type": "error", "message": str(exc) or "Action failed"})
-        finally:
-            self._busy = False
+        await broadcast_operator_event(
+            self._chat_id,
+            {"type": "turn_started", "chat_id": self._chat_id, "phase": "action"},
+        )
+        started = start_action_turn(
+            chat_id=self._chat_id,
+            action=action,
+            confirm=confirm,
+            typed_confirm=typed_confirm,
+            thinking=thinking,
+        )
+        if not started:
+            await self.send_json({"type": "error", "message": "Turn already in progress"})
 
     @database_sync_to_async
     def _has_feature(self) -> bool:

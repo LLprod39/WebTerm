@@ -421,6 +421,364 @@ async def stream_openai_tools(
     yield {"type": "done", "usage": usage, "stop_reason": stop}
 
 
+# ---------------------------------------------------------------------------
+# Ollama native tool-calling (models with the "tools" capability)
+# ---------------------------------------------------------------------------
+
+_OLLAMA_TOOLS_CAPABILITY: dict[str, bool] = {}
+
+# Small local models (≤~9B) reliably tool-call only with a bounded catalog.
+# Measured on qwen3.5:9b via Ollama native tools: ≤16 tools = 4/4 correct calls,
+# 18 = 0/4, 22+ = empty. Keep a relevant subset per request, not the whole registry.
+NATIVE_TOOLS_SOFT_LIMIT = 16
+
+_CORE_TOOL_NAMES = {
+    "operator_list_servers",
+    "operator_resolve_server",
+    "operator_fleet_status",
+    "operator_server_forecasts",
+    "operator_list_alerts",
+    "operator_server_metrics",
+    "operator_run_command",
+    "operator_run_fanout",
+    "operator_propose_plan",
+}
+
+# Russian request terms → English tokens present in tool names/descriptions.
+_RU_EN_TOOL_HINTS = {
+    "сервер": "server", "серв": "server", "хост": "server host",
+    "диск": "disk", "агент": "agent", "плейбук": "playbook",
+    "runbook": "playbook runbook", "ранбук": "playbook runbook",
+    "метрик": "metric", "алерт": "alert", "прогноз": "forecast",
+    "команд": "command run", "пайплайн": "pipeline", "навык": "skill",
+    "память": "memory", "докер": "docker", "контейнер": "container docker",
+    "план": "plan", "расписан": "schedule", "перезапус": "restart",
+    "рестарт": "restart", "лог": "log", "монитор": "monitor",
+    "студи": "studio pipeline", "инцидент": "incident alert",
+}
+
+
+def _all_user_text(messages: list[dict[str, Any]]) -> str:
+    """Concatenate visible user/assistant text across the turn for relevance scoring."""
+    bits: list[str] = []
+    for msg in messages:
+        content = msg.get("content")
+        if isinstance(content, str):
+            bits.append(content)
+        elif isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    bits.append(str(block.get("text") or ""))
+    return " ".join(bits)
+
+
+def select_tools_for_request(
+    tools: list[dict[str, Any]],
+    messages: list[dict[str, Any]],
+    *,
+    limit: int = NATIVE_TOOLS_SOFT_LIMIT,
+) -> list[dict[str, Any]]:
+    """Pick a bounded, relevant tool subset so small local models stay accurate.
+
+    Always keeps a core operational set; fills the rest by keyword overlap with
+    the conversation text (with RU→EN hints). The loop still resolves tool names
+    against the full registry, so subsetting only limits what the model *sees*.
+    """
+    if len(tools) <= limit:
+        return tools
+    text = _all_user_text(messages).lower()
+    tokens: set[str] = set(re.findall(r"[a-zA-Zа-яё0-9]{3,}", text))
+    for ru, en in _RU_EN_TOOL_HINTS.items():
+        if ru in text:
+            tokens.update(en.split())
+
+    core: list[dict[str, Any]] = []
+    rest: list[dict[str, Any]] = []
+    for tool in tools:
+        name = normalise_tool_name(tool.get("name") or tool.get("action_type") or "")
+        (core if name in _CORE_TOOL_NAMES else rest).append(tool)
+
+    def score(tool: dict[str, Any]) -> int:
+        name = normalise_tool_name(tool.get("name") or tool.get("action_type") or "").replace("_", " ")
+        desc = str(tool.get("description") or tool.get("label") or "").lower()
+        haystack = f"{name} {desc}"
+        return sum(1 for tok in tokens if tok in haystack)
+
+    rest.sort(key=score, reverse=True)
+    return core + rest[: max(0, limit - len(core))]
+
+
+async def ollama_model_supports_tools(base_url: str, model: str, headers: dict[str, Any] | None = None) -> bool:
+    """Best-effort check (cached) whether an Ollama model exposes the ``tools`` capability.
+
+    Falls back to optimistic True on any error so a transient probe failure never
+    downgrades a capable model to the brittle JSON path.
+    """
+    key = f"{base_url}::{model}"
+    cached = _OLLAMA_TOOLS_CAPABILITY.get(key)
+    if cached is not None:
+        return cached
+    import aiohttp
+
+    try:
+        timeout = aiohttp.ClientTimeout(total=6)
+        async with (
+            aiohttp.ClientSession(timeout=timeout) as session,
+            session.post(f"{base_url}/api/show", headers=dict(headers or {}), json={"model": model}) as resp,
+        ):
+            if resp.status == 200:
+                data = await resp.json()
+                caps = data.get("capabilities") or []
+                supported = "tools" in caps
+                _OLLAMA_TOOLS_CAPABILITY[key] = supported
+                return supported
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("ollama capability probe failed for {}: {}", model, exc)
+    _OLLAMA_TOOLS_CAPABILITY[key] = True
+    return True
+
+
+def _is_tool_result_only(msg: dict[str, Any]) -> bool:
+    content = msg.get("content")
+    if not isinstance(content, list) or not content:
+        return False
+    return all(isinstance(b, dict) and b.get("type") == "tool_result" for b in content)
+
+
+def bound_messages_for_local(
+    messages: list[dict[str, Any]], *, max_messages: int = 8
+) -> list[dict[str, Any]]:
+    """Keep only the recent tail so small local models don't drown in history.
+
+    qwen3.5:9b stops emitting tool calls once the combined tool catalog + history
+    grows large (a fresh turn calls tools reliably; ~18 messages of history breaks
+    it). Preserve tool_use/tool_result pairing by dropping a leading orphan
+    tool_result block if truncation would start on one.
+    """
+    if len(messages) <= max_messages:
+        return messages
+    tail = messages[-max_messages:]
+    while tail and _is_tool_result_only(tail[0]):
+        tail = tail[1:]
+    return tail
+
+
+def _messages_to_ollama(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Convert Anthropic-style multi-part messages to Ollama /api/chat format.
+
+    Ollama tool calls carry ``arguments`` as an object (not a JSON string) and tool
+    results use a ``tool`` role. Matching is positional, so tool_use_id is dropped.
+    """
+    out: list[dict[str, Any]] = []
+    for msg in messages:
+        role = msg.get("role") or "user"
+        content = msg.get("content")
+        if isinstance(content, str):
+            out.append({"role": role, "content": content})
+            continue
+        if not isinstance(content, list):
+            out.append({"role": role, "content": str(content or "")})
+            continue
+        text_parts: list[str] = []
+        tool_calls: list[dict[str, Any]] = []
+        tool_results: list[dict[str, Any]] = []
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            btype = block.get("type")
+            if btype == "text":
+                text_parts.append(str(block.get("text") or ""))
+            elif btype == "tool_use":
+                tool_calls.append(
+                    {
+                        "function": {
+                            "name": block.get("name") or "",
+                            "arguments": block.get("input") if isinstance(block.get("input"), dict) else {},
+                        }
+                    }
+                )
+            elif btype == "tool_result":
+                tool_results.append({"role": "tool", "content": str(block.get("content") or "")})
+        if role == "assistant":
+            entry: dict[str, Any] = {"role": "assistant", "content": "\n".join(text_parts)}
+            if tool_calls:
+                entry["tool_calls"] = tool_calls
+            out.append(entry)
+        elif tool_results and role == "user":
+            out.extend(tool_results)
+            if text_parts:
+                out.append({"role": "user", "content": "\n".join(text_parts)})
+        else:
+            out.append(
+                {
+                    "role": role if role in {"user", "system", "assistant"} else "user",
+                    "content": "\n".join(text_parts),
+                }
+            )
+    return out
+
+
+async def stream_ollama_tools(
+    *,
+    request_targets: list[dict[str, Any]],
+    messages: list[dict[str, Any]],
+    tools: list[dict[str, Any]],
+    system_prompt: str | None,
+    think_value: Any | None = None,
+    timeout_seconds: float = 120.0,
+    purpose: str = "orchestrator",
+    usage_logger: UsageLogger | None = None,
+    prompt_for_usage: str = "",
+    set_configured_base_url: Callable[[str], None] | None = None,
+    is_connect_error: Callable[[Exception], bool] | None = None,
+) -> AsyncGenerator[dict[str, Any], None]:
+    """Native Ollama tool-calling stream with base-URL failover.
+
+    Reads message.content -> text_delta, message.thinking -> thinking_delta, and
+    message.tool_calls -> tool_call. Yields the same unified events as the other
+    provider tool streams.
+    """
+    import aiohttp
+
+    # Bound catalog + history so small local models stay accurate
+    # (see select_tools_for_request / bound_messages_for_local).
+    bounded = bound_messages_for_local(messages)
+    ollama_tools = tools_to_openai(select_tools_for_request(tools, bounded))
+    chat_messages: list[dict[str, Any]] = []
+    if system_prompt:
+        chat_messages.append({"role": "system", "content": system_prompt})
+    chat_messages.extend(_messages_to_ollama(bounded))
+
+    payload: dict[str, Any] = {
+        "messages": chat_messages,
+        "stream": True,
+        "tools": ollama_tools,
+        # num_ctx MUST be large: the operator system prompt + tool schemas alone run
+        # ~4000 tokens, filling Ollama's default 4096 context. Once any history is
+        # added the prompt overflows, output truncates (done_reason=length) and the
+        # model "thinks" then emits nothing — the classic empty-second-message bug.
+        # num_predict caps output; thinking counts against it, so keep it generous too.
+        "options": {"temperature": 0.3, "num_ctx": 16384, "num_predict": 4096},
+    }
+    # NB: Ollama's qwen3 tool grammar 500s ("XML syntax error … <function> closed by
+    # </parameter>") when thinking is explicitly disabled. Never send think:false with
+    # tools — omit the param instead so the model keeps its default reasoning.
+    if think_value not in (None, False, "off"):
+        payload["think"] = think_value
+
+    timeout = aiohttp.ClientTimeout(total=timeout_seconds)
+    started = time.monotonic()
+    last_error: Exception | None = None
+
+    for base_index, target in enumerate(request_targets):
+        base_url = target["base_url"]
+        headers = dict(target["headers"])
+        payload["model"] = target["model"]
+        text_out = ""
+        tool_calls_acc: list[dict[str, Any]] = []
+        usage: dict[str, Any] = {}
+        stop_reason = "end_turn"
+        try:
+            async with (
+                aiohttp.ClientSession(timeout=timeout) as session,
+                session.post(f"{base_url}/api/chat", headers=headers, json=payload) as resp,
+            ):
+                if resp.status != 200:
+                    body = await resp.text()
+                    raise RuntimeError(f"Ollama tools HTTP {resp.status}: {body[:300]}")
+                async for raw_line in resp.content:
+                    line = raw_line.decode("utf-8", errors="replace").strip()
+                    if not line:
+                        continue
+                    try:
+                        chunk = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    msg = chunk.get("message") or {}
+                    thinking = msg.get("thinking") or ""
+                    if thinking:
+                        yield {"type": "thinking_delta", "text": thinking}
+                    content = msg.get("content") or ""
+                    if content:
+                        text_out += content
+                        yield {"type": "text_delta", "text": content}
+                    for tc in msg.get("tool_calls") or []:
+                        fn = tc.get("function") or {}
+                        name = str(fn.get("name") or "")
+                        args = fn.get("arguments")
+                        if isinstance(args, str):
+                            try:
+                                args = json.loads(args)
+                            except json.JSONDecodeError:
+                                args = {}
+                        if not isinstance(args, dict):
+                            args = {}
+                        if name:
+                            tool_calls_acc.append({"name": name, "arguments": args})
+                    if chunk.get("done"):
+                        stop_reason = chunk.get("done_reason") or stop_reason
+                        usage = {
+                            "input_tokens": int(chunk.get("prompt_eval_count") or 0),
+                            "output_tokens": int(chunk.get("eval_count") or 0),
+                        }
+                        break
+            if target["kind"] == "local" and set_configured_base_url:
+                set_configured_base_url(base_url)
+                try:
+                    from app.core.ollama_config import remember_ollama_url
+
+                    remember_ollama_url(base_url)
+                except Exception:  # noqa: BLE001
+                    pass
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+            has_next = base_index < len(request_targets) - 1
+            if target["kind"] == "local" and is_connect_error and is_connect_error(exc) and has_next:
+                logger.warning("Ollama tools connect failed via {}: {}. Trying next base URL.", base_url, exc)
+                continue
+            logger.error("Ollama tool stream failed: {}", exc)
+            if usage_logger:
+                usage_logger(
+                    "ollama",
+                    payload["model"],
+                    prompt_for_usage or "",
+                    text_out,
+                    int((time.monotonic() - started) * 1000),
+                    "error",
+                    purpose=purpose,
+                )
+            yield {"type": "error", "message": f"Error calling Ollama: {exc}"}
+            return
+
+        for call in tool_calls_acc:
+            yield {
+                "type": "tool_call",
+                "id": f"call_{uuid.uuid4().hex[:12]}",
+                "name": call["name"],
+                "arguments": call["arguments"],
+            }
+        if usage_logger:
+            usage_logger(
+                "ollama",
+                payload["model"],
+                prompt_for_usage or "",
+                text_out,
+                int((time.monotonic() - started) * 1000),
+                "success",
+                purpose=purpose,
+            )
+        yield {
+            "type": "done",
+            "usage": usage,
+            "stop_reason": "tool_use" if tool_calls_acc else (stop_reason or "end_turn"),
+        }
+        return
+
+    if last_error is not None:
+        yield {"type": "error", "message": f"Ollama недоступен из backend: {last_error}"}
+        yield {"type": "done", "usage": {}, "stop_reason": "error"}
+
+
 def _messages_to_openai(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Convert Anthropic-style multi-part messages to OpenAI chat format."""
     out: list[dict[str, Any]] = []
@@ -553,31 +911,42 @@ async def stream_json_tools_fallback(
                         f"tool_use:{block.get('name')} args={json.dumps(block.get('input') or {}, ensure_ascii=False)[:400]}"
                     )
     prompt = "\n".join(user_bits[-12:]) or "Hello"
-    # Tell UI immediately that the model is working (Ollama JSON path has no mid-stream tokens)
+    # Tell UI immediately that the model is working (Ollama JSON path may stream
+    # thinking tokens and/or silent generation before final JSON).
     yield {
         "type": "thinking_status",
         "phase": "thinking",
-        "message": "Модель думает…",
+        "message": "Ждём ответ модели…",
+        "reasoning_active": False,
     }
     collected = ""
     chunk_count = 0
     last_hb = 0.0
+    saw_thinking = False
     import time as _time
 
     t0 = _time.monotonic()
     async for chunk in stream_text(prompt=prompt, system_prompt=instruction, purpose=purpose, json_mode=True):
         chunk_count += 1
-        # Ignore thinking stream (sentinels) — only final JSON content matters
+        # Surface model "thinking" channel to the operator UI (do not mix into JSON body).
         if isinstance(chunk, str) and (
             chunk.startswith("«THINK»") or chunk.startswith("\x00THINK\x00")
         ):
+            if chunk.startswith("«THINK»"):
+                think_text = chunk[len("«THINK»") :]
+            else:
+                think_text = chunk[len("\x00THINK\x00") :]
+            if think_text:
+                saw_thinking = True
+                yield {"type": "thinking_delta", "text": think_text}
             now = _time.monotonic()
-            if now - last_hb >= 1.5:
+            if now - last_hb >= 2.0:
                 last_hb = now
                 yield {
                     "type": "thinking_status",
                     "phase": "thinking",
-                    "message": f"думает… {int(now - t0)}с",
+                    "message": f"Размышление… {int(now - t0)}с",
+                    "reasoning_active": True,
                 }
             continue
         collected += chunk
@@ -587,7 +956,12 @@ async def stream_json_tools_fallback(
             yield {
                 "type": "thinking_status",
                 "phase": "thinking",
-                "message": f"генерация… {len(collected)} симв.",
+                "message": (
+                    f"Генерация JSON… {len(collected)} симв."
+                    if collected
+                    else f"Модель отвечает без thinking… {int(now - t0)}с"
+                ),
+                "reasoning_active": saw_thinking,
             }
         # Surface provider/connectivity errors immediately instead of empty bubble
         if chunk.startswith("Error:") or chunk.startswith("Error from") or chunk.startswith("Error calling"):

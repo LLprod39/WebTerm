@@ -117,10 +117,11 @@ export function inferInventorySkeletonKind(
     /alert/.test(joined) ||
     (/\bseverity\b/.test(text) && /\balert\b/.test(text));
 
+  // Only full inventory list — NOT resolve_server / server_info / server_metrics (no card in chat).
   const looksServers =
-    /\bservers?\b/.test(joined) ||
-    /list_servers|servers?\.list|fleet|inventory/.test(joined) ||
-    (/\bhost\b/.test(text) && (/\bport\b/.test(text) || /\btags?\b/.test(text)));
+    !/resolve_server|server_info|server_metrics|run_command|run_fanout/.test(joined) &&
+    (/list_servers|servers?\.list|operator\.list_servers|fleet_status|inventory/.test(joined) ||
+      (/\bhost\b/.test(text) && (/\bport\b/.test(text) || /\btags?\b/.test(text))));
 
   // Prefer specific kinds
   if (looksForecasts) return "forecasts";

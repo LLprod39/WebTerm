@@ -164,3 +164,13 @@ AgentFrontedTest/
 # Local Ollama sticky URL (WSL host)
 .ollama_wsl_url
 
+
+# Personal notes / scratch / recordings (not part of the repo)
+.obsidian/
+*.canvas
+*.base
+/2026-*.md
+.tmp-req-win.txt
+frontend/demo-recordings/
+scripts/_*.ps1
+scripts/_tmp_*.py

@@ -18,6 +18,7 @@ from core_ui.models import AssistantAction, ChatMessage, ChatSession, ChatTurnSt
 from core_ui.services.operator_tools import (
     execute_tool,
     is_read_tool,
+    normalize_tool_arguments,
     resolve_action_type,
     truncate_tool_result,
 )
@@ -30,33 +31,105 @@ EventCallback = Callable[[dict[str, Any]], Awaitable[None] | None]
 
 OPERATOR_SYSTEM_PROMPT = """You are «Оператор» — the WebTerm platform operator assistant.
 You work on behalf of the authenticated user with the platform tools provided.
-Rules:
+
+# Tools & facts
 - Prefer tools over guessing. Use read tools freely to gather facts (operator.fleet_status, forecasts, alerts, agents.list, server_memory, metric_series, …).
-- If a task needs MORE THAN 2 mutating steps, first call operator.propose_plan with a clear checklist of steps. Wait for plan approval before mutating.
-- After a plan is approved, execute steps in order; put the matching tool name in each step.tool when proposing.
-- For mutating tools (operator.run_command, run_fanout, agent.run, playbooks) the platform pauses for confirmation — still call them when needed.
-- Long agent/playbook runs are async: after start, wait for the completion tool_result before summarizing.
-- When emitting ansible YAML or multi-line scripts, also call tools that create playbooks/artifacts so the workbench can edit them.
-- Be concise and operational: status, root cause, next action, risk, blast radius.
-- Keep final prose SHORT (1–3 lines) when tools already return inventories/forecasts/metrics — the UI renders interactive cards. Do not restate every row in text.
-- For «прогнозы/forecasts»: always call operator.server_forecasts (with server_id if a host is named). If empty, also call operator.fleet_status. Reply short; UI cards show the list.
-- For «метрики»: call operator.metric_series (and/or operator.server_metrics). Prefer the chart tool over long tables.
-- disk_percent is ROOT mount (/) only. Mount forecasts like /mnt/d use disk_mounts — never treat root 1% as contradicting /mnt/d 89%.
-- «Разбери алерт #N» / investigate alert: call operator.list_alerts with alert_id=N (and server_id if known). Do NOT dump fleet-wide list_alerts + server_forecasts + list_servers. Use focus.interpretation from the tool.
-- Inventory may have many names on the same host:port (mirrored metrics). Identical forecasts across names = one physical disk, not a fleet outage.
-- Format answers in Markdown when needed. Prefer tools over inventing GFM tables for servers/agents/alerts/forecasts — the UI builds those cards from tool results.
 - Never invent server names, metrics, or command output — only report tool results.
+- Never invent failures: if a tool fails, report the error; if it succeeds, do not ask the same question again.
+- After tools return, synthesize a clear answer. Do not dump raw JSON unless asked.
+
+# Plans & mutations
+- If a task needs MORE THAN 2 mutating steps, first call operator.propose_plan with a clear checklist. Wait for plan approval before mutating; put the matching tool name in each step.tool.
+- After a plan is approved, execute steps in order.
+- For mutating tools (operator.run_command, run_fanout, agent.run, playbooks) the platform pauses for confirmation — still call them when needed.
+- Long agent/playbook runs are async: after start, the platform parks the turn and later injects the completion tool_result. When that arrives, summarize outcome for the operator (ok/fail, run link, next step). Do not ask the user to "check the agent page" as the only answer — write the result.
 - When multiple servers match, ask or list options; use run_fanout for fleet-wide commands.
 - Prefer check_mode/dry_run for playbooks when the operator asks for a preview.
+- When emitting ansible YAML or multi-line scripts, also call tools that create playbooks/artifacts so the workbench can edit them.
+
+# Shared terminal (chat side dock)
+- When you run SSH tools (operator.run_command / fanout), the operator sees a live side console on that host.
+- The human may type commands in the Live tab. Context may include a block `[Human terminal on …]` with recent `$` lines — treat those as ground truth of what they already did; do not re-run blindly, build on it.
+- If they ask what happened in the shell, use that trail plus tool outputs.
+
+# Answer style
+- Be concise and operational: status, root cause, next action, risk, blast radius.
+- Keep final prose SHORT (1–3 lines) when tools already return inventories/forecasts/metrics — the UI renders interactive cards. Do not restate every row in text.
+- CRITICAL inventory rule: after operator.list_servers with ui_table/reply_hint, your entire answer MUST be ONE short line, e.g. «16 серверов · все healthy.»
+  FORBIDDEN: bullet lists of hosts, inventing roles (API gateway, bastion, CI runner, staging…), grouping by env, restating every name.
+  The interactive card already shows names and status — text is only a one-line summary.
+  Example — User: «Список серверов» → call list_servers → You: «16 серверов · все healthy.»
+  Bad: «• api-prod-01 — API шлюз • bastion-01 — SSH прокси …»
+- Do not repeat the same headline twice. One verdict line is enough.
+- Format answers in Markdown when needed. Prefer tools over inventing GFM tables for servers/agents/alerts/forecasts — the UI builds those cards from tool results.
 - Respond in the user's language (Russian if they write Russian).
-- After tools return, synthesize a clear answer. Do not dump raw JSON unless asked.
+
+# Studio (pipelines & skills)
+- Create/configure pipelines: studio.pipeline_draft.create → revise → validate → apply → studio.pipeline.run.
+  Pass a clear user_message goal (what the pipeline should do). After create, give draft id + Studio link; do not dump full graph JSON in prose.
+- Change an existing pipeline: studio.pipeline.get, then either revise a draft from source or create a new draft with intent=update and apply onto it.
+- Skills: studio.skills.list / get for catalog; studio.skills.create (name+description≥20 chars, optional content body); studio.skills.update (slug + metadata and/or content). Only owner/admin can edit.
+- Always confirm mutations (draft create/revise/apply, run, skill create/update).
+
+# Memory / dream
+- If the chat solved a real incident/problem, call operator.memory.promote_chat (or save_lesson) with a crisp title + lesson (root cause + fix) and server_ids (or use pinned servers). Set run_dream=true so nearline dream consolidates patterns.
+- Do not promote chit-chat. Only promote when the operator agrees it was useful/important (confirm gate).
+
+# Domain playbook
+- «Подключись к X / диагностика @X / df на X»: call operator.resolve_server(q=X) (or list_servers with q=X). Then SSH/metrics tools with the returned server_id.
+  NEVER call unfiltered list_servers just to find a name. NEVER claim a host is missing after a truncated dump — use resolve_server / name_index.
+  Do NOT set show_in_chat for connect/diagnose flows (no inventory card in chat).
+- «Покажи список серверов» / list inventory: call operator.list_servers once (platform attaches the card). ONE line count/status only — no host bullets.
+- NEVER call list_servers without q when the user named a host (grafana/lunix/…). Use operator.resolve_server(q=…).
+- «Статус флота / check servers / metrics + forecast»: call fleet_status + server_forecasts (+ list_alerts if needed). Answer pattern:
+  1) one-line fleet verdict (e.g. «16/16 unreachable · monitoring stale» or «14 ok · 2 warning»);
+  2) top risks only (disk/cert/alert) with host names;
+  3) one concrete next step.
+  Do NOT narrate every server. Do NOT dump list_servers without show_in_chat for fleet status — fleet_status is enough.
+- «Прогнозы/forecasts»: always call operator.server_forecasts (with server_id if a host is named). If empty, also call operator.fleet_status. Reply short; UI cards show the list.
+- «Метрики / проверь метрики X»: resolve_server(q=X) then operator.server_metrics (and optionally metric_series for charts).
+  The UI shows a metrics card — answer in 1–2 short lines (risk + next step). Do NOT open SSH / run_command just for metrics.
+  Do NOT dump JSON or restate every mount in prose. If status is unreachable but cpu/mem/disk_mounts are present, those are last samples — say probe may be down, still report the numbers.
+- disk_percent is ROOT mount (/) only. Mount forecasts like /mnt/d use disk_mounts — never treat root 1% as contradicting /mnt/d 89%.
+- «Сколько контейнеров / docker ps»: that needs SSH (run_command). Metrics alone cannot answer container count.
+- «Разбери алерт #N» / investigate alert: call operator.list_alerts with alert_id=N (and server_id if known). Do NOT dump fleet-wide list_alerts + server_forecasts + list_servers. Use focus.interpretation from the tool.
+- Inventory may have many names on the same host:port (mirrored metrics). Identical forecasts across names = one physical disk, not a fleet outage.
+- If every host is unreachable but forecasts/alerts still mention a host: say monitoring probe is down / stale, and treat forecast cards as last-known risk — not as proof the SSH path is healthy.
+- Unreachable ≠ «nobody is on the page». Background health is `run_monitor` / fleet refresh writing ServerHealthCheck. Live WS (~2s) only runs while a browser is subscribed. If tools return note/unique_endpoints about 127.0.0.1 aliases, explain that N inventory names may be one physical endpoint (demo seed).
 - Creating agents (agent_create): invent the agent YOURSELF from the user request — no canned templates.
   In ONE tool call pass: mode=full, name (human Russian title), goal (full task), system_prompt (detailed
   how-to: steps, tools, when to ask_user, report), ai_prompt (short), server_ids if known (else backend
   auto-picks). Git/Docker example: goal = deploy any app from a Git URL into Docker; runtime input = repo URL
   (do NOT ask for URL at create time). Do NOT list inventory first. After create: one short line (id · servers).
-- Never invent failures: if tool fails, report the error; if it succeeds, do not ask the same question again.
 """
+
+
+def build_operator_system_prompt(session: ChatSession | None = None) -> str:
+    """Base prompt + short dynamic context (now / pinned servers).
+
+    Kept compact on purpose — local models stall on multi-KB system prompts.
+    """
+    from django.utils import timezone
+
+    parts = [OPERATOR_SYSTEM_PROMPT.rstrip()]
+    context_lines = [f"Now: {timezone.now().strftime('%Y-%m-%d %H:%M %Z')}"]
+    if session is not None:
+        pinned = session.pinned_context if isinstance(session.pinned_context, dict) else {}
+        servers = pinned.get("servers") or pinned.get("pinned_servers") or []
+        names = []
+        for item in servers if isinstance(servers, list) else []:
+            if isinstance(item, dict) and item.get("name"):
+                label = str(item["name"])
+                if item.get("id") is not None:
+                    label += f" (id {item['id']})"
+                names.append(label)
+        if names:
+            context_lines.append(
+                "Pinned servers (default targets when the user does not name a host): "
+                + ", ".join(names[:8])
+            )
+    parts.append("# Context\n" + "\n".join(f"- {line}" for line in context_lines))
+    return "\n\n".join(parts) + "\n"
 
 
 @dataclass
@@ -373,6 +446,7 @@ async def run_operator_loop(
     if not messages:
         messages = _history_messages(session, exclude_ids={assistant_message.pk if assistant_message else 0})
 
+    system_prompt = build_operator_system_prompt(session)
     await _emit(on_event, {"type": "turn_started", "turn_id": turn.pk, "chat_id": session.pk})
 
     while True:
@@ -416,7 +490,7 @@ async def run_operator_loop(
                 messages=messages,
                 tools=tools,
                 purpose="orchestrator",
-                system_prompt=OPERATOR_SYSTEM_PROMPT,
+                system_prompt=system_prompt,
             ):
                 etype = event.get("type")
                 if etype == "text_delta":
@@ -434,15 +508,15 @@ async def run_operator_loop(
                             {"type": "thinking_delta", "text": tchunk, "iteration": iteration},
                         )
                 elif etype == "thinking_status":
-                    await _emit(
-                        on_event,
-                        {
-                            "type": "thinking",
-                            "iteration": iteration,
-                            "message": str(event.get("message") or "")[:400],
-                            "phase": str(event.get("phase") or "thinking"),
-                        },
-                    )
+                    status_payload: dict[str, Any] = {
+                        "type": "thinking",
+                        "iteration": iteration,
+                        "message": str(event.get("message") or "")[:400],
+                        "phase": str(event.get("phase") or "thinking"),
+                    }
+                    if "reasoning_active" in event:
+                        status_payload["reasoning_active"] = bool(event.get("reasoning_active"))
+                    await _emit(on_event, status_payload)
                 elif etype == "tool_call":
                     tool_calls.append(event)
                     await _emit(
@@ -531,9 +605,66 @@ async def run_operator_loop(
             tool_id = str(call.get("id") or "")
             arguments = call.get("arguments") if isinstance(call.get("arguments"), dict) else {}
             action_type = resolve_action_type(tool_name, tools) or tool_name
+            # Coerce loose model arguments onto the canonical schema (aliases, server
+            # name→id) before policy rewrites and execution.
+            arguments = await sync_to_async(normalize_tool_arguments)(user, action_type, arguments)
+            # Inventory policy:
+            # - list request → list_servers + UI card
+            # - metrics/connect on a named host → rewrite list_servers → resolve_server
+            #   (do NOT stick a Cyrillic filter on list_servers — that looped the model)
+            if action_type in {"operator.list_servers", "list_servers"}:
+                from servers.operator_tools import (
+                    prepare_list_servers_arguments,
+                    prefer_resolve_server_for_message,
+                )
+
+                resolve_args = prefer_resolve_server_for_message(arguments, user_message=user_message)
+                if resolve_args is not None:
+                    action_type = "operator.resolve_server"
+                    arguments = resolve_args
+                    tool_name = "operator_resolve_server"
+                else:
+                    arguments = prepare_list_servers_arguments(arguments, user_message=user_message)
             # Inject pinned / @-context servers into agent.create when model forgets server_ids
             if action_type in {"agent.create", "agent_create"}:
                 arguments = _enrich_agent_create_arguments(session, user, arguments, user_message)
+            # Memory promotion always needs the current chat id
+            if action_type in {
+                "operator.memory.promote_chat",
+                "operator.memory.save_lesson",
+            }:
+                arguments = dict(arguments or {})
+                arguments.setdefault("chat_id", int(session.pk))
+                if not arguments.get("server_ids") and not arguments.get("server_id"):
+                    pinned = session.pinned_context if isinstance(session.pinned_context, dict) else {}
+                    pinned_ids: list[int] = []
+                    for key in ("servers", "pinned_servers"):
+                        raw = pinned.get(key)
+                        if isinstance(raw, list):
+                            for item in raw:
+                                if isinstance(item, dict) and item.get("id") is not None:
+                                    with contextlib.suppress(TypeError, ValueError):
+                                        pinned_ids.append(int(item["id"]))
+                    if pinned_ids:
+                        arguments["server_ids"] = pinned_ids[:20]
+
+            # Notify chat UI that an SSH-ish tool is about to run (opens session dock)
+            if action_type in {
+                "operator.run_command",
+                "operator.run_fanout",
+                "server.diagnostics.overview",
+            } or "run_command" in action_type:
+                await _emit(
+                    on_event,
+                    {
+                        "type": "ssh_session",
+                        "phase": "start",
+                        "action_type": action_type,
+                        "server_id": arguments.get("server_id"),
+                        "command": arguments.get("command") or arguments.get("cmd") or "",
+                        "name": tool_name,
+                    },
+                )
 
             if is_read_tool(action_type):
                 result = await sync_to_async(execute_tool)(
@@ -578,17 +709,26 @@ async def run_operator_loop(
                 tool_result_blocks.append(
                     {"type": "tool_result", "tool_use_id": tool_id, "content": content}
                 )
-                await _emit(
-                    on_event,
-                    {
-                        "type": "tool_result",
-                        "id": tool_id,
-                        "name": tool_name,
-                        "action_type": action_type,
-                        "ok": bool(result.get("ok")),
-                        "preview": content[:800],
-                    },
-                )
+                # Side-console payload for chat UI (SSH dock)
+                result_payload = result.get("result") if isinstance(result.get("result"), dict) else result
+                if not isinstance(result_payload, dict):
+                    result_payload = {}
+                ssh_event: dict[str, Any] = {
+                    "type": "tool_result",
+                    "id": tool_id,
+                    "name": tool_name,
+                    "action_type": action_type,
+                    "ok": bool(result.get("ok") if "ok" in result else result_payload.get("ok")),
+                    "preview": content[:800],
+                }
+                for key in ("server_id", "server_name", "command", "cmd", "output", "exit_code", "host"):
+                    if result_payload.get(key) is not None:
+                        ssh_event[key] = result_payload.get(key)
+                if arguments.get("server_id") is not None and "server_id" not in ssh_event:
+                    ssh_event["server_id"] = arguments.get("server_id")
+                if arguments.get("command") or arguments.get("cmd"):
+                    ssh_event.setdefault("command", arguments.get("command") or arguments.get("cmd"))
+                await _emit(on_event, ssh_event)
                 continue
 
             # Plan proposal: single confirm for multi-step plan
@@ -680,6 +820,69 @@ async def run_operator_loop(
                 tool_call_id=tool_id,
             )
             actions.append(action)
+
+            # P1.7: inside an APPROVED plan, auto-run non-destructive matching steps
+            # (approving the plan was the consent). Destructive steps still park for
+            # typed confirm below.
+            from core_ui.services.assistant_chat import execute_action, serialize_action
+            from core_ui.services.operator_plan import apply_plan_progress, get_plan_from_message
+            from core_ui.services.operator_security import action_requires_typed_confirm
+
+            plan_for_auto = (
+                await sync_to_async(get_plan_from_message)(assistant_message)
+                if assistant_message
+                else None
+            )
+            if plan_for_auto and plan_for_auto.get("status") in {"approved", "running"}:
+                needs_typed = await sync_to_async(action_requires_typed_confirm)(action)
+                if not needs_typed:
+                    action = await sync_to_async(execute_action)(
+                        action, confirmed=True, request=request
+                    )
+                    ok = action.status == AssistantAction.STATUS_COMPLETED
+                    await _emit(on_event, {"type": "action_update", "action": serialize_action(action)})
+                    updated_plan = await sync_to_async(apply_plan_progress)(
+                        message=assistant_message,
+                        turn=None,
+                        action_type=action_type,
+                        ok=ok,
+                        title=action.title or "",
+                    )
+                    if updated_plan:
+                        await _emit(
+                            on_event,
+                            {
+                                "type": "plan_update",
+                                "turn_id": turn.pk,
+                                "plan": updated_plan,
+                                "status": updated_plan.get("status"),
+                            },
+                        )
+                    if action.undo_payload:
+                        await _emit(
+                            on_event,
+                            {
+                                "type": "undo_available",
+                                "action_id": action.pk,
+                                "undo_payload": action.undo_payload,
+                            },
+                        )
+                    result_payload = {
+                        "ok": ok,
+                        "status": action.status,
+                        "result": action.result_payload,
+                        "error": action.error,
+                    }
+                    tool_result_blocks.append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tool_id,
+                            "content": truncate_tool_result(
+                                result_payload, max_chars=TOOL_RESULT_PREVIEW_CHARS
+                            ),
+                        }
+                    )
+                    continue
             # Mark matching plan step as running
             try:
                 from core_ui.services.operator_plan import get_plan_from_message, save_plan_to_message
@@ -763,6 +966,13 @@ async def run_operator_loop(
             continue
 
         # No tool results and not parked — finish
+        if assistant_message:
+            try:
+                from core_ui.services.operator_artifacts import compress_inventory_assistant_content
+
+                await sync_to_async(compress_inventory_assistant_content)(assistant_message)
+            except Exception:  # noqa: BLE001
+                pass
         await _save_turn(turn, status=ChatTurnState.STATUS_DONE, llm_messages=messages)
         await _emit(on_event, {"type": "turn_done", "status": "done", "turn_id": turn.pk})
         break
@@ -770,6 +980,14 @@ async def run_operator_loop(
     turn = await _refresh_turn(turn.pk)
     if assistant_message:
         assistant_message = await sync_to_async(ChatMessage.objects.get)(pk=assistant_message.pk)
+        # Final safety net: strip fleet role-dumps even if the model ignored the prompt
+        try:
+            from core_ui.services.operator_artifacts import compress_inventory_assistant_content
+
+            await sync_to_async(compress_inventory_assistant_content)(assistant_message)
+            assistant_message = await sync_to_async(ChatMessage.objects.get)(pk=assistant_message.pk)
+        except Exception:  # noqa: BLE001
+            pass
     return OperatorTurnResult(
         user_message=user_message,
         assistant_message=assistant_message,

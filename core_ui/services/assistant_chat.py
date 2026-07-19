@@ -18,7 +18,7 @@ from app.assistant_actions import (
 from app.egress_redaction import payload_preview, redact_egress_payload
 from core_ui.access import feature_allowed_for_user
 from core_ui.activity import log_user_activity
-from core_ui.models import AssistantAction, ChatMessage, ChatSession, UserActivityLog
+from core_ui.models import AssistantAction, ChatMessage, ChatSession, ChatTurnState, UserActivityLog
 from core_ui.services.assistant_chat_planning import (
     _call_planner,
     _contextualise_action_proposals,
@@ -87,6 +87,39 @@ def serialize_chat_session(session: ChatSession, *, include_messages: bool = Fal
     }
     if include_messages:
         payload["messages"] = [serialize_message(message) for message in session.messages.order_by("created_at", "id")]
+        # Open / parked turn — client uses this to keep working after navigation away
+        active = (
+            ChatTurnState.objects.filter(
+                session_id=session.pk,
+                status__in={
+                    ChatTurnState.STATUS_RUNNING,
+                    ChatTurnState.STATUS_RESUMING,
+                    ChatTurnState.STATUS_AWAITING_ASYNC,
+                    ChatTurnState.STATUS_AWAITING_CONFIRM,
+                },
+            )
+            .select_related("assistant_message", "user_message", "pending_action")
+            .order_by("-id")
+            .first()
+        )
+        if active:
+            assistant = active.assistant_message
+            payload["active_turn"] = {
+                "turn_id": active.pk,
+                "status": active.status,
+                "iteration": active.iteration,
+                "busy": active.status
+                in {
+                    ChatTurnState.STATUS_RUNNING,
+                    ChatTurnState.STATUS_RESUMING,
+                    ChatTurnState.STATUS_AWAITING_ASYNC,
+                },
+                "assistant_message_id": assistant.pk if assistant else None,
+                "assistant_text": (assistant.content or "") if assistant else "",
+                "pending_action_id": active.pending_action_id,
+            }
+        else:
+            payload["active_turn"] = None
     return payload
 
 

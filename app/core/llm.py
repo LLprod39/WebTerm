@@ -22,8 +22,10 @@ from app.core.llm_openai_compatible import (
     stream_openai_compatible_response,
 )
 from app.core.llm_tools import (
+    ollama_model_supports_tools,
     stream_anthropic_tools,
     stream_json_tools_fallback,
+    stream_ollama_tools,
     stream_openai_tools,
 )
 from app.core.llm_provider_keys import apply_managed_llm_keys, load_managed_llm_keys
@@ -445,10 +447,8 @@ class LLMProvider:
                 set_configured_base_url=lambda base_url: setattr(model_manager.config, "ollama_base_url", base_url),
                 is_connect_error=_is_ollama_connect_error,
             ):
-                # Drop model "thinking" channel for tool JSON — it only slows UX / floods WS.
-                # Final JSON content still arrives in message.content.
-                if isinstance(chunk, str) and (chunk.startswith("«THINK»") or chunk.startswith("\x00THINK\x00")):
-                    continue
+                # Keep «THINK» markers in the stream. Consumers (operator JSON tools path)
+                # convert them to thinking_delta for the UI; plain chat callers may ignore.
                 yield chunk
             return
 
@@ -572,7 +572,36 @@ class LLMProvider:
                 yield event
             return
 
-        # Gemini / Ollama / others: JSON tool-call fallback without native streaming tools
+        # Ollama: prefer native tool-calling when the model exposes the "tools"
+        # capability; only fall back to the brittle JSON-in-prompt path otherwise.
+        if model == "ollama" and model_manager.config.ollama_enabled:
+            target_model = specific_model or model_manager.get_chat_model("ollama")
+            request_targets = self._build_ollama_request_targets(target_model) if target_model else []
+            if request_targets:
+                first = request_targets[0]
+                supports_tools = await ollama_model_supports_tools(
+                    first["base_url"], first["model"], first["headers"]
+                )
+                if supports_tools:
+                    async for event in stream_ollama_tools(
+                        request_targets=request_targets,
+                        messages=messages,
+                        tools=tools,
+                        system_prompt=system_prompt,
+                        think_value=self._get_ollama_think_value(),
+                        timeout_seconds=float(_provider_timeout_seconds("ollama")),
+                        purpose=purpose,
+                        usage_logger=_log_llm_usage,
+                        prompt_for_usage=prompt_for_usage,
+                        set_configured_base_url=lambda base_url: setattr(
+                            model_manager.config, "ollama_base_url", base_url
+                        ),
+                        is_connect_error=_is_ollama_connect_error,
+                    ):
+                        yield event
+                    return
+
+        # Gemini / Ollama-without-tools / others: JSON tool-call fallback
         async def _text_stream(*, prompt: str, system_prompt: str | None, purpose: str, json_mode: bool):
             async for chunk in self.stream_chat(
                 prompt=prompt,

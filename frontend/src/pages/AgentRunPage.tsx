@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
@@ -25,6 +25,7 @@ import { StatusBadge } from "@/components/system/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useI18n } from "@/lib/i18n";
+import { pushRecentRun } from "@/lib/recent-entities";
 import { cn } from "@/lib/utils";
 
 import { AgentStepsTab } from "./agent-run/AgentRunStepsTab";
@@ -84,6 +85,12 @@ export default function AgentRunPage() {
   const run = data?.run;
   const isActive = Boolean(run && ["running", "pending", "paused", "waiting"].includes(run.status));
   const isPlanReview = run?.status === "plan_review";
+
+  useEffect(() => {
+    if (run?.id && run.agent_name) {
+      pushRecentRun({ id: run.id, agentName: run.agent_name });
+    }
+  }, [run?.id, run?.agent_name]);
 
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: ["agent-run-report", rid] });

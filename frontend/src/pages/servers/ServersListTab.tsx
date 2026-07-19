@@ -9,6 +9,8 @@ import {
   SlidersHorizontal,
   Terminal,
   Trash2,
+  Activity,
+  Import,
 } from "lucide-react";
 import { FleetHealthIndicator, StatusIndicator } from "@/components/StatusIndicator";
 import { ServerOsBadge } from "@/components/servers/ServerOsBadge";
@@ -23,8 +25,9 @@ import {
 import { EmptyState } from "@/components/ui/page-shell";
 import type { FrontendServer, MonitoringStatusItem } from "@/lib/api";
 import { localize } from "@/lib/i18n";
-import { cn } from "@/lib/utils";
+import { cn, relativeTime } from "@/lib/utils";
 import { resolveServerOs, serverOsLabelKey } from "@/lib/server-os";
+import { pushRecentServer } from "@/lib/recent-entities";
 import { displayServerGroupName, formatServerCount } from "./formatters";
 
 type MetricLevel = "ok" | "warn" | "crit";
@@ -177,7 +180,8 @@ export function ServersListTab({
         const groupLabel = displayServerGroupName(group, lang);
         const onlineInGroup = inGroup.filter((server) => {
           const health = fleetHealthByServerId.get(server.id);
-          return health ? health.status === "healthy" : server.status === "online";
+          // Bootstrap `server.status` is terminal-session based — do not treat "offline" as health.
+          return health ? health.status === "healthy" || health.status === "warning" : false;
         }).length;
 
         return (
@@ -230,15 +234,25 @@ export function ServersListTab({
                       const fleetHealth = fleetHealthByServerId.get(server.id);
                       const osKind = resolveServerOs(server);
                       const address = `${server.host}:${server.port}`;
+                      // While monitoring snapshot is not ready, show neutral "unknown"
+                      // (bootstrap online/offline is about open terminals, not host health).
                       const statusDot = fleetHealth ? (
                         <FleetHealthIndicator
-                          status={fleetHealth.status}
-                          stale={fleetHealth.is_stale}
+                          status={
+                            fleetHealth.is_stale && fleetHealth.status === "unreachable"
+                              ? "unknown"
+                              : fleetHealth.status
+                          }
+                          stale={fleetHealth.is_stale && fleetHealth.status !== "unreachable"}
                           showLabel={false}
                         />
                       ) : (
-                        <StatusIndicator status={server.status} showLabel={false} />
+                        <StatusIndicator status="unknown" showLabel={false} />
                       );
+
+                      const lastConnected = server.last_connected
+                        ? relativeTime(server.last_connected)
+                        : null;
 
                       return (
                         <div
@@ -247,9 +261,15 @@ export function ServersListTab({
                         >
                           <div className="flex items-center gap-3 lg:grid lg:grid-cols-[minmax(0,1.35fr)_minmax(9rem,0.85fr)_minmax(14rem,1.15fr)_auto] lg:items-center lg:gap-3">
                             <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                              <span className="flex shrink-0 items-center" aria-hidden>
+                              <Link
+                                to={`/monitoring?server=${server.id}`}
+                                className="flex shrink-0 items-center rounded-full p-0.5 transition-colors hover:bg-secondary"
+                                title={localize(lang, "Insights сервера", "Server insights")}
+                                aria-label={localize(lang, "Insights сервера", "Server insights")}
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 {statusDot}
-                              </span>
+                              </Link>
                               <ServerOsBadge kind={osKind} size="sm" />
                               <div className="min-w-0">
                                 <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -264,6 +284,11 @@ export function ServersListTab({
                                   {address}
                                   <span className="ml-2 font-sans text-muted-foreground/70">{t(serverOsLabelKey(osKind))}</span>
                                 </p>
+                                {lastConnected ? (
+                                  <p className="mt-0.5 text-[11px] text-muted-foreground/80">
+                                    {localize(lang, "Подключение", "Last connect")}: {lastConnected}
+                                  </p>
+                                ) : null}
                                 {fleetHealth ? (
                                   <div className="mt-2 sm:hidden">
                                     <FleetMetricsLine health={fleetHealth} lang={lang} />
@@ -293,7 +318,16 @@ export function ServersListTab({
                                 size="sm"
                                 className="h-8 gap-1.5 shadow-elev-1"
                               >
-                                <Link to={`/servers/${server.id}/terminal`}>
+                                <Link
+                                  to={`/servers/${server.id}/terminal`}
+                                  onClick={() =>
+                                    pushRecentServer({
+                                      id: server.id,
+                                      name: server.name,
+                                      host: server.host,
+                                    })
+                                  }
+                                >
                                   <Terminal className="h-3.5 w-3.5" /> SSH
                                 </Link>
                               </Button>
@@ -342,23 +376,73 @@ export function ServersListTab({
       })}
 
       {!filteredCount ? (
-        <EmptyState
-          icon={<Server className="h-5 w-5" />}
-          title={totalServers ? t("srv.empty_filtered_title") : t("srv.empty_title")}
-          description={totalServers ? t("srv.empty_filtered_text") : t("srv.empty_text")}
-          actions={
-            <>
-              {totalServers ? (
+        totalServers ? (
+          <EmptyState
+            icon={<Server className="h-5 w-5" />}
+            title={t("srv.empty_filtered_title")}
+            description={t("srv.empty_filtered_text")}
+            actions={
+              <>
                 <Button size="sm" variant="outline" onClick={onClearSearch}>
                   {t("srv.clear_search")}
                 </Button>
-              ) : null}
-              <Button size="sm" className="gap-1.5" onClick={onOpenCreate}>
-                <Plus className="h-4 w-4" /> {t("srv.add")}
-              </Button>
-            </>
-          }
-        />
+                <Button size="sm" className="gap-1.5" onClick={onOpenCreate}>
+                  <Plus className="h-4 w-4" /> {t("srv.add")}
+                </Button>
+              </>
+            }
+          />
+        ) : (
+          <div className="workspace-empty space-y-4 rounded-sm border border-dashed border-border bg-card/50 px-6 py-10">
+            <div className="text-center">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-sm border border-border bg-surface-2 text-muted-foreground">
+                <Server className="h-5 w-5" />
+              </div>
+              <h3 className="text-sm font-semibold text-foreground">{t("srv.empty_title")}</h3>
+              <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-muted-foreground">{t("srv.empty_text")}</p>
+            </div>
+            <div className="mx-auto grid max-w-2xl gap-2 sm:grid-cols-3">
+              <button
+                type="button"
+                onClick={onOpenCreate}
+                className="rounded-lg border border-border bg-card px-3 py-3 text-left transition-colors hover:border-border-strong hover:bg-surface-1"
+              >
+                <Plus className="mb-2 h-4 w-4 text-primary" />
+                <div className="text-sm font-medium text-foreground">
+                  {localize(lang, "Добавить SSH-сервер", "Add SSH server")}
+                </div>
+                <div className="mt-0.5 text-[11px] text-muted-foreground">
+                  {localize(lang, "Хост, порт, ключ или пароль", "Host, port, key or password")}
+                </div>
+              </button>
+              <Link
+                to="/servers"
+                state={{ mainTab: "groups" }}
+                className="rounded-lg border border-border bg-card px-3 py-3 text-left transition-colors hover:border-border-strong hover:bg-surface-1"
+              >
+                <Import className="mb-2 h-4 w-4 text-info" />
+                <div className="text-sm font-medium text-foreground">
+                  {localize(lang, "Импорт из группы", "Import from group")}
+                </div>
+                <div className="mt-0.5 text-[11px] text-muted-foreground">
+                  {localize(lang, "Общий доступ и роли", "Shared access and roles")}
+                </div>
+              </Link>
+              <Link
+                to="/monitoring"
+                className="rounded-lg border border-border bg-card px-3 py-3 text-left transition-colors hover:border-border-strong hover:bg-surface-1"
+              >
+                <Activity className="mb-2 h-4 w-4 text-success" />
+                <div className="text-sm font-medium text-foreground">
+                  {localize(lang, "Открыть Insights", "Open Insights")}
+                </div>
+                <div className="mt-0.5 text-[11px] text-muted-foreground">
+                  {localize(lang, "Когда флот уже есть", "When the fleet already exists")}
+                </div>
+              </Link>
+            </div>
+          </div>
+        )
       ) : null}
     </div>
   );

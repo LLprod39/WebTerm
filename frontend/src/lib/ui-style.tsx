@@ -18,7 +18,9 @@ export type UiStyleId =
   | "pulse"
   | "signal"
   | "folio"
-  | "folio-dark";
+  | "folio-dark"
+  | "flow"
+  | "flow-dark";
 
 /** Map of userKey → style */
 export const UI_STYLE_BY_USER_KEY = "webterm.ui-style.by-user";
@@ -32,11 +34,16 @@ export const DEFAULT_UI_STYLE: UiStyleId = "folio-dark";
 export const GUEST_USER_KEY = "guest";
 
 /** Skins that force light color-scheme (native inputs, scrollbars, form controls). */
-export const LIGHT_UI_STYLES = new Set<UiStyleId>(["folio"]);
+export const LIGHT_UI_STYLES = new Set<UiStyleId>(["folio", "flow"]);
 
 /** Folio light + dark share the same editorial paper design language. */
 export function isFolioStyle(value: unknown): value is "folio" | "folio-dark" {
   return value === "folio" || value === "folio-dark";
+}
+
+/** Flow — AI-native SaaS skin family with its own shell (topbar, floating sheet). */
+export function isFlowStyle(value: unknown): value is "flow" | "flow-dark" {
+  return value === "flow" || value === "flow-dark";
 }
 
 const UI_STYLE_ID_SET = new Set<UiStyleId>([
@@ -46,6 +53,8 @@ const UI_STYLE_ID_SET = new Set<UiStyleId>([
   "signal",
   "folio",
   "folio-dark",
+  "flow",
+  "flow-dark",
 ]);
 
 export const UI_STYLE_OPTIONS: Array<{
@@ -103,6 +112,22 @@ export const UI_STYLE_OPTIONS: Array<{
     blurbRu: "Тёмный Folio desk, Inter + terracotta.",
     blurbEn: "Dark Folio desk, Inter + terracotta.",
     swatches: ["#161310", "#e07a3d", "#f3ebe2", "#2dd4bf"],
+  },
+  {
+    id: "flow",
+    labelRu: "Флоу · светлая",
+    labelEn: "Flow · Light",
+    blurbRu: "AI-native SaaS: белые карточки, чёрные кнопки, зелёные статусы.",
+    blurbEn: "AI-native SaaS: white cards, black CTAs, green statuses.",
+    swatches: ["#f5f4f1", "#17181c", "#22a55e", "#3b7cf6"],
+  },
+  {
+    id: "flow-dark",
+    labelRu: "Флоу · тёмная",
+    labelEn: "Flow · Dark",
+    blurbRu: "Ночной Flow: графитовые карточки, белые кнопки, тот же язык.",
+    blurbEn: "Flow at night: graphite cards, white CTAs, same language.",
+    swatches: ["#101013", "#f7f7f8", "#3ec777", "#5b8ef7"],
   },
 ];
 

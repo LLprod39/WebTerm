@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageShell, QueryStateBlock, SoftHeader, StatStrip, StatStripItem } from "@/components/ui/page-shell";
+import { SkeletonList, SkeletonMetrics } from "@/components/ui/list-state";
 import { ServerAdvancedDialog } from "./servers/ServerAdvancedDialog";
 import { ServerFormDialog } from "./servers/ServerFormDialog";
 import { ServerGroupDialog } from "./servers/ServerGroupDialog";
@@ -170,6 +171,7 @@ export default function Servers() {
       void refreshMonitoringFleet({ metrics: true }).then(() => {
         if (!cancelled) {
           void queryClient.invalidateQueries({ queryKey: ["monitoring", "status"] });
+          void queryClient.invalidateQueries({ queryKey: ["monitoring-dashboard"] });
         }
       });
     };
@@ -286,10 +288,18 @@ export default function Servers() {
   }, [advancedServer?.group_id, manageableGroups, rulesController]);
 
   if (isLoading || error || !data) {
+    if (isLoading) {
+      return (
+        <PageShell className="space-y-4">
+          <SkeletonMetrics count={4} />
+          <SkeletonList rows={6} />
+        </PageShell>
+      );
+    }
     return (
       <QueryStateBlock
-        loading={isLoading}
-        error={error || (!isLoading && !data ? new Error(t("srv.error")) : undefined)}
+        loading={false}
+        error={error || (!data ? new Error(t("srv.error")) : undefined)}
         errorText={t("srv.error")}
         className="p-6"
       >

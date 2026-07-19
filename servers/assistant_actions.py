@@ -33,15 +33,108 @@ from servers.views.server_helpers import (
 )
 
 
-def _int_payload(ctx: AssistantActionContext, key: str) -> int:
-    value = ctx.input_payload.get(key)
+def _coerce_positive_int(value) -> int | None:
+    """Best-effort int from tool/LLM payloads (str, float, nested {id})."""
+    if value is None or value is False or value == "":
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if value > 0 else None
+    if isinstance(value, float):
+        if value.is_integer() and value > 0:
+            return int(value)
+        return None
+    if isinstance(value, dict):
+        for key in ("id", "run_id", "pk", "value"):
+            if key in value:
+                return _coerce_positive_int(value.get(key))
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    # "run #42" / "#42" / "42.0"
+    if text.startswith("#"):
+        text = text[1:].strip()
+    if text.lower().startswith("run"):
+        parts = text.replace("#", " ").split()
+        for part in reversed(parts):
+            coerced = _coerce_positive_int(part)
+            if coerced is not None:
+                return coerced
     try:
-        parsed = int(value)
-    except (TypeError, ValueError) as exc:
-        raise AssistantActionError(f"{key} must be an integer") from exc
-    if parsed <= 0:
-        raise AssistantActionError(f"{key} must be positive")
-    return parsed
+        if "." in text:
+            f = float(text)
+            if f.is_integer() and f > 0:
+                return int(f)
+        parsed = int(text)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _int_payload(ctx: AssistantActionContext, key: str, *, aliases: tuple[str, ...] = ()) -> int:
+    payload = ctx.input_payload if isinstance(ctx.input_payload, dict) else {}
+    keys = (key, *aliases)
+    for candidate_key in keys:
+        if candidate_key not in payload:
+            continue
+        parsed = _coerce_positive_int(payload.get(candidate_key))
+        if parsed is not None:
+            return parsed
+    # Also scan common nested bags some models invent
+    for bag_key in ("run", "agent_run", "params", "input"):
+        bag = payload.get(bag_key)
+        if isinstance(bag, dict):
+            for candidate_key in keys:
+                parsed = _coerce_positive_int(bag.get(candidate_key))
+                if parsed is not None:
+                    return parsed
+    raise AssistantActionError(
+        f"{key} must be an integer (got {payload.get(key)!r}). "
+        f"Pass a positive run id, e.g. run_id=42."
+    )
+
+
+def _resolve_agent_run_id(ctx: AssistantActionContext) -> int:
+    """run_id for agent tools — with fallbacks when the model only has agent_id."""
+    payload = ctx.input_payload if isinstance(ctx.input_payload, dict) else {}
+    try:
+        return _int_payload(ctx, "run_id", aliases=("agent_run_id", "runId", "id"))
+    except AssistantActionError:
+        pass
+
+    agent_id = _coerce_positive_int(payload.get("agent_id") or payload.get("agentId"))
+    if agent_id is not None:
+        # Prefer plan-review run (approve_plan), else any active run for that agent.
+        run = (
+            AgentRun.objects.filter(
+                agent_id=agent_id,
+                agent__user=ctx.user,
+                status=AgentRun.STATUS_PLAN_REVIEW,
+            )
+            .order_by("-id")
+            .only("id")
+            .first()
+        )
+        if run is None:
+            run = (
+                AgentRun.objects.filter(
+                    agent_id=agent_id,
+                    agent__user=ctx.user,
+                    status__in=ACTIVE_AGENT_RUN_STATUSES,
+                )
+                .order_by("-id")
+                .only("id")
+                .first()
+            )
+        if run is not None:
+            return int(run.id)
+
+    raise AssistantActionError(
+        "run_id must be an integer. If the agent is waiting for plan approval, "
+        "pass run_id from agent.run result (or agent_id of a plan_review run)."
+    )
 
 
 def _agent_for_user(user, agent_id: int) -> ServerAgent:
@@ -340,7 +433,7 @@ def stop_agent(ctx: AssistantActionContext) -> dict:
 
 
 def reply_to_agent(ctx: AssistantActionContext) -> dict:
-    run_id = _int_payload(ctx, "run_id")
+    run_id = _resolve_agent_run_id(ctx)
     answer = str(ctx.input_payload.get("answer") or "").strip()
     if not answer:
         raise AssistantActionError("answer is required")
@@ -351,7 +444,7 @@ def reply_to_agent(ctx: AssistantActionContext) -> dict:
 
 
 def approve_agent_plan(ctx: AssistantActionContext) -> dict:
-    run_id = _int_payload(ctx, "run_id")
+    run_id = _resolve_agent_run_id(ctx)
     result = approve_agent_plan_for_user(
         run_id=run_id,
         user=ctx.user,
@@ -364,7 +457,7 @@ def approve_agent_plan(ctx: AssistantActionContext) -> dict:
 
 
 def agent_report(ctx: AssistantActionContext) -> dict:
-    run = _run_for_user(ctx.user, _int_payload(ctx, "run_id"))
+    run = _run_for_user(ctx.user, _resolve_agent_run_id(ctx))
     return {**build_agent_run_report_response(run), "target_url": f"/agents/run/{run.pk}"}
 
 
@@ -454,13 +547,33 @@ def register_assistant_actions() -> None:
             risk="internal_write",
             requires_confirmation=True,
             input_schema={
-                "required": ["mode", "goal"],
+                "required": ["mode", "goal", "system_prompt"],
                 "properties": {
-                    "name": {"type": "string", "description": "Human title in Russian"},
+                    "name": {"type": "string", "description": "Human title in Russian, e.g. «Деплой из Git в Docker»"},
                     "mode": {"type": "string", "enum": ["mini", "full", "multi"]},
-                    "goal": {"type": "string"},
-                    "system_prompt": {"type": "string"},
-                    "ai_prompt": {"type": "string"},
+                    "goal": {
+                        "type": "string",
+                        "description": (
+                            "One sentence: what the agent accomplishes, on what target, and the success "
+                            "criterion. E.g. «Развернуть приложение из Git-репозитория в Docker на сервере "
+                            "и убедиться, что контейнер здоров»."
+                        ),
+                    },
+                    "system_prompt": {
+                        "type": "string",
+                        "description": (
+                            "The agent's operating manual — this is what it actually follows, so make it "
+                            "concrete (5+ sentences): numbered steps to reach the goal, which commands/tools "
+                            "to run and in what order, how to verify each step, when to ask_user (missing "
+                            "creds / ambiguous choice), what the final report must contain, and safety rules "
+                            "(no destructive commands without need, never print secrets). Runtime inputs like "
+                            "a repo URL are given at run time — do NOT hardcode or ask for them here."
+                        ),
+                    },
+                    "ai_prompt": {
+                        "type": "string",
+                        "description": "Short 1-2 sentence runtime directive restating the goal.",
+                    },
                     "description": {"type": "string", "description": "User task if goal not expanded yet"},
                     "server_ids": {
                         "type": "array",
@@ -498,17 +611,36 @@ def register_assistant_actions() -> None:
             required_feature="agents",
             risk="mutating",
             requires_confirmation=True,
-            input_schema={"required": ["run_id", "answer"]},
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "run_id": {"type": "integer"},
+                    "agent_id": {"type": "integer"},
+                    "answer": {"type": "string"},
+                },
+                "required": ["run_id", "answer"],
+            },
             handler=reply_to_agent,
         ),
         AssistantActionSpec(
             action_type="agent.approve_plan",
             label="Approve agent plan",
-            description="Approve a multi-agent plan review and start plan execution.",
+            description=(
+                "Approve a multi-agent plan review and start plan execution. "
+                "Pass run_id from agent.run (integer). agent_id is accepted as fallback "
+                "when the run is in plan_review."
+            ),
             required_feature="agents",
             risk="mutating",
             requires_confirmation=True,
-            input_schema={"required": ["run_id"]},
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "run_id": {"type": "integer", "description": "AgentRun id awaiting plan approval"},
+                    "agent_id": {"type": "integer", "description": "Fallback: resolve latest plan_review run"},
+                },
+                "required": ["run_id"],
+            },
             handler=approve_agent_plan,
         ),
         AssistantActionSpec(
@@ -517,7 +649,14 @@ def register_assistant_actions() -> None:
             description="Read the canonical report for an agent run.",
             required_feature="agents",
             risk="read",
-            input_schema={"required": ["run_id"]},
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "run_id": {"type": "integer"},
+                    "agent_id": {"type": "integer"},
+                },
+                "required": ["run_id"],
+            },
             handler=agent_report,
         ),
         AssistantActionSpec(

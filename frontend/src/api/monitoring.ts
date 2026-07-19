@@ -22,6 +22,9 @@ export interface ServerHealth {
   uptime_seconds: number | null;
   response_time_ms: number | null;
   checked_at: string | null;
+  /** True when the status row is older than the fleet stale window. */
+  is_stale?: boolean;
+  is_lite?: boolean;
 }
 
 export interface ServerAlertItem {

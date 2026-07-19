@@ -196,3 +196,74 @@ def test_specs_to_tools_normalises_names(operator_user):
     assert "operator_test_read" in names
     assert "operator_test_mutate" in names
     assert normalise_tool_name("agents.list") == "agents_list"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_operator_loop_auto_executes_approved_plan_step(operator_user):
+    """P1.7: a non-destructive step of an APPROVED plan runs without re-confirming."""
+    from core_ui.models import ChatMessage
+    from core_ui.services.operator_loop import run_operator_loop
+
+    session = ChatSession.objects.create(user=operator_user, title="plan")
+    user_msg = ChatMessage.objects.create(
+        session=session, role=ChatMessage.ROLE_USER, content="выполни план"
+    )
+    assistant_msg = ChatMessage.objects.create(
+        session=session,
+        role=ChatMessage.ROLE_ASSISTANT,
+        content="",
+        metadata={
+            "plan": {
+                "title": "Проверка",
+                "status": "approved",
+                "steps": [
+                    {"id": 1, "text": "run mutate", "tool": "operator_test_mutate", "status": "pending"}
+                ],
+            }
+        },
+    )
+    turn = ChatTurnState.objects.create(
+        session=session,
+        user_message=user_msg,
+        assistant_message=assistant_msg,
+        status=ChatTurnState.STATUS_RUNNING,
+        llm_messages=[{"role": "user", "content": "выполни план"}],
+    )
+    llm = ScriptedToolsLLM(
+        [
+            [
+                {
+                    "type": "tool_call",
+                    "id": "call_step",
+                    "name": "operator_test_mutate",
+                    "arguments": {"cmd": "df -h"},
+                },
+                {"type": "done", "usage": {}, "stop_reason": "tool_use"},
+            ],
+            [
+                {"type": "text_delta", "text": "Шаг выполнен."},
+                {"type": "done", "usage": {}, "stop_reason": "end_turn"},
+            ],
+        ]
+    )
+    events: list[dict] = []
+
+    async def on_event(ev):
+        events.append(ev)
+
+    tools = specs_to_tools(operator_user)
+    result = asyncio.run(
+        run_operator_loop(turn=turn, user=operator_user, tools=tools, on_event=on_event, provider=llm)
+    )
+
+    assert result.status == ChatTurnState.STATUS_DONE
+    action = AssistantAction.objects.filter(
+        session=session, action_type="operator.test_mutate"
+    ).first()
+    assert action is not None
+    # Auto-executed within the approved plan — NOT parked awaiting confirmation.
+    assert action.status == AssistantAction.STATUS_COMPLETED
+    assert any(e.get("type") == "action_update" for e in events)
+    assert any(e.get("type") == "plan_update" for e in events)
+    assert not any(e.get("type") == "confirm_required" for e in events)
+    assert "Шаг выполнен" in (result.assistant_message.content or "")

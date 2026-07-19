@@ -512,6 +512,169 @@
       radial-gradient(ellipse 60% 35% at 50% 110%, hsl(24 20% 20% / 0.2), transparent 55%);
     --shell-glow-size: auto;
   }
+
+  /*
+   * ── Flow — AI-native SaaS light (FlowAI reference).
+   * Off-white canvas, pure white cards, near-black primary buttons,
+   * green status accents, blue AI accent, Inter, generous radius.
+   */
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) {
+    /* warm off-white canvas — app surfaces float on it as white cards */
+    --background: 40 10% 96%;
+    --foreground: 222 15% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 15% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 15% 12%;
+
+    /* near-black CTA (Create Workflow / Ask AI) */
+    --primary: 222 15% 12%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 10% 94%;
+    --secondary-foreground: 222 12% 20%;
+
+    --muted: 220 10% 95%;
+    --muted-foreground: 220 6% 44%;
+
+    --accent: 222 15% 12%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 10% 90%;
+    --border-strong: 220 8% 82%;
+    --input: 220 10% 90%;
+    --ring: 222 15% 12%;
+
+    --radius: 0.875rem;
+
+    --primary-hover: 222 15% 20%;
+    --primary-subtle: 222 15% 12%;
+
+    --ai: 221 83% 56%;
+    --ai-foreground: 0 0% 100%;
+
+    --surface-0: 40 10% 96%;
+    --surface-1: 0 0% 100%;
+    --surface-2: 220 12% 97%;
+    --surface-3: 220 10% 94%;
+
+    /* barely-there elevation — borders do the separation work */
+    --shadow-1: 0 1px 2px hsl(220 30% 10% / 0.05);
+    --shadow-2: 0 4px 12px hsl(220 30% 10% / 0.06), 0 1px 3px hsl(220 30% 10% / 0.05);
+    --shadow-3: 0 16px 40px hsl(220 30% 10% / 0.12), 0 4px 10px hsl(220 30% 10% / 0.05);
+
+    --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+
+    --success: 145 62% 40%;
+    --warning: 36 92% 44%;
+    --info: 221 83% 56%;
+
+    --terminal-bg: 222 14% 10%;
+    --terminal-fg: 220 10% 88%;
+    --terminal-cursor: 145 62% 45%;
+
+    --sidebar-background: 0 0% 99%;
+    --sidebar-foreground: 222 10% 30%;
+    --sidebar-primary: 222 15% 12%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 12% 94%;
+    --sidebar-accent-foreground: 222 15% 12%;
+    --sidebar-border: 220 10% 90%;
+    --sidebar-ring: 222 15% 12%;
+
+    --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --font-display: "Manrope", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --dot-radius: 999px;
+    --focus-radius: calc(var(--radius) - 0.15rem);
+    --selection-bg: hsl(222 15% 12% / 0.12);
+    --selection-fg: hsl(222 15% 12%);
+    /* clean air — no colored blooms, just a hint of depth at the top */
+    --shell-glow:
+      radial-gradient(ellipse 80% 40% at 50% -10%, hsl(0 0% 100% / 0.6), transparent 60%);
+    --shell-glow-size: auto;
+  }
+
+  /*
+   * ── Flow dark — same AI-native SaaS language at night.
+   * Inherits every Flow token above (the :is() block covers both ids);
+   * this block only overrides what differs: dark surfaces, white CTA.
+   */
+  html[data-ui-style="flow-dark"] {
+    --background: 240 6% 7%;
+    --foreground: 220 14% 93%;
+
+    --card: 240 5% 10%;
+    --card-foreground: 220 14% 93%;
+
+    --popover: 240 5% 11%;
+    --popover-foreground: 220 14% 93%;
+
+    /* inverted CTA — white button, dark label (Linear-style night) */
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 6% 8%;
+
+    --secondary: 240 5% 15%;
+    --secondary-foreground: 220 10% 80%;
+
+    --muted: 240 5% 14%;
+    --muted-foreground: 220 6% 58%;
+
+    --accent: 0 0% 98%;
+    --accent-foreground: 240 6% 8%;
+
+    --destructive: 0 66% 56%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 240 5% 17%;
+    --border-strong: 240 5% 24%;
+    --input: 240 5% 17%;
+    --ring: 0 0% 88%;
+
+    --primary-hover: 0 0% 90%;
+    --primary-subtle: 0 0% 98%;
+
+    --ai: 221 83% 62%;
+    --ai-foreground: 0 0% 100%;
+
+    --surface-0: 240 6% 7%;
+    --surface-1: 240 5% 10%;
+    --surface-2: 240 5% 13%;
+    --surface-3: 240 5% 16%;
+
+    --shadow-1: 0 1px 0 hsl(0 0% 100% / 0.03) inset, 0 1px 2px hsl(240 20% 2% / 0.5);
+    --shadow-2: 0 8px 24px hsl(240 20% 2% / 0.5), 0 2px 6px hsl(240 20% 2% / 0.35);
+    --shadow-3: 0 24px 56px hsl(240 25% 2% / 0.6), 0 6px 14px hsl(240 20% 2% / 0.4);
+
+    --success: 145 55% 48%;
+    --warning: 36 90% 55%;
+    --info: 221 83% 62%;
+
+    --terminal-bg: 240 7% 5%;
+    --terminal-fg: 220 12% 86%;
+    --terminal-cursor: 145 55% 52%;
+
+    --sidebar-background: 240 6% 8%;
+    --sidebar-foreground: 220 10% 72%;
+    --sidebar-primary: 0 0% 98%;
+    --sidebar-primary-foreground: 240 6% 8%;
+    --sidebar-accent: 240 5% 15%;
+    --sidebar-accent-foreground: 220 14% 93%;
+    --sidebar-border: 240 5% 15%;
+    --sidebar-ring: 0 0% 88%;
+
+    --selection-bg: hsl(0 0% 98% / 0.16);
+    --selection-fg: hsl(220 14% 96%);
+    --shell-glow:
+      radial-gradient(ellipse 80% 45% at 50% -10%, hsl(221 60% 30% / 0.1), transparent 60%),
+      radial-gradient(ellipse 60% 35% at 90% 105%, hsl(145 40% 20% / 0.08), transparent 55%);
+    --shell-glow-size: auto;
+  }
 }
 
 @layer base {
@@ -524,7 +687,8 @@
     color-scheme: dark;
   }
 
-  html[data-ui-style="folio"] {
+  html[data-ui-style="folio"],
+  html[data-ui-style="flow"] {
     color-scheme: light;
   }
 
@@ -601,6 +765,20 @@
     letter-spacing: -0.02em;
     font-weight: 600;
     font-style: normal;
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) body {
+    font-feature-settings: "cv11", "ss01", "tnum";
+    letter-spacing: 0;
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) h1,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) h2,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) h3,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) h4,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .font-display {
+    letter-spacing: -0.02em;
+    font-weight: 600;
   }
 
 
@@ -752,6 +930,26 @@
   html[data-ui-style="folio"] .font-mono,
   html[data-ui-style="folio-dark"] .tabular-nums,
   html[data-ui-style="folio-dark"] .font-mono {
+    font-variant-numeric: tabular-nums;
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .type-display,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .type-h1,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .type-h2 {
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Section labels stay quiet gray, not colored (FlowAI look) */
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .type-label {
+    letter-spacing: 0.08em;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .tabular-nums,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .font-mono {
     font-variant-numeric: tabular-nums;
   }
 
@@ -1297,6 +1495,276 @@
     background: linear-gradient(180deg, hsl(24 14% 9%) 0%, hsl(24 16% 7%) 100%);
   }
 
+  /*
+   * Flow chrome — white cards on off-white canvas, hairline borders,
+   * barely-there shadows. Scoped so every other skin stays intact.
+   */
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .app-shell-bg {
+    background: var(--shell-glow), hsl(var(--background));
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .enterprise-panel,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .workspace-panel,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .corp-card {
+    border-radius: var(--radius);
+    border-color: hsl(var(--border));
+    background: hsl(var(--card));
+    box-shadow: var(--shadow-1);
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .workspace-empty {
+    border-radius: var(--radius);
+    border-style: dashed;
+    border-color: hsl(var(--border-strong));
+    background: hsl(var(--surface-2));
+    color: hsl(var(--muted-foreground));
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .enterprise-kicker {
+    letter-spacing: 0.08em;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .accent-gradient {
+    background: hsl(var(--primary));
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .icon-box {
+    border-radius: calc(var(--radius) - 0.35rem);
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .icon-box-primary {
+    border-color: hsl(var(--border));
+    background: hsl(var(--surface-2));
+    color: hsl(var(--foreground));
+    box-shadow: none;
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .status-dot {
+    box-shadow: 0 0 0 2px hsl(var(--card));
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .status-dot-online {
+    background: hsl(var(--success));
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .data-row {
+    border-bottom-color: hsl(var(--border) / 0.8);
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .data-row:hover {
+    background: hsl(var(--surface-2));
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .section-divider {
+    border-bottom-color: hsl(var(--border));
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) button,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) input,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) textarea,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) select {
+    border-radius: calc(var(--radius) - 0.25rem);
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) button[class*="bg-primary"],
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) a[class*="bg-primary"] {
+    font-weight: 600;
+    letter-spacing: 0;
+    box-shadow: var(--shadow-1);
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) button[class*="bg-primary"]:hover,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) a[class*="bg-primary"]:hover {
+    background: hsl(var(--primary-hover));
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [data-sidebar="sidebar"],
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) aside {
+    border-right: 1px solid hsl(var(--sidebar-border));
+    background: hsl(var(--sidebar-background));
+  }
+
+  /* Active nav item — soft gray pill with dark text, like the reference */
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [data-sidebar="menu-button"][data-active="true"] {
+    background: hsl(var(--sidebar-accent));
+    color: hsl(var(--sidebar-accent-foreground));
+    box-shadow: none;
+    border: none;
+    font-weight: 600;
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border-strong));
+    border-radius: 999px;
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) *:focus-visible {
+    outline: 2px solid hsl(var(--foreground) / 0.35);
+    outline-offset: 2px;
+    border-radius: var(--focus-radius);
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [role="dialog"],
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [data-radix-popper-content-wrapper] [role="menu"],
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [data-state][class*="bg-popover"],
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [class*="bg-popover"] {
+    border-color: hsl(var(--border)) !important;
+    box-shadow: var(--shadow-3) !important;
+  }
+
+  /* Floating content sheet — the app "card" on the off-white canvas */
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .flow-sheet {
+    margin: 0 0.875rem 0.875rem;
+    border: 1px solid hsl(var(--border));
+    border-radius: calc(var(--radius) + 0.25rem);
+    background: hsl(var(--card));
+    box-shadow: var(--shadow-2);
+  }
+
+  @media (max-width: 767px) {
+    html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .flow-sheet {
+      margin: 0;
+      border: none;
+      border-radius: 0;
+    }
+  }
+
+  /* Pages paint their own bg via bg-background — inside the sheet it must stay white */
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .flow-sheet .bg-background {
+    background-color: transparent;
+  }
+
+  /* Sidebar goes flat: no icon tiles, quiet rows, gray active pill.
+     !important — the tile chrome comes from utility classes that would
+     otherwise win the cascade over this components-layer override. */
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .nav-icon-tile {
+    border-color: transparent !important;
+    background: transparent !important;
+    height: 1.5rem;
+    width: 1.5rem;
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [data-sidebar="menu-button"] a,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [data-sidebar="menu-button"] {
+    border-radius: 0.5rem;
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [data-sidebar="sidebar"] a:hover {
+    background: hsl(var(--sidebar-accent) / 0.7);
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [data-sidebar="sidebar"] a[aria-current="page"],
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [data-sidebar="sidebar"] a.active {
+    border-color: transparent;
+    background: hsl(var(--sidebar-accent));
+    color: hsl(var(--sidebar-accent-foreground));
+    box-shadow: none;
+    font-weight: 600;
+  }
+
+  /* Lighter icon language across the app (lucide honors CSS stroke-width) */
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) svg.lucide {
+    stroke-width: 1.75;
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [data-sidebar="sidebar"] svg.lucide {
+    stroke-width: 1.6;
+  }
+
+  /* Inputs sit on white, hairline borders, calm focus */
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) input:not([type="checkbox"]):not([type="radio"]),
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) textarea,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) select {
+    background-color: hsl(var(--card));
+    border-color: hsl(var(--border));
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) input::placeholder,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) textarea::placeholder {
+    color: hsl(var(--muted-foreground) / 0.75);
+  }
+
+  /* Motion language: soft lift on interactive chrome, gentle press */
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) button,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) a {
+    transition:
+      background-color 150ms var(--ease-standard),
+      border-color 150ms var(--ease-standard),
+      color 150ms var(--ease-standard),
+      box-shadow 200ms var(--ease-standard),
+      transform 200ms var(--ease-standard);
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) button[class*="bg-primary"]:hover,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) a[class*="bg-primary"]:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-2);
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) button[class*="bg-primary"]:active,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) a[class*="bg-primary"]:active {
+    transform: translateY(0);
+    box-shadow: var(--shadow-1);
+  }
+
+  /* Cards breathe on hover */
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .corp-card,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .workspace-panel {
+    transition:
+      box-shadow 200ms var(--ease-standard),
+      transform 200ms var(--ease-standard),
+      border-color 150ms var(--ease-standard);
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .corp-card:hover,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .workspace-panel:hover {
+    border-color: hsl(var(--border-strong));
+    box-shadow: var(--shadow-2);
+  }
+
+  /* Panels rise in softly on mount */
+  @keyframes flow-rise {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .enterprise-panel,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .workspace-panel,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .corp-card {
+    animation: flow-rise 280ms var(--ease-standard) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .enterprise-panel,
+    html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .workspace-panel,
+    html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .corp-card {
+      animation: none;
+    }
+  }
+
+  /* Overlays: airy sheets with generous radius */
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [role="dialog"] {
+    border-radius: calc(var(--radius) + 0.125rem);
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [data-radix-popper-content-wrapper] > * {
+    border-radius: calc(var(--radius) - 0.125rem);
+  }
+
+  /* Status pills — green tint like the reference "Active" badge */
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .status-pill-success {
+    background: hsl(var(--success) / 0.12);
+    color: hsl(145 62% 30%);
+  }
+
 
   .corp-surface {
     @apply transition-colors duration-150 hover:bg-secondary/70;
@@ -1396,4 +1864,120 @@
 [role="listbox"],
 [role="menu"] {
   pointer-events: auto !important;
+}
+
+/*
+ * ══ Flow component redesign (light + dark) ══════════════════════════
+ * Unlayered on purpose: these must win over Tailwind utility classes
+ * (layered) without !important. Scoped to the two Flow skins only.
+ */
+
+/* Badges → quiet pills: no shouting uppercase, round, calm weight.
+   The tracking class is the Badge component's unique signature. */
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [class*="tracking-[0.08em]"] {
+  border-radius: 999px;
+  text-transform: none;
+  letter-spacing: 0.01em;
+  font-weight: 500;
+  padding-left: 0.625rem;
+  padding-right: 0.625rem;
+}
+
+/* Tabs → segmented control: pill track, pill slider, pill triggers */
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [role="tablist"] {
+  border-radius: 999px;
+  background: hsl(var(--surface-2));
+  border-color: hsl(var(--border));
+  padding: 0.1875rem;
+}
+
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [role="tablist"] > [aria-hidden] {
+  border-radius: 999px;
+}
+
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [role="tab"] {
+  border-radius: 999px;
+}
+
+/* Tables — micro uppercase headers, airy rows, hairline separators */
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) thead th {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  height: 2.5rem;
+  background: transparent;
+}
+
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) thead {
+  background: hsl(var(--surface-2) / 0.6);
+}
+
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) tbody tr {
+  border-bottom-color: hsl(var(--border) / 0.7);
+}
+
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) tbody tr:hover {
+  background: hsl(var(--surface-2) / 0.7);
+}
+
+/* Menus, selects, comboboxes — soft rows, generous radius */
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [role="menuitem"],
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [role="option"] {
+  border-radius: 0.5rem;
+}
+
+/* Tooltips — inverted pill, like modern SaaS hints */
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [role="tooltip"] {
+  border-radius: 0.625rem;
+  border: none;
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+  box-shadow: var(--shadow-2);
+  font-weight: 500;
+}
+
+/* Dialog entrance — one soft rise instead of the default zoom */
+@keyframes flow-dialog-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [role="dialog"][data-state="open"].fixed.left-\[50\%\] {
+  animation: flow-dialog-in 240ms var(--ease-standard);
+}
+
+/* Overlay: light theme gets a soft veil with blur, dark stays deep */
+html[data-ui-style="flow"] [data-state][class*="bg-black/75"] {
+  background: hsl(222 20% 10% / 0.35);
+  backdrop-filter: blur(4px);
+}
+
+html[data-ui-style="flow-dark"] [data-state][class*="bg-black/75"] {
+  background: hsl(240 10% 2% / 0.6);
+  backdrop-filter: blur(4px);
+}
+
+/* Display type — Manrope with real weight for hero numbers/headings */
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .type-display {
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .type-h1,
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .type-h2 {
+  font-weight: 700;
+}
+
+/* Dark Flow: success pill text needs more light */
+html[data-ui-style="flow-dark"] .status-pill-success {
+  background: hsl(var(--success) / 0.15);
+  color: hsl(145 55% 62%);
 }

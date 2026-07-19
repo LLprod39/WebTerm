@@ -382,6 +382,24 @@ def start_operator_turn(
             # Keep short — local models stall on multi-KB context prefixes
             chips = json.dumps(pinned, ensure_ascii=False)[:600]
             history.insert(0, {"role": "user", "content": f"Pinned context: {chips}"})
+            # Human commands from the chat-side live terminal dock
+            term = pinned.get("terminal_activity") if isinstance(pinned, dict) else None
+            if isinstance(term, dict):
+                cmds = term.get("recent_commands")
+                if isinstance(cmds, list) and cmds:
+                    host = term.get("server_name") or term.get("server_id") or "host"
+                    lines = "\n".join(f"$ {c}" for c in cmds[-12:] if str(c).strip())
+                    if lines:
+                        history.insert(
+                            0,
+                            {
+                                "role": "user",
+                                "content": (
+                                    f"Human live terminal on {host} "
+                                    f"(they typed these — do not re-run blindly):\n{lines}"
+                                )[:1200],
+                            },
+                        )
             try:
                 from core_ui.services.operator_memory import memory_context_block
 

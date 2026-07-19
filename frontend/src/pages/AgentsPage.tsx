@@ -14,6 +14,7 @@ import {
   type AgentRunResult,
 } from "@/lib/api";
 import { localize, useI18n } from "@/lib/i18n";
+import { notifyWithUndo } from "@/lib/notify-undo";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -159,17 +160,31 @@ export default function AgentsPage() {
       return;
     }
 
-    setStoppingId(ag.id);
+    const runId = ag.active_run_id;
     setActionError(null);
     setActionNotice(null);
-    try {
-      await stopAgent(ag.id, ag.active_run_id);
-      await queryClient.invalidateQueries({ queryKey: ["agents"] });
-    } catch {
-      setActionError(localize(lang, "Не удалось остановить активный запуск.", "Failed to stop the active run."));
-    } finally {
-      setStoppingId(null);
-    }
+    // Delayed stop with Undo (5s) — feels safer than an immediate kill.
+    notifyWithUndo({
+      lang,
+      title: localize(lang, `Остановка «${ag.name}»…`, `Stopping “${ag.name}”…`),
+      description: localize(lang, "Нажмите «Отменить», чтобы продолжить прогон", "Click Undo to keep the run going"),
+      durationMs: 5000,
+      onCommit: async () => {
+        setStoppingId(ag.id);
+        try {
+          await stopAgent(ag.id, runId);
+          await queryClient.invalidateQueries({ queryKey: ["agents"] });
+          setActionNotice(localize(lang, `Агент «${ag.name}» остановлен`, `Agent “${ag.name}” stopped`));
+        } catch {
+          setActionError(localize(lang, "Не удалось остановить активный запуск.", "Failed to stop the active run."));
+        } finally {
+          setStoppingId(null);
+        }
+      },
+      onUndo: () => {
+        setActionNotice(localize(lang, `Остановка «${ag.name}» отменена`, `Stop of “${ag.name}” cancelled`));
+      },
+    });
   };
 
   const onCleanupStale = async () => {

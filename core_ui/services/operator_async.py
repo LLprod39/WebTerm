@@ -158,22 +158,75 @@ def resume_turns_for_playbook_run(run) -> int:
 
 
 def _resume_turns(turns: list[ChatTurnState], *, payload: dict[str, Any], tool_name: str) -> int:
+    """Resume parked turns and fan-out live events to the operator chat WebSocket."""
+    from asgiref.sync import async_to_sync as _a2s
+
+    from core_ui.services.assistant_chat import serialize_action
     from core_ui.services.operator_session import resume_after_async_result
+    from core_ui.services.operator_turn_runtime import broadcast_operator_event
 
     count = 0
     for turn in turns:
-        try:
-            async_to_sync(resume_after_async_result)(
-                turn=turn,
+        chat_id = int(turn.session_id)
+
+        async def _run_one(turn_obj: ChatTurnState = turn, cid: int = chat_id) -> None:
+            async def on_event(event: dict[str, Any]) -> None:
+                await broadcast_operator_event(cid, event)
+
+            await broadcast_operator_event(
+                cid,
+                {
+                    "type": "async_done",
+                    "turn_id": turn_obj.pk,
+                    "run_id": payload.get("run_id"),
+                    "status": payload.get("status"),
+                    "ok": payload.get("ok"),
+                    "async_kind": payload.get("async_kind") or tool_name,
+                },
+            )
+            await broadcast_operator_event(
+                cid,
+                {"type": "turn_started", "chat_id": cid, "phase": "async_resume", "turn_id": turn_obj.pk},
+            )
+            result = await resume_after_async_result(
+                turn=turn_obj,
                 result_payload=payload,
                 tool_name=tool_name,
+                on_event=on_event,
             )
+            actions = []
+            try:
+                actions = [serialize_action(a) for a in (result.actions or []) if a]
+            except Exception:  # noqa: BLE001
+                actions = []
+            await broadcast_operator_event(
+                cid,
+                {
+                    "type": "turn_complete",
+                    "status": getattr(result, "status", None) or "done",
+                    "turn_id": turn_obj.pk,
+                    "assistant_message_id": (
+                        result.assistant_message.pk if getattr(result, "assistant_message", None) else None
+                    ),
+                    "actions": actions,
+                },
+            )
+
+        try:
+            _a2s(_run_one)()
             count += 1
         except Exception as exc:  # noqa: BLE001
             logger.exception("operator async resume failed turn=%s: %s", turn.pk, exc)
             turn.status = ChatTurnState.STATUS_FAILED
             turn.error = str(exc)[:1000]
             turn.save(update_fields=["status", "error", "updated_at"])
+            try:
+                async_to_sync(broadcast_operator_event)(
+                    chat_id,
+                    {"type": "error", "message": f"Async resume failed: {exc}"[:400]},
+                )
+            except Exception:  # noqa: BLE001
+                pass
     return count
 
 

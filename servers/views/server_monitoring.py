@@ -34,8 +34,53 @@ def _monitoring_full_fail_trust_seconds() -> int:
     """How long full SSH unreachable may still yield to fresher metrics."""
     return max(
         15,
-        int(getattr(settings, "MONITORING_FULL_FAIL_METRICS_TRUST_SECONDS", 90) or 90),
+        # Prefer last good CPU/RAM longer so dashboards don't flash "нет связи"
+        # between monitor cycles / before live WS reconnects.
+        int(getattr(settings, "MONITORING_FULL_FAIL_METRICS_TRUST_SECONDS", 300) or 300),
     )
+
+
+def _maybe_kick_stale_fleet_refresh(server_health: list[dict]) -> None:
+    """If the fleet snapshot is mostly stale, schedule a background SSH metrics pass.
+
+    Fire-and-forget: the HTTP response already returns last-known rows. The
+    ``run_monitor`` worker is the main collector; this covers local/dev when the
+    worker is down or just after servers were added.
+    """
+    if not server_health:
+        return
+    stale_ids = [
+        int(row["server_id"])
+        for row in server_health
+        if row.get("server_id")
+        and (
+            row.get("is_stale")
+            or row.get("status") in (None, "unknown", "unreachable")
+            or row.get("cpu_percent") is None
+        )
+    ]
+    # Only act when a meaningful share of the fleet needs attention.
+    if not stale_ids:
+        return
+    ratio = len(stale_ids) / max(1, len(server_health))
+    if ratio < 0.25 and len(stale_ids) < 2:
+        return
+
+    cooldown = max(
+        45,
+        int(getattr(settings, "MONITORING_METRICS_REFRESH_COOLDOWN_SECONDS", 90) or 90),
+    )
+    lock_key = "monitoring:auto-stale-refresh:global"
+    if not cache.add(lock_key, "1", timeout=cooldown):
+        return
+
+    try:
+        from servers.monitor import schedule_health_check_for_server_ids
+
+        schedule_health_check_for_server_ids(stale_ids, deep=False)
+    except Exception:
+        cache.delete(lock_key)
+        raise
 
 
 def _latest_health_checks_by_server_id(
@@ -146,7 +191,11 @@ def _apply_cached_live_metrics(item: dict, live: dict | None, now) -> dict:
     live_dt = datetime.fromtimestamp(live_ts, tz=dt_timezone.utc)
     live_age = int((now - live_dt).total_seconds())
     # Ignore expired/stale cache entries even if TTL has not purged them.
-    if live_age < 0 or live_age > 180:
+    live_max_age = max(
+        60,
+        int(getattr(settings, "MONITORING_LIVE_CACHE_SECONDS", 300) or 300),
+    )
+    if live_age < 0 or live_age > live_max_age:
         return item
 
     metrics_checked_at = item.get("metrics_checked_at")
@@ -210,6 +259,26 @@ def _serialize_monitoring_status_item(
         int((now - metrics_checked_at).total_seconds()) if metrics_checked_at else None
     )
     probe_checked_at = hc.checked_at if hc and hc.checked_at else None
+    is_stale = display_age is None or display_age > stale_seconds
+    # Recent metrics beat a transient unreachable probe for list first-paint.
+    if (
+        status == ServerHealthCheck.STATUS_UNREACHABLE
+        and metrics_age_seconds is not None
+        and metrics_age_seconds <= stale_seconds
+        and source
+        and source.cpu_percent is not None
+    ):
+        status = (
+            source.status
+            if source.status and source.status != ServerHealthCheck.STATUS_UNREACHABLE
+            else "healthy"
+        )
+        is_stale = False
+        status_checked_at = metrics_checked_at or status_checked_at
+        display_age = metrics_age_seconds
+    # Stale unreachable without a fresh live overlay looks like a false outage on first paint.
+    if status == ServerHealthCheck.STATUS_UNREACHABLE and is_stale:
+        status = "unknown"
     item = {
         "server_id": server.id,
         "server_name": server.name,
@@ -219,7 +288,7 @@ def _serialize_monitoring_status_item(
         # Timestamps/RTT/lite flag follow the row that produced *status*.
         "checked_at": status_checked_at.isoformat() if status_checked_at else None,
         "age_seconds": display_age,
-        "is_stale": display_age is None or display_age > stale_seconds,
+        "is_stale": is_stale,
         "response_time_ms": status_row.response_time_ms if status_row else None,
         "cpu_percent": source.cpu_percent if source else None,
         "memory_percent": source.memory_percent if source else None,
@@ -338,6 +407,7 @@ def _serialize_dashboard_server_item(
     hc: ServerHealthCheck | None,
     metrics_hc: ServerHealthCheck | None,
     now,
+    live_sample: dict | None = None,
 ) -> dict:
     """Dashboard row: same status resolution as fleet status API + richer metrics."""
     stale_seconds = _monitoring_stale_seconds()
@@ -352,7 +422,21 @@ def _serialize_dashboard_server_item(
     net_rx_bytes, net_tx_bytes = _parse_net_traffic(net_source.raw_output if net_source else None)
     checked_at = status_row.checked_at if status_row and status_row.checked_at else None
     display_age = int((now - checked_at).total_seconds()) if checked_at else None
-    return {
+    is_stale = display_age is None or display_age > stale_seconds
+    # Prefer last metrics snapshot age for staleness when status row is a lite fail.
+    if source and source.checked_at and (is_stale or status == ServerHealthCheck.STATUS_UNREACHABLE):
+        metrics_age = int((now - source.checked_at).total_seconds())
+        if metrics_age <= stale_seconds and source.cpu_percent is not None:
+            # Still have recent metrics — do not paint a hard outage.
+            if status == ServerHealthCheck.STATUS_UNREACHABLE:
+                status = source.status if source.status and source.status != ServerHealthCheck.STATUS_UNREACHABLE else "healthy"
+            is_stale = False
+            checked_at = source.checked_at
+    # Stale "unreachable" is usually a failed probe window, not a confirmed outage —
+    # paint as unknown so dashboards don't flash red before metrics/live catch up.
+    if status == ServerHealthCheck.STATUS_UNREACHABLE and is_stale:
+        status = "unknown"
+    item = {
         "server_id": server.id,
         "server_name": server.name,
         "host": server.host,
@@ -370,9 +454,12 @@ def _serialize_dashboard_server_item(
         "uptime_seconds": source.uptime_seconds if source else None,
         "response_time_ms": status_row.response_time_ms if status_row else None,
         "checked_at": checked_at.isoformat() if checked_at else None,
-        "is_stale": display_age is None or display_age > stale_seconds,
+        "is_stale": is_stale,
         "is_lite": _is_lite_probe(status_row),
     }
+    # Same live-cache overlay as /monitoring/status so dashboard matches the servers list.
+    item = _apply_cached_live_metrics(item, live_sample, now)
+    return item
 
 
 @login_required
@@ -386,6 +473,11 @@ def monitoring_dashboard(request):
     server_ids = [server.id for server in servers]
     latest_by_id = _latest_health_checks_by_server_id(server_ids)
     metrics_by_id = _latest_health_checks_by_server_id(server_ids, with_metrics=True)
+    live_by_id: dict[int, dict] = {}
+    with contextlib.suppress(Exception):
+        from servers.monitoring_live import fetch_live_samples
+
+        live_by_id = fetch_live_samples(server_ids)
 
     server_health = [
         _serialize_dashboard_server_item(
@@ -393,6 +485,7 @@ def monitoring_dashboard(request):
             latest_by_id.get(server.id),
             metrics_by_id.get(server.id),
             now,
+            live_sample=live_by_id.get(server.id),
         )
         for server in servers
     ]
@@ -445,6 +538,11 @@ def monitoring_dashboard(request):
         }
         for activity in recent_activity
     ]
+
+    # Keep collecting even when no browser is watching: if the snapshot is stale,
+    # kick a background metrics pass (debounced). Does not block this response.
+    with contextlib.suppress(Exception):
+        _maybe_kick_stale_fleet_refresh(server_health)
 
     return JsonResponse(
         {
